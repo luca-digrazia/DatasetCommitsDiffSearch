@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.api.interop.java;
 
-import java.lang.reflect.Type;
 import java.util.AbstractList;
 import java.util.List;
 import java.util.Objects;
@@ -43,44 +42,40 @@ import com.oracle.truffle.api.nodes.RootNode;
 
 final class TruffleList<T> extends AbstractList<T> {
     private final TruffleObject array;
-    private final Class<T> elementClass;
-    private final Type elementType;
+    private final TypeAndClass<T> type;
     private final CallTarget callRead;
     private final CallTarget callGetSize;
     private final CallTarget callWrite;
-    private final Object languageContext;
 
-    private TruffleList(Class<T> elementClass, Type elementType, TruffleObject array, Object languageContext) {
+    private TruffleList(TypeAndClass<T> elementType, TruffleObject array) {
         this.array = array;
-        this.elementClass = elementClass;
-        this.elementType = elementType;
-        this.languageContext = languageContext;
+        this.type = elementType;
         this.callRead = initializeListCall(array, Message.READ);
         this.callWrite = initializeListCall(array, Message.WRITE);
         this.callGetSize = initializeListCall(array, Message.GET_SIZE);
     }
 
-    public static <T> List<T> create(Class<T> elementClass, Type elementType, TruffleObject array, Object languageContext) {
-        return new TruffleList<>(elementClass, elementType, array, languageContext);
+    public static <T> List<T> create(TypeAndClass<T> elementType, TruffleObject array) {
+        return new TruffleList<>(elementType, array);
     }
 
     @Override
     public T get(int index) {
-        final Object element = callRead.call(array, index, elementClass, elementType, languageContext);
-        return elementClass.cast(element);
+        final Object item = callRead.call(type, array, index);
+        return type.cast(item);
     }
 
     @Override
     public T set(int index, T element) {
-        elementClass.cast(element);
+        type.cast(element);
         T prev = get(index);
-        callWrite.call(array, index, element, elementClass, elementType, languageContext);
+        callWrite.call(null, array, index, element);
         return prev;
     }
 
     @Override
     public int size() {
-        return (Integer) callGetSize.call(array);
+        return (Integer) callGetSize.call(null, array);
     }
 
     private static CallTarget initializeListCall(TruffleObject obj, Message msg) {
@@ -106,49 +101,31 @@ final class TruffleList<T> extends AbstractList<T> {
         @Override
         public Object execute(VirtualFrame frame) {
             final Object[] args = frame.getArguments();
-            TruffleObject receiver = (TruffleObject) args[0];
-            Class<?> clazz = null;
-            Type type = null;
-            Object languageContext = null;
+            TypeAndClass<?> type = (TypeAndClass<?>) args[0];
+            TruffleObject receiver = (TruffleObject) args[1];
 
             Object ret;
             try {
                 if (msg == Message.GET_SIZE) {
                     ret = ForeignAccess.sendGetSize(node, receiver);
                 } else if (msg == Message.READ) {
-                    Object key = args[1];
-                    clazz = (Class<?>) args[2];
-                    type = (Type) args[3];
-                    languageContext = args[4];
-                    try {
-                        ret = ForeignAccess.sendRead(node, receiver, key);
-                    } catch (UnknownIdentifierException ex) {
-                        CompilerDirectives.transferToInterpreter();
-                        throw new IndexOutOfBoundsException(Objects.toString(key));
-                    }
+                    ret = ForeignAccess.sendRead(node, receiver, args[2]);
                 } else if (msg == Message.WRITE) {
-                    Object key = args[1];
-                    Object value = args[2];
-                    clazz = (Class<?>) args[3];
-                    type = (Type) args[4];
-                    languageContext = args[5];
-                    try {
-                        ret = ForeignAccess.sendWrite(node, receiver, key, JavaInterop.asTruffleValue(value));
-                    } catch (UnknownIdentifierException ex) {
-                        CompilerDirectives.transferToInterpreter();
-                        throw new IndexOutOfBoundsException(Objects.toString(key));
-                    }
+                    ret = ForeignAccess.sendWrite(node, receiver, args[2], JavaInterop.asTruffleValue(args[3]));
                 } else {
                     CompilerDirectives.transferToInterpreter();
                     throw UnsupportedMessageException.raise(msg);
                 }
+            } catch (UnknownIdentifierException ex) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IndexOutOfBoundsException(Objects.toString(args[2]));
             } catch (InteropException ex) {
                 CompilerDirectives.transferToInterpreter();
                 throw ex.raise();
             }
 
-            if (clazz != null) {
-                return toJavaNode.execute(ret, clazz, type, languageContext);
+            if (type != null) {
+                return toJavaNode.execute(ret, type.clazz, type.type);
             } else {
                 return ret;
             }

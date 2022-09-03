@@ -24,8 +24,6 @@
  */
 package com.oracle.truffle.api.interop.java;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.InvocationTargetException;
@@ -34,16 +32,13 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 
 abstract class SingleMethodDesc implements JavaMethodDesc {
     private final boolean varArgs;
     @CompilationFinal(dimensions = 1) private final Class<?>[] parameterTypes;
     @CompilationFinal(dimensions = 1) private final Type[] genericParameterTypes;
-    @CompilationFinal private MethodHandle methodHandle;
 
     protected SingleMethodDesc(Executable executable) {
         this.varArgs = executable.isVarArgs();
@@ -80,26 +75,7 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
         return new JavaMethodDesc[]{this};
     }
 
-    public final Object invoke(Object receiver, Object[] arguments) throws Throwable {
-        if (methodHandle == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            methodHandle = makeMethodHandle();
-        }
-        try {
-            return invokeHandle(methodHandle, receiver, arguments);
-        } catch (ClassCastException ex) {
-            throw UnsupportedTypeException.raise(ex, arguments);
-        }
-    }
-
-    public abstract Object invokeReflect(Object receiver, Object[] arguments) throws Throwable;
-
-    protected abstract MethodHandle makeMethodHandle();
-
-    @TruffleBoundary(allowInlining = true)
-    private static Object invokeHandle(MethodHandle invokeHandle, Object receiver, Object[] arguments) throws Throwable {
-        return invokeHandle.invokeExact(receiver, arguments);
-    }
+    public abstract Object invoke(Object receiver, Object[] arguments) throws Throwable;
 
     static SingleMethodDesc unreflect(Method reflectionMethod) {
         assert isAccessible(reflectionMethod);
@@ -113,18 +89,6 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
 
     static boolean isAccessible(Executable method) {
         return Modifier.isPublic(method.getModifiers()) && Modifier.isPublic(method.getDeclaringClass().getModifiers());
-    }
-
-    static MethodHandle adaptSignature(MethodHandle originalHandle, boolean isStatic, int parameterCount) {
-        MethodHandle adaptedHandle = originalHandle;
-        adaptedHandle = adaptedHandle.asType(adaptedHandle.type().changeReturnType(Object.class));
-        if (isStatic) {
-            adaptedHandle = MethodHandles.dropArguments(adaptedHandle, 0, Object.class);
-        } else {
-            adaptedHandle = adaptedHandle.asType(adaptedHandle.type().changeParameterType(0, Object.class));
-        }
-        adaptedHandle = adaptedHandle.asSpreader(Object[].class, parameterCount);
-        return adaptedHandle;
     }
 
     @Override
@@ -148,11 +112,9 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
 
         @TruffleBoundary
         @Override
-        public Object invokeReflect(Object receiver, Object[] arguments) throws Throwable {
+        public Object invoke(Object receiver, Object[] arguments) throws Throwable {
             try {
                 return getReflectionMethod().invoke(receiver, arguments);
-            } catch (IllegalArgumentException ex) {
-                throw UnsupportedTypeException.raise(ex, arguments);
             } catch (InvocationTargetException e) {
                 throw e.getCause();
             }
@@ -166,17 +128,6 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
         @Override
         public boolean isInternal() {
             return getReflectionMethod().getDeclaringClass() == Object.class;
-        }
-
-        @Override
-        protected MethodHandle makeMethodHandle() {
-            CompilerAsserts.neverPartOfCompilation();
-            try {
-                final MethodHandle methodHandle = MethodHandles.publicLookup().unreflect(reflectionMethod);
-                return adaptSignature(methodHandle, Modifier.isStatic(reflectionMethod.getModifiers()), reflectionMethod.getParameterCount());
-            } catch (IllegalAccessException e) {
-                throw new IllegalStateException(e);
-            }
         }
     }
 
@@ -196,11 +147,9 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
 
         @TruffleBoundary
         @Override
-        public Object invokeReflect(Object receiver, Object[] arguments) throws Throwable {
+        public Object invoke(Object receiver, Object[] arguments) throws Throwable {
             try {
                 return getReflectionMethod().newInstance(arguments);
-            } catch (IllegalArgumentException ex) {
-                throw UnsupportedTypeException.raise(ex, arguments);
             } catch (InvocationTargetException e) {
                 throw e.getCause();
             }
@@ -209,17 +158,6 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
         @Override
         public Class<?> getReturnType() {
             return getReflectionMethod().getDeclaringClass();
-        }
-
-        @Override
-        protected MethodHandle makeMethodHandle() {
-            CompilerAsserts.neverPartOfCompilation();
-            try {
-                final MethodHandle methodHandle = MethodHandles.publicLookup().unreflectConstructor(reflectionConstructor);
-                return adaptSignature(methodHandle, true, getParameterCount());
-            } catch (IllegalAccessException e) {
-                throw new IllegalStateException(e);
-            }
         }
     }
 }

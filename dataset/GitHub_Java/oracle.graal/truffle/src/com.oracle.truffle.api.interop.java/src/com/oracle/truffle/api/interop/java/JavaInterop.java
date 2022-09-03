@@ -36,7 +36,6 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -669,17 +668,6 @@ public final class JavaInterop {
             return truffleObject;
         }
         return engine.findOriginalObject(truffleObject);
-    }
-
-    static Throwable wrapHostException(Throwable exception) {
-        EngineSupport engine = ACCESSOR.engine();
-        if (engine == null) {
-            return exception;
-        }
-        if (exception instanceof TruffleException) {
-            return exception;
-        }
-        return engine.wrapHostException(exception);
     }
 
     static final JavaInteropAccessor ACCESSOR = new JavaInteropAccessor();
