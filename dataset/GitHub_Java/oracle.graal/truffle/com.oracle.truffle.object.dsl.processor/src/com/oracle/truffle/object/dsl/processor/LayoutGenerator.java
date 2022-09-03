@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -169,8 +171,8 @@ public class LayoutGenerator {
                 iterateProperties(layout.getAllShapeProperties(), new PropertyIteratorAction() {
 
                     @Override
-                    public void run(PropertyModel p, boolean last) {
-                        stream.printf("                %s", p.getName());
+                    public void run(PropertyModel property, boolean last) {
+                        stream.printf("                %s", property.getName());
 
                         if (last) {
                             stream.println(");");
@@ -765,14 +767,14 @@ public class LayoutGenerator {
         stream.println("}");
     }
 
-    private static void addUncheckedCastWarning(final PrintStream stream, PropertyModel property) {
+    private void addUncheckedCastWarning(final PrintStream stream, PropertyModel property) {
         if (property.getType().toString().indexOf('<') != -1 ||
                         (property.isVolatile() && !property.getType().getKind().isPrimitive())) {
             stream.println("    @SuppressWarnings(\"unchecked\")");
         }
     }
 
-    private static void iterateProperties(List<PropertyModel> properties, PropertyIteratorAction action) {
+    private void iterateProperties(List<PropertyModel> properties, PropertyIteratorAction action) {
         for (int n = 0; n < properties.size(); n++) {
             action.run(properties.get(n), n == properties.size() - 1);
         }
