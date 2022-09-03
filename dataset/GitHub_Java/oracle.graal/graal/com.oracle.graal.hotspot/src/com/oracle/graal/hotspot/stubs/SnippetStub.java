@@ -31,7 +31,6 @@ import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
@@ -82,7 +81,7 @@ public abstract class SnippetStub extends Stub implements Snippets {
      * Adds the arguments to this snippet stub.
      */
     protected Arguments makeArguments(SnippetInfo stub) {
-        Arguments args = new Arguments(stub, GuardsStage.FLOATING_GUARDS, LoweringTool.StandardLoweringStage.HIGH_TIER);
+        Arguments args = new Arguments(stub, GuardsStage.FLOATING_GUARDS);
         for (int i = 0; i < stub.getParameterCount(); i++) {
             String name = stub.getParameterName(i);
             if (stub.isConstantParameter(i)) {
