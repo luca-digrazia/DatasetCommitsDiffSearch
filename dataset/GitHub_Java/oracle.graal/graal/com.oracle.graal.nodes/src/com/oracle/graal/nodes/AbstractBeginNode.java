@@ -22,24 +22,18 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.Iterator;
-import java.util.NoSuchElementException;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.extended.AnchoringNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Guard, InputType.Anchor})
-public abstract class AbstractBeginNode extends FixedWithNextNode implements LIRLowerable, GuardingNode, AnchoringNode, IterableNodeType {
+public abstract class AbstractBeginNode extends FixedWithNextNode implements LIRLowerable, Simplifiable, GuardingNode, AnchoringNode, IterableNodeType {
 
     public static final NodeClass<AbstractBeginNode> TYPE = NodeClass.create(AbstractBeginNode.class);
 
@@ -49,6 +43,21 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
 
     protected AbstractBeginNode(NodeClass<? extends AbstractBeginNode> c, Stamp stamp) {
         super(c, stamp);
+    }
+
+    @Override
+    public void simplify(SimplifierTool tool) {
+        FixedNode prev = (FixedNode) this.predecessor();
+        if (prev == null) {
+            // This is the start node.
+        } else if (prev instanceof ControlSplitNode) {
+            // This begin node is necessary.
+        } else {
+            // This begin node can be removed and all guards moved up to the preceding begin node.
+            prepareDelete();
+            tool.addToWorkList(next());
+            graph().removeFixed(this);
+        }
     }
 
     public static AbstractBeginNode prevBegin(FixedNode from) {
@@ -87,7 +96,8 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
             outer: while (true) {
                 for (ProxyNode vpn : proxies().snapshot()) {
                     ValueNode value = vpn.value();
-                    vpn.replaceAtUsagesAndDelete(value);
+                    vpn.replaceAtUsages(value);
+                    vpn.safeDelete();
                     if (value == this) {
                         // Guard proxy could have this input as value.
                         continue outer;
