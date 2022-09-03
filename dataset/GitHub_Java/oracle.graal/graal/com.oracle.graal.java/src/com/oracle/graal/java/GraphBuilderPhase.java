@@ -70,7 +70,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
     public static final class RuntimeCalls {
 
         public static final ForeignCallDescriptor CREATE_NULL_POINTER_EXCEPTION = new ForeignCallDescriptor("createNullPointerException", NullPointerException.class);
-        public static final ForeignCallDescriptor CREATE_OUT_OF_BOUNDS_EXCEPTION = new ForeignCallDescriptor("createOutOfBoundsException", ArrayIndexOutOfBoundsException.class, int.class);
+        public static final ForeignCallDescriptor CREATE_OUT_OF_BOUNDS_EXCEPTION = new ForeignCallDescriptor("createOutOfBoundsException", IndexOutOfBoundsException.class, int.class);
     }
 
     /**
@@ -117,7 +117,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
         private BytecodeStream stream;           // the bytecode stream
 
-        protected FrameStateBuilder frameState;          // the current execution state
+        protected HIRFrameStateBuilder frameState;          // the current execution state
+        private BytecodeParseHelper<ValueNode> parseHelper;
         private Block currentBlock;
 
         private ValueNode methodSynchronizedObject;
@@ -165,7 +166,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
         /**
          * Gets the current frame state being processed by this builder.
          */
-        protected FrameStateBuilder getCurrentFrameState() {
+        protected HIRFrameStateBuilder getCurrentFrameState() {
             return frameState;
         }
 
@@ -202,7 +203,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             unwindBlock = null;
             methodSynchronizedObject = null;
             this.currentGraph = graph;
-            this.frameState = new FrameStateBuilder(method, graph, graphBuilderConfig.eagerResolving());
+            this.frameState = new HIRFrameStateBuilder(method, graph, graphBuilderConfig.eagerResolving());
+            this.parseHelper = new BytecodeParseHelper<>(frameState);
             TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
             try {
                 build();
@@ -302,10 +304,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
         protected int bci() {
             return stream.currentBCI();
-        }
-
-        private void loadLocal(int index, Kind kind) {
-            frameState.push(kind, frameState.loadLocal(index));
         }
 
         private void storeLocal(Kind kind, int index) {
@@ -438,7 +436,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 dispatchBlock = unwindBlock(bci);
             }
 
-            FrameStateBuilder dispatchState = frameState.copy();
+            HIRFrameStateBuilder dispatchState = frameState.copy();
             dispatchState.clearStack();
 
             DispatchBeginNode dispatchBegin;
@@ -572,7 +570,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }
-
         }
 
         private void genArithmeticOp(Kind result, int opcode) {
@@ -1458,15 +1455,15 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
         private static class Target {
 
             FixedNode fixed;
-            FrameStateBuilder state;
+            HIRFrameStateBuilder state;
 
-            public Target(FixedNode fixed, FrameStateBuilder state) {
+            public Target(FixedNode fixed, HIRFrameStateBuilder state) {
                 this.fixed = fixed;
                 this.state = state;
             }
         }
 
-        private Target checkLoopExit(FixedNode target, Block targetBlock, FrameStateBuilder state) {
+        private Target checkLoopExit(FixedNode target, Block targetBlock, HIRFrameStateBuilder state) {
             if (currentBlock != null) {
                 long exits = currentBlock.loops & ~targetBlock.loops;
                 if (exits != 0) {
@@ -1496,7 +1493,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     if (targetBlock instanceof ExceptionDispatchBlock) {
                         bci = ((ExceptionDispatchBlock) targetBlock).deoptBci;
                     }
-                    FrameStateBuilder newState = state.copy();
+                    HIRFrameStateBuilder newState = state.copy();
                     for (Block loop : exitLoops) {
                         LoopBeginNode loopBegin = (LoopBeginNode) loop.firstInstruction;
                         LoopExitNode loopExit = currentGraph.add(new LoopExitNode(loopBegin));
@@ -1519,7 +1516,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             return new Target(target, state);
         }
 
-        private FixedNode createTarget(double probability, Block block, FrameStateBuilder stateAfter) {
+        private FixedNode createTarget(double probability, Block block, HIRFrameStateBuilder stateAfter) {
             assert probability >= 0 && probability <= 1.01 : probability;
             if (isNeverExecutedCode(probability)) {
                 return currentGraph.add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
@@ -1533,7 +1530,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             return probability == 0 && optimisticOpts.removeNeverExecutedCode() && entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI;
         }
 
-        private FixedNode createTarget(Block block, FrameStateBuilder state) {
+        private FixedNode createTarget(Block block, HIRFrameStateBuilder state) {
             assert block != null && state != null;
             assert !block.isExceptionEntry || state.stackSize() == 1;
 
@@ -1613,7 +1610,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
          * Returns a block begin node with the specified state. If the specified probability is 0,
          * the block deoptimizes immediately.
          */
-        private AbstractBeginNode createBlockTarget(double probability, Block block, FrameStateBuilder stateAfter) {
+        private AbstractBeginNode createBlockTarget(double probability, Block block, HIRFrameStateBuilder stateAfter) {
             FixedNode target = createTarget(probability, block, stateAfter);
             AbstractBeginNode begin = AbstractBeginNode.begin(target);
 
@@ -1622,7 +1619,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             return begin;
         }
 
-        private ValueNode synchronizedObject(FrameStateBuilder state, ResolvedJavaMethod target) {
+        private ValueNode synchronizedObject(HIRFrameStateBuilder state, ResolvedJavaMethod target) {
             if (isStatic(target.getModifiers())) {
                 return appendConstant(target.getDeclaringClass().getEncoding(Representation.JavaClass));
             } else {
@@ -1640,6 +1637,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             lastInstr = block.firstInstruction;
             frameState = block.entryState;
+            parseHelper.setCurrentFrameState(frameState);
             currentBlock = block;
 
             frameState.cleanupDeletedPhis();
@@ -1893,31 +1891,31 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             case LDC            : // fall through
             case LDC_W          : // fall through
             case LDC2_W         : genLoadConstant(stream.readCPI(), opcode); break;
-            case ILOAD          : loadLocal(stream.readLocalIndex(), Kind.Int); break;
-            case LLOAD          : loadLocal(stream.readLocalIndex(), Kind.Long); break;
-            case FLOAD          : loadLocal(stream.readLocalIndex(), Kind.Float); break;
-            case DLOAD          : loadLocal(stream.readLocalIndex(), Kind.Double); break;
-            case ALOAD          : loadLocal(stream.readLocalIndex(), Kind.Object); break;
+            case ILOAD          : parseHelper.loadLocal(stream.readLocalIndex(), Kind.Int); break;
+            case LLOAD          : parseHelper.loadLocal(stream.readLocalIndex(), Kind.Long); break;
+            case FLOAD          : parseHelper.loadLocal(stream.readLocalIndex(), Kind.Float); break;
+            case DLOAD          : parseHelper.loadLocal(stream.readLocalIndex(), Kind.Double); break;
+            case ALOAD          : parseHelper.loadLocal(stream.readLocalIndex(), Kind.Object); break;
             case ILOAD_0        : // fall through
             case ILOAD_1        : // fall through
             case ILOAD_2        : // fall through
-            case ILOAD_3        : loadLocal(opcode - ILOAD_0, Kind.Int); break;
+            case ILOAD_3        : parseHelper.loadLocal(opcode - ILOAD_0, Kind.Int); break;
             case LLOAD_0        : // fall through
             case LLOAD_1        : // fall through
             case LLOAD_2        : // fall through
-            case LLOAD_3        : loadLocal(opcode - LLOAD_0, Kind.Long); break;
+            case LLOAD_3        : parseHelper.loadLocal(opcode - LLOAD_0, Kind.Long); break;
             case FLOAD_0        : // fall through
             case FLOAD_1        : // fall through
             case FLOAD_2        : // fall through
-            case FLOAD_3        : loadLocal(opcode - FLOAD_0, Kind.Float); break;
+            case FLOAD_3        : parseHelper.loadLocal(opcode - FLOAD_0, Kind.Float); break;
             case DLOAD_0        : // fall through
             case DLOAD_1        : // fall through
             case DLOAD_2        : // fall through
-            case DLOAD_3        : loadLocal(opcode - DLOAD_0, Kind.Double); break;
+            case DLOAD_3        : parseHelper.loadLocal(opcode - DLOAD_0, Kind.Double); break;
             case ALOAD_0        : // fall through
             case ALOAD_1        : // fall through
             case ALOAD_2        : // fall through
-            case ALOAD_3        : loadLocal(opcode - ALOAD_0, Kind.Object); break;
+            case ALOAD_3        : parseHelper.loadLocal(opcode - ALOAD_0, Kind.Object); break;
             case IALOAD         : genLoadIndexed(Kind.Int   ); break;
             case LALOAD         : genLoadIndexed(Kind.Long  ); break;
             case FALOAD         : genLoadIndexed(Kind.Float ); break;
