@@ -209,6 +209,7 @@ import com.oracle.svm.hosted.code.NativeMethodSubstitutionProcessor;
 import com.oracle.svm.hosted.code.SharedRuntimeConfigurationBuilder;
 import com.oracle.svm.hosted.code.SubstrateGraphMakerFactory;
 import com.oracle.svm.hosted.image.AbstractBootImage;
+import com.oracle.svm.hosted.image.DotHeapPrinter;
 import com.oracle.svm.hosted.image.NativeImageCodeCache;
 import com.oracle.svm.hosted.image.NativeImageHeap;
 import com.oracle.svm.hosted.meta.HostedField;
@@ -796,6 +797,11 @@ public class NativeImageGenerator {
                 try (DebugContext.Scope buildScope = debug.scope("CreateBootImage")) {
                     try (StopTimer t = new Timer("image").start()) {
 
+                        // If requested, prepare to print the heap to a .dot file.
+                        if (NativeImageOptions.PrintDotFiles.getValue()) {
+                            heap.setHeapPrinter(DotHeapPrinter.start(generatedFiles(options).resolve(imageName + ".heap.dot")));
+                        }
+
                         // Start building the model of the native image heap.
                         heap.addInitialObjects(debug);
                         // Then build the model of the code cache, which can
@@ -808,14 +814,22 @@ public class NativeImageGenerator {
                         featureHandler.forEachFeature(feature -> feature.afterHeapLayout(config));
 
                         this.image = AbstractBootImage.create(k, hUniverse, hMetaAccess, nativeLibs, heap, codeCache, hostedEntryPoints, mainEntryPointHostedStub);
-                        image.build(debug);
-                        if (NativeImageOptions.PrintUniverse.getValue()) {
-                            /*
-                             * This debug output must be printed _after_ and not _during_ image
-                             * building, because it adds some PrintStream objects to static fields,
-                             * which disrupts the heap.
-                             */
-                            codeCache.printCompilationResults();
+                        try {
+                            image.build(debug);
+                            if (NativeImageOptions.PrintUniverse.getValue()) {
+                                /*
+                                 * This debug output must be printed _after_ and not _during_ image
+                                 * building, because it adds some PrintStream objects to static
+                                 * fields, which disrupts the heap.
+                                 */
+                                codeCache.printCompilationResults();
+                            }
+                        } finally {
+                            // If building the image fails, someone still might want the heap.dot
+                            // file.
+                            if (heap.getHeapPrinter() != null) {
+                                heap.getHeapPrinter().finish();
+                            }
                         }
                     }
                 }
