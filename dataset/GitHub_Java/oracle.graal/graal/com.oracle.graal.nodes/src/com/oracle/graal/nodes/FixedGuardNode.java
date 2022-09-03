@@ -28,8 +28,8 @@ import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
-@NodeInfo(nameTemplate = "FixedGuard(!={p#negated}) {p#reason/s}", allowedUsageTypes = {InputType.Guard})
-public class FixedGuardNode extends AbstractFixedGuardNode implements Lowerable, IterableNodeType {
+@NodeInfo(nameTemplate = "FixedGuard(!={p#negated}) {p#reason/s}")
+public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowerable, IterableNodeType {
 
     public FixedGuardNode(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action) {
         this(condition, deoptReason, action, false);
@@ -52,7 +52,7 @@ public class FixedGuardNode extends AbstractFixedGuardNode implements Lowerable,
                 }
 
                 DeoptimizeNode deopt = graph().add(new DeoptimizeNode(getAction(), getReason()));
-                deopt.setStateBefore(stateBefore());
+                deopt.setDeoptimizationState(getDeoptimizationState());
                 setNext(deopt);
             }
             this.replaceAtUsages(null);
