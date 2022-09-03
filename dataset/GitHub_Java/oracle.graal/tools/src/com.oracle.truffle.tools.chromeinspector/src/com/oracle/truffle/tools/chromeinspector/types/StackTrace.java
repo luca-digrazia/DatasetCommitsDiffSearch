@@ -24,8 +24,8 @@
  */
 package com.oracle.truffle.tools.chromeinspector.types;
 
-import com.oracle.truffle.tools.utils.json.JSONArray;
-import com.oracle.truffle.tools.utils.json.JSONObject;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import com.oracle.truffle.api.debug.DebugStackTraceElement;
 import com.oracle.truffle.api.source.Source;
@@ -45,11 +45,11 @@ public final class StackTrace {
             if (sourceSection == null) {
                 continue;
             }
-            if (!context.isInspectInternal() && frame.isInternal()) {
+            if (frame.isInternal()) {
                 continue;
             }
             Source source = sourceSection.getSource();
-            if (!context.isInspectInternal() && source.isInternal()) {
+            if (source.isInternal()) {
                 // should not be, double-check
                 continue;
             }

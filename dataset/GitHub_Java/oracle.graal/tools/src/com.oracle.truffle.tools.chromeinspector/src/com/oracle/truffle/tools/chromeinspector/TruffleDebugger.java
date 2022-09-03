@@ -43,8 +43,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.oracle.truffle.tools.utils.json.JSONArray;
-import com.oracle.truffle.tools.utils.json.JSONObject;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.DebugException;
@@ -125,7 +125,7 @@ public final class TruffleDebugger extends DebuggerDomain {
     private void doEnable() {
         Debugger tdbg = context.getEnv().lookup(context.getEnv().getInstruments().get("debugger"), Debugger.class);
         ds = tdbg.startSession(new SuspendedCallbackImpl());
-        ds.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(!context.isInspectInitialization()).includeInternal(context.isInspectInternal()).build());
+        ds.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(true).includeInternal(false).build());
         slh = context.acquireScriptsHandler();
         bph = new BreakpointsHandler(ds, slh, () -> eventHandler);
     }
@@ -166,7 +166,7 @@ public final class TruffleDebugger extends DebuggerDomain {
         for (int i = 0; i < patterns.length; i++) {
             compiledPatterns[i] = Pattern.compile(patterns[i]);
         }
-        ds.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(!context.isInspectInitialization()).includeInternal(context.isInspectInternal()).sourceIs(
+        ds.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(true).includeInternal(false).sourceIs(
                         source -> !sourceMatchesBlackboxPatterns(source, compiledPatterns)).build());
     }
 
@@ -310,11 +310,11 @@ public final class TruffleDebugger extends DebuggerDomain {
             if (sourceSection == null) {
                 continue;
             }
-            if (!context.isInspectInternal() && frame.isInternal()) {
+            if (frame.isInternal()) {
                 continue;
             }
             Source source = sourceSection.getSource();
-            if (!context.isInspectInternal() && source.isInternal()) {
+            if (source.isInternal()) {
                 // should not be, double-check
                 continue;
             }
@@ -657,10 +657,6 @@ public final class TruffleDebugger extends DebuggerDomain {
 
         @Override
         public void onSuspend(SuspendedEvent se) {
-            try {
-                context.waitForRunPermission();
-            } catch (InterruptedException ex) {
-            }
             SourceSection ss = se.getSourceSection();
             lock();
             onSuspendPhaser.register();

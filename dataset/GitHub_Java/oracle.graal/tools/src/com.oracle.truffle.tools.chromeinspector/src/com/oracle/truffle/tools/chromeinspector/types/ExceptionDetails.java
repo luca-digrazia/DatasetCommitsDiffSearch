@@ -26,43 +26,35 @@ package com.oracle.truffle.tools.chromeinspector.types;
 
 import java.util.concurrent.atomic.AtomicLong;
 
-import com.oracle.truffle.tools.utils.json.JSONObject;
+import org.json.JSONObject;
 
 import com.oracle.truffle.api.debug.DebugException;
 import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.tools.chromeinspector.InspectorExecutionContext;
 import com.oracle.truffle.tools.chromeinspector.ScriptsHandler;
+import com.oracle.truffle.tools.chromeinspector.TruffleExecutionContext;
 
 public final class ExceptionDetails {
 
     private static final AtomicLong LAST_ID = new AtomicLong(0);
 
     private final DebugException debugException;
-    private final String errorMessage;
     private final long exceptionId;
 
     public ExceptionDetails(DebugException debugException) {
         this.debugException = debugException;
-        this.errorMessage = debugException.getLocalizedMessage();
         this.exceptionId = LAST_ID.incrementAndGet();
     }
 
-    public ExceptionDetails(String errorMessage) {
-        this.debugException = null;
-        this.errorMessage = errorMessage;
-        this.exceptionId = LAST_ID.incrementAndGet();
-    }
-
-    public JSONObject createJSON(InspectorExecutionContext context, boolean generatePreview) {
+    public JSONObject createJSON(TruffleExecutionContext context) {
         JSONObject json = new JSONObject();
         json.put("exceptionId", exceptionId);
-        if (debugException == null || debugException.getCatchLocation() != null) {
+        if (debugException.getCatchLocation() != null) {
             json.put("text", "Caught");
         } else {
             json.put("text", "Uncaught");
         }
-        SourceSection throwLocation = (debugException != null) ? debugException.getThrowLocation() : null;
+        SourceSection throwLocation = debugException.getThrowLocation();
         if (throwLocation != null) {
             json.put("lineNumber", throwLocation.getStartLine() - 1);
             json.put("columnNumber", throwLocation.getStartColumn() - 1);
@@ -79,29 +71,20 @@ public final class ExceptionDetails {
                 json.put("url", ScriptsHandler.getNiceStringFromURI(throwLocation.getSource().getURI()));
             }
         }
-        if (debugException != null) {
-            StackTrace stackTrace = new StackTrace(context, debugException.getDebugStackTrace());
-            json.put("stackTrace", stackTrace.toJSON());
-        }
-        DebugValue exceptionObject = (debugException != null) ? debugException.getExceptionObject() : null;
+        StackTrace stackTrace = new StackTrace(context, debugException.getDebugStackTrace());
+        json.put("stackTrace", stackTrace.toJSON());
+        DebugValue exceptionObject = debugException.getExceptionObject();
         if (exceptionObject != null) {
-            RemoteObject ro = context.createAndRegister(exceptionObject, generatePreview);
+            RemoteObject ro = context.createAndRegister(exceptionObject);
             json.put("exception", ro.toJSON());
         } else {
             JSONObject ex = new JSONObject();
-            ex.put("description", errorMessage);
-            ex.put("value", errorMessage);
+            ex.put("description", debugException.getLocalizedMessage());
+            ex.put("value", debugException.getLocalizedMessage());
             ex.put("type", "string");
             json.put("exception", ex);
         }
         json.put("executionContextId", context.getId());
         return json;
-    }
-
-    /**
-     * For test purposes only. Do not call from production code.
-     */
-    public static void resetIDs() {
-        LAST_ID.set(0);
     }
 }
