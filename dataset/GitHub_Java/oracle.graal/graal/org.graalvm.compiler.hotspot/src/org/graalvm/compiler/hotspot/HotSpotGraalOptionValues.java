@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.Properties;
-import java.util.ServiceLoader;
 
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionDescriptors;
@@ -40,7 +39,6 @@ import org.graalvm.compiler.options.OptionValuesAccess;
 import org.graalvm.compiler.options.OptionsParser;
 import org.graalvm.compiler.serviceprovider.ServiceProvider;
 import org.graalvm.util.EconomicMap;
-import org.graalvm.util.MapCursor;
 
 import jdk.vm.ci.common.InitTimer;
 
@@ -107,7 +105,7 @@ public class HotSpotGraalOptionValues implements OptionValuesAccess {
         EconomicMap<OptionKey<?>, Object> values = OptionValues.newOptionMap();
         try (InitTimer t = timer("InitializeOptions")) {
 
-            ServiceLoader<OptionDescriptors> loader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
+            Iterable<OptionDescriptors> loader = OptionsParser.getOptionsLoader();
             Properties savedProps = getSavedProperties();
             String optionsFile = savedProps.getProperty(GRAAL_OPTIONS_FILE_PROPERTY_NAME);
 
@@ -118,9 +116,8 @@ public class HotSpotGraalOptionValues implements OptionValuesAccess {
                         Properties props = new Properties();
                         props.load(fr);
                         EconomicMap<String, String> optionSettings = EconomicMap.create();
-                        MapCursor<String, String> cursor = optionSettings.getEntries();
-                        while (cursor.advance()) {
-                            optionSettings.put(cursor.getKey(), cursor.getValue());
+                        for (Map.Entry<Object, Object> e : props.entrySet()) {
+                            optionSettings.put((String) e.getKey(), (String) e.getValue());
                         }
                         try {
                             OptionsParser.parseOptions(optionSettings, values, loader);
