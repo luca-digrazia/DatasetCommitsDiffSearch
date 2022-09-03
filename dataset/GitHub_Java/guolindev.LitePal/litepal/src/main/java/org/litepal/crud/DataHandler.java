@@ -198,7 +198,7 @@ abstract class DataHandler extends LitePalBase {
 	protected void giveBaseObjIdValue(DataSupport baseObj, long id) throws SecurityException,
 			NoSuchFieldException, IllegalArgumentException, IllegalAccessException {
 		if (id > 0) {
-			DynamicExecutor.set(baseObj, "baseObjId", id, DataSupport.class);
+			DynamicExecutor.setField(baseObj, "baseObjId", id, DataSupport.class);
 		}
 	}
 
@@ -358,7 +358,8 @@ abstract class DataHandler extends LitePalBase {
 	 * @param baseObj
 	 *            The class of base object.
 	 */
-	protected void analyzeAssociatedModels(DataSupport baseObj, Collection<AssociationsInfo> associationInfos) {
+	protected void analyzeAssociatedModels(DataSupport baseObj,
+			Collection<AssociationsInfo> associationInfos) {
 		try {
 			for (AssociationsInfo associationInfo : associationInfos) {
 				if (associationInfo.getAssociationType() == Const.Model.MANY_TO_ONE) {
@@ -794,7 +795,7 @@ abstract class DataHandler extends LitePalBase {
 	 *            If the field is char, convert the value to String at index 1.
 	 * @return The types of parameters for {@link android.content.ContentValues#put}.
 	 */
-	protected Class<?>[] getParameterTypes(Field field, Object fieldValue, Object[] parameters) {
+	private Class<?>[] getParameterTypes(Field field, Object fieldValue, Object[] parameters) {
 		Class<?>[] parameterTypes;
 		if (isCharType(field)) {
 			parameters[1] = String.valueOf(fieldValue);
