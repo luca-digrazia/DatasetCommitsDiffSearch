@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,35 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_8;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_6;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.word.Word;
+
+import jdk.vm.ci.meta.Value;
 
 /**
  * A call to the runtime code implementing the uncommon trap logic.
  */
-public class PushInterpreterFrameNode extends FixedWithNextNode implements LIRLowerable {
+@NodeInfo(cycles = CYCLES_8, size = SIZE_6)
+public final class PushInterpreterFrameNode extends FixedWithNextNode implements LIRLowerable {
 
-    @Input private ValueNode framePc;
-    @Input private ValueNode frameSize;
-    @Input private ValueNode senderSp;
-    @Input private ValueNode initialInfo;
+    public static final NodeClass<PushInterpreterFrameNode> TYPE = NodeClass.create(PushInterpreterFrameNode.class);
+    @Input ValueNode framePc;
+    @Input ValueNode frameSize;
+    @Input ValueNode senderSp;
+    @Input ValueNode initialInfo;
 
     public PushInterpreterFrameNode(ValueNode frameSize, ValueNode framePc, ValueNode senderSp, ValueNode initialInfo) {
-        super(StampFactory.forVoid());
+        super(TYPE, StampFactory.forVoid());
         this.frameSize = frameSize;
         this.framePc = framePc;
         this.senderSp = senderSp;

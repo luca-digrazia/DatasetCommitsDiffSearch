@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,35 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.stubs.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.hotspot.stubs.DeoptimizationStub;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.word.Word;
+
+import jdk.vm.ci.meta.Value;
 
 /**
  * Emits code to leave (pop) the current low-level stack frame which is being deoptimized. This node
  * is only used in {@link DeoptimizationStub}.
  */
-public class LeaveDeoptimizedStackFrameNode extends FixedWithNextNode implements LIRLowerable {
+@NodeInfo(cycles = CYCLES_3, size = SIZE_2)
+public final class LeaveDeoptimizedStackFrameNode extends FixedWithNextNode implements LIRLowerable {
 
-    @Input private ValueNode frameSize;
-    @Input private ValueNode initialInfo;
+    public static final NodeClass<LeaveDeoptimizedStackFrameNode> TYPE = NodeClass.create(LeaveDeoptimizedStackFrameNode.class);
+    @Input ValueNode frameSize;
+    @Input ValueNode initialInfo;
 
     public LeaveDeoptimizedStackFrameNode(ValueNode frameSize, ValueNode initialInfo) {
-        super(StampFactory.forVoid());
+        super(TYPE, StampFactory.forVoid());
         this.frameSize = frameSize;
         this.initialInfo = initialInfo;
     }

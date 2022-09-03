@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
 import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
 
@@ -274,7 +273,7 @@ public class VerifyVirtualizableTest {
         for (Method m : c.getDeclaredMethods()) {
             if (!Modifier.isNative(m.getModifiers()) && !Modifier.isAbstract(m.getModifiers())) {
                 ResolvedJavaMethod method = metaAccess.lookupJavaMethod(m);
-                StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO, INVALID_COMPILATION_ID);
+                StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO);
                 graphBuilderSuite.apply(graph, context);
                 try (DebugConfigScope s = Debug.disableIntercept()) {
                     new VerifyVirtualizableUsage().apply(graph, context);

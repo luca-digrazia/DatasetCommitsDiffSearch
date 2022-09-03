@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,30 @@
  */
 package com.oracle.graal.truffle.nodes.frame;
 
-import com.oracle.graal.graph.Node.IterableNodeType;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.truffle.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
 
 /**
  * Intrinsic node for materializing a Truffle frame.
  */
-@NodeInfo(nameTemplate = "MaterializeFrame{p#frame/s}")
-public class MaterializeFrameNode extends FixedWithNextNode implements IterableNodeType {
+@NodeInfo(nameTemplate = "MaterializeFrame{p#frame/s}", cycles = CYCLES_0, size = SIZE_0)
+public final class MaterializeFrameNode extends FixedWithNextNode implements IterableNodeType {
 
-    @Input private ValueNode frame;
+    public static final NodeClass<MaterializeFrameNode> TYPE = NodeClass.create(MaterializeFrameNode.class);
+    @Input ValueNode frame;
 
     public MaterializeFrameNode(ValueNode frame) {
-        super(frame.stamp());
+        super(TYPE, frame.stamp());
         this.frame = frame;
     }
 
     public ValueNode getFrame() {
         return frame;
     }
-
-    @NodeIntrinsic
-    public static native <T> T materialize(FrameWithoutBoxing frame);
 }

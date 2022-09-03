@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,39 +22,93 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.NamedLocationIdentity;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.type.StampTool;
 
-public abstract class UnsafeAccessNode extends FixedWithNextNode {
-    @Input private ValueNode object;
-    @Input private ValueNode offset;
-    private final int displacement;
-    private final Kind accessKind;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
-    public UnsafeAccessNode(Stamp stamp, ValueNode object, int displacement, ValueNode offset, Kind accessKind) {
-        super(stamp);
+@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+public abstract class UnsafeAccessNode extends FixedWithNextNode implements Canonicalizable {
+
+    public static final NodeClass<UnsafeAccessNode> TYPE = NodeClass.create(UnsafeAccessNode.class);
+    @Input ValueNode object;
+    @Input ValueNode offset;
+    protected final JavaKind accessKind;
+    protected final LocationIdentity locationIdentity;
+
+    protected UnsafeAccessNode(NodeClass<? extends UnsafeAccessNode> c, Stamp stamp, ValueNode object, ValueNode offset, JavaKind accessKind, LocationIdentity locationIdentity) {
+        super(c, stamp);
         assert accessKind != null;
+        assert locationIdentity != null;
         this.object = object;
-        this.displacement = displacement;
         this.offset = offset;
         this.accessKind = accessKind;
+        this.locationIdentity = locationIdentity;
+    }
+
+    public LocationIdentity getLocationIdentity() {
+        return locationIdentity;
     }
 
     public ValueNode object() {
         return object;
     }
 
-    public int displacement() {
-        return displacement;
-    }
-
     public ValueNode offset() {
         return offset;
     }
 
-    public Kind accessKind() {
+    public JavaKind accessKind() {
         return accessKind;
     }
+
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (this.getLocationIdentity().isAny() && offset().isConstant()) {
+            long constantOffset = offset().asJavaConstant().asLong();
+
+            // Try to canonicalize to a field access.
+            ResolvedJavaType receiverType = StampTool.typeOrNull(object());
+            if (receiverType != null) {
+                ResolvedJavaField field = receiverType.findInstanceFieldWithOffset(constantOffset, accessKind());
+                // No need for checking that the receiver is non-null. The field access includes
+                // the null check and if a field is found, the offset is so small that this is
+                // never a valid access of an arbitrary address.
+                if (field != null && field.getJavaKind() == this.accessKind()) {
+                    assert !graph().isAfterFloatingReadPhase() : "cannot add more precise memory location after floating read phase";
+                    return cloneAsFieldAccess(graph().getAssumptions(), field);
+                }
+            }
+        }
+        if (this.getLocationIdentity().isAny()) {
+            ResolvedJavaType receiverType = StampTool.typeOrNull(object());
+            // Try to build a better location identity.
+            if (receiverType != null && receiverType.isArray()) {
+                LocationIdentity identity = NamedLocationIdentity.getArrayLocation(receiverType.getComponentType().getJavaKind());
+                assert !graph().isAfterFloatingReadPhase() : "cannot add more precise memory location after floating read phase";
+                return cloneAsArrayAccess(offset(), identity);
+            }
+        }
+
+        return this;
+    }
+
+    protected abstract ValueNode cloneAsFieldAccess(Assumptions assumptions, ResolvedJavaField field);
+
+    protected abstract ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity);
 }

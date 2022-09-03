@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,45 +22,69 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.snippets.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.VM_ERROR;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNKNOWN;
+
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.replacements.Log;
+import com.oracle.graal.replacements.nodes.CStringConstant;
+
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.MetaUtil;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
 
 /**
- * Causes the VM to exit with a description of the current Java location
- * and an optional {@linkplain Log#printf(String, long) formatted} error message specified.
+ * Causes the VM to exit with a description of the current Java location and an optional
+ * {@linkplain Log#printf(String, long) formatted} error message specified.
  */
-public final class VMErrorNode extends FixedWithNextNode implements LIRGenLowerable {
+@NodeInfo(cycles = CYCLES_UNKNOWN, size = SIZE_UNKNOWN)
+public final class VMErrorNode extends DeoptimizingStubCall implements LIRLowerable {
 
-    @Input private ValueNode format;
-    @Input private ValueNode value;
+    public static final NodeClass<VMErrorNode> TYPE = NodeClass.create(VMErrorNode.class);
+    protected final String format;
+    @Input ValueNode value;
 
-    public VMErrorNode(ValueNode format, ValueNode value) {
-        super(StampFactory.forVoid());
+    public VMErrorNode(String format, ValueNode value) {
+        super(TYPE, StampFactory.forVoid());
         this.format = format;
         this.value = value;
     }
 
     @Override
-    public void generate(LIRGenerator gen) {
-        long vmErrorStub = HotSpotGraalRuntime.getInstance().getConfig().vmErrorStub;
-        LIRFrameState state = gen.state();
-        BytecodePosition pos = state.topFrame;
-        String where = CodeUtil.append(new StringBuilder(100), pos).toString();
-        Kind[] signature = new Kind[] {Kind.Object, Kind.Object, Kind.Long};
-        gen.emitCall(vmErrorStub, Kind.Void, signature, true, Constant.forObject(where), gen.operand(format), gen.operand(value));
+    public void generate(NodeLIRBuilderTool gen) {
+        String whereString;
+        if (stateBefore() != null) {
+            String nl = CodeUtil.NEW_LINE;
+            StringBuilder sb = new StringBuilder("in compiled code associated with frame state:");
+            FrameState fs = stateBefore();
+            while (fs != null) {
+                MetaUtil.appendLocation(sb.append(nl).append("\t"), fs.method(), fs.bci);
+                fs = fs.outerFrameState();
+            }
+            whereString = sb.toString();
+        } else {
+            ResolvedJavaMethod method = graph().method();
+            whereString = "in compiled code for " + (method == null ? graph().toString() : method.format("%H.%n(%p)"));
+        }
+
+        LIRKind wordKind = gen.getLIRGeneratorTool().getLIRKind(StampFactory.pointer());
+        Value whereArg = gen.getLIRGeneratorTool().emitConstant(wordKind, new CStringConstant(whereString));
+        Value formatArg = gen.getLIRGeneratorTool().emitConstant(wordKind, new CStringConstant(format));
+
+        ForeignCallLinkage linkage = gen.getLIRGeneratorTool().getForeignCalls().lookupForeignCall(VM_ERROR);
+        gen.getLIRGeneratorTool().emitForeignCall(linkage, null, whereArg, formatArg, gen.operand(value));
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void vmError(String format, long value) {
-        throw new GraalInternalError("");
-    }
+    public static native void vmError(@ConstantNodeParameter String format, long value);
 }

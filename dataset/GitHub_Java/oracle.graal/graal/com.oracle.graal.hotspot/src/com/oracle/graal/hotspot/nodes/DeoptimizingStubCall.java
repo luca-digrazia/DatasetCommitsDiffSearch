@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +22,21 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodes.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNKNOWN;
 
-public class DeoptimizingStubCall extends DeoptimizingFixedWithNextNode {
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.DeoptimizingFixedWithNextNode;
 
-    public DeoptimizingStubCall(Stamp stamp) {
-        super(stamp);
+@NodeInfo(cycles = CYCLES_UNKNOWN, size = SIZE_UNKNOWN)
+public abstract class DeoptimizingStubCall extends DeoptimizingFixedWithNextNode {
+
+    public static final NodeClass<DeoptimizingStubCall> TYPE = NodeClass.create(DeoptimizingStubCall.class);
+
+    public DeoptimizingStubCall(NodeClass<? extends DeoptimizingStubCall> c, Stamp stamp) {
+        super(c, stamp);
     }
 
     @Override

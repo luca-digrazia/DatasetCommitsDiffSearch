@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,26 +22,43 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_10;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_6;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * Emits code to leave (pop) the current low-level stack frame. This operation also removes the
  * return address if its location is on the stack.
  */
-public class LeaveCurrentStackFrameNode extends FixedWithNextNode implements LIRLowerable {
+@NodeInfo(cycles = CYCLES_10, size = SIZE_6)
+public final class LeaveCurrentStackFrameNode extends FixedWithNextNode implements LIRLowerable {
 
-    public LeaveCurrentStackFrameNode() {
-        super(StampFactory.forVoid());
+    public static final NodeClass<LeaveCurrentStackFrameNode> TYPE = NodeClass.create(LeaveCurrentStackFrameNode.class);
+    @Input SaveAllRegistersNode registerSaver;
+
+    public LeaveCurrentStackFrameNode(ValueNode registerSaver) {
+        super(TYPE, StampFactory.forVoid());
+        this.registerSaver = (SaveAllRegistersNode) registerSaver;
+    }
+
+    private SaveRegistersOp getSaveRegistersOp() {
+        return registerSaver.getSaveRegistersOp();
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitLeaveCurrentStackFrame();
+        ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitLeaveCurrentStackFrame(getSaveRegistersOp());
     }
 
     @NodeIntrinsic
-    public static native void leaveCurrentStackFrame();
+    public static native void leaveCurrentStackFrame(long registerSaver);
 }

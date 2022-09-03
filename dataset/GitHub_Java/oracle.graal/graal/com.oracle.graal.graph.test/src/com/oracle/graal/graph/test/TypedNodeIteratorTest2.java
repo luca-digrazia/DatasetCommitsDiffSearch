@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,46 +22,79 @@
  */
 package com.oracle.graal.graph.test;
 
-import static org.junit.Assert.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
 
 public class TypedNodeIteratorTest2 {
 
-    private static class NodeA extends Node implements TestNodeInterface {
+    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    static class NodeA extends Node implements TestNodeInterface {
 
-        private final String name;
+        public static final NodeClass<NodeA> TYPE = NodeClass.create(NodeA.class);
+        protected final String name;
 
-        public NodeA(String name) {
+        protected NodeA(String name) {
+            this(TYPE, name);
+        }
+
+        protected NodeA(NodeClass<? extends NodeA> c, String name) {
+            super(c);
             this.name = name;
         }
 
+        @Override
         public String getName() {
             return name;
         }
     }
 
-    private static class NodeB extends NodeA implements Node.IterableNodeType {
+    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    static class NodeB extends NodeA implements IterableNodeType {
+        public static final NodeClass<NodeB> TYPE = NodeClass.create(NodeB.class);
 
-        public NodeB(String name) {
-            super(name);
+        protected NodeB(String name) {
+            this(TYPE, name);
         }
+
+        protected NodeB(NodeClass<? extends NodeB> c, String name) {
+            super(c, name);
+        }
+
     }
 
-    private static class NodeC extends NodeB {
+    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    static class NodeC extends NodeB {
+        public static final NodeClass<NodeC> TYPE = NodeClass.create(NodeC.class);
 
-        public NodeC(String name) {
-            super(name);
+        protected NodeC(String name) {
+            this(TYPE, name);
         }
+
+        protected NodeC(NodeClass<? extends NodeC> c, String name) {
+            super(c, name);
+        }
+
     }
 
-    private static class NodeD extends NodeC {
+    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    static final class NodeD extends NodeC {
+        public static final NodeClass<NodeD> TYPE = NodeClass.create(NodeD.class);
 
-        public NodeD(String name) {
-            super(name);
+        protected NodeD(String name) {
+            super(TYPE, name);
         }
+
     }
 
     @Test
@@ -70,8 +103,8 @@ public class TypedNodeIteratorTest2 {
         graph.add(new NodeB("b"));
         graph.add(new NodeD("d"));
 
-        Assert.assertEquals("bd", TypedNodeIteratorTest.toString(graph.getNodes(NodeB.class)));
-        Assert.assertEquals("d", TypedNodeIteratorTest.toString(graph.getNodes(NodeD.class)));
+        Assert.assertEquals("bd", TypedNodeIteratorTest.toString(graph.getNodes(NodeB.TYPE)));
+        Assert.assertEquals("d", TypedNodeIteratorTest.toString(graph.getNodes(NodeD.TYPE)));
     }
 
     @Test
@@ -80,21 +113,21 @@ public class TypedNodeIteratorTest2 {
         graph.add(new NodeB("b1"));
         NodeD d1 = graph.add(new NodeD("d1"));
         StringBuilder sb = new StringBuilder();
-        for (NodeB tn : graph.getNodes(NodeB.class)) {
+        for (NodeB tn : graph.getNodes(NodeB.TYPE)) {
             if (tn == d1) {
                 graph.add(new NodeB("b2"));
             }
             sb.append(tn.getName());
         }
         assertEquals("b1d1b2", sb.toString());
-        for (NodeB tn : graph.getNodes(NodeB.class)) {
+        for (NodeB tn : graph.getNodes(NodeB.TYPE)) {
             if (tn == d1) {
                 graph.add(new NodeB("b3"));
             }
             assertNotNull(tn);
         }
-        assertEquals(4, graph.getNodes(NodeB.class).count());
-        assertEquals(1, graph.getNodes(NodeD.class).count());
+        assertEquals(4, graph.getNodes(NodeB.TYPE).count());
+        assertEquals(1, graph.getNodes(NodeD.TYPE).count());
     }
 
 }

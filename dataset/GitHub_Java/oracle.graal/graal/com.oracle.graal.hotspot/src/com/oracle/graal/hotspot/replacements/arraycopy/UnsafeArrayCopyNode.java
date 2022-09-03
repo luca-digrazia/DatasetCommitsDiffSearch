@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,31 @@
  */
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
+import static com.oracle.graal.compiler.common.LocationIdentity.any;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_200;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_200;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.NamedLocationIdentity;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.extended.ArrayRangeWriteNode;
+import com.oracle.graal.nodes.memory.MemoryAccess;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.memory.MemoryNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
-public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerable, MemoryCheckpoint.Single {
+import jdk.vm.ci.meta.JavaKind;
 
+@NodeInfo(allowedUsageTypes = {InputType.Memory}, cycles = CYCLES_200, size = SIZE_200)
+public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerable, MemoryCheckpoint.Single, MemoryAccess {
+
+    public static final NodeClass<UnsafeArrayCopyNode> TYPE = NodeClass.create(UnsafeArrayCopyNode.class);
     @Input ValueNode src;
     @Input ValueNode srcPos;
     @Input ValueNode dest;
@@ -42,14 +54,12 @@ public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerabl
     @Input ValueNode length;
     @OptionalInput ValueNode layoutHelper;
 
-    protected Kind elementKind;
+    @OptionalInput(InputType.Memory) MemoryNode lastLocationAccess;
 
-    public static UnsafeArrayCopyNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
-        return new UnsafeArrayCopyNode(src, srcPos, dest, destPos, length, layoutHelper, elementKind);
-    }
+    protected JavaKind elementKind;
 
-    protected UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
-        super(StampFactory.forVoid());
+    public UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, JavaKind elementKind) {
+        super(TYPE, StampFactory.forVoid());
         assert layoutHelper == null || elementKind == null;
         this.src = src;
         this.srcPos = srcPos;
@@ -60,19 +70,11 @@ public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerabl
         this.elementKind = elementKind;
     }
 
-    public static UnsafeArrayCopyNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind) {
-        return new UnsafeArrayCopyNode(src, srcPos, dest, destPos, length, elementKind);
-    }
-
-    protected UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind) {
+    public UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, JavaKind elementKind) {
         this(src, srcPos, dest, destPos, length, null, elementKind);
     }
 
-    public static UnsafeArrayCopyNode create(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper) {
-        return new UnsafeArrayCopyNode(src, srcPos, dest, destPos, length, layoutHelper);
-    }
-
-    protected UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper) {
+    public UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper) {
         this(src, srcPos, dest, destPos, length, layoutHelper, null);
     }
 
@@ -93,7 +95,7 @@ public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerabl
 
     @Override
     public boolean isObjectArray() {
-        return elementKind == Kind.Object;
+        return elementKind == JavaKind.Object;
     }
 
     @Override
@@ -101,13 +103,13 @@ public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerabl
         return false;
     }
 
-    public Kind getElementKind() {
+    public JavaKind getElementKind() {
         return elementKind;
     }
 
     @Override
     public void lower(LoweringTool tool) {
-        if (graph().getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
+        if (graph().getGuardsStage().areFrameStatesAtDeopts()) {
             UnsafeArrayCopySnippets.Templates templates = tool.getReplacements().getSnippetTemplateCache(UnsafeArrayCopySnippets.Templates.class);
             templates.lower(this, tool);
         }
@@ -129,11 +131,22 @@ public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerabl
         if (elementKind != null) {
             return NamedLocationIdentity.getArrayLocation(elementKind);
         }
-        return ANY_LOCATION;
+        return any();
+    }
+
+    @Override
+    public MemoryNode getLastLocationAccess() {
+        return lastLocationAccess;
+    }
+
+    @Override
+    public void setLastLocationAccess(MemoryNode lla) {
+        updateUsagesInterface(lastLocationAccess, lla);
+        lastLocationAccess = lla;
     }
 
     @NodeIntrinsic
-    public static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter Kind elementKind);
+    public static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter JavaKind elementKind);
 
     @NodeIntrinsic
     public static native void arraycopyPrimitive(Object src, int srcPos, Object dest, int destPos, int length, int layoutHelper);

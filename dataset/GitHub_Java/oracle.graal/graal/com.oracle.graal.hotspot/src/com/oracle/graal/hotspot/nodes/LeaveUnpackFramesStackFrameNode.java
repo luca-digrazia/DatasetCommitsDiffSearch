@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,44 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.stubs.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_10;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_6;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotBackend;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * Emits code to leave a low-level stack frame specifically to call out to the C++ method
- * {@link DeoptimizationStub#UNPACK_FRAMES Deoptimization::unpack_frames}.
+ * {@link HotSpotBackend#UNPACK_FRAMES Deoptimization::unpack_frames}.
  */
-public class LeaveUnpackFramesStackFrameNode extends FixedWithNextNode implements LIRLowerable {
+@NodeInfo(cycles = CYCLES_10, size = SIZE_6)
+public final class LeaveUnpackFramesStackFrameNode extends FixedWithNextNode implements LIRLowerable {
 
-    public LeaveUnpackFramesStackFrameNode() {
-        super(StampFactory.forVoid());
+    public static final NodeClass<LeaveUnpackFramesStackFrameNode> TYPE = NodeClass.create(LeaveUnpackFramesStackFrameNode.class);
+    @Input SaveAllRegistersNode registerSaver;
+
+    public LeaveUnpackFramesStackFrameNode(ValueNode registerSaver) {
+        super(TYPE, StampFactory.forVoid());
+        this.registerSaver = (SaveAllRegistersNode) registerSaver;
+    }
+
+    private SaveRegistersOp getSaveRegistersOp() {
+        return registerSaver.getSaveRegistersOp();
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitLeaveUnpackFramesStackFrame();
+        ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitLeaveUnpackFramesStackFrame(getSaveRegistersOp());
     }
 
     @NodeIntrinsic
-    public static native void leaveUnpackFramesStackFrame();
+    public static native void leaveUnpackFramesStackFrame(long registerSaver);
 }

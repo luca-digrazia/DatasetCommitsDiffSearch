@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,28 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-@NodeInfo(allowedUsageTypes = {InputType.Association, InputType.Value})
-public final class SnippetLocationProxyNode extends FloatingNode implements Canonicalizable {
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
 
-    @Input(InputType.Unchecked) private ValueNode location;
+@NodeInfo(allowedUsageTypes = {InputType.Association, InputType.Value}, cycles = CYCLES_0, size = SIZE_0)
+public final class SnippetLocationProxyNode extends FloatingNode implements Canonicalizable, Node.ValueNumberable {
+
+    public static final NodeClass<SnippetLocationProxyNode> TYPE = NodeClass.create(SnippetLocationProxyNode.class);
+    @Input(InputType.Unchecked) ValueNode location;
 
     public SnippetLocationProxyNode(ValueNode location) {
-        super(StampFactory.object());
+        super(TYPE, StampFactory.object());
         this.location = location;
     }
 

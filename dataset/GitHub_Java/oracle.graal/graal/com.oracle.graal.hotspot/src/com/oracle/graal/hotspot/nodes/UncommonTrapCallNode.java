@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,59 +22,73 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.UNCOMMON_TRAP;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNKNOWN;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.word.Word;
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
 
 /**
  * A call to the runtime code implementing the uncommon trap logic.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
-public class UncommonTrapCallNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Multi {
+@NodeInfo(allowedUsageTypes = {InputType.Memory}, cycles = CYCLES_UNKNOWN, size = SIZE_UNKNOWN)
+public final class UncommonTrapCallNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
 
-    @Input private ValueNode trapRequest;
-    @Input private SaveAllRegistersNode registerSaver;
-    private final ForeignCallsProvider foreignCalls;
-    public static final ForeignCallDescriptor UNCOMMON_TRAP = new ForeignCallDescriptor("uncommonTrap", Word.class, Word.class, int.class);
+    public static final NodeClass<UncommonTrapCallNode> TYPE = NodeClass.create(UncommonTrapCallNode.class);
+    @Input ValueNode trapRequest;
+    @Input ValueNode mode;
+    @Input SaveAllRegistersNode registerSaver;
+    protected final ForeignCallsProvider foreignCalls;
 
-    public UncommonTrapCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode registerSaver, ValueNode trapRequest) {
-        super(StampFactory.forKind(Kind.fromJavaClass(UNCOMMON_TRAP.getResultType())));
+    public UncommonTrapCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode registerSaver, ValueNode trapRequest, ValueNode mode) {
+        super(TYPE, StampFactory.forKind(JavaKind.fromJavaClass(UNCOMMON_TRAP.getResultType())));
         this.trapRequest = trapRequest;
+        this.mode = mode;
         this.registerSaver = (SaveAllRegistersNode) registerSaver;
         this.foreignCalls = foreignCalls;
     }
 
     @Override
-    public LocationIdentity[] getLocationIdentities() {
-        return foreignCalls.getKilledLocations(UNCOMMON_TRAP);
+    public LocationIdentity getLocationIdentity() {
+        return LocationIdentity.any();
     }
 
     public SaveRegistersOp getSaveRegistersOp() {
         return registerSaver.getSaveRegistersOp();
     }
 
+    /**
+     * Returns the node representing the exec_mode/unpack_kind used during this fetch_unroll_info
+     * call.
+     */
+    public ValueNode getMode() {
+        return mode;
+    }
+
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         Value trapRequestValue = gen.operand(trapRequest);
-        Value result = ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitUncommonTrapCall(trapRequestValue, getSaveRegistersOp());
+        Value modeValue = gen.operand(getMode());
+        Value result = ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitUncommonTrapCall(trapRequestValue, modeValue, getSaveRegistersOp());
         gen.setResult(this, result);
     }
 
     @NodeIntrinsic
-    public static native Word uncommonTrap(long registerSaver, int trapRequest);
-
-    public MemoryCheckpoint asMemoryCheckpoint() {
-        return null;
-    }
-
-    public MemoryPhiNode asMemoryPhi() {
-        return null;
-    }
+    public static native Word uncommonTrap(long registerSaver, int trapRequest, int mode);
 }
