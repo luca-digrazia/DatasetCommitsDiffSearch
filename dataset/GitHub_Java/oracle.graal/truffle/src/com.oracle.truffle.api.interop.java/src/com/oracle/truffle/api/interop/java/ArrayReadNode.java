@@ -24,43 +24,133 @@
  */
 package com.oracle.truffle.api.interop.java;
 
-import java.lang.reflect.Array;
+import java.util.List;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.java.ArrayReadNodeGen.ArrayGetNodeGen;
 import com.oracle.truffle.api.nodes.Node;
 
+@SuppressWarnings("deprecation")
 abstract class ArrayReadNode extends Node {
-    @Child private ToPrimitiveNode primitive = ToPrimitiveNode.create();
 
-    protected abstract Object executeWithTarget(VirtualFrame frame, JavaObject receiver, Object index);
+    abstract static class ArrayGet extends Node {
 
-    @SuppressWarnings("unchecked")
-    @Specialization(guards = "index.getClass() == clazz")
-    protected Object doNumber(JavaObject receiver, Number index, @Cached("index.getClass()") Class<?> clazz) {
-        Class<Number> numberClazz = (Class<Number>) clazz;
-        return doArrayAccess(receiver, numberClazz.cast(index).intValue());
+        protected abstract Object execute(Object array, int index);
+
+        @Specialization
+        boolean doBoolean(boolean[] array, int index) {
+            return array[index];
+        }
+
+        @Specialization
+        byte doByte(byte[] array, int index) {
+            return array[index];
+        }
+
+        @Specialization
+        short doShort(short[] array, int index) {
+            return array[index];
+        }
+
+        @Specialization
+        char doChar(char[] array, int index) {
+            return array[index];
+        }
+
+        @Specialization
+        int doInt(int[] array, int index) {
+            return array[index];
+        }
+
+        @Specialization
+        long doLong(long[] array, int index) {
+            return array[index];
+        }
+
+        @Specialization
+        float doFloat(float[] array, int index) {
+            return array[index];
+        }
+
+        @Specialization
+        double doDouble(double[] array, int index) {
+            return array[index];
+        }
+
+        @Specialization
+        Object doObject(Object[] array, int index) {
+            return array[index];
+        }
     }
 
-    @Specialization(replaces = "doNumber")
-    protected Object doNumberGeneric(JavaObject receiver, Number index) {
+    @Child private ArrayGet arrayGet = ArrayGetNodeGen.create();
+
+    protected abstract Object executeWithTarget(JavaObject receiver, Object index);
+
+    @Specialization(guards = {"receiver.isArray()"})
+    protected Object doArrayIntIndex(JavaObject receiver, int index) {
+        return doArrayAccess(receiver, index);
+    }
+
+    @Specialization(guards = {"receiver.isArray()", "index.getClass() == clazz"}, replaces = "doArrayIntIndex")
+    protected Object doArrayCached(JavaObject receiver, Number index,
+                    @Cached("index.getClass()") Class<? extends Number> clazz) {
+        return doArrayAccess(receiver, clazz.cast(index).intValue());
+    }
+
+    @Specialization(guards = {"receiver.isArray()"}, replaces = "doArrayCached")
+    protected Object doArrayGeneric(JavaObject receiver, Number index) {
         return doArrayAccess(receiver, index.intValue());
+    }
+
+    @TruffleBoundary
+    @Specialization(guards = {"isList(receiver)"})
+    protected Object doListIntIndex(JavaObject receiver, int index) {
+        try {
+            return JavaInterop.toGuestValue(((List<?>) receiver.obj).get(index), receiver.languageContext);
+        } catch (IndexOutOfBoundsException e) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnknownIdentifierException.raise(String.valueOf(index));
+        }
+    }
+
+    @TruffleBoundary
+    @Specialization(guards = {"isList(receiver)"}, replaces = "doListIntIndex")
+    protected Object doListGeneric(JavaObject receiver, Number index) {
+        return doListIntIndex(receiver, index.intValue());
+    }
+
+    @SuppressWarnings("unused")
+    @TruffleBoundary
+    @Specialization(guards = {"!receiver.isArray()", "!isList(receiver)"})
+    protected static Object notArray(JavaObject receiver, Number index) {
+        throw UnsupportedMessageException.raise(Message.READ);
     }
 
     private Object doArrayAccess(JavaObject object, int index) {
         Object obj = object.obj;
+        assert object.isArray();
         Object val = null;
         try {
-            val = Array.get(obj, index);
-        } catch (IllegalArgumentException notAnArr) {
-            throw UnsupportedMessageException.raise(Message.READ);
+            val = arrayGet.execute(obj, index);
+        } catch (ArrayIndexOutOfBoundsException outOfBounds) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnknownIdentifierException.raise(String.valueOf(index));
         }
-        if (primitive.isPrimitive(val)) {
-            return val;
-        }
-        return JavaInterop.asTruffleObject(val);
+        return JavaInterop.toGuestValue(val, object.languageContext);
+    }
+
+    static boolean isList(JavaObject receiver) {
+        return receiver.obj instanceof List;
+    }
+
+    static ArrayReadNode create() {
+        return ArrayReadNodeGen.create();
     }
 }
