@@ -25,6 +25,8 @@ package com.oracle.truffle.espresso.jni;
 import static com.oracle.truffle.espresso.meta.Meta.meta;
 import static com.oracle.truffle.espresso.meta.Meta.toHost;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -55,13 +57,13 @@ import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.impl.FieldInfo;
 import com.oracle.truffle.espresso.impl.MethodInfo;
+import com.oracle.truffle.espresso.intrinsics.Target_java_lang_ClassLoader;
 import com.oracle.truffle.espresso.intrinsics.Type;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.nodes.VmNativeNode;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
@@ -77,11 +79,6 @@ public class JniEnv extends NativeEnv {
     public static final int JNI_COMMIT = 1;
     public static final int JNI_ABORT = 2;
 
-
-    public static final int JVM_INTERFACE_VERSION = 4;
-    public static final int JNI_TRUE = 1;
-    public static final int JNI_FALSE = 0;
-
     private long jniEnvPtr;
 
     // Load native library nespresso.dll (Windows) or libnespresso.so (Unixes) at runtime.
@@ -89,7 +86,8 @@ public class JniEnv extends NativeEnv {
 
     private final TruffleObject initializeNativeContext;
     private final TruffleObject disposeNativeContext;
-    private final TruffleObject dupClosureRef;
+
+    private final TruffleObject dupClosureRef = NativeLibrary.lookup(nespressoLibrary, "dupClosureRef");
 
     private final TruffleObject popBoolean;
     private final TruffleObject popByte;
@@ -117,7 +115,7 @@ public class JniEnv extends NativeEnv {
 
     public Callback jniMethodWrapper(Method m) {
         return new Callback(m.getParameterCount() + 1, args -> {
-            assert (long) args[0] == getNativePointer() : "Calling " + m + " from alien JniEnv";
+            assert unwrapPointer(args[0]) == getNativePointer() : "Calling " + m + " from alien JniEnv";
             Object[] shiftedArgs = Arrays.copyOfRange(args, 1, args.length);
 
             Class<?>[] params = m.getParameterTypes();
@@ -166,18 +164,17 @@ public class JniEnv extends NativeEnv {
                     getThreadLocalPendingException().set(((EspressoException) targetEx).getException());
                 }
                 // FIXME(peterssen): Handle VME exceptions back to guest.
-                return defaultValue(m.getReturnType());
+                throw new RuntimeException(e);
             } catch (IllegalAccessException e) {
                 throw EspressoError.shouldNotReachHere(e);
             }
         });
     }
 
-
     public static String jniNativeSignature(Method method) {
         StringBuilder sb = new StringBuilder("(");
         // Prepend JNIEnv* . The raw pointer will be substituted by the proper `this` reference.
-        sb.append(NativeSimpleType.SINT64);
+        sb.append(NativeSimpleType.POINTER);
         for (Parameter param : method.getParameters()) {
             sb.append(", ");
 
@@ -357,10 +354,8 @@ public class JniEnv extends NativeEnv {
 
     private JniEnv() {
         try {
-            dupClosureRef = NativeLibrary.lookup(nespressoLibrary, "dupClosureRef");
-
             initializeNativeContext = NativeLibrary.lookupAndBind(nespressoLibrary,
-                            "initializeNativeContext", "(env, (string): pointer): sint64");
+                            "initializeNativeContext", "(env, (string): pointer): pointer");
 
             disposeNativeContext = NativeLibrary.lookupAndBind(nespressoLibrary, "disposeNativeContext",
                             "(env, sint64): void");
@@ -377,7 +372,7 @@ public class JniEnv extends NativeEnv {
             popObject = NativeLibrary.lookupAndBind(nespressoLibrary, "popObject", "(sint64): object");
 
             Callback lookupJniImplCallback = Callback.wrapInstanceMethod(this, "lookupJniImpl", String.class);
-            this.jniEnvPtr = (long) ForeignAccess.sendExecute(Message.EXECUTE.createNode(), initializeNativeContext, lookupJniImplCallback);
+            this.jniEnvPtr = unwrapPointer(ForeignAccess.sendExecute(Message.EXECUTE.createNode(), initializeNativeContext, lookupJniImplCallback));
             assert this.jniEnvPtr != 0;
         } catch (UnsupportedMessageException | ArityException | UnknownIdentifierException | UnsupportedTypeException e) {
             throw EspressoError.shouldNotReachHere("Cannot initialize Espresso native interface");
@@ -433,10 +428,7 @@ public class JniEnv extends NativeEnv {
     }
 
     @JniImpl
-    public int GetStringLength(@Type(String.class) StaticObject str) {
-        if (str == StaticObject.NULL) {
-            return 0;
-        }
+    public int GetStringLength(StaticObject str) {
         return (int) meta(str).method("length", int.class).invokeDirect();
     }
 
@@ -445,7 +437,7 @@ public class JniEnv extends NativeEnv {
     @JniImpl
     public long GetFieldID(StaticObjectClass clazz, String name, String signature) {
         clazz.getMirror().initialize();
-        Meta.Field field = meta((clazz).getMirror()).declaredField(name);
+        Meta.Field field = meta((clazz).getMirror()).field(name);
         return fieldIds.handlify(field.rawField());
     }
 
@@ -1117,12 +1109,12 @@ public class JniEnv extends NativeEnv {
     }
 
     @JniImpl
-    public long GetStringCritical(@Type(String.class) StaticObject str, long isCopyPtr) {
+    public long GetStringCritical(StaticObject str, long isCopyPtr) {
         if (isCopyPtr != 0L) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // always copy since pinning is not supported
         }
-        final char[] stringChars = (char[]) meta(str).declaredField("value").get();
+        final char[] stringChars = (char[]) meta(str).field("value").get();
         int len = stringChars.length;
         ByteBuffer criticalRegion = allocateDirect(len, JavaKind.Char); // direct byte buffer
         // (non-relocatable)
@@ -1144,25 +1136,25 @@ public class JniEnv extends NativeEnv {
     }
 
     @JniImpl
-    public long GetStringUTFChars(@Type(String.class) StaticObject str, long isCopyPtr) {
+    public long GetStringUTFChars(StaticObject str, long isCopyPtr) {
         if (isCopyPtr != 0L) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // always copy since pinning is not supported
         }
-        byte[] bytes = Utf8.asUTF(Meta.toHost(str), true);
+        byte[] bytes = Utf8.asUTF(Meta.toHost(str));
         ByteBuffer region = allocateDirect(bytes.length);
         region.put(bytes);
         return byteBufferAddress(region);
     }
 
     @JniImpl
-    public void ReleaseStringUTFChars(@Type(String.class) StaticObject str, long charsPtr) {
+    public void ReleaseStringUTFChars(StaticObject str, long charsPtr) {
         assert nativeBuffers.containsKey(charsPtr);
         nativeBuffers.remove(charsPtr);
     }
 
     @JniImpl
-    public void ReleaseStringCritical(@Type(String.class) StaticObject str, long criticalRegionPtr) {
+    public void ReleaseStringCritical(StaticObject str, long criticalRegionPtr) {
         assert nativeBuffers.containsKey(criticalRegionPtr);
         nativeBuffers.remove(criticalRegionPtr);
     }
@@ -1187,7 +1179,7 @@ public class JniEnv extends NativeEnv {
     }
 
     @JniImpl
-    public int ThrowNew(@Type(Class.class) StaticObjectClass clazz, String message) {
+    public int ThrowNew(StaticObjectClass clazz, String message) {
         StaticObject ex = meta(clazz).getMeta().initEx(meta(clazz.getKlass()), message);
         threadLocalPendingException.set(ex);
         return JNI_OK;
@@ -1242,8 +1234,8 @@ public class JniEnv extends NativeEnv {
     }
 
     @JniImpl
-    public void GetStringRegion(@Type(String.class) StaticObject str, int start, int len, long bufPtr) {
-        final char[] chars = (char[]) meta(str).declaredField("value").get();
+    public void GetStringRegion(StaticObject str, int start, int len, long bufPtr) {
+        final char[] chars = (char[]) meta(str).field("value").get();
         CharBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Char).asCharBuffer();
         buf.put(chars, start, len);
     }
@@ -1285,8 +1277,8 @@ public class JniEnv extends NativeEnv {
     }
 
     @JniImpl
-    public int GetStringUTFLength(@Type(String.class) StaticObject string) {
-        return Utf8.UTFLength(Meta.toHost(string));
+    public int GetStringUTFLength(String string) {
+        return Utf8.UTFLength(string);
     }
 
     @JniImpl
@@ -1296,30 +1288,43 @@ public class JniEnv extends NativeEnv {
         buf.put(bytes);
     }
 
-    /**
-     * Loads a class from a buffer of raw class data. The buffer containing the raw class data is not
-     * referenced by the VM after the DefineClass call returns, and it may be discarded if desired.
-     *
-     * @param name the name of the class or interface to be defined. The string is encoded in modified UTF-8.
-     * @param loader a class loader assigned to the defined class.
-     * @param bufPtr buffer containing the .class file data.
-     * @param bufLen buffer length.
-     *
-     * @return Returns a Java class object or NULL if an error occurs.
-     */
-    @JniImpl
-    public @Type(Class.class) StaticObject DefineClass(String name, Object loader, long bufPtr, int bufLen) {
-        // TODO(peterssen): Propagete errors and verifications, e.g. no class win the java package.
-        return EspressoLanguage.getCurrentContext().getVM().JVM_DefineClass(name, loader, bufPtr, bufLen, StaticObject.NULL);
+    private static ByteBuffer directByteBuffer(long address, long capacity, JavaKind kind) {
+        return directByteBuffer(address, Math.multiplyExact(capacity, kind.getByteCount()));
     }
 
+    private final static Constructor<? extends ByteBuffer> constructor;
+    private final static Field address;
+    static {
+        try {
+            @SuppressWarnings("unchecked")
+            Class<? extends ByteBuffer> clazz = (Class<? extends ByteBuffer>) Class.forName("java.nio.DirectByteBuffer");
+            @SuppressWarnings("unchecked")
+            Class<? extends ByteBuffer> bufferClazz = (Class<? extends ByteBuffer>) Class.forName("java.nio.Buffer");
+            constructor = clazz.getDeclaredConstructor(long.class, int.class);
+            address = bufferClazz.getDeclaredField("address");
+            address.setAccessible(true);
+            constructor.setAccessible(true);
+        } catch (ClassNotFoundException | NoSuchMethodException | NoSuchFieldException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        }
+    }
 
-    // JavaVM **vm);
+    private static ByteBuffer directByteBuffer(long address, long capacity) {
+        ByteBuffer buffer = null;
+        try {
+            buffer = constructor.newInstance(address, Math.toIntExact(capacity));
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        }
+        buffer.order(ByteOrder.nativeOrder());
+        return buffer;
+    }
 
-    @JniImpl
-    public int GetJavaVM(long vmPtr) {
-        ByteBuffer buf = directByteBuffer(vmPtr, 1, JavaKind.Long); // 64 bits pointer
-        buf.putLong(EspressoLanguage.getCurrentContext().getVM().getJavaVM());
-        return JNI_OK;
+    private static long byteBufferAddress(ByteBuffer byteBuffer) {
+        try {
+            return (long) address.get(byteBuffer);
+        } catch (IllegalAccessException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        }
     }
 }
