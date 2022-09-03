@@ -1,7 +1,5 @@
 package com.oracle.truffle.espresso;
 
-import java.io.IOException;
-
 public class TestMain {
 
     static long fib(long n) {
@@ -27,20 +25,16 @@ public class TestMain {
         for (int i = 2; i < n; ++i) {
             if (!mark[i]) {
                 count++;
-                // System.out.println(i);
+                //System.out.println(i);
             }
         }
         System.out.println("Found " + count + " primes < " + n);
     }
 
-    public static void main(String[] args) throws IOException {
-
+    public static void main(String[] args) {
+        long ticks = System.currentTimeMillis();
         System.out.println(factorial(8));
-        for (int i = 0; i < 10; ++i) {
-            long ticks = System.currentTimeMillis();
-            primeSieve(1000000);
-            System.out.println("Elapsed: " + (System.currentTimeMillis() - ticks) + " ms");
-        }
-
+        primeSieve(1000);
+        System.out.println("Elapsed: " + (System.currentTimeMillis() - ticks) + " ms");
     }
 }
