@@ -51,6 +51,8 @@ import org.graalvm.polyglot.SourceSection;
 import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
 
+import com.sun.corba.se.impl.ior.GenericTaggedComponent;
+
 @SuppressWarnings("unused")
 public abstract class AbstractPolyglotImpl {
 
