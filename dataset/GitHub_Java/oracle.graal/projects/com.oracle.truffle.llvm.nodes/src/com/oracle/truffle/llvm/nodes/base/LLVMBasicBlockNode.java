@@ -41,8 +41,6 @@ import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.runtime.SulongRuntimeException;
-import com.oracle.truffle.llvm.runtime.SulongStackTrace;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
@@ -67,6 +65,8 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
 
     private final BranchProfile controlFlowExceptionProfile = BranchProfile.create();
 
+    @CompilationFinal private SourceSection sourceSection;
+
     @CompilationFinal(dimensions = 1) private final long[] successorExecutionCount;
     @CompilationFinal private long totalExecutionCount = 0;
 
@@ -86,8 +86,7 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
 
     @ExplodeLoop
     public void executeStatements(VirtualFrame frame) {
-        for (int i = 0; i < statements.length; i++) {
-            LLVMExpressionNode statement = statements[i];
+        for (LLVMExpressionNode statement : statements) {
             try {
                 if (TRACE) {
                     trace(statement);
@@ -96,39 +95,43 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
             } catch (ControlFlowException e) {
                 controlFlowExceptionProfile.enter();
                 throw e;
-            } catch (SulongRuntimeException e) {
-                CompilerDirectives.transferToInterpreter();
-                fillStackTrace(e.getCStackTrace(), i);
-                throw e;
             } catch (Throwable t) {
                 CompilerDirectives.transferToInterpreter();
-                final SulongStackTrace stackTrace = new SulongStackTrace();
-                fillStackTrace(stackTrace, i);
-                throw new SulongRuntimeException(t, stackTrace);
+                SourceSection exceptionSourceSection = statement.getEncapsulatingSourceSection();
+                if (exceptionSourceSection == null) {
+                    throw t;
+                } else {
+                    String message = String.format("LLVM error in %s in %s - %s", statement.getSourceDescription(),
+                                    exceptionSourceSection.getSource() != null ? exceptionSourceSection.getSource().getName() : "<unknow>", t.getMessage());
+                    throw new RuntimeException(message, t);
+                }
             }
         }
     }
 
-    private void fillStackTrace(SulongStackTrace stackTrace, int errorIndex) {
-        final SourceSection s = getLastAvailableSourceSection(errorIndex);
-        final LLVMFunctionStartNode f = NodeUtil.findParent(this, LLVMFunctionStartNode.class);
-        if (s == null) {
-            stackTrace.addStackTraceElement(f.getName(), f.getBcSource().getName(), blockName());
+    @TruffleBoundary
+    private static void trace(LLVMExpressionNode statement) {
+        SourceSection section = statement.getEncapsulatingSourceSection();
+        String name = section == null ? "null" : section.getSource().getName();
+        LLVMLogger.print(LLVMOptions.DEBUG.traceExecution()).accept(
+                        String.format("[sulong] %s in %s", statement.getSourceDescription(), name));
+    }
+
+    @Override
+    public String getSourceDescription() {
+        LLVMFunctionStartNode functionStartNode = NodeUtil.findParent(this, LLVMFunctionStartNode.class);
+        assert functionStartNode != null : getParent().getClass();
+        if (blockId == 0) {
+            return String.format("first basic block in function %s", functionStartNode.getName());
         } else {
-            stackTrace.addStackTraceElement(f.getOriginalName(), s.getSource().getName(), f.getName(), f.getBcSource().getName(), blockName(), s.getStartLine(), s.getStartColumn());
+            return String.format("basic block %s in function %s", blockName, functionStartNode.getName());
         }
     }
 
-    private SourceSection getLastAvailableSourceSection(int i) {
+    @Override
+    public String toString() {
         CompilerAsserts.neverPartOfCompilation();
-        SourceSection s = null;
-        for (int j = i; j >= 0; j--) {
-            s = statements[j].getSourceSection();
-            if (s != null) {
-                break;
-            }
-        }
-        return s;
+        return String.format("basic block %s (#statements: %s, terminating instruction: %s)", blockId, statements.length, termInstruction);
     }
 
     public int getBlockId() {
@@ -137,28 +140,6 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
 
     public String getBlockName() {
         return blockName;
-    }
-
-    @TruffleBoundary
-    private static void trace(LLVMExpressionNode statement) {
-        LLVMLogger.print(LLVMOptions.DEBUG.traceExecution()).accept(("[sulong] " + statement.getSourceDescription()));
-    }
-
-    @Override
-    public String getSourceDescription() {
-        LLVMFunctionStartNode functionStartNode = NodeUtil.findParent(this, LLVMFunctionStartNode.class);
-        assert functionStartNode != null : getParent().getClass();
-        return String.format("Function: %s - Block: %s", functionStartNode.getName(), blockName());
-    }
-
-    private String blockName() {
-        return String.format("id: %d name: %s", blockId, blockName == null ? "N/A" : blockName);
-    }
-
-    @Override
-    public String toString() {
-        CompilerAsserts.neverPartOfCompilation();
-        return String.format("basic block %s (#statements: %s, terminating instruction: %s)", blockId, statements.length, termInstruction);
     }
 
     /**
