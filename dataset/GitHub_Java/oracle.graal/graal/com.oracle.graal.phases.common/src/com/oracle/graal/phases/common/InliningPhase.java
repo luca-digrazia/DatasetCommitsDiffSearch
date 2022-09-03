@@ -91,16 +91,6 @@ public class InliningPhase extends Phase {
         this.optimisticOpts = optimisticOpts;
     }
 
-    public InliningPhase(MetaAccessProvider runtime, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts, InliningPolicy policy) {
-        this.runtime = runtime;
-        this.replacements = replacements;
-        this.compilationAssumptions = assumptions;
-        this.cache = cache;
-        this.plan = plan;
-        this.inliningPolicy = policy;
-        this.optimisticOpts = optimisticOpts;
-    }
-
     public void setCustomCanonicalizer(CustomCanonicalizer customCanonicalizer) {
         this.customCanonicalizer = customCanonicalizer;
     }
@@ -322,6 +312,9 @@ public class InliningPhase extends Phase {
             new CanonicalizerPhase.Instance(runtime, assumptions, !AOTCompilation.getValue()).apply(newGraph);
         }
 
+        if (CullFrameStates.getValue()) {
+            new CullFrameStatesPhase().apply(newGraph);
+        }
         if (CacheGraphs.getValue() && cache != null) {
             cache.put(newGraph.copy(), hasMatureProfilingInfo);
         }

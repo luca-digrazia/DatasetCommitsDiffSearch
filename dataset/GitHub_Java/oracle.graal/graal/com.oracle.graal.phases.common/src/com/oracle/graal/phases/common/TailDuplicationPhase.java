@@ -50,8 +50,10 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
     /*
      * Various metrics on the circumstances in which tail duplication was/wasn't performed.
      */
-    private static final DebugMetric metricDuplicationConsidered = Debug.metric("DuplicationConsidered");
-    private static final DebugMetric metricDuplicationPerformed = Debug.metric("DuplicationPerformed");
+    private static final DebugMetric metricDuplicationEnd = Debug.metric("DuplicationEnd");
+    private static final DebugMetric metricDuplicationEndPerformed = Debug.metric("DuplicationEndPerformed");
+    private static final DebugMetric metricDuplicationOther = Debug.metric("DuplicationOther");
+    private static final DebugMetric metricDuplicationOtherPerformed = Debug.metric("DuplicationOtherPerformed");
 
     /**
      * This interface is used by tail duplication to let clients decide if tail duplication should
@@ -169,11 +171,20 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
             fixedCount++;
         }
         if (fixedCount > 1) {
-            metricDuplicationConsidered.increment();
-            if (decision.doTransform(merge, fixedCount)) {
-                metricDuplicationPerformed.increment();
-                new DuplicationOperation(merge, replacements).duplicate(phaseContext);
-                return true;
+            if (fixed instanceof AbstractEndNode && !(((AbstractEndNode) fixed).merge() instanceof LoopBeginNode)) {
+                metricDuplicationEnd.increment();
+                if (decision.doTransform(merge, fixedCount)) {
+                    metricDuplicationEndPerformed.increment();
+                    new DuplicationOperation(merge, replacements).duplicate(phaseContext);
+                    return true;
+                }
+            } else if (merge.stateAfter() != null) {
+                metricDuplicationOther.increment();
+                if (decision.doTransform(merge, fixedCount)) {
+                    metricDuplicationOtherPerformed.increment();
+                    new DuplicationOperation(merge, replacements).duplicate(phaseContext);
+                    return true;
+                }
             }
         }
         return false;

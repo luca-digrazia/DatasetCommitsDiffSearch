@@ -37,37 +37,37 @@ public class HighTier extends PhaseSuite<HighTierContext> {
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!AOTCompilation.getValue());
 
         if (FullUnroll.getValue()) {
-            appendPhase(new LoopFullUnrollPhase(!AOTCompilation.getValue()));
+            addPhase(new LoopFullUnrollPhase(!AOTCompilation.getValue()));
         }
 
         if (OptTailDuplication.getValue()) {
-            appendPhase(new TailDuplicationPhase());
+            addPhase(new TailDuplicationPhase());
         }
 
         if (PartialEscapeAnalysis.getValue()) {
-            appendPhase(new PartialEscapePhase(true, canonicalizer));
+            addPhase(new PartialEscapePhase(true, canonicalizer));
         }
 
         if (OptConvertDeoptsToGuards.getValue()) {
-            appendPhase(new ConvertDeoptimizeToGuardPhase());
+            addPhase(new ConvertDeoptimizeToGuardPhase());
         }
 
-        appendPhase(new LockEliminationPhase());
+        addPhase(new LockEliminationPhase());
 
         if (OptLoopTransform.getValue()) {
-            appendPhase(new LoopTransformHighPhase());
-            appendPhase(new LoopTransformLowPhase());
+            addPhase(new LoopTransformHighPhase());
+            addPhase(new LoopTransformLowPhase());
         }
-        appendPhase(new RemoveValueProxyPhase());
+        addPhase(new RemoveValueProxyPhase());
 
         if (CullFrameStates.getValue()) {
-            appendPhase(new CullFrameStatesPhase());
+            addPhase(new CullFrameStatesPhase());
         }
 
         if (OptCanonicalizer.getValue()) {
-            appendPhase(canonicalizer);
+            addPhase(canonicalizer);
         }
 
-        appendPhase(new LoweringPhase(LoweringType.BEFORE_GUARDS));
+        addPhase(new LoweringPhase(LoweringType.BEFORE_GUARDS));
     }
 }

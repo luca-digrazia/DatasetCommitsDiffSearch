@@ -38,6 +38,7 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.options.*;
@@ -72,13 +73,10 @@ public class GraalCompiler {
      *            argument can be null.
      * @return the result of the compilation
      */
-    public static CompilationResult compileGraph(final StructuredGraph graph, final CallingConvention cc,
-                                                 final ResolvedJavaMethod installedCodeOwner, final GraalCodeCacheProvider runtime,
-                                                 final Replacements replacements, final Backend backend,
-                                                 final TargetDescription target, final GraphCache cache,
-                                                 final PhasePlan plan, final OptimisticOptimizations optimisticOpts,
-                                                 final SpeculationLog speculationLog, final Suites suites,
-                                                 final CompilationResult compilationResult) {
+    public static CompilationResult compileGraph(final StructuredGraph graph, final CallingConvention cc, final ResolvedJavaMethod installedCodeOwner, final GraalCodeCacheProvider runtime,
+                    final Replacements replacements, final Backend backend, final TargetDescription target, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts,
+                    final SpeculationLog speculationLog, final Suites suites) {
+        final CompilationResult compilationResult = new CompilationResult();
         Debug.scope("GraalCompiler", new Object[]{graph, runtime}, new Runnable() {
 
             public void run() {
@@ -165,6 +163,7 @@ public class GraalCompiler {
         }
         TypeProfileProxyNode.cleanFromGraph(graph);
 
+        plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
         suites.getHighTier().apply(graph, highTierContext);
 
         MidTierContext midTierContext = new MidTierContext(runtime, assumptions, replacements, target, optimisticOpts);
@@ -174,7 +173,8 @@ public class GraalCompiler {
         suites.getLowTier().apply(graph, lowTierContext);
 
         // we do not want to store statistics about OSR compilations because it may prevent inlining
-        if (!graph.isOSR()) {
+        boolean isOSRCompilation = graph.start() instanceof OSRStartNode;
+        if (!isOSRCompilation) {
             InliningPhase.storeStatisticsAfterLowTier(graph);
         }
 
