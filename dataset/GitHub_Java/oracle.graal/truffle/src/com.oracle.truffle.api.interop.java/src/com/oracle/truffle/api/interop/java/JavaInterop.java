@@ -499,7 +499,11 @@ public final class JavaInterop {
         if (foreignObject == null) {
             return null;
         }
-        return ToPrimitiveNode.temporary().unbox(foreignObject);
+        try {
+            return ToPrimitiveNode.temporary().unbox(foreignObject);
+        } catch (InteropException iex) {
+            return null;
+        }
     }
 
     /**

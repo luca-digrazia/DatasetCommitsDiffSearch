@@ -35,7 +35,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import java.lang.reflect.InvocationHandler;
@@ -104,7 +103,7 @@ public class ValueAPITest {
     public void testString() {
         for (Object string : STRINGS) {
             assertValue(context, context.asValue(string), STRING);
-            assertValue(context, context.asValue((ProxyPrimitive) () -> string), STRING, PROXY_OBJECT);
+            assertValue(context, context.asValue((ProxyPrimitive) () -> string), STRING);
         }
     }
 
@@ -121,7 +120,7 @@ public class ValueAPITest {
     public void testNumbers() {
         for (Object number : NUMBERS) {
             assertValue(context, context.asValue(number), NUMBER);
-            assertValue(context, context.asValue((ProxyPrimitive) () -> number), NUMBER, PROXY_OBJECT);
+            assertValue(context, context.asValue((ProxyPrimitive) () -> number), NUMBER);
         }
     }
 
@@ -176,6 +175,22 @@ public class ValueAPITest {
             }
 
         }
+    }
+
+    private static class DummySet extends AbstractSet<Object> {
+
+        final Set<Object> set = new HashSet<>(Arrays.asList("asdf"));
+
+        @Override
+        public Iterator<Object> iterator() {
+            return set.iterator();
+        }
+
+        @Override
+        public int size() {
+            return set.size();
+        }
+
     }
 
     private static class DummyList extends DummyCollection implements List<Object> {
@@ -385,8 +400,8 @@ public class ValueAPITest {
                         (v) -> assertEquals("baz", v.get("foobar")));
 
         ProxyArray array = ProxyArray.fromArray(42, 42, 42);
-        objectCoercionTest(array, List.class,
-                        (v) -> assertEquals(42, v.get(2)));
+        objectCoercionTest(array, Map.class,
+                        (v) -> assertEquals(42, v.get(2L)));
 
         ArrayElements arrayElements = new ArrayElements();
         arrayElements.array.add(42);
@@ -408,9 +423,9 @@ public class ValueAPITest {
         mapAndArray.array.add(42);
 
         objectCoercionTest(mapAndArray, Map.class, (v) -> {
-            assertNull(v.get(0L));
+            assertEquals(42, v.get(0L));
             assertEquals("bar", v.get("foo"));
-            assertEquals(1, v.size());
+            assertEquals(2, v.size());
             assertFalse(v instanceof Function);
 
             Value value = context.asValue(v);
@@ -460,9 +475,9 @@ public class ValueAPITest {
         mapAndArrayAndExecutable.executableResult = "foobarbaz";
 
         objectCoercionTest(mapAndArrayAndExecutable, Map.class, (v) -> {
-            assertNull(v.get(0L));
+            assertEquals(42, v.get(0L));
             assertEquals("bar", v.get("foo"));
-            assertEquals(1, v.size());
+            assertEquals(2, v.size());
             assertTrue(v instanceof Function);
             assertEquals("foobarbaz", ((Function<Object, Object>) v).apply(new Object[0]));
 
@@ -479,9 +494,9 @@ public class ValueAPITest {
         mapAndArrayAndInstantiable.instantiableResult = "foobarbaz";
 
         objectCoercionTest(mapAndArrayAndInstantiable, Map.class, (v) -> {
-            assertNull(v.get(0L));
+            assertEquals(42, v.get(0L));
             assertEquals("bar", v.get("foo"));
-            assertEquals(1, v.size());
+            assertEquals(2, v.size());
             assertTrue(v instanceof Function);
             assertEquals("foobarbaz", ((Function<Object, Object>) v).apply(new Object[0]));
 
@@ -498,9 +513,9 @@ public class ValueAPITest {
         mapAndArrayAndExecutableAndInstantiable.executableResult = "foobarbaz";
 
         objectCoercionTest(mapAndArrayAndExecutableAndInstantiable, Map.class, (v) -> {
-            assertNull(v.get(0L));
+            assertEquals(42, v.get(0L));
             assertEquals("bar", v.get("foo"));
-            assertEquals(1, v.size());
+            assertEquals(2, v.size());
             assertTrue(v instanceof Function);
             assertEquals("foobarbaz", ((Function<Object, Object>) v).apply(new Object[0]));
             Value value = context.asValue(v);

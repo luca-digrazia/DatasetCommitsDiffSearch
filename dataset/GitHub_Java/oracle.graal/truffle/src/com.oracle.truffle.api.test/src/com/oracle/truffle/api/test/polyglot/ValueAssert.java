@@ -84,6 +84,12 @@ public class ValueAssert {
     private static final TypeLiteral<Function<Object, Object>> FUNCTION = new TypeLiteral<Function<Object, Object>>() {
     };
 
+    private static final TypeLiteral<?>[] NEVER_SUPPORTED_MAPS = new TypeLiteral[]{
+                    BYTE_OBJECT_MAP, SHORT_OBJECT_MAP, FLOAT_OBJECT_MAP,
+                    DOUBLE_OBJECT_MAP,
+                    CHAR_SEQUENCE_OBJECT_MAP
+    };
+
     public static void assertValue(Context context, Value value) {
         assertValue(context, value, null, detectSupportedTypes(value));
     }
@@ -93,14 +99,6 @@ public class ValueAssert {
     }
 
     public static void assertValue(Context context, Value value, Object[] arguments, Trait... expectedTypes) {
-        try {
-            assertValueImpl(context, value, arguments, expectedTypes);
-        } catch (AssertionError e) {
-            throw new AssertionError(String.format("assertValue: %s traits: %s", value, Arrays.asList(expectedTypes)), e);
-        }
-    }
-
-    private static void assertValueImpl(Context context, Value value, Object[] arguments, Trait... expectedTypes) {
         assertNotNull(value.toString());
         assertNotNull(value.getMetaObject());
         assertHostObject(context, value.as(Object.class));
@@ -185,6 +183,15 @@ public class ValueAssert {
 
         assertUnsupported(value, expectedTypes);
 
+        if ((!value.isHostObject() || !(value.asHostObject() instanceof Map)) && !value.isNull()) {
+            for (TypeLiteral<?> literal : NEVER_SUPPORTED_MAPS) {
+                try {
+                    value.as(literal);
+                    fail(literal.toString());
+                } catch (ClassCastException e) {
+                }
+            }
+        }
     }
 
     static void assertUnsupported(Value value, Trait... supported) {
@@ -290,15 +297,8 @@ public class ValueAssert {
                         assertNull(value.as(Function.class));
                         assertNull(value.as(IsFunctionalInterfaceVarArgs.class));
                     } else if (!value.canInstantiate()) {
-                        if (value.hasMembers()) {
-                            Function<Object, Object> f1 = value.as(FUNCTION);
-                            assertFails(() -> f1.apply(""), UnsupportedOperationException.class);
-                            IsFunctionalInterfaceVarArgs f2 = value.as(IsFunctionalInterfaceVarArgs.class);
-                            assertFails(() -> f2.foobarbaz(), UnsupportedOperationException.class);
-                        } else {
-                            assertFails(() -> value.as(FUNCTION), ClassCastException.class);
-                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
-                        }
+                        assertFails(() -> value.as(FUNCTION).apply(""), UnsupportedOperationException.class);
+                        assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class).foobarbaz(), UnsupportedOperationException.class);
                     }
                     break;
                 case INSTANTIABLE:
@@ -308,15 +308,8 @@ public class ValueAssert {
                         assertNull(value.as(Function.class));
                         assertNull(value.as(IsFunctionalInterfaceVarArgs.class));
                     } else if (!value.canExecute()) {
-                        if (value.hasMembers()) {
-                            Function<Object, Object> f1 = value.as(FUNCTION);
-                            assertFails(() -> f1.apply(""), UnsupportedOperationException.class);
-                            IsFunctionalInterfaceVarArgs f2 = value.as(IsFunctionalInterfaceVarArgs.class);
-                            assertFails(() -> f2.foobarbaz(), UnsupportedOperationException.class);
-                        } else {
-                            assertFails(() -> value.as(FUNCTION), ClassCastException.class);
-                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
-                        }
+                        assertFails(() -> value.as(FUNCTION).apply(""), UnsupportedOperationException.class);
+                        assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class).foobarbaz(), UnsupportedOperationException.class);
                     }
                     break;
                 case NULL:
@@ -351,14 +344,21 @@ public class ValueAssert {
         assertTrue(value.hasArrayElements());
 
         List<Object> receivedObjects = new ArrayList<>();
+        Map<Object, Object> receivedObjectsObjectMap = new HashMap<>();
         Map<Long, Object> receivedObjectsLongMap = new HashMap<>();
         Map<Integer, Object> receivedObjectsIntMap = new HashMap<>();
         for (long i = 0l; i < value.getArraySize(); i++) {
             Value arrayElement = value.getArrayElement(i);
             receivedObjects.add(arrayElement.as(Object.class));
+            receivedObjectsObjectMap.put(i, arrayElement.as(Object.class));
             receivedObjectsLongMap.put(i, arrayElement.as(Object.class));
             receivedObjectsIntMap.put((int) i, arrayElement.as(Object.class));
             assertValue(context, arrayElement);
+        }
+        if (value.hasMembers()) {
+            for (String key : value.getMemberKeys()) {
+                receivedObjectsObjectMap.put(key, value.getMember(key).as(Object.class));
+            }
         }
 
         List<Object> objectList1 = value.as(OBJECT_LIST);
@@ -367,28 +367,21 @@ public class ValueAssert {
         assertEquals(receivedObjects, objectList1);
         assertEquals(receivedObjects, objectList2);
 
-        if (value.hasMembers()) {
-            Map<Object, Object> objectMap1 = value.as(OBJECT_OBJECT_MAP);
-            assertTrue(objectMap1.keySet().equals(value.getMemberKeys()));
-        } else {
-            assertFails(() -> value.as(OBJECT_OBJECT_MAP), ClassCastException.class);
-        }
-
-        // TODO assert mappings with other key types than Long and Integer
-
+        Map<Object, Object> objectMap1 = value.as(OBJECT_OBJECT_MAP);
         Map<Long, Object> objectMap2 = value.as(LONG_OBJECT_MAP);
         Map<Integer, Object> objectMap3 = value.as(INTEGER_OBJECT_MAP);
         Map<Number, Object> objectMap4 = value.as(NUMBER_OBJECT_MAP);
 
+        assertEquals(receivedObjectsObjectMap, objectMap1);
         assertEquals(receivedObjectsLongMap, objectMap2);
         assertEquals(receivedObjectsIntMap, objectMap3);
         assertEquals(receivedObjectsLongMap, objectMap4);
 
         if (value.isHostObject()) {
             assertTrue(value.as(Object.class) instanceof List || value.as(Object.class).getClass().isArray());
-        } else if (!value.hasMembers()) {
-            List<Object> objectMap5 = (List<Object>) value.as(Object.class);
-            assertEquals(receivedObjects, objectMap5);
+        } else {
+            Map<Object, Object> objectMap5 = (Map<Object, Object>) value.as(Object.class);
+            assertEquals(receivedObjectsObjectMap, objectMap5);
         }
 
         // write them all
@@ -524,14 +517,10 @@ public class ValueAssert {
         if (value.isNull()) {
             assertNull(value.as(EmptyInterface.class));
         } else {
-            if (value.hasMembers()) {
-                assertTrue(value.as(EmptyInterface.class) instanceof EmptyInterface);
-            } else {
-                assertFails(() -> value.as(EmptyInterface.class), ClassCastException.class);
-            }
+            assertTrue(value.as(EmptyInterface.class) instanceof EmptyInterface);
         }
 
-        if (value.hasMembers() && !value.hasMember("foobarbaz")) {
+        if (!value.hasMember("foobarbaz")) {
             assertFails(() -> value.as(NonFunctionalInterface.class).foobarbaz(), UnsupportedOperationException.class);
         }
 
