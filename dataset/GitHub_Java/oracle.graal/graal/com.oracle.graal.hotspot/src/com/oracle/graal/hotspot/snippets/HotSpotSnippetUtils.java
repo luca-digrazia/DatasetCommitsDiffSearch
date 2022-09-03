@@ -248,10 +248,6 @@ public class HotSpotSnippetUtils {
         return loadWordFromObjectIntrinsic(object, 0, offset, wordKind());
     }
 
-    public static Object readFinalObject(Word base, @ConstantNodeParameter int displacement) {
-        return ReadNode.read(base, displacement, LocationNode.FINAL_LOCATION, Kind.Object);
-    }
-
     @NodeIntrinsic(value = RegisterNode.class, setStampFromReturnType = true)
     public static native Word registerAsWord(@ConstantNodeParameter Register register);
 
@@ -263,7 +259,6 @@ public class HotSpotSnippetUtils {
 
     @NodeIntrinsic(value = LoadHubNode.class, setStampFromReturnType = true)
     static native Word loadHubIntrinsic(Object object, @ConstantNodeParameter Kind word);
-
 
     @Fold
     public
@@ -287,12 +282,6 @@ public class HotSpotSnippetUtils {
     public
     static int klassOffset() {
         return config().klassOffset;
-    }
-
-    @Fold
-    public
-    static int classMirrorOffset() {
-        return config().classMirrorOffset;
     }
 
     @Fold
