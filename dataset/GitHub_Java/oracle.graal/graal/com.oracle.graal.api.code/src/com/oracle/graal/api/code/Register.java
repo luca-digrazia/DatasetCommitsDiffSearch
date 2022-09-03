@@ -23,6 +23,7 @@
 package com.oracle.graal.api.code;
 
 import java.io.*;
+import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 
@@ -79,6 +80,12 @@ public final class Register implements Comparable<Register>, Serializable {
     private final RegisterCategory registerCategory;
 
     /**
+     * An array of {@link RegisterValue} objects, for this register, with one entry per {@link Kind}
+     * , indexed by {@link Kind#ordinal}.
+     */
+    private final HashMap<PlatformKind, RegisterValue> values;
+
+    /**
      * A platform specific register type that describes which values can be stored in a register.
      */
     public static class RegisterCategory {
@@ -108,6 +115,7 @@ public final class Register implements Comparable<Register>, Serializable {
         this.name = name;
         this.registerCategory = registerCategory;
         this.encoding = encoding;
+        this.values = new HashMap<>();
     }
 
     public RegisterCategory getRegisterCategory() {
@@ -121,7 +129,13 @@ public final class Register implements Comparable<Register>, Serializable {
      * @return the {@link RegisterValue}
      */
     public RegisterValue asValue(PlatformKind kind) {
-        return new RegisterValue(kind, this);
+        if (values.containsKey(kind)) {
+            return values.get(kind);
+        } else {
+            RegisterValue ret = new RegisterValue(kind, this);
+            values.put(kind, ret);
+            return ret;
+        }
     }
 
     /**

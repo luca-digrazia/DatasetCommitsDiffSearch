@@ -106,7 +106,7 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
         return allocatable;
     }
 
-    public AMD64HotSpotRegisterConfig(Architecture architecture, HotSpotVMConfig config, boolean isNative) {
+    public AMD64HotSpotRegisterConfig(Architecture architecture, HotSpotVMConfig config, boolean globalStubConfig) {
         this.architecture = architecture;
 
         if (config.windowsOs) {
@@ -117,7 +117,7 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
             nativeGeneralParameterRegisters = new Register[] {rdi, rsi, rdx, rcx, r8, r9};
         }
 
-        if (isNative) {
+        if (globalStubConfig) {
             Register[] regs = {
                 rax,  rcx,  rdx,   rbx,   rsp,   rbp,   rsi,   rdi,
                 r8,   r9,   r10,   r11,   r12,   r13,   r14,   r15,
@@ -147,7 +147,6 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
         if (type == Type.NativeCall) {
             return callingConvention(nativeGeneralParameterRegisters, returnType, parameterTypes, type, target, stackOnly);
         }
-        // On x64, parameter locations are the same whether viewed from the caller or callee perspective   
         return callingConvention(javaGeneralParameterRegisters, returnType, parameterTypes, type, target, stackOnly);
     }
 
