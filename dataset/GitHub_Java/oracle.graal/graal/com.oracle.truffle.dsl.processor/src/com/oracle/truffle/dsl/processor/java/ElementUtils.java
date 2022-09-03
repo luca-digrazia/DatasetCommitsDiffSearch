@@ -225,14 +225,8 @@ public class ElementUtils {
     }
 
     public static boolean isAssignable(TypeMirror from, TypeMirror to) {
-        if (typeEquals(from, to)) {
-            return true;
-        } else if (isVoid(to)) {
-            return true;
-        } else if (isObject(to)) {
-            return true;
-        }
         ProcessorContext context = ProcessorContext.getInstance();
+
         if (!(from instanceof CodeTypeMirror) && !(to instanceof CodeTypeMirror)) {
             return context.getEnvironment().getTypeUtils().isAssignable(context.reloadType(from), context.reloadType(to));
         } else {
@@ -365,8 +359,6 @@ public class ElementUtils {
                 return getTypeId(((ArrayType) mirror).getComponentType()) + "Array";
             case VOID:
                 return "Void";
-            case NULL:
-                return "Null";
             case WILDCARD:
                 StringBuilder b = new StringBuilder();
                 WildcardType type = (WildcardType) mirror;
@@ -413,8 +405,6 @@ public class ElementUtils {
                 return getSimpleName(((ArrayType) mirror).getComponentType()) + "[]";
             case VOID:
                 return "void";
-            case NULL:
-                return "null";
             case WILDCARD:
                 return getWildcardName((WildcardType) mirror);
             case TYPEVAR:
@@ -505,8 +495,6 @@ public class ElementUtils {
                 return getQualifiedName(((ArrayType) mirror).getComponentType());
             case VOID:
                 return "void";
-            case NULL:
-                return "null";
             case TYPEVAR:
                 return getSimpleName(mirror);
             case ERROR:
@@ -668,7 +656,6 @@ public class ElementUtils {
             case INT:
             case LONG:
             case VOID:
-            case NULL:
             case TYPEVAR:
                 return null;
             case DECLARED:
@@ -947,27 +934,6 @@ public class ElementUtils {
         }
     }
 
-    public static boolean areTypesCompatible(TypeMirror type1, TypeMirror type2) {
-        if (typeEquals(type1, type2)) {
-            return true;
-        } else if (kindIsIntegral(type1.getKind())) {
-            return kindIsIntegral(type2.getKind());
-        } else if (type1.getKind() == TypeKind.NULL) {
-            if (type2.getKind() == TypeKind.NULL) {
-                return false;
-            }
-            return true;
-        } else if (type2.getKind() == TypeKind.NULL) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    private static boolean kindIsIntegral(TypeKind kind) {
-        return kind == TypeKind.BYTE || kind == TypeKind.SHORT || kind == TypeKind.INT || kind == TypeKind.LONG;
-    }
-
     public static List<String> getUniqueIdentifiers(List<TypeMirror> typeMirror) {
         List<String> ids = new ArrayList<>();
         for (TypeMirror type : typeMirror) {
@@ -1142,82 +1108,4 @@ public class ElementUtils {
             throw new AssertionError("unsupported element type");
         }
     }
-
-    public static List<TypeMirror> sortTypes(List<TypeMirror> list) {
-        Collections.sort(list, new Comparator<TypeMirror>() {
-            public int compare(TypeMirror o1, TypeMirror o2) {
-                return compareType(o1, o2);
-            }
-        });
-        return list;
-    }
-
-    public static int compareType(TypeMirror signature1, TypeMirror signature2) {
-        if (signature1 == null) {
-            return 1;
-        } else if (signature2 == null) {
-            return -1;
-        }
-
-        if (ElementUtils.typeEquals(signature1, signature2)) {
-            return 0;
-        }
-
-        if (signature1.getKind() == TypeKind.DECLARED && signature2.getKind() == TypeKind.DECLARED) {
-            TypeElement element1 = ElementUtils.fromTypeMirror(signature1);
-            TypeElement element2 = ElementUtils.fromTypeMirror(signature2);
-
-            if (ElementUtils.getDirectSuperTypes(element1).contains(element2)) {
-                return -1;
-            } else if (ElementUtils.getDirectSuperTypes(element2).contains(element1)) {
-                return 1;
-            }
-        }
-        return ElementUtils.getSimpleName(signature1).compareTo(ElementUtils.getSimpleName(signature2));
-    }
-
-    public static List<TypeMirror> uniqueSortedTypes(Collection<TypeMirror> types) {
-        if (types.isEmpty()) {
-            return Collections.emptyList();
-        } else if (types.size() <= 1) {
-            if (types instanceof List) {
-                return (List<TypeMirror>) types;
-            } else {
-                return new ArrayList<>(types);
-            }
-        }
-        Map<String, TypeMirror> sourceTypes = new HashMap<>();
-        for (TypeMirror type : types) {
-            sourceTypes.put(ElementUtils.getTypeId(type), type);
-        }
-        return sortTypes(new ArrayList<>(sourceTypes.values()));
-    }
-
-    public static int compareMethod(ExecutableElement method1, ExecutableElement method2) {
-        List<? extends VariableElement> parameters1 = method1.getParameters();
-        List<? extends VariableElement> parameters2 = method2.getParameters();
-        if (parameters1.size() != parameters2.size()) {
-            return Integer.compare(parameters1.size(), parameters2.size());
-        }
-
-        int result = 0;
-        for (int i = 0; i < parameters1.size(); i++) {
-            VariableElement var1 = parameters1.get(i);
-            VariableElement var2 = parameters2.get(i);
-            result = compareType(var1.asType(), var2.asType());
-            if (result != 0) {
-                return result;
-            }
-        }
-
-        result = method1.getSimpleName().toString().compareTo(method2.getSimpleName().toString());
-        if (result == 0) {
-            // if still no difference sort by enclosing type name
-            TypeElement enclosingType1 = ElementUtils.findNearestEnclosingType(method1);
-            TypeElement enclosingType2 = ElementUtils.findNearestEnclosingType(method2);
-            result = enclosingType1.getQualifiedName().toString().compareTo(enclosingType2.getQualifiedName().toString());
-        }
-        return result;
-    }
-
 }
