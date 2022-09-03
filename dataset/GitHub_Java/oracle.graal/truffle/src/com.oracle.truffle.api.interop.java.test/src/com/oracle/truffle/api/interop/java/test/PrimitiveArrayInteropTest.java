@@ -29,13 +29,11 @@ import static org.junit.Assert.assertNull;
 
 import java.util.List;
 
-import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.java.JavaInterop;
 
-public class PrimitiveArrayInteropTest {
+public class PrimitiveArrayInteropTest extends ProxyLanguageEnvTest {
     public Object[] stringArr;
     public byte[] byteArr;
     public short[] shortArr;
@@ -69,10 +67,11 @@ public class PrimitiveArrayInteropTest {
     private TruffleObject obj;
     private ExactMatchInterop interop;
 
-    @Before
-    public void initObjects() {
-        obj = JavaInterop.asTruffleObject(this);
-        interop = JavaInterop.asJavaObject(ExactMatchInterop.class, obj);
+    @Override
+    public void before() {
+        super.before();
+        obj = asTruffleObject(this);
+        interop = asJavaObject(ExactMatchInterop.class, obj);
     }
 
     @Test
@@ -89,7 +88,6 @@ public class PrimitiveArrayInteropTest {
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public void stringAsList() {
         stringArr = new Object[]{"Hello", "World", "!"};
         List<String> list = interop.stringArr();
@@ -103,14 +101,6 @@ public class PrimitiveArrayInteropTest {
 
         list.set(0, null);
         assertNull("set to null", stringArr[0]);
-
-        List rawList = list;
-        try {
-            rawList.set(0, 42);
-        } catch (ClassCastException ex) {
-            // OK
-        }
-        assertNull("still set to null", stringArr[0]);
     }
 
     @Test

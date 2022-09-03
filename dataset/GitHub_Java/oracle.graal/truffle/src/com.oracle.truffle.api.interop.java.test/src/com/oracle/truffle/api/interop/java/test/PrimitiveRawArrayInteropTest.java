@@ -26,16 +26,18 @@ package com.oracle.truffle.api.interop.java.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.util.List;
 
-import org.junit.Before;
+import org.graalvm.polyglot.PolyglotException;
 import org.junit.Test;
 
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.java.JavaInterop;
 
-public class PrimitiveRawArrayInteropTest {
+public class PrimitiveRawArrayInteropTest extends ProxyLanguageEnvTest {
+
     private Object[] objArr;
     private byte[] byteArr;
     private short[] shortArr;
@@ -66,8 +68,20 @@ public class PrimitiveRawArrayInteropTest {
                 return charArr;
             case 8:
                 return boolArr;
+            case 666:
+                throw new SimulatedDeath();
             default:
-                throw new IllegalStateException("type: " + type);
+                throw new WrongArgument(type);
+        }
+    }
+
+    public static final class WrongArgument extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        final int type;
+
+        public WrongArgument(int type) {
+            this.type = type;
         }
     }
 
@@ -78,10 +92,11 @@ public class PrimitiveRawArrayInteropTest {
     private TruffleObject obj;
     private RawInterop interop;
 
-    @Before
-    public void initObjects() {
-        obj = JavaInterop.asTruffleObject(this);
-        interop = JavaInterop.asJavaObject(RawInterop.class, obj);
+    @Override
+    public void before() {
+        super.before();
+        obj = asTruffleObject(this);
+        interop = asJavaObject(RawInterop.class, obj);
     }
 
     @Test
@@ -95,6 +110,30 @@ public class PrimitiveRawArrayInteropTest {
         assertNull(interop.arr(6));
         assertNull(interop.arr(7));
         assertNull(interop.arr(8));
+    }
+
+    @Test
+    public void exceptionIsPropagated() {
+        try {
+            assertNull(interop.arr(30));
+        } catch (PolyglotException hostException) {
+            assertTrue("Expected HostException but got: " + hostException.getClass(), hostException.isHostException());
+            WrongArgument wrongArgument = (WrongArgument) hostException.asHostException();
+            assertEquals(30, wrongArgument.type);
+            return;
+        }
+        fail("WrongArgument should have been thrown");
+    }
+
+    @Test
+    public void errorIsPropagated() {
+        try {
+            assertNull(interop.arr(666));
+        } catch (PolyglotException ex) {
+            assertTrue(ex.isInternalError());
+            return;
+        }
+        fail("SimulatedDeath should have been thrown");
     }
 
     @Test
@@ -224,5 +263,14 @@ public class PrimitiveRawArrayInteropTest {
             }
         }
         assertEquals(msg, expected, v, 0.05);
+    }
+
+    private static class SimulatedDeath extends ThreadDeath {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public String getMessage() {
+            return "simulation";
+        }
     }
 }

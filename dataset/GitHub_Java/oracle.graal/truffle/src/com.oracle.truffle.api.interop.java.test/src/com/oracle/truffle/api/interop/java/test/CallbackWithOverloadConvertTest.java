@@ -24,13 +24,13 @@
  */
 package com.oracle.truffle.api.interop.java.test;
 
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.java.JavaInterop;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+
 import org.junit.Test;
 
-public final class CallbackWithOverloadConvertTest {
+import com.oracle.truffle.api.interop.TruffleObject;
+
+public final class CallbackWithOverloadConvertTest extends ProxyLanguageEnvTest {
     private char ch;
     private int i;
 
@@ -52,16 +52,16 @@ public final class CallbackWithOverloadConvertTest {
 
     @Test
     public void callWithIntTest() {
-        TruffleObject truffle = JavaInterop.asTruffleObject(this);
-        CallWithInt callback = JavaInterop.asJavaObject(CallWithInt.class, truffle);
+        TruffleObject truffle = asTruffleObject(this);
+        CallWithInt callback = asJavaObject(CallWithInt.class, truffle);
         callback.callback(32);
         assertEquals("Char not changed", 0, ch);
         assertEquals("Int changed", 32, i);
     }
 
     public void callWithHugeIntTest() {
-        TruffleObject truffle = JavaInterop.asTruffleObject(this);
-        CallWithInt callback = JavaInterop.asJavaObject(CallWithInt.class, truffle);
+        TruffleObject truffle = asTruffleObject(this);
+        CallWithInt callback = asJavaObject(CallWithInt.class, truffle);
         callback.callback(Integer.MAX_VALUE / 2);
         assertEquals("Char not changed", 0, ch);
         assertEquals("Int changed", Integer.MAX_VALUE / 2, i);
@@ -69,8 +69,8 @@ public final class CallbackWithOverloadConvertTest {
 
     @Test
     public void callWithCharTest() {
-        TruffleObject truffle = JavaInterop.asTruffleObject(this);
-        CallWithChar callback = JavaInterop.asJavaObject(CallWithChar.class, truffle);
+        TruffleObject truffle = asTruffleObject(this);
+        CallWithChar callback = asJavaObject(CallWithChar.class, truffle);
         callback.callback('A');
         assertEquals('A', ch);
         assertEquals("Int remains zero", 0, i);
