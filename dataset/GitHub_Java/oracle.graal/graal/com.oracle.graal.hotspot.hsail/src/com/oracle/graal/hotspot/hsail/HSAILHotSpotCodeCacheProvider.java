@@ -27,11 +27,12 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hsail.*;
 
 public class HSAILHotSpotCodeCacheProvider extends HotSpotCodeCacheProvider {
 
-    public HSAILHotSpotCodeCacheProvider(HotSpotGraalRuntimeProvider runtime, TargetDescription target) {
-        super(runtime, target, new HSAILHotSpotRegisterConfig());
+    public HSAILHotSpotCodeCacheProvider(HotSpotGraalRuntime runtime, TargetDescription target) {
+        super(runtime, target);
 
     }
 
@@ -39,5 +40,10 @@ public class HSAILHotSpotCodeCacheProvider extends HotSpotCodeCacheProvider {
     public String disassemble(CompilationResult compResult, InstalledCode installedCode) {
         byte[] code = installedCode == null ? Arrays.copyOf(compResult.getTargetCode(), compResult.getTargetCodeSize()) : installedCode.getCode();
         return new String(code);
+    }
+
+    @Override
+    protected RegisterConfig createRegisterConfig() {
+        return new HSAILRegisterConfig();
     }
 }
