@@ -154,7 +154,7 @@ final class InstrumentationHandler {
 
         // fast path no bindings attached
         if (!sourceSectionBindings.isEmpty()) {
-            visitRoot(root, root, new NotifyLoadedListenerVisitor(sourceSectionBindings), false);
+            visitRoot(root, new NotifyLoadedListenerVisitor(sourceSectionBindings));
         }
 
     }
@@ -171,7 +171,7 @@ final class InstrumentationHandler {
             return;
         }
 
-        visitRoot(root, root, new InsertWrappersVisitor(executionBindings), false);
+        visitRoot(root, new InsertWrappersVisitor(executionBindings));
     }
 
     void initializeInstrument(Object vmObject, Class<?> instrumentClass) {
@@ -367,7 +367,7 @@ final class InstrumentationHandler {
 
     private void visitRoots(Collection<RootNode> roots, AbstractNodeVisitor addBindingsVisitor) {
         for (RootNode root : roots) {
-            visitRoot(root, root, addBindingsVisitor, false);
+            visitRoot(root, addBindingsVisitor);
         }
     }
 
@@ -438,15 +438,6 @@ final class InstrumentationHandler {
             trace("END: Lazy updated for %s%n", sourceSection);
         }
         return root;
-    }
-
-    public void onNodeInserted(RootNode rootNode, Node tree) {
-        if (!sourceSectionBindings.isEmpty()) {
-            visitRoot(rootNode, tree, new NotifyLoadedListenerVisitor(sourceSectionBindings), true);
-        }
-        if (!executionBindings.isEmpty()) {
-            visitRoot(rootNode, tree, new InsertWrappersVisitor(executionBindings), true);
-        }
     }
 
     private static void notifySourceBindingsLoaded(Collection<EventBinding<?>> bindings, Source source) {
@@ -603,11 +594,11 @@ final class InstrumentationHandler {
         return tags;
     }
 
-    Set<Class<?>> getProvidedTags(Node root) {
-        return getProvidedTags(root.getRootNode().getLanguageInfo());
+    Set<Class<?>> getProvidedTags(RootNode root) {
+        return getProvidedTags(root.getLanguageInfo());
     }
 
-    static boolean isInstrumentableNode(Node node, SourceSection sourceSection) {
+    private static boolean isInstrumentableNode(Node node, SourceSection sourceSection) {
         return !(node instanceof WrapperNode) && !(node instanceof RootNode) && sourceSection != null;
     }
 
@@ -616,36 +607,23 @@ final class InstrumentationHandler {
         out.printf(message, args);
     }
 
-    private void visitRoot(RootNode root, final Node node, final AbstractNodeVisitor visitor, boolean forceRootBitComputation) {
+    private void visitRoot(final RootNode root, final AbstractNodeVisitor visitor) {
         if (TRACE) {
             trace("BEGIN: Visit root %s for %s%n", root.toString(), visitor);
         }
 
         visitor.root = root;
         visitor.providedTags = getProvidedTags(root);
-        visitor.rootSourceSection = root.getSourceSection();
-        visitor.rootBits = RootNodeBits.get(visitor.root);
 
-        if (visitor.shouldVisit() || forceRootBitComputation) {
-            if (forceRootBitComputation) {
-                visitor.computingRootNodeBits = RootNodeBits.isUninitialized(visitor.rootBits) ? RootNodeBits.getAll() : visitor.rootBits;
-            } else if (RootNodeBits.isUninitialized(visitor.rootBits)) {
-                visitor.computingRootNodeBits = RootNodeBits.getAll();
-            }
-
+        if (visitor.shouldVisit()) {
             if (TRACE) {
                 trace("BEGIN: Traverse root %s for %s%n", root.toString(), visitor);
             }
-            node.accept(visitor);
+            root.accept(visitor);
             if (TRACE) {
                 trace("END: Traverse root %s for %s%n", root.toString(), visitor);
             }
-
-            if (!RootNodeBits.isUninitialized(visitor.computingRootNodeBits)) {
-                RootNodeBits.set(visitor.root, visitor.computingRootNodeBits);
-            }
         }
-
         if (TRACE) {
             trace("END: Visited root %s for %s%n", root.toString(), visitor);
         }
@@ -719,43 +697,9 @@ final class InstrumentationHandler {
     private abstract static class AbstractNodeVisitor implements NodeVisitor {
 
         RootNode root;
-        SourceSection rootSourceSection;
         Set<Class<?>> providedTags;
 
-        /* cached root bits read from the root node. value is reliable. */
-        int rootBits;
-        /* temporary field for currently computing root bits. value is not reliable. */
-        int computingRootNodeBits;
-
         abstract boolean shouldVisit();
-
-        final void computeRootBits(SourceSection sourceSection) {
-            int bits = computingRootNodeBits;
-            if (RootNodeBits.isUninitialized(bits)) {
-                return;
-            }
-
-            if (sourceSection != null) {
-                if (RootNodeBits.isNoSourceSection(bits)) {
-                    bits = RootNodeBits.setHasSourceSection(bits);
-                }
-                if (rootSourceSection != null) {
-                    if (RootNodeBits.isSourceSectionsHierachical(bits)) {
-                        if (sourceSection.getCharIndex() < rootSourceSection.getCharIndex() //
-                                        || sourceSection.getCharEndIndex() > rootSourceSection.getCharEndIndex()) {
-                            bits = RootNodeBits.setSourceSectionsUnstructured(bits);
-                        }
-                    }
-                    if (RootNodeBits.isSameSource(bits) && rootSourceSection.getSource() != sourceSection.getSource()) {
-                        bits = RootNodeBits.setHasDifferentSource(bits);
-                    }
-                } else {
-                    bits = RootNodeBits.setSourceSectionsUnstructured(bits);
-                    bits = RootNodeBits.setHasDifferentSource(bits);
-                }
-            }
-            computingRootNodeBits = bits;
-        }
 
     }
 
@@ -769,16 +713,12 @@ final class InstrumentationHandler {
 
         @Override
         boolean shouldVisit() {
-            RootNode localRoot = root;
-            SourceSection localRootSourceSection = rootSourceSection;
-            int localRootBits = rootBits;
-            return binding.isInstrumentedRoot(providedTags, localRoot, localRootSourceSection, localRootBits);
+            return binding.isInstrumentedRoot(providedTags, root, root.getSourceSection());
         }
 
         public final boolean visit(Node node) {
             SourceSection sourceSection = node.getSourceSection();
             if (isInstrumentableNode(node, sourceSection)) {
-                computeRootBits(sourceSection);
                 if (binding.isInstrumentedLeaf(providedTags, node, sourceSection)) {
                     if (TRACE) {
                         traceFilterCheck("hit", providedTags, binding, node, sourceSection);
@@ -822,12 +762,14 @@ final class InstrumentationHandler {
             if (bindings.isEmpty()) {
                 return false;
             }
-            RootNode localRoot = root;
-            SourceSection localRootSourceSection = rootSourceSection;
-            int localRootBits = rootBits;
+            final RootNode localRoot = root;
+            if (localRoot == null) {
+                return false;
+            }
+            SourceSection sourceSection = localRoot.getSourceSection();
 
             for (EventBinding<?> binding : bindings) {
-                if (binding.isInstrumentedRoot(providedTags, localRoot, localRootSourceSection, localRootBits)) {
+                if (binding.isInstrumentedRoot(providedTags, localRoot, sourceSection)) {
                     return true;
                 }
             }
@@ -837,7 +779,6 @@ final class InstrumentationHandler {
         public final boolean visit(Node node) {
             SourceSection sourceSection = node.getSourceSection();
             if (isInstrumentableNode(node, sourceSection)) {
-                computeRootBits(sourceSection);
                 // no locking required for these atomic reference arrays
                 for (EventBinding<?> binding : bindings) {
                     if (binding.isInstrumentedFull(providedTags, root, node, sourceSection)) {
@@ -1517,14 +1458,6 @@ final class InstrumentationHandler {
             @Override
             public Object getEngineInstrumenter(Object instrumentationHandler) {
                 return ((InstrumentationHandler) instrumentationHandler).engineInstrumenter;
-            }
-
-            @Override
-            public void onNodeInserted(RootNode rootNode, Node tree) {
-                InstrumentationHandler handler = getHandler(rootNode);
-                if (handler != null) {
-                    handler.onNodeInserted(rootNode, tree);
-                }
             }
 
             @Override

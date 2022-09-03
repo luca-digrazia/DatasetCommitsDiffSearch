@@ -146,8 +146,6 @@ public abstract class Accessor {
 
         public abstract Env getEnvForInstrument(LanguageInfo language);
 
-        public abstract LanguageInfo getObjectLanguage(Object obj, Object vmObject);
-
         public abstract Object contextReferenceGet(Object reference);
 
         public abstract boolean isDisposed(Object vmInstance);
@@ -206,8 +204,6 @@ public abstract class Accessor {
         public abstract Object findMetaObject(Env env, Object value);
 
         public abstract SourceSection findSourceLocation(Env env, Object value);
-
-        public abstract boolean isObjectOfLanguage(Env env, Object value);
 
         public abstract Object getContext(Env env);
 
@@ -387,7 +383,7 @@ public abstract class Accessor {
     }
 
     protected Accessor() {
-        if (!this.getClass().getName().startsWith("com.oracle.truffle.api") && !this.getClass().getName().startsWith("com.oracle.truffle.tck")) {
+        if (!this.getClass().getName().startsWith("com.oracle.truffle.api")) {
             throw new IllegalStateException();
         }
         if (this.getClass().getSimpleName().endsWith("API")) {
@@ -421,8 +417,6 @@ public abstract class Accessor {
         } else if (this.getClass().getSimpleName().endsWith("ScopeAccessor")) {
             // O.K.
         } else if (this.getClass().getSimpleName().endsWith("AccessorDebug")) {
-            // O.K.
-        } else if (this.getClass().getSimpleName().endsWith("TruffleTCKAccessor")) {
             // O.K.
         } else {
             SPI = this.engineSupport();

@@ -85,7 +85,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
             this.syntaxError = truffleException.isSyntaxError();
             this.incompleteSource = truffleException.isIncompleteSource();
             this.exit = truffleException.isExit();
-            this.exitStatus = this.exit ? truffleException.getExitStatus() : 0;
+            this.exitStatus = truffleException.getExitStatus();
 
             Node location = truffleException.getLocation();
             com.oracle.truffle.api.source.SourceSection section = null;
@@ -114,14 +114,19 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
             this.sourceLocation = null;
             this.guestObject = languageContext.context.getHostContext().nullValue;
         }
-        if (isHostException()) {
+
+        if (!isInternalError() && guestObject != languageContext.context.getHostContext().nullValue) {
+            String msg;
+            try {
+                msg = getGuestObject().toString();
+            } catch (PolyglotException e) {
+                msg = exception.getMessage();
+            }
+            this.message = msg;
+        } else if (isHostException()) {
             this.message = asHostException().getMessage();
         } else {
-            if (internal) {
-                this.message = exception.toString();
-            } else {
-                this.message = exception.getMessage();
-            }
+            this.message = exception.getMessage();
         }
     }
 

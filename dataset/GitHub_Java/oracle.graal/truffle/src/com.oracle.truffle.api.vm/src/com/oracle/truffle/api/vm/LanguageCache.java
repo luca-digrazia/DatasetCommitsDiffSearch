@@ -61,7 +61,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
     private final boolean interactive;
     private final boolean internal;
     private final ClassLoader loader;
-    final TruffleLanguage<?> singletonLanguage;
+    private final TruffleLanguage<?> singletonLanguage;
     private volatile Class<? extends TruffleLanguage<?>> languageClass;
 
     static {
