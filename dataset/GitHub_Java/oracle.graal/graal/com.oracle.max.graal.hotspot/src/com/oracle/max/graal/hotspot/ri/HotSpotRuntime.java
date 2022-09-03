@@ -213,49 +213,69 @@ public class HotSpotRuntime implements GraalRuntime {
         if (!GraalOptions.Lower) {
             return;
         }
-        StructuredGraph graph = (StructuredGraph) n.graph();
 
         if (n instanceof ArrayLengthNode) {
             ArrayLengthNode arrayLengthNode = (ArrayLengthNode) n;
             SafeReadNode safeReadArrayLength = safeReadArrayLength(arrayLengthNode.graph(), arrayLengthNode.array());
-            graph.replaceFixedWithFixed(arrayLengthNode, safeReadArrayLength);
+            FixedNode nextNode = arrayLengthNode.next();
+            arrayLengthNode.clearSuccessors();
+            safeReadArrayLength.setNext(nextNode);
+            arrayLengthNode.replaceAndDelete(safeReadArrayLength);
             safeReadArrayLength.lower(tool);
         } else if (n instanceof LoadFieldNode) {
             LoadFieldNode field = (LoadFieldNode) n;
             if (field.isVolatile()) {
                 return;
             }
+            Graph graph = field.graph();
             int displacement = ((HotSpotField) field.field()).offset();
             assert field.kind() != CiKind.Illegal;
-            ReadNode memoryRead = graph.add(new ReadNode(field.field().kind(true).stackKind(), field.object(), LocationNode.create(field.field(), field.field().kind(true), displacement, graph)));
+            ReadNode memoryRead = graph.unique(new ReadNode(field.field().kind(true).stackKind(), field.object(), LocationNode.create(field.field(), field.field().kind(true), displacement, graph)));
             memoryRead.setGuard((GuardNode) tool.createGuard(graph.unique(new NullCheckNode(field.object(), false))));
-            graph.replaceFixedWithFixed(field, memoryRead);
+            FixedNode next = field.next();
+            field.setNext(null);
+            memoryRead.setNext(next);
+            field.replaceAndDelete(memoryRead);
         } else if (n instanceof StoreFieldNode) {
-            StoreFieldNode storeField = (StoreFieldNode) n;
-            if (storeField.isVolatile()) {
+            StoreFieldNode field = (StoreFieldNode) n;
+            if (field.isVolatile()) {
                 return;
             }
-            HotSpotField field = (HotSpotField) storeField.field();
-            WriteNode memoryWrite = graph.add(new WriteNode(storeField.object(), storeField.value(), LocationNode.create(storeField.field(), storeField.field().kind(true), field.offset(), graph)));
-            memoryWrite.setGuard((GuardNode) tool.createGuard(graph.unique(new NullCheckNode(storeField.object(), false))));
-            memoryWrite.setStateAfter(storeField.stateAfter());
-            graph.replaceFixedWithFixed(storeField, memoryWrite);
-
-            if (field.kind(true) == CiKind.Object && !memoryWrite.value().isNullConstant()) {
-                graph.addAfterFixed(memoryWrite, graph.add(new FieldWriteBarrier(memoryWrite.object())));
+            Graph graph = field.graph();
+            int displacement = ((HotSpotField) field.field()).offset();
+            WriteNode memoryWrite = graph.add(new WriteNode(field.object(), field.value(), LocationNode.create(field.field(), field.field().kind(true), displacement, graph)));
+            memoryWrite.setGuard((GuardNode) tool.createGuard(graph.unique(new NullCheckNode(field.object(), false))));
+            memoryWrite.setStateAfter(field.stateAfter());
+            FixedNode next = field.next();
+            field.setNext(null);
+            if (field.field().kind(true) == CiKind.Object && !field.value().isNullConstant()) {
+                FieldWriteBarrier writeBarrier = graph.add(new FieldWriteBarrier(field.object()));
+                memoryWrite.setNext(writeBarrier);
+                writeBarrier.setNext(next);
+            } else {
+                memoryWrite.setNext(next);
             }
+            field.replaceAndDelete(memoryWrite);
         } else if (n instanceof LoadIndexedNode) {
             LoadIndexedNode loadIndexed = (LoadIndexedNode) n;
+            Graph graph = loadIndexed.graph();
             GuardNode boundsCheck = createBoundsCheck(loadIndexed, tool);
 
             CiKind elementKind = loadIndexed.elementKind();
             LocationNode arrayLocation = createArrayLocation(graph, elementKind, loadIndexed.index());
-            ReadNode memoryRead = graph.add(new ReadNode(elementKind.stackKind(), loadIndexed.array(), arrayLocation));
+            ReadNode memoryRead = graph.unique(new ReadNode(elementKind.stackKind(), loadIndexed.array(), arrayLocation));
             memoryRead.setGuard(boundsCheck);
-            graph.replaceFixedWithFixed(loadIndexed, memoryRead);
+            FixedNode next = loadIndexed.next();
+            loadIndexed.setNext(null);
+            memoryRead.setNext(next);
+            loadIndexed.replaceAndDelete(memoryRead);
         } else if (n instanceof StoreIndexedNode) {
             StoreIndexedNode storeIndexed = (StoreIndexedNode) n;
+            Graph graph = storeIndexed.graph();
+            AnchorNode anchor = graph.add(new AnchorNode());
             GuardNode boundsCheck = createBoundsCheck(storeIndexed, tool);
+
+            FixedWithNextNode append = anchor;
 
             CiKind elementKind = storeIndexed.elementKind();
             LocationNode arrayLocation = createArrayLocation(graph, elementKind, storeIndexed.index());
@@ -266,59 +286,64 @@ public class HotSpotRuntime implements GraalRuntime {
                 if (array.exactType() != null) {
                     RiResolvedType elementType = array.exactType().componentType();
                     if (elementType.superType() != null) {
-                        AnchorNode anchor = graph.add(new AnchorNode());
-                        graph.addBeforeFixed(storeIndexed, anchor);
                         ConstantNode type = graph.unique(ConstantNode.forCiConstant(elementType.getEncoding(Representation.ObjectHub), this, graph));
                         value = graph.unique(new CheckCastNode(anchor, type, elementType, value));
                     } else {
                         assert elementType.name().equals("Ljava/lang/Object;") : elementType.name();
                     }
                 } else {
-                    AnchorNode anchor = graph.add(new AnchorNode());
-                    graph.addBeforeFixed(storeIndexed, anchor);
                     GuardNode guard = (GuardNode) tool.createGuard(graph.unique(new NullCheckNode(array, false)));
-                    ReadNode arrayClass = graph.add(new ReadNode(CiKind.Object, array, LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Object, config.hubOffset, graph)));
+                    ReadNode arrayClass = graph.unique(new ReadNode(CiKind.Object, array, LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Object, config.hubOffset, graph)));
                     arrayClass.setGuard(guard);
-                    graph.addBeforeFixed(storeIndexed, arrayClass);
-                    ReadNode arrayElementKlass = graph.add(new ReadNode(CiKind.Object, arrayClass, LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Object, config.arrayClassElementOffset, graph)));
+                    append.setNext(arrayClass);
+                    append = arrayClass;
+                    ReadNode arrayElementKlass = graph.unique(new ReadNode(CiKind.Object, arrayClass, LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Object, config.arrayClassElementOffset, graph)));
                     value = graph.unique(new CheckCastNode(anchor, arrayElementKlass, null, value));
                 }
             }
             WriteNode memoryWrite = graph.add(new WriteNode(array, value, arrayLocation));
             memoryWrite.setGuard(boundsCheck);
             memoryWrite.setStateAfter(storeIndexed.stateAfter());
-
-            graph.replaceFixedWithFixed(storeIndexed, memoryWrite);
-
+            FixedNode next = storeIndexed.next();
+            storeIndexed.setNext(null);
+            append.setNext(memoryWrite);
             if (elementKind == CiKind.Object && !value.isNullConstant()) {
-                graph.addAfterFixed(memoryWrite, graph.add(new ArrayWriteBarrier(array, arrayLocation)));
+                ArrayWriteBarrier writeBarrier = graph.add(new ArrayWriteBarrier(array, arrayLocation));
+                memoryWrite.setNext(writeBarrier);
+                writeBarrier.setNext(next);
+            } else {
+                memoryWrite.setNext(next);
             }
+            storeIndexed.replaceAtPredecessors(anchor);
+            storeIndexed.safeDelete();
         } else if (n instanceof UnsafeLoadNode) {
             UnsafeLoadNode load = (UnsafeLoadNode) n;
+            Graph graph = load.graph();
             assert load.kind() != CiKind.Illegal;
             IndexedLocationNode location = IndexedLocationNode.create(LocationNode.ANY_LOCATION, load.loadKind(), load.displacement(), load.offset(), graph);
             location.setIndexScalingEnabled(false);
-            ReadNode memoryRead = graph.add(new ReadNode(load.kind(), load.object(), location));
+            ReadNode memoryRead = graph.unique(new ReadNode(load.kind(), load.object(), location));
             memoryRead.setGuard((GuardNode) tool.createGuard(graph.unique(new NullCheckNode(load.object(), false))));
-            graph.replaceFixedWithFixed(load, memoryRead);
+            FixedNode next = load.next();
+            load.setNext(null);
+            memoryRead.setNext(next);
+            load.replaceAndDelete(memoryRead);
         } else if (n instanceof UnsafeStoreNode) {
             UnsafeStoreNode store = (UnsafeStoreNode) n;
+            Graph graph = store.graph();
             IndexedLocationNode location = IndexedLocationNode.create(LocationNode.ANY_LOCATION, store.storeKind(), store.displacement(), store.offset(), graph);
             location.setIndexScalingEnabled(false);
             WriteNode write = graph.add(new WriteNode(store.object(), store.value(), location));
             FieldWriteBarrier barrier = graph.add(new FieldWriteBarrier(store.object()));
+            FixedNode next = store.next();
+            store.setNext(null);
+            barrier.setNext(next);
+            write.setNext(barrier);
             write.setStateAfter(store.stateAfter());
-            graph.replaceFixedWithFixed(store, write);
-            graph.addBeforeFixed(write, barrier);
+            store.replaceAtPredecessors(write);
+            store.safeDelete();
         } else if (n instanceof ArrayHeaderSizeNode) {
-            ArrayHeaderSizeNode arrayHeaderSize = (ArrayHeaderSizeNode) n;
-            graph.replaceFloating(arrayHeaderSize, ConstantNode.forLong(config.getArrayOffset(arrayHeaderSize.elementKind()), n.graph()));
-        } else if (n instanceof ReadClassNode) {
-            ReadClassNode objectClassNode = (ReadClassNode) n;
-            LocationNode location = LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Object, config.hubOffset, graph);
-            ReadNode memoryRead = graph.add(new ReadNode(CiKind.Object, objectClassNode.object(), location));
-            memoryRead.setGuard((GuardNode) tool.createGuard(graph.unique(new NullCheckNode(objectClassNode.object(), false))));
-            graph.replaceFixed(objectClassNode, memoryRead);
+            n.replaceAndDelete(ConstantNode.forLong(config.getArrayOffset(((ArrayHeaderSizeNode) n).elementKind()), n.graph()));
         }
     }
 
@@ -361,7 +386,7 @@ public class HotSpotRuntime implements GraalRuntime {
                 SafeReadNode klassOop = safeRead(graph, CiKind.Object, receiver, config.klassOopOffset);
                 graph.start().setNext(klassOop);
                 // TODO(tw): Care about primitive classes!
-                ReadNode result = graph.add(new ReadNode(CiKind.Int, klassOop, LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Int, config.klassModifierFlagsOffset, graph)));
+                ReadNode result = graph.unique(new ReadNode(CiKind.Int, klassOop, LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Int, config.klassModifierFlagsOffset, graph)));
                 ReturnNode ret = graph.add(new ReturnNode(result));
                 klassOop.setNext(ret);
                 return graph;

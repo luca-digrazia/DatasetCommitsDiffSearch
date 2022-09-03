@@ -60,7 +60,19 @@ public class CompilerToVMImpl implements CompilerToVM, Remote {
     public native int RiMethod_invocationCount(HotSpotMethodResolved method);
 
     @Override
-    public native RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass, boolean eagerResolve);
+    public native int RiMethod_exceptionProbability(HotSpotMethodResolved method, int bci);
+
+    @Override
+    public native RiTypeProfile RiMethod_typeProfile(HotSpotMethodResolved method, int bci);
+
+    @Override
+    public native double RiMethod_branchProbability(HotSpotMethodResolved method, int bci);
+
+    @Override
+    public native double[] RiMethod_switchProbability(HotSpotMethodResolved method, int bci);
+
+    @Override
+    public native RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass);
 
     @Override
     public native Object RiConstantPool_lookupConstant(HotSpotTypeResolved pool, int cpi);
@@ -109,12 +121,6 @@ public class CompilerToVMImpl implements CompilerToVM, Remote {
 
     @Override
     public native boolean RiType_isInitialized(HotSpotTypeResolved klass);
-
-    @Override
-    public native HotSpotMethodData RiMethod_methodData(HotSpotMethodResolved method);
-
-    @Override
-    public native boolean HotSpotMethodData_isMature(HotSpotMethodData methodData);
 
     @Override
     public native RiType getType(Class<?> javaClass);
