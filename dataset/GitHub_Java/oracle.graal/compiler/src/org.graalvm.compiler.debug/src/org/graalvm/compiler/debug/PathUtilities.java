@@ -22,7 +22,6 @@
  */
 package org.graalvm.compiler.debug;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
@@ -136,8 +135,7 @@ public class PathUtilities {
             return result;
         }
         Path dumpDir = DebugOptions.getDumpDirectory(options);
-        final Path fileName = Paths.get(dumpDir.toString(), name);
-        return fileName.normalize();
+        return dumpDir.resolve(name).normalize();
     }
 
     /**
@@ -180,8 +178,6 @@ public class PathUtilities {
         String prefix;
         if (id == null) {
             prefix = baseNameOption.getValue(options);
-            int slash = prefix.lastIndexOf(File.separatorChar);
-            prefix = prefix.substring(slash + 1);
         } else {
             prefix = id;
         }
@@ -206,7 +202,7 @@ public class PathUtilities {
                 }
             }
             Path dumpDir = DebugOptions.getDumpDirectory(options);
-            Path result = Paths.get(dumpDir.toString(), fileName);
+            Path result = dumpDir.resolve(fileName);
             try {
                 if (createDirectory) {
                     return Files.createDirectory(result);
