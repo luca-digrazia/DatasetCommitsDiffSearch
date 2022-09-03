@@ -40,7 +40,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -147,6 +146,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         initializeStaticContext(this);
         VMAccessor.INSTRUMENT.notifyContextCreated(engine, truffleContext);
     }
+
 
     private static void initializeStaticContext(PolyglotContextImpl context) {
         if (SINGLE_CONTEXT.isValid()) {
