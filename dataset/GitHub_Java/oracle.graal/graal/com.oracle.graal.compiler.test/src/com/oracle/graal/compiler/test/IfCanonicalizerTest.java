@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,18 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.graph.iterators.NodePredicates.isNotA;
+import static com.oracle.graal.graph.iterators.NodePredicates.*;
+import jdk.internal.jvmci.debug.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.FloatingReadPhase;
-import com.oracle.graal.phases.common.GuardLoweringPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.common.ValueAnchorCleanupPhase;
-import com.oracle.graal.phases.tiers.MidTierContext;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * In the following tests, the usages of local variable "a" are replaced with the integer constant
@@ -204,7 +195,7 @@ public class IfCanonicalizerTest extends GraalCompilerTest {
         PhaseContext context = new PhaseContext(getProviders());
         new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
         new FloatingReadPhase().apply(graph);
-        MidTierContext midContext = new MidTierContext(getProviders(), getTargetProvider(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
+        MidTierContext midContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
         new GuardLoweringPhase().apply(graph, midContext);
         new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, midContext);
         new ValueAnchorCleanupPhase().apply(graph);
@@ -216,10 +207,8 @@ public class IfCanonicalizerTest extends GraalCompilerTest {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
         ParameterNode param = graph.getNodes(ParameterNode.TYPE).iterator().next();
         ConstantNode constant = ConstantNode.forInt(0, graph);
-        for (Node n : param.usages().snapshot()) {
-            if (!(n instanceof FrameState)) {
-                n.replaceFirstInput(param, constant);
-            }
+        for (Node n : param.usages().filter(isNotA(FrameState.class)).snapshot()) {
+            n.replaceFirstInput(param, constant);
         }
         Debug.dump(graph, "Graph");
         new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));

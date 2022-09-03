@@ -29,9 +29,8 @@ import static org.junit.Assert.*;
 
 import java.util.*;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 import jdk.internal.jvmci.options.*;
 import jdk.internal.jvmci.options.OptionValue.*;
 
@@ -712,7 +711,6 @@ public class MemoryScheduleTest extends GraphScheduleTest {
         return getFinalSchedule(snippet, mode, SchedulingStrategy.LATEST_OUT_OF_LOOPS);
     }
 
-    @SuppressWarnings("try")
     private SchedulePhase getFinalSchedule(final String snippet, final TestMode mode, final SchedulingStrategy schedulingStrategy) {
         final StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
         try (Scope d = Debug.scope("FloatingReadTest", graph)) {
@@ -740,7 +738,7 @@ public class MemoryScheduleTest extends GraphScheduleTest {
                 new FloatingReadPhase().apply(graph);
                 new RemoveValueProxyPhase().apply(graph);
 
-                MidTierContext midContext = new MidTierContext(getProviders(), getTargetProvider(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
+                MidTierContext midContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
                 new GuardLoweringPhase().apply(graph, midContext);
                 new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, midContext);
                 new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.LOW_TIER).apply(graph, midContext);

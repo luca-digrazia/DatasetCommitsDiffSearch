@@ -26,9 +26,8 @@ import static jdk.internal.jvmci.common.UnsafeAccess.*;
 
 import java.lang.ref.*;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 import jdk.internal.jvmci.hotspot.*;
 import jdk.internal.jvmci.meta.*;
 
@@ -247,13 +246,12 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
         return installedCode;
     }
 
-    @SuppressWarnings("try")
     private void testHelper(final String snippetName, final int expectedBarriers) throws Exception, SecurityException {
         ResolvedJavaMethod snippet = getResolvedJavaMethod(snippetName);
         try (Scope s = Debug.scope("WriteBarrierAdditionTest", snippet)) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
             HighTierContext highContext = getDefaultHighTierContext();
-            MidTierContext midContext = new MidTierContext(getProviders(), getTargetProvider(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
+            MidTierContext midContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
             new InliningPhase(new InlineEverythingPolicy(), new CanonicalizerPhase()).apply(graph, highContext);
             new CanonicalizerPhase().apply(graph, highContext);
             new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highContext);

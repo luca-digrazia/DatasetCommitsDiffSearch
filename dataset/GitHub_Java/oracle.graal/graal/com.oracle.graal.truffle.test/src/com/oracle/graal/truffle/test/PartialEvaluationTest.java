@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.truffle.test;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 
 import org.junit.*;
 
@@ -82,7 +82,6 @@ public class PartialEvaluationTest extends GraalCompilerTest {
         }
     }
 
-    @SuppressWarnings("try")
     protected StructuredGraph partialEval(OptimizedCallTarget compilable, Object[] arguments, AllowAssumptions allowAssumptions) {
         // Executed AST so that all classes are loaded and initialized.
         compilable.call(arguments);
@@ -105,7 +104,6 @@ public class PartialEvaluationTest extends GraalCompilerTest {
         new DeadCodeEliminationPhase().apply(graph);
     }
 
-    @SuppressWarnings("try")
     protected StructuredGraph parseForComparison(final String methodName) {
         try (Scope s = Debug.scope("Truffle", new DebugDumpScope("Comparison: " + methodName))) {
             StructuredGraph graph = parseEager(methodName, AllowAssumptions.YES);

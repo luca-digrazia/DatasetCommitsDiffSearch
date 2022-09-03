@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,10 +24,8 @@ package com.oracle.graal.compiler.test.backend;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.code.CallingConvention.*;
-
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 import static jdk.internal.jvmci.code.CodeUtil.*;
 
 import com.oracle.graal.compiler.*;
@@ -47,17 +45,17 @@ public abstract class BackendTest extends GraalCompilerTest {
         super(arch);
     }
 
-    @SuppressWarnings("try")
     protected LIRGenerationResult getLIRGenerationResult(final StructuredGraph graph) {
         SchedulePhase schedule = null;
         try (Scope s = Debug.scope("FrontEnd")) {
-            schedule = GraalCompiler.emitFrontEnd(getProviders(), getBackend(), graph, getDefaultGraphBuilderSuite(), OptimisticOptimizations.NONE, graph.method().getProfilingInfo(), getSuites());
+            schedule = GraalCompiler.emitFrontEnd(getProviders(), getBackend().getTarget(), graph, getDefaultGraphBuilderSuite(), OptimisticOptimizations.NONE, graph.method().getProfilingInfo(),
+                            getSuites());
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
 
         CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
-        LIRGenerationResult lirGen = GraalCompiler.emitLIR(getBackend(), schedule, graph, null, cc, null, getLIRSuites());
+        LIRGenerationResult lirGen = GraalCompiler.emitLIR(getBackend(), getBackend().getTarget(), schedule, graph, null, cc, null, getLIRSuites());
         return lirGen;
     }
 

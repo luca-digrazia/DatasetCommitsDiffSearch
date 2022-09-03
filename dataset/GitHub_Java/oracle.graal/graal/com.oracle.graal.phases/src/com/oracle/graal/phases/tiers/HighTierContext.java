@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,23 @@
  */
 package com.oracle.graal.phases.tiers;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.util.*;
 
 public class HighTierContext extends PhaseContext {
 
-    private final PhasePlan plan;
+    private final PhaseSuite<HighTierContext> graphBuilderSuite;
 
-    private final GraphCache cache;
     private final OptimisticOptimizations optimisticOpts;
 
-    public HighTierContext(MetaAccessProvider runtime, Assumptions assumptions, Replacements replacements, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
-        super(runtime, assumptions, replacements);
-        this.plan = plan;
-        this.cache = cache;
+    public HighTierContext(Providers providers, PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts) {
+        super(providers);
+        this.graphBuilderSuite = graphBuilderSuite;
         this.optimisticOpts = optimisticOpts;
     }
 
-    public PhasePlan getPhasePlan() {
-        return plan;
-    }
-
-    public GraphCache getGraphCache() {
-        return cache;
+    public PhaseSuite<HighTierContext> getGraphBuilderSuite() {
+        return graphBuilderSuite;
     }
 
     public OptimisticOptimizations getOptimisticOptimizations() {

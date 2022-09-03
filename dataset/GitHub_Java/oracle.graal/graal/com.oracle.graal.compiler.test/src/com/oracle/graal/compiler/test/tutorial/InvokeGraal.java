@@ -27,10 +27,8 @@ import java.util.concurrent.atomic.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.code.CallingConvention.Type;
-
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
-
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.Scope;
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.api.runtime.*;
@@ -54,6 +52,7 @@ public class InvokeGraal {
     protected final Providers providers;
     protected final MetaAccessProvider metaAccess;
     protected final CodeCacheProvider codeCache;
+    protected final TargetDescription target;
 
     public InvokeGraal() {
         /* Ask the hosting Java VM for the entry point object to the Graal API. */
@@ -68,6 +67,7 @@ public class InvokeGraal {
         /* Some frequently used providers and configuration objects. */
         metaAccess = providers.getMetaAccess();
         codeCache = providers.getCodeCache();
+        target = codeCache.getTarget();
     }
 
     private static AtomicInteger compilationId = new AtomicInteger();
@@ -75,7 +75,6 @@ public class InvokeGraal {
     /**
      * The simplest way to compile a method, using the default behavior for everything.
      */
-    @SuppressWarnings("try")
     protected InstalledCode compileAndInstallMethod(ResolvedJavaMethod method) {
         /* Ensure every compilation gets a unique number, visible in IGV. */
         try (Scope s = Debug.scope("compileAndInstallMethod", new DebugDumpScope(String.valueOf(compilationId.incrementAndGet()), true))) {
@@ -125,7 +124,7 @@ public class InvokeGraal {
             CompilationResultBuilderFactory factory = CompilationResultBuilderFactory.Default;
 
             /* Invoke the whole Graal compilation pipeline. */
-            GraalCompiler.compileGraph(graph, callingConvention, method, providers, backend, graphBuilderSuite, optimisticOpts, profilingInfo, suites, lirSuites, compilationResult, factory);
+            GraalCompiler.compileGraph(graph, callingConvention, method, providers, backend, target, graphBuilderSuite, optimisticOpts, profilingInfo, suites, lirSuites, compilationResult, factory);
 
             /*
              * Install the compilation result into the VM, i.e., copy the byte[] array that contains

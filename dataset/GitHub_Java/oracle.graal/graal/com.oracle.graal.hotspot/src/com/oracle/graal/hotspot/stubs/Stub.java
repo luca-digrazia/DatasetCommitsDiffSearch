@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,13 +29,13 @@ import java.util.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
+import jdk.internal.jvmci.debug.internal.*;
 import jdk.internal.jvmci.hotspot.*;
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
@@ -156,7 +156,6 @@ public abstract class Stub {
     /**
      * Gets the code for this stub, compiling it first if necessary.
      */
-    @SuppressWarnings("try")
     public synchronized InstalledCode getCode(final Backend backend) {
         if (code == null) {
             try (Scope d = Debug.sandbox("CompilingStub", DebugScope.getConfig(), providers.getCodeCache(), debugScopeContext())) {
@@ -176,14 +175,15 @@ public abstract class Stub {
                 CodeCacheProvider codeCache = providers.getCodeCache();
                 // The stub itself needs the incoming calling convention.
                 CallingConvention incomingCc = linkage.getIncomingCallingConvention();
+                TargetDescription target = codeCache.getTarget();
 
                 compResult = new CompilationResult(toString());
                 try (Scope s0 = Debug.scope("StubCompilation", graph, providers.getCodeCache())) {
                     Suites defaultSuites = providers.getSuites().getDefaultSuites();
                     Suites suites = new Suites(new PhaseSuite<>(), defaultSuites.getMidTier(), defaultSuites.getLowTier());
-                    SchedulePhase schedule = emitFrontEnd(providers, backend, graph, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph), suites);
+                    SchedulePhase schedule = emitFrontEnd(providers, target, graph, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph), suites);
                     LIRSuites lirSuites = createLIRSuites();
-                    emitBackEnd(graph, Stub.this, incomingCc, getInstalledCodeOwner(), backend, compResult, CompilationResultBuilderFactory.Default, schedule, getRegisterConfig(), lirSuites);
+                    emitBackEnd(graph, Stub.this, incomingCc, getInstalledCodeOwner(), backend, target, compResult, CompilationResultBuilderFactory.Default, schedule, getRegisterConfig(), lirSuites);
                 } catch (Throwable e) {
                     throw Debug.handle(e);
                 }
@@ -195,7 +195,7 @@ public abstract class Stub {
                     HotSpotCompiledCode hsCompResult = new HotSpotCompiledRuntimeStub(compResult);
 
                     HotSpotGraalRuntime runtime = runtime();
-                    int result = runtime.getCompilerToVM().installCode(backend.getTarget(), hsCompResult, installedCode, null);
+                    int result = runtime.getCompilerToVM().installCode(hsCompResult, installedCode, null);
                     HotSpotVMConfig config = runtime.getConfig();
                     if (result != config.codeInstallResultOk) {
                         throw new JVMCIError("Error installing stub %s: %s", Stub.this, config.getCodeInstallResultDescription(result));

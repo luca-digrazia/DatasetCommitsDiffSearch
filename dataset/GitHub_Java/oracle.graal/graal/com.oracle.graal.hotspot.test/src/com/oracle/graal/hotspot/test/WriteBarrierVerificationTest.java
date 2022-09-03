@@ -24,10 +24,9 @@ package com.oracle.graal.hotspot.test;
 
 import java.util.*;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-import com.oracle.graal.debug.internal.*;
-
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
+import jdk.internal.jvmci.debug.internal.*;
 import jdk.internal.jvmci.hotspot.*;
 import jdk.internal.jvmci.meta.*;
 
@@ -627,14 +626,13 @@ public class WriteBarrierVerificationTest extends GraalCompilerTest {
         testPredicate(snippet, noCheck, removedBarrierIndices);
     }
 
-    @SuppressWarnings("try")
     private void testPredicate(final String snippet, final GraphPredicate expectedBarriers, final int... removedBarrierIndices) {
         try (Scope d = Debug.scope("WriteBarrierVerificationTest", new DebugDumpScope(snippet))) {
             final StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
             HighTierContext highTierContext = getDefaultHighTierContext();
             new InliningPhase(new CanonicalizerPhase()).apply(graph, highTierContext);
 
-            MidTierContext midTierContext = new MidTierContext(getProviders(), getTargetProvider(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
+            MidTierContext midTierContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
 
             new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highTierContext);
             new GuardLoweringPhase().apply(graph, midTierContext);

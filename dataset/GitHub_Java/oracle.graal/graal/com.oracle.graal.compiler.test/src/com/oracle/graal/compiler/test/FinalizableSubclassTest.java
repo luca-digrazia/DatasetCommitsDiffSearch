@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,25 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
+import java.io.*;
+import java.lang.reflect.*;
+import java.util.*;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.Constructor;
-import java.util.HashMap;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.meta.Assumptions.*;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.Assumptions.Assumption;
-import jdk.vm.ci.meta.Assumptions.NoFinalizableSubclass;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.junit.*;
 
-import org.junit.Assert;
-import org.junit.Test;
-
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.java.GraphBuilderPhase;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.java.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.java.RegisterFinalizerNode;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.inlining.InliningPhase;
-import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class FinalizableSubclassTest extends GraalCompilerTest {
 
@@ -72,7 +65,7 @@ public class FinalizableSubclassTest extends GraalCompilerTest {
         Constructor<?>[] constructors = cl.getConstructors();
         Assert.assertTrue(constructors.length == 1);
         final ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(constructors[0]);
-        StructuredGraph graph = new StructuredGraph(javaMethod, allowAssumptions, NO_PROFILING_INFO);
+        StructuredGraph graph = new StructuredGraph(javaMethod, allowAssumptions);
 
         GraphBuilderConfiguration conf = GraphBuilderConfiguration.getSnippetDefault(getDefaultGraphBuilderPlugins());
         new GraphBuilderPhase.Instance(getMetaAccess(), getProviders().getStampProvider(), getProviders().getConstantReflection(), conf, OptimisticOptimizations.ALL, null).apply(graph);

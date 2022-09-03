@@ -23,8 +23,8 @@
 package com.oracle.graal.compiler.test.inlining;
 
 import jdk.internal.jvmci.code.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 import jdk.internal.jvmci.meta.*;
 
 import org.junit.*;
@@ -52,7 +52,7 @@ public class InliningTest extends GraalCompilerTest {
         return Boolean.valueOf(value);
     }
 
-    @SuppressWarnings({"all", "static"})
+    @SuppressWarnings("all")
     public static Boolean invokeStaticOnInstanceSnippet(Boolean obj, boolean value) {
         return obj.valueOf(value);
     }

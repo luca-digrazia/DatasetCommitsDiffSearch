@@ -53,7 +53,6 @@ public class ImplicitNullCheckTest extends GraphScheduleTest {
         return 0;
     }
 
-    @Ignore("temporarily disable until LoadHub lowering is clarified")
     @Test
     public void test1() {
         test("test1Snippet");

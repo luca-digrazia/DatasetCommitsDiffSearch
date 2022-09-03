@@ -22,20 +22,34 @@
  */
 package com.oracle.graal.phases.tiers;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.spi.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.util.*;
 
 public class MidTierContext extends PhaseContext {
 
     private final TargetDescription target;
+    private final OptimisticOptimizations optimisticOpts;
+    private final ProfilingInfo profilingInfo;
 
-    public MidTierContext(MetaAccessProvider runtime, Assumptions assumptions, Replacements replacements, TargetDescription target) {
-        super(runtime, assumptions, replacements);
+    public MidTierContext(Providers copyFrom, TargetDescription target, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo) {
+        super(copyFrom);
         this.target = target;
+        this.optimisticOpts = optimisticOpts;
+        this.profilingInfo = profilingInfo;
     }
 
     public TargetDescription getTarget() {
         return target;
+    }
+
+    public OptimisticOptimizations getOptimisticOptimizations() {
+        return optimisticOpts;
+    }
+
+    public ProfilingInfo getProfilingInfo() {
+        return profilingInfo;
     }
 }

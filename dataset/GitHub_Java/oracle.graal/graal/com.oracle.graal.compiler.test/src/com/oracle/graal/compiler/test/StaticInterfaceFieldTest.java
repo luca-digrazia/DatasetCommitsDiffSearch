@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.*;
+import static jdk.internal.jvmci.debug.DelegatingDebugConfig.Feature.*;
 
 import java.lang.reflect.*;
 
-import com.oracle.graal.debug.*;
-
+import jdk.internal.jvmci.debug.*;
 import jdk.internal.jvmci.meta.*;
 
 import org.junit.*;
@@ -69,7 +68,6 @@ public class StaticInterfaceFieldTest extends GraalTest {
 
     }
 
-    @SuppressWarnings("try")
     private void eagerlyParseMethod(Class<C> clazz, String methodName) {
         RuntimeProvider rt = Graal.getRequiredCapability(RuntimeProvider.class);
         Providers providers = rt.getHostBackend().getProviders();
