@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,11 +24,11 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "|%|")
 public class UnsignedRemNode extends FixedBinaryNode implements Canonicalizable, Lowerable, LIRLowerable {
@@ -36,6 +36,7 @@ public class UnsignedRemNode extends FixedBinaryNode implements Canonicalizable,
     /**
      * Used by {@code NodeIntrinsic} in {@code UnsignedMathSubstitutions}.
      */
+    @SuppressWarnings("unused")
     private UnsignedRemNode(Kind kind, ValueNode x, ValueNode y) {
         this(StampFactory.forKind(kind), x, y);
     }
@@ -70,17 +71,11 @@ public class UnsignedRemNode extends FixedBinaryNode implements Canonicalizable,
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        gen.setResult(this, gen.getLIRGeneratorTool().emitURem(gen.operand(x()), gen.operand(y()), gen.state(this)));
+        gen.setResult(this, gen.getLIRGeneratorTool().emitURem(gen.operand(x()), gen.operand(y()), this));
     }
 
     @Override
     public boolean canDeoptimize() {
         return !(y().stamp() instanceof IntegerStamp) || ((IntegerStamp) y().stamp()).contains(0);
     }
-
-    @NodeIntrinsic
-    public static native int unsignedRemainder(@ConstantNodeParameter Kind kind, int a, int b);
-
-    @NodeIntrinsic
-    public static native long unsignedRemainder(@ConstantNodeParameter Kind kind, long a, long b);
 }

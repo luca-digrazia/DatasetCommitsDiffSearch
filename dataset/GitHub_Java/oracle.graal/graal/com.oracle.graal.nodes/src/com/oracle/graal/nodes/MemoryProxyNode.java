@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,25 +23,18 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 public class MemoryProxyNode extends ProxyNode implements MemoryProxy, LIRLowerable {
 
-    @Input private ValueNode value;
     private final LocationIdentity identity;
 
     public MemoryProxyNode(ValueNode value, AbstractBeginNode exit, LocationIdentity identity) {
-        super(StampFactory.dependency(), exit);
-        this.value = value;
+        super(value, exit, PhiType.Memory);
         assert value instanceof MemoryNode;
         this.identity = identity;
-    }
-
-    @Override
-    public ValueNode value() {
-        return value;
     }
 
     public LocationIdentity getLocationIdentity() {
@@ -54,8 +47,12 @@ public class MemoryProxyNode extends ProxyNode implements MemoryProxy, LIRLowera
 
     @Override
     public boolean verify() {
-        assert value() instanceof MemoryNode : this + " " + value();
+        assert value() instanceof MemoryNode;
         return super.verify();
+    }
+
+    public static MemoryProxyNode forMemory(MemoryNode value, AbstractBeginNode exit, LocationIdentity location, StructuredGraph graph) {
+        return graph.unique(new MemoryProxyNode(ValueNodeUtil.asNode(value), exit, location));
     }
 
     public MemoryNode getOriginalMemoryNode() {

@@ -54,7 +54,7 @@ public final class AddLocationNode extends LocationNode implements Canonicalizab
     }
 
     private AddLocationNode(ValueNode x, ValueNode y) {
-        super(StampFactory.forVoid());
+        super(StampFactory.extension());
         this.x = x;
         this.y = y;
     }

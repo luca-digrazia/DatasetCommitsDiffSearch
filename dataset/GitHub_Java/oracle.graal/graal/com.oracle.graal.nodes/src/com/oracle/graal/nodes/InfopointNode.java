@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,19 +23,35 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-@NodeInfo
-public abstract class InfopointNode extends FixedWithNextNode {
-    private final InfopointReason reason;
+/**
+ * Nodes of this type are inserted into the graph to denote points of interest to debugging.
+ */
+public class InfopointNode extends FixedWithNextNode implements LIRLowerable, NodeWithState {
 
-    public InfopointNode(InfopointReason reason) {
+    public final InfopointReason reason;
+    @Input private FrameState state;
+
+    public InfopointNode(InfopointReason reason, FrameState state) {
         super(StampFactory.forVoid());
         this.reason = reason;
+        this.state = state;
     }
 
-    public InfopointReason getReason() {
-        return reason;
+    @Override
+    public void generate(NodeLIRBuilderTool generator) {
+        generator.visitInfopointNode(this);
     }
+
+    public FrameState getState() {
+        return state;
+    }
+
+    @Override
+    public boolean verify() {
+        return state != null && super.verify();
+    }
+
 }

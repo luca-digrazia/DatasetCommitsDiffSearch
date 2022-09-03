@@ -32,13 +32,12 @@ import com.oracle.graal.nodes.type.*;
  * states together. It is thus referenced from the {@link MonitorEnterNode}, from the
  * {@link MonitorExitNode} and from the {@link FrameState}.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Association})
 public class MonitorIdNode extends ValueNode implements IterableNodeType, LIRLowerable {
 
     private int lockDepth;
 
     public MonitorIdNode(int lockDepth) {
-        super(StampFactory.forVoid());
+        super(StampFactory.dependency());
         this.lockDepth = lockDepth;
     }
 

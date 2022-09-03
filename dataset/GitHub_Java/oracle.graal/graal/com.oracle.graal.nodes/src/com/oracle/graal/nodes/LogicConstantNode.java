@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -34,10 +33,6 @@ public class LogicConstantNode extends LogicNode implements LIRLowerable {
 
     public final boolean value;
 
-    public static LogicConstantNode create(boolean value) {
-        return new LogicConstantNodeGen(value);
-    }
-
     protected LogicConstantNode(boolean value) {
         super();
         this.value = value;
@@ -45,23 +40,13 @@ public class LogicConstantNode extends LogicNode implements LIRLowerable {
 
     /**
      * Returns a node for a boolean constant.
-     *
+     * 
      * @param v the boolean value for which to create the instruction
      * @param graph
      * @return a node representing the boolean
      */
     public static LogicConstantNode forBoolean(boolean v, Graph graph) {
-        return graph.unique(LogicConstantNode.create(v));
-    }
-
-    /**
-     * Returns a node for a boolean constant.
-     *
-     * @param v the boolean value for which to create the instruction
-     * @return a node representing the boolean
-     */
-    public static LogicConstantNode forBoolean(boolean v) {
-        return LogicConstantNode.create(v);
+        return graph.unique(new LogicConstantNode(v));
     }
 
     /**
@@ -76,20 +61,6 @@ public class LogicConstantNode extends LogicNode implements LIRLowerable {
      */
     public static LogicConstantNode contradiction(Graph graph) {
         return forBoolean(false, graph);
-    }
-
-    /**
-     * Gets a constant for {@code true}.
-     */
-    public static LogicConstantNode tautology() {
-        return forBoolean(true);
-    }
-
-    /**
-     * Gets a constant for {@code false}.
-     */
-    public static LogicConstantNode contradiction() {
-        return forBoolean(false);
     }
 
     public boolean getValue() {

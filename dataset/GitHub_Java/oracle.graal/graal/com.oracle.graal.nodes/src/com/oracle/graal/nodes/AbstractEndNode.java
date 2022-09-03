@@ -24,11 +24,10 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-@NodeInfo
 public abstract class AbstractEndNode extends FixedNode implements IterableNodeType, LIRLowerable {
 
     protected AbstractEndNode() {

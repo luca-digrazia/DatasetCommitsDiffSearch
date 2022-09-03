@@ -22,25 +22,15 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
  * This node will be inserted at point specified by {@link StructuredGraph#getEntryBCI()}, usually
  * by the graph builder.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Association})
-public class EntryMarkerNode extends BeginStateSplitNode implements IterableNodeType, Simplifiable, LIRLowerable {
-
-    public static EntryMarkerNode create() {
-        return new EntryMarkerNodeGen();
-    }
-
-    EntryMarkerNode() {
-    }
+public class EntryMarkerNode extends AbstractBeginNode implements IterableNodeType, Simplifiable, LIRLowerable {
 
     @Override
     public void simplify(SimplifierTool tool) {

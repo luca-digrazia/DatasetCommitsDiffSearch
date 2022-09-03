@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.type.*;
 public final class ReturnNode extends ControlSinkNode implements LIRLowerable, IterableNodeType {
 
     @Input private ValueNode result;
-    @Input(InputType.Extension) private MemoryMapNode memoryMap;
+    @Input private MemoryMapNode memoryMap;
 
     public ValueNode result() {
         return result;

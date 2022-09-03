@@ -164,8 +164,4 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
             }
         }
     }
-
-    public boolean canNullCheck() {
-        return true;
-    }
 }

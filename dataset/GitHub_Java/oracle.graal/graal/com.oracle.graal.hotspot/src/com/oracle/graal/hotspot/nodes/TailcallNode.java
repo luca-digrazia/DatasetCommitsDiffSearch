@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,31 +24,31 @@ package com.oracle.graal.hotspot.nodes;
 
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
+import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.java.*;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Performs a tail call to the specified target compiled method, with the parameter taken from the
  * supplied FrameState.
  */
-@NodeInfo
-public class TailcallNode extends FixedWithNextNode implements LIRLowerable {
+public class TailcallNode extends FixedWithNextNode implements LIRGenResLowerable {
 
-    @Input(InputType.State) private FrameState frameState;
+    @Input private FrameState frameState;
     @Input private ValueNode target;
 
     /**
      * Creates a TailcallNode.
-     *
+     * 
      * @param target points to the start of an nmethod
      * @param frameState the parameters will be taken from this FrameState
      */
@@ -58,21 +58,20 @@ public class TailcallNode extends FixedWithNextNode implements LIRLowerable {
         this.frameState = frameState;
     }
 
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(NodeLIRBuilderTool gen, LIRGenerationResult res) {
         HotSpotVMConfig config = runtime().getConfig();
-        LIRGeneratorTool lirGen = gen.getLIRGeneratorTool();
         ResolvedJavaMethod method = frameState.method();
-        boolean isStatic = method.isStatic();
+        boolean isStatic = Modifier.isStatic(method.getModifiers());
 
-        JavaType[] signature = method.getSignature().toParameterTypes(isStatic ? null : method.getDeclaringClass());
-        CallingConvention cc = lirGen.getResult().getFrameMap().registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, null, signature, lirGen.target(), false);
+        JavaType[] signature = MetaUtil.signatureToTypes(method.getSignature(), isStatic ? null : method.getDeclaringClass());
+        CallingConvention cc = res.getFrameMap().registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, null, signature, gen.getLIRGeneratorTool().target(), false);
         List<ValueNode> parameters = new ArrayList<>();
         for (int i = 0, slot = 0; i < cc.getArgumentCount(); i++, slot += HIRFrameStateBuilder.stackSlots(frameState.localAt(slot).getKind())) {
             parameters.add(frameState.localAt(slot));
         }
         Value[] args = gen.visitInvokeArguments(cc, parameters);
-        Value address = lirGen.emitAddress(gen.operand(target), config.nmethodEntryOffset, Value.ILLEGAL, 0);
-        Value entry = lirGen.emitLoad(LIRKind.value(Kind.Long), address, null);
+        Value address = gen.getLIRGeneratorTool().emitAddress(gen.operand(target), config.nmethodEntryOffset, Value.ILLEGAL, 0);
+        Value entry = gen.getLIRGeneratorTool().emitLoad(Kind.Long, address, null);
         HotSpotLIRGenerator hsgen = (HotSpotLIRGenerator) gen;
         hsgen.emitTailcall(args, entry);
     }

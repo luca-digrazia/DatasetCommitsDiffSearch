@@ -354,12 +354,6 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
     }
 
     @Override
-    protected void genGoto() {
-        assert currentBlock.numNormalSuccessors() == 1;
-        gen.emitJump(LabelRef.forSuccessor(lirGenRes.getLIR(), currentBlock, 0));
-    }
-
-    @Override
     protected Value genObjectEquals(Value x, Value y) {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
@@ -377,7 +371,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
         BciBlock trueBlock = currentBlock.getSuccessors().get(0);
         BciBlock falseBlock = currentBlock.getSuccessors().get(1);
         if (trueBlock == falseBlock) {
-            gen.emitJump(LabelRef.forSuccessor(lirGenRes.getLIR(), currentBlock, 0));
+            appendGoto(createTarget(trueBlock, frameState));
             return;
         }
 
@@ -396,10 +390,21 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
             }
         }
 
-        LabelRef trueDestination = LabelRef.forSuccessor(lirGenRes.getLIR(), currentBlock, 0);
-        LabelRef falseDestination = LabelRef.forSuccessor(lirGenRes.getLIR(), currentBlock, 1);
+        // the mirroring and negation operations get the condition into canonical form
+        boolean mirror = cond.canonicalMirror();
+        boolean negate = cond.canonicalNegate();
 
-        gen.emitCompareBranch(x.getKind(), x, y, cond, false, trueDestination, falseDestination, probability);
+        Value a = mirror ? y : x;
+        Value b = mirror ? x : y;
+
+        LabelRef trueDestination = LabelRef.forSuccessor(lirGenRes.getLIR(), trueBlock, 0);
+        LabelRef falseDestination = LabelRef.forSuccessor(lirGenRes.getLIR(), falseBlock, 1);
+
+        if (negate) {
+            gen.emitCompareBranch(a, b, cond, false, falseDestination, trueDestination, 1 - probability);
+        } else {
+            gen.emitCompareBranch(a, b, cond, false, trueDestination, falseDestination, probability);
+        }
     }
 
     @Override
@@ -518,6 +523,10 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
     @Override
     protected void genReturn(Value x) {
+        if (x != null) {
+            AllocatableValue operand = gen.resultOperandFor(x.getKind());
+            gen.emitMove(operand, x);
+        }
         gen.emitReturn(x);
     }
 
@@ -577,6 +586,12 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
     }
 
     @Override
+    protected Value createTarget(BciBlock trueBlock, AbstractFrameStateBuilder<Value> state) {
+        // TODO Auto-generated method stub
+        throw GraalInternalError.unimplemented("Auto-generated method stub");
+    }
+
+    @Override
     protected Value createBlockTarget(double probability, BciBlock bciBlock, AbstractFrameStateBuilder<Value> stateAfter) {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
@@ -584,7 +599,6 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
     @Override
     protected void processBlock(BciBlock block) {
-        currentBlock = block;
         iterateBytecodesForBlock(block);
     }
 
@@ -620,19 +634,15 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
             processBytecode(bci, opcode);
 
-            if (gen.hasBlockEnd(currentBlock)) {
-                break;
-            }
-
             stream.next();
             bci = stream.currentBCI();
 
             if (bci < endBCI) {
                 if (bci > block.endBci) {
-                    assert block.numNormalSuccessors() == 1;
                     assert !block.getSuccessor(0).isExceptionEntry;
+                    assert block.numNormalSuccessors() == 1;
                     // we fell through to the next block, add a goto and break
-                    genGoto();
+                    appendGoto(createTarget(block.getSuccessor(0), frameState));
                     break;
                 }
             }

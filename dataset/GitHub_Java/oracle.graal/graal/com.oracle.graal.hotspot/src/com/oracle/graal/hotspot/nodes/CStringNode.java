@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,8 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
@@ -31,8 +32,7 @@ import com.oracle.graal.word.*;
 /**
  * Converts a compile-time constant Java string into a C string installed with the generated code.
  */
-@NodeInfo
-public class CStringNode extends FloatingNode implements LIRLowerable {
+public final class CStringNode extends FloatingNode implements LIRGenLowerable {
 
     private final String string;
 
@@ -41,19 +41,19 @@ public class CStringNode extends FloatingNode implements LIRLowerable {
         this.string = string;
     }
 
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(NodeLIRBuilder gen) {
         gen.setResult(this, emitCString(gen, string));
     }
 
     public static AllocatableValue emitCString(NodeLIRBuilderTool gen, String value) {
-        AllocatableValue dst = gen.getLIRGeneratorTool().newVariable(LIRKind.value(gen.getLIRGeneratorTool().target().wordKind));
+        AllocatableValue dst = gen.getLIRGeneratorTool().newVariable(gen.getLIRGeneratorTool().target().wordKind);
         gen.getLIRGeneratorTool().emitData(dst, toCString(value));
         return dst;
     }
 
     /**
      * Converts a string to a null terminated byte array of ASCII characters.
-     *
+     * 
      * @param s a String that must only contain ASCII characters
      */
     public static byte[] toCString(String s) {

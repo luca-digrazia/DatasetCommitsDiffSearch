@@ -27,7 +27,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.spi.*;
 
-@NodeInfo
 public class DynamicDeoptimizeNode extends AbstractDeoptimizeNode implements LIRLowerable, Canonicalizable {
     @Input private ValueNode actionAndReason;
     @Input private ValueNode speculation;
@@ -56,7 +55,7 @@ public class DynamicDeoptimizeNode extends AbstractDeoptimizeNode implements LIR
     }
 
     public void generate(NodeLIRBuilderTool generator) {
-        generator.getLIRGeneratorTool().emitDeoptimize(generator.operand(actionAndReason), generator.operand(speculation), generator.state(this));
+        generator.getLIRGeneratorTool().emitDeoptimize(generator.operand(actionAndReason), generator.operand(speculation), this);
     }
 
     @Override
@@ -64,8 +63,10 @@ public class DynamicDeoptimizeNode extends AbstractDeoptimizeNode implements LIR
         if (actionAndReason.isConstant() && speculation.isConstant()) {
             Constant constant = actionAndReason.asConstant();
             Constant speculationConstant = speculation.asConstant();
-            DeoptimizeNode newDeopt = new DeoptimizeNode(tool.getMetaAccess().decodeDeoptAction(constant), tool.getMetaAccess().decodeDeoptReason(constant), tool.getMetaAccess().decodeDebugId(
-                            constant), speculationConstant, stateBefore());
+            DeoptimizeNode newDeopt = graph().add(
+                            new DeoptimizeNode(tool.getMetaAccess().decodeDeoptAction(constant), tool.getMetaAccess().decodeDeoptReason(constant), tool.getMetaAccess().decodeDebugId(constant),
+                                            speculationConstant));
+            newDeopt.setStateBefore(stateBefore());
             return newDeopt;
         }
         return this;

@@ -25,13 +25,12 @@ package com.oracle.graal.nodes.calc;
 import static com.oracle.graal.nodes.calc.CompareNode.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code ConditionalNode} class represents a comparison that yields one of two values. Note
@@ -39,7 +38,7 @@ import com.oracle.graal.nodes.spi.*;
  */
 public final class ConditionalNode extends BinaryNode implements Canonicalizable, LIRLowerable {
 
-    @Input(InputType.Condition) private LogicNode condition;
+    @Input private LogicNode condition;
 
     public LogicNode condition() {
         return condition;
@@ -82,7 +81,7 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
                 IntegerStamp equalsXStamp = (IntegerStamp) equals.x().stamp();
                 if (equalsXStamp.upMask() == 1) {
                     if (x().asConstant().equals(Constant.INT_0) && y().asConstant().equals(Constant.INT_1)) {
-                        return IntegerConvertNode.convertUnsigned(equals.x(), stamp());
+                        return equals.x();
                     }
                 }
             }
@@ -129,7 +128,7 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
     public static native boolean materializeCondition(@ConstantNodeParameter Condition condition, long x, long y);
 
     @NodeIntrinsic
-    public static boolean materializeIsInstance(Class<?> mirror, Object object) {
+    public static boolean materializeIsInstance(Class mirror, Object object) {
         return mirror.isInstance(object);
     }
 }

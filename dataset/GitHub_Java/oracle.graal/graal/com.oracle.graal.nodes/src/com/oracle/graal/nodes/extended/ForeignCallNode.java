@@ -26,20 +26,20 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Node for a {@linkplain ForeignCallDescriptor foreign} call.
  */
-@NodeInfo(nameTemplate = "ForeignCall#{p#descriptor/s}", allowedUsageTypes = {InputType.Memory})
+@NodeInfo(nameTemplate = "ForeignCall#{p#descriptor/s}")
 public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowerable, DeoptimizingNode.DeoptDuring, MemoryCheckpoint.Multi {
 
     @Input private final NodeInputList<ValueNode> arguments;
-    @OptionalInput(InputType.State) private FrameState stateDuring;
     private final ForeignCallsProvider foreignCalls;
+    @Input private FrameState stateDuring;
 
     private final ForeignCallDescriptor descriptor;
 
@@ -94,7 +94,7 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
     public void generate(NodeLIRBuilderTool gen) {
         ForeignCallLinkage linkage = gen.getLIRGeneratorTool().getForeignCalls().lookupForeignCall(descriptor);
         Value[] operands = operands(gen);
-        Value result = gen.getLIRGeneratorTool().emitForeignCall(linkage, gen.state(this), operands);
+        Value result = gen.getLIRGeneratorTool().emitForeignCall(linkage, this, operands);
         if (result != null) {
             gen.setResult(this, result);
         }

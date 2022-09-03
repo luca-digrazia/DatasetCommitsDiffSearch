@@ -54,7 +54,7 @@ public final class FixedValueAnchorNode extends FixedWithNextNode implements LIR
     }
 
     @Override
-    public ValueNode getOriginalNode() {
+    public ValueNode getOriginalValue() {
         return object;
     }
 

@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
@@ -35,11 +34,6 @@ public class IntegerRemNode extends FixedBinaryNode implements Canonicalizable, 
 
     public IntegerRemNode(Stamp stamp, ValueNode x, ValueNode y) {
         super(stamp, x, y);
-    }
-
-    @Override
-    public boolean inferStamp() {
-        return updateStamp(StampTool.rem(x().stamp(), y().stamp()));
     }
 
     @Override
@@ -68,7 +62,7 @@ public class IntegerRemNode extends FixedBinaryNode implements Canonicalizable, 
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        gen.setResult(this, gen.getLIRGeneratorTool().emitRem(gen.operand(x()), gen.operand(y()), gen.state(this)));
+        gen.setResult(this, gen.getLIRGeneratorTool().emitRem(gen.operand(x()), gen.operand(y()), this));
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,17 +23,15 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Intrinsification for getting the address of an object. The code path(s) between a call to
  * {@link #get(Object)} and all uses of the returned value must be atomic. The only exception to
  * this is if the usage is not an attempt to dereference the value.
  */
-@NodeInfo
 public class GetObjectAddressNode extends FixedWithNextNode implements LIRLowerable {
 
     @Input private ValueNode object;
@@ -48,7 +46,7 @@ public class GetObjectAddressNode extends FixedWithNextNode implements LIRLowera
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        AllocatableValue obj = gen.getLIRGeneratorTool().newVariable(LIRKind.derivedReference(gen.getLIRGeneratorTool().target().wordKind));
+        AllocatableValue obj = gen.getLIRGeneratorTool().newVariable(gen.getLIRGeneratorTool().target().wordKind);
         gen.getLIRGeneratorTool().emitMove(obj, gen.operand(object));
         gen.setResult(this, obj);
     }

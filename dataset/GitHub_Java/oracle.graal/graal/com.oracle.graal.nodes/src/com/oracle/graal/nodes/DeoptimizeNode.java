@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "Deopt", nameTemplate = "Deopt {p#reason/s}")
@@ -34,20 +34,11 @@ public class DeoptimizeNode extends AbstractDeoptimizeNode implements Lowerable,
     private final int debugId;
     private final Constant speculation;
 
-    public static DeoptimizeNode create(DeoptimizationAction action, DeoptimizationReason reason) {
-        return new DeoptimizeNodeGen(action, reason);
+    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason) {
+        this(action, reason, 0, Constant.NULL_OBJECT);
     }
 
-    protected DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason) {
-        this(action, reason, 0, Constant.NULL_OBJECT, null);
-    }
-
-    public static DeoptimizeNode create(DeoptimizationAction action, DeoptimizationReason reason, int debugId, Constant speculation, FrameState stateBefore) {
-        return new DeoptimizeNodeGen(action, reason, debugId, speculation, stateBefore);
-    }
-
-    protected DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason, int debugId, Constant speculation, FrameState stateBefore) {
-        super(stateBefore);
+    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason, int debugId, Constant speculation) {
         assert action != null;
         assert reason != null;
         assert speculation.getKind() == Kind.Object;
@@ -72,7 +63,7 @@ public class DeoptimizeNode extends AbstractDeoptimizeNode implements Lowerable,
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        gen.getLIRGeneratorTool().emitDeoptimize(gen.getLIRGeneratorTool().getMetaAccess().encodeDeoptActionAndReason(action, reason, debugId), speculation, gen.state(this));
+        gen.getLIRGeneratorTool().emitDeoptimize(gen.getLIRGeneratorTool().getMetaAccess().encodeDeoptActionAndReason(action, reason, debugId), speculation, this);
     }
 
     @Override

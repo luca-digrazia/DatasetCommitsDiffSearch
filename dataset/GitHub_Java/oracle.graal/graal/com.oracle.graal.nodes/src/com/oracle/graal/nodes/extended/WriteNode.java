@@ -82,8 +82,4 @@ public final class WriteNode extends AbstractWriteNode implements LIRLowerable, 
             }
         }
     }
-
-    public boolean canNullCheck() {
-        return true;
-    }
 }

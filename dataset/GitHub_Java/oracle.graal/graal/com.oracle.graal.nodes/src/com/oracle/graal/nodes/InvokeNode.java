@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
@@ -35,19 +34,19 @@ import com.oracle.graal.nodes.util.*;
 /**
  * The {@code InvokeNode} represents all kinds of method calls.
  */
-@NodeInfo(nameTemplate = "Invoke#{p#targetMethod/s}", allowedUsageTypes = {InputType.Memory})
+@NodeInfo(nameTemplate = "Invoke#{p#targetMethod/s}")
 public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRLowerable, MemoryCheckpoint.Single {
 
-    @Input(InputType.Association) private CallTargetNode callTarget;
-    @Input(InputType.State) private FrameState stateDuring;
-    @Input(InputType.Guard) private GuardingNode guard;
+    @Input private CallTargetNode callTarget;
+    @Input private FrameState stateDuring;
+    @Input private GuardingNode guard;
     private final int bci;
     private boolean polymorphic;
     private boolean useForInlining;
 
     /**
      * Constructs a new Invoke instruction.
-     *
+     * 
      * @param callTarget the target method being called
      * @param bci the bytecode index of the original invoke (used for debug infos)
      */
@@ -57,7 +56,7 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
 
     /**
      * Constructs a new Invoke instruction.
-     *
+     * 
      * @param callTarget the target method being called
      * @param bci the bytecode index of the original invoke (used for debug infos)
      * @param stamp the stamp to be used for this value
@@ -92,16 +91,6 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     @Override
     public void setUseForInlining(boolean value) {
         this.useForInlining = value;
-    }
-
-    @Override
-    public boolean isAllowedUsageType(InputType type) {
-        if (getKind() != Kind.Void) {
-            if (callTarget instanceof MethodCallTargetNode && ((MethodCallTargetNode) callTarget).targetMethod().getAnnotation(NodeIntrinsic.class) != null) {
-                return true;
-            }
-        }
-        return super.isAllowedUsageType(type);
     }
 
     @Override
@@ -145,7 +134,7 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
 
     @Override
     public void intrinsify(Node node) {
-        assert !(node instanceof ValueNode) || node.isAllowedUsageType(InputType.Value) == isAllowedUsageType(InputType.Value) : "replacing " + this + " with " + node;
+        assert !(node instanceof ValueNode) || (((ValueNode) node).getKind() == Kind.Void) == (getKind() == Kind.Void);
         CallTargetNode call = callTarget;
         FrameState stateAfter = stateAfter();
         if (node instanceof StateSplit) {

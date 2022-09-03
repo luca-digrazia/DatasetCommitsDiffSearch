@@ -33,10 +33,9 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-@NodeInfo(allowedUsageTypes = {InputType.Guard, InputType.Anchor})
 public abstract class AbstractBeginNode extends FixedWithNextNode implements StateSplit, LIRLowerable, Simplifiable, GuardingNode, IterableNodeType {
 
-    @Input(InputType.State) private FrameState stateAfter;
+    @Input(notDataflow = true) private FrameState stateAfter;
 
     public FrameState stateAfter() {
         return stateAfter;
@@ -53,7 +52,7 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements Sta
     }
 
     protected AbstractBeginNode() {
-        super(StampFactory.forVoid());
+        super(StampFactory.dependency());
     }
 
     protected AbstractBeginNode(Stamp stamp) {
