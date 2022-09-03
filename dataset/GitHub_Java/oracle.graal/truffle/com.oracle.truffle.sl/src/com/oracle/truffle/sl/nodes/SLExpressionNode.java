@@ -42,9 +42,12 @@ package com.oracle.truffle.sl.nodes;
 
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.Instrumentable;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.sl.runtime.SLContext;
+import com.oracle.truffle.sl.runtime.SLFunction;
 
 /**
  * Base class for all SL nodes that produce a value and therefore benefit from type specialization.
@@ -53,8 +56,11 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
  */
 @TypeSystemReference(SLTypes.class)
 @NodeInfo(description = "The abstract base node for all expressions")
-@Instrumentable(factory = SLExpressionNodeWrapper.class)
 public abstract class SLExpressionNode extends SLStatementNode {
+
+    public SLExpressionNode(SourceSection src) {
+        super(src);
+    }
 
     /**
      * The execute method when no specialization is possible. This is the most general case,
@@ -81,7 +87,15 @@ public abstract class SLExpressionNode extends SLStatementNode {
         return SLTypesGen.expectLong(executeGeneric(frame));
     }
 
+    public SLFunction executeFunction(VirtualFrame frame) throws UnexpectedResultException {
+        return SLTypesGen.expectSLFunction(executeGeneric(frame));
+    }
+
     public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {
         return SLTypesGen.expectBoolean(executeGeneric(frame));
+    }
+
+    protected static boolean isSLObject(DynamicObject object) {
+        return SLContext.isSLObject(object);
     }
 }

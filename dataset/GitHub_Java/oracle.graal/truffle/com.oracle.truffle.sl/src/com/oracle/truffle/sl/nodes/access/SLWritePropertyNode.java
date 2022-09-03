@@ -52,6 +52,8 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.api.utilities.ConditionProfile;
+import com.oracle.truffle.sl.SLException;
 import com.oracle.truffle.sl.nodes.SLExpressionNode;
 import com.oracle.truffle.sl.runtime.SLContext;
 
@@ -69,6 +71,7 @@ public abstract class SLWritePropertyNode extends SLExpressionNode {
     protected final String propertyName;
     @Child protected SLExpressionNode valueNode;
     @Child protected SLWritePropertyCacheNode cacheNode;
+    private final ConditionProfile receiverTypeCondition = ConditionProfile.createBinaryProfile();
 
     SLWritePropertyNode(SourceSection src, String propertyName) {
         super(src);
@@ -78,7 +81,12 @@ public abstract class SLWritePropertyNode extends SLExpressionNode {
 
     @Specialization(guards = "isSLObject(object)")
     public Object doSLObject(DynamicObject object, Object value) {
-        cacheNode.executeObject(SLContext.castSLObject(object), value);
+        if (receiverTypeCondition.profile(SLContext.isSLObject(object))) {
+            cacheNode.executeObject(SLContext.castSLObject(object), value);
+        } else {
+            CompilerDirectives.transferToInterpreter();
+            throw new SLException("unexpected receiver type");
+        }
         return value;
     }
 

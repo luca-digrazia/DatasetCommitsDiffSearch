@@ -221,11 +221,7 @@ public final class SLContext extends ExecutionContext {
     }
 
     public static boolean isSLObject(TruffleObject value) {
-        return value instanceof DynamicObject && isSLObject((DynamicObject) value);
-    }
-
-    public static boolean isSLObject(DynamicObject value) {
-        return value.getShape().getObjectType() instanceof SLObjectType;
+        return value instanceof DynamicObject && ((DynamicObject) value).getShape().getObjectType() instanceof SLObjectType;
     }
 
     public static DynamicObject castSLObject(Object value) {
@@ -247,14 +243,6 @@ public final class SLContext extends ExecutionContext {
         return env.parse(source).call();
     }
 
-    /**
-     * Goes through the other registered languages to find an exported global symbol of the
-     * specified name. The expected return type is either <code>TruffleObject</code>, or one of
-     * wrappers of Java primitive types ({@link Integer}, {@link Double}).
-     * 
-     * @param name the name of the symbol to search for
-     * @return object representing the symbol or <code>null</code>
-     */
     public Object importSymbol(String name) {
         Object object = env.importSymbol(name);
         Object slValue = fromForeignValue(object);

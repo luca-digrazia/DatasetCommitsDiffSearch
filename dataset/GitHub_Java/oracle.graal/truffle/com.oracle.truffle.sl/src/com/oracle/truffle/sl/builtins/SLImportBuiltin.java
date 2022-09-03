@@ -46,8 +46,7 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.sl.SLLanguage;
 
 /**
- * Built-in function that goes through the other registered languages to find an exported global
- * symbol of the specified name. See <link>SLContext#import(String)</link>.
+ * Built-in function to import a foreign object.
  */
 @NodeInfo(shortName = "import")
 public abstract class SLImportBuiltin extends SLBuiltinNode {

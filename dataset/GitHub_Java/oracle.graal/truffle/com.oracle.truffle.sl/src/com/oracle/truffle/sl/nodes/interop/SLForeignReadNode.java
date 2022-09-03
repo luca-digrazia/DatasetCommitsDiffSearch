@@ -48,66 +48,60 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.sl.SLLanguage;
-import com.oracle.truffle.sl.nodes.access.SLWritePropertyCacheNode;
-import com.oracle.truffle.sl.nodes.access.SLWritePropertyCacheNodeGen;
+import com.oracle.truffle.sl.nodes.access.SLReadPropertyCacheNode;
+import com.oracle.truffle.sl.nodes.access.SLReadPropertyCacheNodeGen;
 
-public class SLForeignWriteNode extends RootNode {
+public class SLForeignReadNode extends RootNode {
 
-    @Child private SLMonomorphicNameWriteNode write;
+    @Child private SLMonomorphicNameReadNode read;
 
-    public SLForeignWriteNode() {
+    public SLForeignReadNode() {
         super(SLLanguage.class, null, null);
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-        if (write == null) {
+        if (read == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             String name = (String) ForeignAccess.getArguments(frame).get(0);
-            write = insert(new SLMonomorphicNameWriteNode(name));
+            read = insert(new SLMonomorphicNameReadNode(name));
         }
-        return write.execute(frame);
+        return read.execute(frame);
     }
 
-    private static abstract class SLWriteNode extends Node {
-        @Child protected SLForeignToSLTypeNode toSLType = SLForeignToSLTypeNodeGen.create(getSourceSection(), null);
-
+    private static abstract class SLReadNode extends Node {
         abstract Object execute(VirtualFrame frame);
     }
 
-    private static final class SLMonomorphicNameWriteNode extends SLWriteNode {
+    private static final class SLMonomorphicNameReadNode extends SLReadNode {
 
         private final String name;
-        @Child private SLWritePropertyCacheNode writePropertyCacheNode;
+        @Child private SLReadPropertyCacheNode readPropertyCacheNode;
 
-        SLMonomorphicNameWriteNode(String name) {
+        SLMonomorphicNameReadNode(String name) {
             this.name = name;
-            this.writePropertyCacheNode = SLWritePropertyCacheNodeGen.create(name);
+            this.readPropertyCacheNode = SLReadPropertyCacheNodeGen.create(name);
         }
 
         @Override
         Object execute(VirtualFrame frame) {
             if (name.equals(ForeignAccess.getArguments(frame).get(0))) {
-                Object value = toSLType.executeWithTarget(frame, ForeignAccess.getArguments(frame).get(1));
-                DynamicObject receiver = (DynamicObject) ForeignAccess.getReceiver(frame);
-                writePropertyCacheNode.executeObject(receiver, value);
-                return receiver;
+                return readPropertyCacheNode.executeObject((DynamicObject) ForeignAccess.getReceiver(frame));
             } else {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                return this.replace(new SLPolymorphicNameWriteNode()).execute(frame);
+                return this.replace(new SLPolymorphicNameReadNode()).execute(frame);
             }
         }
     }
 
-    private static final class SLPolymorphicNameWriteNode extends SLWriteNode {
+    private static final class SLPolymorphicNameReadNode extends SLReadNode {
 
         @Override
         Object execute(VirtualFrame frame) {
             String name = (String) ForeignAccess.getArguments(frame).get(0);
             DynamicObject obj = (DynamicObject) ForeignAccess.getReceiver(frame);
             Property property = obj.getShape().getProperty(name);
-            Object value = toSLType.executeWithTarget(frame, ForeignAccess.getArguments(frame).get(0));
-            return obj.set(property.getKey(), value);
+            return obj.get(property.getKey());
         }
     }
 }

@@ -51,6 +51,8 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.api.utilities.ConditionProfile;
+import com.oracle.truffle.sl.SLException;
 import com.oracle.truffle.sl.nodes.SLExpressionNode;
 import com.oracle.truffle.sl.nodes.interop.SLForeignToSLTypeNode;
 import com.oracle.truffle.sl.nodes.interop.SLForeignToSLTypeNodeGen;
@@ -66,6 +68,7 @@ public abstract class SLReadPropertyNode extends SLExpressionNode {
 
     @Child private SLReadPropertyCacheNode cacheNode;
     private final String propertyName;
+    private final ConditionProfile receiverTypeCondition = ConditionProfile.createBinaryProfile();
 
     public SLReadPropertyNode(SourceSection src, String propertyName) {
         super(src);
@@ -75,7 +78,12 @@ public abstract class SLReadPropertyNode extends SLExpressionNode {
 
     @Specialization(guards = "isSLObject(object)")
     public Object doSLObject(DynamicObject object) {
-        return cacheNode.executeObject(SLContext.castSLObject(object));
+        if (receiverTypeCondition.profile(SLContext.isSLObject(object))) {
+            return cacheNode.executeObject(SLContext.castSLObject(object));
+        } else {
+            CompilerDirectives.transferToInterpreter();
+            throw new SLException("unexpected receiver type");
+        }
     }
 
     @Child private Node foreignRead;
