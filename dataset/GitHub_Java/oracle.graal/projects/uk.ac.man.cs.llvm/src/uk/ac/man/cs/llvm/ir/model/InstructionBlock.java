@@ -110,11 +110,11 @@ public final class InstructionBlock implements InstructionGenerator, ValueSymbol
     }
 
     @Override
-    public void createCall(Type type, int target, int[] arguments, long visibility, long linkage) {
+    public void createCall(Type type, int target, int[] arguments) {
         if (type == MetaType.VOID) {
-            addInstruction(VoidCallInstruction.fromSymbols(function.getSymbols(), target, arguments, visibility, linkage));
+            addInstruction(VoidCallInstruction.fromSymbols(function.getSymbols(), target, arguments));
         } else {
-            addInstruction(CallInstruction.fromSymbols(function.getSymbols(), type, target, arguments, visibility, linkage));
+            addInstruction(CallInstruction.fromSymbols(function.getSymbols(), type, target, arguments));
         }
     }
 

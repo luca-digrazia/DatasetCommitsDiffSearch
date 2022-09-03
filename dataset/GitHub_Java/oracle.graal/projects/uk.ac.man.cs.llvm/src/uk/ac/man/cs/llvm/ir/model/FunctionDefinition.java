@@ -27,34 +27,15 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (c) 2016 University of Manchester
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package uk.ac.man.cs.llvm.ir.model;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
 import uk.ac.man.cs.llvm.ir.FunctionGenerator;
 import uk.ac.man.cs.llvm.ir.InstructionGenerator;
+import uk.ac.man.cs.llvm.ir.model.constants.BigIntegerConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.BinaryOperationConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.BlockAddressConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.CastConstant;
@@ -62,21 +43,18 @@ import uk.ac.man.cs.llvm.ir.model.constants.CompareConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.Constant;
 import uk.ac.man.cs.llvm.ir.model.constants.FloatingPointConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.GetElementPointerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.InlineAsmConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.NullConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.StringConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.UndefinedConstant;
 import uk.ac.man.cs.llvm.ir.model.elements.Instruction;
 import uk.ac.man.cs.llvm.ir.model.elements.ValueInstruction;
-import uk.ac.man.cs.llvm.ir.model.enums.BinaryOperator;
-import uk.ac.man.cs.llvm.ir.model.enums.CastOperator;
-import uk.ac.man.cs.llvm.ir.model.enums.CompareOperator;
 import uk.ac.man.cs.llvm.ir.types.FloatingPointType;
 import uk.ac.man.cs.llvm.ir.types.FunctionType;
 import uk.ac.man.cs.llvm.ir.types.IntegerType;
 import uk.ac.man.cs.llvm.ir.types.PointerType;
 import uk.ac.man.cs.llvm.ir.types.Type;
-import uk.ac.man.cs.llvm.ir.types.VectorType;
 
 public final class FunctionDefinition extends FunctionType implements Constant, FunctionGenerator, ValueSymbol {
 
@@ -90,8 +68,11 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
 
     private String name = ValueSymbol.UNKNOWN;
 
-    public FunctionDefinition(FunctionType type) {
+    private MetadataBlock metadata;
+
+    public FunctionDefinition(FunctionType type, MetadataBlock metadata) {
         super(type.getReturnType(), type.getArgumentTypes(), type.isVarArg());
+        this.metadata = metadata;
     }
 
     public void accept(FunctionVisitor visitor) {
@@ -102,11 +83,14 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
 
     @Override
     public void allocateBlocks(int count) {
+        // we don't want do add function specific metadata to the global scope
+        metadata = new MetadataBlock(metadata);
+
         blocks = new InstructionBlock[count];
         for (int i = 0; i < count; i++) {
             blocks[i] = new InstructionBlock(this, i);
         }
-        blocks[0].setName("");
+        blocks[0].setName("0");
     }
 
     @Override
@@ -119,6 +103,14 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
     @Override
     public void exitFunction() {
         int identifier = 1; // Zero clashes with entry block in sulong
+
+        // in K&R style function declarations the parameters are not assigned names
+        for (FunctionParameter parameter : parameters) {
+            if (ValueSymbol.UNKNOWN.equals(parameter.getName())) {
+                parameter.setName(String.valueOf(identifier++));
+            }
+        }
+
         for (InstructionBlock block : blocks) {
             if (block.getName().equals(ValueSymbol.UNKNOWN)) {
                 block.setName(String.valueOf(identifier++));
@@ -167,18 +159,18 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
     }
 
     @Override
-    public void nameBlock(int index, String name) {
-        blocks[index].setName(name);
+    public void nameBlock(int index, String argName) {
+        blocks[index].setName(argName);
     }
 
     @Override
-    public void nameEntry(int index, String name) {
-        symbols.setSymbolName(index, name);
+    public void nameEntry(int index, String argName) {
+        symbols.setSymbolName(index, argName);
     }
 
     @Override
-    public void nameFunction(int index, int offset, String name) {
-        symbols.setSymbolName(index, name);
+    public void nameFunction(int index, int offset, String argName) {
+        symbols.setSymbolName(index, argName);
     }
 
     @Override
@@ -188,45 +180,27 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
 
     @Override
     public void createBinaryOperationExpression(Type type, int opcode, int lhs, int rhs) {
-        boolean isFloatingPoint = type instanceof FloatingPointType || (type instanceof VectorType && ((VectorType) type).getElementType() instanceof FloatingPointType);
-
-        symbols.addSymbol(new BinaryOperationConstant(
-                        type,
-                        BinaryOperator.decode(opcode, isFloatingPoint),
-                        symbols.getSymbol(lhs),
-                        symbols.getSymbol(rhs)));
+        symbols.addSymbol(BinaryOperationConstant.fromSymbols(symbols, type, opcode, lhs, rhs));
     }
 
     @Override
-    public void createBlockAddress(Type type, int method, int block) {
-        symbols.addSymbol(new BlockAddressConstant(
-                        type,
-                        symbols.getSymbol(method),
-                        getBlock(block)));
+    public void createBlockAddress(Type type, int function, int block) {
+        symbols.addSymbol(BlockAddressConstant.fromSymbols(symbols, type, function, block));
     }
 
     @Override
     public void createCastExpression(Type type, int opcode, int value) {
-        CastConstant cast = new CastConstant(type, CastOperator.decode(opcode));
-
-        cast.setValue(symbols.getSymbol(value, cast));
-
-        symbols.addSymbol(cast);
+        symbols.addSymbol(CastConstant.fromSymbols(symbols, type, opcode, value));
     }
 
     @Override
     public void createCompareExpression(Type type, int opcode, int lhs, int rhs) {
-        CompareConstant compare = new CompareConstant(type, CompareOperator.decode(opcode));
-
-        compare.setLHS(symbols.getSymbol(lhs, compare));
-        compare.setRHS(symbols.getSymbol(rhs, compare));
-
-        symbols.addSymbol(compare);
+        symbols.addSymbol(CompareConstant.fromSymbols(symbols, type, opcode, lhs, rhs));
     }
 
     @Override
-    public void createFloatingPoint(Type type, long bits) {
-        symbols.addSymbol(new FloatingPointConstant((FloatingPointType) type, bits));
+    public void createFloatingPoint(Type type, long[] bits) {
+        symbols.addSymbol(FloatingPointConstant.create((FloatingPointType) type, bits));
     }
 
     @Override
@@ -241,24 +215,27 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
 
     @Override
     public void createFromValues(Type type, int[] values) {
-        symbols.addSymbol(Constant.createFromValues(type, symbols.getConstants(values)));
+        symbols.addSymbol(Constant.createFromValues(type, symbols, values));
     }
 
     @Override
     public void createGetElementPointerExpression(Type type, int pointer, int[] indices, boolean isInbounds) {
-        GetElementPointerConstant gep = new GetElementPointerConstant(type, isInbounds);
+        symbols.addSymbol(GetElementPointerConstant.fromSymbols(symbols, type, pointer, indices, isInbounds));
+    }
 
-        gep.setBasePointer(symbols.getSymbol(pointer, gep));
-        for (int index : indices) {
-            gep.addIndex(symbols.getSymbol(index, gep));
-        }
-
-        symbols.addSymbol(gep);
+    @Override
+    public void createInlineASM(Type type, long[] args) {
+        symbols.addSymbol(InlineAsmConstant.generate(type, args));
     }
 
     @Override
     public void createInteger(Type type, long value) {
         symbols.addSymbol(new IntegerConstant((IntegerType) type, value));
+    }
+
+    @Override
+    public void createInteger(Type type, BigInteger value) {
+        symbols.addSymbol(new BigIntegerConstant((IntegerType) type, value));
     }
 
     @Override
@@ -269,5 +246,15 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
     @Override
     public void createUndefined(Type type) {
         symbols.addSymbol(new UndefinedConstant(type));
+    }
+
+    @Override
+    public MetadataBlock getMetadata() {
+        return metadata;
+    }
+
+    @Override
+    public String toString() {
+        return "FunctionDefinition [symbolCount=" + symbols.getSize() + ", parameters=" + parameters + ", blocks=" + blocks.length + ", currentBlock=" + currentBlock + ", name=" + name + "]";
     }
 }
