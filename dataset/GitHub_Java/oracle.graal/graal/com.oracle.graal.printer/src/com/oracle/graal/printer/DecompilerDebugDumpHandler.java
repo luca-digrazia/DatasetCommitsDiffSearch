@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import java.io.*;
 import java.util.concurrent.atomic.*;
 
+import static com.oracle.graal.phases.GraalOptions.*;
+
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.java.decompiler.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.schedule.*;
@@ -70,15 +69,18 @@ public class DecompilerDebugDumpHandler implements DebugDumpHandler {
             final String currentScope = Debug.currentScope();
             if (currentScope.endsWith(filter) && graph.method() != null) {
                 final String methodName = graph.method().getName();
-                try (Scope s = Debug.sandbox("Printing Decompiler Output", null)) {
-                    printStream.println();
-                    printStream.println("Object: " + methodName);
-                    printStream.println("Message: " + message);
-                    new Decompiler(graph, getPredefinedSchedule(), printStream, infoPrintStream, currentScope).decompile();
-                    printStream.flush();
-                } catch (Throwable e) {
-                    throw Debug.handle(e);
-                }
+                Debug.sandbox("Printing Decompiler Output", null, new Runnable() {
+
+                    @Override
+                    public void run() {
+                        printStream.println();
+                        printStream.println("Object: " + methodName);
+                        printStream.println("Message: " + message);
+                        new Decompiler(graph, getPredefinedSchedule(), printStream, infoPrintStream, currentScope).decompile();
+                        printStream.flush();
+                    }
+                });
+
             }
         }
     }
