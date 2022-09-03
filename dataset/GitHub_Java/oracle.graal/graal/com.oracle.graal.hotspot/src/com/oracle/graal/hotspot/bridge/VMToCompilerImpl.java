@@ -39,7 +39,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.CompilationTask.Enqueueing;
 import com.oracle.graal.hotspot.CompileTheWorld.Config;
 import com.oracle.graal.hotspot.debug.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -99,16 +98,9 @@ public class VMToCompilerImpl implements VMToCompiler {
         }
 
         public long getCompletedTaskCount() {
-            try (Enqueueing enqueueing = new Enqueueing()) {
+            try (CompilationTask.BeginEnqueue beginEnqueue = new CompilationTask.BeginEnqueue()) {
                 // Don't allow new enqueues while reading the state of queue.
                 return executor.getCompletedTaskCount();
-            }
-        }
-
-        public long getTaskCount() {
-            try (Enqueueing enqueueing = new Enqueueing()) {
-                // Don't allow new enqueues while reading the state of queue.
-                return executor.getTaskCount();
             }
         }
 
@@ -125,11 +117,6 @@ public class VMToCompilerImpl implements VMToCompiler {
                 // Wait 2 seconds to flush out all graph dumps that may be of interest
                 executor.awaitTermination(2, TimeUnit.SECONDS);
             }
-        }
-
-        @Override
-        public String toString() {
-            return executor.toString();
         }
     }
 
@@ -295,7 +282,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             // Compile until the queue is empty.
             int z = 0;
             while (true) {
-                if (compileQueue.getCompletedTaskCount() >= Math.max(3, compileQueue.getTaskCount())) {
+                if (compileQueue.getCompletedTaskCount() >= Math.max(3, compileQueue.getCompletedTaskCount())) {
                     break;
                 }
 
@@ -356,7 +343,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     public void shutdownCompiler() throws Exception {
-        try (Enqueueing enqueueing = new Enqueueing()) {
+        try (CompilationTask.BeginEnqueue beginEnqueue = new CompilationTask.BeginEnqueue()) {
             // We have to use a privileged action here because shutting down the compiler might be
             // called from user code which very likely contains unprivileged frames.
             AccessController.doPrivileged(new PrivilegedExceptionAction<Void>() {
@@ -576,7 +563,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
         // Don't allow blocking compiles from CompilerThreads
         boolean block = blocking && !(Thread.currentThread() instanceof CompilerThread);
-        try (Enqueueing enqueueing = new Enqueueing()) {
+        try (CompilationTask.BeginEnqueue beginEnqueue = new CompilationTask.BeginEnqueue()) {
             if (method.tryToQueueForCompilation()) {
                 assert method.isQueuedForCompilation();
 
