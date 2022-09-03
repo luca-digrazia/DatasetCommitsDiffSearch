@@ -27,7 +27,6 @@ import java.util.Map.Entry;
 
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.ir.Phi.*;
 import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.GraphUtil.ColorSplitingLambda;
@@ -154,7 +153,7 @@ public class LoopUtil {
             for (Node usage : n.dataUsages()) {
                 if (usage instanceof Phi) { // filter out data graph cycles
                     Phi phi = (Phi) usage;
-                    if (phi.type() == PhiType.Value) {
+                    if (!phi.isDead()) {
                         Merge merge = phi.merge();
                         if (merge instanceof LoopBegin) {
                             LoopBegin phiLoop = (LoopBegin) merge;
@@ -173,7 +172,7 @@ public class LoopUtil {
             markWithState(n, inOrBefore);
             if (n instanceof Phi) { // filter out data graph cycles
                 Phi phi = (Phi) n;
-                if (phi.type() == PhiType.Value) {
+                if (!phi.isDead()) {
                     int backIndex = -1;
                     Merge merge = phi.merge();
                     if (!loopNodes.isMarked(merge) && merge instanceof LoopBegin) {
@@ -490,7 +489,7 @@ public class LoopUtil {
                     values.add(valueAt);
                 }
                 if (createPhi) {
-                    Phi phi = new Phi(kind, merge, PhiType.Value, merge.graph());
+                    Phi phi = new Phi(kind, merge, merge.graph());
                     valueMap.set(point, phi);
                     for (EndNode end : merge.cfgPredecessors()) {
                         phi.addInput(getValueAt(colors.get(end), valueMap, kind));
@@ -643,7 +642,7 @@ public class LoopUtil {
             }
             if (n instanceof Phi) { // filter out data graph cycles
                 Phi phi = (Phi) n;
-                if (phi.type() == PhiType.Value) {
+                if (!phi.isDead()) {
                     int backIndex = -1;
                     Merge merge = phi.merge();
                     if (!loopNodes.isNew(merge) && !loopNodes.isMarked(merge) && merge instanceof LoopBegin) {

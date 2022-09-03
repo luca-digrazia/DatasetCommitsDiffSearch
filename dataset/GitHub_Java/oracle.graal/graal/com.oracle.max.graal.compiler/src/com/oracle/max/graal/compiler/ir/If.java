@@ -81,16 +81,6 @@ public final class If extends ControlSplit {
         return blockSuccessor(1);
     }
 
-
-    public void setTrueSuccessor(FixedNode node) {
-        setBlockSuccessor(0, node);
-    }
-
-
-    public void setFalseSuccessor(FixedNode node) {
-        setBlockSuccessor(1, node);
-    }
-
     /**
      * Gets the block corresponding to the specified outcome of the branch.
      * @param istrue {@code true} if the true successor is requested, {@code false} otherwise
@@ -103,6 +93,14 @@ public final class If extends ControlSplit {
     @Override
     public void accept(ValueVisitor v) {
         v.visitIf(this);
+    }
+
+    @Override
+    public boolean verify() {
+        assertTrue(compare() != null);
+        assertTrue(trueSuccessor() != null);
+        assertTrue(falseSuccessor() != null);
+        return true;
     }
 
     @Override
