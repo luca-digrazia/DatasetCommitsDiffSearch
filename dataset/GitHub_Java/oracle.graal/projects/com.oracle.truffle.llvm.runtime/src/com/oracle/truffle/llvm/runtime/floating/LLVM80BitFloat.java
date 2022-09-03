@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.runtime.floating;
 
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.Arrays;
 
 import javax.xml.bind.DatatypeConverter;
@@ -334,14 +333,6 @@ public final class LLVM80BitFloat {
         return fromDouble(getDoubleValue() % right.getDoubleValue());
     }
 
-    public LLVM80BitFloat pow(int right) {
-        return fromDouble(Math.pow(getDoubleValue(), right));
-    }
-
-    public LLVM80BitFloat pow(LLVM80BitFloat right) {
-        return fromDouble(Math.pow(getDoubleValue(), right.getDoubleValue()));
-    }
-
     public boolean isPositiveInfinity() {
         return this.equals(POSITIVE_INFINITY);
     }
@@ -439,46 +430,22 @@ public final class LLVM80BitFloat {
         return Arrays.hashCode(getBytes());
     }
 
-    public byte[] getBytesBigEndian() {
-        ByteBuffer bb = ByteBuffer.allocate(BYTE_WIDTH);
-        bb.order(ByteOrder.BIG_ENDIAN);
-        short signWithExponent = getExponent();
-        short signBit = sign ? (short) bit(Short.SIZE - 1) : 0;
-        signWithExponent |= signBit;
-        bb.putShort(signWithExponent);
-        bb.putLong(getFraction());
-        return bb.array();
-    }
-
     public byte[] getBytes() {
         ByteBuffer bb = ByteBuffer.allocate(BYTE_WIDTH);
-        bb.order(ByteOrder.LITTLE_ENDIAN);
         short signWithExponent = getExponent();
         short signBit = sign ? (short) bit(Short.SIZE - 1) : 0;
         signWithExponent |= signBit;
-        bb.putLong(getFraction());
         bb.putShort(signWithExponent);
+        bb.putLong(getFraction());
         return bb.array();
-    }
-
-    public static LLVM80BitFloat fromBytesBigEndian(byte[] bytes) {
-        assert bytes.length == BYTE_WIDTH;
-        ByteBuffer bb = ByteBuffer.wrap(bytes);
-        bb.order(ByteOrder.BIG_ENDIAN);
-        short readShort = bb.getShort();
-        int exponent = readShort & BinaryHelper.getBitMask(EXPONENT_BIT_WIDTH);
-        long fraction = bb.getLong();
-        boolean signSet = getBit(Short.SIZE, readShort);
-        return LLVM80BitFloat.fromRawValues(signSet, exponent, fraction);
     }
 
     public static LLVM80BitFloat fromBytes(byte[] bytes) {
         assert bytes.length == BYTE_WIDTH;
         ByteBuffer bb = ByteBuffer.wrap(bytes);
-        bb.order(ByteOrder.LITTLE_ENDIAN);
-        long fraction = bb.getLong();
         short readShort = bb.getShort();
         int exponent = readShort & BinaryHelper.getBitMask(EXPONENT_BIT_WIDTH);
+        long fraction = bb.getLong();
         boolean signSet = getBit(Short.SIZE, readShort);
         return LLVM80BitFloat.fromRawValues(signSet, exponent, fraction);
     }
@@ -602,7 +569,7 @@ public final class LLVM80BitFloat {
         if (stringValue.length() != HEX_WIDTH) {
             throw new IllegalArgumentException("unexpected length of input string!");
         }
-        return fromBytesBigEndian(DatatypeConverter.parseHexBinary(stringValue));
+        return fromBytes(DatatypeConverter.parseHexBinary(stringValue));
     }
 
 }
