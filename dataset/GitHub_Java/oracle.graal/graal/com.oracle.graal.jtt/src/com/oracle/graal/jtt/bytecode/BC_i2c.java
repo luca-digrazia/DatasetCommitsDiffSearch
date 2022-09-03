@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 /*
  */
@@ -66,24 +65,5 @@ public class BC_i2c extends JTTTest {
     @Test
     public void runI2() throws Throwable {
         runTest("testInt", 65535);
-    }
-
-    public static long testLong(int a) {
-        return (char) a;
-    }
-
-    @Test
-    public void runL0() throws Throwable {
-        runTest("testLong", -1);
-    }
-
-    @Test
-    public void runL1() throws Throwable {
-        runTest("testLong", 645);
-    }
-
-    @Test
-    public void runL2() throws Throwable {
-        runTest("testLong", 65535);
     }
 }
