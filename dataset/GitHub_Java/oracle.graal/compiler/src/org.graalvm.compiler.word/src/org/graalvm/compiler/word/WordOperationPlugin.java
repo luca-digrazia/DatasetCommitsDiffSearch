@@ -31,9 +31,7 @@ import java.util.Arrays;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.bytecode.BridgeMethodUtils;
-import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.core.common.calc.Condition;
-import org.graalvm.compiler.core.common.calc.Condition.CanonicalizedCondition;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
@@ -411,30 +409,31 @@ public class WordOperationPlugin extends WordFactory implements NodePlugin, Type
     private ValueNode comparisonOp(GraphBuilderContext graph, Condition condition, ValueNode left, ValueNode right) {
         assert left.getStackKind() == wordKind && right.getStackKind() == wordKind;
 
-        CanonicalizedCondition canonical = condition.canonicalize();
+        // mirroring gets the condition into canonical form
+        boolean mirror = condition.canonicalMirror();
 
-        ValueNode a = canonical.mustMirror() ? right : left;
-        ValueNode b = canonical.mustMirror() ? left : right;
+        ValueNode a = mirror ? right : left;
+        ValueNode b = mirror ? left : right;
 
         CompareNode comparison;
-        if (canonical.getCanonicalCondition() == CanonicalCondition.EQ) {
+        if (condition == Condition.EQ || condition == Condition.NE) {
             comparison = new IntegerEqualsNode(a, b);
-        } else if (canonical.getCanonicalCondition() == CanonicalCondition.BT) {
+        } else if (condition.isUnsigned()) {
             comparison = new IntegerBelowNode(a, b);
         } else {
-            assert canonical.getCanonicalCondition() == CanonicalCondition.LT;
             comparison = new IntegerLessThanNode(a, b);
         }
 
         ConstantNode trueValue = graph.add(forInt(1));
         ConstantNode falseValue = graph.add(forInt(0));
 
-        if (canonical.mustNegate()) {
+        if (condition.canonicalNegate()) {
             ConstantNode temp = trueValue;
             trueValue = falseValue;
             falseValue = temp;
         }
-        return graph.add(new ConditionalNode(graph.add(comparison), trueValue, falseValue));
+        ConditionalNode materialize = graph.add(new ConditionalNode(graph.add(comparison), trueValue, falseValue));
+        return materialize;
     }
 
     protected ValueNode readOp(GraphBuilderContext b, JavaKind readKind, AddressNode address, LocationIdentity location, Opcode op) {
