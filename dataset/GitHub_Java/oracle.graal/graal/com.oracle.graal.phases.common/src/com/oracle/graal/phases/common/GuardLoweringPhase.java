@@ -95,13 +95,12 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
             GuardNode guard = nullGuarded.get(access.object());
             if (guard != null && isImplicitNullCheck(access.nullCheckLocation())) {
                 access.setGuard(guard.getGuard());
-                FixedAccessNode fixedAccess;
+                Access fixedAccess = access;
                 if (access instanceof FloatingAccessNode) {
                     fixedAccess = ((FloatingAccessNode) access).asFixedNode();
-                    replaceCurrent(fixedAccess.asNode());
-                } else {
-                    fixedAccess = (FixedAccessNode) access;
+                    replaceCurrent((FixedWithNextNode) fixedAccess.asNode());
                 }
+                assert fixedAccess instanceof FixedNode;
                 fixedAccess.setNullCheck(true);
                 LogicNode condition = guard.condition();
                 guard.replaceAndDelete(fixedAccess.asNode());
