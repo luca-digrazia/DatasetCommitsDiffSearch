@@ -34,7 +34,10 @@ import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.api.runtime.GraalRuntime;
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.GraalOptions;
+import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.DebugEnvironment;
@@ -49,9 +52,6 @@ import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.phases.tiers.CompilerConfiguration;
 import org.graalvm.compiler.replacements.SnippetCounter;
 import org.graalvm.compiler.runtime.RuntimeProvider;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
 
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.code.stack.StackIntrospection;
@@ -83,7 +83,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     private final HotSpotBackend hostBackend;
     private DebugValuesPrinter debugValuesPrinter;
 
-    private final EconomicMap<Class<? extends Architecture>, HotSpotBackend> backends = CollectionFactory.newMap(Equivalence.IDENTITY);
+    private final EconomicMap<Class<? extends Architecture>, HotSpotBackend> backends = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
 
     private final GraalHotSpotVMConfig config;
 
@@ -138,7 +138,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         }
 
         if (Debug.isEnabled()) {
-            DebugEnvironment.ensureInitialized(hostBackend.getProviders().getSnippetReflection());
+            DebugEnvironment.initialize(TTY.out, hostBackend.getProviders().getSnippetReflection());
 
             String summary = DebugValueSummary.getValue();
             if (summary != null) {

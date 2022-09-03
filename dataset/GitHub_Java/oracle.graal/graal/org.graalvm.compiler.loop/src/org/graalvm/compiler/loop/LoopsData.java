@@ -28,7 +28,9 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
-
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
+import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.Debug.Scope;
@@ -37,14 +39,11 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
 
 public class LoopsData {
 
-    private EconomicMap<Loop<?>, LoopEx> loopToEx = CollectionFactory.newMap(Equivalence.IDENTITY);
-    private EconomicMap<LoopBeginNode, LoopEx> loopBeginToEx = CollectionFactory.newMap(Equivalence.IDENTITY);
+    private EconomicMap<Loop<?>, LoopEx> loopToEx = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
+    private EconomicMap<LoopBeginNode, LoopEx> loopBeginToEx = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
     private ControlFlowGraph cfg;
 
     @SuppressWarnings("try")

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,7 +29,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.IntFunction;
 
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.GraalOptions;
+import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -67,13 +70,6 @@ import org.graalvm.compiler.nodes.spi.Virtualizable;
 import org.graalvm.compiler.nodes.spi.VirtualizableAllocation;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
-import org.graalvm.compiler.phases.graph.ReentrantBlockIterator;
-import org.graalvm.compiler.phases.graph.ReentrantBlockIterator.BlockIteratorClosure;
-import org.graalvm.compiler.phases.graph.ReentrantBlockIterator.LoopInfo;
-import org.graalvm.compiler.virtual.phases.ea.EffectList.Effect;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
 
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
@@ -95,64 +91,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
     private final VirtualizerToolImpl tool;
 
     public final ArrayList<VirtualObjectNode> virtualObjects = new ArrayList<>();
-
-    @Override
-    public boolean needsApplyEffects() {
-        if (hasChanged()) {
-            return true;
-        }
-        /*
-         * If there were fewer materializations than virtualizations, we need to apply effects, even
-         * if there were no other significant changes to the graph.
-         */
-        class Closure extends BlockIteratorClosure<Void> {
-
-            int delta;
-
-            @Override
-            protected Void getInitialState() {
-                return null;
-            }
-
-            private void apply(GraphEffectList effects) {
-                process(effects);
-            }
-
-            private void process(GraphEffectList effects) {
-                if (effects != null && !effects.isEmpty()) {
-                    for (Effect effect : effects) {
-                        delta += effect.virtualObjects();
-                    }
-                }
-            }
-
-            @Override
-            protected Void processBlock(Block block, Void currentState) {
-                apply(blockEffects.get(block));
-                return currentState;
-            }
-
-            @Override
-            protected Void merge(Block merge, List<Void> states) {
-                return null;
-            }
-
-            @Override
-            protected Void cloneState(Void oldState) {
-                return oldState;
-            }
-
-            @Override
-            protected List<Void> processLoop(Loop<Block> loop, Void initialState) {
-                LoopInfo<Void> info = ReentrantBlockIterator.processLoop(this, loop, initialState);
-                process(loopMergeEffects.get(loop));
-                return info.exitStates;
-            }
-        }
-        Closure closure = new Closure();
-        ReentrantBlockIterator.apply(closure, cfg.getStartBlock());
-        return closure.delta != 0;
-    }
 
     private final class CollectVirtualObjectsClosure extends NodeClosure<ValueNode> {
         private final Set<VirtualObjectNode> virtual;
@@ -540,7 +478,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
     @Override
     protected void processLoopExit(LoopExitNode exitNode, BlockT initialState, BlockT exitState, GraphEffectList effects) {
         if (exitNode.graph().hasValueProxies()) {
-            EconomicMap<Integer, ProxyNode> proxies = CollectionFactory.newMap(Equivalence.DEFAULT);
+            EconomicMap<Integer, ProxyNode> proxies = CollectionsFactory.newMap(CompareStrategy.EQUALS);
             for (ProxyNode proxy : exitNode.proxies()) {
                 ValueNode alias = getAlias(proxy.value());
                 if (alias instanceof VirtualObjectNode) {
@@ -623,7 +561,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
         private <T> PhiNode getPhiCached(T virtual, Stamp stamp) {
             if (materializedPhis == null) {
-                materializedPhis = CollectionFactory.newMap(Equivalence.DEFAULT);
+                materializedPhis = CollectionsFactory.newMap(CompareStrategy.EQUALS);
             }
             ValuePhiNode result = materializedPhis.get(virtual);
             if (result == null) {
@@ -643,7 +581,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
         private PhiNode[] getValuePhisCached(ValueNode key, int entryCount) {
             if (valuePhis == null) {
-                valuePhis = CollectionFactory.newMap(Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE);
+                valuePhis = CollectionsFactory.newMap(CompareStrategy.IDENTITY_WITH_SYSTEM_HASHCODE);
             }
             ValuePhiNode[] result = valuePhis.get(key);
             if (result == null) {
@@ -664,7 +602,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
         private VirtualObjectNode getValueObjectVirtualCached(ValuePhiNode phi, VirtualObjectNode virtual) {
             if (valueObjectVirtuals == null) {
-                valueObjectVirtuals = CollectionFactory.newMap(Equivalence.IDENTITY);
+                valueObjectVirtuals = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
             }
             VirtualObjectNode result = valueObjectVirtuals.get(phi);
             if (result == null) {

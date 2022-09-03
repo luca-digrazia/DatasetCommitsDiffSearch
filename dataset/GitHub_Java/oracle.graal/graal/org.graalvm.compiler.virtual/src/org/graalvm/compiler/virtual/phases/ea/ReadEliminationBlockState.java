@@ -23,12 +23,11 @@
 package org.graalvm.compiler.virtual.phases.ea;
 
 import java.util.Iterator;
-
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.LocationIdentity;
+import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
 
 public class ReadEliminationBlockState extends EffectsBlockState<ReadEliminationBlockState> {
 
@@ -144,11 +143,11 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
     }
 
     public ReadEliminationBlockState() {
-        readCache = CollectionFactory.newMap(Equivalence.DEFAULT);
+        readCache = CollectionsFactory.newMap(CompareStrategy.EQUALS);
     }
 
     public ReadEliminationBlockState(ReadEliminationBlockState other) {
-        readCache = CollectionFactory.newMap(Equivalence.DEFAULT, other.readCache);
+        readCache = CollectionsFactory.newMap(CompareStrategy.EQUALS, other.readCache);
     }
 
     @Override

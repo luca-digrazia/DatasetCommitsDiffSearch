@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,15 +26,14 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.function.BiFunction;
 
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.MapCursor;
+import org.graalvm.compiler.core.common.EconomicMap;
+import org.graalvm.compiler.core.common.MapCursor;
 
 public class NodeMap<T> extends NodeIdAccessor implements EconomicMap<Node, T> {
 
     private static final int MIN_REALLOC_SIZE = 16;
 
     protected Object[] values;
-    private int size;
 
     public NodeMap(Graph graph) {
         super(graph);
@@ -44,7 +43,6 @@ public class NodeMap<T> extends NodeIdAccessor implements EconomicMap<Node, T> {
     public NodeMap(NodeMap<T> copyFrom) {
         super(copyFrom.graph);
         this.values = Arrays.copyOf(copyFrom.values, copyFrom.values.length);
-        this.size = copyFrom.size;
     }
 
     @Override
@@ -69,7 +67,7 @@ public class NodeMap<T> extends NodeIdAccessor implements EconomicMap<Node, T> {
 
     @Override
     public boolean isEmpty() {
-        return size == 0;
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -95,23 +93,12 @@ public class NodeMap<T> extends NodeIdAccessor implements EconomicMap<Node, T> {
 
     public void set(Node node, T value) {
         assert check(node);
-        int id = getNodeId(node);
-        if (value == null) {
-            if (values[id] != null) {
-                --size;
-            }
-            values[id] = null;
-        } else {
-            if (values[id] == null) {
-                ++size;
-            }
-            values[id] = value;
-        }
+        values[getNodeId(node)] = value;
     }
 
     public void setAndGrow(Node node, T value) {
         checkAndGrow(node);
-        set(node, value);
+        values[getNodeId(node)] = value;
     }
 
     /**
@@ -124,15 +111,11 @@ public class NodeMap<T> extends NodeIdAccessor implements EconomicMap<Node, T> {
 
     @Override
     public int size() {
-        return size;
-    }
-
-    public int capacity() {
         return values.length;
     }
 
     public boolean isNew(Node node) {
-        return getNodeId(node) >= capacity();
+        return getNodeId(node) >= size();
     }
 
     private boolean check(Node node) {
@@ -214,9 +197,7 @@ public class NodeMap<T> extends NodeIdAccessor implements EconomicMap<Node, T> {
 
             @Override
             public void remove() {
-                assert NodeMap.this.values[current] != null;
                 NodeMap.this.values[current] = null;
-                NodeMap.this.size--;
             }
         };
     }

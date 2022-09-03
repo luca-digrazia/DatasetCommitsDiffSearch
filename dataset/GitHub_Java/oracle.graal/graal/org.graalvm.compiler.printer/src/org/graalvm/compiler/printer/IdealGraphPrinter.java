@@ -32,6 +32,9 @@ import java.util.Set;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.bytecode.BytecodeDisassembler;
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
+import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.debug.GraalDebugConfig.Options;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Node;
@@ -50,9 +53,6 @@ import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -63,7 +63,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
 
     private final boolean tryToSchedule;
-    private SnippetReflectionProvider snippetReflection;
+    private final SnippetReflectionProvider snippetReflection;
 
     /**
      * Creates a new {@link IdealGraphPrinter} that writes to the specified output stream.
@@ -71,14 +71,10 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
      * @param tryToSchedule If false, no scheduling is done, which avoids exceptions for
      *            non-schedulable graphs.
      */
-    public IdealGraphPrinter(OutputStream stream, boolean tryToSchedule) {
+    public IdealGraphPrinter(OutputStream stream, boolean tryToSchedule, SnippetReflectionProvider snippetReflection) {
         super(stream);
         this.begin();
         this.tryToSchedule = tryToSchedule;
-    }
-
-    @Override
-    public void setSnippetReflectionProvider(SnippetReflectionProvider snippetReflection) {
         this.snippetReflection = snippetReflection;
     }
 
@@ -116,7 +112,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
     @Override
     public void print(Graph graph, String title, Map<Object, Object> properties) {
         beginGraph(title);
-        EconomicSet<Node> noBlockNodes = CollectionFactory.newSet(Equivalence.IDENTITY);
+        EconomicSet<Node> noBlockNodes = CollectionsFactory.newSet(CompareStrategy.IDENTITY);
         ScheduleResult schedule = null;
         if (graph instanceof StructuredGraph) {
             StructuredGraph structuredGraph = (StructuredGraph) graph;
@@ -294,7 +290,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
         endSuccessors();
         beginBlockNodes();
 
-        EconomicSet<Node> nodes = CollectionFactory.newSet(Equivalence.IDENTITY);
+        EconomicSet<Node> nodes = CollectionsFactory.newSet(CompareStrategy.IDENTITY);
 
         if (nodeToBlock != null) {
             for (Node n : graph.getNodes()) {
@@ -315,7 +311,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
                 }
             }
 
-            EconomicSet<Node> snapshot = CollectionFactory.newSet(Equivalence.IDENTITY, nodes);
+            EconomicSet<Node> snapshot = CollectionsFactory.newSet(CompareStrategy.IDENTITY, nodes);
             // add all framestates and phis to their blocks
             for (Node node : snapshot) {
                 if (node instanceof StateSplit && ((StateSplit) node).stateAfter() != null) {

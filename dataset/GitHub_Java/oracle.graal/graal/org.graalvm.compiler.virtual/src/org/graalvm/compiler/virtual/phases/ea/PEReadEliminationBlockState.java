@@ -24,16 +24,15 @@ package org.graalvm.compiler.virtual.phases.ea;
 
 import java.util.Iterator;
 import java.util.List;
-
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.LocationIdentity;
+import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.nodes.FieldLocationIdentity;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.virtual.AllocatedObjectNode;
 import org.graalvm.compiler.nodes.virtual.VirtualInstanceNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
 
 public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadEliminationBlockState> {
 
@@ -74,12 +73,12 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
     }
 
     public PEReadEliminationBlockState() {
-        readCache = CollectionFactory.newMap(Equivalence.DEFAULT);
+        readCache = CollectionsFactory.newMap(CompareStrategy.EQUALS);
     }
 
     public PEReadEliminationBlockState(PEReadEliminationBlockState other) {
         super(other);
-        readCache = CollectionFactory.newMap(Equivalence.DEFAULT, other.readCache);
+        readCache = CollectionsFactory.newMap(CompareStrategy.EQUALS, other.readCache);
     }
 
     @Override

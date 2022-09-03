@@ -35,16 +35,16 @@ import java.util.Map;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.api.replacements.MethodSubstitutionRegistry;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
+import org.graalvm.compiler.core.common.ImmutableMapCursor;
+import org.graalvm.compiler.core.common.EconomicMap;
+import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.EconomicSet;
-import org.graalvm.util.ImmutableMapCursor;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.MetaUtil;
@@ -494,7 +494,7 @@ public class InvocationPlugins {
 
     private final MetaAccessProvider metaAccess;
 
-    private final EconomicMap<String, ClassPlugins> registrations = CollectionFactory.newMap(Equivalence.DEFAULT);
+    private final EconomicMap<String, ClassPlugins> registrations = CollectionsFactory.newMap(CompareStrategy.EQUALS);
 
     /**
      * Deferred registrations as well as guard for initialization. The guard uses double-checked
@@ -533,14 +533,14 @@ public class InvocationPlugins {
         void initializeMap() {
             if (!isClosed()) {
                 if (registrations.isEmpty()) {
-                    entries = CollectionFactory.newMap(Equivalence.DEFAULT);
+                    entries = CollectionsFactory.newMap(CompareStrategy.EQUALS);
                 } else {
                     Class<?> declaringClass = resolveType(declaringType, true);
                     if (declaringClass == null) {
                         // An optional type that could not be resolved
-                        entries = CollectionFactory.newMap(Equivalence.DEFAULT);
+                        entries = CollectionsFactory.newMap(CompareStrategy.EQUALS);
                     } else {
-                        EconomicMap<ResolvedJavaMethodKey, InvocationPlugin> newEntries = CollectionFactory.newMap(Equivalence.DEFAULT);
+                        EconomicMap<ResolvedJavaMethodKey, InvocationPlugin> newEntries = CollectionsFactory.newMap(CompareStrategy.EQUALS);
                         for (MethodKey methodKey : registrations) {
                             ResolvedJavaMethod m = methodKey.resolve(declaringClass);
                             if (m != null) {
@@ -694,7 +694,7 @@ public class InvocationPlugins {
             if (classPlugins == null) {
                 classPlugins = new ClassPlugins(null);
                 registrations.put(internalName, classPlugins);
-                classPlugins.entries = CollectionFactory.newMap(Equivalence.DEFAULT);
+                classPlugins.entries = CollectionsFactory.newMap(CompareStrategy.EQUALS);
             }
 
             classPlugins.entries.put(new ResolvedJavaMethodKey(method), plugin);
@@ -769,7 +769,7 @@ public class InvocationPlugins {
      * is called, no further registrations can be made.
      */
     public EconomicSet<ResolvedJavaMethod> getMethods() {
-        EconomicSet<ResolvedJavaMethod> res = CollectionFactory.newSet(Equivalence.DEFAULT);
+        EconomicSet<ResolvedJavaMethod> res = CollectionsFactory.newSet(CompareStrategy.EQUALS);
         if (parent != null) {
             res.addAll(parent.getMethods());
         }

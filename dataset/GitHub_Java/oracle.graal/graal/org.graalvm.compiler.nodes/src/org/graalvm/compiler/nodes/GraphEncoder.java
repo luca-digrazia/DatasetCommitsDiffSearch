@@ -29,6 +29,7 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.Objects;
 
+import org.graalvm.compiler.core.common.ImmutableMapCursor;
 import org.graalvm.compiler.core.common.Fields;
 import org.graalvm.compiler.core.common.util.FrequencyEncoder;
 import org.graalvm.compiler.core.common.util.TypeConversion;
@@ -44,8 +45,6 @@ import org.graalvm.compiler.graph.NodeMap;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.java.ExceptionObjectNode;
-import org.graalvm.util.ImmutableMapCursor;
-import org.graalvm.util.Pair;
 
 import jdk.vm.ci.code.Architecture;
 
@@ -340,7 +339,7 @@ public class GraphEncoder {
             } while (current != null);
 
             for (Node node : graph.getNodes()) {
-                assert (node instanceof FixedNode) == (orderIds.get(node) != null) : "all fixed nodes must be ordered: " + node;
+                assert (node instanceof FixedNode) == (orderIds.get(node) != null) : "all fixed nodes must be ordered";
                 add(node);
             }
         }
@@ -432,8 +431,8 @@ class GraphComparison {
         pushToWorklist(expectedGraph.start(), actualGraph.start(), nodeMapping, workList);
         while (!workList.isEmpty()) {
             Pair<Node, Node> pair = workList.removeFirst();
-            Node expectedNode = pair.getLeft();
-            Node actualNode = pair.getRight();
+            Node expectedNode = pair.first;
+            Node actualNode = pair.second;
             assert expectedNode.getClass() == actualNode.getClass();
 
             NodeClass<?> nodeClass = expectedNode.getNodeClass();
@@ -536,5 +535,15 @@ class GraphComparison {
         } else {
             workList.addFirst(new Pair<>(expectedNode, actualNode));
         }
+    }
+}
+
+class Pair<F, S> {
+    public final F first;
+    public final S second;
+
+    Pair(F first, S second) {
+        this.first = first;
+        this.second = second;
     }
 }

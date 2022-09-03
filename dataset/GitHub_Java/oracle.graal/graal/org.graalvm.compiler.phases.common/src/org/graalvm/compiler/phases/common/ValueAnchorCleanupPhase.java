@@ -24,6 +24,9 @@ package org.graalvm.compiler.phases.common;
 
 import java.util.List;
 
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
+import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.FixedNode;
@@ -34,9 +37,6 @@ import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.graph.MergeableState;
 import org.graalvm.compiler.phases.graph.SinglePassNodeIterator;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicSet;
 
 /**
  * This phase performs a bit of hygiene on {@link ValueAnchorNode} by removing inputs that have
@@ -50,11 +50,11 @@ public class ValueAnchorCleanupPhase extends Phase {
         private final EconomicSet<Node> anchoredValues;
 
         State() {
-            anchoredValues = CollectionFactory.newSet(Equivalence.IDENTITY);
+            anchoredValues = CollectionsFactory.newSet(CompareStrategy.IDENTITY);
         }
 
         State(State other) {
-            anchoredValues = CollectionFactory.newSet(Equivalence.IDENTITY, other.anchoredValues);
+            anchoredValues = CollectionsFactory.newSet(CompareStrategy.IDENTITY, other.anchoredValues);
         }
 
         @Override

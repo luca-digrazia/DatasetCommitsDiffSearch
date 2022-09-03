@@ -27,8 +27,11 @@ import static jdk.vm.ci.code.ValueUtil.isIllegal;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 
 import java.util.ArrayList;
-
+import java.util.List;
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.LIRKind;
+import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.DebugCounter;
 import org.graalvm.compiler.debug.GraalError;
@@ -36,9 +39,6 @@ import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.lir.LIRInsertionBuffer;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.LIRValueUtil;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.CompareStrategy;
-import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
@@ -55,9 +55,9 @@ public class MoveResolver {
     private int insertIdx;
     private LIRInsertionBuffer insertionBuffer; // buffer where moves are inserted
 
-    private final ArrayList<Interval> mappingFrom;
-    private final ArrayList<Constant> mappingFromOpr;
-    private final ArrayList<Interval> mappingTo;
+    private final List<Interval> mappingFrom;
+    private final List<Constant> mappingFromOpr;
+    private final List<Interval> mappingTo;
     private boolean multipleReadsAllowed;
     private final int[] registerBlocked;
 
@@ -147,7 +147,7 @@ public class MoveResolver {
             }
         }
 
-        EconomicSet<Value> usedRegs = CollectionFactory.newSet(CompareStrategy.EQUALS);
+        EconomicSet<Value> usedRegs = CollectionsFactory.newSet(CompareStrategy.EQUALS);
         if (!areMultipleReadsAllowed()) {
             for (i = 0; i < mappingFrom.size(); i++) {
                 Interval interval = mappingFrom.get(i);
@@ -176,7 +176,7 @@ public class MoveResolver {
     }
 
     protected void verifyStackSlotMapping() {
-        EconomicSet<Value> usedRegs = CollectionFactory.newSet(CompareStrategy.EQUALS);
+        EconomicSet<Value> usedRegs = CollectionsFactory.newSet(CompareStrategy.IDENTITY);
         for (int i = 0; i < mappingFrom.size(); i++) {
             Interval interval = mappingFrom.get(i);
             if (interval != null && !isRegister(interval.location())) {
@@ -252,7 +252,7 @@ public class MoveResolver {
         return isRegister(location);
     }
 
-    private void createInsertionBuffer(ArrayList<LIRInstruction> list) {
+    private void createInsertionBuffer(List<LIRInstruction> list) {
         assert !insertionBuffer.initialized() : "overwriting existing buffer";
         insertionBuffer.init(list);
     }
@@ -428,14 +428,14 @@ public class MoveResolver {
         }
     }
 
-    void setInsertPosition(ArrayList<LIRInstruction> insertList, int insertIdx) {
+    void setInsertPosition(List<LIRInstruction> insertList, int insertIdx) {
         assert this.insertIdx == -1 : "use moveInsertPosition instead of setInsertPosition when data already set";
 
         createInsertionBuffer(insertList);
         this.insertIdx = insertIdx;
     }
 
-    void moveInsertPosition(ArrayList<LIRInstruction> newInsertList, int newInsertIdx) {
+    void moveInsertPosition(List<LIRInstruction> newInsertList, int newInsertIdx) {
         if (insertionBuffer.lirList() != null && (insertionBuffer.lirList() != newInsertList || this.insertIdx != newInsertIdx)) {
             // insert position changed . resolve current mappings
             resolveMappings();

@@ -23,8 +23,10 @@
 package org.graalvm.compiler.phases.schedule;
 
 import java.util.List;
-
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.LocationIdentity;
+import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.graph.Node;
@@ -40,9 +42,6 @@ import org.graalvm.compiler.nodes.memory.MemoryNode;
 import org.graalvm.compiler.nodes.memory.MemoryPhiNode;
 import org.graalvm.compiler.phases.graph.ReentrantBlockIterator;
 import org.graalvm.compiler.phases.graph.ReentrantBlockIterator.BlockIteratorClosure;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicSet;
 
 public final class MemoryScheduleVerification extends BlockIteratorClosure<EconomicSet<FloatingReadNode>> {
 
@@ -59,7 +58,7 @@ public final class MemoryScheduleVerification extends BlockIteratorClosure<Econo
 
     @Override
     protected EconomicSet<FloatingReadNode> getInitialState() {
-        return CollectionFactory.newSet(Equivalence.IDENTITY);
+        return CollectionsFactory.newSet(CompareStrategy.IDENTITY);
     }
 
     @Override
@@ -139,7 +138,7 @@ public final class MemoryScheduleVerification extends BlockIteratorClosure<Econo
 
     @Override
     protected EconomicSet<FloatingReadNode> cloneState(EconomicSet<FloatingReadNode> oldState) {
-        EconomicSet<FloatingReadNode> result = CollectionFactory.newSet(Equivalence.IDENTITY);
+        EconomicSet<FloatingReadNode> result = CollectionsFactory.newSet(CompareStrategy.IDENTITY);
         if (oldState != null) {
             result.addAll(oldState);
         }

@@ -25,12 +25,14 @@ package org.graalvm.compiler.lir;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 import static jdk.vm.ci.code.ValueUtil.isStackSlot;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
-
+import java.util.List;
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.LIRKind;
+import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.DebugCounter;
@@ -42,9 +44,6 @@ import org.graalvm.compiler.lir.StandardOp.ValueMoveOp;
 import org.graalvm.compiler.lir.framemap.FrameMap;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.phases.PostAllocationOptimizationPhase;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
 
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterArray;
@@ -104,7 +103,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
 
     private static final class Optimization {
 
-        EconomicMap<AbstractBlockBase<?>, BlockData> blockData = CollectionFactory.newMap(Equivalence.IDENTITY);
+        EconomicMap<AbstractBlockBase<?>, BlockData> blockData = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
 
         RegisterArray callerSaveRegs;
 
@@ -117,7 +116,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
          * A map from the {@link StackSlot} {@link #getOffset offset} to an index into the state.
          * StackSlots of different kinds that map to the same location will map to the same index.
          */
-        EconomicMap<Integer, Integer> stackIndices = CollectionFactory.newMap(Equivalence.DEFAULT);
+        EconomicMap<Integer, Integer> stackIndices = CollectionsFactory.newMap(CompareStrategy.EQUALS);
 
         int numRegs;
 
@@ -180,7 +179,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
              * slots which occur as destinations of move instructions.
              */
             for (AbstractBlockBase<?> block : blocks) {
-                ArrayList<LIRInstruction> instructions = lir.getLIRforBlock(block);
+                List<LIRInstruction> instructions = lir.getLIRforBlock(block);
                 for (LIRInstruction op : instructions) {
                     if (isEligibleMove(op)) {
                         Value dest = ((MoveOp) op).getResult();
@@ -287,7 +286,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
                                      */
                                     int[] iterState = data.exitState;
                                     copyState(iterState, data.entryState);
-                                    ArrayList<LIRInstruction> instructions = lir.getLIRforBlock(block);
+                                    List<LIRInstruction> instructions = lir.getLIRforBlock(block);
 
                                     for (LIRInstruction op : instructions) {
                                         valueNum = updateState(iterState, op, valueNum);
@@ -332,7 +331,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
 
                     try (Indent indent2 = Debug.logAndIndent("eliminate moves in block %d", block.getId())) {
 
-                        ArrayList<LIRInstruction> instructions = lir.getLIRforBlock(block);
+                        List<LIRInstruction> instructions = lir.getLIRforBlock(block);
                         BlockData data = blockData.get(block);
                         boolean hasDead = false;
 

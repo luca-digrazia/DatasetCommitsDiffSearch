@@ -28,8 +28,13 @@ import static org.graalvm.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCA
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
-
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.LocationIdentity;
+import org.graalvm.compiler.core.common.MapCursor;
+import org.graalvm.compiler.core.common.Pair;
+import org.graalvm.compiler.core.common.EconomicMap;
+import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.debug.Debug;
@@ -60,12 +65,6 @@ import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.nodes.virtual.VirtualArrayNode;
 import org.graalvm.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.EconomicSet;
-import org.graalvm.util.MapCursor;
-import org.graalvm.util.Pair;
 
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
@@ -259,11 +258,12 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
                 ValueNode firstValue = phi.valueAt(0);
                 if (firstValue != null && phi.getStackKind().isObject()) {
                     ValueNode unproxified = GraphUtil.unproxify(firstValue);
+                    Pair<ValueNode, Object> pair = new Pair<>(unproxified, null);
                     if (firstValueSet == null) {
-                        firstValueSet = CollectionFactory.newMap(Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE);
+                        firstValueSet = CollectionsFactory.newMap(CompareStrategy.IDENTITY_WITH_SYSTEM_HASHCODE);
                     }
-                    Pair<ValueNode, Object> pair = new Pair<>(unproxified, firstValueSet.get(unproxified));
-                    firstValueSet.put(unproxified, pair);
+                    Pair<ValueNode, Object> oldValue = firstValueSet.put(unproxified, pair);
+                    pair.setRight(oldValue);
                 }
             }
 
@@ -417,7 +417,7 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
                     loopKilledLocations.setKillsAll();
                 } else {
                     // we have fully processed this loop >1 times, update the killed locations
-                    EconomicSet<LocationIdentity> forwardEndLiveLocations = CollectionFactory.newSet(Equivalence.DEFAULT);
+                    EconomicSet<LocationIdentity> forwardEndLiveLocations = CollectionsFactory.newSet(CompareStrategy.EQUALS);
                     for (ReadCacheEntry entry : initialState.readCache.getKeys()) {
                         forwardEndLiveLocations.add(entry.identity);
                     }

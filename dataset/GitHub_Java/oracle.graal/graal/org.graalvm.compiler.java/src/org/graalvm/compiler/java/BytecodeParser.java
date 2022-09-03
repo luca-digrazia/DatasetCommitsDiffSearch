@@ -22,16 +22,6 @@
  */
 package org.graalvm.compiler.java;
 
-import static java.lang.String.format;
-import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateRecompile;
-import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.vm.ci.meta.DeoptimizationReason.JavaSubroutineMismatch;
-import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
-import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
-import static jdk.vm.ci.meta.DeoptimizationReason.TypeCheckedInliningViolated;
-import static jdk.vm.ci.meta.DeoptimizationReason.UnreachedCode;
-import static jdk.vm.ci.meta.DeoptimizationReason.Unresolved;
-import static jdk.vm.ci.runtime.JVMCICompiler.INVOCATION_ENTRY_BCI;
 import static org.graalvm.compiler.bytecode.Bytecodes.AALOAD;
 import static org.graalvm.compiler.bytecode.Bytecodes.AASTORE;
 import static org.graalvm.compiler.bytecode.Bytecodes.ACONST_NULL;
@@ -250,6 +240,16 @@ import static org.graalvm.compiler.java.BytecodeParserOptions.TraceParserPlugins
 import static org.graalvm.compiler.java.BytecodeParserOptions.UseGuardedIntrinsics;
 import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_DURING_PARSING;
 import static org.graalvm.compiler.nodes.type.StampTool.isPointerNonNull;
+import static java.lang.String.format;
+import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateRecompile;
+import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
+import static jdk.vm.ci.meta.DeoptimizationReason.JavaSubroutineMismatch;
+import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
+import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
+import static jdk.vm.ci.meta.DeoptimizationReason.TypeCheckedInliningViolated;
+import static jdk.vm.ci.meta.DeoptimizationReason.UnreachedCode;
+import static jdk.vm.ci.meta.DeoptimizationReason.Unresolved;
+import static jdk.vm.ci.runtime.JVMCICompiler.INVOCATION_ENTRY_BCI;
 
 import java.lang.ref.Reference;
 import java.util.ArrayList;
@@ -268,8 +268,11 @@ import org.graalvm.compiler.bytecode.Bytecodes;
 import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecode;
 import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecodeProvider;
 import org.graalvm.compiler.common.PermanentBailoutException;
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.LocationIdentity;
+import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.calc.FloatConvert;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
@@ -400,9 +403,6 @@ import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodeFrame;
@@ -1402,11 +1402,6 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    @Override
-    public void handleReplacedInvoke(CallTargetNode callTarget, JavaKind resultType) {
-        createNonInlinedInvoke(callTarget, resultType, null);
-    }
-
     private Invoke appendInvoke(InvokeKind initialInvokeKind, ResolvedJavaMethod initialTargetMethod, ValueNode[] args) {
         ResolvedJavaMethod targetMethod = initialTargetMethod;
         InvokeKind invokeKind = initialInvokeKind;
@@ -1486,7 +1481,16 @@ public class BytecodeParser implements GraphBuilderContext {
         }
 
         MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, targetMethod, args, returnStamp, profile));
-        Invoke invoke = createNonInlinedInvoke(callTarget, resultType, inlineInfo);
+
+        Invoke invoke;
+        if (omitInvokeExceptionEdge(callTarget, inlineInfo)) {
+            invoke = createInvoke(callTarget, resultType);
+        } else {
+            invoke = createInvokeWithException(callTarget, resultType);
+            AbstractBeginNode beginNode = graph.add(new KillingBeginNode(LocationIdentity.any()));
+            invoke.setNext(beginNode);
+            lastInstr = beginNode;
+        }
 
         for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
             plugin.notifyNotInlined(this, targetMethod, invoke);
@@ -1495,25 +1499,13 @@ public class BytecodeParser implements GraphBuilderContext {
         return invoke;
     }
 
-    protected Invoke createNonInlinedInvoke(CallTargetNode callTarget, JavaKind resultType, InlineInfo inlineInfo) {
-        if (omitInvokeExceptionEdge(callTarget, inlineInfo)) {
-            return createInvoke(callTarget, resultType);
-        } else {
-            Invoke invoke = createInvokeWithException(callTarget, resultType);
-            AbstractBeginNode beginNode = graph.add(new KillingBeginNode(LocationIdentity.any()));
-            invoke.setNext(beginNode);
-            lastInstr = beginNode;
-            return invoke;
-        }
-    }
-
     /**
      * If the method returns true, the invocation of the given {@link MethodCallTargetNode call
      * target} does not need an exception edge.
      *
      * @param callTarget The call target.
      */
-    protected boolean omitInvokeExceptionEdge(CallTargetNode callTarget, InlineInfo lastInlineInfo) {
+    protected boolean omitInvokeExceptionEdge(MethodCallTargetNode callTarget, InlineInfo lastInlineInfo) {
         if (lastInlineInfo == InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION) {
             return false;
         } else if (lastInlineInfo == InlineInfo.DO_NOT_INLINE_NO_EXCEPTION) {
@@ -1746,8 +1738,9 @@ public class BytecodeParser implements GraphBuilderContext {
             } else {
                 // Intrinsic was not applied: remove intrinsic guard
                 // and restore the original receiver node in the arguments array
-                intrinsicGuard.lastInstr.setNext(null);
-                GraphUtil.removeNewNodes(graph, intrinsicGuard.mark);
+                for (Node node : graph.getNewNodes(intrinsicGuard.mark)) {
+                    GraphUtil.killCFG(node);
+                }
                 lastInstr = intrinsicGuard.lastInstr;
                 args[0] = intrinsicGuard.receiver;
             }
@@ -3749,7 +3742,7 @@ public class BytecodeParser implements GraphBuilderContext {
         int nofCases = bs.numberOfCases();
         double[] keyProbabilities = switchProbability(nofCases + 1, bci);
 
-        EconomicMap<Integer, SuccessorInfo> bciToBlockSuccessorIndex = CollectionFactory.newMap(Equivalence.DEFAULT);
+        EconomicMap<Integer, SuccessorInfo> bciToBlockSuccessorIndex = CollectionsFactory.newMap(CompareStrategy.EQUALS);
         for (int i = 0; i < currentBlock.getSuccessorCount(); i++) {
             assert !bciToBlockSuccessorIndex.containsKey(currentBlock.getSuccessor(i).startBci);
             bciToBlockSuccessorIndex.put(currentBlock.getSuccessor(i).startBci, new SuccessorInfo(i));

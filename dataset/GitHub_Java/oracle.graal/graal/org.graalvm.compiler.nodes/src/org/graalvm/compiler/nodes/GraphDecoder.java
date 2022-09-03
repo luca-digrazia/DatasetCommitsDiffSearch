@@ -38,7 +38,10 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 import org.graalvm.compiler.common.PermanentBailoutException;
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.Fields;
+import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.core.common.util.TypeReader;
 import org.graalvm.compiler.core.common.util.UnsafeArrayTypeReader;
 import org.graalvm.compiler.debug.Debug;
@@ -61,9 +64,6 @@ import org.graalvm.compiler.nodes.GraphDecoder.ProxyPlaceholder;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.extended.IntegerSwitchNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin.LoopExplosionKind;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
 
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -535,7 +535,7 @@ public class GraphDecoder {
                     resultScope = new LoopScope(methodScope, loopScope, loopScope.loopDepth + 1, 0, mergeOrderId,
                                     Arrays.copyOf(loopScope.createdNodes, loopScope.createdNodes.length), loopScope.createdNodes, //
                                     methodScope.loopExplosion != LoopExplosionKind.NONE ? new ArrayDeque<>() : null, //
-                                    methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE ? CollectionFactory.newMap(Equivalence.DEFAULT) : null);
+                                    methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE ? CollectionsFactory.newMap(CompareStrategy.EQUALS) : null);
                     phiInputScope = resultScope;
                     phiNodeScope = resultScope;
 
@@ -594,11 +594,6 @@ public class GraphDecoder {
     protected LoopScope handleInvoke(MethodScope methodScope, LoopScope loopScope, InvokeData invokeData) {
         assert invokeData.invoke.callTarget() == null : "callTarget edge is ignored during decoding of Invoke";
         CallTargetNode callTarget = (CallTargetNode) ensureNodeCreated(methodScope, loopScope, invokeData.callTargetOrderId);
-        appendInvoke(methodScope, loopScope, invokeData, callTarget);
-        return loopScope;
-    }
-
-    protected void appendInvoke(MethodScope methodScope, LoopScope loopScope, InvokeData invokeData, CallTargetNode callTarget) {
         if (invokeData.invoke instanceof InvokeWithExceptionNode) {
             ((InvokeWithExceptionNode) invokeData.invoke).setCallTarget(callTarget);
         } else {
@@ -612,6 +607,7 @@ public class GraphDecoder {
         if (invokeData.invoke instanceof InvokeWithExceptionNode) {
             ((InvokeWithExceptionNode) invokeData.invoke).setExceptionEdge((AbstractBeginNode) makeStubNode(methodScope, loopScope, invokeData.exceptionOrderId));
         }
+        return loopScope;
     }
 
     /**
@@ -1333,7 +1329,7 @@ class LoopDetector implements Runnable {
 
     private List<Loop> findLoops() {
         /* Mapping from the loop header node to additional loop information. */
-        EconomicMap<MergeNode, Loop> unorderedLoops = CollectionFactory.newMap(Equivalence.IDENTITY);
+        EconomicMap<MergeNode, Loop> unorderedLoops = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
         /* Loops in reverse order of, i.e., inner loops before outer loops. */
         List<Loop> orderedLoops = new ArrayList<>();
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,35 +20,36 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.lir.util;
+package org.graalvm.compiler.core.common;
 
-import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
-import org.graalvm.compiler.core.common.EconomicMap;
+public interface EconomicSet<E> extends Iterable<E> {
 
-import jdk.vm.ci.meta.Value;
+    boolean contains(E element);
 
-public final class GenericValueMap<T> extends ValueMap<Value, T> {
+    void addAll(Iterable<E> values);
 
-    private final EconomicMap<Value, T> data;
+    int size();
 
-    public GenericValueMap() {
-        data = CollectionsFactory.newMap(CompareStrategy.EQUALS);
+    boolean add(E element);
+
+    void remove(E element);
+
+    void clear();
+
+    boolean isEmpty();
+
+    void retainAll(EconomicSet<E> values);
+
+    default E[] toArray(E[] target) {
+        if (target.length != size()) {
+            throw new UnsupportedOperationException("target array must have correct length");
+        }
+
+        int index = 0;
+        for (E element : this) {
+            target[index++] = element;
+        }
+
+        return target;
     }
-
-    @Override
-    public T get(Value value) {
-        return data.get(value);
-    }
-
-    @Override
-    public void remove(Value value) {
-        data.removeKey(value);
-    }
-
-    @Override
-    public void put(Value value, T object) {
-        data.put(value, object);
-    }
-
 }

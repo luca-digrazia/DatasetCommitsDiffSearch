@@ -22,21 +22,25 @@
  */
 package org.graalvm.compiler.lir.alloc.lsra;
 
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.asStackSlot;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
 import static org.graalvm.compiler.core.common.GraalOptions.DetailedAsserts;
 import static org.graalvm.compiler.lir.LIRValueUtil.asVariable;
 import static org.graalvm.compiler.lir.LIRValueUtil.isVariable;
 import static org.graalvm.compiler.lir.debug.LIRGenerationDebugContext.getSourceForOperandFromDebugContext;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static jdk.vm.ci.code.ValueUtil.asStackSlot;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static jdk.vm.ci.code.ValueUtil.isStackSlot;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Deque;
 import java.util.EnumSet;
+import java.util.List;
 import org.graalvm.compiler.common.PermanentBailoutException;
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.LIRKind;
+import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.core.common.alloc.ComputeBlockOrder;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
 import org.graalvm.compiler.core.common.util.BitMap2D;
@@ -56,9 +60,6 @@ import org.graalvm.compiler.lir.alloc.lsra.Interval.SpillState;
 import org.graalvm.compiler.lir.alloc.lsra.LinearScan.BlockData;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.phases.AllocationPhase;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterArray;
@@ -127,7 +128,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
         for (AbstractBlockBase<?> block : allocator.sortedBlocks()) {
             allocator.initBlockData(block);
 
-            ArrayList<LIRInstruction> instructions = allocator.getLIR().getLIRforBlock(block);
+            List<LIRInstruction> instructions = allocator.getLIR().getLIRforBlock(block);
 
             int numInst = instructions.size();
             for (int j = 0; j < numInst; j++) {
@@ -165,7 +166,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                 final BitSet liveGen = new BitSet(liveSize);
                 final BitSet liveKill = new BitSet(liveSize);
 
-                ArrayList<LIRInstruction> instructions = allocator.getLIR().getLIRforBlock(block);
+                List<LIRInstruction> instructions = allocator.getLIR().getLIRforBlock(block);
                 int numInst = instructions.size();
 
                 ValueConsumer useConsumer = (operand, mode, flags) -> {
@@ -408,8 +409,8 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                     }
                     try (Indent indent2 = Debug.logAndIndent("---- Detailed information for var %d; operand=%s; node=%s ----", operandNum, operand, valueForOperandFromDebugContext)) {
 
-                        ArrayDeque<AbstractBlockBase<?>> definedIn = new ArrayDeque<>();
-                        EconomicSet<AbstractBlockBase<?>> usedIn = CollectionFactory.newSet(Equivalence.IDENTITY);
+                        Deque<AbstractBlockBase<?>> definedIn = new ArrayDeque<>();
+                        EconomicSet<AbstractBlockBase<?>> usedIn = CollectionsFactory.newSet(CompareStrategy.IDENTITY);
                         for (AbstractBlockBase<?> block : allocator.sortedBlocks()) {
                             if (allocator.getBlockData(block).liveGen.get(operandNum)) {
                                 usedIn.add(block);
@@ -737,7 +738,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                 AbstractBlockBase<?> block = allocator.blockAt(i);
                 try (Indent indent2 = Debug.logAndIndent("handle block %d", block.getId())) {
 
-                    ArrayList<LIRInstruction> instructions = allocator.getLIR().getLIRforBlock(block);
+                    List<LIRInstruction> instructions = allocator.getLIR().getLIRforBlock(block);
                     final int blockFrom = allocator.getFirstLirInstructionId(block);
                     int blockTo = allocator.getLastLirInstructionId(block);
 

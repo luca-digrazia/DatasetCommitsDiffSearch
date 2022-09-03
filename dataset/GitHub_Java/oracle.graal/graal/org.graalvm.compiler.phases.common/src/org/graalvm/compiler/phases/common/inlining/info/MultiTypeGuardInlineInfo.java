@@ -27,7 +27,9 @@ import static org.graalvm.compiler.core.common.GraalOptions.UseGraalInstrumentat
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
+import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.graph.Node;
@@ -57,9 +59,6 @@ import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 import org.graalvm.compiler.phases.common.inlining.info.elem.Inlineable;
 import org.graalvm.compiler.phases.util.Providers;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -101,7 +100,7 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
     }
 
     private static boolean assertUniqueTypes(ArrayList<ProfiledType> ptypes) {
-        EconomicSet<ResolvedJavaType> set = CollectionFactory.newSet(Equivalence.DEFAULT);
+        EconomicSet<ResolvedJavaType> set = CollectionsFactory.newSet(CompareStrategy.EQUALS);
         for (ProfiledType ptype : ptypes) {
             set.add(ptype.getType());
         }

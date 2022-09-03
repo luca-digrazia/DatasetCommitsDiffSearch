@@ -26,7 +26,6 @@ import static org.graalvm.compiler.graph.Edges.Type.Inputs;
 import static org.graalvm.compiler.graph.Edges.Type.Successors;
 import static org.graalvm.compiler.graph.Graph.isModificationCountsEnabled;
 import static org.graalvm.compiler.graph.UnsafeAccess.UNSAFE;
-import static org.graalvm.compiler.options.OptionValues.GLOBAL;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.RetentionPolicy;
@@ -54,7 +53,6 @@ import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.Verbosity;
-import org.graalvm.compiler.options.OptionValues;
 
 import sun.misc.Unsafe;
 
@@ -82,7 +80,7 @@ import sun.misc.Unsafe;
 public abstract class Node implements Cloneable, Formattable, NodeInterface {
 
     public static final NodeClass<?> TYPE = null;
-    public static final boolean USE_UNSAFE_TO_CLONE = Graph.Options.CloneNodesWithUnsafe.getValue(GLOBAL);
+    public static final boolean USE_UNSAFE_TO_CLONE = Graph.Options.CloneNodesWithUnsafe.getValue();
 
     static final int DELETED_ID_START = -1000000000;
     static final int INITIAL_ID = -1;
@@ -246,13 +244,6 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
      */
     public Graph graph() {
         return graph;
-    }
-
-    /**
-     * Gets the option values associated with this node's graph.
-     */
-    public final OptionValues getOptions() {
-        return graph.getOptions();
     }
 
     /**
@@ -706,9 +697,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     public void replaceAndDelete(Node other) {
         assert checkReplaceWith(other);
         assert other != null;
-        if (this.hasUsages()) {
-            replaceAtUsages(other);
-        }
+        replaceAtUsages(other);
         replaceAtPredecessor(other);
         this.safeDelete();
     }
@@ -895,7 +884,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         assertTrue(isAlive(), "cannot verify inactive nodes (id=%d)", id);
         assertTrue(graph() != null, "null graph");
         verifyInputs();
-        if (Options.VerifyGraalGraphEdges.getValue(getOptions())) {
+        if (Options.VerifyGraalGraphEdges.getValue()) {
             verifyEdges();
         }
         return true;

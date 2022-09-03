@@ -35,6 +35,7 @@ import java.util.TreeMap;
 
 import org.graalvm.compiler.bytecode.BytecodeDisassembler;
 import org.graalvm.compiler.bytecode.Bytecode;
+import org.graalvm.compiler.core.common.ImmutableMapCursor;
 import org.graalvm.compiler.core.common.alloc.Trace;
 import org.graalvm.compiler.core.common.alloc.TraceBuilderResult;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
@@ -64,7 +65,6 @@ import org.graalvm.compiler.nodes.ValuePhiNode;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
-import org.graalvm.util.UnmodifiableMapCursor;
 
 import jdk.vm.ci.code.DebugInfo;
 import jdk.vm.ci.code.TargetDescription;
@@ -310,7 +310,7 @@ class CFGPrinter extends CompilationPrinter {
             printNode(cur, false);
 
             if (cur == block.getEndNode()) {
-                UnmodifiableMapCursor<Node, Block> cursor = latestScheduling.getEntries();
+                ImmutableMapCursor<Node, Block> cursor = latestScheduling.getEntries();
                 while (cursor.advance()) {
                     if (cursor.getValue() == block && !inFixedSchedule(cursor.getKey()) && !printedNodes.isMarked(cursor.getKey())) {
                         printNode(cursor.getKey(), true);
@@ -473,7 +473,7 @@ class CFGPrinter extends CompilationPrinter {
         if (lir == null) {
             return;
         }
-        ArrayList<LIRInstruction> lirInstructions = lir.getLIRforBlock(block);
+        List<LIRInstruction> lirInstructions = lir.getLIRforBlock(block);
         if (lirInstructions == null) {
             return;
         }
@@ -700,7 +700,7 @@ class CFGPrinter extends CompilationPrinter {
         out.println("LIR");
 
         for (AbstractBlockBase<?> block : trace.getBlocks()) {
-            ArrayList<LIRInstruction> lirInstructions = lir.getLIRforBlock(block);
+            List<LIRInstruction> lirInstructions = lir.getLIRforBlock(block);
             if (lirInstructions == null) {
                 continue;
             }

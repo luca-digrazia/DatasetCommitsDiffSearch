@@ -28,7 +28,12 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
+import org.graalvm.compiler.core.common.ImmutableEconomicMap;
+import org.graalvm.compiler.core.common.EconomicMap;
+import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -43,11 +48,6 @@ import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.spi.VirtualizableAllocation;
 import org.graalvm.compiler.nodes.util.GraphUtil;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.EconomicSet;
-import org.graalvm.util.ImmutableEconomicMap;
 
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Assumptions.Assumption;
@@ -372,7 +372,7 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
         copy.setGuardsStage(getGuardsStage());
         copy.isAfterFloatingReadPhase = isAfterFloatingReadPhase;
         copy.hasValueProxies = hasValueProxies;
-        EconomicMap<Node, Node> replacements = CollectionFactory.newMap(Equivalence.IDENTITY);
+        EconomicMap<Node, Node> replacements = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
         replacements.put(start, copy.start);
         ImmutableEconomicMap<Node, Node> duplicates = copy.addDuplicates(getNodes(), this, this.getNodeCount(), replacements);
         if (duplicationMapCallback != null) {
@@ -509,7 +509,7 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
         for (Node successor : snapshot) {
             if (successor != null && successor.isAlive()) {
                 if (successor != survivingSuccessor) {
-                    GraphUtil.killCFG((FixedNode) successor, tool);
+                    GraphUtil.killCFG(successor, tool);
                 }
             }
         }
@@ -569,9 +569,6 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
             reduceTrivialMerge(begin);
         } else { // convert to merge
             AbstractMergeNode merge = this.add(new MergeNode());
-            for (EndNode end : begin.forwardEnds()) {
-                merge.addForwardEnd(end);
-            }
             this.replaceFixedWithFixed(begin, merge);
         }
     }
@@ -582,14 +579,7 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
         for (PhiNode phi : merge.phis().snapshot()) {
             assert phi.valueCount() == 1;
             ValueNode singleValue = phi.valueAt(0);
-            if (phi.hasUsages()) {
-                phi.replaceAtUsagesAndDelete(singleValue);
-            } else {
-                phi.safeDelete();
-                if (singleValue != null) {
-                    GraphUtil.tryKillUnused(singleValue);
-                }
-            }
+            phi.replaceAtUsagesAndDelete(singleValue);
         }
         // remove loop exits
         if (merge instanceof LoopBeginNode) {
@@ -601,8 +591,8 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
         // evacuateGuards
         merge.prepareDelete((FixedNode) singleEnd.predecessor());
         merge.safeDelete();
-        if (stateAfter != null) {
-            GraphUtil.tryKillUnused(stateAfter);
+        if (stateAfter != null && stateAfter.isAlive() && stateAfter.hasNoUsages()) {
+            GraphUtil.killWithUnusedFloatingInputs(stateAfter);
         }
         if (sux == null) {
             singleEnd.replaceAtPredecessor(null);
@@ -710,7 +700,7 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
     public void recordField(ResolvedJavaField field) {
         assert GraalOptions.GeneratePIC.getValue();
         if (this.fields == null) {
-            this.fields = CollectionFactory.newSet(Equivalence.IDENTITY);
+            this.fields = CollectionsFactory.newSet(CompareStrategy.IDENTITY);
         }
         fields.add(field);
     }
@@ -723,7 +713,7 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
         assert this != other;
         assert GraalOptions.GeneratePIC.getValue();
         if (this.fields == null) {
-            this.fields = CollectionFactory.newSet(Equivalence.IDENTITY);
+            this.fields = CollectionsFactory.newSet(CompareStrategy.IDENTITY);
         }
         this.fields.addAll(other.fields);
     }

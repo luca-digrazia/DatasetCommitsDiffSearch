@@ -25,8 +25,8 @@ package org.graalvm.compiler.virtual.phases.ea;
 import java.util.Iterator;
 import java.util.Map;
 
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.UnmodifiableMapCursor;
+import org.graalvm.compiler.core.common.ImmutableMapCursor;
+import org.graalvm.compiler.core.common.EconomicMap;
 
 public abstract class EffectsBlockState<T extends EffectsBlockState<T>> {
 
@@ -62,7 +62,7 @@ public abstract class EffectsBlockState<T extends EffectsBlockState<T>> {
         if (left == right) {
             return true;
         }
-        UnmodifiableMapCursor<K, V> cursor = right.getEntries();
+        ImmutableMapCursor<K, V> cursor = right.getEntries();
         while (cursor.advance()) {
             K key = cursor.getKey();
             V value = cursor.getValue();

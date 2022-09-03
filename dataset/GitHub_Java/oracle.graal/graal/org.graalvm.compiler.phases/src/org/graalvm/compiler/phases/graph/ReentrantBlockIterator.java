@@ -29,6 +29,9 @@ import java.util.List;
 import java.util.function.Predicate;
 
 import org.graalvm.compiler.common.RetryableBailoutException;
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
+import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.util.CompilationAlarm;
 import org.graalvm.compiler.nodes.AbstractEndNode;
@@ -36,9 +39,6 @@ import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.cfg.Block;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicMap;
 
 public final class ReentrantBlockIterator {
 
@@ -99,7 +99,7 @@ public final class ReentrantBlockIterator {
         /*
          * States are stored on EndNodes before merges, and on BeginNodes after ControlSplitNodes.
          */
-        EconomicMap<FixedNode, StateT> states = CollectionFactory.newMap(Equivalence.IDENTITY);
+        EconomicMap<FixedNode, StateT> states = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
 
         StateT state = initialState;
         Block current = start;

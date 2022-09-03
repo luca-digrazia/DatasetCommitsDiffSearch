@@ -26,11 +26,14 @@ import static org.graalvm.compiler.lir.LIRValueUtil.asVirtualStackSlot;
 import static org.graalvm.compiler.lir.LIRValueUtil.isVirtualStackSlot;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Deque;
 import java.util.EnumSet;
+import java.util.List;
 
+import org.graalvm.compiler.core.common.CollectionsFactory;
+import org.graalvm.compiler.core.common.CompareStrategy;
+import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.debug.Debug;
@@ -42,9 +45,6 @@ import org.graalvm.compiler.lir.LIR;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.LIRInstruction.OperandFlag;
 import org.graalvm.compiler.lir.LIRInstruction.OperandMode;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.EconomicSet;
 import org.graalvm.compiler.lir.VirtualStackSlot;
 
 import jdk.vm.ci.meta.Value;
@@ -71,7 +71,7 @@ final class FixPointIntervalBuilder {
         this.maxOpId = maxOpId;
         liveInMap = new BlockMap<>(lir.getControlFlowGraph());
         liveOutMap = new BlockMap<>(lir.getControlFlowGraph());
-        this.usePos = CollectionFactory.newSet(Equivalence.IDENTITY);
+        this.usePos = CollectionsFactory.newSet(CompareStrategy.IDENTITY);
     }
 
     /**
@@ -116,7 +116,7 @@ final class FixPointIntervalBuilder {
     private void processBlock(AbstractBlockBase<?> block, Deque<AbstractBlockBase<?>> worklist) {
         if (updateOutBlock(block)) {
             try (Indent indent = Debug.logAndIndent("handle block %s", block)) {
-                ArrayList<LIRInstruction> instructions = lir.getLIRforBlock(block);
+                List<LIRInstruction> instructions = lir.getLIRforBlock(block);
                 // get out set and mark intervals
                 BitSet outSet = liveOutMap.get(block);
                 markOutInterval(outSet, getBlockEnd(instructions));
@@ -307,11 +307,11 @@ final class FixPointIntervalBuilder {
         return stackSlotMap[id];
     }
 
-    private static int getBlockBegin(ArrayList<LIRInstruction> instructions) {
+    private static int getBlockBegin(List<LIRInstruction> instructions) {
         return instructions.get(0).id();
     }
 
-    private static int getBlockEnd(ArrayList<LIRInstruction> instructions) {
+    private static int getBlockEnd(List<LIRInstruction> instructions) {
         return instructions.get(instructions.size() - 1).id() + 1;
     }
 
