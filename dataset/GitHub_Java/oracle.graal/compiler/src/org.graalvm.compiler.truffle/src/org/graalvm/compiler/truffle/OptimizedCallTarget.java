@@ -46,8 +46,6 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.truffle.GraalTruffleRuntime.LazyFrameBoxingQuery;
 import org.graalvm.compiler.truffle.debug.AbstractDebugCompilationListener;
 import org.graalvm.compiler.truffle.substitutions.TruffleGraphBuilderPlugins;
-import org.graalvm.options.OptionKey;
-import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -185,10 +183,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     @Override
     public final Object call(Object... args) {
-        OptimizedCompilationProfile profile = compilationProfile;
-        if (profile != null) {
-            profile.profileIndirectCall();
-        }
+        getCompilationProfile().profileIndirectCall();
         return doInvoke(args);
     }
 
@@ -218,7 +213,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     protected final Object callBoundary(Object[] args) {
         if (CompilerDirectives.inInterpreter()) {
             // We are called and we are still in Truffle interpreter mode.
-            getCompilationProfile().interpreterCall(this);
+            compilationProfile.interpreterCall(this);
             if (isValid()) {
                 // Stubs were deoptimized => reinstall.
                 runtime().reinstallStubs();
@@ -267,7 +262,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         runtime().getCompilationNotify().notifyCompilationDeoptimized(this, frame);
     }
 
-    static GraalTruffleRuntime runtime() {
+    private static GraalTruffleRuntime runtime() {
         return (GraalTruffleRuntime) Truffle.getRuntime();
     }
 
@@ -283,16 +278,11 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         }
     }
 
-    public final OptionValues getOptionValues() {
-        return runtime().getTvmci().getCompilerOptionValues(rootNode);
-    }
-
-    private OptimizedCompilationProfile createCompilationProfile() {
-        OptionValues optionValues = PolyglotCompilerOptions.getPolyglotValues(rootNode);
+    private static OptimizedCompilationProfile createCompilationProfile() {
         if (TruffleCompilerOptions.getValue(TruffleCallTargetProfiling)) {
-            return TraceCompilationProfile.create(optionValues);
+            return TraceCompilationProfile.create();
         } else {
-            return OptimizedCompilationProfile.create(optionValues);
+            return OptimizedCompilationProfile.create();
         }
     }
 
@@ -626,9 +616,4 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     void resetCompilationTask() {
         this.compilationTask = null;
     }
-
-    public <T> T getOptionValue(OptionKey<T> key) {
-        return PolyglotCompilerOptions.getValue(rootNode, key);
-    }
-
 }
