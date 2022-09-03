@@ -23,9 +23,8 @@
 package com.oracle.truffle.api.test.vm;
 
 import com.oracle.truffle.api.impl.Accessor;
-import com.oracle.truffle.api.source.Source;
 import static com.oracle.truffle.api.test.vm.ImplicitExplicitExportTest.L1;
-import com.oracle.truffle.api.vm.Portaal;
+import com.oracle.truffle.api.vm.TruffleVM;
 import java.io.IOException;
 import static org.junit.Assert.*;
 import org.junit.Test;
@@ -35,12 +34,12 @@ public class ExceptionDuringParsingTest {
 
     @Test
     public void canGetAccessToOwnLanguageInstance() throws Exception {
-        Portaal vm = Portaal.createNew().build();
-        Portaal.Language language = vm.getLanguages().get(L1);
+        TruffleVM vm = TruffleVM.newVM().build();
+        TruffleVM.Language language = vm.getLanguages().get(L1);
         assertNotNull("L1 language is defined", language);
 
         try {
-            vm.eval(Source.fromText("parse=No, no, no!", "Fail on parsing").withMimeType(L1));
+            vm.eval(L1, "parse=No, no, no!");
             fail("Exception thrown");
         } catch (IOException ex) {
             assertEquals(ex.getMessage(), "No, no, no!");

@@ -22,6 +22,13 @@
  */
 package com.oracle.truffle.api.test.vm;
 
+import static org.junit.Assert.*;
+
+import java.io.*;
+import java.util.*;
+
+import org.junit.*;
+
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.debug.*;
@@ -30,37 +37,27 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.api.vm.*;
-import java.io.*;
-import java.util.*;
-import java.util.concurrent.Executors;
-import org.junit.*;
-import static org.junit.Assert.*;
 
 public class ImplicitExplicitExportTest {
-    private static Thread mainThread;
     private TruffleVM vm;
 
     @Before
     public void initializeVM() {
-        mainThread = Thread.currentThread();
-        vm = TruffleVM.newVM().executor(Executors.newSingleThreadExecutor()).build();
+        vm = TruffleVM.newVM().build();
         assertTrue("Found " + L1 + " language", vm.getLanguages().containsKey(L1));
         assertTrue("Found " + L2 + " language", vm.getLanguages().containsKey(L2));
         assertTrue("Found " + L3 + " language", vm.getLanguages().containsKey(L3));
     }
 
-    @After
-    public void cleanThread() {
-        mainThread = null;
-    }
-
     @Test
     public void explicitExportFound() throws IOException {
         // @formatter:off
-        vm.eval(Source.fromText("explicit.ahoj=42", "Fourty two").withMimeType(L1));
-        Object ret = vm.eval(
-            Source.fromText("return=ahoj", "Return").withMimeType(L3)
-        ).get();
+        vm.eval(L1,
+            "explicit.ahoj=42"
+        );
+        Object ret = vm.eval(L3,
+            "return=ahoj"
+        );
         // @formatter:on
         assertEquals("42", ret);
     }
@@ -68,12 +65,12 @@ public class ImplicitExplicitExportTest {
     @Test
     public void implicitExportFound() throws IOException {
         // @formatter:off
-        vm.eval(
-            Source.fromText("implicit.ahoj=42", "Fourty two").withMimeType(L1)
+        vm.eval(L1,
+            "implicit.ahoj=42"
         );
-        Object ret = vm.eval(
-            Source.fromText("return=ahoj", "Return").withMimeType(L3)
-        ).get();
+        Object ret = vm.eval(L3,
+            "return=ahoj"
+        );
         // @formatter:on
         assertEquals("42", ret);
     }
@@ -81,35 +78,35 @@ public class ImplicitExplicitExportTest {
     @Test
     public void explicitExportPreferred2() throws IOException {
         // @formatter:off
-        vm.eval(
-            Source.fromText("implicit.ahoj=42", "Fourty two").withMimeType(L1)
+        vm.eval(L1,
+            "implicit.ahoj=42"
         );
-        vm.eval(
-            Source.fromText("explicit.ahoj=43", "Fourty three").withMimeType(L2)
+        vm.eval(L2,
+            "explicit.ahoj=43"
         );
-        Object ret = vm.eval(
-            Source.fromText("return=ahoj", "Return").withMimeType(L3)
-        ).get();
+        Object ret = vm.eval(L3,
+            "return=ahoj"
+        );
         // @formatter:on
         assertEquals("Explicit import from L2 is used", "43", ret);
-        assertEquals("Global symbol is also 43", "43", vm.findGlobalSymbol("ahoj").get());
+        assertEquals("Global symbol is also 43", "43", vm.findGlobalSymbol("ahoj").invoke(null));
     }
 
     @Test
     public void explicitExportPreferred1() throws IOException {
         // @formatter:off
-        vm.eval(
-            Source.fromText("explicit.ahoj=43", "Fourty three").withMimeType(L1)
+        vm.eval(L1,
+            "explicit.ahoj=43"
         );
-        vm.eval(
-            Source.fromText("implicit.ahoj=42", "Fourty two").withMimeType(L2)
+        vm.eval(L2,
+            "implicit.ahoj=42"
         );
-        Object ret = vm.eval(
-            Source.fromText("return=ahoj", "Return").withMimeType(L3)
-        ).get();
+        Object ret = vm.eval(L3,
+            "return=ahoj"
+        );
         // @formatter:on
         assertEquals("Explicit import from L2 is used", "43", ret);
-        assertEquals("Global symbol is also 43", "43", vm.findGlobalSymbol("ahoj").invoke(null).get());
+        assertEquals("Global symbol is also 43", "43", vm.findGlobalSymbol("ahoj").invoke(null));
     }
 
     private static final class Ctx {
@@ -126,9 +123,6 @@ public class ImplicitExplicitExportTest {
 
         @Override
         protected Ctx createContext(Env env) {
-            if (mainThread != null) {
-                assertNotEquals("Should run asynchronously", Thread.currentThread(), mainThread);
-            }
             return new Ctx(env);
         }
 
@@ -172,7 +166,6 @@ public class ImplicitExplicitExportTest {
         }
 
         private Object importExport(Source code) {
-            assertNotEquals("Should run asynchronously", Thread.currentThread(), mainThread);
             final Node node = createFindContextNode();
             Ctx ctx = findContext(node);
             Properties p = new Properties();
@@ -222,8 +215,8 @@ public class ImplicitExplicitExportTest {
     }
 
     static final String L1 = "application/x-test-import-export-1";
-    static final String L2 = "application/x-test-import-export-2";
-    static final String L3 = "application/x-test-import-export-3";
+    private static final String L2 = "application/x-test-import-export-2";
+    private static final String L3 = "application/x-test-import-export-3";
 
     @TruffleLanguage.Registration(mimeType = L1, name = "ImportExport1", version = "0")
     public static final class ExportImportLanguage1 extends AbstractExportImportLanguage {
