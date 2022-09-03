@@ -27,32 +27,29 @@ package com.oracle.truffle.api.instrument.impl;
 import java.util.*;
 
 import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CompilerDirectives.SlowPath;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.source.*;
 
 /**
- * Abstract implementation of Truffle {@link Node} to be used for AST probes and instruments.
- * <p>
- * Coordinates propagation of Truffle AST {@link ExecutionEvents}.
+ * Abstract implementation of Truffle {@link Node}s used as AST {@link Probe}s and
+ * {@link Instrument}s. A {@link Probe} manages its attached {@link Instrument}s by appending them
+ * to a chain through which {@link ExecutionEvents} are propagated.
  */
 public abstract class InstrumentationNode extends Node implements ExecutionEvents {
 
-    // TODO (mlvdv) This is a pretty awkward design; it is a priority to revise it.
+    interface ProbeCallback {
+        void newTagAdded(ProbeImpl probe, SyntaxTag tag);
+    }
 
-    /**
-     * Creates a new {@link Probe}, presumed to be unique to a particular {@linkplain SourceSection}
-     * extent of guest language source code.
-     *
-     * @param eventListener an optional listener for certain instrumentation-related events.
-     * @return a new probe
-     */
-    static Probe createProbe(InstrumentationImpl instrumentation, SourceSection sourceSection, InstrumentEventListener eventListener) {
-        return new ProbeImpl(instrumentation, sourceSection, eventListener);
+    static ProbeImpl createProbe(SourceSection source, ProbeCallback probeCallback) {
+        return new ProbeImpl(source, probeCallback);
     }
 
     /**
-     * Next in chain.
+     * Next instrumentation node in chain.
      */
     @Child protected InstrumentationNode next;
 
@@ -60,15 +57,15 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
     }
 
     /**
-     * @return the instance of {@link Probe} to which this instrument is attached.
+     * Gets the {@link Probe} to which this instrument is attached; {@code null} if not attached.
      */
-    public Probe getProbe() {
+    protected Probe getProbe() {
         final InstrumentationNode parent = (InstrumentationNode) getParent();
         return parent == null ? null : parent.getProbe();
     }
 
     /**
-     * Add a probe to the end of this probe chain.
+     * Add an instrument to the end of this instrument chain.
      */
     private void internalAddInstrument(Instrument newInstrument) {
         if (next == null) {
@@ -78,6 +75,12 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
         }
     }
 
+    /**
+     * Remove an instrument from this instrument chain. If no matching instrument is found, a
+     * {@link RuntimeException} is thrown.
+     *
+     * @param oldInstrument The {@link Instrument} to remove.
+     */
     private void internalRemoveInstrument(Instrument oldInstrument) {
         if (next == null) {
             throw new RuntimeException("Couldn't find probe to remove: " + oldInstrument);
@@ -94,93 +97,213 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
     }
 
     /**
-     * Reports to the instance of {@link Probe} holding this instrument that some essential state
-     * has changed that requires deoptimization.
+     * Reports to the instance of {@link Probe} holding this instrument, if any, that some essential
+     * state has changed that requires deoptimization.
      */
     @CompilerDirectives.SlowPath
     protected void notifyProbeChanged(Instrument instrument) {
-        final ProbeImpl probe = (ProbeImpl) getProbe();
-        probe.notifyProbeChanged(instrument);
+        Probe probe = getProbe();
+        if (probe != null) {
+            final ProbeImpl probeImpl = (ProbeImpl) probe;
+            probeImpl.notifyProbeChanged(instrument);
+        }
     }
 
-    private void internalEnter(Node astNode, VirtualFrame frame) {
+    /**
+     * Informs the instrument that execution is just about to enter an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalEnter(Node, VirtualFrame)} to inform all instruments in the chain.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of entry
+     */
+    protected void internalEnter(Node astNode, VirtualFrame frame) {
         enter(astNode, frame);
         if (next != null) {
             next.internalEnter(astNode, frame);
         }
     }
 
-    private void internalLeave(Node astNode, VirtualFrame frame) {
+    /**
+     * Informs the instrument that execution has just returned from an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalEnter(Node, VirtualFrame)} to inform all instruments in the chain. In this
+     * case, there is no return value.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of exit
+     */
+    protected void internalLeave(Node astNode, VirtualFrame frame) {
         leave(astNode, frame);
         if (next != null) {
             next.internalLeave(astNode, frame);
         }
     }
 
-    private void internalLeave(Node astNode, VirtualFrame frame, boolean result) {
+    /**
+     * Informs the instrument that execution has just returned from an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalLeave(Node, VirtualFrame, boolean)} to inform all instruments in the chain.
+     * In this case, a boolean value was returned.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of exit
+     * @param result The boolean result
+     */
+    protected void internalLeave(Node astNode, VirtualFrame frame, boolean result) {
         leave(astNode, frame, result);
         if (next != null) {
             next.internalLeave(astNode, frame, result);
         }
     }
 
-    private void internalLeave(Node astNode, VirtualFrame frame, byte result) {
+    /**
+     * Informs the instrument that execution has just returned from an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalLeave(Node, VirtualFrame, byte)} to inform all instruments in the chain. In
+     * this case, a byte value was returned.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of exit
+     * @param result The byte result
+     */
+    protected void internalLeave(Node astNode, VirtualFrame frame, byte result) {
         leave(astNode, frame, result);
         if (next != null) {
             next.internalLeave(astNode, frame, result);
         }
     }
 
-    private void internalLeave(Node astNode, VirtualFrame frame, short result) {
+    /**
+     * Informs the instrument that execution has just returned from an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalLeave(Node, VirtualFrame, short)} to inform all instruments in the chain. In
+     * this case, a short value was returned.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of exit
+     * @param result The short result
+     */
+    protected void internalLeave(Node astNode, VirtualFrame frame, short result) {
         leave(astNode, frame, result);
         if (next != null) {
             next.internalLeave(astNode, frame, result);
         }
     }
 
-    private void internalLeave(Node astNode, VirtualFrame frame, int result) {
+    /**
+     * Informs the instrument that execution has just returned from an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalLeave(Node, VirtualFrame, int)} to inform all instruments in the chain. In
+     * this case, a int value was returned.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of exit
+     * @param result The int result
+     */
+    protected void internalLeave(Node astNode, VirtualFrame frame, int result) {
         leave(astNode, frame, result);
         if (next != null) {
             next.internalLeave(astNode, frame, result);
         }
     }
 
-    private void internalLeave(Node astNode, VirtualFrame frame, long result) {
+    /**
+     * Informs the instrument that execution has just returned from an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalLeave(Node, VirtualFrame, long)} to inform all instruments in the chain. In
+     * this case, a long value was returned.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of exit
+     * @param result The long result
+     */
+    protected void internalLeave(Node astNode, VirtualFrame frame, long result) {
         leave(astNode, frame, result);
         if (next != null) {
             next.internalLeave(astNode, frame, result);
         }
     }
 
-    private void internalLeave(Node astNode, VirtualFrame frame, char result) {
+    /**
+     * Informs the instrument that execution has just returned from an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalLeave(Node, VirtualFrame, char)} to inform all instruments in the chain. In
+     * this case, a char value was returned.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of exit
+     * @param result The char result
+     */
+    protected void internalLeave(Node astNode, VirtualFrame frame, char result) {
         leave(astNode, frame, result);
         if (next != null) {
             next.internalLeave(astNode, frame, result);
         }
     }
 
-    private void internalLeave(Node astNode, VirtualFrame frame, float result) {
+    /**
+     * Informs the instrument that execution has just returned from an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalLeave(Node, VirtualFrame, float)} to inform all instruments in the chain. In
+     * this case, a float value was returned.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of exit
+     * @param result The float result
+     */
+    protected void internalLeave(Node astNode, VirtualFrame frame, float result) {
         leave(astNode, frame, result);
         if (next != null) {
             next.internalLeave(astNode, frame, result);
         }
     }
 
-    private void internalLeave(Node astNode, VirtualFrame frame, double result) {
+    /**
+     * Informs the instrument that execution has just returned from an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalLeave(Node, VirtualFrame, double)} to inform all instruments in the chain. In
+     * this case, a double value was returned.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of exit
+     * @param result The double result
+     */
+    protected void internalLeave(Node astNode, VirtualFrame frame, double result) {
         leave(astNode, frame, result);
         if (next != null) {
             next.internalLeave(astNode, frame, result);
         }
     }
 
-    private void internalLeave(Node astNode, VirtualFrame frame, Object result) {
+    /**
+     * Informs the instrument that execution has just returned from an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalLeave(Node, VirtualFrame, Object)} to inform all instruments in the chain. In
+     * this case, an Object was returned.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of exit
+     * @param result The Object result
+     */
+    protected void internalLeave(Node astNode, VirtualFrame frame, Object result) {
         leave(astNode, frame, result);
         if (next != null) {
             next.internalLeave(astNode, frame, result);
         }
     }
 
-    private void internalLeaveExceptional(Node astNode, VirtualFrame frame, Exception e) {
+    /**
+     * Informs the instrument that execution has just returned from an AST node with which this
+     * instrumentation node is associated. This will continue to call
+     * {@link #internalLeaveExceptional(Node, VirtualFrame, Exception)} to inform all instruments in
+     * the chain. In this case, a exception (sometimes containing a value) was thrown.
+     *
+     * @param astNode The {@link Node} that was entered
+     * @param frame The {@link VirtualFrame} at the time of exit
+     * @param e The exception
+     */
+    protected void internalLeaveExceptional(Node astNode, VirtualFrame frame, Exception e) {
         leaveExceptional(astNode, frame, null);
         if (next != null) {
             next.internalLeaveExceptional(astNode, frame, e);
@@ -189,108 +312,151 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
 
     /**
      * Holder of a chain of {@linkplain InstrumentationNode instruments}: manages the
-     * {@link Assumption} that none of the instruments have changed since last checked.
+     * {@link Assumption} that no {@link Instrument}s have been added or removed and that none of
+     * the attached instruments have changed state in a way that would require deopt.
      * <p>
      * An instance is intended to be shared by every clone of the AST node with which it is
      * originally attached, so it holds no parent pointer.
      * <p>
-     * May be categorized by one or more {@linkplain PhylumTag tags}, signifying information useful
-     * for instrumentation about its AST location(s).
+     * Each probe is associated with a {@link SourceSection}, not necessarily uniquely, although
+     * such a policy could be enforced for some uses.
+     * <p>
+     * Each {@link Probe} be categorized by one or more {@linkplain SyntaxTag tags}, signifying
+     * information useful for instrumentation about its AST location(s).
      */
-    private static final class ProbeImpl extends InstrumentationNode implements Probe {
+    static final class ProbeImpl extends InstrumentationNode implements Probe {
 
-        final InstrumentationImpl instrumentation;
+        private final ProbeCallback probeCallback;
 
-        final InstrumentEventListener eventListener;
-
+        // TODO (mlvdv) assumption model broken
         @CompilerDirectives.CompilationFinal private Assumption probeUnchanged;
 
-        /**
-         * When in stepping mode, ordinary line breakpoints are ignored, but every entry at a line
-         * will cause a halt.
-         */
-        @CompilerDirectives.CompilationFinal private boolean stepping;
+        @CompilerDirectives.CompilationFinal private SyntaxTagTrap trap = null;
 
         /**
-         * Source information about the AST node to which this instrumentation is attached.
+         * The collection of tags for this instrumentation node
+         */
+        private final ArrayList<SyntaxTag> tags = new ArrayList<>();
+
+        /**
+         * The region of source code associated with this probe. Note that this is distinct from
+         * {@link Node#getSourceSection()}, which is {@code null} for all instances of
+         * {@link InstrumentationNode} since they have no corresponding source of their own.
          */
         private final SourceSection probedSourceSection;
 
-        private final Set<PhylumTag> tags = EnumSet.noneOf(PhylumTag.class);
-
-        private ProbeImpl(InstrumentationImpl instrumentation, SourceSection sourceSection, InstrumentEventListener eventListener) {
-            this.instrumentation = instrumentation;
-            this.probedSourceSection = sourceSection;
-            this.eventListener = eventListener == null ? NullInstrumentEventListener.INSTANCE : eventListener;
+        /**
+         * Constructor.
+         *
+         * @param probedSourceSection The {@link SourceSection} associated with this probe.
+         * @param probeCallback The {@link ProbeCallback} to inform when tags have been added to
+         *            this probe.
+         */
+        private ProbeImpl(SourceSection probedSourceSection, ProbeCallback probeCallback) {
+            this.probeCallback = probeCallback;
+            this.probedSourceSection = probedSourceSection;
             this.probeUnchanged = Truffle.getRuntime().createAssumption();
             this.next = null;
         }
 
-        @Override
-        public Probe getProbe() {
-            return this;
-        }
-
-        @Override
-        protected void notifyProbeChanged(Instrument instrument) {
-            probeUnchanged.invalidate();
-            probeUnchanged = Truffle.getRuntime().createAssumption();
-        }
-
+        /**
+         * Returns the {@link SourceSection} associated with this probe.
+         */
         public SourceSection getSourceLocation() {
             return probedSourceSection;
         }
 
-        public void tagAs(PhylumTag tag) {
+        /**
+         * Tags this probe with the given {@link SyntaxTag}. If the tag already exists, the tag is
+         * not added.
+         *
+         * @param tag The tag to add to this probe.
+         */
+        @SlowPath
+        public void tagAs(SyntaxTag tag) {
             assert tag != null;
             if (!tags.contains(tag)) {
                 tags.add(tag);
-                instrumentation.newTagAdded(this, tag);
+                probeCallback.newTagAdded(this, tag);
             }
         }
 
-        public boolean isTaggedAs(PhylumTag tag) {
+        /**
+         * Checks if this probe has been tagged with the given tag.
+         *
+         * @param tag The {@link SyntaxTag} to check for.
+         * @return True if this probe has the given tag, false otherwise.
+         */
+        public boolean isTaggedAs(SyntaxTag tag) {
             assert tag != null;
             return tags.contains(tag);
         }
 
-        public Set<PhylumTag> getPhylumTags() {
+        /**
+         * Returns an iterable collection of all syntax tags on this probe.
+         *
+         * @return A collection of {@link SyntaxTag}s.
+         */
+        public Iterable<SyntaxTag> getSyntaxTags() {
             return tags;
         }
 
-        public void setStepping(boolean stepping) {
-            if (this.stepping != stepping) {
-                this.stepping = stepping;
-                probeUnchanged.invalidate();
-                probeUnchanged = Truffle.getRuntime().createAssumption();
-            }
-        }
-
-        public boolean isStepping() {
-            return stepping;
-        }
-
-        @CompilerDirectives.SlowPath
+        /**
+         * Adds the given {@link Instrument} to this probe's chain of instruments. This method does
+         * not check to see if the same instrument has already been added.
+         *
+         * @param instrument The instrument to add to this probe.
+         */
+        @SlowPath
         public void addInstrument(Instrument instrument) {
             probeUnchanged.invalidate();
             super.internalAddInstrument(instrument);
             probeUnchanged = Truffle.getRuntime().createAssumption();
         }
 
-        @CompilerDirectives.SlowPath
+        /**
+         * Removes the given instrument from the chain of instruments. If no matching instrument is
+         * found, a {@link RuntimeException} is thrown.
+         *
+         * @param instrument The instrument to remove from this probe.
+         */
+        @SlowPath
         public void removeInstrument(Instrument instrument) {
             probeUnchanged.invalidate();
             super.internalRemoveInstrument(instrument);
             probeUnchanged = Truffle.getRuntime().createAssumption();
         }
 
-        public void notifyEnter(Node astNode, VirtualFrame frame) {
-            if (stepping || next != null) {
+        /**
+         * Returns this probe.
+         */
+        @Override
+        protected Probe getProbe() {
+            return this;
+        }
+
+        @Override
+        @SlowPath
+        protected void notifyProbeChanged(Instrument instrument) {
+            probeUnchanged.invalidate();
+            probeUnchanged = Truffle.getRuntime().createAssumption();
+        }
+
+        @SlowPath
+        void setTrap(SyntaxTagTrap trap) {
+            assert trap == null || isTaggedAs(trap.getTag());
+            probeUnchanged.invalidate();
+            this.trap = trap;
+            probeUnchanged = Truffle.getRuntime().createAssumption();
+        }
+
+        public void enter(Node astNode, VirtualFrame frame) {
+            if (trap != null || next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
                 }
-                if (stepping) {
-                    eventListener.haltedAt(astNode, frame.materialize());
+                if (trap != null) {
+                    trap.tagTrappedAt(astNode, frame.materialize());
                 }
                 if (next != null) {
                     next.internalEnter(astNode, frame);
@@ -298,7 +464,7 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
             }
         }
 
-        public void notifyLeave(Node astNode, VirtualFrame frame) {
+        public void leave(Node astNode, VirtualFrame frame) {
             if (next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
@@ -307,7 +473,7 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
             }
         }
 
-        public void notifyLeave(Node astNode, VirtualFrame frame, boolean result) {
+        public void leave(Node astNode, VirtualFrame frame, boolean result) {
             if (next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
@@ -316,7 +482,7 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
             }
         }
 
-        public void notifyLeave(Node astNode, VirtualFrame frame, byte result) {
+        public void leave(Node astNode, VirtualFrame frame, byte result) {
             if (next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
@@ -325,7 +491,7 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
             }
         }
 
-        public void notifyLeave(Node astNode, VirtualFrame frame, short result) {
+        public void leave(Node astNode, VirtualFrame frame, short result) {
             if (next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
@@ -334,7 +500,7 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
             }
         }
 
-        public void notifyLeave(Node astNode, VirtualFrame frame, int result) {
+        public void leave(Node astNode, VirtualFrame frame, int result) {
             if (next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
@@ -343,7 +509,7 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
             }
         }
 
-        public void notifyLeave(Node astNode, VirtualFrame frame, long result) {
+        public void leave(Node astNode, VirtualFrame frame, long result) {
             if (next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
@@ -352,7 +518,7 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
             }
         }
 
-        public void notifyLeave(Node astNode, VirtualFrame frame, char result) {
+        public void leave(Node astNode, VirtualFrame frame, char result) {
             if (next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
@@ -361,7 +527,7 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
             }
         }
 
-        public void notifyLeave(Node astNode, VirtualFrame frame, float result) {
+        public void leave(Node astNode, VirtualFrame frame, float result) {
             if (next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
@@ -370,7 +536,7 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
             }
         }
 
-        public void notifyLeave(Node astNode, VirtualFrame frame, double result) {
+        public void leave(Node astNode, VirtualFrame frame, double result) {
             if (next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
@@ -379,7 +545,7 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
             }
         }
 
-        public void notifyLeave(Node astNode, VirtualFrame frame, Object result) {
+        public void leave(Node astNode, VirtualFrame frame, Object result) {
             if (next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
@@ -388,57 +554,13 @@ public abstract class InstrumentationNode extends Node implements ExecutionEvent
             }
         }
 
-        public void notifyLeaveExceptional(Node astNode, VirtualFrame frame, Exception e) {
+        public void leaveExceptional(Node astNode, VirtualFrame frame, Exception e) {
             if (next != null) {
                 if (!probeUnchanged.isValid()) {
                     CompilerDirectives.transferToInterpreter();
                 }
                 next.internalLeaveExceptional(astNode, frame, e);
             }
-        }
-
-        public void enter(Node astNode, VirtualFrame frame) {
-        }
-
-        public void leave(Node astNode, VirtualFrame frame) {
-        }
-
-        public void leave(Node astNode, VirtualFrame frame, boolean result) {
-            leave(astNode, frame, (Object) result);
-        }
-
-        public void leave(Node astNode, VirtualFrame frame, byte result) {
-            leave(astNode, frame, (Object) result);
-        }
-
-        public void leave(Node astNode, VirtualFrame frame, short result) {
-            leave(astNode, frame, (Object) result);
-        }
-
-        public void leave(Node astNode, VirtualFrame frame, int result) {
-            leave(astNode, frame, (Object) result);
-        }
-
-        public void leave(Node astNode, VirtualFrame frame, long result) {
-            leave(astNode, frame, (Object) result);
-        }
-
-        public void leave(Node astNode, VirtualFrame frame, char result) {
-            leave(astNode, frame, (Object) result);
-        }
-
-        public void leave(Node astNode, VirtualFrame frame, float result) {
-            leave(astNode, frame, (Object) result);
-        }
-
-        public void leave(Node astNode, VirtualFrame frame, double result) {
-            leave(astNode, frame, (Object) result);
-        }
-
-        public void leave(Node astNode, VirtualFrame frame, Object result) {
-        }
-
-        public void leaveExceptional(Node astNode, VirtualFrame frame, Exception e) {
         }
 
     }
