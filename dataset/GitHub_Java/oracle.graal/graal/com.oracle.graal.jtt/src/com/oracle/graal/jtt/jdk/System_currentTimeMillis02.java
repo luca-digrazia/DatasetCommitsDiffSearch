@@ -22,34 +22,22 @@
  */
 package com.oracle.graal.jtt.jdk;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 /*
  */
 public class System_currentTimeMillis02 extends JTTTest {
 
-    static void m(long[] times) {
-        times[1] = System.currentTimeMillis() - times[0];
-    }
-
     public static boolean test() {
-        long[] times = new long[2];  // { start, delta }
-        times[0] = System.currentTimeMillis();
-        times[1] = 0;
-        // force compilation:
-        for (int i = 0; i < 5000; i++) {
-            m(times);
-        }
-        times[0] = System.currentTimeMillis();
-        times[1] = 0;
-        for (int i = 0; times[1] == 0 && i < 5000000; i++) {
-            m(times);
+        long start = System.currentTimeMillis();
+        long delta = 0;
+        for (int i = 0; delta == 0 && i < 5000000; i++) {
+            delta = System.currentTimeMillis() - start;
             // do nothing.
         }
         // better get at least 100 millisecond resolution.
-        return times[1] >= 1 && times[1] < 100;
+        return delta >= 1 && delta < 100;
     }
 
     @Test
