@@ -26,15 +26,9 @@ package com.oracle.svm.core.heap;
 
 import java.util.BitSet;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.Equivalence;
-
-import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.heap.ReferenceMapEncoder.OffsetIterator;
 
@@ -46,14 +40,11 @@ public class SubstrateReferenceMap extends ReferenceMap implements ReferenceMapE
 
     private final BitSet input = new BitSet();
 
-    /* Maps base references with references pointing to the interior of that object */
-    private EconomicMap<Integer, Set<Integer>> derived;
-
     private Map<Integer, Object> debugAllUsedRegisters;
     private Map<Integer, Object> debugAllUsedStackSlots;
 
     public SubstrateReferenceMap() {
-        assert ConfigurationValues.getObjectLayout().getReferenceSize() > 2 : "needs to be three bits or more for encoding and validation";
+        assert ConfigurationValues.getObjectLayout().getCompressedReferenceSize() > 2 : "needs to be three bits or more for encoding and validation";
     }
 
     public boolean isOffsetMarked(int offset) {
@@ -73,35 +64,9 @@ public class SubstrateReferenceMap extends ReferenceMap implements ReferenceMapE
         }
     }
 
-    public void markReferenceAtOffset(int offset, int baseOffset, boolean compressed) {
-        if (offset == baseOffset) {
-            /* We might have already seen the offset as a base to a derived offset */
-            if (derived == null || !derived.containsKey(baseOffset)) {
-                markReferenceAtOffset(baseOffset, compressed);
-            }
-            return;
-        }
-
-        if (!isOffsetMarked(baseOffset)) {
-            markReferenceAtOffset(baseOffset, compressed);
-        }
-
-        if (derived == null) {
-            derived = EconomicMap.create(Equivalence.DEFAULT);
-        }
-        Set<Integer> derivedOffsets = derived.get(baseOffset);
-        if (derivedOffsets == null) {
-            derivedOffsets = new HashSet<>();
-            derived.put(baseOffset, derivedOffsets);
-        }
-
-        assert !derivedOffsets.contains(offset);
-        derivedOffsets.add(offset);
-    }
-
     private boolean isValidToMark(int offset, boolean isCompressed) {
-        int uncompressedSize = FrameAccess.uncompressedReferenceSize();
-        int compressedSize = ConfigurationValues.getObjectLayout().getReferenceSize();
+        int uncompressedSize = ConfigurationValues.getObjectLayout().getReferenceSize();
+        int compressedSize = ConfigurationValues.getObjectLayout().getCompressedReferenceSize();
 
         int previousOffset = input.previousSetBit(offset - 1);
         if (previousOffset != -1) {
@@ -175,28 +140,12 @@ public class SubstrateReferenceMap extends ReferenceMap implements ReferenceMapE
                 }
                 return isOffsetCompressed(nextIndex);
             }
-
-            @Override
-            public boolean isNextDerived() {
-                if (!hasNext()) {
-                    throw new NoSuchElementException();
-                }
-                return derived != null && derived.containsKey(nextIndex);
-            }
-
-            @Override
-            public Set<Integer> getDerivedOffsets(int baseOffset) {
-                if (derived == null || !derived.containsKey(baseOffset)) {
-                    throw new NoSuchElementException();
-                }
-                return derived.get(baseOffset);
-            }
         };
     }
 
     @Override
     public int hashCode() {
-        return input.hashCode() + ((derived == null) ? 0 : derived.hashCode());
+        return input.hashCode();
     }
 
     @Override
@@ -205,65 +154,9 @@ public class SubstrateReferenceMap extends ReferenceMap implements ReferenceMapE
             return true;
         } else if (obj instanceof SubstrateReferenceMap) {
             SubstrateReferenceMap other = (SubstrateReferenceMap) obj;
-            if (!input.equals(other.input)) {
-                return false;
-            }
-
-            if (derived == null || other.derived == null) {
-                return derived == null && other.derived == null;
-            }
-
-            if (derived.size() != other.derived.size()) {
-                return false;
-            }
-
-            for (int base : derived.getKeys()) {
-                if (!derived.get(base).equals(other.derived.get(base))) {
-                    return false;
-                }
-            }
-
-            return true;
+            return input.equals(other.input);
         } else {
             return false;
         }
-    }
-
-    public boolean hasNoDerivedOffsets() {
-        return derived == null || derived.isEmpty();
-    }
-
-    public void verify() {
-        if (derived == null) {
-            return;
-        }
-
-        for (int baseOffset : derived.getKeys()) {
-            for (int derivedOffset : derived.get(baseOffset)) {
-                assert !derived.containsKey(derivedOffset);
-            }
-        }
-    }
-
-    public void dump(StringBuilder builder) {
-        if (input.isEmpty()) {
-            builder.append("[]");
-            return;
-        }
-
-        builder.append('[');
-        input.stream().forEach(offset -> {
-            builder.append(offset);
-            if (derived != null && derived.containsKey(offset)) {
-                builder.append(" -> {");
-                for (int derivedOffset : derived.get(offset)) {
-                    builder.append(derivedOffset);
-                    builder.append(", ");
-                }
-                builder.replace(builder.length() - 2, builder.length(), "}");
-            }
-            builder.append(", ");
-        });
-        builder.replace(builder.length() - 2, builder.length(), "]");
     }
 }
