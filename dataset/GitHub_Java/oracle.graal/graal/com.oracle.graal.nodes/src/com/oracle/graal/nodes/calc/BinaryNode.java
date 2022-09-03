@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * The {@code BinaryNode} class is the base of arithmetic and logic operations with two inputs.
@@ -68,19 +68,4 @@ public abstract class BinaryNode extends FloatingNode implements Canonicalizable
         this.x = x;
         this.y = y;
     }
-
-    @Override
-    public boolean inferStamp() {
-        return updateStamp(foldStamp(getX().stamp(), getY().stamp()));
-    }
-
-    /**
-     * Compute an improved for this node using the passed in stamps. The stamps must be compatible
-     * with the current values of {@link #x} and {@link #y}. This code is used to provide the
-     * default implementation of {@link #inferStamp()} and may be used by external optimizations.
-     *
-     * @param stampX
-     * @param stampY
-     */
-    public abstract Stamp foldStamp(Stamp stampX, Stamp stampY);
 }

@@ -263,7 +263,10 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                     try (AutoCloseable verify = getCanonicalizeableContractAssertion(node)) {
                         canonical = ((Canonicalizable) node).canonical(tool);
                         if (canonical == node && nodeClass.isCommutative()) {
-                            canonical = ((BinaryCommutative<?>) node).maybeCommuteInputs();
+                            Canonicalizable.BinaryCommutative<?> commutative = (BinaryCommutative<?>) node;
+                            if (commutative.isCommutative()) {
+                                canonical = commutative.maybeCommuteInputs();
+                            }
                         }
                     }
                     if (performReplacement(node, canonical)) {

@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.*;
 
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.Edges.Type;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.Node.Input;
@@ -63,7 +64,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     private static final DebugTimer Init_IterableIds = Debug.timer("NodeClass.Init.IterableIds");
 
     private static <T extends Annotation> T getAnnotationTimed(AnnotatedElement e, Class<T> annotationClass) {
-        try (DebugCloseable s = Init_AnnotationParsing.start()) {
+        try (TimerCloseable s = Init_AnnotationParsing.start()) {
             return e.getAnnotation(annotationClass);
         }
     }
@@ -146,15 +147,15 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         this.isSimplifiable = Simplifiable.class.isAssignableFrom(clazz);
 
         NodeFieldsScanner fs = new NodeFieldsScanner(calcOffset, superNodeClass);
-        try (DebugCloseable t = Init_FieldScanning.start()) {
+        try (TimerCloseable t = Init_FieldScanning.start()) {
             fs.scan(clazz, clazz.getSuperclass(), false);
         }
 
-        try (DebugCloseable t1 = Init_Edges.start()) {
+        try (TimerCloseable t1 = Init_Edges.start()) {
             successors = new SuccessorEdges(fs.directSuccessors, fs.successors);
             inputs = new InputEdges(fs.directInputs, fs.inputs);
         }
-        try (DebugCloseable t1 = Init_Data.start()) {
+        try (TimerCloseable t1 = Init_Data.start()) {
             data = new Fields(fs.data);
         }
 
@@ -167,7 +168,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         assert info != null : "Missing NodeInfo annotation on " + clazz;
         this.nameTemplate = info.nameTemplate();
 
-        try (DebugCloseable t1 = Init_AllowedUsages.start()) {
+        try (TimerCloseable t1 = Init_AllowedUsages.start()) {
             allowedUsageTypes = superNodeClass == null ? EnumSet.noneOf(InputType.class) : superNodeClass.allowedUsageTypes.clone();
             allowedUsageTypes.addAll(Arrays.asList(info.allowedUsageTypes()));
         }
@@ -177,12 +178,14 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             this.iterableId = presetIterableId;
         } else if (IterableNodeType.class.isAssignableFrom(clazz)) {
             ITERABLE_NODE_TYPES.increment();
-            try (DebugCloseable t1 = Init_IterableIds.start()) {
+            try (TimerCloseable t1 = Init_IterableIds.start()) {
                 this.iterableId = nextIterableId.getAndIncrement();
 
                 NodeClass<?> snc = superNodeClass;
                 while (snc != null && IterableNodeType.class.isAssignableFrom(snc.getClazz())) {
-                    snc.addIterableId(iterableId);
+                    assert !containsId(this.iterableId, snc.iterableIds);
+                    snc.iterableIds = Arrays.copyOf(snc.iterableIds, snc.iterableIds.length + 1);
+                    snc.iterableIds[snc.iterableIds.length - 1] = this.iterableId;
                     snc = snc.superNodeClass;
                 }
 
@@ -193,23 +196,6 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             this.iterableIds = null;
         }
         nodeIterableCount = Debug.metric("NodeIterable_%s", clazz);
-        assert verifyIterableIds();
-    }
-
-    private synchronized void addIterableId(int newIterableId) {
-        assert !containsId(newIterableId, iterableIds);
-        int[] copy = Arrays.copyOf(iterableIds, iterableIds.length + 1);
-        copy[iterableIds.length] = newIterableId;
-        iterableIds = copy;
-    }
-
-    private boolean verifyIterableIds() {
-        NodeClass<?> snc = superNodeClass;
-        while (snc != null && IterableNodeType.class.isAssignableFrom(snc.getClazz())) {
-            assert containsId(iterableId, snc.iterableIds);
-            snc = snc.superNodeClass;
-        }
-        return true;
     }
 
     private static boolean containsId(int iterableId, int[] iterableIds) {
@@ -349,7 +335,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             Input inputAnnotation = getAnnotationTimed(field, Node.Input.class);
             OptionalInput optionalInputAnnotation = getAnnotationTimed(field, Node.OptionalInput.class);
             Successor successorAnnotation = getAnnotationTimed(field, Successor.class);
-            try (DebugCloseable s = Init_FieldScanningInner.start()) {
+            try (TimerCloseable s = Init_FieldScanningInner.start()) {
                 Class<?> type = field.getType();
                 int modifiers = field.getModifiers();
 
@@ -599,9 +585,8 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         int index = 0;
         Type curType = edges.type();
         int directCount = edges.getDirectCount();
-        final long[] curOffsets = edges.getOffsets();
         while (index < directCount) {
-            Node edge = Edges.getNode(node, curOffsets, index);
+            Node edge = edges.getNode(node, index);
             if (edge != null) {
                 Node newEdge = duplicationReplacement.replacement(edge, curType);
                 if (curType == Edges.Type.Inputs) {
@@ -610,15 +595,15 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
                     node.updatePredecessor(null, newEdge);
                 }
                 assert assertUpdateValid(node, edges, index, newEdge);
-                Edges.initializeNode(node, curOffsets, index, newEdge);
+                edges.initializeNode(node, index, newEdge);
             }
             index++;
         }
 
         while (index < edges.getCount()) {
-            NodeList<Node> list = Edges.getNodeList(node, curOffsets, index);
+            NodeList<Node> list = edges.getNodeList(node, index);
             if (list != null) {
-                Edges.initializeList(node, curOffsets, index, updateEdgeListCopy(node, list, duplicationReplacement, curType));
+                edges.initializeList(node, index, updateEdgeListCopy(node, list, duplicationReplacement, curType));
             }
             index++;
         }
@@ -674,10 +659,9 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
 
     private void initNullEdgeLists(Node node, Edges.Type type) {
         Edges edges = getEdges(type);
-        final long[] curOffsets = edges.getOffsets();
         for (int inputPos = edges.getDirectCount(); inputPos < edges.getCount(); inputPos++) {
-            if (Edges.getNodeList(node, curOffsets, inputPos) == null) {
-                Edges.initializeList(node, curOffsets, inputPos, type == Edges.Type.Inputs ? new NodeInputList<>(node) : new NodeSuccessorList<>(node));
+            if (edges.getNodeList(node, inputPos) == null) {
+                edges.initializeList(node, inputPos, type == Edges.Type.Inputs ? new NodeInputList<>(node) : new NodeSuccessorList<>(node));
             }
         }
     }

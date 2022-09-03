@@ -131,10 +131,15 @@ public interface Canonicalizable {
 
     /**
      * This sub-interface of {@link Canonicalizable.Binary} is for nodes with two inputs where the
-     * operation is commutative. It is used to improve GVN by trying to merge nodes with the same
-     * inputs in different order.
+     * operation may be commutative. It is used to improve GVN by trying to merge nodes with the
+     * same inputs in different order.
      */
     public interface BinaryCommutative<T extends Node> extends Binary<T> {
+
+        /**
+         * Test whether this node is commutative.
+         */
+        boolean isCommutative();
 
         /**
          * Ensure a canonical ordering of inputs for commutative nodes to improve GVN results. Order

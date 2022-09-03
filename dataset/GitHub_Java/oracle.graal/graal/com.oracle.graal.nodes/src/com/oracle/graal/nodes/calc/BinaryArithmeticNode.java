@@ -37,7 +37,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
-public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements ArithmeticLIRLowerable, Canonicalizable.Binary<ValueNode> {
+public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements ArithmeticLIRLowerable, Canonicalizable.BinaryCommutative<ValueNode> {
 
     @SuppressWarnings("rawtypes") public static final NodeClass<BinaryArithmeticNode> TYPE = NodeClass.create(BinaryArithmeticNode.class);
 
@@ -59,6 +59,11 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
 
     public boolean isAssociative() {
         return getOp(getX(), getY()).isAssociative();
+    }
+
+    @Override
+    public boolean isCommutative() {
+        return getOp(getX(), getY()).isCommutative();
     }
 
     @Override
@@ -263,7 +268,6 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
      */
     @SuppressWarnings("deprecation")
     public BinaryNode maybeCommuteInputs() {
-        assert this instanceof BinaryCommutative;
         if (!y.isConstant() && x.getId() > y.getId()) {
             ValueNode tmp = x;
             x = y;
