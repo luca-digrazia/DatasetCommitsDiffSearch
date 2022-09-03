@@ -22,18 +22,12 @@
  */
 package com.oracle.graal.microbenchmarks.graal;
 
-import java.util.Arrays;
+import java.util.*;
 
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.OperationsPerInvocation;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.annotations.*;
 
 @State(Scope.Thread)
-public class ArrayDuplicationBenchmark extends GraalBenchmark {
+public class ArrayDuplicationBenchmark {
 
     /** How large should the test-arrays be. */
     private static final int TESTSIZE = 300;

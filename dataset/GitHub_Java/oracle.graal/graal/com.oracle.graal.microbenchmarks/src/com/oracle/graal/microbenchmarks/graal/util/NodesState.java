@@ -22,20 +22,13 @@
  */
 package com.oracle.graal.microbenchmarks.graal.util;
 
-import static com.oracle.graal.microbenchmarks.graal.util.GraalUtil.getGraphFromMethodSpec;
-import static com.oracle.graal.microbenchmarks.graal.util.GraalUtil.getNodes;
+import static com.oracle.graal.microbenchmarks.graal.util.GraalUtil.*;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.annotations.*;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.graph.*;
 
 /**
  * State providing the nodes in a graph. Subclasses of this class are annotated with
@@ -45,8 +38,7 @@ import com.oracle.graal.nodes.StructuredGraph;
 public abstract class NodesState {
 
     public NodesState() {
-        this.graph = getGraphFromMethodSpec(getClass());
-        this.nodes = getNodes(graph);
+        this.nodes = getNodes(getGraphFromMethodSpec(getClass()));
         this.originalNodes = nodes.clone();
         List<Node> vnln = new ArrayList<>(nodes.length);
         List<NodePair> list2 = new ArrayList<>(nodes.length);
@@ -76,7 +68,6 @@ public abstract class NodesState {
      * The nodes processed by the benchmark. These arrays must be treated as read-only within the
      * benchmark method.
      */
-    public final StructuredGraph graph;
     public final Node[] nodes;
     public final Node[] valueNumberableLeafNodes;
     public final NodePair[] valueEqualsNodePairs;

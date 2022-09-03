@@ -22,14 +22,11 @@
  */
 package com.oracle.graal.microbenchmarks.graal;
 
-import java.util.Arrays;
+import java.util.*;
 
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.*;
 
-import com.oracle.graal.microbenchmarks.graal.util.MethodSpec;
-import com.oracle.graal.microbenchmarks.graal.util.ScheduleState;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
+import com.oracle.graal.microbenchmarks.graal.util.*;
 import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
 
 @Warmup(iterations = 15)
@@ -42,11 +39,6 @@ public class SchedulePhaseBenchmark extends GraalBenchmark {
     @Benchmark
     public void stringEquals(StringEquals s) {
         s.schedule.apply(s.graph);
-    }
-
-    @Benchmark
-    public void cfgCompute1(StringEquals s) {
-        ControlFlowGraph.compute(s.graph, false, false, false, false);
     }
 
     public static int[] intersectionSnippet(int[] in1, int[] in2) {

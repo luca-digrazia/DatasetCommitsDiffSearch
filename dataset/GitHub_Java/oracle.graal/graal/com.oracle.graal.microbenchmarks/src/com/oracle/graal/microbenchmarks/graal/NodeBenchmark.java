@@ -22,17 +22,13 @@
  */
 package com.oracle.graal.microbenchmarks.graal;
 
-import java.util.HashMap;
+import java.util.*;
 
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.microbenchmarks.graal.util.GraalState;
-import com.oracle.graal.microbenchmarks.graal.util.MethodSpec;
-import com.oracle.graal.microbenchmarks.graal.util.NodesState;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.microbenchmarks.graal.util.*;
 import com.oracle.graal.microbenchmarks.graal.util.NodesState.NodePair;
 
 public class NodeBenchmark extends GraalBenchmark {
@@ -69,24 +65,18 @@ public class NodeBenchmark extends GraalBenchmark {
         }
     }
 
-    @Benchmark
-    @Warmup(iterations = 20)
-    public void nodeBitmap(StringEquals s, @SuppressWarnings("unused") GraalState g) {
-        NodeBitMap bitMap = s.graph.createNodeBitMap();
-        for (Node node : s.graph.getNodes()) {
-            if (!bitMap.isMarked(node)) {
-                bitMap.mark(node);
-            }
-        }
-        for (Node node : s.graph.getNodes()) {
-            if (bitMap.isMarked(node)) {
-                bitMap.clear(node);
-            }
-        }
-    }
-
     @MethodSpec(declaringClass = HashMap.class, name = "computeIfAbsent")
     public static class HashMapComputeIfAbsent extends NodesState {
+    }
+
+    @Benchmark
+    @Warmup(iterations = 20)
+    public void nonNullInputs(HashMapComputeIfAbsent s, Blackhole bh) {
+        for (Node n : s.nodes) {
+            for (Node input : n.inputs().nonNull()) {
+                bh.consume(input);
+            }
+        }
     }
 
     // Checkstyle: stop method name check
