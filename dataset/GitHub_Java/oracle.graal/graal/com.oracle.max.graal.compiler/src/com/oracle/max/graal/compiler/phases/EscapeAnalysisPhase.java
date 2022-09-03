@@ -310,8 +310,7 @@ public class EscapeAnalysisPhase extends Phase {
                         }
                         break;
                     }
-                    new InliningPhase(compilation, ir, invokes).apply(graph);
-                    new DeadCodeEliminationPhase().apply(graph);
+                    new InliningPhase(compilation, ir, invokes, GraalOptions.TraceInlining).apply(graph);
                     exits.clear();
                     invokes.clear();
                 } while (iterations++ < 3);
