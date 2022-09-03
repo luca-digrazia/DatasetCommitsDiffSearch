@@ -25,17 +25,19 @@
 package com.oracle.truffle.tck;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-final class Schema {
+public final class Schema {
 
-    enum Type {
+    public enum Type {
         DOUBLE(Double.SIZE / Byte.SIZE),
         INT(Integer.SIZE / Byte.SIZE);
 
         private final int size;
 
-        Type(int size) {
+        private Type(int size) {
             this.size = size;
         }
     }
@@ -45,7 +47,7 @@ final class Schema {
     private final List<String> names;
     private final List<Type> types;
 
-    Schema(int size, boolean rowBased, List<String> names, List<Type> types) {
+    public Schema(int size, boolean rowBased, List<String> names, List<Type> types) {
         this.size = size;
         this.rowBased = rowBased;
         this.names = names;
@@ -56,7 +58,19 @@ final class Schema {
         return size;
     }
 
-    public Object get(byte[] buffer, int index, String name) {
+    // for simplicity: structured data is read-only
+
+    public Map<String, Object> getEntry(byte[] buffer, int index) {
+        Map<String, Object> entry = new HashMap<>();
+        for (int i = 0; i < names.size(); i++) {
+            String name = names.get(i);
+            Object value = get(buffer, index, name);
+            entry.put(name, value);
+        }
+        return entry;
+    }
+
+    private Object get(byte[] buffer, int index, String name) {
         assert names.contains(name);
         int offset = rowBased ? getRowOffset(name, index) : getColumnOffset(name, index);
         if (types.get(names.indexOf(name)) == Type.DOUBLE) {

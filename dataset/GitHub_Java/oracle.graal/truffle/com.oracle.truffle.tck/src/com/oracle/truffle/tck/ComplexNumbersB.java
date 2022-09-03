@@ -24,15 +24,23 @@
  */
 package com.oracle.truffle.tck;
 
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.ForeignAccess.Factory;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 
-final class ComplexNumbersB implements TruffleObject {
+public class ComplexNumbersB implements TruffleObject {
 
     private final double[] reals;
     private final double[] imags;
 
-    ComplexNumbersB(double[] reals, double[] imags) {
+    public ComplexNumbersB(double[] reals, double[] imags) {
         assert reals.length == imags.length;
         this.reals = reals;
         this.imags = imags;
@@ -47,20 +55,175 @@ final class ComplexNumbersB implements TruffleObject {
         return data;
     }
 
-    public double[] getImags() {
-        return imags;
-    }
-
-    public double[] getReals() {
-        return reals;
-    }
-
     public ForeignAccess getForeignAccess() {
-        return ComplexNumbersBForeign.ACCESS;
+        return ForeignAccess.create(new ComplexNumbersBForeignAccessFactory());
     }
 
-    public static boolean isInstance(TruffleObject obj) {
-        return obj instanceof ComplexNumbersB;
+    private static class ComplexNumbersBForeignAccessFactory implements Factory {
+
+        public boolean canHandle(TruffleObject obj) {
+            return obj instanceof ComplexNumbersB;
+        }
+
+        public CallTarget accessMessage(Message tree) {
+            if (Message.IS_NULL.equals(tree)) {
+                return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
+            } else if (Message.IS_EXECUTABLE.equals(tree)) {
+                return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
+            } else if (Message.IS_BOXED.equals(tree)) {
+                return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
+            } else if (Message.HAS_SIZE.equals(tree)) {
+                return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(true));
+            } else if (Message.READ.equals(tree)) {
+                return Truffle.getRuntime().createCallTarget(new ComplexNumbersBReadNode());
+            } else if (Message.WRITE.equals(tree)) {
+                return Truffle.getRuntime().createCallTarget(new ComplexNumbersBWriteNode());
+            } else if (Message.GET_SIZE.equals(tree)) {
+                return Truffle.getRuntime().createCallTarget(new ComplexNumbersBSizeNode());
+            } else {
+                throw new IllegalArgumentException(tree.toString() + " not supported");
+            }
+        }
+    }
+
+    private static class ComplexNumbersBWriteNode extends RootNode {
+        protected ComplexNumbersBWriteNode() {
+            super(TckLanguage.class, null, null);
+        }
+
+        @Child private Node readReal;
+        @Child private Node readImag;
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            ComplexNumbersB complexNumbers = (ComplexNumbersB) ForeignAccess.getReceiver(frame);
+            Number index = (Number) ForeignAccess.getArguments(frame).get(0);
+            TruffleObject value = (TruffleObject) ForeignAccess.getArguments(frame).get(1);
+            if (readReal == null || readImag == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                this.readReal = insert(Message.READ.createNode());
+                this.readImag = insert(Message.READ.createNode());
+            }
+            Number realPart = (Number) ForeignAccess.execute(readReal, frame, value, new Object[]{ComplexNumber.REAL_IDENTIFIER});
+            Number imagPart = (Number) ForeignAccess.execute(readImag, frame, value, new Object[]{ComplexNumber.IMAGINARY_IDENTIFIER});
+
+            complexNumbers.reals[index.intValue()] = realPart.doubleValue();
+            complexNumbers.imags[index.intValue()] = imagPart.doubleValue();
+            return value;
+        }
+    }
+
+    private static class ComplexNumbersBReadNode extends RootNode {
+        protected ComplexNumbersBReadNode() {
+            super(TckLanguage.class, null, null);
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            ComplexNumbersB complexNumbers = (ComplexNumbersB) ForeignAccess.getReceiver(frame);
+            Number index = (Number) ForeignAccess.getArguments(frame).get(0);
+            return new ComplexNumberBEntry(complexNumbers, index.intValue());
+        }
+
+    }
+
+    private static class ComplexNumbersBSizeNode extends RootNode {
+        protected ComplexNumbersBSizeNode() {
+            super(TckLanguage.class, null, null);
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            ComplexNumbersB complexNumbers = (ComplexNumbersB) ForeignAccess.getReceiver(frame);
+            assert complexNumbers.reals.length == complexNumbers.imags.length;
+            return complexNumbers.reals.length;
+        }
+
+    }
+
+    private static class ComplexNumberBEntry implements TruffleObject {
+
+        private final ComplexNumbersB numbers;
+        private final int index;
+
+        public ComplexNumberBEntry(ComplexNumbersB numbers, int index) {
+            this.numbers = numbers;
+            this.index = index;
+        }
+
+        public ForeignAccess getForeignAccess() {
+            return ForeignAccess.create(new ComplexNumberBEntryForeignAccessFactory());
+        }
+
+        private static class ComplexNumberBEntryForeignAccessFactory implements Factory {
+
+            public boolean canHandle(TruffleObject obj) {
+                return obj instanceof ComplexNumberBEntry;
+            }
+
+            public CallTarget accessMessage(Message tree) {
+                if (Message.IS_NULL.equals(tree)) {
+                    return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
+                } else if (Message.IS_EXECUTABLE.equals(tree)) {
+                    return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
+                } else if (Message.IS_BOXED.equals(tree)) {
+                    return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
+                } else if (Message.HAS_SIZE.equals(tree)) {
+                    return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
+                } else if (Message.READ.equals(tree)) {
+                    return Truffle.getRuntime().createCallTarget(new ComplexNumbersAEntryReadNode());
+                } else if (Message.WRITE.equals(tree)) {
+                    return Truffle.getRuntime().createCallTarget(new ComplexNumbersAEntryWriteNode());
+                } else {
+                    throw new IllegalArgumentException(tree.toString() + " not supported");
+                }
+            }
+
+            private static class ComplexNumbersAEntryReadNode extends RootNode {
+                protected ComplexNumbersAEntryReadNode() {
+                    super(TckLanguage.class, null, null);
+                }
+
+                @Child private Node readReal;
+                @Child private Node readImag;
+
+                @Override
+                public Object execute(VirtualFrame frame) {
+                    ComplexNumberBEntry complexNumber = (ComplexNumberBEntry) ForeignAccess.getReceiver(frame);
+                    String name = (String) ForeignAccess.getArguments(frame).get(0);
+                    if (name.equals(ComplexNumber.IMAGINARY_IDENTIFIER)) {
+                        return complexNumber.numbers.imags[complexNumber.index];
+                    } else if (name.equals(ComplexNumber.REAL_IDENTIFIER)) {
+                        return complexNumber.numbers.reals[complexNumber.index];
+                    } else {
+                        throw new IllegalArgumentException();
+                    }
+                }
+            }
+
+            private static class ComplexNumbersAEntryWriteNode extends RootNode {
+                protected ComplexNumbersAEntryWriteNode() {
+                    super(TckLanguage.class, null, null);
+                }
+
+                @Override
+                public Object execute(VirtualFrame frame) {
+                    ComplexNumberBEntry complexNumber = (ComplexNumberBEntry) ForeignAccess.getReceiver(frame);
+                    String name = (String) ForeignAccess.getArguments(frame).get(0);
+                    Number value = (Number) ForeignAccess.getArguments(frame).get(1);
+                    if (name.equals(ComplexNumber.IMAGINARY_IDENTIFIER)) {
+                        complexNumber.numbers.imags[complexNumber.index] = value.doubleValue();
+                    } else if (name.equals(ComplexNumber.REAL_IDENTIFIER)) {
+                        complexNumber.numbers.reals[complexNumber.index] = value.doubleValue();
+                    } else {
+                        throw new IllegalArgumentException();
+                    }
+                    return value;
+                }
+
+            }
+        }
+
     }
 
 }

@@ -24,8 +24,6 @@
  */
 package com.oracle.truffle.tck;
 
-import com.oracle.truffle.tck.impl.LongBinaryOperation;
-import com.oracle.truffle.tck.impl.ObjectBinaryOperation;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
@@ -44,73 +42,17 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.interop.ForeignAccess.Factory10;
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
-import com.oracle.truffle.api.interop.java.MethodMessage;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Language;
 import com.oracle.truffle.tck.Schema.Type;
 
 /**
- * Test compatibility kit (the <em>TCK</em>) is a collection of tests to certify your
- * {@link TruffleLanguage language implementation} compliance. If you want your language to be
- * compliant with most recent requirements of the Truffle infrastructure and tooling, subclass,
- * implement <b>protected</b> methods and include in your test suite:
- * 
- * <pre>
- * <b>public class</b> MyLanguageTCKTest <b>extends</b> {@link TruffleTCK} {
- *   {@link Override @Override}
- *   <b>protected</b> {@link PolyglotEngine} {@link #prepareVM() prepareVM}() {
- *     <em>// create the engine</em>
- *     <em>// execute necessary scripts</em>
- *   }
- * 
- *   {@link Override @Override}
- *   <b>protected</b> {@link String} fourtyTwo() {
- *     <b>return</b> <em>// name of function that returns 42</em>
- *   }
- * 
- *   <em>// and so on...</em>
- * }
- * </pre>
- * 
- * The <em>TCK</em> is carefully designed to accommodate differences between languages. The
- * <em>TCK</em> doesn't dictate what object your language is using to represent {@link Number
- * numbers} or {@link String strings} internally. The <em>TCK</em> doesn't prescribe the precise
- * type of values returned from your
- * {@link PolyglotEngine#eval(com.oracle.truffle.api.source.Source) language evaluations}. The tests
- * just assume that if the result is supposed to be a number, the returned value will be an instance
- * of {@link Number} or be {@link Message#UNBOX convertible} to a {@link Number} and keeps
- * sufficient level of precision. Similarly for {@link String strings}. As such the tests in the
- * <em>TCK</em> should be applicable to wide range of languages. Should there be a test that cannot
- * be implemented in your language, it can be suppressed by overriding its test method and doing
- * nothing:
- * 
- * <pre>
- *   {@link Override @Override}
- *   <b>public void</b> {@link #testFortyTwo() testFortyTwo}() {
- *     <em>// do nothing</em>
- *   }
- * </pre>
- * <p>
- * The primary goal of the <em>TCK</em> is to ensure your {@link TruffleLanguage language
- * implementation} plays well with other languages in the {@link PolyglotEngine} - e.g. that data
- * can be exchanged between your and other languages. The {@link com.oracle.truffle.api.interop
- * interop package} defines what types of data can be interchanged between the languages and the
- * <em>TCK</em> does its best to make sure all these data are really accepted as an input on a
- * boundary of your {@link TruffleLanguage language implementation}. That doesn't mean such data
- * need to be used internally, many languages do conversions in their {@link Factory10 foreign
- * access} {@link RootNode nodes} to more suitable internal representation. Such conversion is fully
- * acceptable as nobody prescribes what is the actual type of output after executing a function/code
- * snippet in your language.
- * <p>
- * Should the <em>TCK</em> be found unsuitable for your {@link TruffleLanguage language
- * implementation} please speak-up (at <em>Truffle/Graal</em> mailing list for example) and we do
- * our best to analyze your case and adjust the <em>TCK</em> to suite everyone's needs.
+ * A collection of tests that can certify language implementation to be compliant with most recent
+ * requirements of the Truffle infrastructure and tooling. Subclass, implement abstract methods and
+ * include in your test suite.
  */
 public abstract class TruffleTCK {
     private static final Random RANDOM = new Random();
@@ -174,7 +116,7 @@ public abstract class TruffleTCK {
 
     /**
      * Name of function to add two numbers together. The symbol will be invoked with two parameters
-     * of <code>type1</code> and <code>type2</code> and expects result of type {@link Number} 
+     * of <code>type1</code> and <code>type2</code> and expects result of type {@link Number}
      * which's {@link Number#intValue()} is equivalent of <code>param1 + param2</code>. As some
      * languages may have different operations for different types of numbers, the actual types are
      * passed to the method and the implementation can decide to return different symbol based on
@@ -327,35 +269,6 @@ public abstract class TruffleTCK {
      */
     protected String compoundObject() {
         throw new UnsupportedOperationException("compoundObject() method not implemented");
-    }
-
-    /**
-     * Name of a function that returns a compound object with members representing certain primitive
-     * types. In the JavaScript the object should look like:
-     *
-     * <pre>
-     * <b>var</b> obj = {
-     *   'byteValue': 0,
-     *   'shortValue': 0,
-     *   'intValue': 0,
-     *   'longValue': 0,
-     *   'floatValue': 0.0,
-     *   'doubleValue': 0.0,
-     *   'charValue': '0',
-     *   'stringValue': '',
-     *   'booleanVlaue': false
-     * };
-     * <b>return</b> obj;
-     * </pre>
-     *
-     * The returned object shall have slots for these values that can be read and written to.
-     * Various test methods try to read and modify the values. Each invocation of the function
-     * should yield new object.
-     *
-     * @return name of a function that returns such values object
-     */
-    protected String valuesObject() {
-        throw new UnsupportedOperationException("valuesObject() method not implemented");
     }
 
     private PolyglotEngine vm() throws Exception {
@@ -921,7 +834,7 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        ComplexNumbersRowBased numbers = new ComplexNumbersRowBased(new double[]{2, -1, 30, -1, 10, -1});
+        ComplexNumbersA numbers = new ComplexNumbersA(new double[]{2, -1, 30, -1, 10, -1});
 
         Number n = (Number) apply.execute(numbers).get();
         assertEquals("The same value returned", 42.0, n.doubleValue(), 0.01);
@@ -935,7 +848,7 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        ComplexNumbersColumnBased numbers = new ComplexNumbersColumnBased(new double[]{2, 30, 10}, new double[]{-1, -1, -1});
+        ComplexNumbersB numbers = new ComplexNumbersB(new double[]{2, 30, 10}, new double[]{-1, -1, -1});
 
         Number n = (Number) apply.execute(numbers).get();
         assertEquals("The same value returned", 42.0, n.doubleValue(), 0.01);
@@ -984,8 +897,8 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        ComplexNumbersRowBased a = new ComplexNumbersRowBased(new double[]{-1, -1, -1, -1, -1, -1});
-        ComplexNumbersRowBased b = new ComplexNumbersRowBased(new double[]{41, 42, 43, 44, 45, 46});
+        ComplexNumbersA a = new ComplexNumbersA(new double[]{-1, -1, -1, -1, -1, -1});
+        ComplexNumbersA b = new ComplexNumbersA(new double[]{41, 42, 43, 44, 45, 46});
 
         apply.execute(a, b);
 
@@ -1000,8 +913,8 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        ComplexNumbersColumnBased a = new ComplexNumbersColumnBased(new double[]{-1, -1, -1}, new double[]{-1, -1, -1});
-        ComplexNumbersColumnBased b = new ComplexNumbersColumnBased(new double[]{41, 43, 45}, new double[]{42, 44, 46});
+        ComplexNumbersB a = new ComplexNumbersB(new double[]{-1, -1, -1}, new double[]{-1, -1, -1});
+        ComplexNumbersB b = new ComplexNumbersB(new double[]{41, 43, 45}, new double[]{42, 44, 46});
 
         apply.execute(a, b);
 
@@ -1016,7 +929,7 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        ComplexNumbersRowBased a = new ComplexNumbersRowBased(new double[]{-1, -1, -1, -1, -1, -1});
+        ComplexNumbersA a = new ComplexNumbersA(new double[]{-1, -1, -1, -1, -1, -1});
 
         Schema schema = new Schema(3, true, Arrays.asList(ComplexNumber.REAL_IDENTIFIER, ComplexNumber.IMAGINARY_IDENTIFIER), Arrays.asList(Type.DOUBLE, Type.DOUBLE));
         byte[] buffer = new byte[6 * Double.SIZE / Byte.SIZE];
@@ -1027,78 +940,6 @@ public abstract class TruffleTCK {
         apply.execute(a, b);
 
         Assert.assertArrayEquals(new double[]{41, 42, 43, 44, 45, 46}, a.getData(), 0.1);
-    }
-
-    @Test
-    public void readWriteByteValue() throws Exception {
-        String id = valuesObject();
-        ValuesObject values = findGlobalSymbol(id).execute().as(ValuesObject.class);
-        assertEquals("Zero", 0, values.byteValue());
-        final byte value = (byte) RANDOM.nextInt(128);
-        values.byteValue(value);
-        assertEquals("Correct value", value, values.byteValue());
-    }
-
-    @Test
-    public void readWriteShortValue() throws Exception {
-        String id = valuesObject();
-        ValuesObject values = findGlobalSymbol(id).execute().as(ValuesObject.class);
-        assertEquals("Zero", 0, values.shortValue());
-        final short value = (short) RANDOM.nextInt(32768);
-        values.shortValue(value);
-        assertEquals("Correct value", value, values.shortValue());
-    }
-
-    @Test
-    public void readWriteIntValue() throws Exception {
-        String id = valuesObject();
-        ValuesObject values = findGlobalSymbol(id).execute().as(ValuesObject.class);
-        assertEquals("Zero", 0, values.intValue());
-        final int value = RANDOM.nextInt();
-        values.intValue(value);
-        assertEquals("Correct value", value, values.intValue());
-    }
-
-    @Test
-    public void readWriteFloatValue() throws Exception {
-        String id = valuesObject();
-        ValuesObject values = findGlobalSymbol(id).execute().as(ValuesObject.class);
-        assertEquals("Zero", 0, values.floatValue(), 0.1);
-        final float value = RANDOM.nextFloat() * 1000.0f;
-        values.floatValue(value);
-        assertEquals("Correct value", value, values.floatValue(), 0.1);
-    }
-
-    @Test
-    public void readWriteDoubleValue() throws Exception {
-        String id = valuesObject();
-        ValuesObject values = findGlobalSymbol(id).execute().as(ValuesObject.class);
-        assertEquals("Zero", 0, values.doubleValue(), 0.1);
-        final double value = RANDOM.nextDouble() * 1000.0;
-        values.doubleValue(value);
-        assertEquals("Correct value", value, values.doubleValue(), 0.1);
-    }
-
-    @Test
-    public void readWriteCharValue() throws Exception {
-        String id = valuesObject();
-        ValuesObject values = findGlobalSymbol(id).execute().as(ValuesObject.class);
-        assertEquals("Zero", '0', values.charValue());
-        String letters = "P\u0159\u00EDli\u0161 \u017Elu\u0165ou\u010Dk\u00FD k\u016F\u0148 \u00FAp\u011Bl \u010F\u00E1belsk\u00E9 \u00F3dy";
-        final char value = letters.charAt(RANDOM.nextInt(letters.length()));
-        values.charValue(value);
-        assertEquals("Correct value", value, values.charValue());
-    }
-
-    @Test
-    public void readWriteBooleanValue() throws Exception {
-        String id = valuesObject();
-        ValuesObject values = findGlobalSymbol(id).execute().as(ValuesObject.class);
-        assertEquals("False", false, values.booleanValue());
-        values.booleanValue(true);
-        assertEquals("Correct value", true, values.booleanValue());
-        values.booleanValue(false);
-        assertEquals("Correct value2", false, values.booleanValue());
     }
 
     private static void putDoubles(byte[] buffer, double[] values) {
@@ -1163,47 +1004,5 @@ public abstract class TruffleTCK {
         Object returnsNull();
 
         CompoundObject returnsThis();
-    }
-
-    interface ValuesObject {
-        byte byteValue();
-
-        @MethodMessage(message = "WRITE")
-        void byteValue(byte v);
-
-        short shortValue();
-
-        @MethodMessage(message = "WRITE")
-        void shortValue(short v);
-
-        int intValue();
-
-        @MethodMessage(message = "WRITE")
-        void intValue(int v);
-
-        long longValue();
-
-        @MethodMessage(message = "WRITE")
-        void longValue(long v);
-
-        float floatValue();
-
-        @MethodMessage(message = "WRITE")
-        void floatValue(float v);
-
-        double doubleValue();
-
-        @MethodMessage(message = "WRITE")
-        void doubleValue(double v);
-
-        char charValue();
-
-        @MethodMessage(message = "WRITE")
-        void charValue(char v);
-
-        boolean booleanValue();
-
-        @MethodMessage(message = "WRITE")
-        void booleanValue(boolean v);
     }
 }

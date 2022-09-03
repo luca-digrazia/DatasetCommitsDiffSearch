@@ -47,10 +47,10 @@ import com.oracle.truffle.tck.TruffleTCK;
 
 import org.junit.After;
 
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Before;
 import org.junit.Test;
-import static org.junit.Assert.assertTrue;
 
 /**
  * This is the way to verify your language implementation is compatible.
@@ -113,20 +113,7 @@ public class SLTckTest extends TruffleTCK {
                 "  obj.returnsNull = returnsNull;\n" +
                 "  obj.returnsThis = obj;\n" +
                 "  return obj;\n" +
-                "}\n" +
-                "function valuesObject() {\n" +
-                "  obj = new();\n" +
-                "  obj.byteValue = 0;\n" +
-                "  obj.shortValue = 0;\n" +
-                "  obj.intValue = 0;\n" +
-                "  obj.longValue = 0;\n" +
-                "  obj.floatValue = 0;\n" +
-                "  obj.doubleValue = 0;\n" +
-                "  obj.charValue = \"0\";\n" +
-                "  obj.booleanValue = (1 == 0);\n" +
-                "  return obj;\n" +
-                "}\n",
-                "SL TCK"
+                "}\n", "SL TCK"
             ).withMimeType("application/x-sl")
         );
         // @formatter:on
@@ -169,11 +156,6 @@ public class SLTckTest extends TruffleTCK {
     }
 
     @Override
-    protected String valuesObject() {
-        return "valuesObject";
-    }
-
-    @Override
     protected String invalidCode() {
         // @formatter:off
         return
@@ -213,20 +195,60 @@ public class SLTckTest extends TruffleTCK {
         return "eval";
     }
 
+    //
+    // Ignore tests working on floats and double
+    //
+
     @Override
-    protected String complexCopy() {
-        // skip these tests; SL doesn't have arrays
-        return null;
+    public void testPlusWithDouble() throws Exception {
     }
 
     @Override
-    protected String complexSumReal() {
-        // skip these tests; SL doesn't have arrays
-        return null;
+    public void testPlusWithFloat() throws Exception {
     }
 
     @Override
-    protected void assertDouble(String msg, double expectedValue, double actualValue) {
-        // don't compare doubles, SL had to convert them to longs
+    public void testPrimitiveReturnTypeDouble() throws Exception {
     }
+
+    @Override
+    public void testPrimitiveReturnTypeFloat() throws Exception {
+    }
+
+    @Override
+    public void testPrimitiveidentityDouble() throws Exception {
+    }
+
+    @Override
+    public void testPrimitiveidentityFloat() throws Exception {
+    }
+
+    @Override
+    public void testSumRealOfComplexNumbersA() throws Exception {
+    }
+
+    @Override
+    public void testSumRealOfComplexNumbersB() throws Exception {
+    }
+
+    @Override
+    public void testSumRealOfComplexNumbersAsStructuredDataColumnBased() throws Exception {
+    }
+
+    @Override
+    public void testSumRealOfComplexNumbersAsStructuredDataRowBased() throws Exception {
+    }
+
+    @Override
+    public void testCopyComplexNumbersA() throws Exception {
+    }
+
+    @Override
+    public void testCopyComplexNumbersB() throws Exception {
+    }
+
+    @Override
+    public void testCopyStructuredComplexToComplexNumbersA() throws Exception {
+    }
+
 }
