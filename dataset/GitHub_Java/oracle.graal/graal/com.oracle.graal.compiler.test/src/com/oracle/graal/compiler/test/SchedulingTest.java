@@ -22,19 +22,22 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static org.junit.Assert.*;
+import java.util.List;
 
-import java.util.*;
+import org.junit.Test;
 
-import org.junit.*;
-
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.LoopExitNode;
+import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
+import com.oracle.graal.nodes.calc.AddNode;
+import com.oracle.graal.nodes.calc.BinaryArithmeticNode;
+import com.oracle.graal.nodes.cfg.Block;
+import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.phases.schedule.SchedulePhase;
 import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
 
 public class SchedulingTest extends GraphScheduleTest {
@@ -57,16 +60,17 @@ public class SchedulingTest extends GraphScheduleTest {
             fs.replaceAtUsages(null);
             GraphUtil.killWithUnusedFloatingInputs(fs);
         }
-        SchedulePhase schedule = new SchedulePhase(SchedulingStrategy.LATEST);
-        schedule.apply(graph);
+        SchedulePhase schedulePhase = new SchedulePhase(SchedulingStrategy.LATEST);
+        schedulePhase.apply(graph);
+        ScheduleResult schedule = graph.getLastSchedule();
         NodeMap<Block> nodeToBlock = schedule.getCFG().getNodeToBlock();
         assertTrue(graph.getNodes().filter(LoopExitNode.class).count() == 1);
         LoopExitNode loopExit = graph.getNodes().filter(LoopExitNode.class).first();
-        List<ValueNode> list = schedule.nodesFor(nodeToBlock.get(loopExit));
+        List<Node> list = schedule.nodesFor(nodeToBlock.get(loopExit));
         for (BinaryArithmeticNode<?> node : graph.getNodes().filter(BinaryArithmeticNode.class)) {
             if (!(node instanceof AddNode)) {
-                assertTrue(nodeToBlock.get(node) == nodeToBlock.get(loopExit));
-                assertTrue(list.indexOf(node) < list.indexOf(loopExit));
+                assertTrue(node.toString(), nodeToBlock.get(node) == nodeToBlock.get(loopExit));
+                assertTrue(list.indexOf(node) + " < " + list.indexOf(loopExit) + ", " + node + ", " + loopExit, list.indexOf(node) < list.indexOf(loopExit));
             }
         }
     }

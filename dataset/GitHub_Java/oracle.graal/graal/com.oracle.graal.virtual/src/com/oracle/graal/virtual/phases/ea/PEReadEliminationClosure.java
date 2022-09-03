@@ -66,7 +66,6 @@ import com.oracle.graal.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheE
 public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadEliminationBlockState> {
 
     private static final EnumMap<JavaKind, LocationIdentity> UNBOX_LOCATIONS;
-
     static {
         UNBOX_LOCATIONS = new EnumMap<>(JavaKind.class);
         for (JavaKind kind : JavaKind.values()) {
@@ -285,7 +284,7 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
 
     private class ReadEliminationMergeProcessor extends MergeProcessor {
 
-        ReadEliminationMergeProcessor(Block mergeBlock) {
+        public ReadEliminationMergeProcessor(Block mergeBlock) {
             super(mergeBlock);
         }
 

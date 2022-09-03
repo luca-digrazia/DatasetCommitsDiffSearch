@@ -31,12 +31,9 @@ import java.util.function.Consumer;
 
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Assumptions.Assumption;
-import jdk.vm.ci.meta.DefaultProfilingInfo;
 import jdk.vm.ci.meta.JavaMethod;
-import jdk.vm.ci.meta.ProfilingInfo;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.SpeculationLog;
-import jdk.vm.ci.meta.TriState;
 import jdk.vm.ci.runtime.JVMCICompiler;
 
 import com.oracle.graal.compiler.common.cfg.BlockMap;
@@ -154,7 +151,6 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
     private GuardsStage guardsStage = GuardsStage.FLOATING_GUARDS;
     private boolean isAfterFloatingReadPhase = false;
     private boolean hasValueProxies = true;
-    private final boolean useProfilingInfo;
 
     /**
      * The assumptions made while constructing and transforming this graph.
@@ -187,49 +183,31 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
         this(null, null, allowAssumptions);
     }
 
-    public static final boolean USE_PROFILING_INFO = true;
-
-    public static final boolean NO_PROFILING_INFO = false;
-
-    private static final SpeculationLog NO_SPECULATION_LOG = null;
-
     /**
      * Creates a new Graph containing a single {@link AbstractBeginNode} as the {@link #start()
      * start} node.
      */
     public StructuredGraph(String name, ResolvedJavaMethod method, AllowAssumptions allowAssumptions) {
-        this(name, method, uniqueGraphIds.incrementAndGet(), JVMCICompiler.INVOCATION_ENTRY_BCI, allowAssumptions, NO_SPECULATION_LOG, USE_PROFILING_INFO);
+        this(name, method, uniqueGraphIds.incrementAndGet(), JVMCICompiler.INVOCATION_ENTRY_BCI, allowAssumptions, null);
     }
 
     public StructuredGraph(String name, ResolvedJavaMethod method, AllowAssumptions allowAssumptions, SpeculationLog speculationLog) {
-        this(name, method, uniqueGraphIds.incrementAndGet(), JVMCICompiler.INVOCATION_ENTRY_BCI, allowAssumptions, speculationLog, USE_PROFILING_INFO);
-    }
-
-    public StructuredGraph(String name, ResolvedJavaMethod method, AllowAssumptions allowAssumptions, SpeculationLog speculationLog, boolean useProfilingInfo) {
-        this(name, method, uniqueGraphIds.incrementAndGet(), JVMCICompiler.INVOCATION_ENTRY_BCI, allowAssumptions, speculationLog, useProfilingInfo);
+        this(name, method, uniqueGraphIds.incrementAndGet(), JVMCICompiler.INVOCATION_ENTRY_BCI, allowAssumptions, speculationLog);
     }
 
     public StructuredGraph(ResolvedJavaMethod method, AllowAssumptions allowAssumptions) {
-        this(null, method, uniqueGraphIds.incrementAndGet(), JVMCICompiler.INVOCATION_ENTRY_BCI, allowAssumptions, NO_SPECULATION_LOG, USE_PROFILING_INFO);
-    }
-
-    public StructuredGraph(ResolvedJavaMethod method, AllowAssumptions allowAssumptions, boolean useProfilingInfo) {
-        this(null, method, uniqueGraphIds.incrementAndGet(), JVMCICompiler.INVOCATION_ENTRY_BCI, allowAssumptions, NO_SPECULATION_LOG, useProfilingInfo);
+        this(null, method, uniqueGraphIds.incrementAndGet(), JVMCICompiler.INVOCATION_ENTRY_BCI, allowAssumptions, null);
     }
 
     public StructuredGraph(ResolvedJavaMethod method, AllowAssumptions allowAssumptions, SpeculationLog speculationLog) {
-        this(null, method, uniqueGraphIds.incrementAndGet(), JVMCICompiler.INVOCATION_ENTRY_BCI, allowAssumptions, speculationLog, USE_PROFILING_INFO);
+        this(null, method, uniqueGraphIds.incrementAndGet(), JVMCICompiler.INVOCATION_ENTRY_BCI, allowAssumptions, speculationLog);
     }
 
     public StructuredGraph(ResolvedJavaMethod method, int entryBCI, AllowAssumptions allowAssumptions, SpeculationLog speculationLog) {
-        this(null, method, uniqueGraphIds.incrementAndGet(), entryBCI, allowAssumptions, speculationLog, USE_PROFILING_INFO);
+        this(null, method, uniqueGraphIds.incrementAndGet(), entryBCI, allowAssumptions, speculationLog);
     }
 
-    public StructuredGraph(ResolvedJavaMethod method, int entryBCI, AllowAssumptions allowAssumptions, SpeculationLog speculationLog, boolean useProfilingInfo) {
-        this(null, method, uniqueGraphIds.incrementAndGet(), entryBCI, allowAssumptions, speculationLog, useProfilingInfo);
-    }
-
-    private StructuredGraph(String name, ResolvedJavaMethod method, long graphId, int entryBCI, AllowAssumptions allowAssumptions, SpeculationLog speculationLog, boolean useProfilingInfo) {
+    private StructuredGraph(String name, ResolvedJavaMethod method, long graphId, int entryBCI, AllowAssumptions allowAssumptions, SpeculationLog speculationLog) {
         super(name);
         this.setStart(add(new StartNode()));
         this.method = method;
@@ -237,7 +215,6 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
         this.entryBCI = entryBCI;
         this.assumptions = allowAssumptions == AllowAssumptions.YES ? new Assumptions() : null;
         this.speculationLog = speculationLog;
-        this.useProfilingInfo = useProfilingInfo;
     }
 
     public void setLastSchedule(ScheduleResult result) {
@@ -293,7 +270,7 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
     }
 
     /**
-     * Gets the root method from which this graph was built.
+     * Gets the method from which this graph was built.
      *
      * @return null if this method was not built from a method or the method is not available
      */
@@ -326,7 +303,7 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
     @Override
     protected Graph copy(String newName, Consumer<Map<Node, Node>> duplicationMapCallback) {
         AllowAssumptions allowAssumptions = AllowAssumptions.from(assumptions != null);
-        StructuredGraph copy = new StructuredGraph(newName, method, graphId, entryBCI, allowAssumptions, speculationLog, useProfilingInfo);
+        StructuredGraph copy = new StructuredGraph(newName, method, graphId, entryBCI, allowAssumptions, speculationLog);
         if (allowAssumptions == AllowAssumptions.YES && assumptions != null) {
             copy.assumptions.record(assumptions);
         }
@@ -585,32 +562,6 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
     public void setHasValueProxies(boolean state) {
         assert !state : "cannot 'unapply' value proxy removal on graph";
         hasValueProxies = state;
-    }
-
-    /**
-     * Determines if {@link ProfilingInfo} is used during construction of this graph.
-     */
-    public boolean useProfilingInfo() {
-        return hasValueProxies;
-    }
-
-    /**
-     * Gets the profiling info for the {@linkplain #method() root method} of this graph.
-     */
-    public ProfilingInfo getProfilingInfo() {
-        return getProfilingInfo(method());
-    }
-
-    /**
-     * Gets the profiling info for a given method that is or will be part of this graph, taking into
-     * account {@link #useProfilingInfo()}.
-     */
-    public ProfilingInfo getProfilingInfo(ResolvedJavaMethod m) {
-        if (useProfilingInfo && m != null) {
-            return m.getProfilingInfo();
-        } else {
-            return DefaultProfilingInfo.get(TriState.UNKNOWN);
-        }
     }
 
     /**

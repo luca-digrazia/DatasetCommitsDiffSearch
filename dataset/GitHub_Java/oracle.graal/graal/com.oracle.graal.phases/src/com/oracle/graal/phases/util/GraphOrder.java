@@ -26,9 +26,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import jdk.vm.ci.common.JVMCIError;
+
 import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.graph.GraalGraphError;
+import com.oracle.graal.graph.GraalGraphJVMCIError;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeBitMap;
 import com.oracle.graal.nodes.AbstractEndNode;
@@ -44,7 +45,6 @@ import com.oracle.graal.nodes.PhiNode;
 import com.oracle.graal.nodes.ProxyNode;
 import com.oracle.graal.nodes.StateSplit;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
 import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.VirtualState;
@@ -112,7 +112,7 @@ public final class GraphOrder {
             assert node == null || node.isAlive() : node + " not alive";
             if (node != null && !visited.isMarked(node)) {
                 if (floatingOnly && node instanceof FixedNode) {
-                    throw new GraalError("unexpected reference to fixed node: %s (this indicates an unexpected cycle)", node);
+                    throw new JVMCIError("unexpected reference to fixed node: %s (this indicates an unexpected cycle)", node);
                 }
                 visited.mark(node);
                 FrameState stateAfter = null;
@@ -141,17 +141,19 @@ public final class GraphOrder {
                     visitForward(nodes, visited, stateAfter, true);
                 }
             }
-        } catch (GraalError e) {
-            throw GraalGraphError.transformAndAddContext(e, node);
+        } catch (JVMCIError e) {
+            throw GraalGraphJVMCIError.transformAndAddContext(e, node);
         }
     }
 
     /**
      * This method schedules the graph and makes sure that, for every node, all inputs are available
      * at the position where it is scheduled. This is a very expensive assertion.
+     *
+     * Also, this phase assumes ProxyNodes to exist at LoopExitNodes, so that it cannot be run after
+     * phases that remove loop proxies or move proxies to BeginNodes.
      */
     public static boolean assertSchedulableGraph(final StructuredGraph graph) {
-        assert graph.getGuardsStage() != GuardsStage.AFTER_FSA : "Cannot use the BlockIteratorClosure after FrameState Assignment, HIR Loop Data Structures are no longer valid.";
         try {
             final SchedulePhase schedulePhase = new SchedulePhase(SchedulingStrategy.LATEST_OUT_OF_LOOPS);
             final Map<LoopBeginNode, NodeBitMap> loopEntryStates = Node.newIdentityMap();

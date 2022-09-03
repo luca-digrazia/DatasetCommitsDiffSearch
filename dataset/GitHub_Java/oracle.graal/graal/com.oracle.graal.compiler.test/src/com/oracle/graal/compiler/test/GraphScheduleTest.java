@@ -22,35 +22,42 @@
  */
 package com.oracle.graal.compiler.test;
 
-import java.util.*;
+import java.util.List;
 
-import org.junit.*;
+import org.junit.Assert;
 
-import com.oracle.graal.compiler.schedule.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.cfg.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
+import com.oracle.graal.nodes.cfg.Block;
+import com.oracle.graal.phases.schedule.SchedulePhase;
 
 public class GraphScheduleTest extends GraalCompilerTest {
+
     protected void assertOrderedAfterSchedule(StructuredGraph graph, Node a, Node b) {
-        SchedulePhase ibp = new SchedulePhase();
+        SchedulePhase ibp = new SchedulePhase(SchedulePhase.SchedulingStrategy.LATEST);
         ibp.apply(graph);
+        assertOrderedAfterSchedule(graph.getLastSchedule(), a, b);
+    }
+
+    protected void assertOrderedAfterSchedule(ScheduleResult ibp, Node a, Node b) {
         NodeMap<Block> nodeToBlock = ibp.getCFG().getNodeToBlock();
         Block bBlock = nodeToBlock.get(b);
         Block aBlock = nodeToBlock.get(a);
 
         if (bBlock == aBlock) {
-            List<ScheduledNode> instructions = ibp.nodesFor(bBlock);
+            List<Node> instructions = ibp.nodesFor(bBlock);
             Assert.assertTrue(instructions.indexOf(b) > instructions.indexOf(a));
         } else {
             Block block = bBlock;
             while (block != null) {
                 if (block == aBlock) {
-                    break;
+                    return;
                 }
                 block = block.getDominator();
             }
-            Assert.assertSame(block, aBlock);
+            Assert.fail("block of A doesn't dominate the block of B");
         }
     }
 }

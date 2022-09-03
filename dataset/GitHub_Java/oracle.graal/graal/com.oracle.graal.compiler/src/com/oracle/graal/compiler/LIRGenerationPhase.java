@@ -22,12 +22,14 @@
  */
 package com.oracle.graal.compiler;
 
+import static com.oracle.graal.compiler.common.BackendOptions.ConstructionSSAlirDuringLirBuilding;
+
 import java.util.List;
+
+import jdk.vm.ci.code.TargetDescription;
 
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGeneratorTool;
@@ -37,8 +39,6 @@ import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
 import com.oracle.graal.nodes.cfg.Block;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-import jdk.vm.ci.code.TargetDescription;
 
 public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGenerationContext> {
 
@@ -56,8 +56,6 @@ public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGeneratio
         }
     }
 
-    private static final DebugCounter instructionCounter = Debug.counter("GeneratedLIRInstructions");
-
     @Override
     protected final <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
                     LIRGenerationPhase.LIRGenerationContext context) {
@@ -68,7 +66,7 @@ public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGeneratio
             emitBlock(nodeLirBuilder, lirGenRes, (Block) b, graph, schedule.getBlockToNodesMap());
         }
         context.lirGen.beforeRegisterAllocation();
-        assert SSAUtil.verifySSAForm(lirGenRes.getLIR());
+        assert !ConstructionSSAlirDuringLirBuilding.getValue() || SSAUtil.verifySSAForm(lirGenRes.getLIR());
     }
 
     private static void emitBlock(NodeLIRBuilderTool nodeLirGen, LIRGenerationResult lirGenRes, Block b, StructuredGraph graph, BlockMap<List<Node>> blockMap) {
@@ -79,9 +77,6 @@ public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGeneratio
                 }
             }
             nodeLirGen.doBlock(b, graph, blockMap);
-            if (instructionCounter.isEnabled()) {
-                instructionCounter.add(lirGenRes.getLIR().getLIRforBlock(b).size());
-            }
         }
     }
 

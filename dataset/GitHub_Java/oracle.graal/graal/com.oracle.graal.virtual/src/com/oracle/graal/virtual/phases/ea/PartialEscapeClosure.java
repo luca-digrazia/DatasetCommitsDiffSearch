@@ -48,6 +48,7 @@ import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeBitMap;
+import com.oracle.graal.graph.NodePosIterator;
 import com.oracle.graal.graph.Position;
 import com.oracle.graal.graph.spi.Canonicalizable;
 import com.oracle.graal.nodes.CallTargetNode;
@@ -61,7 +62,6 @@ import com.oracle.graal.nodes.LoopBeginNode;
 import com.oracle.graal.nodes.LoopExitNode;
 import com.oracle.graal.nodes.PhiNode;
 import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.ValuePhiNode;
@@ -145,9 +145,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     public PartialEscapeClosure(ScheduleResult schedule, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
         super(schedule, schedule.getCFG());
-        StructuredGraph graph = schedule.getCFG().graph;
-        this.hasVirtualInputs = graph.createNodeBitMap();
-        this.tool = new VirtualizerToolImpl(metaAccess, constantReflection, this, graph.getAssumptions());
+        this.hasVirtualInputs = schedule.getCFG().graph.createNodeBitMap();
+        this.tool = new VirtualizerToolImpl(metaAccess, constantReflection, this);
     }
 
     /**
@@ -265,7 +264,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     private boolean prepareCanonicalNode(ValueNode node, BlockT state, GraphEffectList effects) {
         assert !node.isAlive();
-        for (Position pos : node.inputPositions()) {
+        NodePosIterator iter = node.inputs().iterator();
+        while (iter.hasNext()) {
+            Position pos = iter.nextPosition();
             Node input = pos.get(node);
             if (input instanceof ValueNode) {
                 if (input.isAlive()) {

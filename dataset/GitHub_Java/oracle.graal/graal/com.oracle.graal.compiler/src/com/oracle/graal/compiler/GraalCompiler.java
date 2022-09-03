@@ -363,9 +363,7 @@ public class GraalCompiler {
                     JavaKind kind = JavaKind.Illegal;
                     if (dp.reference instanceof ConstantReference) {
                         VMConstant constant = ((ConstantReference) dp.reference).getConstant();
-                        if (constant instanceof JavaConstant) {
-                            kind = ((JavaConstant) constant).getJavaKind();
-                        }
+                        kind = ((JavaConstant) constant).getJavaKind();
                     }
                     dms[kind.ordinal()].add(1);
                 }

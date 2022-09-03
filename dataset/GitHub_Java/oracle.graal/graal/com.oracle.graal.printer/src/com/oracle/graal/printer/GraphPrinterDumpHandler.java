@@ -46,8 +46,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import jdk.vm.ci.meta.JavaMethod;
@@ -73,12 +71,12 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     private List<String> previousInlineContext;
     private int[] dumpIds = {};
     private int failuresCount;
-    private Map<Graph, List<String>> inlineContextMap;
 
     /**
      * Creates a new {@link GraphPrinterDumpHandler}.
      */
     public GraphPrinterDumpHandler() {
+        previousInlineContext = new ArrayList<>();
     }
 
     private void ensureInitialized() {
@@ -86,8 +84,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             if (failuresCount > 8) {
                 return;
             }
-            previousInlineContext = new ArrayList<>();
-            inlineContextMap = new WeakHashMap<>();
+            previousInlineContext.clear();
             createPrinter();
         }
     }
@@ -176,37 +173,28 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
 
             if (printer != null) {
                 // Get all current JavaMethod instances in the context.
-                List<String> inlineContext = getInlineContext(graph);
+                List<String> inlineContext = getInlineContext();
 
-                if (inlineContext != previousInlineContext) {
-                    if (inlineContext.equals(previousInlineContext)) {
-                        /*
-                         * two different graphs have the same inline context, so make sure they
-                         * appear in different folders by closing and reopening the top scope.
-                         */
-                        int inlineDepth = previousInlineContext.size() - 1;
-                        closeScope(inlineDepth);
-                        openScope(inlineContext.get(inlineDepth), inlineDepth);
-                    } else {
-                        // Check for method scopes that must be closed since the previous dump.
-                        for (int i = 0; i < previousInlineContext.size(); ++i) {
-                            if (i >= inlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
-                                for (int inlineDepth = previousInlineContext.size() - 1; inlineDepth >= i; --inlineDepth) {
-                                    closeScope(inlineDepth);
-                                }
-                                break;
-                            }
-                        }
+                // Reverse list such that inner method comes after outer method.
+                Collections.reverse(inlineContext);
 
-                        // Check for method scopes that must be opened since the previous dump.
-                        for (int i = 0; i < inlineContext.size(); ++i) {
-                            if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
-                                for (int inlineDepth = i; inlineDepth < inlineContext.size(); ++inlineDepth) {
-                                    openScope(inlineContext.get(inlineDepth), inlineDepth);
-                                }
-                                break;
-                            }
+                // Check for method scopes that must be closed since the previous dump.
+                for (int i = 0; i < previousInlineContext.size(); ++i) {
+                    if (i >= inlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
+                        for (int inlineDepth = previousInlineContext.size() - 1; inlineDepth >= i; --inlineDepth) {
+                            closeScope(inlineDepth);
                         }
+                        break;
+                    }
+                }
+
+                // Check for method scopes that must be opened since the previous dump.
+                for (int i = 0; i < inlineContext.size(); ++i) {
+                    if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
+                        for (int inlineDepth = i; inlineDepth < inlineContext.size(); ++inlineDepth) {
+                            openScope(inlineContext.get(inlineDepth), inlineDepth);
+                        }
+                        break;
                     }
                 }
 
@@ -226,42 +214,34 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
         }
     }
 
-    private List<String> getInlineContext(Graph graph) {
-        List<String> result = inlineContextMap.get(graph);
-        if (result == null) {
-            result = new ArrayList<>();
-            Object lastMethodOrGraph = null;
-            for (Object o : Debug.context()) {
-                JavaMethod method = asJavaMethod(o);
-                if (method != null) {
-                    if (lastMethodOrGraph == null || asJavaMethod(lastMethodOrGraph) == null || !asJavaMethod(lastMethodOrGraph).equals(method)) {
-                        result.add(method.format("%H::%n(%p)"));
-                    } else {
-                        /*
-                         * This prevents multiple adjacent method context objects for the same
-                         * method from resulting in multiple IGV tree levels. This works on the
-                         * assumption that real inlining debug scopes will have a graph context
-                         * object between the inliner and inlinee context objects.
-                         */
-                    }
-                } else if (o instanceof DebugDumpScope) {
-                    DebugDumpScope debugDumpScope = (DebugDumpScope) o;
-                    if (debugDumpScope.decorator && !result.isEmpty()) {
-                        result.set(result.size() - 1, debugDumpScope.name + ":" + result.get(result.size() - 1));
-                    } else {
-                        result.add(debugDumpScope.name);
-                    }
+    private static List<String> getInlineContext() {
+        List<String> result = new ArrayList<>();
+        Object lastMethodOrGraph = null;
+        for (Object o : Debug.context()) {
+            JavaMethod method = asJavaMethod(o);
+            if (method != null) {
+                if (lastMethodOrGraph == null || asJavaMethod(lastMethodOrGraph) == null || !asJavaMethod(lastMethodOrGraph).equals(method)) {
+                    result.add(method.format("%H::%n(%p)"));
+                } else {
+                    // This prevents multiple adjacent method context objects for the same method
+                    // from resulting in multiple IGV tree levels. This works on the
+                    // assumption that real inlining debug scopes will have a graph
+                    // context object between the inliner and inlinee context objects.
                 }
-                if (o instanceof JavaMethod || o instanceof Graph) {
-                    lastMethodOrGraph = o;
+            } else if (o instanceof DebugDumpScope) {
+                DebugDumpScope debugDumpScope = (DebugDumpScope) o;
+                if (debugDumpScope.decorator && !result.isEmpty()) {
+                    result.set(result.size() - 1, debugDumpScope.name + ":" + result.get(result.size() - 1));
+                } else {
+                    result.add(debugDumpScope.name);
                 }
             }
-            if (result.isEmpty()) {
-                result.add("Top Scope");
+            if (o instanceof JavaMethod || o instanceof Graph) {
+                lastMethodOrGraph = o;
             }
-            // Reverse list such that inner method comes after outer method.
-            Collections.reverse(result);
-            inlineContextMap.put(graph, result);
+        }
+        if (result.isEmpty()) {
+            result.add("Top Scope");
         }
         return result;
     }

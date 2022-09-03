@@ -81,7 +81,7 @@ class CFGPrinter extends CompilationPrinter {
      *
      * @param out where the output generated via this printer shown be written
      */
-    CFGPrinter(OutputStream out) {
+    public CFGPrinter(OutputStream out) {
         super(out);
     }
 
