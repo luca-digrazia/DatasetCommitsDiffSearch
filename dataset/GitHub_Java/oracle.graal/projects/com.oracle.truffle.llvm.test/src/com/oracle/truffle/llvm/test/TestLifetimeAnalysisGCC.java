@@ -86,8 +86,7 @@ public class TestLifetimeAnalysisGCC extends TestSuiteBase {
 
     // TODO in the long term we should replace this
     private static final String[] excludedFiles = new String[]{
-                    "projects/com.oracle.truffle.llvm.test/suites/gcc/gcc-5.2.0/gcc/testsuite/gcc.dg/pr43419.c",
-                    "projects/com.oracle.truffle.llvm.test/suites/gcc/gcc-5.2.0/gcc/testsuite/gfortran.fortran-torture/execute/integer_select.f90"
+                    "projects/com.oracle.truffle.llvm.test/suites/gcc/gcc-5.2.0/gcc/testsuite/gcc.dg/pr43419.c"
     };
 
     private static final String FUNCTION_INDENT = "";
