@@ -22,6 +22,7 @@
  */
 package org.graalvm.compiler.truffle.test;
 
+import org.graalvm.compiler.code.SourceStackTraceBailoutException;
 import org.graalvm.compiler.core.common.GraalBailoutException;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.replacements.PEGraphDecoder;
