@@ -22,9 +22,34 @@
  */
 package com.oracle.graal.nodeinfo;
 
+/**
+ * Constants representing an estimation of of the size needed to represent a compiler node in
+ * machine code.
+ */
 public enum NodeSize {
-    SIZE_UNKOWN(0),
+
+    /**
+     * The default value of the {@link NodeInfo#size()} property.
+     * <p>
+     * For further information about the use of {@code SIZE_UNSET} see {@link NodeInfo#size()}.
+     */
     SIZE_UNSET(0),
+    /**
+     * Nodes for which, due to arbitrary reasons, no estimation can be made either (1) statically
+     * without inspecting the properties of a node or (2) at all (like e.g. for an invocation).
+     * <p>
+     * Nodes annotated with {@code SIZE_UNKNOWN} should specify the {@link NodeInfo#sizeRationale()}
+     * property to clarify why an estimation cannot be done.
+     */
+    SIZE_UNKNOWN(0),
+    /**
+     * Nodes for which code size information is irrelevant and can be ignored, e.g. for test nodes.
+     */
+    SIZE_IGNORED(0),
+    /**
+     * Nodes that do not require any code to be generated in order to be "executed", e.g. a phi
+     * node.
+     */
     SIZE_0(0),
     SIZE_1(1),
     SIZE_2(2),
@@ -40,22 +65,13 @@ public enum NodeSize {
     SIZE_50(50),
     SIZE_80(80),
     SIZE_100(100),
-    SIZE_200(200),
-    SIZE_INFINITY(1000);
+    SIZE_200(200);
 
-    final int relativeSize;
+    public final int estimatedCodeSize;
 
-    NodeSize(int relativeSize) {
-        this.relativeSize = relativeSize;
+    NodeSize(int estimatedCodeSize) {
+        this.estimatedCodeSize = estimatedCodeSize;
     }
 
-    public static int relativeSize(NodeSizeSupplier supplier) {
-        return supplier.getNodeSize().relativeSize;
-    }
-
-    public interface NodeSizeSupplier {
-        NodeSize getNodeSize();
-    }
-
-    public static final int IGNORE_SIZE_CHECK_FACTOR = 0xFFFF;
+    public static final int IGNORE_SIZE_CONTRACT_FACTOR = 0xFFFF;
 }

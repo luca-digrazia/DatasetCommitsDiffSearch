@@ -22,11 +22,32 @@
  */
 package com.oracle.graal.nodes.spi;
 
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_100;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_15;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_20;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_30;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_4;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_40;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_80;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_10;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_100;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_15;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_200;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_30;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_4;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_6;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_80;
+
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.nodeinfo.NodeCycles;
 import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodes.CallTargetNode;
-import com.oracle.graal.nodes.InvokeNode;
+import com.oracle.graal.nodes.Invoke;
 import com.oracle.graal.nodes.LoopEndNode;
 import com.oracle.graal.nodes.extended.IntegerSwitchNode;
 import com.oracle.graal.nodes.extended.SwitchNode;
@@ -34,38 +55,38 @@ import com.oracle.graal.nodes.java.AccessFieldNode;
 import com.oracle.graal.nodes.virtual.CommitAllocationNode;
 
 /*
- * (dl) Certain node costs can not, based on the meta information encoded in the node properties,
+ * Certain node costs can not, based on the meta information encoded in the node properties,
  * be computed before a real node is instantiated. E.g. the type of a call in Java heavily
  * influences the cost of an invocation and thus must be decided dynamically.
  */
-public class DefaultNodeCostProvider implements NodeCostProvider {
+public abstract class DefaultNodeCostProvider implements NodeCostProvider {
 
     @Override
-    public final int sizeNumeric(Node n) {
-        return NodeSize.relativeSize(() -> size(n));
+    public final int getEstimatedCodeSize(Node n) {
+        return size(n).estimatedCodeSize;
     }
 
     @Override
-    public final int cyclesNumeric(Node n) {
-        return NodeCycles.relativeCycles(() -> cycles(n));
+    public final int getEstimatedCPUCycles(Node n) {
+        return cycles(n).estimatedCPUCycles;
     }
 
     @Override
     public NodeSize size(Node n) {
-        if (n instanceof InvokeNode) {
+        if (n instanceof Invoke) {
             /*
              * Code size for the invoke itself is a very weak approximation.
              */
-            InvokeNode ivk = (InvokeNode) n;
+            Invoke ivk = (Invoke) n;
             CallTargetNode mct = ivk.callTarget();
             switch (mct.invokeKind()) {
                 case Interface:
-                    return NodeSize.SIZE_50;
+                    return SIZE_50;
                 case Special:
                 case Static:
-                    return NodeSize.SIZE_2;
+                    return SIZE_2;
                 case Virtual:
-                    return NodeSize.SIZE_4;
+                    return SIZE_4;
                 default:
                     break;
             }
@@ -77,36 +98,36 @@ public class DefaultNodeCostProvider implements NodeCostProvider {
              */
             int nrOfAllocs = commit.getVirtualObjects().size();
             if (nrOfAllocs < 5) {
-                return NodeSize.SIZE_80;
+                return SIZE_80;
             } else if (nrOfAllocs < 10) {
-                return NodeSize.SIZE_100;
+                return SIZE_100;
             } else {
-                return NodeSize.SIZE_200;
+                return SIZE_200;
             }
         } else if (n instanceof AccessFieldNode) {
             if (((AccessFieldNode) n).field().isVolatile()) {
                 // membar size is added
-                return NodeSize.SIZE_10;
+                return SIZE_10;
             }
         } else if (n instanceof LoopEndNode) {
             if (((LoopEndNode) n).canSafepoint()) {
-                return NodeSize.SIZE_6;
+                return SIZE_6;
             }
         } else if (n instanceof SwitchNode) {
             SwitchNode x = (SwitchNode) n;
             int keyCount = x.keyCount();
             if (keyCount == 0) {
-                return NodeSize.SIZE_1;
+                return SIZE_1;
             } else {
                 if (keyCount == 1) {
                     // if
-                    return NodeSize.SIZE_2;
+                    return SIZE_2;
                 } else if (x instanceof IntegerSwitchNode && x.isSorted()) {
                     // good heuristic
-                    return NodeSize.SIZE_15;
+                    return SIZE_15;
                 } else {
                     // not so good
-                    return NodeSize.SIZE_30;
+                    return SIZE_30;
                 }
             }
         }
@@ -116,17 +137,17 @@ public class DefaultNodeCostProvider implements NodeCostProvider {
 
     @Override
     public NodeCycles cycles(Node n) {
-        if (n instanceof InvokeNode) {
-            InvokeNode ivk = (InvokeNode) n;
+        if (n instanceof Invoke) {
+            Invoke ivk = (Invoke) n;
             CallTargetNode mct = ivk.callTarget();
             switch (mct.invokeKind()) {
                 case Interface:
-                    return NodeCycles.CYCLES_100;
+                    return CYCLES_100;
                 case Special:
                 case Static:
-                    return NodeCycles.CYCLES_2;
+                    return CYCLES_2;
                 case Virtual:
-                    return NodeCycles.CYCLES_4;
+                    return CYCLES_4;
                 default:
                     break;
             }
@@ -138,36 +159,32 @@ public class DefaultNodeCostProvider implements NodeCostProvider {
              */
             int nrOfAllocs = commit.getVirtualObjects().size();
             if (nrOfAllocs < 5) {
-                return NodeCycles.CYCLES_20;
+                return CYCLES_20;
             } else if (nrOfAllocs < 10) {
-                return NodeCycles.CYCLES_40;
+                return CYCLES_40;
             } else {
-                return NodeCycles.CYCLES_80;
+                return CYCLES_80;
             }
         } else if (n instanceof AccessFieldNode) {
             if (((AccessFieldNode) n).field().isVolatile()) {
                 // membar cycles is added
-                return NodeCycles.CYCLES_30;
-            }
-        } else if (n instanceof LoopEndNode) {
-            if (((LoopEndNode) n).canSafepoint()) {
-                return NodeCycles.CYCLES_INFINITY;
+                return CYCLES_30;
             }
         } else if (n instanceof SwitchNode) {
             SwitchNode x = (SwitchNode) n;
             int keyCount = x.keyCount();
             if (keyCount == 0) {
-                return NodeCycles.CYCLES_1;
+                return CYCLES_1;
             } else {
                 if (keyCount == 1) {
                     // if
-                    return NodeCycles.CYCLES_2;
+                    return CYCLES_2;
                 } else if (x instanceof IntegerSwitchNode && x.isSorted()) {
                     // good heuristic
-                    return NodeCycles.CYCLES_15;
+                    return CYCLES_15;
                 } else {
                     // not so good
-                    return NodeCycles.CYCLES_30;
+                    return CYCLES_30;
                 }
             }
         }
