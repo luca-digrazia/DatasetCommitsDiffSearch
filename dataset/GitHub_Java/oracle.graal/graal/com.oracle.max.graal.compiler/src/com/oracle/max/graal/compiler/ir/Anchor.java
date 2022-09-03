@@ -31,7 +31,7 @@ import com.sun.cri.ci.*;
 /**
  * The {@code Anchor} instruction represents the end of a block with an unconditional jump to another block.
  */
-public final class Anchor extends FixedNodeWithNext {
+public final class Anchor extends Instruction {
 
     private static final int INPUT_COUNT = 0;
     private static final int SUCCESSOR_COUNT = 0;
@@ -42,10 +42,6 @@ public final class Anchor extends FixedNodeWithNext {
      */
     public Anchor(Graph graph) {
         super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-    }
-
-    public void addGuard(GuardNode x) {
-        variableInputs().add(x);
     }
 
     @Override

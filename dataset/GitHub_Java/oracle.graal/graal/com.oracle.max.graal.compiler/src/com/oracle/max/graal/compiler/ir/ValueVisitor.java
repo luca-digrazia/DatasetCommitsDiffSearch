@@ -44,14 +44,15 @@ public abstract class ValueVisitor {
     public abstract void visitAnchor(Anchor i);
     public abstract void visitIf(If i);
     public abstract void visitIfOp(Conditional i);
+    public abstract void visitInstanceOf(InstanceOf i);
     public abstract void visitInvoke(Invoke i);
     public abstract void visitLoadField(LoadField i);
     public abstract void visitLoadIndexed(LoadIndexed i);
     public abstract void visitLocal(Local i);
     public abstract void visitLogic(Logic i);
     public abstract void visitLookupSwitch(LookupSwitch i);
-    public abstract void visitMemoryRead(ReadNode i);
-    public abstract void visitMemoryWrite(WriteNode i);
+    public abstract void visitMemoryRead(MemoryRead i);
+    public abstract void visitMemoryWrite(MemoryWrite i);
     public abstract void visitMonitorAddress(MonitorAddress monitorAddress);
     public abstract void visitMonitorEnter(MonitorEnter i);
     public abstract void visitMonitorExit(MonitorExit i);

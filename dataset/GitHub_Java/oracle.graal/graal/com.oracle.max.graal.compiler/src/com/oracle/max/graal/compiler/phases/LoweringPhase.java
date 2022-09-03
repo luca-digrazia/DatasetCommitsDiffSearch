@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import java.util.*;
-
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.graph.*;
@@ -34,8 +32,8 @@ public class LoweringPhase extends Phase {
 
     public static final LoweringOp DELEGATE_TO_RUNTIME = new LoweringOp() {
         @Override
-        public void lower(Node n, CiLoweringTool tool) {
-            tool.getRuntime().lower(n, tool);
+        public Node lower(Node n, CiLoweringTool tool) {
+            return tool.getRuntime().lower(n, tool);
         }
     };
 
@@ -50,49 +48,75 @@ public class LoweringPhase extends Phase {
         final IdentifyBlocksPhase s = new IdentifyBlocksPhase(false);
         s.apply(graph);
 
-        List<Block> blocks = s.getBlocks();
-        for (final Block b : blocks) {
-            process(b);
-        }
-    }
+        for (Block b : s.getBlocks()) {
+            final Node[] firstNodeValue = new Node[]{b.firstNode()};
 
-    private void process(final Block b) {
+            final CiLoweringTool loweringTool = new CiLoweringTool() {
+                @Override
+                public Node getGuardAnchor() {
+                    Node firstNode = firstNodeValue[0];
+                    if (firstNode == firstNode.graph().start()) {
+                        Anchor a = new Anchor(graph);
+                        a.setNext((FixedNode) firstNode.graph().start().start());
+                        firstNode.graph().start().setStart(a);
+                        firstNodeValue[0] = a;
+                        return a;
+                    } else if (firstNode instanceof Merge) {
+                        Merge merge = (Merge) firstNode;
+                        Anchor a = new Anchor(graph);
+                        a.setNext(merge.next());
+                        merge.setNext(a);
+                        firstNodeValue[0] = a;
+                        return a;
+                    } else if (!(firstNode instanceof Anchor)) {
+                        Anchor a = new Anchor(graph);
+                        assert firstNode.predecessors().size() == 1 : firstNode;
+                        Node pred = firstNode.predecessors().get(0);
+                        int predIndex = pred.successors().indexOf(firstNode);
+                        pred.successors().set(predIndex, a);
+                        a.setNext((FixedNode) firstNode);
+                        firstNodeValue[0] = a;
+                        return a;
+                    }
+                    return firstNode;
+                }
 
-        final Node anchor = b.javaBlock().createAnchor();
-        final CiLoweringTool loweringTool = new CiLoweringTool() {
+                @Override
+                public RiRuntime getRuntime() {
+                    return runtime;
+                }
 
-            @Override
-            public Node getGuardAnchor() {
-                return anchor;
-            }
+                @Override
+                public Node createGuard(Node condition) {
+                    Anchor anchor = (Anchor) getGuardAnchor();
+                    for (GuardNode guard : anchor.happensAfterGuards()) {
+                        if (guard.node().valueEqual(condition)) {
+                            condition.delete();
+                            return guard;
+                        }
+                    }
+                    GuardNode newGuard = new GuardNode(graph);
+                    newGuard.setAnchor(anchor);
+                    newGuard.setNode((BooleanNode) condition);
+                    return newGuard;
+                }
+            };
 
-            @Override
-            public RiRuntime getRuntime() {
-                return runtime;
-            }
-
-            @Override
-            public Node createGuard(Node condition) {
-                Anchor anchor = (Anchor) getGuardAnchor();
-                GuardNode newGuard = new GuardNode((BooleanNode) condition, anchor.graph());
-                newGuard.setAnchor(anchor);
-                return newGuard;
-            }
-        };
-
-
-        // Lower the instructions of this block.
-        for (final Node n : b.getInstructions()) {
-            if (n instanceof FixedNode) {
-                LoweringOp op = n.lookup(LoweringOp.class);
-                if (op != null) {
-                    op.lower(n, loweringTool);
+            for (final Node n : b.getInstructions()) {
+                if (n instanceof FixedNode) {
+                    LoweringOp op = n.lookup(LoweringOp.class);
+                    if (op != null) {
+                        Node newNode = op.lower(n, loweringTool);
+                        if (newNode != null) {
+                            n.replace(newNode);
+                        }
+                    }
                 }
             }
         }
     }
 
     public interface LoweringOp extends Op {
-        void lower(Node n, CiLoweringTool tool);
+        Node lower(Node n, CiLoweringTool tool);
     }
 }
