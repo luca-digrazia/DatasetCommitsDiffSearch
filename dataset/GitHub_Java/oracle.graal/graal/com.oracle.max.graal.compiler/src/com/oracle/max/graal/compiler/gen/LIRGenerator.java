@@ -45,7 +45,6 @@ import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
-import com.sun.cri.ri.RiType.*;
 import com.sun.cri.xir.*;
 import com.sun.cri.xir.CiXirAssembler.*;
 
@@ -226,10 +225,16 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
 
         if (block.blockPredecessors().size() > 1) {
+            if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
+                TTY.println("STATE RESET");
+            }
             lastState = null;
         }
 
         for (Node instr : block.getInstructions()) {
+            if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
+                TTY.println("LIRGen for " + instr);
+            }
             FrameState stateAfter = null;
             if (instr instanceof Instruction) {
                 stateAfter = ((Instruction) instr).stateAfter();
@@ -249,6 +254,8 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
             if (!(instr instanceof Merge) && instr != instr.graph().start()) {
                 walkState(instr, stateAfter);
+            }
+            if (instr instanceof Value) {
                 doRoot((Value) instr);
             }
             if (stateAfter != null) {
@@ -717,13 +724,6 @@ public abstract class LIRGenerator extends ValueVisitor {
             CiValue value = load(x.object());
             LIRDebugInfo info = stateFor(x);
             lir.nullCheck(value, info);
-        } else if (comp instanceof IsType) {
-            IsType x = (IsType) comp;
-            CiValue value = load(x.object());
-            LIRDebugInfo info = stateFor(x);
-            XirArgument clazz = toXirArgument(x.type().getEncoding(Representation.ObjectHub));
-            XirSnippet typeCheck = xir.genTypeCheck(site(x), toXirArgument(x.object()), clazz, x.type());
-            emitXir(typeCheck, x, info, compilation.method, false);
         }
     }
 
@@ -1019,10 +1019,22 @@ public abstract class LIRGenerator extends ValueVisitor {
                 emitXir(prologue, null, null, null, false);
             }
             FrameState fs = setOperandsForLocals();
+            if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
+                TTY.println("STATE CHANGE (setOperandsForLocals)");
+                if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
+                    TTY.println(fs.toString());
+                }
+            }
             lastState = fs;
         } else if (block.blockPredecessors().size() == 1) {
             FrameState fs = block.blockPredecessors().get(0).lastState();
             assert fs != null;
+            if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
+                TTY.println("STATE CHANGE (singlePred)");
+                if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
+                    TTY.println(fs.toString());
+                }
+            }
             lastState = fs;
         }
     }
@@ -1191,7 +1203,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    protected void arithmeticOpLong(int code, CiValue result, CiValue left, CiValue right, LIRDebugInfo info) {
+    protected void arithmeticOpLong(int code, CiValue result, CiValue left, CiValue right) {
         CiValue leftOp = left;
 
         if (isTwoOperand && leftOp != result) {
@@ -1452,6 +1464,29 @@ public abstract class LIRGenerator extends ValueVisitor {
                         }
                     }
                     resolver.dispose();
+
+                    //TODO (gd) remove that later
+                    Node suxFirstInstr = sux.firstInstruction();
+                    if (suxFirstInstr instanceof LoopBegin) {
+                        for (Node n : suxFirstInstr.usages()) {
+                            if (n instanceof LoopCounter) {
+                                LoopCounter counter = (LoopCounter) n;
+                                if (counter.operand().isIllegal()) {
+                                    createResultVariable(counter);
+                                }
+                                if (predIndex == 0) {
+                                    lir.move(operandForInstruction(counter.init()), counter.operand());
+                                } else {
+                                    if (counter.kind == CiKind.Int) {
+                                        this.arithmeticOpInt(IADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()), CiValue.IllegalValue);
+                                    } else {
+                                        assert counter.kind == CiKind.Long;
+                                        this.arithmeticOpLong(LADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()));
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1473,7 +1508,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             if (x instanceof Constant) {
                 x.setOperand(x.asConstant());
             } else {
-                assert x instanceof Phi || x instanceof Local : "only for Phi and Local";
+                assert x instanceof Phi || x instanceof Local : "only for Phi and Local : " + x;
                 // allocate a variable for this local or phi
                 createResultVariable(x);
             }
@@ -1485,8 +1520,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         assert !phi.isDead() : "dead phi: " + phi.id();
         if (phi.operand().isIllegal()) {
             // allocate a variable for this phi
-            CiVariable operand = newVariable(phi.kind);
-            setResult(phi, operand);
+            createResultVariable(phi);
         }
         return phi.operand();
     }

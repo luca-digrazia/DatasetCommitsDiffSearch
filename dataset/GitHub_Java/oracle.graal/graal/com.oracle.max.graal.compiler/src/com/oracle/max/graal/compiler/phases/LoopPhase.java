@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.ci.*;
 
 
 public class LoopPhase extends Phase {
@@ -60,15 +59,13 @@ public class LoopPhase extends Phase {
                 LoopCounter c2 = acounters[j];
                 if (c2 != null && c1.stride().valueEqual(c2.stride())) {
                     acounters[j] = null;
-                    CiKind kind = c1.kind;
-                    IntegerSub sub = new IntegerSub(kind, c2.init(), c1.init(), graph);
-                    IntegerAdd addStride = new IntegerAdd(kind, sub, c1.stride(), graph);
-                    IntegerAdd add = new IntegerAdd(kind, c1, addStride, graph);
-                    Phi phi = new Phi(kind, loopBegin, graph); // TODO (gd) assumes order on loopBegin preds
+                    IntegerSub sub = new IntegerSub(c1.kind, c2.init(), c1.init(), graph);
+                    IntegerAdd add = new IntegerAdd(c1.kind, c1, sub, graph);
+                    Phi phi = new Phi(c1.kind, loopBegin, 2, graph); // TODO (gd) assumes order on loppBegin preds
                     phi.addInput(c2.init());
                     phi.addInput(add);
                     c2.replace(phi);
-                    //System.out.println("--> merged Loop Counters");
+                    System.out.println("--> merged Loop Counters");
                 }
             }
         }
@@ -143,12 +140,6 @@ public class LoopPhase extends Phase {
             }
             for (Node pred : n.predecessors()) {
                 workCFG.add(pred);
-            }
-            if (n instanceof Merge) {
-                Merge merge = (Merge) n;
-                for (int i = 0; i < merge.endCount(); i++) {
-                    workCFG.add(merge.endAt(i));
-                }
             }
         }
         for (Node n : workData) {

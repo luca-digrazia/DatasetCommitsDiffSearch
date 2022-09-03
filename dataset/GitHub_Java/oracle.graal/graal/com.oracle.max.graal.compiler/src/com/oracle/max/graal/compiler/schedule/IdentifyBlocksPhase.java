@@ -78,13 +78,6 @@ public class IdentifyBlocksPhase extends Phase {
     private Block assignBlock(Node n, Block b) {
         assert nodeToBlock.get(n) == null;
         nodeToBlock.set(n, b);
-        for (Node input : n.inputs()) {
-            if (input instanceof FrameState) {
-                assert nodeToBlock.get(n) == null;
-                nodeToBlock.set(n, b);
-            }
-        }
-
         if (b.firstNode() == null) {
             b.setFirstNode(n);
             b.setLastNode(n);
@@ -98,26 +91,6 @@ public class IdentifyBlocksPhase extends Phase {
         return b;
     }
 
-    private Block assignBlockNew(Node n, Block b) {
-        if (b == null) {
-            b = createBlock();
-        }
-
-        assert nodeToBlock.get(n) == null;
-        nodeToBlock.set(n, b);
-        if (b.lastNode() == null) {
-            b.setFirstNode(n);
-            b.setLastNode(n);
-        } else {
-            if (b.firstNode() != b.lastNode()) {
-                b.getInstructions().add(0, b.firstNode());
-            }
-            b.setFirstNode(n);
-        }
-
-        return b;
-    }
-
     public static boolean isFixed(Node n) {
         return n != null && ((n instanceof FixedNode) || n == n.graph().start());
     }
@@ -128,8 +101,7 @@ public class IdentifyBlocksPhase extends Phase {
 
     private void identifyBlocks() {
         // Identify blocks.
-
-        /*final ArrayList<Node> blockBeginNodes = new ArrayList<Node>();
+        final ArrayList<Node> blockBeginNodes = new ArrayList<Node>();
         NodeIterator.iterate(EdgeType.SUCCESSORS, graph.start(), null, new NodeVisitor() {
             @Override
             public boolean visit(Node n) {
@@ -173,78 +145,26 @@ public class IdentifyBlocksPhase extends Phase {
                 }
                 return true;
             }}
-        );*/
-
-        for (Node n : graph.getNodes()) {
-            if (n != null) {
-                if (n instanceof EndNode || n instanceof Return || n instanceof Unwind || n instanceof LoopEnd) {
-                    Block block = null;
-                    while (nodeToBlock.get(n) == null) {
-                        if (block != null && IdentifyBlocksPhase.trueSuccessorCount(n) > 1) {
-
-
-                            // We are at a split => start a new block.
-                            block = null;
-                        }
-                        block = assignBlockNew(n, block);
-                        if (n.predecessors().size() == 0) {
-                            // Either dead code or at a merge => stop iteration.
-                            break;
-                        }
-                        if (n.predecessors().size() > 1) {
-                            TTY.println("n=" + n);
-                            for (Node p : n.predecessors()) {
-                                TTY.println("pred=" + p);
-                            }
-                            for (Node s : n.successors()) {
-                                TTY.println("succ=" + s);
-                            }
-                        }
-                        assert n.predecessors().size() == 1 : "preds: " + n;
-                        n = n.predecessors().get(0);
-                    }
-                }
-            }
-        }
+        );
 
         // Connect blocks.
-        for (Block block : blocks) {
-            Node n = block.firstNode();
+        for (Node n : blockBeginNodes) {
+            Block block = nodeToBlock.get(n);
+            for (Node pred : n.predecessors()) {
+                if (isFixed(pred)) {
+                    Block predBlock = nodeToBlock.get(pred);
+                    predBlock.addSuccessor(block);
+                }
+            }
+
             if (n instanceof Merge) {
-                //TTY.println("merge " + n + " is first of block " + block.blockID());
                 for (Node usage : n.usages()) {
-                    if (usage instanceof Phi) {
+                    if (usage instanceof Phi || usage instanceof LoopCounter) {
                         nodeToBlock.set(usage, block);
                     }
                 }
-                Merge m = (Merge) n;
-//                TTY.println("merging " + m.endCount() + " ends");
-                for (int i=0; i<m.endCount(); ++i) {
-                    EndNode end = m.endAt(i);
-                    Block predBlock = nodeToBlock.get(end);
-                    predBlock.addSuccessor(block);
-                }
-            } else {
-//                TTY.println("node " + n + " is first of block " + block.blockID());
-                for (Node pred : n.predecessors()) {
-                    if (isFixed(pred)) {
-                        Block predBlock = nodeToBlock.get(pred);
-                        predBlock.addSuccessor(block);
-                    }
-                }
             }
-
-//            TTY.println("node " + block.lastNode() + " is last");
         }
-
-//        for (Block block : blocks) {
-//            TTY.print("Block B" + block.blockID() + ": ");
-//            TTY.print("preds=");
-//            for (Block p : block.getPredecessors()) {
-//                TTY.print("B" + p.blockID() + ";");
-//            }
-//            TTY.println();
-//        }
 
         for (Node n : graph.getNodes()) {
             if (n instanceof FrameState) {
@@ -254,11 +174,6 @@ public class IdentifyBlocksPhase extends Phase {
                     assert predBlock != null;
                     nodeToBlock.set(f, predBlock);
                     predBlock.getInstructions().add(f);
-                } else if (f.usages().size() == 1) {
-//                    Block predBlock = nodeToBlock.get(f.usages().get(0));
-//                    assert predBlock != null;
-//                    nodeToBlock.set(f, predBlock);
-//                    predBlock.getInstructions().add(f);
                 } else {
                     assert f.predecessors().size() == 0;
                 }
@@ -271,8 +186,8 @@ public class IdentifyBlocksPhase extends Phase {
         if (scheduleAllNodes) {
 
             // Add successors of loop end nodes. Makes the graph cyclic.
-            for (Block block : blocks) {
-                Node n = block.firstNode();
+            for (Node n : blockBeginNodes) {
+                Block block = nodeToBlock.get(n);
                 if (n instanceof LoopBegin) {
                     LoopBegin loopBegin = (LoopBegin) n;
                     nodeToBlock.get(loopBegin.loopEnd()).addSuccessor(block);
@@ -306,7 +221,7 @@ public class IdentifyBlocksPhase extends Phase {
                 }
             } else {
                 Block dominatorBlock = b.getPredecessors().get(0);
-                for (int i=1; i<b.getPredecessors().size(); ++i) {
+                for (int i = 1; i < b.getPredecessors().size(); ++i) {
                     dominatorBlock = getCommonDominator(dominatorBlock, b.getPredecessors().get(i));
                 }
                 CiBitMap blockMap = new CiBitMap(blocks.size());
@@ -380,9 +295,17 @@ public class IdentifyBlocksPhase extends Phase {
                 }
             } else if (usage instanceof FrameState && ((FrameState) usage).block() != null) {
                 Merge merge = ((FrameState) usage).block();
-                for (int i=0; i<merge.endCount(); ++i) {
-                    EndNode pred = merge.endAt(i);
-                    block = getCommonDominator(block, nodeToBlock.get(pred));
+                for (Node pred : merge.predecessors()) {
+                    if (isFixed(pred)) {
+                        block = getCommonDominator(block, nodeToBlock.get(pred));
+                    }
+                }
+            } else if (usage instanceof LoopCounter) {
+                LoopCounter counter = (LoopCounter) usage;
+                if (n == counter.init()) {
+                    LoopBegin loopBegin = counter.loopBegin();
+                    Block mergeBlock = nodeToBlock.get(loopBegin);
+                    block = getCommonDominator(block, mergeBlock.dominator());
                 }
             } else {
                 block = getCommonDominator(block, assignLatestPossibleBlockToNode(usage));
@@ -419,8 +342,6 @@ public class IdentifyBlocksPhase extends Phase {
         assert !map.isMarked(b.firstNode()) && nodeToBlock.get(b.firstNode()) == b;
 
         boolean scheduleFirst = true;
-        assert !instructions.contains(b.lastNode());
-        assert !instructions.contains(b.firstNode());
 
         if (b.firstNode() == b.lastNode()) {
             Node node = b.firstNode();
@@ -435,22 +356,16 @@ public class IdentifyBlocksPhase extends Phase {
             addToSorting(b, i, sortedInstructions, map);
         }
         addToSorting(b, b.lastNode(), sortedInstructions, map);
-        assert sortedInstructions.get(sortedInstructions.size() - 1) == b.lastNode() : "lastNode=" + b.lastNode() + ", firstNode=" + b.firstNode();
         b.setInstructions(sortedInstructions);
     }
 
     private void addToSorting(Block b, Node i, List<Node> sortedInstructions, NodeBitMap map) {
-        if (i == null || map.isMarked(i) || nodeToBlock.get(i) != b || i instanceof Phi || i instanceof Local) {
+        if (i == null || map.isMarked(i) || nodeToBlock.get(i) != b || i instanceof Phi || i instanceof Local || i instanceof LoopCounter) {
             return;
         }
 
-        FrameState state = null;
         for (Node input : i.inputs()) {
-//            if (input instanceof FrameState) {
-//               state = (FrameState) input;
-//            } else {
-                addToSorting(b, input, sortedInstructions, map);
-//            }
+            addToSorting(b, input, sortedInstructions, map);
         }
 
         for (Node pred : i.predecessors()) {
@@ -458,10 +373,6 @@ public class IdentifyBlocksPhase extends Phase {
         }
 
         map.mark(i);
-
-        if (state != null) {
-            addToSorting(b, state, sortedInstructions, map);
-        }
 
         for (Node succ : i.successors()) {
             if (succ instanceof FrameState) {
@@ -551,6 +462,23 @@ public class IdentifyBlocksPhase extends Phase {
             if (isFixed(s)) {
                 i++;
             }
+        }
+        return i;
+    }
+
+    public static int truePredecessorCount(Node n) {
+        if (n == null) {
+            return 0;
+        }
+        int i = 0;
+        for (Node s : n.predecessors()) {
+            if (isFixed(s)) {
+                i++;
+            }
+        }
+
+        if (n instanceof LoopBegin) {
+            i++;
         }
         return i;
     }
