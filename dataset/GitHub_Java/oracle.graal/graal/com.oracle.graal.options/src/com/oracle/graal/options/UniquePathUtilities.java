@@ -60,39 +60,21 @@ public class UniquePathUtilities {
     }
 
     /**
-     * Generate a {@link Path} using the format "%s-%d_%d%s" with the {@link OptionValue#getValue()
+     * Generate a {@link Path} using the format "%s-%d_%d%s" with the {@link OptionKey#getValue()
      * base filename}, a {@link #globalTimeStamp global timestamp}, {@link #getThreadDumpId a per
      * thread unique id} and an optional {@code extension}.
      *
      * @return the output file path or null if the flag is null
      */
-    public static Path getPath(OptionValue<String> option, OptionValue<String> defaultDirectory, String extension) {
-        return getPath(option, defaultDirectory, extension, true);
-    }
-
-    /**
-     * Generate a {@link Path} using the format "%s-%d_%s" with the {@link OptionValue#getValue()
-     * base filename}, a {@link #globalTimeStamp global timestamp} and an optional {@code extension}
-     * .
-     *
-     * @return the output file path or null if the flag is null
-     */
-    public static Path getPathGlobal(OptionValue<String> option, OptionValue<String> defaultDirectory, String extension) {
-        return getPath(option, defaultDirectory, extension, false);
-    }
-
-    private static Path getPath(OptionValue<String> option, OptionValue<String> defaultDirectory, String extension, boolean includeThreadId) {
+    public static Path getPath(OptionKey<String> option, OptionKey<String> defaultDirectory, String extension) {
         if (option.getValue() == null) {
             return null;
         }
-        final String name = includeThreadId
-                        ? String.format("%s-%d_%d%s", option.getValue(), getGlobalTimeStamp(), getThreadDumpId(), formatExtension(extension))
-                        : String.format("%s-%d%s", option.getValue(), getGlobalTimeStamp(), formatExtension(extension));
+        String name = String.format("%s-%d_%d%s", option.getValue(), getGlobalTimeStamp(), getThreadDumpId(), formatExtension(extension));
         Path result = Paths.get(name);
         if (result.isAbsolute() || defaultDirectory == null) {
             return result;
         }
         return Paths.get(defaultDirectory.getValue(), name);
     }
-
 }

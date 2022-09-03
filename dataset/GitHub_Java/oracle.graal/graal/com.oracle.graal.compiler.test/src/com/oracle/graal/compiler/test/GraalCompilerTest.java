@@ -24,6 +24,8 @@ package com.oracle.graal.compiler.test;
 
 import static com.oracle.graal.compiler.GraalCompilerOptions.PrintCompilation;
 import static com.oracle.graal.nodes.ConstantNode.getConstantNodes;
+import static com.oracle.graal.options.OptionValues.GLOBAL;
+import static jdk.vm.ci.runtime.JVMCICompiler.INVOCATION_ENTRY_BCI;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -36,6 +38,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import org.junit.After;
@@ -50,7 +53,6 @@ import com.oracle.graal.api.test.Graal;
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.GraalCompiler;
 import com.oracle.graal.compiler.GraalCompiler.Request;
-import com.oracle.graal.compiler.common.CompilationIdentifier;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.target.Backend;
 import com.oracle.graal.debug.Debug;
@@ -88,7 +90,9 @@ import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.nodes.spi.LoweringProvider;
 import com.oracle.graal.nodes.spi.Replacements;
 import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-import com.oracle.graal.options.DerivedOptionValue;
+import com.oracle.graal.options.OptionKey;
+import com.oracle.graal.options.OptionValues;
+import com.oracle.graal.options.OptionValues.OverrideScope;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.Phase;
@@ -141,8 +145,48 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     private final Providers providers;
     private final Backend backend;
-    private final DerivedOptionValue<Suites> suites;
-    private final DerivedOptionValue<LIRSuites> lirSuites;
+
+    /**
+     * The option values used during a test. They can be overridden with
+     * {@link #overrideOptions(Object...)}.
+     */
+    protected OptionValues options = new OptionValues(GLOBAL);
+
+    /**
+     * Changes the values for a given set of options. The {@linkplain OptionKey#getValue() value} of
+     * each {@code option} in {@code overrides} is set to the corresponding {@code value} in
+     * {@code overrides} until {@link OverrideScope#close()} is called on the object returned by
+     * this method.
+     * <p>
+     * Since the returned object is {@link AutoCloseable} the try-with-resource construct can be
+     * used:
+     *
+     * <pre>
+     * try (OverrideScope s = overrideOptions(myOption1, myValue1, myOption2, myValue2)) {
+     *     // code that depends on myOption == myValue
+     * }
+     * </pre>
+     *
+     * @param overrides overrides in the form {@code [option1, override1, option2, override2, ...]}
+     */
+    protected OverrideScope overrideOptions(Object... overrides) {
+        OptionValues newOptions = new OptionValues(options);
+        for (int i = 0; i < overrides.length; i += 2) {
+            OptionKey<?> option = (OptionKey<?>) overrides[i];
+            Object overrideValue = overrides[i + 1];
+            option.setValue(newOptions, overrideValue);
+        }
+        OptionValues savedOptions = options;
+        String savedOptionsAsString = options.toString();
+        options = newOptions;
+        return new OverrideScope() {
+            @Override
+            public void close() {
+                options = savedOptions;
+                assert options.toString().equals(savedOptionsAsString);
+            }
+        };
+    }
 
     /**
      * Can be overridden by unit tests to verify properties of the graph.
@@ -182,7 +226,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected Suites createSuites() {
-        Suites ret = backend.getSuites().getDefaultSuites().copy();
+        Suites ret = backend.getSuites().getDefaultSuites(options).copy();
         ListIterator<BasePhase<? super HighTierContext>> iter = ret.getHighTier().findPhase(ConvertDeoptimizeToGuardPhase.class, true);
         if (iter != null) {
             PhaseSuite.findNextPhase(iter, CanonicalizerPhase.class);
@@ -246,15 +290,13 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected LIRSuites createLIRSuites() {
-        LIRSuites ret = backend.getSuites().getDefaultLIRSuites().copy();
+        LIRSuites ret = backend.getSuites().getDefaultLIRSuites(options).copy();
         return ret;
     }
 
     public GraalCompilerTest() {
         this.backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
         this.providers = getBackend().getProviders();
-        this.suites = new DerivedOptionValue<>(this::createSuites);
-        this.lirSuites = new DerivedOptionValue<>(this::createLIRSuites);
     }
 
     /**
@@ -273,8 +315,6 @@ public abstract class GraalCompilerTest extends GraalTest {
             this.backend = runtime.getHostBackend();
         }
         this.providers = backend.getProviders();
-        this.suites = new DerivedOptionValue<>(this::createSuites);
-        this.lirSuites = new DerivedOptionValue<>(this::createLIRSuites);
     }
 
     /**
@@ -285,8 +325,6 @@ public abstract class GraalCompilerTest extends GraalTest {
     public GraalCompilerTest(Backend backend) {
         this.backend = backend;
         this.providers = backend.getProviders();
-        this.suites = new DerivedOptionValue<>(this::createSuites);
-        this.lirSuites = new DerivedOptionValue<>(this::createLIRSuites);
     }
 
     private Scope debugScope;
@@ -484,14 +522,6 @@ public abstract class GraalCompilerTest extends GraalTest {
         return backend;
     }
 
-    protected Suites getSuites() {
-        return suites.getValue();
-    }
-
-    protected LIRSuites getLIRSuites() {
-        return lirSuites.getValue();
-    }
-
     protected Providers getProviders() {
         return providers;
     }
@@ -528,9 +558,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         return getProviders().getLowerer();
     }
 
-    protected CompilationIdentifier getCompilationId(ResolvedJavaMethod method) {
-        return getBackend().getCompilationIdentifier(method);
-    }
+    private static AtomicInteger compilationId = new AtomicInteger();
 
     protected void testN(int n, final String name, final Object... args) {
         final List<Throwable> errors = new ArrayList<>(n);
@@ -776,13 +804,13 @@ public abstract class GraalCompilerTest extends GraalTest {
      * Gets installed code for a given method and graph, compiling it first if necessary.
      *
      * @param installedCodeOwner the method the compiled code will be associated with when installed
-     * @param graph0 the graph to be compiled. If null, a graph will be obtained from
+     * @param graph the graph to be compiled. If null, a graph will be obtained from
      *            {@code installedCodeOwner} via {@link #parseForCompile(ResolvedJavaMethod)}.
      * @param forceCompile specifies whether to ignore any previous code cached for the (method,
      *            key) pair
      */
     @SuppressWarnings("try")
-    protected InstalledCode getCode(final ResolvedJavaMethod installedCodeOwner, StructuredGraph graph0, boolean forceCompile) {
+    protected InstalledCode getCode(final ResolvedJavaMethod installedCodeOwner, StructuredGraph graph, boolean forceCompile) {
         if (!forceCompile) {
             InstalledCode cached = cache.get(installedCodeOwner);
             if (cached != null) {
@@ -791,8 +819,8 @@ public abstract class GraalCompilerTest extends GraalTest {
                 }
             }
         }
-        final StructuredGraph graph = graph0 != null ? graph0 : parseForCompile(installedCodeOwner);
-        final CompilationIdentifier id = graph.compilationId();
+
+        final int id = compilationId.incrementAndGet();
 
         InstalledCode installedCode = null;
         try (AllocSpy spy = AllocSpy.open(installedCodeOwner); Scope ds = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true))) {
@@ -864,7 +892,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         lastCompiledGraph = graphToCompile;
         try (Scope s = Debug.scope("Compile", graphToCompile)) {
             Request<CompilationResult> request = new Request<>(graphToCompile, installedCodeOwner, getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
-                            graphToCompile.getProfilingInfo(), getSuites(), getLIRSuites(), compilationResult, CompilationResultBuilderFactory.Default);
+                            graphToCompile.getProfilingInfo(), createSuites(), createLIRSuites(), compilationResult, CompilationResultBuilderFactory.Default);
             return GraalCompiler.compile(request);
         } catch (Throwable e) {
             throw Debug.handle(e);
@@ -878,7 +906,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected InstalledCode addMethod(final ResolvedJavaMethod method, final CompilationResult compilationResult) {
-        return backend.addInstalledCode(method, null, compilationResult);
+        return backend.addInstalledCode(method, compilationResult);
     }
 
     private final Map<ResolvedJavaMethod, Method> methodMap = new HashMap<>();
@@ -968,7 +996,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     @SuppressWarnings("try")
     private StructuredGraph parse1(ResolvedJavaMethod javaMethod, PhaseSuite<HighTierContext> graphBuilderSuite, AllowAssumptions allowAssumptions) {
         assert javaMethod.getAnnotation(Test.class) == null : "shouldn't parse method with @Test annotation: " + javaMethod;
-        StructuredGraph graph = new StructuredGraph(javaMethod, allowAssumptions, getSpeculationLog(), getCompilationId(javaMethod));
+        StructuredGraph graph = new StructuredGraph(javaMethod, INVOCATION_ENTRY_BCI, allowAssumptions, getSpeculationLog(), true, options);
         try (Scope ds = Debug.scope("Parsing", javaMethod, graph)) {
             graphBuilderSuite.apply(graph, getDefaultHighTierContext());
             return graph;

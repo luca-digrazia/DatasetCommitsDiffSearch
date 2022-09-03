@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.truffle;
 
+import static com.oracle.graal.options.OptionValues.GLOBAL;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreThrown;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompileOnly;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleEnableInfopoints;
@@ -48,13 +49,14 @@ import java.util.function.Supplier;
 import com.oracle.graal.api.runtime.GraalRuntime;
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.CompilerThreadFactory;
-import com.oracle.graal.compiler.common.CompilationIdentifier;
-import com.oracle.graal.compiler.target.Backend;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.options.OptionKey;
+import com.oracle.graal.options.OptionValues;
+import com.oracle.graal.options.OptionValues.OverrideScope;
 import com.oracle.graal.serviceprovider.GraalServices;
 import com.oracle.graal.truffle.debug.CompilationStatisticsListener;
 import com.oracle.graal.truffle.debug.PrintCallTargetProfiling;
@@ -137,11 +139,56 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     private final Supplier<GraalRuntime> graalRuntime;
     private final GraalTVMCI tvmci = new GraalTVMCI();
 
+    private static final ThreadLocal<OptionValues> optionsOverride = new ThreadLocal<>();
+
+    protected final OptionValues options = new OptionValues(GLOBAL);
+
     /**
      * Utility method that casts the singleton {@link TruffleRuntime}.
      */
     public static GraalTruffleRuntime getRuntime() {
         return (GraalTruffleRuntime) Truffle.getRuntime();
+    }
+
+    /**
+     * Overrides the option values used by the Truffle runtime on the calling thread. Only one
+     * override scope can be activated at a time for a thread.
+     *
+     * The {@linkplain OptionKey#getValue() value} of each {@code option} in {@code overrides} is
+     * set to the corresponding {@code value} in {@code overrides} until
+     * {@link OverrideScope#close()} is called on the object returned by this method.
+     * <p>
+     * Since the returned object is {@link AutoCloseable} the try-with-resource construct can be
+     * used:
+     *
+     * <pre>
+     * try (OverrideScope s = overrideOptions(myOption1, myValue1, myOption2, myValue2)) {
+     *     // code that depends on myOption == myValue
+     * }
+     * </pre>
+     *
+     * @param overrides overrides in the form {@code [option1, override1, option2, override2, ...]}
+     */
+    public OverrideScope overrideOptions(Object... overrides) {
+        assert optionsOverride.get() == null;
+        OptionValues newOptions = new OptionValues(options);
+        for (int i = 0; i < overrides.length; i += 2) {
+            OptionKey<?> option = (OptionKey<?>) overrides[i];
+            Object overrideValue = overrides[i + 1];
+            option.setValue(newOptions, overrideValue);
+        }
+        optionsOverride.set(newOptions);
+        return new OverrideScope() {
+            @Override
+            public void close() {
+                optionsOverride.set(null);
+            }
+        };
+    }
+
+    public OptionValues getOptions() {
+        OptionValues result = optionsOverride.get();
+        return result == null ? options : result;
     }
 
     public GraalTruffleRuntime(Supplier<GraalRuntime> graalRuntime) {
@@ -377,7 +424,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     @SuppressFBWarnings(value = "", justification = "Cache that does not need to use equals to compare.")
     final boolean acceptForCompilation(RootNode rootNode) {
-        String includesExcludes = TruffleCompileOnly.getValue();
+        String includesExcludes = TruffleCompileOnly.getValue(options);
         if (includesExcludes != null) {
             if (cachedIncludesExcludes != includesExcludes) {
                 parseCompileOnly();
@@ -481,21 +528,12 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     @SuppressWarnings("try")
     private void doCompile0(OptimizedCallTarget optimizedCallTarget) {
         try (Scope s = Debug.scope("Truffle", new TruffleDebugJavaMethod(optimizedCallTarget))) {
-            getTruffleCompiler().compileMethod(optimizedCallTarget, this);
+            getTruffleCompiler().compileMethod(optimizedCallTarget);
         } catch (Throwable e) {
             optimizedCallTarget.notifyCompilationFailed(e);
         } finally {
             optimizedCallTarget.resetCompilationTask();
         }
-    }
-
-    /**
-     * @param optimizedCallTarget
-     * @param callRootMethod
-     * @param backend
-     */
-    public CompilationIdentifier getCompilationIdentifier(OptimizedCallTarget optimizedCallTarget, ResolvedJavaMethod callRootMethod, Backend backend) {
-        return backend.getCompilationIdentifier(callRootMethod);
     }
 
     protected abstract BackgroundCompileQueue getCompileQueue();
