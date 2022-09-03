@@ -24,7 +24,6 @@ package com.oracle.svm.jni.functions;
 
 // Checkstyle: allow reflection
 
-import java.io.CharConversionException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
@@ -40,7 +39,6 @@ import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
-import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
@@ -48,11 +46,11 @@ import org.graalvm.nativeimage.c.type.CShortPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.WordPointer;
 import org.graalvm.word.Pointer;
+import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateUtil;
-import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.c.function.CEntryPointActions;
@@ -63,6 +61,7 @@ import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.thread.VMThreads;
 import com.oracle.svm.core.util.Utf8;
+import com.oracle.svm.core.util.Utf8Exception;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.jni.JNIGlobalHandles;
 import com.oracle.svm.jni.JNIObjectHandles;
@@ -399,28 +398,11 @@ final class JNIFunctions {
     }
 
     /*
-     * jobject AllocObject(JNIEnv *env, jclass clazz);
-     */
-
-    @CEntryPoint
-    @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, exceptionHandler = JNIExceptionHandlerReturnNullHandle.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
-    static JNIObjectHandle AllocObject(JNIEnvironment env, JNIObjectHandle classHandle) {
-        Class<?> clazz = JNIObjectHandles.getObject(classHandle);
-        Object instance;
-        try {
-            instance = UnsafeAccess.UNSAFE.allocateInstance(clazz);
-        } catch (InstantiationException e) {
-            instance = null;
-        }
-        return JNIThreadLocalHandles.get().create(instance);
-    }
-
-    /*
      * jstring NewString(JNIEnv *env, const jchar *unicodeChars, jsize len);
      */
 
     @CEntryPoint
-    @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, exceptionHandler = JNIExceptionHandlerReturnNullHandle.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
+    @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, exceptionHandler = JNIExceptionHandlerReturnNullWord.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static JNIObjectHandle NewString(JNIEnvironment env, CShortPointer unicode, int len) {
         String str;
         char[] chars = new char[len];
@@ -437,14 +419,18 @@ final class JNIFunctions {
      */
 
     @CEntryPoint
-    @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, exceptionHandler = JNIExceptionHandlerReturnNullHandle.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
+    @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, exceptionHandler = JNIExceptionHandlerReturnNullWord.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static JNIObjectHandle NewStringUTF(JNIEnvironment env, CCharPointer bytes) {
         String str = null;
         if (bytes.isNonNull()) {
-            ByteBuffer buffer = SubstrateUtil.wrapAsByteBuffer(bytes, Integer.MAX_VALUE);
+            UnsignedWord len = SubstrateUtil.strlen(bytes);
+            byte[] array = new byte[(int) len.rawValue()];
+            for (int i = 0; i < array.length; i++) {
+                array[i] = ((Pointer) bytes).readByte(i);
+            }
             try {
-                str = Utf8.utf8ToString(true, buffer);
-            } catch (CharConversionException ignore) {
+                str = Utf8.utf8ToString(true, array);
+            } catch (Utf8Exception ignore) {
             }
         }
         return JNIThreadLocalHandles.get().create(str);
@@ -574,10 +560,9 @@ final class JNIFunctions {
         if (len < 0) {
             throw new StringIndexOutOfBoundsException(len);
         }
-        int capacity = Utf8.maxUtf8ByteLength(len, true); // estimate: caller must pre-allocate
-                                                          // enough
+        int capacity = Utf8.maxByteLength(len, true); // estimate: caller must pre-allocate enough
         ByteBuffer buffer = SubstrateUtil.wrapAsByteBuffer(buf, capacity);
-        Utf8.substringToUtf8(buffer, str, start, start + len, true);
+        Utf8.writeString(buffer, str, start, start + len, true);
     }
 
     /*
@@ -763,25 +748,6 @@ final class JNIFunctions {
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, exceptionHandler = JNIExceptionHandlerVoid.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static void Throw(JNIEnvironment env, JNIObjectHandle handle) throws Throwable {
         throw (Throwable) JNIObjectHandles.getObject(handle);
-    }
-
-    interface NewObjectWithObjectArgFunctionPointer extends CFunctionPointer {
-        @InvokeCFunctionPointer
-        JNIObjectHandle invoke(JNIEnvironment env, JNIObjectHandle clazz, JNIMethodId ctor, JNIObjectHandle arg);
-    }
-
-    /*
-     * jint ThrowNew(JNIEnv *env, jclass clazz, const char *message);
-     */
-    @CEntryPoint
-    @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, exceptionHandler = JNIExceptionHandlerVoid.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
-    static void ThrowNew(JNIEnvironment env, JNIObjectHandle clazzHandle, CCharPointer message) throws Throwable {
-        Class<?> clazz = JNIObjectHandles.getObject(clazzHandle);
-        JNIMethodId ctor = JNIReflectionDictionary.singleton().getMethodID(clazz, "<init>", "(Ljava/lang/String;)V", false);
-        JNIObjectHandle messageHandle = NewStringUTF(env, message);
-        NewObjectWithObjectArgFunctionPointer newObject = (NewObjectWithObjectArgFunctionPointer) env.getFunctions().getNewObject();
-        JNIObjectHandle exception = newObject.invoke(env, clazzHandle, ctor, messageHandle);
-        throw (Throwable) JNIObjectHandles.getObject(exception);
     }
 
     /*
