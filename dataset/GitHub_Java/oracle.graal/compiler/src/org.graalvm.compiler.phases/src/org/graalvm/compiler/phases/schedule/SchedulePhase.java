@@ -1092,7 +1092,7 @@ public final class SchedulePhase extends Phase {
                             continue;
                         }
                         GuardNode.GuardPriority inputPriority = priorities.get(input);
-                        if (inputPriority == null || inputPriority.isLowerPriorityThan(priority)) {
+                        if (inputPriority == null || inputPriority.compareTo(priority) > 0) {
                             priorities.set(input, priority);
                             stack.push(input);
                         }

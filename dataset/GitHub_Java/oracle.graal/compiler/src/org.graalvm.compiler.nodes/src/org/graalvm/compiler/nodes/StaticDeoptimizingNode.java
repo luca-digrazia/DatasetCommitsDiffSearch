@@ -45,15 +45,7 @@ public interface StaticDeoptimizingNode extends ValueNodeInterface {
     enum GuardPriority {
         Speculation,
         Profile,
-        None;
-
-        public boolean isHigherPriorityThan(GuardPriority other) {
-            return this.compareTo(other) < 0;
-        }
-
-        public boolean isLowerPriorityThan(GuardPriority other) {
-            return this.compareTo(other) > 0;
-        }
+        None
     }
 
     default GuardPriority computePriority() {
