@@ -24,6 +24,8 @@
  */
 package com.oracle.truffle.api.vm;
 
+import static com.oracle.truffle.api.vm.PolyglotImpl.engineError;
+import static com.oracle.truffle.api.vm.PolyglotImpl.isGuestInteropValue;
 import static com.oracle.truffle.api.vm.VMAccessor.JAVAINTEROP;
 import static com.oracle.truffle.api.vm.VMAccessor.LANGUAGE;
 
@@ -52,9 +54,9 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.vm.PolyglotImpl.VMObject;
 
-@SuppressWarnings("deprecation")
-final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
+final class PolyglotLanguageContext implements VMObject {
 
     private static final String[] EMPTY_STRING_ARRAY = new String[0];
 
@@ -559,7 +561,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
             PolyglotValue valueImpl = (PolyglotValue) languageContext.getAPIAccess().getImpl(receiverValue);
             if (valueImpl.languageContext.context != languageContext.context) {
                 CompilerDirectives.transferToInterpreter();
-                throw PolyglotImpl.engineError(new IllegalArgumentException(String.format("Values cannot be passed from one context to another. " +
+                throw engineError(new IllegalArgumentException(String.format("Values cannot be passed from one context to another. " +
                                 "The current value originates from context 0x%s and the argument originates from context 0x%s.",
                                 Integer.toHexString(languageContext.context.api.hashCode()), Integer.toHexString(valueImpl.languageContext.context.api.hashCode()))));
             }
@@ -569,7 +571,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         } else if (receiver instanceof Proxy) {
             return PolyglotProxy.toProxyGuestObject(languageContext, (Proxy) receiver);
         } else {
-            return JAVAINTEROP.toGuestObject(receiver, languageContext);
+            return JAVAINTEROP.toJavaGuestObject(receiver, languageContext);
         }
     }
 
@@ -594,7 +596,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         if (receiver instanceof Proxy) {
             return PolyglotProxy.toProxyGuestObject(PolyglotLanguageContext.this, (Proxy) receiver);
         } else {
-            return (TruffleObject) JAVAINTEROP.toGuestObject(receiver, PolyglotLanguageContext.this);
+            return (TruffleObject) JAVAINTEROP.toJavaGuestObject(receiver, PolyglotLanguageContext.this);
         }
     }
 
@@ -706,7 +708,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         Object symbol = lookupGuest(symbolName);
         Value resolvedSymbol = null;
         if (symbol != null) {
-            assert PolyglotImpl.isGuestInteropValue(symbol);
+            assert isGuestInteropValue(symbol);
             resolvedSymbol = toHostValue(symbol);
         }
         return resolvedSymbol;
