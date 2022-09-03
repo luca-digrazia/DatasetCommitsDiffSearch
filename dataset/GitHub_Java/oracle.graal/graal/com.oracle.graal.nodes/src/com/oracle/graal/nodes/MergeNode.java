@@ -35,18 +35,18 @@ import com.oracle.graal.nodes.util.*;
  */
 public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeType, LIRLowerable {
 
-    @Input(notDataflow = true) private final NodeInputList<AbstractEndNode> ends = new NodeInputList<>(this);
+    @Input(notDataflow = true) private final NodeInputList<EndNode> ends = new NodeInputList<>(this);
 
     @Override
     public void generate(LIRGeneratorTool gen) {
         gen.visitMerge(this);
     }
 
-    public int forwardEndIndex(AbstractEndNode end) {
+    public int forwardEndIndex(EndNode end) {
         return ends.indexOf(end);
     }
 
-    public void addForwardEnd(AbstractEndNode end) {
+    public void addForwardEnd(EndNode end) {
         ends.add(end);
     }
 
@@ -54,12 +54,12 @@ public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeT
         return ends.size();
     }
 
-    public AbstractEndNode forwardEndAt(int index) {
+    public EndNode forwardEndAt(int index) {
         return ends.get(index);
     }
 
     @Override
-    public NodeIterable<AbstractEndNode> cfgPredecessors() {
+    public NodeIterable<EndNode> cfgPredecessors() {
         return ends;
     }
 
@@ -79,7 +79,7 @@ public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeT
      * 
      * @param pred the end to remove
      */
-    public void removeEnd(AbstractEndNode pred) {
+    public void removeEnd(EndNode pred) {
         int predIndex = phiPredecessorIndex(pred);
         assert predIndex != -1;
         deleteEnd(pred);
@@ -95,7 +95,7 @@ public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeT
         }
     }
 
-    protected void deleteEnd(AbstractEndNode end) {
+    protected void deleteEnd(EndNode end) {
         ends.remove(end);
     }
 
@@ -103,7 +103,7 @@ public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeT
         ends.clear();
     }
 
-    public NodeIterable<AbstractEndNode> forwardEnds() {
+    public NodeIterable<EndNode> forwardEnds() {
         return ends;
     }
 
@@ -111,11 +111,11 @@ public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeT
         return forwardEndCount();
     }
 
-    public int phiPredecessorIndex(AbstractEndNode pred) {
+    public int phiPredecessorIndex(EndNode pred) {
         return forwardEndIndex(pred);
     }
 
-    public AbstractEndNode phiPredecessorAt(int index) {
+    public EndNode phiPredecessorAt(int index) {
         return forwardEndAt(index);
     }
 
@@ -143,8 +143,8 @@ public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeT
     @Override
     public void simplify(SimplifierTool tool) {
         FixedNode next = next();
-        if (next instanceof AbstractEndNode) {
-            AbstractEndNode origLoopEnd = (AbstractEndNode) next;
+        if (next instanceof EndNode) {
+            EndNode origLoopEnd = (EndNode) next;
             MergeNode merge = origLoopEnd.merge();
             if (merge instanceof LoopBeginNode && !(origLoopEnd instanceof LoopEndNode)) {
                 return;
@@ -167,13 +167,14 @@ public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeT
             }
             Debug.log("Split %s into ends for %s.", this, merge);
             int numEnds = this.forwardEndCount();
+            StructuredGraph graph = (StructuredGraph) graph();
             for (int i = 0; i < numEnds - 1; i++) {
-                AbstractEndNode end = forwardEndAt(numEnds - 1 - i);
-                AbstractEndNode newEnd;
+                EndNode end = forwardEndAt(numEnds - 1 - i);
+                EndNode newEnd;
                 if (merge instanceof LoopBeginNode) {
-                    newEnd = graph().add(new LoopEndNode((LoopBeginNode) merge));
+                    newEnd = graph.add(new LoopEndNode((LoopBeginNode) merge));
                 } else {
-                    newEnd = graph().add(new EndNode());
+                    newEnd = graph.add(new EndNode());
                     merge.addForwardEnd(newEnd);
                 }
                 for (PhiNode phi : merge.phis()) {
@@ -192,7 +193,7 @@ public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeT
                 end.safeDelete();
                 tool.addToWorkList(newEnd.predecessor()); // ?
             }
-            graph().reduceTrivialMerge(this);
+            graph.reduceTrivialMerge(this);
         }
     }
 }
