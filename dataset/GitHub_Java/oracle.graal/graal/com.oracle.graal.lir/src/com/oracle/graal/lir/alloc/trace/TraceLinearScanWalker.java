@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 import static com.oracle.graal.lir.LIRValueUtil.isVariable;
 import static jdk.vm.ci.code.CodeUtil.isOdd;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static jdk.vm.ci.code.ValueUtil.isStackSlotValue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -569,8 +569,13 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
                      * The loop depth of the spilling position is higher then the loop depth at the
                      * definition of the interval. Move write to memory out of loop.
                      */
-                    // store at definition of the interval
-                    interval.setSpillState(SpillState.StoreAtDefinition);
+                    if (com.oracle.graal.lir.alloc.lsra.LinearScan.Options.LIROptLSRAOptimizeSpillPosition.getValue()) {
+                        // find best spill position in dominator the tree
+                        interval.setSpillState(SpillState.SpillInDominator);
+                    } else {
+                        // store at definition of the interval
+                        interval.setSpillState(SpillState.StoreAtDefinition);
+                    }
                 } else {
                     /*
                      * The interval is currently spilled only once, so for now there is no reason to
@@ -582,8 +587,13 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
             }
 
             case OneSpillStore: {
-                // It is better to store it to memory at the definition.
-                interval.setSpillState(SpillState.StoreAtDefinition);
+                if (com.oracle.graal.lir.alloc.lsra.LinearScan.Options.LIROptLSRAOptimizeSpillPosition.getValue()) {
+                    // the interval is spilled more then once
+                    interval.setSpillState(SpillState.SpillInDominator);
+                } else {
+                    // It is better to store it to memory at the definition.
+                    interval.setSpillState(SpillState.StoreAtDefinition);
+                }
                 break;
             }
 
