@@ -235,7 +235,7 @@ public class LLVM {
     }
 
     public static LLVMParserResult parseBitcodeFile(Source source, LLVMContext context) {
-        return LLVMBitcodeVisitor.parse(source, context, getNodeFactoryFacade());
+        return LLVMBitcodeVisitor.getMain(source, context, getNodeFactoryFacade());
     }
 
     public static int executeMain(File file, Object... args) {
