@@ -39,6 +39,16 @@ import java.util.BitSet;
 import java.util.EnumSet;
 import java.util.List;
 
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.alloc.ComputeBlockOrder;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
@@ -54,6 +64,7 @@ import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.LoadConstantOp;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
+import com.oracle.graal.lir.ValueConsumer;
 import com.oracle.graal.lir.ValueProcedure;
 import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.alloc.trace.ShadowedRegisterValue;
@@ -61,16 +72,6 @@ import com.oracle.graal.lir.alloc.trace.lsra.TraceInterval.RegisterPriority;
 import com.oracle.graal.lir.alloc.trace.lsra.TraceInterval.SpillState;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.ssi.SSIUtil;
-
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
 
 final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanAllocationPhase {
 
@@ -124,6 +125,14 @@ final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanAllocati
             }
         }
 
+        private final ValueConsumer setVariableConsumer = new ValueConsumer() {
+            public void visitValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+                if (isVariable(value)) {
+                    allocator.getOrCreateInterval(asVariable(value));
+                }
+            }
+        };
+
         /**
          * Numbers all instructions in all blocks. The numbering follows the
          * {@linkplain ComputeBlockOrder linear scan order}.
@@ -155,6 +164,9 @@ final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanAllocati
 
                     allocator.putOpIdMaps(index, op, block);
                     assert allocator.instructionForId(opId) == op : "must match";
+
+                    op.visitEachTemp(setVariableConsumer);
+                    op.visitEachOutput(setVariableConsumer);
 
                     index++;
                     opId += 2; // numbering of lirOps by two

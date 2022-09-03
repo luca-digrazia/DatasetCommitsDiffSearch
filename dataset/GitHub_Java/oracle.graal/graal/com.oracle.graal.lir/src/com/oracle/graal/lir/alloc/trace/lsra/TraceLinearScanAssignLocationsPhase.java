@@ -38,7 +38,6 @@ import java.util.List;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Value;
 
@@ -164,7 +163,10 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
                  */
                 final LIRInstruction instr = allocator.getLIR().getLIRforBlock(block).get(allocator.getLIR().getLIRforBlock(block).size() - 1);
                 if (instr instanceof StandardOp.JumpOp) {
-                    throw JVMCIError.unimplemented("DebugInfo on jumps are not supported!");
+                    if (allocator.getBlockData(block).liveOut.get(allocator.operandNumber(operand))) {
+                        tempOpId = allocator.getFirstLirInstructionId(block.getSuccessors().iterator().next());
+                        mode = OperandMode.DEF;
+                    }
                 }
             }
 
