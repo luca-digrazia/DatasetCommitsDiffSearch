@@ -183,15 +183,13 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMNode tryCreateFunctionSubstitution(FunctionType declaration, LLVMExpressionNode[] argNodes, int numberOfExplicitArguments) {
-        String functionName = declaration.getName();
-        if (functionName.startsWith("@llvm")) {
-            return LLVMIntrinsicFactory.create(declaration, argNodes, numberOfExplicitArguments, runtime);
-        } else if (functionName.startsWith("@truffle")) {
-            return LLVMTruffleIntrinsicFactory.create(functionName, argNodes);
-        } else {
-            return null;
-        }
+    public LLVMNode createLLVMIntrinsic(FunctionType declaration, Object[] argNodes, int numberOfExplicitArguments) {
+        return LLVMIntrinsicFactory.create(declaration, argNodes, numberOfExplicitArguments, runtime);
+    }
+
+    @Override
+    public LLVMNode createTruffleIntrinsic(String functionName, LLVMExpressionNode[] argNodes) {
+        return LLVMTruffleIntrinsicFactory.create(functionName, argNodes);
     }
 
     @Override
@@ -275,7 +273,10 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     public LLVMExpressionNode createSelect(Type type, LLVMExpressionNode condition, LLVMExpressionNode trueValue, LLVMExpressionNode falseValue) {
         LLVMBaseType llvmType = type.getLLVMBaseType();
         if (type instanceof VectorType) {
-            final LLVMAddressNode target = (LLVMAddressNode) runtime.allocateVectorResult(type);
+            final int size = runtime.getByteSize(type);
+            final int alignment = runtime.getBitAlignment(llvmType);
+            final LLVMAddressNode target = (LLVMAddressNode) createAlloc(type, size, alignment, null, null);
+
             return LLVMSelectFactory.createSelectVector(llvmType, target, condition, trueValue, falseValue);
         } else {
             return LLVMSelectFactory.createSelect(llvmType, condition, trueValue, falseValue);
