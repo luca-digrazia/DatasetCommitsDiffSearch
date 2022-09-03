@@ -214,7 +214,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
         }
     }
 
-    protected static void forEach(LIRInstruction inst, Values values, OperandMode mode, InstructionValueProcedure proc) {
+    protected static void forEach(LIRInstruction inst, Values values, OperandMode mode, InstructionValueProcedureBase proc) {
         for (int i = 0; i < values.getCount(); i++) {
             assert LIRInstruction.ALLOWED_FLAGS.get(mode).containsAll(values.getFlags(i));
 
@@ -225,7 +225,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
                     CompositeValue composite = (CompositeValue) value;
                     newValue = composite.forEachComponent(inst, mode, proc);
                 } else {
-                    newValue = proc.doValue(inst, value, mode, values.getFlags(i));
+                    newValue = proc.processValue(inst, value, mode, values.getFlags(i));
                 }
                 if (!value.identityEquals(newValue)) {
                     values.setValue(inst, i, newValue);
@@ -239,7 +239,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
                         CompositeValue composite = (CompositeValue) value;
                         newValue = composite.forEachComponent(inst, mode, proc);
                     } else {
-                        newValue = proc.doValue(inst, value, mode, values.getFlags(i));
+                        newValue = proc.processValue(inst, value, mode, values.getFlags(i));
                     }
                     if (!value.identityEquals(newValue)) {
                         valueArray[j] = newValue;
@@ -249,7 +249,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
         }
     }
 
-    protected static CompositeValue forEachComponent(LIRInstruction inst, CompositeValue obj, Values values, OperandMode mode, InstructionValueProcedure proc) {
+    protected static CompositeValue forEachComponent(LIRInstruction inst, CompositeValue obj, Values values, OperandMode mode, InstructionValueProcedureBase proc) {
         CompositeValue newCompValue = null;
         for (int i = 0; i < values.getCount(); i++) {
             assert LIRInstruction.ALLOWED_FLAGS.get(mode).containsAll(values.getFlags(i));
@@ -261,7 +261,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
                     CompositeValue composite = (CompositeValue) value;
                     newValue = composite.forEachComponent(inst, mode, proc);
                 } else {
-                    newValue = proc.doValue(inst, value, mode, values.getFlags(i));
+                    newValue = proc.processValue(inst, value, mode, values.getFlags(i));
                 }
                 if (!value.identityEquals(newValue)) {
                     // lazy initialize
@@ -280,7 +280,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
                         CompositeValue composite = (CompositeValue) value;
                         newValue = composite.forEachComponent(inst, mode, proc);
                     } else {
-                        newValue = proc.doValue(inst, value, mode, values.getFlags(i));
+                        newValue = proc.processValue(inst, value, mode, values.getFlags(i));
                     }
                     if (!value.identityEquals(newValue)) {
                         // lazy initialize
@@ -304,18 +304,19 @@ abstract class LIRIntrospection extends FieldIntrospection {
 
             if (i < values.getDirectCount()) {
                 Value value = values.getValue(obj, i);
-                doForValue(inst, values, mode, proc, outerPosition, i, ValuePosition.NO_SUBINDEX, value);
+                doForValue(inst, mode, proc, outerPosition, i, ValuePosition.NO_SUBINDEX, value);
             } else {
                 Value[] valueArray = values.getValueArray(obj, i);
                 for (int j = 0; j < valueArray.length; j++) {
                     Value value = valueArray[j];
-                    doForValue(inst, values, mode, proc, outerPosition, i, j, value);
+                    doForValue(inst, mode, proc, outerPosition, i, j, value);
                 }
             }
         }
     }
 
-    private static void doForValue(LIRInstruction inst, Values values, OperandMode mode, ValuePositionProcedure proc, ValuePosition outerPosition, int index, int subIndex, Value value) {
+    private static void doForValue(LIRInstruction inst, OperandMode mode, ValuePositionProcedure proc, ValuePosition outerPosition, int index, int subIndex, Value value) {
+        Values values = inst.getLIRInstructionClass().getValues(mode);
         ValuePosition position = new ValuePosition(values, index, subIndex, outerPosition);
         if (value instanceof CompositeValue) {
             CompositeValue composite = (CompositeValue) value;
