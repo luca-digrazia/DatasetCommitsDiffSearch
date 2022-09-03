@@ -47,7 +47,7 @@ public final class SeparateClassloaderTestRunner extends BlockJUnit4ClassRunner 
     }
 
     private static class TestClassLoader extends URLClassLoader {
-        TestClassLoader() {
+        public TestClassLoader() {
             super(((URLClassLoader) getSystemClassLoader()).getURLs());
         }
 

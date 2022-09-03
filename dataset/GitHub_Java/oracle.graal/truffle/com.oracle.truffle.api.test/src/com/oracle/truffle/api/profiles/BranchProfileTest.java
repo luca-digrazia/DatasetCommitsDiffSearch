@@ -22,10 +22,13 @@
  */
 package com.oracle.truffle.api.profiles;
 
+import com.oracle.truffle.api.nodes.Node;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
+@RunWith(SeparateClassloaderTestRunner.class)
 public class BranchProfileTest {
 
     @Test
@@ -47,4 +50,17 @@ public class BranchProfileTest {
         assertTrue(profile.toString().contains(Integer.toHexString(profile.hashCode())));
     }
 
+    // BEGIN: BranchProfileSample
+    class SampleNode extends Node {
+        final BranchProfile errorProfile = BranchProfile.create();
+
+        int execute(int value) {
+            if (value == Integer.MAX_VALUE) {
+                errorProfile.enter();
+                throw new Error("Invalid input value");
+            }
+            return value;
+        }
+    }
+    // END: BranchProfileSample
 }
