@@ -190,29 +190,25 @@ public class Space {
 
     /** Report some statistics about this Space. */
     public Log report(Log log, boolean traceHeapChunks) {
-        log.string("[").string(getName()).string(":").indent(true);
+        log.string("[").string(getName()).string(":");
         getAccounting().report(log);
         if (traceHeapChunks) {
             if (getFirstAlignedHeapChunk().isNonNull()) {
-                log.newline().string("aligned chunks:").redent(true);
+                log.newline().string("  ").string("  aligned chunks:");
                 for (AlignedHeapChunk.AlignedHeader aChunk = getFirstAlignedHeapChunk(); aChunk.isNonNull(); aChunk = aChunk.getNext()) {
                     /* TODO: Print out the HeapChunk identifier. */
-                    log.newline().hex(aChunk)
-                                    .string(" (").hex(AlignedHeapChunk.getAlignedHeapChunkStart(aChunk)).string("-").hex(aChunk.getTop()).string(")");
+                    log.string("  ").hex(aChunk).string(" (").hex(AlignedHeapChunk.getAlignedHeapChunkStart(aChunk)).string("-").hex(aChunk.getTop()).string(")");
                 }
-                log.redent(false);
             }
             if (getFirstUnalignedHeapChunk().isNonNull()) {
-                log.newline().string("unaligned chunks:").redent(true);
+                log.newline().string("  ").string("  unaligned chunks:");
                 for (UnalignedHeapChunk.UnalignedHeader uChunk = getFirstUnalignedHeapChunk(); uChunk.isNonNull(); uChunk = uChunk.getNext()) {
                     /* TODO: Print out the HeapChunk identifier. */
-                    log.newline().hex(uChunk)
-                                    .string(" (").hex(UnalignedHeapChunk.getUnalignedHeapChunkStart(uChunk)).string("-").hex(uChunk.getTop()).string(")");
+                    log.string("  ").hex(uChunk);
                 }
-                log.redent(false);
             }
         }
-        log.redent(false).string("]");
+        log.string("]");
         return log;
     }
 
@@ -833,9 +829,8 @@ public class Space {
         }
 
         public void report(Log reportLog) {
-            reportLog.string("aligned: ").unsigned(alignedChunkBytes).string("/").unsigned(alignedCount);
-            reportLog.string(" ");
-            reportLog.string("unaligned: ").unsigned(unalignedChunkBytes).string("/").unsigned(unalignedCount);
+            reportLog.string(" aligned: ").unsigned(alignedChunkBytes).string("/").unsigned(alignedCount);
+            reportLog.string(" unaligned: ").unsigned(unalignedChunkBytes).string("/").unsigned(unalignedCount);
         }
 
         void noteAlignedHeapChunk(UnsignedWord size) {
