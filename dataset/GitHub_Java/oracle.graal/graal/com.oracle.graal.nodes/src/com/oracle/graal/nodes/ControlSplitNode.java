@@ -61,6 +61,14 @@ public abstract class ControlSplitNode extends FixedNode {
         branchProbability[successorIndex] = x;
     }
 
+    /**
+     * Gets the successor corresponding to the default (fall through) case.
+     * @return the default successor
+     */
+    public FixedNode defaultSuccessor() {
+        return blockSuccessor(blockSuccessorCount() - 1);
+    }
+
     public Iterable<BeginNode> blockSuccessors() {
         return new Iterable<BeginNode>() {
             @Override
