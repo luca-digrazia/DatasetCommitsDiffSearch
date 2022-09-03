@@ -56,19 +56,16 @@ public class SLFactorialTest {
     public void initEngine() throws Exception {
         engine = PolyglotEngine.newBuilder().build();
         // @formatter:off
-        engine.eval(
-            Source.newBuilder("\n" +
-                "function fac(n) {\n" +
-                "  if (n <= 1) {\n" +
-                "    return 1;\n" +
-                "  }\n" +
-                "  prev = fac(n - 1);\n" +
-                "  return prev * n;\n" +
-                "}\n").
-            name("factorial.sl").
-            mimeType("application/x-sl").
-            build()
-        );
+        engine.eval(Source.fromText(
+            "function fac(n) {\n" +
+            "  if (n <= 1) {\n" +
+            "    return 1;\n" +
+            "  }\n" +
+            "  prev = fac(n - 1);\n" +
+            "  return prev * n;\n" +
+            "}\n",
+            "factorial.sl"
+        ).withMimeType("application/x-sl"));
         // @formatter:on
         factorial = engine.findGlobalSymbol("fac");
     }
