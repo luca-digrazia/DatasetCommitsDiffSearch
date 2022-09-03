@@ -291,10 +291,6 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
             return registerAttributes[reg.number];
         }
 
-        public boolean isAllocatable(RegisterValue register) {
-            return attributes(register.getRegister()).isAllocatable();
-        }
-
         public MoveFactory getSpillMoveFactory() {
             return moveFactory;
         }
