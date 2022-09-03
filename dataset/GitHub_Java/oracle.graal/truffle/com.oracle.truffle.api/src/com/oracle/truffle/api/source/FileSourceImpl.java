@@ -68,14 +68,14 @@ final class FileSourceImpl extends Content implements Content.CreateURI {
         if (Source.fileCacheEnabled) {
             if (code == null) {
                 try {
-                    code = Source.read(file);
+                    code = Source.read(getReader());
                 } catch (IOException e) {
                 }
             }
             return code;
         }
         try {
-            return Source.read(file);
+            return Source.read(new InputStreamReader(new FileInputStream(file), "UTF-8"));
         } catch (IOException e) {
         }
         return null;
