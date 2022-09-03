@@ -744,7 +744,7 @@ public class NativeImage {
         boolean buildExecutable = !NativeImageKind.SHARED_LIBRARY.name().equals(imageKind);
         boolean printFlags = imageBuilderArgs.stream().anyMatch(arg -> arg.contains(enablePrintFlags));
 
-        if (!printFlags) {
+        if (buildExecutable && !printFlags) {
             List<String> extraImageArgs = new ArrayList<>();
             ListIterator<String> leftoverArgsItr = leftoverArgs.listIterator();
             while (leftoverArgsItr.hasNext()) {
@@ -755,42 +755,35 @@ public class NativeImage {
                 }
             }
 
-            if (buildExecutable) {
-                /* Main-class from customImageBuilderArgs counts as explicitMainClass */
-                boolean explicitMainClass = customImageBuilderArgs.stream().anyMatch(arg -> arg.startsWith(oHClass));
+            /* Main-class from customImageBuilderArgs counts as explicitMainClass */
+            boolean explicitMainClass = customImageBuilderArgs.stream().anyMatch(arg -> arg.startsWith(oHClass));
 
-                if (extraImageArgs.isEmpty()) {
-                    if (mainClass == null || mainClass.isEmpty()) {
-                        showError("Please specify class containing the main entry point method. (see --help)");
-                    }
-                } else {
-                    /* extraImageArgs main-class overrules previous main-class specification */
-                    explicitMainClass = true;
-                    mainClass = extraImageArgs.remove(0);
-                    replaceArg(imageBuilderArgs, oHClass, mainClass);
-                }
-
-                if (extraImageArgs.isEmpty()) {
-                    /* No explicit image name, define image name by other means */
-                    if (customImageBuilderArgs.stream().noneMatch(arg -> arg.startsWith(oHName))) {
-                        /* Also no explicit image name given as customImageBuilderArgs */
-                        if (explicitMainClass) {
-                            /* Use main-class lower case as image name */
-                            replaceArg(imageBuilderArgs, oHName, mainClass.toLowerCase());
-                        } else if (imageBuilderArgs.stream().noneMatch(arg -> arg.startsWith(oHName))) {
-                            /* Although very unlikely, report missing image-name if needed. */
-                            throw showError("Missing image-name. Use " + oHName + "<imagename> to provide one.");
-                        }
-                    }
-                } else {
-                    /* extraImageArgs executable name overrules previous specification */
-                    replaceArg(imageBuilderArgs, oHName, extraImageArgs.remove(0));
+            if (extraImageArgs.isEmpty()) {
+                if (mainClass == null || mainClass.isEmpty()) {
+                    showError("Please specify class containing the main entry point method. (see --help)");
                 }
             } else {
-                if (!extraImageArgs.isEmpty()) {
-                    /* extraImageArgs library name overrules previous specification */
-                    replaceArg(imageBuilderArgs, oHName, extraImageArgs.remove(0));
+                /* extraImageArgs main-class overrules previous main-class specification */
+                explicitMainClass = true;
+                mainClass = extraImageArgs.remove(0);
+                replaceArg(imageBuilderArgs, oHClass, mainClass);
+            }
+
+            if (extraImageArgs.isEmpty()) {
+                /* No explicit image name, define image name by other means */
+                if (customImageBuilderArgs.stream().noneMatch(arg -> arg.startsWith(oHName))) {
+                    /* Also no explicit image name given as customImageBuilderArgs */
+                    if (explicitMainClass) {
+                        /* Use main-class lower case as image name */
+                        replaceArg(imageBuilderArgs, oHName, mainClass.toLowerCase());
+                    } else if (imageBuilderArgs.stream().noneMatch(arg -> arg.startsWith(oHName))) {
+                        /* Although very unlikely, report missing image-name if needed. */
+                        throw showError("Missing image-name. Use " + oHName + "<imagename> to provide one.");
+                    }
                 }
+            } else {
+                /* extraImageArgs executable name overrules previous specification */
+                replaceArg(imageBuilderArgs, oHName, extraImageArgs.remove(0));
             }
         }
 
