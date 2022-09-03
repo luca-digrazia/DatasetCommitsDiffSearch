@@ -160,14 +160,13 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
      */
     @Override
     public Engine buildEngine(OutputStream out, OutputStream err, InputStream in, Map<String, String> arguments, long timeout, TimeUnit timeoutUnit, boolean sandbox,
-                    long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean boundEngine, MessageTransport messageInterceptor, Object logHandlerOrStream) {
+                    long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean boundEngine, MessageTransport messageInterceptor, Handler logHandler) {
         if (TruffleOptions.AOT) {
             VMAccessor.SPI.initializeNativeImageTruffleLocator();
         }
         OutputStream resolvedOut = out == null ? System.out : out;
         OutputStream resolvedErr = err == null ? System.err : err;
         InputStream resolvedIn = in == null ? System.in : in;
-        Handler logHandler = PolyglotLogHandler.asHandler(logHandlerOrStream);
 
         DispatchOutputStream dispatchOut = INSTRUMENT.createDispatchOutput(resolvedOut);
         DispatchOutputStream dispatchErr = INSTRUMENT.createDispatchOutput(resolvedErr);
@@ -241,31 +240,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
     public Path findHome() {
         final HomeFinder homeFinder = HomeFinder.getInstance();
         return homeFinder == null ? null : homeFinder.getHomeFolder();
-    }
-
-    @Override
-    @TruffleBoundary
-    public Value asValue(Object hostValue) {
-        assert !(hostValue instanceof Value);
-        PolyglotLanguageContext languageContext = null;
-        Object guestValue = null;
-        if (hostValue instanceof PolyglotList) {
-            languageContext = ((PolyglotList<?>) hostValue).languageContext;
-            guestValue = ((PolyglotList<?>) hostValue).guestObject;
-        } else if (hostValue instanceof PolyglotMap) {
-            languageContext = ((PolyglotMap<?, ?>) hostValue).languageContext;
-            guestValue = ((PolyglotMap<?, ?>) hostValue).guestObject;
-        } else if (hostValue instanceof PolyglotFunction) {
-            languageContext = ((PolyglotFunction<?, ?>) hostValue).languageContext;
-            guestValue = ((PolyglotFunction<?, ?>) hostValue).guestObject;
-        }
-        if (languageContext == null) {
-            PolyglotContextImpl context = PolyglotContextImpl.current();
-            languageContext = context.getHostContext();
-            return languageContext.asValue(languageContext.toGuestValue(hostValue));
-        } else {
-            return languageContext.asValue(guestValue);
-        }
     }
 
     org.graalvm.polyglot.Source getPolyglotSource(Source source) {
@@ -686,6 +660,28 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
+        public <T> T installJavaInteropCodeCache(Object languageContext, Object key, T value, Class<T> expectedType) {
+            if (languageContext == null) {
+                return value;
+            }
+            T result = expectedType.cast(((PolyglotLanguageContext) languageContext).context.engine.javaInteropCodeCache.putIfAbsent(key, value));
+            if (result != null) {
+                return result;
+            } else {
+                return value;
+            }
+        }
+
+        @Override
+        public <T> T lookupJavaInteropCodeCache(Object languageContext, Object key, Class<T> expectedType) {
+            if (languageContext == null) {
+                return null;
+            }
+
+            return expectedType.cast(((PolyglotLanguageContext) languageContext).context.engine.javaInteropCodeCache.get(key));
+        }
+
+        @Override
         public Object toGuestValue(Object obj, Object context) {
             PolyglotLanguageContext languageContext = (PolyglotLanguageContext) context;
             if (obj instanceof Value) {
@@ -785,7 +781,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
-        public Thread createThread(Object vmObject, Runnable runnable, Object innerContextImpl, ThreadGroup group, long stackSize) {
+        public Thread createThread(Object vmObject, ThreadGroup group, Runnable runnable, long stackSize, Object innerContextImpl) {
             if (!isCreateThreadAllowed(vmObject)) {
                 throw new IllegalStateException("Creating threads is not allowed.");
             }
@@ -795,7 +791,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
                 PolyglotContextImpl innerContext = (PolyglotContextImpl) innerContextImpl;
                 threadContext = innerContext.getContext(threadContext.language);
             }
-            return new PolyglotThread(threadContext, runnable, group, stackSize);
+            return new PolyglotThread(threadContext, group, runnable, stackSize);
         }
 
         @Override

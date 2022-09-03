@@ -48,18 +48,18 @@ final class PolyglotThread extends Thread {
 
     Object context;
 
-    PolyglotThread(PolyglotLanguageContext languageContext, Runnable runnable, ThreadGroup group, long stackSize) {
+    PolyglotThread(PolyglotLanguageContext languageContext, ThreadGroup group, Runnable runnable, long stackSize) {
         super(group, runnable, createDefaultName(languageContext), stackSize);
         this.languageContext = languageContext;
         setUncaughtExceptionHandler(languageContext.getPolyglotExceptionHandler());
     }
 
-    PolyglotThread(PolyglotLanguageContext languageContext, Runnable runnable, ThreadGroup group) {
-        this(languageContext, runnable, group, 0);
+    PolyglotThread(PolyglotLanguageContext languageContext, ThreadGroup group, Runnable runnable) {
+        this(languageContext, group, runnable, 0);
     }
 
     PolyglotThread(PolyglotLanguageContext languageContext, Runnable runnable) {
-        this(languageContext, runnable, null, 0);
+        this(languageContext, null, runnable, 0);
     }
 
     private static String createDefaultName(PolyglotLanguageContext creator) {
@@ -72,16 +72,7 @@ final class PolyglotThread extends Thread {
 
     @Override
     public void run() {
-        Object prev;
-        try {
-            prev = languageContext.enterThread(this);
-        } catch (PolyglotEngineException polyglotException) {
-            if (polyglotException.closingContext) {
-                return;
-            } else {
-                throw polyglotException;
-            }
-        }
+        Object prev = languageContext.enterThread(this);
         assert prev == null;
         try {
             super.run();
