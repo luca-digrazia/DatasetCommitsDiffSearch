@@ -38,12 +38,10 @@ import com.oracle.graal.nodes.spi.*;
 public class GuardedValueNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, IterableNodeType, Canonicalizable, ValueProxy {
 
     @Input private ValueNode object;
-    private final Stamp piStamp;
 
     public GuardedValueNode(ValueNode object, GuardingNode guard, Stamp stamp) {
         super(stamp, guard);
         this.object = object;
-        this.piStamp = stamp;
     }
 
     public GuardedValueNode(ValueNode object, GuardingNode guard) {
@@ -63,10 +61,10 @@ public class GuardedValueNode extends FloatingGuardedNode implements LIRLowerabl
 
     @Override
     public boolean inferStamp() {
-        if (piStamp instanceof ObjectStamp && object().stamp() instanceof ObjectStamp) {
-            return updateStamp(((ObjectStamp) object().stamp()).castTo((ObjectStamp) piStamp));
+        if (stamp() instanceof ObjectStamp && object().stamp() instanceof ObjectStamp) {
+            return updateStamp(((ObjectStamp) object().stamp()).castTo((ObjectStamp) stamp()));
         }
-        return updateStamp(object().stamp().join(piStamp));
+        return updateStamp(object().stamp().join(stamp()));
     }
 
     @Override
