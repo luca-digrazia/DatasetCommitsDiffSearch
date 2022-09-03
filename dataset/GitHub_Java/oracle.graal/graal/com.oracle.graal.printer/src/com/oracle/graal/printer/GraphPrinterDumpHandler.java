@@ -22,25 +22,21 @@
  */
 package com.oracle.graal.printer;
 
+import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.debug.GraalDebugConfig.*;
 
 import java.io.*;
 import java.net.*;
 import java.nio.channels.*;
 import java.nio.file.*;
+import java.text.*;
 import java.util.*;
-import java.util.concurrent.atomic.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.phases.schedule.*;
-
-//JaCoCo Exclude
 
 /**
  * Observes compilation events and uses {@link IdealGraphPrinter} to generate a graph representation
@@ -87,35 +83,46 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
         return dumpIds[depth - 1]++;
     }
 
+    // This field must be lazily initialized as this class may be loaded in a version
+    // VM startup phase at which not all required features (such as system properties)
+    // are online.
+    private static volatile SimpleDateFormat sdf;
+
     private void initializeFilePrinter() {
-        Path path = getFilePrinterPath();
+        String ext;
+        if (PrintBinaryGraphs.getValue()) {
+            ext = ".bgv";
+        } else {
+            ext = ".gv.xml";
+        }
+        if (sdf == null) {
+            sdf = new SimpleDateFormat("YYYY-MM-dd-HHmm");
+        }
+
+        // DateFormats are inherently unsafe for multi-threaded use. Use a synchronized block.
+        String prefix;
+        synchronized (sdf) {
+            prefix = "Graphs-" + Thread.currentThread().getName() + "-" + sdf.format(new Date());
+        }
+
+        String num = "";
+        File file;
+        int i = 0;
+        while ((file = new File(prefix + num + ext)).exists()) {
+            num = "-" + Integer.toString(++i);
+        }
         try {
             if (PrintBinaryGraphs.getValue()) {
-                printer = new BinaryGraphPrinter(FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW));
+                printer = new BinaryGraphPrinter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW));
             } else {
-                printer = new IdealGraphPrinter(Files.newOutputStream(path), true);
+                printer = new IdealGraphPrinter(new FileOutputStream(file), true);
             }
-            TTY.println("Dumping IGV graphs to %s", path.toString());
+            TTY.println("Dumping IGV graphs to %s", file.getName());
         } catch (IOException e) {
-            TTY.println("Failed to open %s to dump IGV graphs : %s", path.toString(), e);
+            TTY.println("Failed to open %s to dump IGV graphs : %s", file.getName(), e);
             failuresCount++;
             printer = null;
         }
-    }
-
-    private static long dumpIgvTimestamp;
-    private static final AtomicInteger dumpIgvId = new AtomicInteger();
-
-    private static Path getFilePrinterPath() {
-        // If this is the first time I have constructed a FilePrinterPath,
-        // get a time stamp in a (weak) attempt to make unique file names.
-        if (dumpIgvTimestamp == 0) {
-            dumpIgvTimestamp = System.currentTimeMillis();
-        }
-        // Encode the kind of the file in the extension.
-        final String ext = (PrintBinaryGraphs.getValue() ? ".bgv" : ".gv.xml");
-        // Construct the path to the file.
-        return Paths.get(DumpPath.getValue(), "runtime-graphs-" + dumpIgvTimestamp + "_" + dumpIgvId.incrementAndGet() + ext);
     }
 
     private void initializeNetworkPrinter() {
@@ -144,7 +151,6 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     }
 
     @Override
-    @SuppressWarnings("try")
     public void dump(Object object, final String message) {
         if (object instanceof Graph && PrintIdealGraph.getValue()) {
             ensureInitialized();

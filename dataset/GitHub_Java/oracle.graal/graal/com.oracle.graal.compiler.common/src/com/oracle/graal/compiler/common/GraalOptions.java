@@ -60,12 +60,6 @@ public final class GraalOptions {
     @Option(help = "Graphs with less than this number of nodes are trivial and therefore always inlined.", type = OptionType.Expert)
     public static final OptionValue<Integer> TrivialInliningSize = new OptionValue<>(10);
 
-    @Option(help = "Inlines trivial methods during parsing of the bytecodes.", type = OptionType.Expert)
-    public static final StableOptionValue<Boolean> InlineDuringParsing = new StableOptionValue<>(false);
-
-    @Option(help = "Maximum depth when inlining during parsing.", type = OptionType.Debug)
-    public static final StableOptionValue<Integer> InlineDuringParsingMaxDepth = new StableOptionValue<>(10);
-
     @Option(help = "Inlining is explored up to this number of nodes in the graph for each call site.", type = OptionType.Expert)
     public static final OptionValue<Integer> MaximumInliningSize = new OptionValue<>(300);
 
@@ -224,6 +218,9 @@ public final class GraalOptions {
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> PrintStackTraceOnException = new OptionValue<>(false);
 
+    @Option(help = "Set a phase after which the decompiler dumps the graph, -G:Dump= required", type = OptionType.Debug)
+    public static final OptionValue<String> DecompileAfterPhase = new OptionValue<>(null);
+
     // HotSpot command line options
     @Option(help = "Print inlining optimizations", type = OptionType.Debug)
     public static final OptionValue<Boolean> HotSpotPrintInlining = new OptionValue<>(false);
@@ -231,6 +228,10 @@ public final class GraalOptions {
     // Register allocator debugging
     @Option(help = "Comma separated list of register that the allocation is limited to.", type = OptionType.Debug)
     public static final OptionValue<String> RegisterPressure = new OptionValue<>(null);
+
+    // Code generator settings
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Boolean> FlowSensitiveReduction = new OptionValue<>(false);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> ConditionalElimination = new OptionValue<>(true);
@@ -348,15 +349,4 @@ public final class GraalOptions {
      */
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> SnippetCounters = new OptionValue<>(false);
-
-    @Option(help = "Enable expensive assertions", type = OptionType.Debug)
-    public static final OptionValue<Boolean> DetailedAsserts = new StableOptionValue<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            boolean enabled = false;
-            // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)
-            assert (enabled = true) == true;
-            return enabled;
-        }
-    };
 }
