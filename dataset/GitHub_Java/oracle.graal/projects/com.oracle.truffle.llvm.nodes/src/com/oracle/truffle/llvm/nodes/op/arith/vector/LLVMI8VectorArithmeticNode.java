@@ -32,7 +32,7 @@ package com.oracle.truffle.llvm.nodes.op.arith.vector;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
 @NodeChildren({@NodeChild("leftNode"), @NodeChild("rightNode")})
@@ -70,27 +70,11 @@ public abstract class LLVMI8VectorArithmeticNode extends LLVMExpressionNode {
         }
     }
 
-    public abstract static class LLVMI8VectorUDivNode extends LLVMI8VectorArithmeticNode {
-
-        @Specialization
-        protected LLVMI8Vector executeI8Vector(LLVMI8Vector left, LLVMI8Vector right) {
-            return left.divUnsigned(right);
-        }
-    }
-
     public abstract static class LLVMI8VectorRemNode extends LLVMI8VectorArithmeticNode {
 
         @Specialization
         protected LLVMI8Vector executeI8Vector(LLVMI8Vector left, LLVMI8Vector right) {
             return left.rem(right);
-        }
-    }
-
-    public abstract static class LLVMI8VectorURemNode extends LLVMI8VectorArithmeticNode {
-
-        @Specialization
-        protected LLVMI8Vector executeI8Vector(LLVMI8Vector left, LLVMI8Vector right) {
-            return left.remUnsigned(right);
         }
     }
 }

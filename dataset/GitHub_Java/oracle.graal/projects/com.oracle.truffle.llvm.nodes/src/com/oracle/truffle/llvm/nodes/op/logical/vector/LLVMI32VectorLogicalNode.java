@@ -32,53 +32,51 @@ package com.oracle.truffle.llvm.nodes.op.logical.vector;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI32VectorNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
 
-@NodeChildren({@NodeChild(value = "address", type = LLVMAddressNode.class), @NodeChild("leftNode"), @NodeChild("rightNode")})
-public abstract class LLVMI32VectorLogicalNode extends LLVMI32VectorNode {
+@NodeChildren({@NodeChild("leftNode"), @NodeChild("rightNode")})
+public abstract class LLVMI32VectorLogicalNode extends LLVMExpressionNode {
 
     public abstract static class LLVMI32VectorAndNode extends LLVMI32VectorLogicalNode {
         @Specialization
-        protected LLVMI32Vector executeI32Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return left.and(target, right);
+        protected LLVMI32Vector executeI32Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return left.and(right);
         }
     }
 
     public abstract static class LLVMI32VectorOrNode extends LLVMI32VectorLogicalNode {
         @Specialization
-        protected LLVMI32Vector executeI32Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return left.or(target, right);
+        protected LLVMI32Vector executeI32Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return left.or(right);
         }
     }
 
     public abstract static class LLVMI32VectorShlNode extends LLVMI32VectorLogicalNode {
         @Specialization
-        protected LLVMI32Vector executeI32Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return left.leftShift(target, right);
+        protected LLVMI32Vector executeI32Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return left.leftShift(right);
         }
     }
 
     public abstract static class LLVMI32VectorLshrNode extends LLVMI32VectorLogicalNode {
         @Specialization
-        protected LLVMI32Vector executeI32Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return left.logicalRightShift(target, right);
+        protected LLVMI32Vector executeI32Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return left.logicalRightShift(right);
         }
     }
 
     public abstract static class LLVMI32VectorAshrNode extends LLVMI32VectorLogicalNode {
         @Specialization
-        protected LLVMI32Vector executeI32Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return left.arithmeticRightShift(target, right);
+        protected LLVMI32Vector executeI32Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return left.arithmeticRightShift(right);
         }
     }
 
     public abstract static class LLVMI32VectorXorNode extends LLVMI32VectorLogicalNode {
         @Specialization
-        protected LLVMI32Vector executeI32Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return left.xor(target, right);
+        protected LLVMI32Vector executeI32Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return left.xor(right);
         }
     }
 

@@ -32,7 +32,7 @@ package com.oracle.truffle.llvm.nodes.op.logical.vector;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 
 @NodeChildren({@NodeChild("leftNode"), @NodeChild("rightNode")})
@@ -49,27 +49,6 @@ public abstract class LLVMI1VectorLogicalNode extends LLVMExpressionNode {
         @Specialization
         protected LLVMI1Vector executeI1Vector(LLVMI1Vector left, LLVMI1Vector right) {
             return left.or(right);
-        }
-    }
-
-    public abstract static class LLVMI1VectorShlNode extends LLVMI1VectorLogicalNode {
-        @Specialization
-        protected LLVMI1Vector executeI1Vector(LLVMI1Vector left, LLVMI1Vector right) {
-            return left.leftShift(right);
-        }
-    }
-
-    public abstract static class LLVMI1VectorLshrNode extends LLVMI1VectorLogicalNode {
-        @Specialization
-        protected LLVMI1Vector executeI1Vector(LLVMI1Vector left, LLVMI1Vector right) {
-            return left.logicalRightShift(right);
-        }
-    }
-
-    public abstract static class LLVMI1VectorAshrNode extends LLVMI1VectorLogicalNode {
-        @Specialization
-        protected LLVMI1Vector executeI1Vector(LLVMI1Vector left, LLVMI1Vector right) {
-            return left.arithmeticRightShift(right);
         }
     }
 

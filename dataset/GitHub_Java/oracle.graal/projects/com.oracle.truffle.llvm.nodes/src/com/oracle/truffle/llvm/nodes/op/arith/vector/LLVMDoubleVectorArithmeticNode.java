@@ -32,26 +32,24 @@ package com.oracle.truffle.llvm.nodes.op.arith.vector;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMDoubleVectorNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.vector.LLVMDoubleVector;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 
-@NodeChildren({@NodeChild(value = "addressNode", type = LLVMAddressNode.class), @NodeChild("leftNode"), @NodeChild("rightNode")})
-public abstract class LLVMDoubleVectorArithmeticNode extends LLVMDoubleVectorNode {
+@NodeChildren({@NodeChild("leftNode"), @NodeChild("rightNode")})
+public abstract class LLVMDoubleVectorArithmeticNode extends LLVMExpressionNode {
 
     public abstract static class LLVMDoubleVectorAddNode extends LLVMDoubleVectorArithmeticNode {
         @Specialization
-        protected LLVMDoubleVector executeDoubleVector(LLVMAddress target, LLVMDoubleVector left, LLVMDoubleVector right) {
-            return left.add(target, right);
+        protected LLVMDoubleVector executeDoubleVector(LLVMDoubleVector left, LLVMDoubleVector right) {
+            return left.add(right);
         }
     }
 
     public abstract static class LLVMDoubleVectorMulNode extends LLVMDoubleVectorArithmeticNode {
 
         @Specialization
-        public LLVMDoubleVector executeDoubleVector(LLVMAddress target, LLVMDoubleVector left, LLVMDoubleVector right) {
-            return left.mul(target, right);
+        public LLVMDoubleVector executeDoubleVector(LLVMDoubleVector left, LLVMDoubleVector right) {
+            return left.mul(right);
         }
 
     }
@@ -59,24 +57,24 @@ public abstract class LLVMDoubleVectorArithmeticNode extends LLVMDoubleVectorNod
     public abstract static class LLVMDoubleVectorSubNode extends LLVMDoubleVectorArithmeticNode {
 
         @Specialization
-        protected LLVMDoubleVector executeDoubleVector(LLVMAddress target, LLVMDoubleVector left, LLVMDoubleVector right) {
-            return left.sub(target, right);
+        protected LLVMDoubleVector executeDoubleVector(LLVMDoubleVector left, LLVMDoubleVector right) {
+            return left.sub(right);
         }
     }
 
     public abstract static class LLVMDoubleVectorDivNode extends LLVMDoubleVectorArithmeticNode {
 
         @Specialization
-        protected LLVMDoubleVector executeDoubleVector(LLVMAddress target, LLVMDoubleVector left, LLVMDoubleVector right) {
-            return left.div(target, right);
+        protected LLVMDoubleVector executeDoubleVector(LLVMDoubleVector left, LLVMDoubleVector right) {
+            return left.div(right);
         }
     }
 
     public abstract static class LLVMDoubleVectorRemNode extends LLVMDoubleVectorArithmeticNode {
 
         @Specialization
-        protected LLVMDoubleVector executeDoubleVector(LLVMAddress target, LLVMDoubleVector left, LLVMDoubleVector right) {
-            return left.rem(target, right);
+        protected LLVMDoubleVector executeDoubleVector(LLVMDoubleVector left, LLVMDoubleVector right) {
+            return left.rem(right);
         }
     }
 }

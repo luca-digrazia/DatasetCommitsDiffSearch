@@ -32,22 +32,16 @@ package com.oracle.truffle.llvm.nodes.op.compare;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI1VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI32VectorNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.vector.LLVMI1Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
 
 @NodeChildren({
-                @NodeChild(value = "addressNode", type = LLVMAddressNode.class),
-                @NodeChild(value = "leftNode", type = LLVMI32VectorNode.class),
-                @NodeChild(value = "rightNode", type = LLVMI32VectorNode.class)})
-public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
+                @NodeChild(value = "leftNode", type = LLVMExpressionNode.class),
+                @NodeChild(value = "rightNode", type = LLVMExpressionNode.class)})
+public abstract class LLVMI32VectorCompareNode extends LLVMExpressionNode {
 
-    @ExplodeLoop
-    protected LLVMI1Vector executeI1VectorBody(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
+    protected LLVMI1Vector doCompare(LLVMI32Vector left, LLVMI32Vector right) {
         int length = left.getLength();
         boolean[] values = new boolean[length];
 
@@ -55,7 +49,7 @@ public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
             values[i] = comparison(left.getValue(i), right.getValue(i));
         }
 
-        return LLVMI1Vector.fromI1Array(target, values);
+        return LLVMI1Vector.create(values);
     }
 
     protected abstract boolean comparison(int lhs, int rhs);
@@ -63,8 +57,8 @@ public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
     public abstract static class LLVMI32VectorEqNode extends LLVMI32VectorCompareNode {
 
         @Specialization
-        public LLVMI1Vector executeI1Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return executeI1VectorBody(target, left, right);
+        public LLVMI1Vector executeI1Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return doCompare(left, right);
         }
 
         @Override
@@ -77,8 +71,8 @@ public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
     public abstract static class LLVMI32VectorNeNode extends LLVMI32VectorCompareNode {
 
         @Specialization
-        public LLVMI1Vector executeI1Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return executeI1VectorBody(target, left, right);
+        public LLVMI1Vector executeI1Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return doCompare(left, right);
         }
 
         @Override
@@ -91,8 +85,8 @@ public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
     public abstract static class LLVMI32VectorSltNode extends LLVMI32VectorCompareNode {
 
         @Specialization
-        public LLVMI1Vector executeI1Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return executeI1VectorBody(target, left, right);
+        public LLVMI1Vector executeI1Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return doCompare(left, right);
         }
 
         @Override
@@ -105,8 +99,8 @@ public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
     public abstract static class LLVMI32VectorSleNode extends LLVMI32VectorCompareNode {
 
         @Specialization
-        public LLVMI1Vector executeI1Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return executeI1VectorBody(target, left, right);
+        public LLVMI1Vector executeI1Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return doCompare(left, right);
         }
 
         @Override
@@ -119,8 +113,8 @@ public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
     public abstract static class LLVMI32VectorSgtNode extends LLVMI32VectorCompareNode {
 
         @Specialization
-        public LLVMI1Vector executeI1Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return executeI1VectorBody(target, left, right);
+        public LLVMI1Vector executeI1Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return doCompare(left, right);
         }
 
         @Override
@@ -133,8 +127,8 @@ public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
     public abstract static class LLVMI32VectorSgeNode extends LLVMI32VectorCompareNode {
 
         @Specialization
-        public LLVMI1Vector executeI1Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return executeI1VectorBody(target, left, right);
+        public LLVMI1Vector executeI1Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return doCompare(left, right);
         }
 
         @Override
@@ -147,8 +141,8 @@ public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
     public abstract static class LLVMI32VectorUgtNode extends LLVMI32VectorCompareNode {
 
         @Specialization
-        public LLVMI1Vector executeI1Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return executeI1VectorBody(target, left, right);
+        public LLVMI1Vector executeI1Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return doCompare(left, right);
         }
 
         @Override
@@ -161,8 +155,8 @@ public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
     public abstract static class LLVMI32VectorUgeNode extends LLVMI32VectorCompareNode {
 
         @Specialization
-        public LLVMI1Vector executeI1Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return executeI1VectorBody(target, left, right);
+        public LLVMI1Vector executeI1Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return doCompare(left, right);
         }
 
         @Override
@@ -175,8 +169,8 @@ public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
     public abstract static class LLVMI32VectorUltNode extends LLVMI32VectorCompareNode {
 
         @Specialization
-        public LLVMI1Vector executeI1Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return executeI1VectorBody(target, left, right);
+        public LLVMI1Vector executeI1Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return doCompare(left, right);
         }
 
         @Override
@@ -189,8 +183,8 @@ public abstract class LLVMI32VectorCompareNode extends LLVMI1VectorNode {
     public abstract static class LLVMI32VectorUleNode extends LLVMI32VectorCompareNode {
 
         @Specialization
-        public LLVMI1Vector executeI1Vector(LLVMAddress target, LLVMI32Vector left, LLVMI32Vector right) {
-            return executeI1VectorBody(target, left, right);
+        public LLVMI1Vector executeI1Vector(LLVMI32Vector left, LLVMI32Vector right) {
+            return doCompare(left, right);
         }
 
         @Override

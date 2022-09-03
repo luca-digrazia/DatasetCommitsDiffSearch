@@ -32,26 +32,24 @@ package com.oracle.truffle.llvm.nodes.op.arith.vector;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMFloatVectorNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 
-@NodeChildren({@NodeChild(value = "addressNode", type = LLVMAddressNode.class), @NodeChild("leftNode"), @NodeChild("rightNode")})
-public abstract class LLVMFloatVectorArithmeticNode extends LLVMFloatVectorNode {
+@NodeChildren({@NodeChild("leftNode"), @NodeChild("rightNode")})
+public abstract class LLVMFloatVectorArithmeticNode extends LLVMExpressionNode {
 
     public abstract static class LLVMFloatVectorAddNode extends LLVMFloatVectorArithmeticNode {
         @Specialization
-        protected LLVMFloatVector executeFloatVector(LLVMAddress target, LLVMFloatVector left, LLVMFloatVector right) {
-            return left.add(target, right);
+        protected LLVMFloatVector executeFloatVector(LLVMFloatVector left, LLVMFloatVector right) {
+            return left.add(right);
         }
     }
 
     public abstract static class LLVMFloatVectorMulNode extends LLVMFloatVectorArithmeticNode {
 
         @Specialization
-        public LLVMFloatVector executeFloatVector(LLVMAddress target, LLVMFloatVector left, LLVMFloatVector right) {
-            return left.mul(target, right);
+        public LLVMFloatVector executeFloatVector(LLVMFloatVector left, LLVMFloatVector right) {
+            return left.mul(right);
         }
 
     }
@@ -59,24 +57,24 @@ public abstract class LLVMFloatVectorArithmeticNode extends LLVMFloatVectorNode 
     public abstract static class LLVMFloatVectorSubNode extends LLVMFloatVectorArithmeticNode {
 
         @Specialization
-        protected LLVMFloatVector executeFloatVector(LLVMAddress target, LLVMFloatVector left, LLVMFloatVector right) {
-            return left.sub(target, right);
+        protected LLVMFloatVector executeFloatVector(LLVMFloatVector left, LLVMFloatVector right) {
+            return left.sub(right);
         }
     }
 
     public abstract static class LLVMFloatVectorDivNode extends LLVMFloatVectorArithmeticNode {
 
         @Specialization
-        protected LLVMFloatVector executeFloatVector(LLVMAddress target, LLVMFloatVector left, LLVMFloatVector right) {
-            return left.div(target, right);
+        protected LLVMFloatVector executeFloatVector(LLVMFloatVector left, LLVMFloatVector right) {
+            return left.div(right);
         }
     }
 
     public abstract static class LLVMFloatVectorRemNode extends LLVMFloatVectorArithmeticNode {
 
         @Specialization
-        protected LLVMFloatVector executeFloatVector(LLVMAddress target, LLVMFloatVector left, LLVMFloatVector right) {
-            return left.rem(target, right);
+        protected LLVMFloatVector executeFloatVector(LLVMFloatVector left, LLVMFloatVector right) {
+            return left.rem(right);
         }
     }
 }

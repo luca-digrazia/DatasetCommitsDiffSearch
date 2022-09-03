@@ -51,7 +51,7 @@ public abstract class LLVMMemory {
     static final Unsafe UNSAFE = getUnsafe();
 
     @SuppressWarnings("restriction")
-    private static Unsafe getUnsafe() {
+    static Unsafe getUnsafe() {
         CompilerAsserts.neverPartOfCompilation();
         try {
             Field singleoneInstanceField = Unsafe.class.getDeclaredField("theUnsafe");
@@ -62,25 +62,12 @@ public abstract class LLVMMemory {
         }
     }
 
-    public static void memset(LLVMAddress address, long size, byte value) {
-        UNSAFE.setMemory(address.getVal(), size, value);
-    }
-
-    public static void free(LLVMAddress address) {
-        UNSAFE.freeMemory(address.getVal());
-    }
-
-    public static LLVMAddress allocateMemory(long size) {
-        return LLVMAddress.fromLong(UNSAFE.allocateMemory(size));
-    }
-
-    public static LLVMAddress reallocateMemory(LLVMAddress addr, long size) {
-        // a null pointer is a valid argument
-        return LLVMAddress.fromLong(UNSAFE.reallocateMemory(addr.getVal(), size));
+    static long extractAddrNullPointerAllowed(LLVMAddress addr) {
+        return addr.getVal();
     }
 
     public static boolean getI1(LLVMAddress addr) {
-        return UNSAFE.getByte(LLVMMemory.extractAddr(addr)) != 0;
+        return UNSAFE.getByte(LLVMMemory.extractAddr(addr)) == 0 ? false : true;
     }
 
     public static byte getI8(LLVMAddress addr) {
@@ -170,7 +157,7 @@ public abstract class LLVMMemory {
         }
     }
 
-    private static void putByteArray(LLVMAddress addr, byte[] bytes) {
+    static void putByteArray(LLVMAddress addr, byte[] bytes) {
         LLVMAddress currentAddress = addr;
         for (int i = 0; i < bytes.length; i++) {
             putI8(currentAddress, bytes[i]);
@@ -220,6 +207,10 @@ public abstract class LLVMMemory {
 
     public static LLVMDoubleVector getDoubleVector(LLVMAddress addr, int size) {
         return LLVMDoubleVector.readVectorFromMemory(addr, size);
+    }
+
+    public static void putStruct(LLVMAddress address, LLVMAddress value, int structSize) {
+        LLVMHeap.memCopy(address, value, structSize);
     }
 
     // watch out for casts such as I32* to I32Vector* when changing the way how vectors are

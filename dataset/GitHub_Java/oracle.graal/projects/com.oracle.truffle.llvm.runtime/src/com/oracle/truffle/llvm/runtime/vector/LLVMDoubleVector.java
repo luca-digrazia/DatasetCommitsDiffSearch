@@ -51,19 +51,19 @@ public final class LLVMDoubleVector {
 
     public static LLVMDoubleVector readVectorFromMemory(LLVMAddress address, int size) {
         double[] vector = new double[size];
-        long currentPtr = address.getVal();
+        LLVMAddress currentTarget = address;
         for (int i = 0; i < size; i++) {
-            vector[i] = LLVMMemory.getDouble(currentPtr);
-            currentPtr += DOUBLE_SIZE;
+            vector[i] = LLVMMemory.getDouble(currentTarget);
+            currentTarget = currentTarget.increment(DOUBLE_SIZE);
         }
         return create(vector);
     }
 
     public static void writeVectorToMemory(LLVMAddress address, LLVMDoubleVector vector) {
-        long currentPtr = address.getVal();
+        LLVMAddress currentTarget = address;
         for (int i = 0; i < vector.getLength(); i++) {
-            LLVMMemory.putDouble(currentPtr, vector.getValue(i));
-            currentPtr += DOUBLE_SIZE;
+            LLVMMemory.putDouble(currentTarget, vector.getValue(i));
+            currentTarget = currentTarget.increment(DOUBLE_SIZE);
         }
     }
 

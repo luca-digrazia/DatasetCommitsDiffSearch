@@ -34,10 +34,9 @@ import java.util.Map;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.parser.api.facade.NodeFactoryFacade;
 import com.oracle.truffle.llvm.parser.api.model.globals.GlobalValueSymbol;
-import com.oracle.truffle.llvm.parser.api.model.types.Type;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
 public interface LLVMParserRuntime {
 
@@ -61,8 +60,6 @@ public interface LLVMParserRuntime {
      */
     FrameSlot getReturnSlot();
 
-    LLVMExpressionNode allocateVectorResult(Object type);
-
     Object getGlobalAddress(GlobalValueSymbol var);
 
     FrameSlot getStackPointerSlot();
@@ -84,7 +81,7 @@ public interface LLVMParserRuntime {
      *
      * @param destructorNode a node that executes the destructor
      */
-    void addDestructor(LLVMNode destructorNode);
+    void addDestructor(LLVMExpressionNode destructorNode);
 
     long getNativeHandle(String name);
 

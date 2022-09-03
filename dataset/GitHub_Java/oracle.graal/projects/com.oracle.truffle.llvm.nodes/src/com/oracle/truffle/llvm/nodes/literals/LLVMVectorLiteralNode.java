@@ -29,9 +29,11 @@
  */
 package com.oracle.truffle.llvm.nodes.literals;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
@@ -56,7 +58,12 @@ public class LLVMVectorLiteralNode {
         public LLVMI1Vector executeI1Vector(VirtualFrame frame) {
             boolean[] vals = new boolean[values.length];
             for (int i = 0; i < values.length; i++) {
-                vals[i] = values[i].executeI1(frame);
+                try {
+                    vals[i] = values[i].executeI1(frame);
+                } catch (UnexpectedResultException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new IllegalStateException(e);
+                }
             }
             return LLVMI1Vector.create(vals);
         }
@@ -76,7 +83,12 @@ public class LLVMVectorLiteralNode {
         public LLVMI8Vector executeI8Vector(VirtualFrame frame) {
             byte[] vals = new byte[values.length];
             for (int i = 0; i < values.length; i++) {
-                vals[i] = values[i].executeI8(frame);
+                try {
+                    vals[i] = values[i].executeI8(frame);
+                } catch (UnexpectedResultException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new IllegalStateException(e);
+                }
             }
             return LLVMI8Vector.create(vals);
         }
@@ -96,7 +108,12 @@ public class LLVMVectorLiteralNode {
         public LLVMI16Vector executeI16Vector(VirtualFrame frame) {
             short[] vals = new short[values.length];
             for (int i = 0; i < values.length; i++) {
-                vals[i] = values[i].executeI16(frame);
+                try {
+                    vals[i] = values[i].executeI16(frame);
+                } catch (UnexpectedResultException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new IllegalStateException(e);
+                }
             }
             return LLVMI16Vector.create(vals);
         }
@@ -115,7 +132,12 @@ public class LLVMVectorLiteralNode {
         public LLVMI32Vector executeI32Vector(VirtualFrame frame) {
             int[] vals = new int[values.length];
             for (int i = 0; i < values.length; i++) {
-                vals[i] = values[i].executeI32(frame);
+                try {
+                    vals[i] = values[i].executeI32(frame);
+                } catch (UnexpectedResultException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new IllegalStateException(e);
+                }
             }
             return LLVMI32Vector.create(vals);
         }
@@ -134,7 +156,12 @@ public class LLVMVectorLiteralNode {
         public LLVMI64Vector executeI64Vector(VirtualFrame frame) {
             long[] vals = new long[values.length];
             for (int i = 0; i < values.length; i++) {
-                vals[i] = values[i].executeI64(frame);
+                try {
+                    vals[i] = values[i].executeI64(frame);
+                } catch (UnexpectedResultException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new IllegalStateException(e);
+                }
             }
             return LLVMI64Vector.create(vals);
         }
@@ -153,7 +180,12 @@ public class LLVMVectorLiteralNode {
         public LLVMFloatVector executeFloatVector(VirtualFrame frame) {
             float[] vals = new float[values.length];
             for (int i = 0; i < values.length; i++) {
-                vals[i] = values[i].executeFloat(frame);
+                try {
+                    vals[i] = values[i].executeFloat(frame);
+                } catch (UnexpectedResultException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new IllegalStateException(e);
+                }
             }
             return LLVMFloatVector.create(vals);
         }
@@ -173,7 +205,12 @@ public class LLVMVectorLiteralNode {
         public LLVMDoubleVector executeDoubleVector(VirtualFrame frame) {
             double[] vals = new double[values.length];
             for (int i = 0; i < values.length; i++) {
-                vals[i] = values[i].executeDouble(frame);
+                try {
+                    vals[i] = values[i].executeDouble(frame);
+                } catch (UnexpectedResultException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new IllegalStateException(e);
+                }
             }
             return LLVMDoubleVector.create(vals);
         }
