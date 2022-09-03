@@ -32,14 +32,12 @@ import java.util.function.*;
 import sun.misc.*;
 
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Graph.NodeEvent;
 import com.oracle.graal.graph.Graph.NodeEventListener;
-import com.oracle.graal.graph.Graph.Options;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.debug.*;
 
 /**
  * This class is the base class for all nodes. It represents a node that can be inserted in a
@@ -574,8 +572,8 @@ public abstract class Node implements Cloneable, Formattable {
             if (filter == null || filter.test(usage)) {
                 boolean result = usage.getNodeClass().getInputEdges().replaceFirst(usage, this, other);
                 assert assertTrue(result, "not found in inputs, usage: %s", usage);
-                maybeNotifyInputChanged(usage);
                 if (other != null) {
+                    maybeNotifyInputChanged(usage);
                     other.addUsage(usage);
                 }
                 this.movUsageFromEndTo(i);
@@ -830,7 +828,7 @@ public abstract class Node implements Cloneable, Formattable {
                 copyOrClearEdgesForClone(newNode, Successors, edgesToCopy);
             }
         } catch (Exception e) {
-            throw new GraalGraphJVMCIError(e).addContext(this);
+            throw new GraalGraphInternalError(e).addContext(this);
         }
         newNode.graph = into;
         newNode.id = INITIAL_ID;
@@ -919,7 +917,7 @@ public abstract class Node implements Cloneable, Formattable {
         }
     }
 
-    protected VerificationError fail(String message, Object... args) throws GraalGraphJVMCIError {
+    protected VerificationError fail(String message, Object... args) throws GraalGraphInternalError {
         throw new VerificationError(message, args).addContext(this);
     }
 
