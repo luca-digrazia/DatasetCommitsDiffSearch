@@ -534,10 +534,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         switch (kind) {
             case Boolean:
             case Byte:
-                return IntegerStamp.OPS.getNarrow().foldStamp(8, stamp);
+                return StampTool.narrowingConversion(stamp, 8);
             case Char:
             case Short:
-                return IntegerStamp.OPS.getNarrow().foldStamp(16, stamp);
+                return StampTool.narrowingConversion(stamp, 16);
         }
         return stamp;
     }
@@ -625,19 +625,19 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 offset = extend.getValue();
             }
         }
-        if (offset instanceof AddNode) {
-            AddNode integerAddNode = (AddNode) offset;
+        if (offset instanceof IntegerAddNode) {
+            IntegerAddNode integerAddNode = (IntegerAddNode) offset;
             if (integerAddNode.getY() instanceof ConstantNode) {
                 displacement = integerAddNode.getY().asConstant().asLong();
                 offset = integerAddNode.getX();
             }
         }
-        if (base != null && signExtend == false && offset instanceof AddNode) {
+        if (base != null && signExtend == false && offset instanceof IntegerAddNode) {
             /*
              * Try to decompose the operation into base plus offset so the base can go into a new
              * node. Prefer the unshifted side of an add as the base.
              */
-            AddNode integerAddNode = (AddNode) offset;
+            IntegerAddNode integerAddNode = (IntegerAddNode) offset;
             if (integerAddNode.getY() instanceof LeftShiftNode) {
                 base[0] = integerAddNode.getX();
                 offset = integerAddNode.getY();
@@ -645,8 +645,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 base[0] = integerAddNode.getY();
                 offset = integerAddNode.getX();
             }
-            if (offset instanceof AddNode) {
-                integerAddNode = (AddNode) offset;
+            if (offset instanceof IntegerAddNode) {
+                integerAddNode = (IntegerAddNode) offset;
                 if (integerAddNode.getY() instanceof ConstantNode) {
                     displacement = integerAddNode.getY().asConstant().asLong();
                     offset = integerAddNode.getX();
@@ -748,7 +748,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             if (base == 0) {
                 return index;
             } else {
-                return BinaryArithmeticNode.add(graph, ConstantNode.forInt((int) base, graph), index);
+                return IntegerArithmeticNode.add(graph, ConstantNode.forInt((int) base, graph), index);
             }
         }
     }
