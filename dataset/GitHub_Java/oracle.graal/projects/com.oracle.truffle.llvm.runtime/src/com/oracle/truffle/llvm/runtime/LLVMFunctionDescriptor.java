@@ -46,12 +46,11 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension.NativeLookupResult;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceFunctionType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceFunctionType;
 import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.interop.LLVMFunctionMessageResolutionForeign;
 import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -75,24 +74,9 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
 
     @CompilationFinal private TruffleObject nativeWrapper;
     @CompilationFinal private long nativePointer;
-    @CompilationFinal private boolean interopTypeCached;
-    @CompilationFinal private LLVMInteropType interopType;
 
     private static long tagSulongFunctionPointer(int id) {
         return id | SULONG_FUNCTION_POINTER_TAG;
-    }
-
-    /**
-     * @see LLVMGlobal#getInteropType()
-     */
-    public LLVMInteropType getInteropType() {
-        if (!interopTypeCached) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMSourceFunctionType sourceType = getFunction().getSourceType();
-            interopType = sourceType == null ? LLVMInteropType.UNKNOWN : LLVMInteropType.fromSourceType(sourceType);
-            interopTypeCached = true;
-        }
-        return interopType;
     }
 
     public static final class Intrinsic {
@@ -229,7 +213,7 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
             LLVMContext context = descriptor.getContext();
             NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
             LLVMIntrinsicProvider intrinsicProvider = context.getContextExtensionOrNull(LLVMIntrinsicProvider.class);
-            assert intrinsicProvider == null || !intrinsicProvider.isIntrinsified(descriptor.getName());
+            assert !descriptor.isNullFunction() && (intrinsicProvider == null || !intrinsicProvider.isIntrinsified(descriptor.getName()));
             if (nfiContextExtension != null) {
                 NativeLookupResult nativeFunction = nfiContextExtension.getNativeFunctionOrNull(context, descriptor.getName());
                 if (nativeFunction != null) {
@@ -307,7 +291,7 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
         RootCallTarget convert();
 
         /**
-         * Get an {@link com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceFunctionType} for the
+         * Get an {@link com.oracle.truffle.llvm.runtime.debug.LLVMSourceFunctionType} for the
          * already converted function. Can be null if no debug information is available in the
          * bitcode file.
          *
@@ -404,6 +388,10 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
         return type;
     }
 
+    public boolean isNullFunction() {
+        return functionId == 0;
+    }
+
     @Override
     public String toString() {
         if (name != null) {
@@ -462,7 +450,13 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
         }
     }
 
-    private long asPointer() {
+    /*
+     * TODO: make this function private
+     */
+    public long asPointer() {
+        if (isNullFunction()) {
+            return 0;
+        }
         if (isPointer()) {
             return nativePointer;
         }
@@ -470,14 +464,23 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
         throw UnsupportedMessageException.raise(Message.AS_POINTER);
     }
 
-    private boolean isPointer() {
+    /*
+     * TODO: make this function private
+     */
+    public boolean isPointer() {
+        if (isNullFunction()) {
+            return true;
+        }
         return nativeWrapper != null;
     }
 
+    /*
+     * TODO: make this function private
+     */
     /**
      * Gets a pointer to this function that can be stored in native memory.
      */
-    private LLVMFunctionDescriptor toNative() {
+    public LLVMFunctionDescriptor toNative() {
         if (nativeWrapper == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             nativeWrapper = getFunction().createNativeWrapper(this);

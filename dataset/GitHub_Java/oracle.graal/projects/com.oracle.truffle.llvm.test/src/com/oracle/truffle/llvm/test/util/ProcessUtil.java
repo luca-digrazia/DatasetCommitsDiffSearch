@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,14 +30,27 @@
 package com.oracle.truffle.llvm.test.util;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Context.Builder;
+import org.graalvm.polyglot.Value;
+
+import com.oracle.truffle.llvm.pipe.CaptureOutput;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
+import com.oracle.truffle.llvm.test.options.TestOptions;
 
 public class ProcessUtil {
 
     private static final int BUFFER_SIZE = 1024;
-    private static final int PROCESS_WAIT_TIMEOUT = 5000;
+    private static final int PROCESS_WAIT_TIMEOUT = 60 * 1000; // 1min timeout
 
     /**
      * This class represents the result of a native command executed by the operating system.
@@ -49,11 +62,11 @@ public class ProcessUtil {
         private final String stdOutput;
         private final int returnValue;
 
-        private ProcessResult(String originalCommand, int returnValue, String stdErr, String stdInput) {
+        private ProcessResult(String originalCommand, int returnValue, String stdErr, String stdOutput) {
             this.originalCommand = originalCommand;
             this.returnValue = returnValue;
             this.stdErr = stdErr;
-            this.stdOutput = stdInput;
+            this.stdOutput = stdOutput;
         }
 
         /**
@@ -93,6 +106,58 @@ public class ProcessUtil {
             return sb.toString();
         }
 
+        @Override
+        public boolean equals(Object obj) {
+            // ignore originalCommand, two different commands can still produce the same output
+            if (!(obj instanceof ProcessResult)) {
+                return false;
+            }
+
+            ProcessResult other = (ProcessResult) obj;
+            return this.returnValue == other.returnValue &&
+                            Objects.equals(this.stdErr, other.stdErr) &&
+                            Objects.equals(this.stdOutput, other.stdOutput);
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 5;
+            hash = 97 * hash + Objects.hashCode(this.stdErr);
+            hash = 97 * hash + Objects.hashCode(this.stdOutput);
+            hash = 97 * hash + this.returnValue;
+            return hash;
+        }
+    }
+
+    public static ProcessResult executeSulongTestMain(File bitcodeFile, String[] args, Map<String, String> options, Function<Context.Builder, CaptureOutput> captureOutput) throws Exception {
+        if (TestOptions.TEST_AOT_IMAGE == null) {
+            org.graalvm.polyglot.Source source = org.graalvm.polyglot.Source.newBuilder(LLVMLanguage.NAME, bitcodeFile).build();
+            Builder builder = Context.newBuilder();
+            try (CaptureOutput out = captureOutput.apply(builder)) {
+                int result;
+                try (Context context = builder.arguments(LLVMLanguage.NAME, args).options(options).allowAllAccess(true).build()) {
+                    Value main = context.eval(source);
+                    if (!main.canExecute()) {
+                        throw new LLVMLinkerException("No main function found.");
+                    }
+                    result = main.execute().asInt();
+                }
+                return new ProcessResult(bitcodeFile.getName(), result, out.getStdErr(), out.getStdOut());
+            }
+        } else {
+            String aotArgs = TestOptions.TEST_AOT_ARGS == null ? "" : TestOptions.TEST_AOT_ARGS + " ";
+            String cmdline = TestOptions.TEST_AOT_IMAGE + " " + aotArgs + concatOptions(options) + bitcodeFile.getAbsolutePath() + " " + concatCommand(args);
+            return executeNativeCommand(cmdline);
+        }
+    }
+
+    private static String concatOptions(Map<String, String> options) {
+        StringBuilder str = new StringBuilder();
+        for (Map.Entry<String, String> entry : options.entrySet()) {
+            String encoded = entry.getKey() + '=' + entry.getValue();
+            str.append("'--").append(encoded.replace("'", "''")).append("' ");
+        }
+        return str.toString();
     }
 
     public static ProcessResult executeNativeCommandZeroReturn(String command) {
@@ -118,7 +183,7 @@ public class ProcessUtil {
     /**
      * Concats a command by introducing whitespaces between the array elements.
      */
-    static String concatCommand(String[] command) {
+    static String concatCommand(Object[] command) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < command.length; i++) {
             if (i != 0) {
@@ -135,9 +200,12 @@ public class ProcessUtil {
         }
         try {
             Process process = Runtime.getRuntime().exec(command);
-            process.waitFor(PROCESS_WAIT_TIMEOUT, TimeUnit.MILLISECONDS);
+            boolean success = process.waitFor(PROCESS_WAIT_TIMEOUT, TimeUnit.MILLISECONDS);
             String readError = readStreamAndClose(process.getErrorStream());
             String inputStream = readStreamAndClose(process.getInputStream());
+            if (!success) {
+                throw new AssertionError("timeout running command: " + command);
+            }
             int llvmResult = process.exitValue();
             process.destroyForcibly();
             return new ProcessResult(command, llvmResult, readError, inputStream);
@@ -163,5 +231,4 @@ public class ProcessUtil {
         result.close();
         return result.toString();
     }
-
 }
