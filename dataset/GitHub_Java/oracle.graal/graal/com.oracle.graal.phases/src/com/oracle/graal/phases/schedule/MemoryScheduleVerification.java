@@ -22,26 +22,17 @@
  */
 package com.oracle.graal.phases.schedule;
 
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
-import jdk.vm.ci.meta.LocationIdentity;
-
-import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.compiler.common.cfg.Loop;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.HIRLoop;
-import com.oracle.graal.nodes.memory.FloatingReadNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.memory.MemoryNode;
-import com.oracle.graal.nodes.memory.MemoryPhiNode;
-import com.oracle.graal.phases.graph.ReentrantBlockIterator;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.graph.ReentrantBlockIterator.BlockIteratorClosure;
 
 public final class MemoryScheduleVerification extends BlockIteratorClosure<Set<FloatingReadNode>> {
@@ -64,17 +55,18 @@ public final class MemoryScheduleVerification extends BlockIteratorClosure<Set<F
 
     @Override
     protected Set<FloatingReadNode> processBlock(Block block, Set<FloatingReadNode> currentState) {
-        AbstractBeginNode beginNode = block.getBeginNode();
-        if (beginNode instanceof AbstractMergeNode) {
-            AbstractMergeNode abstractMergeNode = (AbstractMergeNode) beginNode;
-            for (PhiNode phi : abstractMergeNode.phis()) {
-                if (phi instanceof MemoryPhiNode) {
-                    MemoryPhiNode memoryPhiNode = (MemoryPhiNode) phi;
-                    addFloatingReadUsages(currentState, memoryPhiNode);
-                }
-            }
-        }
         for (Node n : blockToNodesMap.get(block)) {
+            if (n instanceof AbstractMergeNode) {
+                AbstractMergeNode abstractMergeNode = (AbstractMergeNode) n;
+                for (PhiNode phi : abstractMergeNode.phis()) {
+                    if (phi instanceof MemoryPhiNode) {
+                        MemoryPhiNode memoryPhiNode = (MemoryPhiNode) phi;
+                        addFloatingReadUsages(currentState, memoryPhiNode);
+                    }
+                }
+
+            }
+
             if (n instanceof MemoryCheckpoint) {
                 if (n instanceof MemoryCheckpoint.Single) {
                     MemoryCheckpoint.Single single = (MemoryCheckpoint.Single) n;
@@ -87,7 +79,7 @@ public final class MemoryScheduleVerification extends BlockIteratorClosure<Set<F
                 }
 
                 addFloatingReadUsages(currentState, n);
-            } else if (n instanceof MemoryNode) {
+            } else if (n instanceof MemoryProxy) {
                 addFloatingReadUsages(currentState, n);
             } else if (n instanceof FloatingReadNode) {
                 FloatingReadNode floatingReadNode = (FloatingReadNode) n;
@@ -96,8 +88,7 @@ public final class MemoryScheduleVerification extends BlockIteratorClosure<Set<F
                         // Floating read was found in the state.
                         currentState.remove(floatingReadNode);
                     } else {
-                        throw new RuntimeException("Floating read node " + n + " was not found in the state, i.e., it was killed by a memory check point before its place in the schedule. Block=" +
-                                        block + ", block begin: " + block.getBeginNode() + " block loop: " + block.getLoop() + ", " + blockToNodesMap.get(block).get(0));
+                        throw new RuntimeException("Floating read node " + n + " was not found in the state, i.e., it was killed by a memory check point before its place in the schedule");
                     }
                 }
 
@@ -140,9 +131,7 @@ public final class MemoryScheduleVerification extends BlockIteratorClosure<Set<F
     @Override
     protected Set<FloatingReadNode> cloneState(Set<FloatingReadNode> oldState) {
         Set<FloatingReadNode> result = CollectionsFactory.newSet();
-        if (oldState != null) {
-            result.addAll(oldState);
-        }
+        result.addAll(oldState);
         return result;
     }
 
