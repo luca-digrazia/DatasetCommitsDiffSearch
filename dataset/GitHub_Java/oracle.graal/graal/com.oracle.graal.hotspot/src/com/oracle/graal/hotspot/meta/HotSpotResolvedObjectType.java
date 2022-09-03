@@ -509,20 +509,4 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         }
         return cls.getResource(name + ".class");
     }
-
-    @Override
-    public boolean isLocal() {
-        return mirror().isLocalClass();
-    }
-
-    @Override
-    public boolean isMember() {
-        return mirror().isMemberClass();
-    }
-
-    @Override
-    public ResolvedJavaType getEnclosingType() {
-        final Class<?> encl = mirror().getEnclosingClass();
-        return encl == null ? null : fromClass(encl);
-    }
 }
