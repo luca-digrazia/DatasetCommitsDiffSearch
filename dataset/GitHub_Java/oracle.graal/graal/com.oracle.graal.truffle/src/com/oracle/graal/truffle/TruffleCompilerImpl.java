@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@ package com.oracle.graal.truffle;
 
 import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
 import java.util.*;
 
@@ -49,6 +50,7 @@ import com.oracle.graal.runtime.*;
 import com.oracle.graal.truffle.nodes.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.source.*;
 
 /**
  * Implementation of the Truffle compiler using Graal.
@@ -62,7 +64,6 @@ public class TruffleCompilerImpl {
     private final GraphBuilderConfiguration config;
     private final RuntimeProvider runtime;
     private final TruffleCache truffleCache;
-    private final GraalTruffleCompilationListener compilationNotify;
 
     private static final Class<?>[] SKIPPED_EXCEPTION_CLASSES = new Class[]{UnexpectedResultException.class, SlowPathException.class, ArithmeticException.class, IllegalArgumentException.class};
 
@@ -70,11 +71,9 @@ public class TruffleCompilerImpl {
                     OptimisticOptimizations.Optimization.RemoveNeverExecutedCode, OptimisticOptimizations.Optimization.UseTypeCheckedInlining, OptimisticOptimizations.Optimization.UseTypeCheckHints);
 
     public TruffleCompilerImpl() {
-        GraalTruffleRuntime graalTruffleRuntime = ((GraalTruffleRuntime) Truffle.getRuntime());
         this.runtime = Graal.getRequiredCapability(RuntimeProvider.class);
-        this.compilationNotify = graalTruffleRuntime.getCompilationNotify();
         this.backend = runtime.getHostBackend();
-        Replacements truffleReplacements = graalTruffleRuntime.getReplacements();
+        Replacements truffleReplacements = ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements();
         this.providers = backend.getProviders().copyWith(truffleReplacements);
         this.suites = backend.getSuites().getDefaultSuites();
 
@@ -106,29 +105,69 @@ public class TruffleCompilerImpl {
     public static final DebugMemUseTracker CompilationMemUse = Debug.memUseTracker("TruffleCompilationMemUse");
     public static final DebugMemUseTracker CodeInstallationMemUse = Debug.memUseTracker("TruffleCodeInstallationMemUse");
 
-    public void compileMethod(final OptimizedCallTarget compilable) {
-        StructuredGraph graph = null;
+    public void compileMethodImpl(final OptimizedCallTarget compilable) {
+        final StructuredGraph graph;
 
-        compilationNotify.notifyCompilationStarted(compilable);
-
-        try {
-            Assumptions assumptions = new Assumptions(true);
-
-            try (TimerCloseable a = PartialEvaluationTime.start(); Closeable c = PartialEvaluationMemUse.start()) {
-                graph = partialEvaluator.createGraph(compilable, assumptions);
+        if (TraceTruffleCompilation.getValue() || TraceTruffleCompilationAST.getValue()) {
+            OptimizedCallTargetLog.logOptimizingStart(compilable);
+            if (TraceTruffleCompilationAST.getValue()) {
+                OptimizedCallUtils.printCompactTree(OptimizedCallTarget.OUT, compilable.getRootNode());
             }
-
-            if (Thread.currentThread().isInterrupted()) {
-                return;
-            }
-
-            compilationNotify.notifyCompilationTruffleTierFinished(compilable, graph);
-            CompilationResult compilationResult = compileMethodHelper(graph, assumptions, compilable.toString(), compilable.getSpeculationLog(), compilable);
-            compilationNotify.notifyCompilationSuccess(compilable, graph, compilationResult);
-        } catch (Throwable t) {
-            compilationNotify.notifyCompilationFailed(compilable, graph, t);
-            throw t;
         }
+        if (TraceTruffleCompilationCallTree.getValue()) {
+            OptimizedCallTargetLog.log(0, "opt call tree", compilable.toString(), compilable.getDebugProperties());
+            OptimizedCallTargetLog.logTruffleCalls(compilable);
+        }
+
+        long timeCompilationStarted = System.nanoTime();
+        Assumptions assumptions = new Assumptions(true);
+        ContextSensitiveInlining inlining = TruffleCompilerOptions.TruffleContextSensitiveInlining.getValue() ? new ContextSensitiveInlining(compilable, new DefaultInliningPolicy()) : null;
+        try (TimerCloseable a = PartialEvaluationTime.start(); Closeable c = PartialEvaluationMemUse.start()) {
+            graph = partialEvaluator.createGraph(compilable, assumptions, inlining);
+        }
+
+        if (Thread.currentThread().isInterrupted()) {
+            return;
+        }
+
+        long timePartialEvaluationFinished = System.nanoTime();
+        int nodeCountPartialEval = graph.getNodeCount();
+        CompilationResult compilationResult = compileMethodHelper(graph, assumptions, compilable.toString(), compilable.getSpeculationLog(), compilable);
+        long timeCompilationFinished = System.nanoTime();
+        int nodeCountLowered = graph.getNodeCount();
+
+        compilable.setInliningDecision(inlining);
+
+        if (TraceTruffleInlining.getValue() && inlining != null) {
+            OptimizedCallTargetLog.logInliningDecision(compilable);
+        }
+        if (TraceTruffleCompilation.getValue()) {
+            printTruffleCompilation(compilable, timeCompilationStarted, timePartialEvaluationFinished, nodeCountPartialEval, compilationResult, timeCompilationFinished, nodeCountLowered);
+        }
+
+    }
+
+    private static void printTruffleCompilation(final OptimizedCallTarget compilable, long timeCompilationStarted, long timePartialEvaluationFinished, int nodeCountPartialEval,
+                    CompilationResult compilationResult, long timeCompilationFinished, int nodeCountLowered) {
+        int calls = OptimizedCallUtils.countCalls(compilable);
+        int inlinedCalls = OptimizedCallUtils.countCallsInlined(compilable);
+        int dispatchedCalls = calls - inlinedCalls;
+        Map<String, Object> properties = new LinkedHashMap<>();
+        OptimizedCallTargetLog.addASTSizeProperty(compilable, properties);
+        properties.put("Time", String.format("%5.0f(%4.0f+%-4.0f)ms", //
+                        (timeCompilationFinished - timeCompilationStarted) / 1e6, //
+                        (timePartialEvaluationFinished - timeCompilationStarted) / 1e6, //
+                        (timeCompilationFinished - timePartialEvaluationFinished) / 1e6));
+        properties.put("CallNodes", String.format("I %5d/D %5d", inlinedCalls, dispatchedCalls));
+        properties.put("GraalNodes", String.format("%5d/%5d", nodeCountPartialEval, nodeCountLowered));
+        properties.put("CodeSize", compilationResult.getTargetCodeSize());
+        properties.put("Source", formatSourceSection(compilable.getRootNode().getSourceSection()));
+
+        OptimizedCallTargetLog.logOptimizingDone(compilable, properties);
+    }
+
+    private static String formatSourceSection(SourceSection sourceSection) {
+        return sourceSection != null ? sourceSection.getShortDescription() : "n/a";
     }
 
     public CompilationResult compileMethodHelper(StructuredGraph graph, Assumptions assumptions, String name, SpeculationLog speculationLog, InstalledCode predefinedInstalledCode) {
