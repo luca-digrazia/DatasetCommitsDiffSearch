@@ -26,8 +26,8 @@ import com.oracle.graal.nodes.*;
 
 /**
  * This interface marks is used for subclasses of {@link FixedNode} that kill a set of memory
- * locations represented by location identities (i.e. change a value at one or more locations that
- * belong to these location identities).
+ * locations represented by a location identity (i.e. change a value at one or more locations that
+ * belong to this location identity).
  */
 public interface MemoryCheckpoint {
 
@@ -35,8 +35,8 @@ public interface MemoryCheckpoint {
      * This method is used to determine which set of memory locations is killed by this node.
      * Returning the special value {@link LocationNode#ANY_LOCATION} will kill all memory locations.
      * 
-     * @return the identities of all locations killed by this node.
+     * @return the identity of the location killed by this node.
      */
-    Object[] getLocationIdentities();
+    Object getLocationIdentity();
 
 }
