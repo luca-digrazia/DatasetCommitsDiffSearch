@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.truffle;
 
-import java.util.concurrent.*;
-
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.truffle.api.*;
 
@@ -34,8 +32,6 @@ public interface GraalTruffleRuntime extends TruffleRuntime {
     void compile(OptimizedCallTarget optimizedCallTarget, boolean mayBeAsynchronous);
 
     boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget);
-
-    void waitForCompilation(OptimizedCallTarget optimizedCallTarget, long timeout) throws ExecutionException, TimeoutException;
 
     boolean isCompiling(OptimizedCallTarget optimizedCallTarget);
 
