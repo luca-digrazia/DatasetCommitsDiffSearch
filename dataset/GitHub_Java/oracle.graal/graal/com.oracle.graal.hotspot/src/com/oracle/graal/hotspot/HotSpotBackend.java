@@ -36,8 +36,7 @@ import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.nodes.*;
@@ -77,7 +76,7 @@ public abstract class HotSpotBackend extends Backend {
     /**
      * @see DeoptimizationFetchUnrollInfoCallNode
      */
-    public static final ForeignCallDescriptor FETCH_UNROLL_INFO = new ForeignCallDescriptor("fetchUnrollInfo", Word.class, long.class);
+    public static final ForeignCallDescriptor FETCH_UNROLL_INFO = newDescriptor(DeoptimizationStub.class, "fetchUnrollInfo", Word.class, Word.class);
 
     /**
      * @see DeoptimizationStub#unpackFrames(ForeignCallDescriptor, Word, int)
@@ -153,14 +152,15 @@ public abstract class HotSpotBackend extends Backend {
      */
     protected static Set<Register> gatherDefinedRegisters(LIR lir) {
         final Set<Register> definedRegisters = new HashSet<>();
-        ValueConsumer defConsumer = new ValueConsumer() {
+        ValueProcedure defProc = new ValueProcedure() {
 
             @Override
-            public void visitValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+            public Value doValue(Value value) {
                 if (ValueUtil.isRegister(value)) {
                     final Register reg = ValueUtil.asRegister(value);
                     definedRegisters.add(reg);
                 }
+                return value;
             }
         };
         for (AbstractBlock<?> block : lir.codeEmittingOrder()) {
@@ -168,8 +168,8 @@ public abstract class HotSpotBackend extends Backend {
                 if (op instanceof LabelOp) {
                     // Don't consider this as a definition
                 } else {
-                    op.visitEachTemp(defConsumer);
-                    op.visitEachOutput(defConsumer);
+                    op.forEachTemp(defProc);
+                    op.forEachOutput(defProc);
                 }
             }
         }
