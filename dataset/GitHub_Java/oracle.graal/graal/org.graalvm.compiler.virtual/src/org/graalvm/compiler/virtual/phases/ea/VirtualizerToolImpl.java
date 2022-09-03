@@ -144,7 +144,7 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
 
     @Override
     public void replaceWithValue(ValueNode replacement) {
-        effects.replaceAtUsages(current, closure.getScalarAlias(replacement), position);
+        effects.replaceAtUsages(current, closure.getScalarAlias(replacement));
         closure.addScalarAlias(current, replacement);
         deleted = true;
     }

@@ -748,15 +748,14 @@ public abstract class GraalCompilerTest extends GraalTest {
         return applyArgSuppliers(executeArgs);
     }
 
-    protected Result test(String name, Object... args) {
+    protected void test(String name, Object... args) {
         try {
             ResolvedJavaMethod method = getResolvedJavaMethod(name);
             Object receiver = method.isStatic() ? null : this;
-            return test(method, receiver, args);
+            test(method, receiver, args);
         } catch (AssumptionViolatedException e) {
             // Suppress so that subsequent calls to this method within the
             // same Junit @Test annotated method can proceed.
-            return null;
         }
     }
 
@@ -776,12 +775,12 @@ public abstract class GraalCompilerTest extends GraalTest {
         return supplier;
     }
 
-    protected Result test(ResolvedJavaMethod method, Object receiver, Object... args) {
+    protected void test(ResolvedJavaMethod method, Object receiver, Object... args) {
         Result expect = executeExpected(method, receiver, args);
-        if (getCodeCache() != null) {
-            testAgainstExpected(method, expect, receiver, args);
+        if (getCodeCache() == null) {
+            return;
         }
-        return expect;
+        testAgainstExpected(method, expect, receiver, args);
     }
 
     /**
