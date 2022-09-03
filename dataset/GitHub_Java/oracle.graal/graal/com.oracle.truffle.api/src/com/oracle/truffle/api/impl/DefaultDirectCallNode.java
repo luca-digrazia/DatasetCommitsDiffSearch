@@ -34,14 +34,16 @@ import com.oracle.truffle.api.nodes.*;
 public final class DefaultDirectCallNode extends DirectCallNode {
 
     private boolean inliningForced;
+    private final DefaultTruffleRuntime defaultTruffleRuntime;
 
-    public DefaultDirectCallNode(CallTarget target) {
+    public DefaultDirectCallNode(CallTarget target, DefaultTruffleRuntime defaultTruffleRuntime) {
         super(target);
+        this.defaultTruffleRuntime = defaultTruffleRuntime;
     }
 
     @Override
     public Object call(final VirtualFrame frame, Object[] arguments) {
-        final CallTarget currentCallTarget = defaultTruffleRuntime().getCurrentFrame().getCallTarget();
+        final CallTarget currentCallTarget = defaultTruffleRuntime.getCurrentFrame().getCallTarget();
         FrameInstance frameInstance = new FrameInstance() {
 
             public Frame getFrame(FrameAccess access, boolean slowPath) {
@@ -60,11 +62,11 @@ public final class DefaultDirectCallNode extends DirectCallNode {
                 return currentCallTarget;
             }
         };
-        defaultTruffleRuntime().pushFrame(frameInstance);
+        defaultTruffleRuntime.pushFrame(frameInstance);
         try {
             return getCurrentCallTarget().call(arguments);
         } finally {
-            defaultTruffleRuntime().popFrame();
+            defaultTruffleRuntime.popFrame();
         }
     }
 
@@ -106,9 +108,5 @@ public final class DefaultDirectCallNode extends DirectCallNode {
     @Override
     public String toString() {
         return (getParent() != null ? getParent().toString() : super.toString()) + " call " + getCurrentCallTarget().toString();
-    }
-
-    private static DefaultTruffleRuntime defaultTruffleRuntime() {
-        return (DefaultTruffleRuntime) Truffle.getRuntime();
     }
 }
