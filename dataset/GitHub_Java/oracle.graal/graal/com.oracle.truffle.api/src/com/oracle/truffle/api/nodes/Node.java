@@ -357,9 +357,11 @@ public abstract class Node implements Cloneable {
      * @return the iterator
      */
     public final Iterable<Node> getChildren() {
+        final Node node = this;
         return new Iterable<Node>() {
+
             public Iterator<Node> iterator() {
-                return NodeUtil.makeIterator(Node.this);
+                return new NodeUtil.NodeIterator(node);
             }
         };
     }
