@@ -136,15 +136,25 @@ import com.oracle.truffle.llvm.nodes.base.LLVMMetadataNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStatementNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStructWriteNode;
+import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
+import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
 import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
 import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
+import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
 import com.oracle.truffle.llvm.nodes.base.vector.LLVMI32VectorNode;
 import com.oracle.truffle.llvm.nodes.exception.LLVMInvokeNode;
 import com.oracle.truffle.llvm.nodes.exception.LLVMLandingPadNode.LLVMAddressLandingPadNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMFunctionBodyNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyFactory;
+import com.oracle.truffle.llvm.nodes.literals.LLVMAggregateLiteralNode.LLVMEmptyStructLiteralNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNodeFactory.LLVMAddressI32GetElementPtrNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.LLVMAddressZeroNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstruction.LLVMAllocaInstruction;
+import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstructionFactory.LLVMI32AllocaInstructionNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstructionFactory.LLVMI64AllocaInstructionNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.LLVMInsertValueNode.LLVMInsertDoubleValueNode;
+import com.oracle.truffle.llvm.nodes.memory.LLVMInsertValueNode.LLVMInsertFloatValueNode;
 import com.oracle.truffle.llvm.nodes.others.LLVMBlockNode;
 import com.oracle.truffle.llvm.nodes.others.LLVMBlockNode.LLVMBlockControlFlowNode;
 import com.oracle.truffle.llvm.nodes.others.LLVMBlockNode.LLVMBlockNoControlFlowNode;
@@ -730,7 +740,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMI32VectorNode mask = (LLVMI32VectorNode) visitValueRef(instr.getMask().getRef(), instr.getMask().getType());
         ResolvedType resultType = resolve(instr.getVector1().getType());
         ResolvedVectorType resultVectorType = resultType.asVector();
-        LLVMExpressionNode target = allocateFunctionLifetime(resultVectorType);
+        LLVMAllocaInstruction target = allocateFunctionLifetime(resultVectorType);
         LLVMBaseType llvmType = getLLVMType(instr.getVector1().getType());
         return factoryFacade.createShuffleVector(llvmType, target, vector1, vector2, mask);
     }
@@ -777,7 +787,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         TypedValue aggregate = insertValue.getAggregate();
         TypedValue element = insertValue.getElement();
         int size = LLVMTypeHelper.getByteSize(resolve(aggregate.getType()));
-        LLVMExpressionNode resultAggregate = allocateFunctionLifetime(resolve(aggregate.getType()));
+        LLVMAllocaInstruction resultAggregate = allocateFunctionLifetime(resolve(aggregate.getType()));
         LLVMAddressNode sourceAggregate = (LLVMAddressNode) visitValueRef(aggregate.getRef(), aggregate.getType());
         LLVMExpressionNode valueToInsert = visitValueRef(element.getRef(), element.getType());
         List<LLVMI32Node> indexNodes = new ArrayList<>();
@@ -789,7 +799,14 @@ public class LLVMVisitor implements LLVMParserRuntime {
         int offset = LLVMTypeHelper.goIntoTypeGetLengthByte(resolve(aggregate.getType()), index);
         assert indexNodes.size() == 1;
         LLVMBaseType llvmType = getLLVMType(element);
-        return factoryFacade.createInsertValue(resultAggregate, sourceAggregate, size, offset, valueToInsert, llvmType);
+        switch (llvmType) {
+            case FLOAT:
+                return new LLVMInsertFloatValueNode(resultAggregate, sourceAggregate, size, offset, (LLVMFloatNode) valueToInsert);
+            case DOUBLE:
+                return new LLVMInsertDoubleValueNode(resultAggregate, sourceAggregate, size, offset, (LLVMDoubleNode) valueToInsert);
+            default:
+                throw new AssertionError(llvmType);
+        }
     }
 
     private LLVMExpressionNode visitFcmpInstruction(Instruction_fcmp instr) {
@@ -806,13 +823,13 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMExpressionNode left = visitValueRef(op1, instr.getType());
         LLVMExpressionNode right = visitValueRef(op2, instr.getType());
         LLVMBaseType llvmType = getLLVMType(instr.getType());
-        LLVMExpressionNode target = allocateVectorResultIfVector(instr);
+        LLVMAddressNode target = allocateVectorResultIfVector(instr);
         return factoryFacade.createLogicalOperation(left, right, instr, llvmType, target);
     }
 
-    private LLVMExpressionNode allocateVectorResultIfVector(EObject type) {
+    private LLVMAddressNode allocateVectorResultIfVector(EObject type) {
         boolean isVector = resolve(type) instanceof ResolvedVectorType;
-        LLVMExpressionNode target;
+        LLVMAddressNode target;
         if (isVector) {
             target = allocateVectorResult(type);
         } else {
@@ -930,12 +947,21 @@ public class LLVMVisitor implements LLVMParserRuntime {
         int byteSize = LLVMTypeHelper.getByteSize(resolve(type));
         LLVMExpressionNode alloc;
         if (numElementsVal == null) {
-            alloc = factoryFacade.createAlloc(byteSize, alignment);
+            alloc = LLVMAllocaInstructionNodeGen.create(byteSize, alignment);
         } else {
             Type numElementsType = instr.getNumElements().getType();
-            LLVMBaseType llvmType = getLLVMType(numElementsType);
-            LLVMExpressionNode numElements = visitValueRef(numElementsVal.getRef(), numElementsType);
-            alloc = factoryFacade.createAlloc(llvmType, numElements, byteSize, alignment);
+            switch (getLLVMType(numElementsType)) {
+                case I32:
+                    LLVMI32Node numElements = (LLVMI32Node) visitValueRef(numElementsVal.getRef(), numElementsType);
+                    alloc = LLVMI32AllocaInstructionNodeGen.create(numElements, byteSize, alignment);
+                    break;
+                case I64:
+                    LLVMI64Node numElements2 = (LLVMI64Node) visitValueRef(numElementsVal.getRef(), numElementsType);
+                    alloc = LLVMI64AllocaInstructionNodeGen.create(numElements2, byteSize, alignment);
+                    break;
+                default:
+                    throw new AssertionError(getLLVMType(type));
+            }
         }
         return alloc;
     }
@@ -952,7 +978,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         ValueRef op2 = instr.getOp2();
         LLVMExpressionNode left = visitValueRef(op1, instr.getType());
         LLVMExpressionNode right = visitValueRef(op2, instr.getType());
-        LLVMExpressionNode target = allocateVectorResultIfVector(instr);
+        LLVMAddressNode target = allocateVectorResultIfVector(instr);
         LLVMArithmeticInstructionType instructionType = LLVMArithmeticInstructionType.fromString(instr.getOpcode());
         return factoryFacade.createArithmeticOperation(left, right, instructionType, getLLVMType(instr.getType()), target);
     }
@@ -1072,7 +1098,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         ConstantList list = constant.getList();
         ResolvedVectorType type = (ResolvedVectorType) resolve(constant);
         List<LLVMExpressionNode> listValues = visitConstantList(list);
-        LLVMExpressionNode target = allocateVectorResult(constant);
+        LLVMAddressNode target = allocateVectorResult(constant);
         return factoryFacade.createVectorLiteralNode(listValues, target, type);
     }
 
@@ -1089,7 +1115,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMExpressionNode left = visitValueRef(constant.getOp1().getRef(), constant.getOp1().getType());
         LLVMExpressionNode right = visitValueRef(constant.getOp2().getRef(), constant.getOp2().getType());
         String opCode = constant.getOpcode();
-        LLVMExpressionNode target = allocateVectorResultIfVector(constant);
+        LLVMAddressNode target = allocateVectorResultIfVector(constant);
         LLVMBaseType llvmType = getLLVMType(constant);
         if (LLVMLogicalInstructionType.isLogicalInstruction(opCode)) {
             LLVMLogicalInstructionType opType = LLVMLogicalInstructionType.fromString(opCode);
@@ -1176,7 +1202,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
     private LLVMExpressionNode visitZeroVectorInitializer(EObject type) {
         ResolvedVectorType vectorType = (ResolvedVectorType) resolve(type);
         int nrElements = vectorType.getSize();
-        LLVMExpressionNode target = allocateVectorResult(type);
+        LLVMAddressNode target = allocateVectorResult(type);
         LLVMBaseType llvmType = LLVMTypeHelper.getLLVMType(vectorType);
         return factoryFacade.createZeroVectorInitializer(nrElements, target, llvmType);
     }
@@ -1188,9 +1214,8 @@ public class LLVMVisitor implements LLVMParserRuntime {
             LLVMAddress minusOneNode = LLVMAddress.fromLong(-1);
             return factoryFacade.createLiteral(minusOneNode, LLVMBaseType.ADDRESS);
         } else {
-            LLVMExpressionNode addressNode = allocateFunctionLifetime(size, resolvedType);
-            return factoryFacade.createZeroNode(addressNode, size);
-
+            LLVMAllocaInstruction addressNode = allocateFunctionLifetime(size, resolvedType);
+            return new LLVMAddressZeroNode(addressNode, size);
         }
     }
 
@@ -1201,8 +1226,8 @@ public class LLVMVisitor implements LLVMParserRuntime {
             // zero-size array, not allowed per C and C++ standard
             return null;
         } else {
-            LLVMExpressionNode addressNode = allocateFunctionLifetime(resolvedType);
-            return factoryFacade.createZeroNode(addressNode, size);
+            LLVMAllocaInstruction addressNode = allocateFunctionLifetime(resolvedType);
+            return new LLVMAddressZeroNode(addressNode, size);
         }
     }
 
@@ -1216,7 +1241,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         boolean packed = structure.getPacked() != null;
         int structSize = LLVMTypeHelper.getStructureSizeByte(structure, typeResolver);
         // FIXME alignment
-        LLVMExpressionNode alloc = allocateFunctionLifetime(structSize, LLVMStack.NO_ALIGNMENT_REQUIREMENTS);
+        LLVMAllocaInstruction alloc = allocateFunctionLifetime(structSize, LLVMStack.NO_ALIGNMENT_REQUIREMENTS);
         for (TypedConstant constant : typedConstants) {
             ResolvedType resolvedType = resolve(constant.getType());
             if (!packed) {
@@ -1243,8 +1268,8 @@ public class LLVMVisitor implements LLVMParserRuntime {
         } else {
             ResolvedType resolvedType = resolve(type);
             int byteSize = LLVMTypeHelper.getByteSize(resolvedType);
-            LLVMExpressionNode alloca = allocateFunctionLifetime(resolvedType);
-            return factoryFacade.createEmptyStructLiteralNode(alloca, byteSize);
+            LLVMAllocaInstruction alloca = allocateFunctionLifetime(resolvedType);
+            return new LLVMEmptyStructLiteralNode(alloca, byteSize);
         }
     }
 
@@ -1422,7 +1447,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     @Override
-    public LLVMExpressionNode allocateVectorResult(EObject type) {
+    public LLVMAddressNode allocateVectorResult(EObject type) {
         ResolvedVectorType vector = (ResolvedVectorType) resolve(type);
         return allocateFunctionLifetime(vector);
     }
@@ -1432,20 +1457,23 @@ public class LLVMVisitor implements LLVMParserRuntime {
         return typeResolver.resolve(e);
     }
 
-    public LLVMExpressionNode allocateFunctionLifetime(ResolvedType resolvedType) {
+    public LLVMAllocaInstruction allocateFunctionLifetime(ResolvedType resolvedType) {
         int alignment = LLVMTypeHelper.getAlignmentByte(resolvedType);
         int size = LLVMTypeHelper.getByteSize(resolvedType);
-        return allocateFunctionLifetime(size, alignment);
+        LLVMAllocaInstruction arrayAlloc = LLVMAllocaInstructionNodeGen.create(size, alignment);
+        return arrayAlloc;
     }
 
-    public LLVMExpressionNode allocateFunctionLifetime(int size, ResolvedType resolvedType) {
+    public LLVMAllocaInstruction allocateFunctionLifetime(int size, ResolvedType resolvedType) {
         int alignment = LLVMTypeHelper.getAlignmentByte(resolvedType);
-        return allocateFunctionLifetime(size, alignment);
+        LLVMAllocaInstruction arrayAlloc = LLVMAllocaInstructionNodeGen.create(size, alignment);
+        return arrayAlloc;
     }
 
     @Override
     public LLVMAllocaInstruction allocateFunctionLifetime(int size, int alignment) {
-        return factoryFacade.createAlloc(size, alignment);
+        LLVMAllocaInstruction arrayAlloc = LLVMAllocaInstructionNodeGen.create(size, alignment);
+        return arrayAlloc;
     }
 
     @Override
