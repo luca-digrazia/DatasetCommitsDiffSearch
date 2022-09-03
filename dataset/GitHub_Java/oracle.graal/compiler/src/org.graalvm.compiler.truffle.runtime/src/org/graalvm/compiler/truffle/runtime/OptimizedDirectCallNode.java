@@ -32,7 +32,6 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.profiles.ValueProfile;
 
 /**
  * A call node with a constant {@link CallTarget} that can be optimized by Graal.
@@ -44,7 +43,6 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
 
     private int callCount;
     private boolean inliningForced;
-    @CompilationFinal private ValueProfile exceptionProfile;
 
     @CompilationFinal private OptimizedCallTarget splitCallTarget;
 
@@ -61,17 +59,7 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
         if (CompilerDirectives.inInterpreter()) {
             onInterpreterCall();
         }
-        try {
-            return callProxy(this, getCurrentCallTarget(), arguments, true);
-        } catch (Throwable t) {
-            if (exceptionProfile == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                exceptionProfile = ValueProfile.createClassProfile();
-            }
-            Throwable profiledT = exceptionProfile.profile(t);
-            OptimizedCallTarget.runtime().getTvmci().onThrowable(this, null, profiledT, null);
-            throw OptimizedCallTarget.rethrow(profiledT);
-        }
+        return callProxy(this, getCurrentCallTarget(), arguments, true);
     }
 
     // Note: {@code PartialEvaluator} looks up this method by name and signature.
@@ -162,10 +150,8 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
 
             if (callCount >= 1) {
                 currentTarget.decrementKnownCallSites();
-                currentTarget.removeKnownCallSite(this);
             }
             splitTarget.incrementKnownCallSites();
-            splitTarget.addKnownCallNode(this);
 
             if (getParent() != null) {
                 // dummy replace to report the split, irrelevant if this node is not adopted
