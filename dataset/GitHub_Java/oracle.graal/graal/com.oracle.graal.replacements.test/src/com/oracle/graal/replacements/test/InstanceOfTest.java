@@ -26,16 +26,16 @@ import java.util.*;
 
 import org.junit.*;
 
+import com.oracle.graal.api.code.CompilationResult.Call;
+import com.oracle.graal.api.code.CompilationResult.Mark;
+import com.oracle.graal.api.code.CompilationResult.Site;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.replacements.test.CheckCastTest.Depth12;
 import com.oracle.graal.replacements.test.CheckCastTest.Depth13;
 import com.oracle.graal.replacements.test.CheckCastTest.Depth14;
-import com.oracle.jvmci.code.CompilationResult.Call;
-import com.oracle.jvmci.code.CompilationResult.Mark;
-import com.oracle.jvmci.code.CompilationResult.Site;
-import com.oracle.jvmci.meta.*;
 
 /**
  * Tests the implementation of instanceof, allowing profiling information to be manually specified.
@@ -50,7 +50,7 @@ public class InstanceOfTest extends TypeCheckTest {
     protected void replaceProfile(StructuredGraph graph, JavaTypeProfile profile) {
         InstanceOfNode ion = graph.getNodes().filter(InstanceOfNode.class).first();
         if (ion != null) {
-            LogicNode ionNew = graph.unique(InstanceOfNode.create(ion.type(), ion.getValue(), profile));
+            InstanceOfNode ionNew = graph.unique(new InstanceOfNode(ion.type(), ion.getValue(), profile));
             graph.replaceFloating(ion, ionNew);
         }
     }
@@ -411,24 +411,5 @@ public class InstanceOfTest extends TypeCheckTest {
     public void testArrayCopy() {
         test("arrayCopyTypeName", (Object) new Object[]{"one", "two", "three"});
         test("arrayCopyTypeName", (Object) new String[]{"one", "two", "three"});
-    }
-
-    public int conditionalInstantiation(Object o) {
-        int total = 0;
-        if (o instanceof CharSequence) {
-            if (o instanceof StringBuilder || o instanceof String) {
-                total = 9;
-            }
-            total += (o instanceof String ? 2 : 1);
-        }
-
-        return total;
-    }
-
-    @Test
-    public void testInstantiation() {
-        test("conditionalInstantiation", "foo");
-        test("conditionalInstantiation", new StringBuilder());
-        test("conditionalInstantiation", 1);
     }
 }
