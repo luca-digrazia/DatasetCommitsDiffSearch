@@ -195,9 +195,6 @@ public class TruffleCompilerOptions {
     @Option(help = "Dumps to IGV information on polymorphic events", type = OptionType.Expert)
     public static final OptionKey<Boolean> TruffleDumpPolymorphicEvents = new OptionKey<>(false);
 
-    @Option(help = "Should forced splits be allowed (when using pollution based splitting)", type = OptionType.Expert)
-    public static final OptionKey<Boolean> TruffleAllowForcedSplits = new OptionKey<>(false);
-
     @Option(help = "Enable asynchronous truffle compilation in background thread", type = OptionType.Expert)
     public static final OptionKey<Boolean> TruffleBackgroundCompilation = new OptionKey<>(true);
 
