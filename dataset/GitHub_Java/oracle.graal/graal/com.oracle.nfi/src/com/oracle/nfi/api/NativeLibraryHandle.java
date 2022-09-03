@@ -20,28 +20,18 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.nfi;
+package com.oracle.nfi.api;
 
-import com.oracle.nfi.api.*;
-
-public final class NativeFunctionInterfaceRuntime {
-    private static final NativeFunctionInterface INTERFACE;
-
-    private static native NativeFunctionInterface createInterface();
-
-    public static NativeFunctionInterface getNativeFunctionInterface() {
-        return INTERFACE;
-    }
-
-    static {
-        NativeFunctionInterface instance;
-        try {
-            instance = createInterface();
-        } catch (UnsatisfiedLinkError e) {
-            System.err.println("Graal Native Function Interface not supported!");
-            e.printStackTrace();
-            instance = null;
-        }
-        INTERFACE = instance;
-    }
+/**
+ * An opaque representation of a native library handle. A handle is obtained via
+ * {@link NativeFunctionInterface#getLibraryHandle(String)}. A handle is used to resolve a string to
+ * a {@linkplain NativeFunctionInterface#getFunctionHandle(String, Class, Class...) handle} or
+ * {@linkplain NativeFunctionInterface#getFunctionPointer(NativeLibraryHandle[], String) pointer}.
+ */
+public interface NativeLibraryHandle {
+    /**
+     * Gets a name for this library. This may be the path for the file from which the library was
+     * loaded.
+     */
+    String getName();
 }

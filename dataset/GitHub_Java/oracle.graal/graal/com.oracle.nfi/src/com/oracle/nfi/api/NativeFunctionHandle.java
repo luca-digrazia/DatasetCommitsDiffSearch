@@ -20,28 +20,24 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.nfi;
+package com.oracle.nfi.api;
 
-import com.oracle.nfi.api.*;
+/**
+ * A handle that can be used to {@linkplain #call(Object[]) call} a native function.
+ */
+public interface NativeFunctionHandle {
 
-public final class NativeFunctionInterfaceRuntime {
-    private static final NativeFunctionInterface INTERFACE;
+    /**
+     * Calls the native function.
+     * <p>
+     * The caller is responsible for ensuring {@code args} comply with the platform ABI (e.g. <a
+     * href="http://www.uclibc.org/docs/psABI-x86_64.pdf"> Unix AMD64 ABI</a>). If the library
+     * function has struct parameters, the fields of the struct must be passed as individual
+     * arguments.
+     *
+     * @param args the arguments that will be passed to the native function
+     * @return boxed return value of the function call
+     */
+    Object call(Object... args);
 
-    private static native NativeFunctionInterface createInterface();
-
-    public static NativeFunctionInterface getNativeFunctionInterface() {
-        return INTERFACE;
-    }
-
-    static {
-        NativeFunctionInterface instance;
-        try {
-            instance = createInterface();
-        } catch (UnsatisfiedLinkError e) {
-            System.err.println("Graal Native Function Interface not supported!");
-            e.printStackTrace();
-            instance = null;
-        }
-        INTERFACE = instance;
-    }
 }
