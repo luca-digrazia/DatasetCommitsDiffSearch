@@ -24,60 +24,75 @@ package com.oracle.graal.lir.asm;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Arrays;
+import java.nio.IntBuffer;
+import java.nio.FloatBuffer;
+import java.nio.DoubleBuffer;
+import java.nio.LongBuffer;
 
+import com.oracle.graal.code.DataSection.Data;
+import com.oracle.graal.code.DataSection.RawData;
 import com.oracle.graal.compiler.common.type.DataPointerConstant;
+import com.oracle.graal.debug.GraalError;
+
+import jdk.vm.ci.code.site.DataSectionReference;
+import jdk.vm.ci.meta.Constant;
 
 /**
- * Class for chunks of data that go into the data section.
+ * Base class for {@link Constant constants} that represent a pointer to the data section.
  */
 public class ArrayDataPointerConstant extends DataPointerConstant {
 
-    private final byte[] data;
+    public DataSectionReference dataRef;
+    private CompilationResultBuilder crb;
+    private int[] intArray;
+    private float[] floatArray;
+    private double[] doubleArray;
+    private long[] longArray;
+    private ByteBuffer byteBuffer;
 
-    public ArrayDataPointerConstant(byte[] array, int alignment) {
-        super(alignment);
-        data = array.clone();
+    public enum ArrayType {
+        INT_ARRAY,
+        FLOAT_ARRAY,
+        DOUBLE_ARRAY,
+        LONG_ARRAY
     }
 
-    public ArrayDataPointerConstant(short[] array, int alignment) {
+    private final ArrayType arrayType;
+
+    public ArrayDataPointerConstant(int[] array, ArrayType arrayType, CompilationResultBuilder crb, int alignment) {
         super(alignment);
-        ByteBuffer byteBuffer = ByteBuffer.allocate(array.length * 2);
-        byteBuffer.order(ByteOrder.nativeOrder());
-        byteBuffer.asShortBuffer().put(array);
-        data = byteBuffer.array();
+        this.crb = crb;
+        this.arrayType = arrayType;
+        this.intArray = array;
+        this.byteBuffer = ByteBuffer.allocate(array.length * 4);
+        serialize(byteBuffer);
     }
 
-    public ArrayDataPointerConstant(int[] array, int alignment) {
+    public ArrayDataPointerConstant(float[] array, ArrayType arrayType, CompilationResultBuilder crb, int alignment) {
         super(alignment);
-        ByteBuffer byteBuffer = ByteBuffer.allocate(array.length * 4);
-        byteBuffer.order(ByteOrder.nativeOrder());
-        byteBuffer.asIntBuffer().put(array);
-        data = byteBuffer.array();
+        this.crb = crb;
+        this.arrayType = arrayType;
+        this.floatArray = array;
+        this.byteBuffer = ByteBuffer.allocate(array.length * 4);
+        serialize(byteBuffer);
     }
 
-    public ArrayDataPointerConstant(float[] array, int alignment) {
+    public ArrayDataPointerConstant(double[] array, ArrayType arrayType, CompilationResultBuilder crb, int alignment) {
         super(alignment);
-        ByteBuffer byteBuffer = ByteBuffer.allocate(array.length * 4);
-        byteBuffer.order(ByteOrder.nativeOrder());
-        byteBuffer.asFloatBuffer().put(array);
-        data = byteBuffer.array();
+        this.crb = crb;
+        this.arrayType = arrayType;
+        this.doubleArray = array;
+        this.byteBuffer = ByteBuffer.allocate(array.length * 8);
+        serialize(byteBuffer);
     }
 
-    public ArrayDataPointerConstant(double[] array, int alignment) {
+    public ArrayDataPointerConstant(long[] array, ArrayType arrayType, CompilationResultBuilder crb, int alignment) {
         super(alignment);
-        ByteBuffer byteBuffer = ByteBuffer.allocate(array.length * 8);
-        byteBuffer.order(ByteOrder.nativeOrder());
-        byteBuffer.asDoubleBuffer().put(array);
-        data = byteBuffer.array();
-    }
-
-    public ArrayDataPointerConstant(long[] array, int alignment) {
-        super(alignment);
-        ByteBuffer byteBuffer = ByteBuffer.allocate(array.length * 8);
-        byteBuffer.order(ByteOrder.nativeOrder());
-        byteBuffer.asLongBuffer().put(array);
-        data = byteBuffer.array();
+        this.crb = crb;
+        this.arrayType = arrayType;
+        this.longArray = array;
+        this.byteBuffer = ByteBuffer.allocate(array.length * 8);
+        serialize(byteBuffer);
     }
 
     @Override
@@ -87,16 +102,50 @@ public class ArrayDataPointerConstant extends DataPointerConstant {
 
     @Override
     public void serialize(ByteBuffer buffer) {
-        buffer.put(data);
+        byteBuffer.order(ByteOrder.nativeOrder());
+        switch(arrayType) {
+            case INT_ARRAY:
+                IntBuffer intBuffer = byteBuffer.asIntBuffer();
+                intBuffer.put(intArray);
+                break;
+            case FLOAT_ARRAY:
+                FloatBuffer floatBuffer = byteBuffer.asFloatBuffer();
+                floatBuffer.put(floatArray);
+                break;
+            case DOUBLE_ARRAY:
+                DoubleBuffer doubleBuffer = byteBuffer.asDoubleBuffer();
+                doubleBuffer.put(doubleArray);
+                break;
+            case LONG_ARRAY:
+                LongBuffer longBuffer = byteBuffer.asLongBuffer();
+                longBuffer.put(longArray);
+                break;
+            default:
+                throw GraalError.shouldNotReachHere();
+        }
+        byte[] rawBytes = byteBuffer.array();
+        Data data = new RawData(rawBytes, getAlignment());
+        dataRef = crb.compilationResult.getDataSection().insertData(data);
     }
 
     @Override
     public int getSerializedSize() {
-        return data.length;
+        switch(arrayType) {
+            case INT_ARRAY:
+                return intArray.length * 4;
+            case FLOAT_ARRAY:
+                return floatArray.length * 4;
+            case DOUBLE_ARRAY:
+                return doubleArray.length * 8;
+            case LONG_ARRAY:
+                return longArray.length * 8;   
+            default:
+                throw GraalError.shouldNotReachHere();
+        }
     }
 
     @Override
     public String toValueString() {
-        return "ArrayDataPointerConstant" + Arrays.toString(data);
+        return "no context value available";
     }
 }
