@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.compiler.test;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.BailoutException;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
 import jdk.internal.org.objectweb.asm.ClassWriter;
 import jdk.internal.org.objectweb.asm.Label;
 import jdk.internal.org.objectweb.asm.MethodVisitor;
@@ -31,12 +31,12 @@ import jdk.internal.org.objectweb.asm.Opcodes;
 
 import org.junit.Test;
 
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.java.GraphBuilderPhase;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.phases.OptimisticOptimizations;
 
 /**
@@ -81,6 +81,7 @@ public class UnbalancedMonitorsTest extends GraalCompilerTest implements Opcodes
         try {
             StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO);
             GraphBuilderConfiguration graphBuilderConfig = GraphBuilderConfiguration.getEagerDefault(new Plugins(new InvocationPlugins(getMetaAccess())));
+            graphBuilderConfig = graphBuilderConfig.withOmitAllExceptionEdges(false);
             OptimisticOptimizations optimisticOpts = OptimisticOptimizations.NONE;
 
             GraphBuilderPhase.Instance graphBuilder = new GraphBuilderPhase.Instance(getMetaAccess(), getProviders().getStampProvider(), null, graphBuilderConfig, optimisticOpts, null);
