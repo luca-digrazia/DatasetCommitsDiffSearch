@@ -39,8 +39,10 @@ import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMBasicBlockNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMArgNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMArgNodeGen;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
@@ -48,7 +50,6 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
@@ -232,12 +233,17 @@ public abstract class LLVMRetNode extends LLVMControlFlowNode implements Instrum
         }
 
         @Specialization
-        protected Object doOp(LLVMPointer retResult) {
+        protected Object doOp(LLVMAddress retResult) {
             return retResult;
         }
 
         @Specialization
         protected Object doOp(LLVMFunctionDescriptor retResult) {
+            return retResult;
+        }
+
+        @Specialization
+        protected Object doOp(LLVMTruffleObject retResult) {
             return retResult;
         }
     }
@@ -300,7 +306,12 @@ public abstract class LLVMRetNode extends LLVMControlFlowNode implements Instrum
         }
 
         @Specialization
-        protected Object doOp(VirtualFrame frame, LLVMPointer retResult) {
+        protected Object doOp(VirtualFrame frame, LLVMAddress retResult) {
+            return returnStruct(frame, retResult);
+        }
+
+        @Specialization
+        protected Object doOp(VirtualFrame frame, LLVMTruffleObject retResult) {
             return returnStruct(frame, retResult);
         }
 
