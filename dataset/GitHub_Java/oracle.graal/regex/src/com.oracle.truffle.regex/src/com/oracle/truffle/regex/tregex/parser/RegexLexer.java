@@ -28,11 +28,10 @@ import com.oracle.truffle.regex.RegexFlags;
 import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.RegexSyntaxException;
-import com.oracle.truffle.regex.tregex.util.DebugUtil;
 import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 import com.oracle.truffle.regex.util.Constants;
-
 import java.math.BigInteger;
+
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -46,7 +45,6 @@ public final class RegexLexer {
     private static final CodePointSet ID_START = UnicodeCharacterProperties.getProperty("ID_Start");
     private static final CodePointSet ID_CONTINUE = UnicodeCharacterProperties.getProperty("ID_Continue");
 
-    private final RegexSource source;
     private final String pattern;
     private final RegexFlags flags;
     private final RegexOptions options;
@@ -57,7 +55,6 @@ public final class RegexLexer {
     private Map<String, Integer> namedCaptureGroups = null;
 
     public RegexLexer(RegexSource source, RegexOptions options) {
-        this.source = source;
         this.pattern = source.getPattern();
         this.flags = source.getFlags();
         this.options = options;
@@ -68,28 +65,9 @@ public final class RegexLexer {
     }
 
     public Token next() throws RegexSyntaxException {
-        int startIndex = index;
         Token t = getNext();
-        setSourceSection(t, startIndex, index);
         lastToken = t;
         return t;
-    }
-
-    /**
-     * Sets the {@link com.oracle.truffle.api.source.SourceSection} of a given {@link Token} in
-     * respect of {@link RegexSource#getSource()}.
-     * 
-     * @param startIndex inclusive start index of the source section in respect of
-     *            {@link RegexSource#getPattern()}.
-     * @param endIndex exclusive end index of the source section in respect of
-     *            {@link RegexSource#getPattern()}.
-     */
-    private void setSourceSection(Token t, int startIndex, int endIndex) {
-        if (DebugUtil.DEBUG) {
-            // RegexSource#getSource() prepends a slash ('/') to the pattern, so we have to add an
-            // offset of 1 here.
-            t.setSourceSection(source.getSource().createSection(startIndex + 1, endIndex - startIndex));
-        }
     }
 
     /* input string access */
@@ -330,13 +308,11 @@ public final class RegexLexer {
 
     private Token parseGroupBegin() throws RegexSyntaxException {
         if (consumingLookahead("?=")) {
-            return Token.createLookAheadAssertionBegin(false);
+            return Token.create(Token.Kind.lookAheadAssertionBegin);
         } else if (consumingLookahead("?!")) {
-            return Token.createLookAheadAssertionBegin(true);
+            return Token.create(Token.Kind.negativeLookAheadAssertionBegin);
         } else if (consumingLookahead("?<=")) {
-            return Token.createLookBehindAssertionBegin(false);
-        } else if (consumingLookahead("?<!")) {
-            return Token.createLookBehindAssertionBegin(true);
+            return Token.create(Token.Kind.lookBehindAssertionBegin);
         } else if (consumingLookahead("?:")) {
             return Token.create(Token.Kind.nonCaptureGroupBegin);
         } else if (consumingLookahead("?<")) {
