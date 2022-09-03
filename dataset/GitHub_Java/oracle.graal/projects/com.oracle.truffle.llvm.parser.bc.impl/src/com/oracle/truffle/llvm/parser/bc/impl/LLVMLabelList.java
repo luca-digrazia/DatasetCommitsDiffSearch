@@ -32,7 +32,15 @@ package com.oracle.truffle.llvm.parser.bc.impl;
 import java.util.HashMap;
 import java.util.Map;
 
-import uk.ac.man.cs.llvm.ir.model.*;
+import uk.ac.man.cs.llvm.ir.model.InstructionBlock;
+import uk.ac.man.cs.llvm.ir.model.FunctionDeclaration;
+import uk.ac.man.cs.llvm.ir.model.FunctionDefinition;
+import uk.ac.man.cs.llvm.ir.model.FunctionVisitor;
+import uk.ac.man.cs.llvm.ir.model.GlobalAlias;
+import uk.ac.man.cs.llvm.ir.model.GlobalConstant;
+import uk.ac.man.cs.llvm.ir.model.GlobalVariable;
+import uk.ac.man.cs.llvm.ir.model.Model;
+import uk.ac.man.cs.llvm.ir.model.ModelVisitor;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
 public final class LLVMLabelList {
@@ -59,11 +67,15 @@ public final class LLVMLabelList {
 
         private final Map<String, Map<String, Integer>> labels = new HashMap<>();
 
-        public LLVMLabelListVisitor() {
+        LLVMLabelListVisitor() {
         }
 
         private Map<String, Map<String, Integer>> labels() {
             return labels;
+        }
+
+        @Override
+        public void visit(GlobalAlias alias) {
         }
 
         @Override
@@ -100,7 +112,7 @@ public final class LLVMLabelList {
 
         private int index = 0;
 
-        public LLVMLabelListFunctionVisitor() {
+        LLVMLabelListFunctionVisitor() {
         }
 
         private Map<String, Integer> labels() {
@@ -108,7 +120,7 @@ public final class LLVMLabelList {
         }
 
         @Override
-        public void visit(Block block) {
+        public void visit(InstructionBlock block) {
             String name = block.getName();
             if (name.isEmpty() || "entry".equals(name)) {
                 name = "%0";

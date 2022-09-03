@@ -29,7 +29,6 @@
  */
 package uk.ac.man.cs.llvm.ir.model;
 
-import uk.ac.man.cs.llvm.ir.model.enums.Linkage;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
 public abstract class GlobalValueSymbol implements ValueSymbol {
@@ -44,13 +43,10 @@ public abstract class GlobalValueSymbol implements ValueSymbol {
 
     private Symbol value = null;
 
-    private final Linkage linkage;
-
-    protected GlobalValueSymbol(Type type, int initialiser, int align, long linkage) {
+    protected GlobalValueSymbol(Type type, int initialiser, int align) {
         this.type = type;
         this.initialiser = initialiser;
         this.align = align;
-        this.linkage = Linkage.decode((int) linkage);
     }
 
     protected abstract void accept(ModelVisitor visitor);
@@ -72,18 +68,6 @@ public abstract class GlobalValueSymbol implements ValueSymbol {
     @Override
     public Type getType() {
         return type;
-    }
-
-    public Linkage getLinkage() {
-        return linkage;
-    }
-
-    public boolean isStatic() {
-        return linkage == Linkage.INTERNAL || linkage == Linkage.PRIVATE;
-    }
-
-    public boolean isExtern() {
-        return linkage == Linkage.EXTERNAL || linkage == Linkage.EXTERN_WEAK;
     }
 
     public Symbol getValue() {

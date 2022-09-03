@@ -35,11 +35,44 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import uk.ac.man.cs.llvm.ir.model.*;
-import uk.ac.man.cs.llvm.ir.model.elements.*;
+import uk.ac.man.cs.llvm.ir.model.InstructionBlock;
+import uk.ac.man.cs.llvm.ir.model.FunctionDeclaration;
+import uk.ac.man.cs.llvm.ir.model.FunctionDefinition;
+import uk.ac.man.cs.llvm.ir.model.FunctionVisitor;
+import uk.ac.man.cs.llvm.ir.model.GlobalAlias;
+import uk.ac.man.cs.llvm.ir.model.GlobalConstant;
+import uk.ac.man.cs.llvm.ir.model.GlobalVariable;
+import uk.ac.man.cs.llvm.ir.model.InstructionVisitor;
+import uk.ac.man.cs.llvm.ir.model.Model;
+import uk.ac.man.cs.llvm.ir.model.ModelVisitor;
+import uk.ac.man.cs.llvm.ir.model.Symbol;
+import uk.ac.man.cs.llvm.ir.model.ValueSymbol;
+import uk.ac.man.cs.llvm.ir.model.elements.AllocateInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.BinaryOperationInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.BranchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.CallInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.CastInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.CompareInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ConditionalBranchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ExtractElementInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ExtractValueInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.GetElementPointerInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.IndirectBranchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.InsertElementInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.InsertValueInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.LoadInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.PhiInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ReturnInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.SelectInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ShuffleVectorInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.StoreInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.SwitchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.SwitchOldInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.UnreachableInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.VoidCallInstruction;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
-public final class LLVMPhiManager implements ModelVisitor  {
+public final class LLVMPhiManager implements ModelVisitor {
 
     public static LLVMPhiManager generate(Model model) {
         LLVMPhiManager visitor = new LLVMPhiManager();
@@ -49,18 +82,22 @@ public final class LLVMPhiManager implements ModelVisitor  {
         return visitor;
     }
 
-    private final Map<String, Map<Block, List<Phi>>> edges = new HashMap();
+    private final Map<String, Map<InstructionBlock, List<Phi>>> edges = new HashMap<>();
 
     private LLVMPhiManager() {
     }
 
-    public Map<Block, List<Phi>> getPhiMap(String method) {
-        Map<Block, List<Phi>> references = edges.get(method);
+    public Map<InstructionBlock, List<Phi>> getPhiMap(String method) {
+        Map<InstructionBlock, List<Phi>> references = edges.get(method);
         if (references == null) {
             return Collections.emptyMap();
         } else {
             return references;
         }
+    }
+
+    @Override
+    public void visit(GlobalAlias alias) {
     }
 
     @Override
@@ -90,20 +127,20 @@ public final class LLVMPhiManager implements ModelVisitor  {
 
     private static class LLVMPhiManagerFunctionVisitor implements FunctionVisitor, InstructionVisitor {
 
-        private final Map<Block, List<Phi>> edges = new HashMap<>();
+        private final Map<InstructionBlock, List<Phi>> edges = new HashMap<>();
 
-        private Block block = null;
+        private InstructionBlock currentBlock = null;
 
-        public LLVMPhiManagerFunctionVisitor() {
+        LLVMPhiManagerFunctionVisitor() {
         }
 
-        public Map<Block, List<Phi>> getEdges() {
+        public Map<InstructionBlock, List<Phi>> getEdges() {
             return edges;
         }
 
         @Override
-        public void visit(Block block) {
-            this.block = block;
+        public void visit(InstructionBlock block) {
+            this.currentBlock = block;
             block.accept(this);
         }
 
@@ -166,13 +203,13 @@ public final class LLVMPhiManager implements ModelVisitor  {
         @Override
         public void visit(PhiInstruction phi) {
             for (int i = 0; i < phi.getSize(); i++) {
-                Block blk = phi.getBlock(i);
+                InstructionBlock blk = phi.getBlock(i);
                 List<Phi> references = edges.get(blk);
                 if (references == null) {
                     references = new ArrayList<>();
                     edges.put(blk, references);
                 }
-                references.add(new Phi(block, phi, phi.getValue(i)));
+                references.add(new Phi(currentBlock, phi, phi.getValue(i)));
             }
         }
 
@@ -211,19 +248,19 @@ public final class LLVMPhiManager implements ModelVisitor  {
 
     public static final class Phi {
 
-        private final Block block;
+        private final InstructionBlock block;
 
         private final ValueSymbol phi;
 
         private final Symbol value;
 
-        public Phi(Block block, ValueSymbol phi, Symbol value) {
+        Phi(InstructionBlock block, ValueSymbol phi, Symbol value) {
             this.block = block;
             this.phi = phi;
             this.value = value;
         }
 
-        public Block getBlock() {
+        public InstructionBlock getBlock() {
             return block;
         }
 

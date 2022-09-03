@@ -119,9 +119,7 @@ public class Module implements ParserListener {
                 break;
 
             case TARGET_DATALAYOUT:
-                final TargetDataLayout layout = TargetDataLayout.fromString(Records.toString(args));
-                info.add(layout);
-                generator.createTargetDataLayout(layout);
+                info.add(new TargetDataLayout(Records.toString(args)));
                 break;
 
             case GLOBAL_VARIABLE:

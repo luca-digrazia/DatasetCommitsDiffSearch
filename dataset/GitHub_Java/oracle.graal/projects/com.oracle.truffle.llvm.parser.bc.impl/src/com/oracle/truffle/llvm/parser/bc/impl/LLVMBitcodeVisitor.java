@@ -74,7 +74,6 @@ import uk.ac.man.cs.llvm.ir.model.GlobalValueSymbol;
 import uk.ac.man.cs.llvm.ir.model.GlobalVariable;
 import uk.ac.man.cs.llvm.ir.model.Model;
 import uk.ac.man.cs.llvm.ir.model.ModelVisitor;
-import uk.ac.man.cs.llvm.ir.model.Symbol;
 import uk.ac.man.cs.llvm.ir.module.ModuleVersion;
 import uk.ac.man.cs.llvm.ir.types.PointerType;
 import uk.ac.man.cs.llvm.ir.types.Type;
@@ -131,7 +130,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
     private final List<LLVMNode> deallocations = new ArrayList<>();
 
-    private final Map<GlobalAlias, Symbol> aliases = new HashMap<>();
+    private final Map<GlobalAlias, GlobalValueSymbol> aliases = new HashMap<>();
 
     private final Map<LLVMFunctionDescriptor, RootCallTarget> functions = new HashMap<>();
 
@@ -239,27 +238,22 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
     }
 
     public LLVMExpressionNode getGlobalVariable(GlobalValueSymbol global) {
-        Symbol g = global;
+        GlobalValueSymbol g = global;
 
         while (g instanceof GlobalAlias) {
             g = aliases.get((GlobalAlias) g);
         }
 
-        if (g instanceof GlobalValueSymbol) {
-            GlobalValueSymbol variable = (GlobalValueSymbol) g;
-            LLVMAddressNode address = variables.get(variable);
+        LLVMAddressNode address = variables.get(g);
 
-            if (address == null) {
-                Type type = ((PointerType) variable.getType()).getPointeeType();
+        if (address == null) {
+            Type type = ((PointerType) g.getType()).getPointeeType();
 
-                address = new LLVMAddressLiteralNode(LLVMHeap.allocateMemory(LLVMBitcodeHelper.getSize(type, variable.getAlign())));
-                deallocations.add(LLVMFreeFactory.create(address));
-                variables.put(variable, address);
-            }
-            return address;
-        } else {
-            throw new IllegalArgumentException(global.getClass().getSimpleName() + " is not a global variable");
+            address = new LLVMAddressLiteralNode(LLVMHeap.allocateMemory(LLVMBitcodeHelper.getSize(type, g.getAlign())));
+            deallocations.add(LLVMFreeFactory.create(address));
+            variables.put(g, address);
         }
+        return address;
     }
 
     public LLVMOptimizationConfiguration getOptimizationConfiguration() {
@@ -279,7 +273,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
     @Override
     public void visit(GlobalAlias alias) {
-        aliases.put(alias, alias.getValue());
+        aliases.put(alias, (GlobalValueSymbol) alias.getValue());
     }
 
     @Override
