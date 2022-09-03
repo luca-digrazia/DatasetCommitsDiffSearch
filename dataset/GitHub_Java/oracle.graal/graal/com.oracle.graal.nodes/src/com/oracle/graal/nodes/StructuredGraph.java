@@ -25,7 +25,8 @@ package com.oracle.graal.nodes;
 import java.util.*;
 import java.util.concurrent.atomic.*;
 
-import com.oracle.graal.api.meta.Assumptions.Assumption;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.Assumptions.Assumption;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -78,10 +79,6 @@ public class StructuredGraph extends Graph {
 
         public boolean areFrameStatesAtSideEffects() {
             return !this.areFrameStatesAtDeopts();
-        }
-
-        public boolean areDeoptsFixed() {
-            return this.ordinal() >= FIXED_DEOPTS.ordinal();
         }
     }
 
@@ -433,7 +430,6 @@ public class StructuredGraph extends Graph {
         assert node != null && newNode != null && node.isAlive() && newNode.isAlive() : "cannot add " + newNode + " before " + node;
         assert node.predecessor() != null && node.predecessor() instanceof FixedWithNextNode : "cannot add " + newNode + " before " + node;
         assert newNode.next() == null : newNode;
-        assert !(node instanceof AbstractMergeNode);
         FixedWithNextNode pred = (FixedWithNextNode) node.predecessor();
         pred.setNext(newNode);
         newNode.setNext(node);
