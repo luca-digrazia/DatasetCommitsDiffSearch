@@ -31,8 +31,6 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.debug.DebugSupportProvider;
 import com.oracle.truffle.api.debug.Debugger;
-import com.oracle.truffle.api.debug.SuspendedEvent;
-import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.instrument.ToolSupportProvider;
 import com.oracle.truffle.api.nodes.Node;
@@ -140,10 +138,6 @@ public abstract class Accessor {
 
     protected Object eval(TruffleLanguage<?> l, Source s) throws IOException {
         return API.eval(l, s);
-    }
-
-    protected Object evalInContext(Object vm, SuspendedEvent ev, String code, FrameInstance frame) throws IOException {
-        return API.evalInContext(vm, ev, code, frame);
     }
 
     protected Object importSymbol(Object vm, TruffleLanguage<?> queryingLang, String globalName) {
