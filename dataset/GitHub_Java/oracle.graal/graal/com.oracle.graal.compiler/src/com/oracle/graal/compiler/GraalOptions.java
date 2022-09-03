@@ -44,9 +44,9 @@ public final class GraalOptions {
     public static boolean Inline                             = true;
     public static boolean Intrinsify                         = true;
     public static boolean CacheGraphs                        = ____;
-           static boolean InlineMonomorphicCalls             = true;
-           static boolean InlinePolymorphicCalls             = true;
-           static boolean InlineMegamorphicCalls             = ____;
+    public static boolean InlineMonomorphicCalls             = true;
+    public static boolean InlinePolymorphicCalls             = true;
+    public static boolean InlineMegamorphicCalls             = ____;
     public static int     InliningPolicy                     = 4;
     public static int     WeightComputationPolicy            = 2;
     public static int     MaximumTrivialSize                 = 10;
@@ -81,8 +81,6 @@ public final class GraalOptions {
     public static int     LoopFrequencyPropagationPolicy     = -2;
 
     // profiling information
-    public static int     DeoptsToDisableOptimisticOptimization = 40;
-    public static boolean PrintDisabledOptimisticOptimizations = true;
     public static int     MatureExecutionsBranch             = 1;
     public static int     MatureExecutionsPerSwitchCase      = 1;
     public static int     MatureExecutionsTypeProfile        = 1;
@@ -117,10 +115,11 @@ public final class GraalOptions {
     public static String Time                                = null;
     public static String Log                                 = null;
     public static String MethodFilter                        = null;
-    public static boolean DumpOnError                        = ____;
 
     // Ideal graph visualizer output settings
+    public static boolean PlotOnError                        = ____;
     public static int     PlotLevel                          = 3;
+    public static boolean PlotSnippets                       = ____;
     public static int     PrintIdealGraphLevel               = 0;
     public static boolean PrintIdealGraphFile                = ____;
     public static String  PrintIdealGraphAddress             = "127.0.0.1";
@@ -140,7 +139,6 @@ public final class GraalOptions {
     public static int     TraceLIRGeneratorLevel             = 0;
     public static boolean TraceEscapeAnalysis                = ____;
     public static int     TraceBytecodeParserLevel           = 0;
-    public static boolean PrintBailouts                      = true;
     public static boolean ExitVMOnBailout                    = ____;
     public static boolean ExitVMOnException                  = true;
 
@@ -149,14 +147,13 @@ public final class GraalOptions {
 
     // Code generator settings
     public static boolean PropagateTypes                     = ____;
-    public static boolean UseProfilingInformation            = true;
-           static boolean RemoveNeverExecutedCode            = true;
-           static boolean UseExceptionProbability            = true;
+    public static boolean UseBranchPrediction                = true;
+    public static boolean UseExceptionProbability            = true;
     public static boolean AllowExplicitExceptionChecks       = true;
     public static boolean OmitHotExceptionStacktrace         = ____;
     public static boolean GenSafepoints                      = true;
     public static boolean GenLoopSafepoints                  = true;
-           static boolean UseTypeCheckHints                  = true;
+    public static boolean UseTypeCheckHints                  = true;
     public static boolean InlineVTableStubs                  = ____;
     public static boolean AlwaysInlineVTableStubs            = ____;
 
