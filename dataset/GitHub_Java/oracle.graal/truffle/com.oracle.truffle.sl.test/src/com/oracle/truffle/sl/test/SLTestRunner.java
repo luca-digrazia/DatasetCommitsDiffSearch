@@ -144,7 +144,7 @@ public final class SLTestRunner extends ParentRunner<TestCase> {
         return foundCases;
     }
 
-    public static Path getRootViaResourceURL(final Class<?> c, String[] paths) {
+    private static Path getRootViaResourceURL(final Class<?> c, String[] paths) {
         URL url = c.getResource(c.getSimpleName() + ".class");
         if (url != null) {
             String externalForm = url.toExternalForm();
@@ -153,6 +153,7 @@ public final class SLTestRunner extends ParentRunner<TestCase> {
                 String suffix = sep + "bin" + sep + c.getName().replace('.', sep) + ".class";
                 if (externalForm.endsWith(suffix)) {
                     String base = externalForm.substring("file:".length(), externalForm.length() - suffix.length());
+                    System.out.println(base);
                     for (String path : paths) {
                         String candidate = base + sep + path;
                         if (new File(candidate).exists()) {
