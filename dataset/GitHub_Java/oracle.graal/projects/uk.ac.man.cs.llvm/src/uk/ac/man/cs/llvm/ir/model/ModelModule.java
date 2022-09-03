@@ -59,15 +59,13 @@ public final class ModelModule implements ModuleGenerator {
 
     private final List<Type> types = new ArrayList<>();
 
-    private final List<GlobalValueSymbol> globals = new ArrayList<>();
+    private final List<GlobalValueSymbol> variables = new ArrayList<>();
 
     private final List<FunctionDeclaration> declares = new ArrayList<>();
 
     private final List<FunctionDefinition> defines = new ArrayList<>();
 
     private final Symbols symbols = new Symbols();
-
-    private final MetadataBlock metadata = new MetadataBlock();
 
     private int currentFunction = -1;
 
@@ -89,7 +87,7 @@ public final class ModelModule implements ModuleGenerator {
         for (Type type : types) {
             visitor.visit(type);
         }
-        for (GlobalValueSymbol variable : globals) {
+        for (GlobalValueSymbol variable : variables) {
             variable.accept(visitor);
         }
         for (FunctionDefinition define : defines) {
@@ -105,7 +103,7 @@ public final class ModelModule implements ModuleGenerator {
         GlobalAlias alias = new GlobalAlias(type, aliasedValue);
 
         symbols.addSymbol(alias);
-        globals.add(alias);
+        variables.add(alias);
     }
 
     @Override
@@ -197,20 +195,20 @@ public final class ModelModule implements ModuleGenerator {
     }
 
     @Override
-    public void createGlobal(Type type, boolean isConstant, int initialiser, int align) {
-        final GlobalValueSymbol global;
+    public void createVariable(Type type, boolean isConstant, int initialiser, int align) {
+        GlobalValueSymbol variable;
         if (isConstant) {
-            global = new GlobalConstant(type, initialiser, align);
+            variable = new GlobalConstant(type, initialiser, align);
         } else {
-            global = new GlobalVariable(type, initialiser, align);
+            variable = new GlobalVariable(type, initialiser, align);
         }
-        symbols.addSymbol(global);
-        globals.add(global);
+        symbols.addSymbol(variable);
+        variables.add(variable);
     }
 
     @Override
     public void exitModule() {
-        for (GlobalValueSymbol variable : globals) {
+        for (GlobalValueSymbol variable : variables) {
             variable.initialise(symbols);
         }
     }
@@ -229,11 +227,6 @@ public final class ModelModule implements ModuleGenerator {
     }
 
     @Override
-    public MetadataBlock getMetadata() {
-        return metadata;
-    }
-
-    @Override
     public void nameBlock(int index, String name) {
     }
 
@@ -249,6 +242,6 @@ public final class ModelModule implements ModuleGenerator {
 
     @Override
     public String toString() {
-        return "ModelModule [types=" + types + ", globals=" + globals + ", declares=" + declares + ", defines=" + defines + ", symbols=" + symbols + ", currentFunction=" + currentFunction + "]";
+        return "ModelModule [types=" + types + ", variables=" + variables + ", declares=" + declares + ", defines=" + defines + ", symbols=" + symbols + ", currentFunction=" + currentFunction + "]";
     }
 }

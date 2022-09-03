@@ -95,9 +95,6 @@ public class Module implements ParserListener {
             case VALUE_SYMTAB:
                 return new ValueSymbolTable(generator);
 
-            case METADATA:
-                return version.createMetadata(types, symbols, generator);
-
             default:
                 return ParserListener.DEFAULT;
         }
@@ -171,7 +168,7 @@ public class Module implements ParserListener {
         i++; // Unused parameter
         int align = (int) args[i++];
 
-        generator.createGlobal(type, isConstant, initialiser, align);
+        generator.createVariable(type, isConstant, initialiser, align);
         symbols.add(type);
     }
 }

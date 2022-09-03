@@ -29,7 +29,6 @@
  */
 package uk.ac.man.cs.llvm.ir;
 
-import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
 import uk.ac.man.cs.llvm.ir.module.TargetDataLayout;
 import uk.ac.man.cs.llvm.ir.types.FunctionType;
 import uk.ac.man.cs.llvm.ir.types.Type;
@@ -44,11 +43,9 @@ public interface ModuleGenerator extends SymbolGenerator {
 
     void createType(Type type);
 
-    void createGlobal(Type type, boolean isConstant, int initialiser, int align);
+    void createVariable(Type type, boolean isConstant, int initialiser, int align);
 
     void exitModule();
 
     FunctionGenerator generateFunction();
-
-    MetadataBlock getMetadata();
 }
