@@ -223,10 +223,8 @@ public class InliningUtil {
      * @param inlineGraph the graph that the invoke will be replaced with
      * @param receiverNullCheck true if a null check needs to be generated for non-static inlinings,
      *            false if no such check is required
-     * @param canonicalizedNodes if non-null then append to this list any nodes which should be
-     *            canonicalized after inlining
      */
-    public static Map<Node, Node> inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck, List<Node> canonicalizedNodes) {
+    public static Map<Node, Node> inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck) {
         final NodeInputList<ValueNode> parameters = invoke.callTarget().arguments();
         FixedNode invokeNode = invoke.asNode();
         StructuredGraph graph = invokeNode.graph();
@@ -341,7 +339,7 @@ public class InliningUtil {
                 }
                 MergeNode merge = graph.add(new MergeNode());
                 merge.setStateAfter(stateAfter);
-                ValueNode returnValue = mergeReturns(merge, returnDuplicates, canonicalizedNodes);
+                ValueNode returnValue = mergeReturns(merge, returnDuplicates);
                 invokeNode.replaceAtUsages(returnValue);
                 merge.setNext(n);
             }
@@ -440,7 +438,7 @@ public class InliningUtil {
         }
     }
 
-    public static ValueNode mergeReturns(MergeNode merge, List<? extends ReturnNode> returnNodes, List<Node> canonicalizedNodes) {
+    public static ValueNode mergeReturns(MergeNode merge, List<? extends ReturnNode> returnNodes) {
         PhiNode returnValuePhi = null;
 
         for (ReturnNode returnNode : returnNodes) {
@@ -451,9 +449,6 @@ public class InliningUtil {
             if (returnNode.result() != null) {
                 if (returnValuePhi == null) {
                     returnValuePhi = merge.graph().addWithoutUnique(new ValuePhiNode(returnNode.result().stamp().unrestricted(), merge));
-                    if (canonicalizedNodes != null) {
-                        canonicalizedNodes.add(returnValuePhi);
-                    }
                 }
                 returnValuePhi.addInput(returnNode.result());
             }

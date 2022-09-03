@@ -141,7 +141,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
                 assert testValue.isConstant();
                 return LogicConstantNode.forBoolean(result.asConstant().equals(testValue.asConstant()), result.graph());
             }
-            if (condition == null || condition.getY() != testValue) {
+            if (condition == null || condition.y() != testValue) {
                 // Re-use previously generated condition if the trueValue for the test is the same
                 condition = createCompareNode(result.graph(), Condition.EQ, result, testValue);
             }
@@ -160,7 +160,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
                 // Can simply use the phi result if the same materialized values are expected.
                 return result;
             } else {
-                return graph.unique(ConditionalNode.create(asCondition(trueValue), t, f));
+                return graph.unique(new ConditionalNode(asCondition(trueValue), t, f));
             }
         }
     }
@@ -208,7 +208,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
         }
 
         @Override
-        public void replace(ValueNode oldNode, ValueNode newNode, MemoryMap mmap) {
+        public void replace(ValueNode oldNode, ValueNode newNode, MemoryMapNode mmap) {
             assert newNode instanceof PhiNode;
             assert oldNode == instanceOf;
             newNode.inferStamp();
@@ -239,7 +239,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
         }
 
         @Override
-        public void replace(ValueNode oldNode, ValueNode newNode, MemoryMap mmap) {
+        public void replace(ValueNode oldNode, ValueNode newNode, MemoryMapNode mmap) {
             assert newNode instanceof PhiNode;
             assert oldNode == instanceOf;
             newNode.inferStamp();
