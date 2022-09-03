@@ -261,7 +261,7 @@ public class OptimizedCallTargetTest {
 
         private String name;
 
-        NamedRootNode(String name) {
+        public NamedRootNode(String name) {
             super(TruffleLanguage.class, null, null);
             this.name = name;
         }
