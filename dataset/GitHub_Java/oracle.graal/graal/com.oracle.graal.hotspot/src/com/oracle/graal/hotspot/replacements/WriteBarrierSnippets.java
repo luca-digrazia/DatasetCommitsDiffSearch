@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
 
@@ -43,6 +42,7 @@ import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
+import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
 
 public class WriteBarrierSnippets implements Snippets {
 
@@ -118,7 +118,7 @@ public class WriteBarrierSnippets implements Snippets {
             // If the previous value has to be loaded (before the write), the load is issued.
             // The load is always issued except the cases of CAS and referent field.
             if (probability(LIKELY_PROBABILITY, doLoad)) {
-                previousOop = (Word) Word.fromObject(field.readObject(0, 0, true));
+                previousOop = (Word) Word.fromObject(field.readObjectCompressed(0));
                 if (trace) {
                     log(trace, "[%d] G1-Pre Thread %p Previous Object %p\n ", gcCycle, thread.rawValue(), previousOop.rawValue());
                     verifyOop(previousOop.toObject());
@@ -225,7 +225,7 @@ public class WriteBarrierSnippets implements Snippets {
 
         for (int i = startIndex; i < length; i++) {
             Word address = (Word) Word.fromObject(dest).add(header).add(Word.unsigned(i * (long) scale));
-            oop = (Word) Word.fromObject(address.readObject(0, 0, true));
+            oop = (Word) Word.fromObject(address.readObjectCompressed(0));
             if (oop.notEqual(0)) {
                 if (indexValue.notEqual(0)) {
                     Word nextIndex = indexValue.subtract(wordSize());
