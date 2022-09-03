@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,54 +29,72 @@
  */
 package com.oracle.truffle.llvm.parser.scanner;
 
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import org.graalvm.polyglot.io.ByteSequence;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Base64;
+public final class BitStream {
 
-final class BitStream {
-
-    public static BitStream create(Source source) {
-        byte[] bytes;
-        switch (source.getMimeType()) {
-            case LLVMLanguage.LLVM_BITCODE_MIME_TYPE:
-                bytes = read(source.getPath());
-                break;
-
-            case LLVMLanguage.LLVM_BITCODE_BASE64_MIME_TYPE:
-                bytes = Base64.getDecoder().decode(source.getCode());
-                break;
-
-            default:
-                throw new UnsupportedOperationException();
-        }
-        return new BitStream(bytes);
-    }
-
-    private static byte[] read(String filename) {
-        try {
-            return Files.readAllBytes(Paths.get(filename));
-        } catch (IOException ignore) {
-            return new byte[0];
-        }
-    }
+    private static final int BYTE_BITS_SHIFT = 3;
+    private static final int BYTE_BITS_MASK = 0x7;
 
     private static final long BYTE_MASK = 0xffL;
+    private final ByteSequence bitstream;
 
-    private final byte[] bitstream;
-
-    private BitStream(byte[] bitstream) {
+    private BitStream(ByteSequence bitstream) {
         this.bitstream = bitstream;
     }
 
-    long read(long offset, long bits) {
-        return read(offset) & ((1L << bits) - 1L);
+    public static BitStream create(ByteSequence bytes) {
+
+        return new BitStream(bytes);
     }
 
-    long readVBR(long offset, long width) {
+    public static BitStream createFromBlob(long[] args, int blobStartIndex) {
+        final byte[] blob = new byte[(args.length - blobStartIndex) * Long.BYTES];
+        int to = 0;
+        for (int from = blobStartIndex; from < args.length; from++) {
+            final long l = args[from];
+            for (int i = 0; i < Long.BYTES; i++) {
+                blob[to++] = (byte) ((l >> (Byte.SIZE * i)) & BYTE_MASK);
+            }
+        }
+        return new BitStream(ByteSequence.create(blob));
+    }
+
+    public static long widthVBR(long value, long width) {
+        long total = 0;
+        long v = value;
+        do {
+            total += width;
+            v >>>= (width - 1);
+        } while (v != 0);
+        return total;
+    }
+
+    public long read(long offset, int bits) {
+        int byteIndex = (int) (offset >> BYTE_BITS_SHIFT);
+        int bitOffsetInByte = (int) (offset & BYTE_BITS_MASK);
+        int availableBits = Byte.SIZE - bitOffsetInByte;
+
+        long value = (bitstream.byteAt(byteIndex++) & BYTE_MASK) >> bitOffsetInByte;
+        if (bits <= availableBits) {
+            return value & (BYTE_MASK >> (8 - bits));
+        }
+        int remainingBits = bits - availableBits;
+        int shift = availableBits;
+        while (true) {
+            byte byteValue = bitstream.byteAt(byteIndex++);
+
+            if (remainingBits > Byte.SIZE) {
+                value = value | ((byteValue & BYTE_MASK) << shift);
+                remainingBits -= Byte.SIZE;
+                shift += Byte.SIZE;
+            } else {
+                return value | ((byteValue & (BYTE_MASK >> (Byte.SIZE - remainingBits))) << shift);
+            }
+        }
+    }
+
+    public long readVBR(long offset, int width) {
         long value = 0;
         long shift = 0;
         long datum;
@@ -92,34 +110,6 @@ final class BitStream {
     }
 
     public long size() {
-        return bitstream.length * Byte.SIZE;
-    }
-
-    static long widthVBR(long value, long width) {
-        long total = 0;
-        long v = value;
-        do {
-            total += width;
-            v >>>= (width - 1);
-        } while (v != 0);
-        return total;
-    }
-
-    private long read(long offset) {
-        long div = offset / Byte.SIZE;
-        long value = 0;
-        for (int i = 0; i < Byte.SIZE; i++) {
-            value += readAlignedByte(div + i) << (i * Byte.SIZE);
-        }
-        long mod = offset & (Byte.SIZE - 1L);
-        if (mod != 0) {
-            value >>>= mod;
-            value += readAlignedByte(div + Byte.SIZE) << (Long.SIZE - mod);
-        }
-        return value;
-    }
-
-    private long readAlignedByte(long i) {
-        return i < bitstream.length ? bitstream[(int) i] & BYTE_MASK : 0;
+        return bitstream.length() * Byte.SIZE;
     }
 }
