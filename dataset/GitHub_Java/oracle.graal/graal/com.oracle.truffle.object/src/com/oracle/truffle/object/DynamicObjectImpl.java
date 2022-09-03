@@ -165,21 +165,23 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         assert toShape.isRelated(ancestor);
         assert toShape.isValid();
         assert ancestor.isValid();
-        PropertyMap ancestorMap = ((ShapeImpl) ancestor).getPropertyMap();
-        PropertyMap fromMap = fromShape.getPropertyMap();
-        for (PropertyMap toMap = toShape.getPropertyMap(); !toMap.isEmpty() && toMap != ancestorMap; toMap = toMap.getParentMap()) {
-            Property toProperty = toMap.getLastProperty();
-            Property fromProperty = fromMap.get(toProperty.getKey());
+        for (; toShape != ancestor; toShape = toShape.getParent()) {
+            Transition transitionFromParent = toShape.getTransitionFromParent();
+            if (transitionFromParent instanceof Transition.AddPropertyTransition) {
+                Property toProperty = ((Transition.AddPropertyTransition) transitionFromParent).getProperty();
+                Property fromProperty = fromShape.getProperty(toProperty.getKey());
 
-            // copy only if property has a location and it's not the same as the source location
-            if (toProperty.getLocation() != null && !(toProperty.getLocation() instanceof ValueLocation) && !toProperty.getLocation().equals(fromProperty.getLocation())) {
-                toProperty.setInternal(this, fromProperty.get(fromObject, false));
-                assert toShape.isValid();
-            }
+                // copy only if property has a location and it's not the same as the source location
+                if (toProperty.getLocation() != null && !(toProperty.getLocation() instanceof ValueLocation) && !toProperty.getLocation().equals(fromProperty.getLocation())) {
+                    toProperty.setInternal(this, fromProperty.get(fromObject, false));
+                    assert toShape.isValid();
+                }
 
-            if (fromProperty == fromMap.getLastProperty()) {
-                // no property is looked up twice, so we can skip over to parent
-                fromMap = fromMap.getParentMap();
+                if (fromShape.getTransitionFromParent() instanceof Transition.AddPropertyTransition &&
+                                ((Transition.AddPropertyTransition) fromShape.getTransitionFromParent()).getProperty() == fromProperty) {
+                    // no property is looked up twice, so we can skip over to parent
+                    fromShape = fromShape.getParent();
+                }
             }
         }
     }
@@ -374,8 +376,7 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         ShapeProfiler.getInstance().track(obj);
     }
 
-    @Override
-    public ForeignAccess getForeignAccess() {
+    public ForeignAccessFactory getForeignAccessFactory() {
         return getShape().getForeignAccessFactory();
     }
 }
