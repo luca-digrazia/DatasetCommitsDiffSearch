@@ -24,8 +24,7 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
@@ -93,7 +92,7 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     @Override
     public boolean isAllowedUsageType(InputType type) {
         if (!super.isAllowedUsageType(type)) {
-            if (getStackKind() != Kind.Void) {
+            if (getKind() != Kind.Void) {
                 if (callTarget instanceof MethodCallTargetNode && ((MethodCallTargetNode) callTarget).targetMethod().getAnnotation(NodeIntrinsic.class) != null) {
                     return true;
                 }

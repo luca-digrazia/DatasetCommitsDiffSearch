@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.compiler.test;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
 import org.junit.*;
 
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
@@ -57,7 +56,6 @@ public class FloatingReadTest extends GraphScheduleTest {
         test("test1Snippet");
     }
 
-    @SuppressWarnings("try")
     private void test(final String snippet) {
         try (Scope s = Debug.scope("FloatingReadTest", new DebugDumpScope(snippet))) {
 

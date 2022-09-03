@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import jdk.internal.jvmci.meta.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
 
-import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,16 @@
  */
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import jdk.vm.ci.meta.JavaKind;
+import static com.oracle.graal.api.meta.LocationIdentity.*;
 
-import static com.oracle.graal.compiler.common.LocationIdentity.any;
-
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.ArrayRangeWriteNode;
-import com.oracle.graal.nodes.memory.MemoryAccess;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.memory.MemoryNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
@@ -54,9 +47,9 @@ public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lo
 
     @OptionalInput(InputType.Memory) MemoryNode lastLocationAccess;
 
-    protected JavaKind elementKind;
+    protected Kind elementKind;
 
-    public UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, JavaKind elementKind) {
+    public UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
         super(TYPE, StampFactory.forVoid());
         assert layoutHelper == null || elementKind == null;
         this.src = src;
@@ -68,7 +61,7 @@ public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lo
         this.elementKind = elementKind;
     }
 
-    public UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, JavaKind elementKind) {
+    public UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind) {
         this(src, srcPos, dest, destPos, length, null, elementKind);
     }
 
@@ -93,7 +86,7 @@ public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lo
 
     @Override
     public boolean isObjectArray() {
-        return elementKind == JavaKind.Object;
+        return elementKind == Kind.Object;
     }
 
     @Override
@@ -101,7 +94,7 @@ public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lo
         return false;
     }
 
-    public JavaKind getElementKind() {
+    public Kind getElementKind() {
         return elementKind;
     }
 
@@ -132,19 +125,17 @@ public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lo
         return any();
     }
 
-    @Override
     public MemoryNode getLastLocationAccess() {
         return lastLocationAccess;
     }
 
-    @Override
     public void setLastLocationAccess(MemoryNode lla) {
         updateUsagesInterface(lastLocationAccess, lla);
         lastLocationAccess = lla;
     }
 
     @NodeIntrinsic
-    public static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter JavaKind elementKind);
+    public static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter Kind elementKind);
 
     @NodeIntrinsic
     public static native void arraycopyPrimitive(Object src, int srcPos, Object dest, int destPos, int length, int layoutHelper);

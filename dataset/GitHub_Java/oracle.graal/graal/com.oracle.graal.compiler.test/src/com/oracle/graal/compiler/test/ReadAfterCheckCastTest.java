@@ -24,14 +24,14 @@ package com.oracle.graal.compiler.test;
 
 import org.junit.*;
 
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
 
 /* consider
  *     B b = (B) a;
@@ -94,7 +94,7 @@ public class ReadAfterCheckCastTest extends GraphScheduleTest {
             for (FloatingReadNode node : graph.getNodes(ParameterNode.TYPE).first().usages().filter(FloatingReadNode.class)) {
                 // Checking that the parameter a is not directly used for the access to field
                 // x10 (because x10 must be guarded by the checkcast).
-                Assert.assertTrue(node.getLocationIdentity().isImmutable());
+                Assert.assertTrue(node.location().getLocationIdentity().isImmutable());
             }
         } catch (Throwable e) {
             throw Debug.handle(e);

@@ -22,29 +22,29 @@
  */
 package com.oracle.graal.hotspot.test;
 
+import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
-import static jdk.internal.jvmci.code.CodeUtil.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.CallingConvention.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
-import jdk.internal.jvmci.options.OptionValue.*;
 
 import org.junit.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CallingConvention.Type;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.options.OptionValue.OverrideScope;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.runtime.*;
@@ -214,7 +214,7 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
             final Suites suitesLocal = suitesProvider.createSuites();
             final LIRSuites lirSuitesLocal = suitesProvider.createLIRSuites();
             final CompilationResult compResult = compileGraph(graph, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
-                            getProfilingInfo(graph), suitesLocal, lirSuitesLocal, new CompilationResult(), CompilationResultBuilderFactory.Default);
+                            getProfilingInfo(graph), getSpeculationLog(), suitesLocal, lirSuitesLocal, new CompilationResult(), CompilationResultBuilderFactory.Default);
             addMethod(method, compResult);
             return graph;
         }

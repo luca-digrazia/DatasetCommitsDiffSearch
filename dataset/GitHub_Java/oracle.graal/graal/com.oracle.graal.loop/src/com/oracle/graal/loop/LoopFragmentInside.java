@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,37 +22,16 @@
  */
 package com.oracle.graal.loop;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-
-import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.graph.Graph.DuplicationReplacement;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.BeginNode;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.GuardPhiNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopEndNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.MergeNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.VirtualState.NodeClosure;
-import com.oracle.graal.nodes.memory.MemoryPhiNode;
-import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.VirtualState.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.util.*;
 
 public class LoopFragmentInside extends LoopFragment {
 
@@ -215,7 +194,7 @@ public class LoopFragmentInside extends LoopFragment {
         } else if (phi instanceof MemoryPhiNode) {
             ret = new MemoryPhiNode(merge, ((MemoryPhiNode) phi).getLocationIdentity());
         } else {
-            throw JVMCIError.shouldNotReachHere();
+            throw GraalInternalError.shouldNotReachHere();
         }
         return graph.addWithoutUnique(ret);
     }
@@ -234,8 +213,7 @@ public class LoopFragmentInside extends LoopFragment {
         }
         markStateNodes(loopBegin, usagesToPatch);
 
-        List<PhiNode> oldPhis = loopBegin.phis().snapshot();
-        for (PhiNode phi : oldPhis) {
+        for (PhiNode phi : loopBegin.phis().snapshot()) {
             if (phi.hasNoUsages()) {
                 continue;
             }
@@ -276,32 +254,7 @@ public class LoopFragmentInside extends LoopFragment {
             }
         }
 
-        int oldPhisSize;
-        do {
-            oldPhisSize = oldPhis.size();
-            int i = 0;
-            outer: while (i < oldPhisSize) {
-                PhiNode oldPhi = oldPhis.get(i);
-                for (Node usage : oldPhi.usages()) {
-                    if (usage instanceof PhiNode && oldPhis.contains(usage)) {
-                        // Do not mark.
-                    } else {
-                        // Mark alive by removing from delete set.
-                        oldPhis.set(i, oldPhis.get(oldPhisSize - 1));
-                        oldPhisSize--;
-                        continue outer;
-                    }
-                }
-                i++;
-            }
-            // Check for progress.
-        } while (oldPhisSize != oldPhis.size());
-
-        for (PhiNode deadPhi : oldPhis) {
-            deadPhi.clearInputs();
-        }
-
-        for (PhiNode deadPhi : oldPhis) {
+        for (PhiNode deadPhi : loopBegin.phis().filter(n -> n.hasNoUsages()).snapshot()) {
             if (deadPhi.isAlive()) {
                 GraphUtil.killWithUnusedFloatingInputs(deadPhi);
             }

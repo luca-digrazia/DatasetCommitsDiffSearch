@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static com.oracle.jvmci.common.UnsafeAccess.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
 import java.lang.ref.*;
 
@@ -30,26 +30,26 @@ import org.junit.*;
 
 import sun.misc.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.memory.*;
-import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.memory.HeapAccess.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.common.inlining.policy.*;
 import com.oracle.graal.phases.tiers.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * The following unit tests assert the presence of write barriers for both Serial and G1 GCs.
@@ -284,10 +284,9 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
 
             for (ReadNode read : graph.getNodes().filter(ReadNode.class)) {
                 if (read.getBarrierType() != BarrierType.NONE) {
-                    Assert.assertTrue(read.getAddress() instanceof OffsetAddressNode);
-                    JavaConstant constDisp = ((OffsetAddressNode) read.getAddress()).getOffset().asJavaConstant();
-                    Assert.assertNotNull(constDisp);
-                    Assert.assertEquals(referentOffset, constDisp.asLong());
+                    if (read.location() instanceof ConstantLocationNode) {
+                        Assert.assertEquals(referentOffset, ((ConstantLocationNode) (read.location())).getDisplacement());
+                    }
                     Assert.assertTrue(config.useG1GC);
                     Assert.assertEquals(BarrierType.PRECISE, read.getBarrierType());
                     Assert.assertTrue(read.next() instanceof G1ReferentFieldReadBarrier);

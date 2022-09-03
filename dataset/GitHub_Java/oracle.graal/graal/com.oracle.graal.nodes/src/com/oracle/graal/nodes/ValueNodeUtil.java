@@ -24,8 +24,7 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.memory.*;
@@ -33,7 +32,7 @@ import com.oracle.graal.nodes.memory.*;
 public class ValueNodeUtil {
 
     public static ValueNode assertKind(Kind kind, ValueNode x) {
-        assert x != null && x.getStackKind() == kind : "kind=" + kind + ", value=" + x + ((x == null) ? "" : ", value.kind=" + x.getStackKind());
+        assert x != null && x.getKind() == kind : "kind=" + kind + ", value=" + x + ((x == null) ? "" : ", value.kind=" + x.getKind());
         return x;
     }
 
@@ -46,27 +45,27 @@ public class ValueNodeUtil {
     }
 
     public static ValueNode assertLong(ValueNode x) {
-        assert x != null && (x.getStackKind() == Kind.Long);
+        assert x != null && (x.getKind() == Kind.Long);
         return x;
     }
 
     public static ValueNode assertInt(ValueNode x) {
-        assert x != null && (x.getStackKind() == Kind.Int);
+        assert x != null && (x.getKind() == Kind.Int);
         return x;
     }
 
     public static ValueNode assertFloat(ValueNode x) {
-        assert x != null && (x.getStackKind() == Kind.Float);
+        assert x != null && (x.getKind() == Kind.Float);
         return x;
     }
 
     public static ValueNode assertObject(ValueNode x) {
-        assert x != null && (x.getStackKind() == Kind.Object);
+        assert x != null && (x.getKind() == Kind.Object);
         return x;
     }
 
     public static ValueNode assertDouble(ValueNode x) {
-        assert x != null && (x.getStackKind() == Kind.Double);
+        assert x != null && (x.getKind() == Kind.Double);
         return x;
     }
 
@@ -87,15 +86,15 @@ public class ValueNodeUtil {
 
     /**
      * Converts a given instruction to a value string. The representation of an node as a value is
-     * formed by concatenating the {@linkplain jdk.internal.jvmci.meta.Kind#getTypeChar character}
-     * denoting its {@linkplain ValueNode#getStackKind kind} and its id. For example, {@code "i13"}.
+     * formed by concatenating the {@linkplain com.oracle.graal.api.meta.Kind#getTypeChar character}
+     * denoting its {@linkplain ValueNode#getKind kind} and its id. For example, {@code "i13"}.
      *
      * @param value the instruction to convert to a value string. If {@code value == null}, then "-"
      *            is returned.
      * @return the instruction representation as a string
      */
     public static String valueString(ValueNode value) {
-        return (value == null) ? "-" : ("" + value.getStackKind().getTypeChar() + value.toString(Verbosity.Id));
+        return (value == null) ? "-" : ("" + value.getKind().getTypeChar() + value.toString(Verbosity.Id));
     }
 
     public static ValueNode asNode(MemoryNode node) {

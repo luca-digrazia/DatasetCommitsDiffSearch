@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,33 +22,24 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.vm.ci.meta.MetaAccessProvider;
-
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.BeginStateSplitNode;
-import com.oracle.graal.nodes.InvokeWithExceptionNode;
-import com.oracle.graal.nodes.KillingBeginNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * The entry to an exception handler with the exception coming from a call (as opposed to a local
  * throw instruction or implicit exception).
  */
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
-public final class ExceptionObjectNode extends BeginStateSplitNode implements Lowerable, MemoryCheckpoint.Single {
+public final class ExceptionObjectNode extends DispatchBeginNode implements Lowerable, MemoryCheckpoint.Single {
     public static final NodeClass<ExceptionObjectNode> TYPE = NodeClass.create(ExceptionObjectNode.class);
 
     public ExceptionObjectNode(MetaAccessProvider metaAccess) {
-        super(TYPE, StampFactory.objectNonNull(TypeReference.createTrustedWithoutAssumptions(metaAccess.lookupJavaType(Throwable.class))));
+        super(TYPE, StampFactory.declaredNonNull(metaAccess.lookupJavaType(Throwable.class)));
     }
 
     @Override

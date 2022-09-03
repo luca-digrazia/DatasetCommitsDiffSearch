@@ -24,8 +24,7 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
@@ -181,7 +180,7 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
 
     @Override
     public void intrinsify(Node node) {
-        assert !(node instanceof ValueNode) || (((ValueNode) node).getStackKind() == Kind.Void) == (getStackKind() == Kind.Void);
+        assert !(node instanceof ValueNode) || (((ValueNode) node).getKind() == Kind.Void) == (getKind() == Kind.Void);
         CallTargetNode call = callTarget;
         FrameState state = stateAfter();
         killExceptionEdge();
@@ -194,7 +193,7 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
             foreign.setBci(bci());
         }
         if (node == null) {
-            assert getStackKind() == Kind.Void && hasNoUsages();
+            assert getKind() == Kind.Void && hasNoUsages();
             graph().removeSplit(this, next());
         } else if (node instanceof ControlSinkNode) {
             this.replaceAtPredecessor(node);

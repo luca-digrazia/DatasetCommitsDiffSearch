@@ -22,15 +22,13 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code MonitorEnterNode} represents the acquisition of a monitor.
@@ -56,13 +54,10 @@ public final class MonitorEnterNode extends AccessMonitorNode implements Virtual
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(object());
-        if (alias instanceof VirtualObjectNode) {
-            VirtualObjectNode virtual = (VirtualObjectNode) alias;
-            if (virtual.hasIdentity()) {
-                tool.addLock(virtual, getMonitorId());
-                tool.delete();
-            }
+        State state = tool.getObjectState(object());
+        if (state != null && state.getState() == EscapeState.Virtual && state.getVirtualObject().hasIdentity()) {
+            state.addLock(getMonitorId());
+            tool.delete();
         }
     }
 }

@@ -31,7 +31,6 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The ValueAnchor instruction keeps non-CFG (floating) nodes above a certain point in the graph.
@@ -95,14 +94,13 @@ public final class ValueAnchorNode extends FixedWithNextNode implements LIRLower
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (anchored == null || anchored instanceof AbstractBeginNode) {
-            tool.delete();
-        } else {
-            ValueNode alias = tool.getAlias(anchored);
-            if (alias instanceof VirtualObjectNode) {
-                tool.delete();
+        if (anchored != null && !(anchored instanceof AbstractBeginNode)) {
+            State state = tool.getObjectState(anchored);
+            if (state == null || state.getState() != EscapeState.Virtual) {
+                return;
             }
         }
+        tool.delete();
     }
 
     public void removeAnchoredNode() {

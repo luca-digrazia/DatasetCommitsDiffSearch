@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,15 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.vm.ci.meta.Value;
-import sun.misc.Unsafe;
+import sun.misc.*;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.memory.FixedAccessNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.memory.address.AddressNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Represents the lowered version of an atomic read-and-write operation like
@@ -49,35 +43,35 @@ public final class LoweredAtomicReadAndWriteNode extends FixedAccessNode impleme
     @Input ValueNode newValue;
     @OptionalInput(InputType.State) FrameState stateAfter;
 
-    public LoweredAtomicReadAndWriteNode(AddressNode address, LocationIdentity location, ValueNode newValue, BarrierType barrierType) {
-        super(TYPE, address, location, newValue.stamp().unrestricted(), barrierType);
+    public LoweredAtomicReadAndWriteNode(ValueNode object, LocationNode location, ValueNode newValue, BarrierType barrierType) {
+        super(TYPE, object, location, newValue.stamp().unrestricted(), barrierType);
         this.newValue = newValue;
     }
 
-    @Override
     public FrameState stateAfter() {
         return stateAfter;
     }
 
-    @Override
     public void setStateAfter(FrameState x) {
         assert x == null || x.isAlive() : "frame state must be in a graph";
         updateUsages(stateAfter, x);
         stateAfter = x;
     }
 
-    @Override
     public boolean hasSideEffect() {
         return true;
     }
 
-    @Override
+    public LocationIdentity getLocationIdentity() {
+        return location().getLocationIdentity();
+    }
+
     public void generate(NodeLIRBuilderTool gen) {
-        Value result = gen.getLIRGeneratorTool().emitAtomicReadAndWrite(gen.operand(getAddress()), gen.operand(getNewValue()));
+        Value address = location().generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
+        Value result = gen.getLIRGeneratorTool().emitAtomicReadAndWrite(address, gen.operand(getNewValue()));
         gen.setResult(this, result);
     }
 
-    @Override
     public boolean canNullCheck() {
         return false;
     }

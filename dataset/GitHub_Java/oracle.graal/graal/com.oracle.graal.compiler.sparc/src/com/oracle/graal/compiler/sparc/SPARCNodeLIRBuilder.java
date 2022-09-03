@@ -23,11 +23,9 @@
 
 package com.oracle.graal.compiler.sparc;
 
-import com.oracle.jvmci.code.CallingConvention;
-import com.oracle.jvmci.meta.Value;
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.JavaType;
-import com.oracle.jvmci.meta.LIRKind;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.match.*;
 import com.oracle.graal.lir.*;
@@ -37,7 +35,6 @@ import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.memory.*;
-import com.oracle.jvmci.common.*;
 
 /**
  * This class implements the SPARC specific portion of the LIR generator.
@@ -102,13 +99,14 @@ public abstract class SPARCNodeLIRBuilder extends NodeLIRBuilder {
                 fromKind = Kind.Int;
                 break;
             default:
-                throw JVMCIError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
+                throw GraalInternalError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
         }
 
         Kind localFromKind = fromKind;
         Kind localToKind = toKind;
         return builder -> {
-            Value v = getLIRGeneratorTool().emitSignExtendLoad(LIRKind.value(localFromKind), operand(access.getAddress()), getState(access));
+            Value address = access.accessLocation().generateAddress(builder, gen, operand(access.object()));
+            Value v = getLIRGeneratorTool().emitSignExtendLoad(LIRKind.value(localFromKind), address, getState(access));
             return getLIRGeneratorTool().emitReinterpret(LIRKind.value(localToKind), v);
         };
     }

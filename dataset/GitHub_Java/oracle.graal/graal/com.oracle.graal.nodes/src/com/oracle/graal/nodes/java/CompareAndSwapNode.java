@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,13 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.vm.ci.meta.JavaKind;
-
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Represents an atomic compare-and-swap operation The result is a boolean that contains whether the
@@ -48,11 +43,11 @@ public final class CompareAndSwapNode extends AbstractMemoryCheckpoint implement
     @Input ValueNode expected;
     @Input ValueNode newValue;
 
-    protected final JavaKind valueKind;
+    protected final Kind valueKind;
     protected final LocationIdentity locationIdentity;
 
-    public CompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, JavaKind valueKind, LocationIdentity locationIdentity) {
-        super(TYPE, StampFactory.forKind(JavaKind.Boolean.getStackKind()));
+    public CompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, Kind valueKind, LocationIdentity locationIdentity) {
+        super(TYPE, StampFactory.forKind(Kind.Boolean.getStackKind()));
         assert expected.stamp().isCompatible(newValue.stamp());
         this.object = object;
         this.offset = offset;
@@ -78,7 +73,7 @@ public final class CompareAndSwapNode extends AbstractMemoryCheckpoint implement
         return newValue;
     }
 
-    public JavaKind getValueKind() {
+    public Kind getValueKind() {
         return valueKind;
     }
 

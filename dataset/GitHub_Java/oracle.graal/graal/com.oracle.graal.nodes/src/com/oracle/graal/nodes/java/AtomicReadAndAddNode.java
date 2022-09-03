@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.internal.jvmci.meta.*;
 import sun.misc.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.memory.*;
-import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -40,16 +40,26 @@ import com.oracle.graal.nodes.spi.*;
 public final class AtomicReadAndAddNode extends AbstractMemoryCheckpoint implements LIRLowerable, MemoryCheckpoint.Single {
 
     public static final NodeClass<AtomicReadAndAddNode> TYPE = NodeClass.create(AtomicReadAndAddNode.class);
-    @Input(InputType.Association) AddressNode address;
+    @Input ValueNode object;
+    @Input ValueNode offset;
     @Input ValueNode delta;
 
     protected final LocationIdentity locationIdentity;
 
-    public AtomicReadAndAddNode(AddressNode address, ValueNode delta, LocationIdentity locationIdentity) {
-        super(TYPE, StampFactory.forKind(delta.getStackKind()));
-        this.address = address;
+    public AtomicReadAndAddNode(ValueNode object, ValueNode offset, ValueNode delta, LocationIdentity locationIdentity) {
+        super(TYPE, StampFactory.forKind(delta.getKind()));
+        this.object = object;
+        this.offset = offset;
         this.delta = delta;
         this.locationIdentity = locationIdentity;
+    }
+
+    public ValueNode object() {
+        return object;
+    }
+
+    public ValueNode offset() {
+        return offset;
     }
 
     public ValueNode delta() {
@@ -61,7 +71,9 @@ public final class AtomicReadAndAddNode extends AbstractMemoryCheckpoint impleme
     }
 
     public void generate(NodeLIRBuilderTool gen) {
-        Value result = gen.getLIRGeneratorTool().emitAtomicReadAndAdd(gen.operand(address), gen.operand(delta));
+        LocationNode location = graph().unique(new IndexedLocationNode(getLocationIdentity(), 0, offset, 1));
+        Value address = location.generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
+        Value result = gen.getLIRGeneratorTool().emitAtomicReadAndAdd(address, gen.operand(delta));
         gen.setResult(this, result);
     }
 }

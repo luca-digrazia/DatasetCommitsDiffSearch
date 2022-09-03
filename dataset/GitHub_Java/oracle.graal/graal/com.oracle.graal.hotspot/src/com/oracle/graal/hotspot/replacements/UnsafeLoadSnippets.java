@@ -22,22 +22,19 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.referentOffset;
-import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.replacements.SnippetTemplate.*;
 
-import com.oracle.graal.api.replacements.Snippet;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.nodes.extended.FixedValueAnchorNode;
-import com.oracle.graal.nodes.extended.UnsafeLoadNode;
-import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.memory.HeapAccess.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.replacements.Snippets;
-import com.oracle.graal.word.Word;
-
-import jdk.vm.ci.code.TargetDescription;
+import com.oracle.graal.word.*;
 
 public class UnsafeLoadSnippets implements Snippets {
 
@@ -45,9 +42,9 @@ public class UnsafeLoadSnippets implements Snippets {
     public static Object lowerUnsafeLoad(Object object, long offset) {
         Object fixedObject = FixedValueAnchorNode.getObject(object);
         if (object instanceof java.lang.ref.Reference && referentOffset() == offset) {
-            return Word.objectToTrackedPointer(fixedObject).readObject((int) offset, BarrierType.PRECISE);
+            return Word.fromObject(fixedObject).readObject((int) offset, BarrierType.PRECISE);
         } else {
-            return Word.objectToTrackedPointer(fixedObject).readObject((int) offset, BarrierType.NONE);
+            return Word.fromObject(fixedObject).readObject((int) offset, BarrierType.NONE);
         }
     }
 

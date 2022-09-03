@@ -23,25 +23,23 @@
 
 package com.oracle.graal.compiler.amd64;
 
-import com.oracle.jvmci.amd64.*;
-import com.oracle.jvmci.code.CallingConvention;
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.JavaType;
-import com.oracle.jvmci.meta.PlatformKind;
-import com.oracle.jvmci.meta.JavaConstant;
-import com.oracle.jvmci.meta.Value;
-import com.oracle.jvmci.meta.AllocatableValue;
-import com.oracle.jvmci.meta.LIRKind;
-
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.*;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp.*;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.*;
 
+import com.oracle.graal.amd64.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.*;
+import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MIOp;
+import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp;
+import com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize;
+import com.oracle.graal.asm.amd64.AMD64Assembler.SSEOp;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.match.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.amd64.AMD64ControlFlow.BranchOp;
@@ -50,8 +48,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.memory.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.debug.*;
 
 public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
 
@@ -136,8 +132,12 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
             case Double:
                 return OperandSize.SD;
             default:
-                throw JVMCIError.shouldNotReachHere("unsupported memory access type " + getMemoryKind(access));
+                throw GraalInternalError.shouldNotReachHere("unsupported memory access type " + getMemoryKind(access));
         }
+    }
+
+    protected AMD64AddressValue makeAddress(Access access) {
+        return (AMD64AddressValue) access.accessLocation().generateAddress(this, gen, operand(access.object()));
     }
 
     protected ValueNode uncast(ValueNode value) {
@@ -193,8 +193,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
                     other = operand(value);
                 }
 
-                AMD64AddressValue address = (AMD64AddressValue) operand(access.getAddress());
-                getLIRGeneratorTool().emitCompareBranchMemory(kind, other, address, getState(access), finalCondition, unorderedIsTrue, trueLabel, falseLabel, trueLabelProbability);
+                getLIRGeneratorTool().emitCompareBranchMemory(kind, other, makeAddress(access), getState(access), finalCondition, unorderedIsTrue, trueLabel, falseLabel, trueLabelProbability);
                 return null;
             }
         };
@@ -216,15 +215,13 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
                 return null;
             }
             return builder -> {
-                AMD64AddressValue address = (AMD64AddressValue) operand(access.getAddress());
-                gen.append(new AMD64BinaryConsumer.MemoryConstOp(AMD64MIOp.TEST, size, address, (int) constant.asLong(), getState(access)));
+                gen.append(new AMD64BinaryConsumer.MemoryConstOp(AMD64MIOp.TEST, size, makeAddress(access), (int) constant.asLong(), getState(access)));
                 gen.append(new BranchOp(Condition.EQ, trueLabel, falseLabel, trueLabelProbability));
                 return null;
             };
         } else {
             return builder -> {
-                AMD64AddressValue address = (AMD64AddressValue) operand(access.getAddress());
-                gen.append(new AMD64BinaryConsumer.MemoryRMOp(AMD64RMOp.TEST, size, gen.asAllocatable(operand(value)), address, getState(access)));
+                gen.append(new AMD64BinaryConsumer.MemoryRMOp(AMD64RMOp.TEST, size, gen.asAllocatable(operand(value)), makeAddress(access), getState(access)));
                 gen.append(new BranchOp(Condition.EQ, trueLabel, falseLabel, trueLabelProbability));
                 return null;
             };
@@ -233,7 +230,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
 
     protected ComplexMatchResult emitConvertMemoryOp(PlatformKind kind, AMD64RMOp op, OperandSize size, Access access) {
         return builder -> {
-            AMD64AddressValue address = (AMD64AddressValue) operand(access.getAddress());
+            AMD64AddressValue address = makeAddress(access);
             LIRFrameState state = getState(access);
             return getLIRGeneratorTool().emitConvertMemoryOp(kind, op, size, address, state);
         };
@@ -261,7 +258,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
                     op = MOVSXD;
                     break;
                 default:
-                    throw JVMCIError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
+                    throw GraalInternalError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
             }
         } else {
             kind = Kind.Int;
@@ -277,7 +274,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
                 case 32:
                     return null;
                 default:
-                    throw JVMCIError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
+                    throw GraalInternalError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
             }
         }
         if (kind != null && op != null) {
@@ -287,7 +284,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
     }
 
     private Value emitReinterpretMemory(LIRKind to, Access access) {
-        AMD64AddressValue address = (AMD64AddressValue) operand(access.getAddress());
+        AMD64AddressValue address = makeAddress(access);
         LIRFrameState state = getState(access);
         return getLIRGeneratorTool().emitLoad(to, address, state);
     }
@@ -337,7 +334,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
     }
 
     private ComplexMatchResult binaryRead(AMD64RMOp op, OperandSize size, ValueNode value, Access access) {
-        return builder -> getLIRGeneratorTool().emitBinaryMemory(op, size, getLIRGeneratorTool().asAllocatable(operand(value)), (AMD64AddressValue) operand(access.getAddress()), getState(access));
+        return builder -> getLIRGeneratorTool().emitBinaryMemory(op, size, getLIRGeneratorTool().asAllocatable(operand(value)), makeAddress(access), getState(access));
     }
 
     @MatchRule("(Add value Read=access)")
@@ -406,11 +403,13 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
         }
     }
 
-    @MatchRule("(Write object Narrow=narrow)")
+    @MatchRule("(Write object location Narrow=narrow)")
     public ComplexMatchResult writeNarrow(WriteNode root, NarrowNode narrow) {
         return builder -> {
             LIRKind writeKind = getLIRGeneratorTool().getLIRKind(root.value().stamp());
-            getLIRGeneratorTool().emitStore(writeKind, operand(root.getAddress()), operand(narrow.getValue()), state(root));
+            Value address = root.location().generateAddress(builder, getLIRGeneratorTool(), operand(root.object()));
+            Value v = operand(narrow.getValue());
+            getLIRGeneratorTool().emitStore(writeKind, address, v, state(root));
             return null;
         };
     }
@@ -433,8 +432,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
              */
             return null;
         }
-        return builder -> getLIRGeneratorTool().emitZeroExtendMemory(memoryKind == Kind.Short ? Kind.Char : memoryKind, root.getResultBits(), (AMD64AddressValue) operand(access.getAddress()),
-                        getState(access));
+        return builder -> getLIRGeneratorTool().emitZeroExtendMemory(memoryKind == Kind.Short ? Kind.Char : memoryKind, root.getResultBits(), makeAddress(access), getState(access));
     }
 
     @MatchRule("(FloatConvert Read=access)")
@@ -462,7 +460,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
             case L2F:
                 return emitConvertMemoryOp(Kind.Float, SSEOp.CVTSI2SS, QWORD, access);
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 

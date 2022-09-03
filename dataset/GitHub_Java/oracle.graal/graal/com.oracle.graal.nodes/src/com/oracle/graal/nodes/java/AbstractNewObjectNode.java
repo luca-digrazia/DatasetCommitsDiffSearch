@@ -31,7 +31,6 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.memory.*;
-import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -43,8 +42,8 @@ public abstract class AbstractNewObjectNode extends DeoptimizingFixedWithNextNod
     public static final NodeClass<AbstractNewObjectNode> TYPE = NodeClass.create(AbstractNewObjectNode.class);
     protected final boolean fillContents;
 
-    protected AbstractNewObjectNode(NodeClass<? extends AbstractNewObjectNode> c, Stamp stamp, boolean fillContents, FrameState stateBefore) {
-        super(c, stamp, stateBefore);
+    public AbstractNewObjectNode(NodeClass<? extends AbstractNewObjectNode> c, Stamp stamp, boolean fillContents) {
+        super(c, stamp);
         this.fillContents = fillContents;
     }
 
@@ -63,43 +62,24 @@ public abstract class AbstractNewObjectNode extends DeoptimizingFixedWithNextNod
                 if (((FixedValueAnchorNode) usage).usages().isNotEmpty()) {
                     return;
                 }
-            } else if (usage instanceof OffsetAddressNode) {
-                if (((OffsetAddressNode) usage).getBase() != this) {
+            } else if (usage instanceof WriteNode) {
+                if (((WriteNode) usage).object() != this || usage.usages().isNotEmpty()) {
+                    // we would need to fix up the memory graph if the write has usages
                     return;
-                }
-                for (Node access : usage.usages()) {
-                    if (access instanceof WriteNode) {
-                        if (access.usages().isNotEmpty()) {
-                            // we would need to fix up the memory graph if the write has usages
-                            return;
-                        }
-                    } else {
-                        return;
-                    }
                 }
             } else {
                 return;
             }
         }
         for (Node usage : usages().distinct().snapshot()) {
-            if (usage instanceof OffsetAddressNode) {
-                for (Node access : usage.usages().snapshot()) {
-                    removeUsage(tool, (FixedWithNextNode) access);
-                }
-            } else {
-                removeUsage(tool, (FixedWithNextNode) usage);
+            List<Node> snapshot = usage.inputs().snapshot();
+            graph().removeFixed((FixedWithNextNode) usage);
+            for (Node input : snapshot) {
+                tool.removeIfUnused(input);
             }
         }
         List<Node> snapshot = inputs().snapshot();
         graph().removeFixed(this);
-        for (Node input : snapshot) {
-            tool.removeIfUnused(input);
-        }
-    }
-
-    private void removeUsage(SimplifierTool tool, FixedWithNextNode usage) {
-        List<Node> snapshot = usage.inputs().snapshot();
-        graph().removeFixed(usage);
         for (Node input : snapshot) {
             tool.removeIfUnused(input);
         }

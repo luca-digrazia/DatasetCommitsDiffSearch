@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
@@ -31,7 +30,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Store of a value at a location specified as an offset relative to an object. No null check is
@@ -80,27 +78,26 @@ public final class UnsafeStoreNode extends UnsafeAccessNode implements StateSpli
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(object());
-        if (alias instanceof VirtualObjectNode) {
-            VirtualObjectNode virtual = (VirtualObjectNode) alias;
-            ValueNode indexValue = tool.getAlias(offset());
+        State state = tool.getObjectState(object());
+        if (state != null && state.getState() == EscapeState.Virtual) {
+            ValueNode indexValue = tool.getReplacedValue(offset());
             if (indexValue.isConstant()) {
                 long off = indexValue.asJavaConstant().asLong();
-                int entryIndex = virtual.entryIndexForOffset(off, accessKind());
+                int entryIndex = state.getVirtualObject().entryIndexForOffset(off, accessKind());
                 if (entryIndex != -1) {
-                    Kind entryKind = virtual.entryKind(entryIndex);
-                    ValueNode entry = tool.getEntry(virtual, entryIndex);
+                    Kind entryKind = state.getVirtualObject().entryKind(entryIndex);
+                    ValueNode entry = state.getEntry(entryIndex);
                     if (entry.getKind() == value.getKind() || entryKind == accessKind()) {
-                        tool.setVirtualEntry(virtual, entryIndex, value(), true);
+                        tool.setVirtualEntry(state, entryIndex, value(), true);
                         tool.delete();
                     } else {
                         if ((accessKind() == Kind.Long || accessKind() == Kind.Double) && entryKind == Kind.Int) {
-                            int nextIndex = virtual.entryIndexForOffset(off + 4, entryKind);
+                            int nextIndex = state.getVirtualObject().entryIndexForOffset(off + 4, entryKind);
                             if (nextIndex != -1) {
-                                Kind nextKind = virtual.entryKind(nextIndex);
+                                Kind nextKind = state.getVirtualObject().entryKind(nextIndex);
                                 if (nextKind == Kind.Int) {
-                                    tool.setVirtualEntry(virtual, entryIndex, value(), true);
-                                    tool.setVirtualEntry(virtual, nextIndex, ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccessProvider(), graph()), true);
+                                    tool.setVirtualEntry(state, entryIndex, value(), true);
+                                    tool.setVirtualEntry(state, nextIndex, ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccessProvider(), graph()), true);
                                     tool.delete();
                                 }
                             }

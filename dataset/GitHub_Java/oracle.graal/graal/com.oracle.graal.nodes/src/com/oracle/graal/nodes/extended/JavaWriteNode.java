@@ -22,27 +22,26 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.memory.*;
-import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * Write a raw memory location according to Java field or array write semantics. It will perform
  * write barriers, implicit conversions and optionally oop compression.
  */
-@NodeInfo(nameTemplate = "JavaWrite#{p#location/s}")
+@NodeInfo
 public final class JavaWriteNode extends AbstractWriteNode implements Lowerable, StateSplit, MemoryAccess, MemoryCheckpoint.Single {
 
     public static final NodeClass<JavaWriteNode> TYPE = NodeClass.create(JavaWriteNode.class);
     protected final Kind writeKind;
     protected final boolean compressible;
 
-    public JavaWriteNode(Kind writeKind, AddressNode address, LocationIdentity location, ValueNode value, BarrierType barrierType, boolean compressible, boolean initialization) {
-        super(TYPE, address, location, value, barrierType, initialization);
+    public JavaWriteNode(Kind writeKind, ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean compressible, boolean initialization) {
+        super(TYPE, object, value, location, barrierType, initialization);
         this.writeKind = writeKind;
         this.compressible = compressible;
     }
