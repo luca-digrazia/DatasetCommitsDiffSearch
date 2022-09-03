@@ -23,7 +23,6 @@
 package com.oracle.graal.printer;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.graph.Edges.Type.*;
 
 import java.io.*;
 import java.nio.*;
@@ -231,20 +230,6 @@ public class BinaryGraphPrinter implements GraphPrinter {
         }
     }
 
-    private void writeNodeClass(Node node, NodeClass nodeClass) throws IOException {
-        Character id = constantPool.get(nodeClass);
-        if (id == null) {
-            writeByte(POOL_NODE_CLASS);
-            writeString(nodeClass.getJavaClass().getSimpleName());
-            writeString(node.getNameTemplate());
-            writeEdgesInfo(nodeClass, Inputs);
-            writeEdgesInfo(nodeClass, Successors);
-        } else {
-            writeByte(POOL_NODE_CLASS);
-            writeShort(id.charValue());
-        }
-    }
-
     private void writePoolObject(Object object) throws IOException {
         if (object == null) {
             writeByte(POOL_NULL);
@@ -258,6 +243,8 @@ public class BinaryGraphPrinter implements GraphPrinter {
                 writeByte(POOL_ENUM);
             } else if (object instanceof Class<?> || object instanceof JavaType) {
                 writeByte(POOL_CLASS);
+            } else if (object instanceof NodeClass) {
+                writeByte(POOL_NODE_CLASS);
             } else if (object instanceof ResolvedJavaMethod) {
                 writeByte(POOL_METHOD);
             } else if (object instanceof ResolvedJavaField) {
@@ -279,7 +266,6 @@ public class BinaryGraphPrinter implements GraphPrinter {
     }
 
     private void addPoolEntry(Object object) throws IOException {
-        assert !(object instanceof NodeClass);
         char index = constantPool.add(object);
         writeByte(POOL_NEW);
         writeShort(index);
@@ -306,6 +292,24 @@ public class BinaryGraphPrinter implements GraphPrinter {
             writeByte(POOL_CLASS);
             writeString(type.toJavaName());
             writeByte(KLASS);
+        } else if (object instanceof NodeClass) {
+            NodeClass nodeClass = (NodeClass) object;
+            writeByte(POOL_NODE_CLASS);
+            writeString(nodeClass.getJavaClass().getSimpleName());
+            writeString(nodeClass.getNameTemplate());
+            Collection<Position> directInputPositions = nodeClass.getFirstLevelInputPositions();
+            writeShort((char) directInputPositions.size());
+            for (Position pos : directInputPositions) {
+                writeByte(pos.getSubIndex() == Node.NOT_ITERABLE ? 0 : 1);
+                writePoolObject(nodeClass.getName(pos));
+                writePoolObject(nodeClass.getInputType(pos));
+            }
+            Collection<Position> directSuccessorPositions = nodeClass.getFirstLevelSuccessorPositions();
+            writeShort((char) directSuccessorPositions.size());
+            for (Position pos : directSuccessorPositions) {
+                writeByte(pos.getSubIndex() == Node.NOT_ITERABLE ? 0 : 1);
+                writePoolObject(nodeClass.getName(pos));
+            }
         } else if (object instanceof ResolvedJavaMethod) {
             writeByte(POOL_METHOD);
             ResolvedJavaMethod method = ((ResolvedJavaMethod) object);
@@ -333,18 +337,6 @@ public class BinaryGraphPrinter implements GraphPrinter {
         } else {
             writeByte(POOL_STRING);
             writeString(object.toString());
-        }
-    }
-
-    private void writeEdgesInfo(NodeClass nodeClass, Edges.Type type) throws IOException {
-        Edges edges = nodeClass.getEdges(type);
-        writeShort((char) edges.getCount());
-        for (int i = 0; i < edges.getCount(); i++) {
-            writeByte(i < edges.getDirectCount() ? 0 : 1);
-            writePoolObject(edges.getName(i));
-            if (type == Inputs) {
-                writePoolObject(((InputEdges) edges).getInputType(i));
-            }
         }
     }
 
@@ -428,7 +420,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
                 }
             }
             writeInt(getNodeId(node));
-            writeNodeClass(node, nodeClass);
+            writePoolObject(nodeClass);
             writeByte(node.predecessor() == null ? 0 : 1);
             // properties
             writeShort((char) props.size());
@@ -437,29 +429,32 @@ public class BinaryGraphPrinter implements GraphPrinter {
                 writePoolObject(key);
                 writePropertyObject(entry.getValue());
             }
-            writeEdges(node, Inputs);
-            writeEdges(node, Successors);
+            // inputs
+            writeEdges(node, nodeClass.getFirstLevelInputPositions());
+            // successors
+            writeEdges(node, nodeClass.getFirstLevelSuccessorPositions());
 
             props.clear();
         }
     }
 
-    private void writeEdges(Node node, Edges.Type type) throws IOException {
+    private void writeEdges(Node node, Collection<Position> positions) throws IOException {
         NodeClass nodeClass = node.getNodeClass();
-        Edges edges = nodeClass.getEdges(type);
-        for (int i = 0; i < edges.getDirectCount(); i++) {
-            writeNodeRef(edges.getNode(node, i));
-        }
-        for (int i = edges.getDirectCount(); i < edges.getCount(); i++) {
-            NodeList<Node> list = edges.getNodeList(node, i);
-            if (list == null) {
-                writeShort((char) 0);
+        for (Position pos : positions) {
+            if (pos.getSubIndex() == Node.NOT_ITERABLE) {
+                Node edge = nodeClass.get(node, pos);
+                writeNodeRef(edge);
             } else {
-                int listSize = list.count();
-                assert listSize == ((char) listSize);
-                writeShort((char) listSize);
-                for (Node edge : list) {
-                    writeNodeRef(edge);
+                NodeList<?> list = nodeClass.getNodeList(node, pos);
+                if (list == null) {
+                    writeShort((char) 0);
+                } else {
+                    int listSize = list.count();
+                    assert listSize == ((char) listSize);
+                    writeShort((char) listSize);
+                    for (Node edge : list) {
+                        writeNodeRef(edge);
+                    }
                 }
             }
         }
