@@ -112,13 +112,10 @@ public class DebugTimerTest {
             DebugTimer timerD = Debug.timer("TimerD");
             DebugTimer timerE = Debug.timer("TimerE");
 
-            long spinD1;
-            long spinE;
-
             try (TimerCloseable d1 = timerD.start()) {
-                spinD1 = spin(50);
+                spin(50);
                 try (TimerCloseable e1 = timerE.start()) {
-                    spinE = spin(50);
+                    spin(50);
                     try (TimerCloseable d2 = timerD.start()) {
                         spin(50);
                         try (TimerCloseable d3 = timerD.start()) {
@@ -130,7 +127,7 @@ public class DebugTimerTest {
 
             Assert.assertTrue(timerE.getCurrentValue() < timerD.getCurrentValue());
             if (timerD.getFlat() != null && timerE.getFlat() != null) {
-                assertTrue(spinE >= spinD1 || timerE.getFlat().getCurrentValue() < timerD.getFlat().getCurrentValue());
+                assertTrue(timerE.getFlat().getCurrentValue() < timerD.getFlat().getCurrentValue());
                 assertEquals(timerD.getFlat().getCurrentValue(), timerD.getCurrentValue() - timerE.getFlat().getCurrentValue(), 10D);
             }
         }
