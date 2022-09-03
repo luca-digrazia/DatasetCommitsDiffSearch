@@ -24,6 +24,8 @@ package com.oracle.max.graal.runtime;
 
 import java.lang.reflect.*;
 
+import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
@@ -32,14 +34,15 @@ import com.sun.cri.ri.*;
  */
 public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements HotSpotMethodResolved {
 
-    private AccessibleObject javaMirror;
+    /** DO NOT USE IN JAVA CODE! */
+    @Deprecated
+    private Object javaMirror;
 
     // cached values
     private final int codeSize;
     private final int accessFlags;
     private final int maxLocals;
     private final int maxStackSize;
-    private final int invocationCount;
     private RiExceptionHandler[] exceptionHandlers;
     private RiSignature signature;
     private Boolean hasBalancedMonitors;
@@ -50,7 +53,6 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
         accessFlags = -1;
         maxLocals = -1;
         maxStackSize = -1;
-        invocationCount = -1;
     }
 
     @Override
@@ -79,10 +81,7 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
 
     @Override
     public RiExceptionHandler[] exceptionHandlers() {
-        if (exceptionHandlers == null) {
-            exceptionHandlers = compiler.getVMEntries().RiMethod_exceptionHandlers(this);
-        }
-        return exceptionHandlers;
+        return compiler.getVMEntries().RiMethod_exceptionHandlers(this);
     }
 
     @Override
@@ -128,7 +127,7 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
         throw new UnsupportedOperationException("jniSymbol");
     }
 
-    public CiBitMap[] livenessMap() {
+    public BitMap[] livenessMap() {
         return null;
     }
 
@@ -171,9 +170,7 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     }
 
     public boolean hasCompiledCode() {
-        // TODO: needs a VMEntries to go cache the result of that method.
-        // This isn't used by GRAAL for now, so this is enough.
-        return false;
+        return compiler.getVMEntries().RiMethod_hasCompiledCode(this);
     }
 
     @Override
@@ -192,14 +189,45 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     }
 
     public int invocationCount() {
-        return invocationCount;
+        return compiler.getVMEntries().RiMethod_invocationCount(this);
+    }
+
+    public int exceptionProbability(int bci) {
+        return compiler.getVMEntries().RiMethod_exceptionProbability(this, bci);
     }
 
     public RiTypeProfile typeProfile(int bci) {
         return compiler.getVMEntries().RiMethod_typeProfile(this, bci);
     }
 
-    public int branchProbability(int bci) {
+    public double branchProbability(int bci) {
         return compiler.getVMEntries().RiMethod_branchProbability(this, bci);
+    }
+
+    public double[] switchProbability(int bci) {
+        return compiler.getVMEntries().RiMethod_switchProbability(this, bci);
+    }
+
+    @Override
+    public int compiledCodeSize() {
+        return compiler.getVMEntries().RiMethod_compiledCodeSize(this);
+    }
+
+    public void dumpProfile() {
+        TTY.println("profile info for %s", this);
+        TTY.println("canBeStaticallyBound: " + canBeStaticallyBound());
+        TTY.println("invocationCount: " + invocationCount());
+        for (int i = 0; i < codeSize(); i++) {
+            if (exceptionProbability(i) > 0) {
+                TTY.println("  exceptionProbability@%d: %d", i, exceptionProbability(i));
+            }
+            if (branchProbability(i) != -1) {
+                TTY.println("  branchProbability@%d: %f", i, branchProbability(i));
+            }
+            RiTypeProfile profile = typeProfile(i);
+            if (profile != null && profile.count > 0) {
+                TTY.println("  profile@%d: count: %d, morphism: %d", i, profile.count, profile.morphism);
+            }
+        }
     }
 }

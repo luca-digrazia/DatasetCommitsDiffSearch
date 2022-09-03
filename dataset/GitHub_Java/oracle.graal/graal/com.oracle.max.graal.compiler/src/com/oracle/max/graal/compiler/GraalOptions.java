@@ -99,7 +99,6 @@ public final class GraalOptions {
     public static boolean Plot                               = ____;
     public static boolean PlotVerbose                        = ____;
     public static boolean PlotOnError                        = ____;
-    public static boolean PrintIdealGraphBytecodes           = true;
     public static int     PrintIdealGraphLevel               = 0;
     public static boolean PrintIdealGraphFile                = ____;
     public static String  PrintIdealGraphAddress             = "127.0.0.1";
@@ -170,10 +169,9 @@ public final class GraalOptions {
     public static boolean OptReadElimination                 = ____;
     public static boolean OptGVN                             = ____;
     public static boolean Rematerialize                      = ____;
-    public static boolean SplitMaterialization               = ____;
     public static boolean OptCanonicalizer                   = true;
     public static boolean OptLoops                           = ____;
-    public static boolean ScheduleOutOfLoops                 = true;
+    public static boolean OptOptimisticSchedule              = ____;
     public static boolean OptReorderLoops                    = ____;
     public static boolean LoopPeeling                        = ____;
     public static boolean LoopInversion                      = ____;
