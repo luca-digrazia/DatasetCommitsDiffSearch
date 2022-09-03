@@ -30,7 +30,6 @@ import java.nio.MappedByteBuffer;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.nodes.BreakpointNode;
 import org.graalvm.nativeimage.IsolateThread;
-import org.graalvm.nativeimage.c.function.CEntryPointContext;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
@@ -262,7 +261,7 @@ public class SubstrateUtil {
             dumpException(log, "dumpVMThreads", e);
         }
 
-        IsolateThread currentThread = CEntryPointContext.getCurrentIsolateThread();
+        IsolateThread currentThread = KnownIntrinsics.currentVMThread();
         try {
             dumpVMThreadState(log, currentThread);
         } catch (Exception e) {
@@ -309,7 +308,7 @@ public class SubstrateUtil {
 
         if (VMOperationControl.isFrozen()) {
             for (IsolateThread vmThread = VMThreads.firstThread(); vmThread != VMThreads.nullThread(); vmThread = VMThreads.nextThread(vmThread)) {
-                if (vmThread == CEntryPointContext.getCurrentIsolateThread()) {
+                if (vmThread == KnownIntrinsics.currentVMThread()) {
                     continue;
                 }
                 try {

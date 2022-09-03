@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -116,7 +114,7 @@ public class HeapVerifierImpl implements HeapVerifier {
         trace.string("  header: ").hex(header);
         final ObjectHeaderImpl ohi = ObjectHeaderImpl.getObjectHeaderImpl();
         if (ohi.isForwardedHeader(header)) {
-            final Object obj = ohi.getForwardedObject(ptr);
+            final Object obj = ohi.getForwardedObject(header);
             final Pointer op = Word.objectToUntrackedPointer(obj);
             trace.string("  forwards to ").hex(op).newline();
             if (!verifyObjectAt(op)) {
@@ -352,7 +350,14 @@ public class HeapVerifierImpl implements HeapVerifier {
             }
 
             /* Consider the field pointer. */
-            if (!compressed && (objPointer.equal(HeapPolicy.getProducedHeapChunkZapWord()) || objPointer.equal(HeapPolicy.getConsumedHeapChunkZapWord()))) {
+            if (objPointer.equal(HeapPolicy.getProducedHeapChunkZapValue())) {
+                try (Log witness = verifier.getWitnessLog()) {
+                    witness.string("[HeapVerifierImpl.noReferencesOutsideHeap:").string("  cause: ").string(verifier.getCause());
+                    witness.string("  contains zapped field Pointer: ").hex(objPointer).string("  at: ").hex(objRef).string("]").newline();
+                }
+                return false;
+            }
+            if (objPointer.equal(HeapPolicy.getConsumedHeapChunkZapValue())) {
                 try (Log witness = verifier.getWitnessLog()) {
                     witness.string("[HeapVerifierImpl.noReferencesOutsideHeap:").string("  cause: ").string(verifier.getCause());
                     witness.string("  contains zapped field Pointer: ").hex(objPointer).string("  at: ").hex(objRef).string("]").newline();
@@ -374,7 +379,14 @@ public class HeapVerifierImpl implements HeapVerifier {
             }
             /* It is probably safe to look at the referenced object. */
             final Word readWord = objPointer.readWord(0);
-            if (readWord.equal(HeapPolicy.getProducedHeapChunkZapWord()) || readWord.equal(HeapPolicy.getConsumedHeapChunkZapWord())) {
+            if (readWord.equal(HeapPolicy.getProducedHeapChunkZapValue())) {
+                try (Log witness = verifier.getWitnessLog()) {
+                    witness.string("[HeapVerifierImpl.noReferencesOutsideHeap:").string("  cause: ").string(verifier.getCause());
+                    witness.string("  contains fieldPointer: ").hex(objPointer).string("  to zapped memory: ").hex(readWord).string("  at: ").hex(objRef).string("]").newline();
+                }
+                return false;
+            }
+            if (readWord.equal(HeapPolicy.getConsumedHeapChunkZapValue())) {
                 try (Log witness = verifier.getWitnessLog()) {
                     witness.string("[HeapVerifierImpl.noReferencesOutsideHeap:").string("  cause: ").string(verifier.getCause());
                     witness.string("  contains fieldPointer: ").hex(objPointer).string("  to zapped memory: ").hex(readWord).string("  at: ").hex(objRef).string("]").newline();

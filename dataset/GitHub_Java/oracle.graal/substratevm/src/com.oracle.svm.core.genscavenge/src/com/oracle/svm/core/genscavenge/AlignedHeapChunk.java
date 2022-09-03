@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -256,25 +254,25 @@ public class AlignedHeapChunk extends HeapChunk {
      *
      * This has to be fast, because it is used by the post-write barrier.
      */
-    public static void dirtyCardForObjectOfAlignedHeapChunk(Object object) {
-        final Pointer objectPointer = Word.objectToUntrackedPointer(object);
-        final AlignedHeader chunk = getEnclosingAlignedHeapChunkFromPointer(objectPointer);
+    public static void dirtyCardForObjectOfAlignedHeapChunk(Object obj) {
+        final AlignedHeader chunk = getEnclosingAlignedHeapChunk(obj);
         final Pointer cardTableStart = getCardTableStart(chunk);
-        final UnsignedWord index = getObjectIndex(chunk, objectPointer);
+        final UnsignedWord index = getObjectIndex(chunk, obj);
         CardTable.dirtyEntryAtIndex(cardTableStart, index);
     }
 
     /** Return the offset of an object within the objects part of a chunk. */
-    private static UnsignedWord getObjectOffset(AlignedHeader that, Pointer objectPointer) {
+    private static UnsignedWord getObjectOffset(AlignedHeader that, Object obj) {
         final Pointer objectsStart = getObjectsStart(that);
+        final Pointer objectPointer = Word.objectToUntrackedPointer(obj);
         assert objectsStart.belowOrEqual(objectPointer);
         assert objectPointer.belowOrEqual(that.getEnd());
         return objectPointer.subtract(objectsStart);
     }
 
     /** Return the index of an object within the tables of a chunk. */
-    private static UnsignedWord getObjectIndex(AlignedHeader that, Pointer objectPointer) {
-        final UnsignedWord offset = getObjectOffset(that, objectPointer);
+    private static UnsignedWord getObjectIndex(AlignedHeader that, Object obj) {
+        final UnsignedWord offset = getObjectOffset(that, obj);
         return CardTable.memoryOffsetToIndex(offset);
     }
 

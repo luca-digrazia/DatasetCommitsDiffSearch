@@ -58,7 +58,6 @@ import com.oracle.svm.core.heap.NoAllocationVerifier;
 import com.oracle.svm.core.heap.ObjectReferenceWalker;
 import com.oracle.svm.core.heap.ObjectVisitor;
 import com.oracle.svm.core.hub.LayoutEncoding;
-import com.oracle.svm.core.jdk.SunMiscSupport;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
@@ -156,7 +155,7 @@ public class GCImpl implements GC {
         this.greyToBlackObjectVisitor = GreyToBlackObjectVisitor.factory(greyToBlackObjRefVisitor);
         this.alwaysCompletelyInstance = new CollectionPolicy.OnlyCompletely();
         this.collectionInProgress = Latch.factory("Collection in progress");
-        this.oldGenerationSizeExceeded = new OutOfMemoryError("Garbage-collected heap size exceeded.");
+        this.oldGenerationSizeExceeded = new OutOfMemoryError("Old generation size exceeded.");
         this.unpinnedObjectReferenceWalkerException = new UnpinnedObjectReferenceWalkerException();
         this.gcManagementFactory = new GarbageCollectorManagementFactory();
 
@@ -888,7 +887,6 @@ public class GCImpl implements GC {
      */
     void possibleCollectionEpilogue(UnsignedWord requestingEpoch) {
         if (requestingEpoch.belowThan(getCollectionEpoch())) {
-            SunMiscSupport.drainCleanerQueue();
             visitWatchersReport();
         }
     }
