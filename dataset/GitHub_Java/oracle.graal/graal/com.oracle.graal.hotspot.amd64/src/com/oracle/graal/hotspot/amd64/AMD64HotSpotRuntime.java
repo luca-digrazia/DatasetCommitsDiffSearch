@@ -37,21 +37,20 @@ import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
 import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
 import static com.oracle.graal.hotspot.nodes.VerifyOopStubCall.*;
-import static com.oracle.graal.hotspot.nodes.WriteBarrierPostStubCall.*;
-import static com.oracle.graal.hotspot.nodes.WriteBarrierPreStubCall.*;
 import static com.oracle.graal.hotspot.replacements.AESCryptSubstitutions.DecryptBlockStubCall.*;
 import static com.oracle.graal.hotspot.replacements.AESCryptSubstitutions.EncryptBlockStubCall.*;
 import static com.oracle.graal.hotspot.replacements.CipherBlockChainingSubstitutions.DecryptAESCryptStubCall.*;
 import static com.oracle.graal.hotspot.replacements.CipherBlockChainingSubstitutions.EncryptAESCryptStubCall.*;
 
-import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.amd64.*;
 
 public class AMD64HotSpotRuntime extends HotSpotRuntime {
@@ -72,13 +71,13 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /*             ret */ ret(Kind.Void));
 
         addRuntimeCall(ARITHMETIC_FREM, config.arithmeticFremStub,
-                /*           temps */ new Register[]{AMD64.rax},
+                /*           temps */ null,
                 /*             ret */ ret(Kind.Float),
                 /* arg0:         a */ javaCallingConvention(Kind.Float,
                 /* arg1:         b */                       Kind.Float));
 
         addRuntimeCall(ARITHMETIC_DREM, config.arithmeticDremStub,
-                /*           temps */ new Register[]{AMD64.rax},
+                /*           temps */ null,
                 /*             ret */ ret(Kind.Double),
                 /* arg0:         a */ javaCallingConvention(Kind.Double,
                 /* arg1:         b */                       Kind.Double));
@@ -88,16 +87,6 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /*          ret */ ret(Kind.Void),
                 /* arg0: object */ javaCallingConvention(Kind.Object,
                 /* arg1:   lock */                       word));
-
-       addRuntimeCall(WBPRECALL, config.wbPreCallStub,
-                /*        temps */ null,
-                /*          ret */ ret(Kind.Void),
-                /* arg0: object */ javaCallingConvention(Kind.Object));
-
-       addRuntimeCall(WBPOSTCALL, config.wbPostCallStub,
-                /*        temps */ null,
-                /*          ret */ ret(Kind.Void),
-                /* arg0: object */ javaCallingConvention(Kind.Object, word));
 
         addRuntimeCall(MONITOREXIT, config.monitorExitStub,
                 /*        temps */ null,
@@ -153,7 +142,7 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
 
         addRuntimeCall(THREAD_IS_INTERRUPTED, config.threadIsInterruptedStub,
                 /*        temps */ null,
-                /*          ret */ rax.asValue(Kind.Boolean),
+                /*          ret */ rax.asValue(Kind.Int),
                 /* arg0: thread */ javaCallingConvention(Kind.Object,
       /* arg1: clearInterrupted */                       Kind.Boolean));
 
@@ -207,9 +196,10 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
     private AMD64ConvertSnippets.Templates convertSnippets;
 
     @Override
-    public void registerReplacements(Replacements replacements) {
-        convertSnippets = new AMD64ConvertSnippets.Templates(this, replacements, graalRuntime.getTarget());
-        super.registerReplacements(replacements);
+    public void installReplacements(Backend backend, ReplacementsInstaller installer, Assumptions assumptions) {
+        installer.installSnippets(AMD64ConvertSnippets.class);
+        convertSnippets = new AMD64ConvertSnippets.Templates(this, assumptions, graalRuntime.getTarget());
+        super.installReplacements(backend, installer, assumptions);
     }
 
     @Override
