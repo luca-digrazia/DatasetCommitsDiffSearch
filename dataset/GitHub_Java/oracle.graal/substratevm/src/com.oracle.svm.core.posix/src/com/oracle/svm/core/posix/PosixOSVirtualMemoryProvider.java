@@ -22,8 +22,6 @@
  */
 package com.oracle.svm.core.posix;
 
-import static com.oracle.svm.core.posix.PosixIsolates.IMAGE_HEAP_WRITABLE_BEGIN;
-import static com.oracle.svm.core.posix.PosixIsolates.IMAGE_HEAP_WRITABLE_END;
 import static com.oracle.svm.core.posix.headers.Mman.MAP_ANON;
 import static com.oracle.svm.core.posix.headers.Mman.MAP_FAILED;
 import static com.oracle.svm.core.posix.headers.Mman.MAP_PRIVATE;
@@ -32,32 +30,20 @@ import static com.oracle.svm.core.posix.headers.Mman.PROT_READ;
 import static com.oracle.svm.core.posix.headers.Mman.PROT_WRITE;
 import static com.oracle.svm.core.posix.headers.Mman.mmap;
 import static com.oracle.svm.core.posix.headers.Mman.munmap;
-import static com.oracle.svm.core.posix.headers.Unistd._SC_PAGE_SIZE;
-import static com.oracle.svm.core.posix.headers.UnistdNoTransitions.sysconf;
 
-import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platform.LINUX;
-import org.graalvm.nativeimage.c.function.CEntryPointContext;
-import org.graalvm.nativeimage.c.type.WordPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.c.CGlobalData;
-import com.oracle.svm.core.c.CGlobalDataFactory;
-import com.oracle.svm.core.c.function.CEntryPointCreateIsolateParameters;
-import com.oracle.svm.core.c.function.CEntryPointSetup;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.os.VirtualMemoryProvider;
-import com.oracle.svm.core.posix.headers.LibC;
-import com.oracle.svm.core.posix.headers.Mman;
 import com.oracle.svm.core.posix.linux.LinuxOSVirtualMemoryProvider;
 import com.oracle.svm.core.util.PointerUtils;
 import com.oracle.svm.core.util.UnsignedUtils;
@@ -74,75 +60,8 @@ class PosixVirtualMemoryProviderFeature implements Feature {
 }
 
 public class PosixOSVirtualMemoryProvider implements VirtualMemoryProvider {
-    private static final CGlobalData<WordPointer> CACHED_PAGE_SIZE = CGlobalDataFactory.createWord();
-
-    @Override
-    @Uninterruptible(reason = "Still being initialized.")
-    public int initialize(WordPointer isolatePointer, CEntryPointCreateIsolateParameters parameters) {
-        if (!SubstrateOptions.SpawnIsolates.getValue()) {
-            isolatePointer.write(CEntryPointSetup.SINGLE_ISOLATE_SENTINEL);
-            return PosixCEntryPointErrors.NO_ERROR;
-        }
-
-        Word begin = PosixIsolates.IMAGE_HEAP_BEGIN.get();
-        Word size = PosixIsolates.IMAGE_HEAP_END.get().subtract(begin);
-
-        Pointer heap = Mman.NoTransitions.mmap(WordFactory.nullPointer(), size, PROT_READ() | PROT_WRITE(), MAP_ANON() | MAP_PRIVATE(), -1, 0);
-        if (heap.equal(MAP_FAILED())) {
-            return PosixCEntryPointErrors.MAP_HEAP_FAILED;
-        }
-
-        LibC.memcpy(heap, begin, size);
-
-        UnsignedWord pageSize = getPageSize();
-        UnsignedWord pageMask = pageSize.subtract(1).not();
-        Word writableBeginPageOffset = IMAGE_HEAP_WRITABLE_BEGIN.get().subtract(begin).and(pageMask);
-        if (writableBeginPageOffset.aboveThan(0)) {
-            if (Mman.NoTransitions.mprotect(heap, writableBeginPageOffset, PROT_READ()) != 0) {
-                return PosixCEntryPointErrors.PROTECT_HEAP_FAILED;
-            }
-        }
-        Word writableEndPageOffset = IMAGE_HEAP_WRITABLE_END.get().subtract(begin).add(pageSize.subtract(1)).and(pageMask);
-        if (writableEndPageOffset.belowThan(size)) {
-            if (Mman.NoTransitions.mprotect(heap.add(writableEndPageOffset), size.subtract(writableEndPageOffset), PROT_READ()) != 0) {
-                return PosixCEntryPointErrors.PROTECT_HEAP_FAILED;
-            }
-        }
-
-        isolatePointer.write(heap);
-        return PosixCEntryPointErrors.NO_ERROR;
-    }
-
-    @Override
-    @Uninterruptible(reason = "Tear-down in progress.")
-    public int tearDown() {
-        if (!SubstrateOptions.SpawnIsolates.getValue()) {
-            return PosixCEntryPointErrors.NO_ERROR;
-        }
-
-        PointerBase heapBase = PosixIsolates.getHeapBase(CEntryPointContext.getCurrentIsolate());
-        Word size = PosixIsolates.IMAGE_HEAP_END.get().subtract(PosixIsolates.IMAGE_HEAP_BEGIN.get());
-        if (Mman.NoTransitions.munmap(heapBase, size) != 0) {
-            return PosixCEntryPointErrors.MAP_HEAP_FAILED;
-        }
-        return PosixCEntryPointErrors.NO_ERROR;
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static UnsignedWord queryPageSize() {
-        Word value = CACHED_PAGE_SIZE.get().read();
-        if (value.equal(WordFactory.zero())) {
-            long queried = sysconf(_SC_PAGE_SIZE());
-            value = WordFactory.unsigned(queried);
-            CACHED_PAGE_SIZE.get().write(value);
-        }
-        return value;
-    }
-
-    @Override
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public UnsignedWord getPageSize() {
-        return queryPageSize();
+        return WordFactory.unsigned(UnsafeAccess.UNSAFE.pageSize());
     }
 
     @Override
