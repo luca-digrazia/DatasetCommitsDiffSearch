@@ -105,7 +105,7 @@ public class VerifierInstrument extends TruffleInstrument implements InlineVerif
             if (predicate == null || canRunAt(context.getInstrumentedSourceSection())) {
                 return new InlineScriptNode(context);
             } else {
-                return null;
+                return new DummyNode();
             }
         }
 
@@ -175,6 +175,10 @@ public class VerifierInstrument extends TruffleInstrument implements InlineVerif
             private void verify(final Object result) {
                 resultVerifier.verify(result);
             }
+        }
+
+        private class DummyNode extends ExecutionEventNode {
+            // dummy node placed where we can not run the inline script
         }
     }
 

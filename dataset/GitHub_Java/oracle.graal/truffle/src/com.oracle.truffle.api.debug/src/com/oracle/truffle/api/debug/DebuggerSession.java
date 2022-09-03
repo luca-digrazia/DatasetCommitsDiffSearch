@@ -601,7 +601,7 @@ public final class DebuggerSession implements Closeable {
      */
     @Deprecated
     public void setBreakpointsActive(boolean active) {
-        for (Breakpoint.Kind kind : Breakpoint.Kind.VALUES) {
+        for (Breakpoint.Kind kind : Breakpoint.Kind.values()) {
             setBreakpointsActive(kind, active);
         }
     }
@@ -642,7 +642,7 @@ public final class DebuggerSession implements Closeable {
      */
     @Deprecated
     public boolean isBreakpointsActive() {
-        for (Breakpoint.Kind kind : Breakpoint.Kind.VALUES) {
+        for (Breakpoint.Kind kind : Breakpoint.Kind.values()) {
             if (isBreakpointsActive(kind)) {
                 return true;
             }
