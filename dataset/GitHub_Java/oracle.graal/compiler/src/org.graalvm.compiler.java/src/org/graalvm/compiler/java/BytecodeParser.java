@@ -1698,6 +1698,7 @@ public class BytecodeParser implements GraphBuilderContext {
             targetMethod = originalMethod;
         }
         Invoke invoke = createNonInlinedInvoke(edgeAction, invokeBci, args, targetMethod, invokeKind, resultType, returnType, profile);
+        graph.getInliningLog().addDecision(invoke, false, "GraphBuilderPhase", null, null, "bytecode parser did not replace invoke");
         if (partialIntrinsicExit) {
             // This invoke must never be later inlined as it might select the intrinsic graph.
             // Until there is a mechanism to guarantee that any late inlining will not select
@@ -2198,9 +2199,9 @@ public class BytecodeParser implements GraphBuilderContext {
             IntrinsicContext intrinsic = this.intrinsicContext;
 
             if (intrinsic == null && !graphBuilderConfig.insertFullInfopoints() &&
-                    targetMethod.equals(inlinedMethod) &&
-                    (targetMethod.getModifiers() & (STATIC | SYNCHRONIZED)) == 0 &&
-                    tryFastInlineAccessor(args, targetMethod)) {
+                            targetMethod.equals(inlinedMethod) &&
+                            (targetMethod.getModifiers() & (STATIC | SYNCHRONIZED)) == 0 &&
+                            tryFastInlineAccessor(args, targetMethod)) {
                 return true;
             }
 
