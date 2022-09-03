@@ -23,6 +23,7 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.code.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -102,9 +103,5 @@ public class StubForeignCallNode extends FixedWithNextNode implements Deoptimizi
     @Override
     public DeoptimizationReason getDeoptimizationReason() {
         return null;
-    }
-
-    public FrameState getState() {
-        return deoptState;
     }
 }

@@ -22,10 +22,9 @@
  */
 package com.oracle.graal.nodes.extended;
 
-
 /**
  * Denotes monitor locking transition.
  */
-public interface MonitorEnter extends MemoryCheckpoint {
+public interface MonitorEnter {
 
 }

@@ -29,6 +29,7 @@ import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.word.*;
 
 /**
@@ -41,8 +42,8 @@ public final class BeginLockScopeNode extends AbstractStateSplit implements LIRG
 
     private int lockDepth;
 
-    private BeginLockScopeNode(int lockDepth) {
-        super(null);
+    public BeginLockScopeNode(int lockDepth) {
+        super(StampFactory.forWord());
         this.lockDepth = lockDepth;
     }
 
@@ -65,6 +66,6 @@ public final class BeginLockScopeNode extends AbstractStateSplit implements LIRG
         gen.setResult(this, result);
     }
 
-    @NodeIntrinsic(setStampFromReturnType = true)
+    @NodeIntrinsic
     public static native Word beginLockScope(@ConstantNodeParameter int lockDepth);
 }

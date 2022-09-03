@@ -30,15 +30,18 @@ import com.oracle.graal.nodes.spi.*;
 /**
  * The {@code MonitorEnterNode} represents the acquisition of a monitor.
  */
-public final class MonitorEnterNode extends AccessMonitorNode implements Virtualizable, Lowerable, MonitorEnter, MemoryCheckpoint.Single {
+public final class MonitorEnterNode extends AccessMonitorNode implements Virtualizable, Lowerable, MonitorEnter, MemoryCheckpoint.Single, MonitorReference {
+
+    private int lockDepth;
 
     /**
      * Creates a new MonitorEnterNode.
      * 
      * @param object the instruction producing the object
      */
-    public MonitorEnterNode(ValueNode object, MonitorIdNode monitorId) {
-        super(object, monitorId);
+    public MonitorEnterNode(ValueNode object, int lockDepth) {
+        super(object);
+        this.lockDepth = lockDepth;
     }
 
     @Override
@@ -47,15 +50,23 @@ public final class MonitorEnterNode extends AccessMonitorNode implements Virtual
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+    public void lower(LoweringTool tool, LoweringType loweringType) {
+        tool.getRuntime().lower(this, tool);
+    }
+
+    public int getLockDepth() {
+        return lockDepth;
+    }
+
+    public void setLockDepth(int lockDepth) {
+        this.lockDepth = lockDepth;
     }
 
     @Override
     public void virtualize(VirtualizerTool tool) {
         State state = tool.getObjectState(object());
         if (state != null && state.getState() == EscapeState.Virtual && state.getVirtualObject().hasIdentity()) {
-            state.addLock(getMonitorId());
+            state.addLock(getLockDepth());
             tool.delete();
         }
     }

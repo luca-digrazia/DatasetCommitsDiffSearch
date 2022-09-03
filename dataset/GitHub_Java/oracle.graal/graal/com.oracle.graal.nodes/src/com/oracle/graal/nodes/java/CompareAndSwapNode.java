@@ -44,7 +44,7 @@ public class CompareAndSwapNode extends AbstractStateSplit implements StateSplit
     @Input private LocationNode location;
     private final int displacement;
     private WriteBarrierType barrierType;
-    private boolean compressible;
+    private boolean compress;
 
     public ValueNode object() {
         return object;
@@ -85,12 +85,12 @@ public class CompareAndSwapNode extends AbstractStateSplit implements StateSplit
     }
 
     @Override
-    public boolean compressible() {
-        return compressible;
+    public boolean compress() {
+        return compress;
     }
 
-    public void setCompressible() {
-        this.compressible = true;
+    public void setCompress() {
+        this.compress = true;
     }
 
     public CompareAndSwapNode(ValueNode object, int displacement, ValueNode offset, ValueNode expected, ValueNode newValue) {
@@ -102,7 +102,7 @@ public class CompareAndSwapNode extends AbstractStateSplit implements StateSplit
         this.newValue = newValue;
         this.displacement = displacement;
         this.barrierType = WriteBarrierType.NONE;
-        this.compressible = false;
+        this.compress = false;
     }
 
     @Override

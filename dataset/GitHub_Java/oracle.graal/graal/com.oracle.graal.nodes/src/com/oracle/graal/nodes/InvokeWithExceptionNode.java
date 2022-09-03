@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(nameTemplate = "Invoke!#{p#targetMethod/s}")
-public class InvokeWithExceptionNode extends ControlSplitNode implements IterableNodeType, Invoke, MemoryCheckpoint.Single, LIRLowerable {
+public class InvokeWithExceptionNode extends ControlSplitNode implements Node.IterableNodeType, Invoke, MemoryCheckpoint.Single, LIRLowerable {
 
     private static final double EXCEPTION_PROBA = 1e-5;
 
@@ -119,16 +119,21 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Iterabl
     }
 
     @Override
+    public FixedNode asNode() {
+        return this;
+    }
+
+    @Override
     public void setNext(FixedNode x) {
         if (x != null) {
-            this.setNext(KillingBeginNode.begin(x, getLocationIdentity()));
+            this.setNext(AbstractBeginNode.begin(x));
         } else {
             this.setNext(null);
         }
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         tool.getRuntime().lower(this, tool);
     }
 
@@ -219,6 +224,11 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Iterabl
     }
 
     @Override
+    public DeoptimizationReason getDeoptimizationReason() {
+        return null;
+    }
+
+    @Override
     public FrameState getDeoptimizationState() {
         if (deoptState == null) {
             FrameState stateDuring = stateDuring();
@@ -242,15 +252,5 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Iterabl
     public void setGuard(GuardingNode guard) {
         updateUsages(this.guard == null ? null : this.guard.asNode(), guard == null ? null : guard.asNode());
         this.guard = guard;
-    }
-
-    @Override
-    public FrameState getState() {
-        if (deoptState != null) {
-            assert stateAfter() == null;
-            return deoptState;
-        } else {
-            return stateAfter();
-        }
     }
 }

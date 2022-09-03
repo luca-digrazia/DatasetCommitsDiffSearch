@@ -62,34 +62,20 @@ public class MacroNode extends AbstractStateSplit implements Lowerable, MemoryCh
         return returnType;
     }
 
-    /**
-     * Gets a snippet to be used for lowering this macro node.
-     */
     @SuppressWarnings("unused")
     protected StructuredGraph getSnippetGraph(LoweringTool tool) {
         return null;
     }
 
-    /**
-     * Gets a normal method substitution to be used for lowering this macro node. This is only
-     * called if {@link #getSnippetGraph(LoweringTool)} return nulls.
-     */
-    protected StructuredGraph getSubstitutionGraph(LoweringTool tool) {
-        return tool.getReplacements().getMethodSubstitution(getTargetMethod());
-    }
-
     @Override
     public void lower(LoweringTool tool, LoweringType loweringType) {
-        StructuredGraph replacementGraph = getSnippetGraph(tool);
-        if (replacementGraph == null) {
-            replacementGraph = getSubstitutionGraph(tool);
-        }
+        StructuredGraph snippetGraph = getSnippetGraph(tool);
 
         InvokeNode invoke = replaceWithInvoke();
         assert invoke.verify();
 
-        if (replacementGraph != null) {
-            InliningUtil.inline(invoke, replacementGraph, false);
+        if (snippetGraph != null) {
+            InliningUtil.inline(invoke, snippetGraph, false);
         }
     }
 
