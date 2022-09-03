@@ -29,15 +29,11 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
 import com.oracle.truffle.llvm.runtime.types.Type;
@@ -118,8 +114,6 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
     }
 
     private static final class LLVMTruffleObjectNativeLibrary extends LLVMObjectNativeLibrary {
-        @Child private Node isNull;
-
         private final LLVMObjectNativeLibrary lib;
 
         private LLVMTruffleObjectNativeLibrary(LLVMObjectNativeLibrary lib) {
@@ -138,30 +132,14 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
         @Override
         public boolean isPointer(VirtualFrame frame, Object obj) {
             LLVMTruffleObject object = (LLVMTruffleObject) obj;
-            if (lib.isPointer(frame, object.getObject())) {
-                return true;
-            } else {
-                if (isNull == null) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    isNull = insert(Message.IS_NULL.createNode());
-                }
-                return ForeignAccess.sendIsNull(isNull, object.getObject());
-            }
+            return lib.isPointer(frame, object.getObject());
         }
 
         @Override
         public long asPointer(VirtualFrame frame, Object obj) throws InteropException {
             LLVMTruffleObject object = (LLVMTruffleObject) obj;
-            if (isNull == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                isNull = insert(Message.IS_NULL.createNode());
-            }
-            if (ForeignAccess.sendIsNull(isNull, object.getObject())) {
-                return object.getOffset();
-            } else {
-                long base = lib.asPointer(frame, object.getObject());
-                return base + object.getOffset();
-            }
+            long base = lib.asPointer(frame, object.getObject());
+            return base + object.getOffset();
         }
 
         @Override
