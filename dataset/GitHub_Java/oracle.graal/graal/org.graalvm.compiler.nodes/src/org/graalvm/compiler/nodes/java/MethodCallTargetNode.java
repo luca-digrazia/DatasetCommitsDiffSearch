@@ -132,11 +132,8 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
             return targetMethod;
         }
 
-        return devirtualizeCall(invokeKind, targetMethod, contextType, receiver.graph().getAssumptions(), receiver.stamp());
-    }
-
-    public static ResolvedJavaMethod devirtualizeCall(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ResolvedJavaType contextType, Assumptions assumptions, Stamp receiverStamp) {
-        TypeReference type = StampTool.typeReferenceOrNull(receiverStamp);
+        Assumptions assumptions = receiver.graph().getAssumptions();
+        TypeReference type = StampTool.typeReferenceOrNull(receiver);
         if (type == null && invokeKind == InvokeKind.Virtual) {
             // For virtual calls, we are guaranteed to receive a correct receiver type.
             type = TypeReference.createTrusted(assumptions, targetMethod.getDeclaringClass());
@@ -158,6 +155,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                 return uniqueConcreteMethod.getResult();
             }
         }
+
         return null;
     }
 
