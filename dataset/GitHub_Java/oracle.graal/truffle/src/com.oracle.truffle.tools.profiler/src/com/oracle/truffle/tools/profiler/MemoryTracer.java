@@ -37,7 +37,6 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptor;
-import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionType;
 
@@ -49,7 +48,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -96,7 +94,7 @@ public final class MemoryTracer implements Closeable {
          */
         public static final String ID = "memtracer";
         static MemoryTracer tracer;
-        OptionDescriptors descriptors = null;
+        List<OptionDescriptor> descriptors = new ArrayList<>();
 
         /**
          * Called to create the Instrument.
@@ -130,25 +128,23 @@ public final class MemoryTracer implements Closeable {
          * @return A list of the options provided by the {@link MemoryTracer}.
          * @since 0.29
          */
+        @SuppressWarnings("deprecation")
         @Override
-        protected OptionDescriptors getOptionDescriptors() {
-            List<OptionDescriptor> descriptorList = new LinkedList<>();
-            descriptorList.add(OptionDescriptor.newBuilder(CLI.ENABLED, ID).category(OptionCategory.USER).help("Enable the Memory Tracer (default:false).").build());
-            descriptorList.add(OptionDescriptor.newBuilder(CLI.OUTPUT, ID + ".Output").category(OptionCategory.USER).help(
+        protected List<OptionDescriptor> describeOptions() {
+            descriptors.add(OptionDescriptor.newBuilder(CLI.ENABLED, ID).category(OptionCategory.USER).help("Enable the Memory Tracer (default:false).").build());
+            descriptors.add(OptionDescriptor.newBuilder(CLI.OUTPUT, ID + ".Output").category(OptionCategory.USER).help(
                             "Print a 'typehistogram', 'histogram' or 'calltree' as output (default:histogram).").build());
-            descriptorList.add(OptionDescriptor.newBuilder(CLI.STACK_LIMIT, ID + ".StackLimit").category(OptionCategory.USER).help("Maximum number of maximum stack elements.").build());
-            descriptorList.add(OptionDescriptor.newBuilder(CLI.TRACE_ROOTS, ID + ".TraceRoots").category(OptionCategory.USER).help("Capture roots when tracing (default:true).").build());
-            descriptorList.add(
-                            OptionDescriptor.newBuilder(CLI.TRACE_STATEMENTS, ID + ".TraceStatements").category(OptionCategory.USER).help("Capture statements when tracing (default:false).").build());
-            descriptorList.add(OptionDescriptor.newBuilder(CLI.TRACE_CALLS, ID + ".TraceCalls").category(OptionCategory.USER).help("Capture calls when tracing (default:false).").build());
-            descriptorList.add(OptionDescriptor.newBuilder(CLI.TRACE_INTERNAL, ID + ".TraceInternal").category(OptionCategory.USER).help("Capture internal elements (default:false).").build());
-            descriptorList.add(OptionDescriptor.newBuilder(CLI.FILTER_ROOT, ID + ".FilterRootName").category(OptionCategory.USER).help(
+            descriptors.add(OptionDescriptor.newBuilder(CLI.STACK_LIMIT, ID + ".StackLimit").category(OptionCategory.USER).help("Maximum number of maximum stack elements.").build());
+            descriptors.add(OptionDescriptor.newBuilder(CLI.TRACE_ROOTS, ID + ".TraceRoots").category(OptionCategory.USER).help("Capture roots when tracing (default:true).").build());
+            descriptors.add(OptionDescriptor.newBuilder(CLI.TRACE_STATEMENTS, ID + ".TraceStatements").category(OptionCategory.USER).help("Capture statements when tracing (default:false).").build());
+            descriptors.add(OptionDescriptor.newBuilder(CLI.TRACE_CALLS, ID + ".TraceCalls").category(OptionCategory.USER).help("Capture calls when tracing (default:false).").build());
+            descriptors.add(OptionDescriptor.newBuilder(CLI.TRACE_INTERNAL, ID + ".TraceInternal").category(OptionCategory.USER).help("Capture internal elements (default:false).").build());
+            descriptors.add(OptionDescriptor.newBuilder(CLI.FILTER_ROOT, ID + ".FilterRootName").category(OptionCategory.USER).help(
                             "Wildcard filter for program roots. (eg. Math.*, default:*).").build());
-            descriptorList.add(OptionDescriptor.newBuilder(CLI.FILTER_FILE, ID + ".FilterFile").category(OptionCategory.USER).help(
+            descriptors.add(OptionDescriptor.newBuilder(CLI.FILTER_FILE, ID + ".FilterFile").category(OptionCategory.USER).help(
                             "Wildcard filter for source file paths. (eg. *program*.sl, default:*).").build());
-            descriptorList.add(OptionDescriptor.newBuilder(CLI.FILTER_LANGUAGE, ID + ".FilterLanguage").category(OptionCategory.USER).help(
+            descriptors.add(OptionDescriptor.newBuilder(CLI.FILTER_LANGUAGE, ID + ".FilterLanguage").category(OptionCategory.USER).help(
                             "Only profile languages with mime-type. (eg. +, default:no filter).").build());
-            descriptors = OptionDescriptors.create(descriptorList);
             return descriptors;
         }
 
@@ -589,7 +585,7 @@ public final class MemoryTracer implements Closeable {
         static final OptionKey<Object[]> FILTER_FILE = new OptionKey<>(new Object[0], WILDCARD_FILTER_TYPE);
         static final OptionKey<String> FILTER_LANGUAGE = new OptionKey<>("");
 
-        static void handleOutput(TruffleInstrument.Env env, MemoryTracer tracer, OptionDescriptors descriptors) {
+        static void handleOutput(TruffleInstrument.Env env, MemoryTracer tracer, List<OptionDescriptor> descriptors) {
             PrintStream out = new PrintStream(env.out());
             if (tracer.hasStackOverflowed()) {
                 out.println("-------------------------------------------------------------------------------- ");
