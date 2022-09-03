@@ -107,7 +107,6 @@ public final class TruffleCache {
                     }
 
                     Assumptions tmpAssumptions = new Assumptions(false);
-
                     optimizeGraph(newGraph, tmpAssumptions);
 
                     HighTierContext context = new HighTierContext(metaAccessProvider, tmpAssumptions, replacements);
@@ -154,11 +153,9 @@ public final class TruffleCache {
 
         CanonicalizerPhase.Instance canonicalizerPhase = new CanonicalizerPhase.Instance(metaAccessProvider, assumptions, !AOTCompilation.getValue(), null, null);
 
-        EarlyReadEliminationPhase earlyRead = new EarlyReadEliminationPhase(new CanonicalizerPhase(true));
-        HighTierContext context = new HighTierContext(metaAccessProvider, assumptions, replacements);
         Integer maxNodes = TruffleCompilerOptions.TruffleOperationCacheMaxNodes.getValue();
 
-        contractGraph(newGraph, eliminate, convertDeoptimizeToGuardPhase, canonicalizerPhase, earlyRead, context);
+        contractGraph(newGraph, eliminate, convertDeoptimizeToGuardPhase, canonicalizerPhase);
 
         while (newGraph.getNodeCount() <= maxNodes) {
 
@@ -171,7 +168,7 @@ public final class TruffleCache {
                 break;
             }
 
-            contractGraph(newGraph, eliminate, convertDeoptimizeToGuardPhase, canonicalizerPhase, earlyRead, context);
+            contractGraph(newGraph, eliminate, convertDeoptimizeToGuardPhase, canonicalizerPhase);
         }
 
         if (newGraph.getNodeCount() > maxNodes && (TruffleCompilerOptions.TraceTruffleCacheDetails.getValue() || TruffleCompilerOptions.TraceTrufflePerformanceWarnings.getValue())) {
@@ -180,12 +177,9 @@ public final class TruffleCache {
     }
 
     private static void contractGraph(StructuredGraph newGraph, ConditionalEliminationPhase eliminate, ConvertDeoptimizeToGuardPhase convertDeoptimizeToGuardPhase,
-                    CanonicalizerPhase.Instance canonicalizerPhase, EarlyReadEliminationPhase earlyRead, HighTierContext context) {
+                    CanonicalizerPhase.Instance canonicalizerPhase) {
         // Canonicalize / constant propagate.
         canonicalizerPhase.apply(newGraph);
-
-        // Early read eliminiation
-        earlyRead.apply(newGraph, context);
 
         // Convert deopt to guards.
         convertDeoptimizeToGuardPhase.apply(newGraph);
