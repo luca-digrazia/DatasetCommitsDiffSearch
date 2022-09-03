@@ -101,6 +101,11 @@ class OptionValuesImpl implements OptionValues {
         values.put(optionKey, value);
     }
 
+    @Override
+    public boolean hasSetOptions() {
+        return !values.isEmpty();
+    }
+
     private OptionDescriptor findDescriptor(String key) {
         OptionDescriptor descriptor = descriptors.get(key);
         if (descriptor == null) {
@@ -110,7 +115,20 @@ class OptionValuesImpl implements OptionValues {
     }
 
     RuntimeException failNotFound(String key) {
-        throw failNotFound(engine == null ? descriptors : engine.getAllOptions(), key);
+        OptionDescriptors allOptions;
+        Exception errorOptions = null;
+        try {
+            allOptions = engine == null ? this.descriptors : this.engine.getAllOptions();
+        } catch (Exception e) {
+            errorOptions = e;
+            allOptions = this.descriptors;
+        }
+        RuntimeException error = failNotFound(allOptions, key);
+        if (errorOptions != null) {
+            error.addSuppressed(errorOptions);
+        }
+
+        throw error;
     }
 
     static RuntimeException failNotFound(OptionDescriptors allOptions, String key) {
