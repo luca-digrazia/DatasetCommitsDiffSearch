@@ -202,11 +202,12 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         PhasePlan phasePlan = new PhasePlan();
         GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
+        editPhasePlan(method, graph, phasePlan);
         CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
         // create suites everytime, as we modify options for the compiler
         final Suites suitesLocal = Graal.getRequiredCapability(SuitesProvider.class).createSuites();
         final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, method, runtime, replacements, backend, runtime().getTarget(), null, phasePlan, OptimisticOptimizations.ALL,
-                        new SpeculationLog(), suitesLocal, new CompilationResult());
+                        new SpeculationLog(), suitesLocal);
         addMethod(method, compResult);
 
         AOTCompilation.setValue(originalSetting);
