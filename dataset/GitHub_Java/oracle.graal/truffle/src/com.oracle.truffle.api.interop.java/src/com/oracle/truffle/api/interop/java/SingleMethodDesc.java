@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.api.interop.java;
 
-import java.lang.annotation.Annotation;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Constructor;
@@ -36,9 +35,9 @@ import java.lang.reflect.Type;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 
 abstract class SingleMethodDesc implements JavaMethodDesc {
@@ -93,7 +92,7 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
 
     static SingleMethodDesc unreflect(Method reflectionMethod) {
         assert isAccessible(reflectionMethod);
-        if (TruffleOptions.AOT || isCallerSensitive(reflectionMethod)) {
+        if (TruffleOptions.AOT) {
             return new MethodReflectImpl(reflectionMethod);
         } else {
             return new MethodMHImpl(reflectionMethod);
@@ -102,7 +101,7 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
 
     static SingleMethodDesc unreflect(Constructor<?> reflectionConstructor) {
         assert isAccessible(reflectionConstructor);
-        if (TruffleOptions.AOT || isCallerSensitive(reflectionConstructor)) {
+        if (TruffleOptions.AOT) {
             return new ConstructorReflectImpl(reflectionConstructor);
         } else {
             return new ConstructorMHImpl(reflectionConstructor);
@@ -111,18 +110,6 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
 
     static boolean isAccessible(Executable method) {
         return Modifier.isPublic(method.getModifiers()) && Modifier.isPublic(method.getDeclaringClass().getModifiers());
-    }
-
-    static boolean isCallerSensitive(Executable method) {
-        Annotation[] annotations = method.getAnnotations();
-        for (Annotation annotation : annotations) {
-            switch (annotation.annotationType().getName()) {
-                case "sun.reflect.CallerSensitive":
-                case "jdk.internal.reflect.CallerSensitive":
-                    return true;
-            }
-        }
-        return false;
     }
 
     @Override

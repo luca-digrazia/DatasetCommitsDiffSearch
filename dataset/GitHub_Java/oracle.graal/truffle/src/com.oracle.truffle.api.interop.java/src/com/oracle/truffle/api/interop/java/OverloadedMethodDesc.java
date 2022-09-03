@@ -34,12 +34,22 @@ class OverloadedMethodDesc implements JavaMethodDesc {
         assert overloads.length >= 2;
     }
 
+    @Override
     public SingleMethodDesc[] getOverloads() {
         return overloads;
     }
 
+    @Override
     public String getName() {
         return getOverloads()[0].getName();
+    }
+
+    public boolean isMethod() {
+        return getOverloads()[0].isMethod();
+    }
+
+    public boolean isConstructor() {
+        return getOverloads()[0].isConstructor();
     }
 
     @Override
@@ -49,5 +59,15 @@ class OverloadedMethodDesc implements JavaMethodDesc {
             sj.add(overload.getReflectionMethod().toString());
         }
         return sj.toString();
+    }
+
+    @Override
+    public boolean isInternal() {
+        for (SingleMethodDesc overload : overloads) {
+            if (!overload.isInternal()) {
+                return false;
+            }
+        }
+        return true;
     }
 }
