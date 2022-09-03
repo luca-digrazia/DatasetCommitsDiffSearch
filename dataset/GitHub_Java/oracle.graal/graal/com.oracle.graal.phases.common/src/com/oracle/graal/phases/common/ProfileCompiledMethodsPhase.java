@@ -77,7 +77,9 @@ public class ProfileCompiledMethodsPhase extends Phase {
         while (current.next() instanceof FixedWithNextNode) {
             current = (FixedWithNextNode) current.next();
         }
-        addSectionCounters(current, Arrays.asList(cfg.getBlocks()), cfg.getLoops(), schedule, probabilities);
+        if (graph.getEntryBCI() != -1) {
+            addSectionCounters(current, Arrays.asList(cfg.getBlocks()), cfg.getLoops(), schedule, probabilities);
+        }
     }
 
     private static void addSectionCounters(FixedWithNextNode start, Collection<Block> sectionBlocks, Collection<Loop<Block>> childLoops, SchedulePhase schedule, NodesToDoubles probabilities) {
