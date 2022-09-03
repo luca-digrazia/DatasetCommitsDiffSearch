@@ -79,8 +79,8 @@ public final class ObjectKlass extends Klass {
     public static final int INITIALIZED = 3;
 
     public ObjectKlass(String klassName, Klass superclass, Klass[] interfaces,
-                    MethodInfo.Builder[] declaredMethodsBuilders,
-                    FieldInfo.Builder[] declaredFieldBuilders,
+                    MethodInfo[] declaredMethods,
+                    FieldInfo[] declaredFields,
                     int accessFlags,
                     EnclosingMethodAttribute enclosingMethod,
                     InnerClassesAttribute innerClasses,
@@ -88,23 +88,15 @@ public final class ObjectKlass extends Klass {
         super(klassName);
         this.superclass = superclass;
         this.interfaces = interfaces;
+        this.declaredMethods = declaredMethods;
+        this.declaredFields = declaredFields;
         this.accessFlags = accessFlags;
         this.enclosingMethod = enclosingMethod;
         this.innerClasses = innerClasses;
         this.pool = pool;
         this.runtimeVisibleAnnotations = runtimeVisibleAnnotations;
 
-        this.declaredMethods = new MethodInfo[declaredMethodsBuilders.length];
-        this.declaredFields = new FieldInfo[declaredFieldBuilders.length];
-
-        for (int i = 0; i < declaredMethods.length; ++i) {
-            this.declaredMethods[i] = declaredMethodsBuilders[i].setDeclaringClass(this).build();
-        }
-        for (int i = 0; i < declaredFields.length; ++i) {
-            this.declaredFields[i] = declaredFieldBuilders[i].setDeclaringClass(this).build();
-        }
-
-        this.instanceFieldSlots = countDeclaredInstanceFields(this.declaredFields) + (superclass == null ? 0 : ((ObjectKlass) superclass).getInstanceFieldSlots());
+        this.instanceFieldSlots = getDeclaredFields().length + (getSuperclass() == null ? 0 : ((ObjectKlass) getSuperclass()).getInstanceFieldSlots());
     }
 
     @Override
@@ -112,14 +104,18 @@ public final class ObjectKlass extends Klass {
         return pool.getContext();
     }
 
-    private static int countDeclaredInstanceFields(FieldInfo[] declaredFields) {
-        int count = 0;
-        for (FieldInfo fi : declaredFields) {
-            if (!fi.isStatic()) {
-                count++;
-            }
+    public static Klass create(String className, Klass superClass, Klass[] localInterfaces, MethodInfo.Builder[] methodBuilders, FieldInfo.Builder[] fieldBuilders,
+                    int accessFlags, EnclosingMethodAttribute enclosingMethod, InnerClassesAttribute innerClasses, ConstantPool pool, AttributeInfo runtimeVisibleAnnotations) {
+        MethodInfo[] methods = new MethodInfo[methodBuilders.length];
+        FieldInfo[] fields = new FieldInfo[fieldBuilders.length];
+        ObjectKlass result = new ObjectKlass(className, superClass, localInterfaces, methods, fields, accessFlags, enclosingMethod, innerClasses, pool, runtimeVisibleAnnotations);
+        for (int i = 0; i < methods.length; ++i) {
+            methods[i] = methodBuilders[i].setDeclaringClass(result).build();
         }
-        return count;
+        for (int i = 0; i < fields.length; ++i) {
+            fields[i] = fieldBuilders[i].setDeclaringClass(result).build();
+        }
+        return result;
     }
 
     public int getInitState() {

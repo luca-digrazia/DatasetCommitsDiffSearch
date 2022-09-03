@@ -23,64 +23,50 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import static com.oracle.truffle.espresso.impl.EspressoVMConfig.config;
-
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.ModifiersProvider;
+import com.oracle.truffle.espresso.runtime.AttributeInfo;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
 
+import java.lang.reflect.Modifier;
+
 /**
- * Represents a resolved Espresso field.
+ * Represents a resolved Espresso field. FieldInfo instances can be safely compared using ==.
  */
 public class FieldInfo implements ModifiersProvider {
 
     public static final FieldInfo[] EMPTY_ARRAY = new FieldInfo[0];
 
     private final Klass holder;
-    private TypeDescriptor typeDescriptor;
+    private final TypeDescriptor typeDescriptor;
     private final String name;
     private final int offset;
-    private final short index;
+    private final short slot;
+    private AttributeInfo runtimeVisibleAnnotations;
 
-    @CompilerDirectives.CompilationFinal
-    private Klass type;
+    @CompilerDirectives.CompilationFinal private Klass type;
 
     /**
      * This value contains all flags as stored in the VM including internal ones.
      */
     private final int modifiers;
 
-    FieldInfo(Klass holder, String name, TypeDescriptor typeDescriptor, long offset, int modifiers, int index) {
+    FieldInfo(Klass holder, String name, TypeDescriptor typeDescriptor, long offset, int modifiers, int slot, AttributeInfo runtimeVisibleAnnotations) {
         this.holder = holder;
         this.name = name;
         this.typeDescriptor = typeDescriptor;
-        this.index = (short) index;
+        this.slot = (short) slot;
         this.offset = (int) offset;
         this.modifiers = modifiers;
-        assert this.index == index;
+        this.runtimeVisibleAnnotations = runtimeVisibleAnnotations;
+        assert this.slot == slot;
         assert offset != -1;
         assert offset == (int) offset : "offset larger than int";
     }
 
     public JavaKind getKind() {
         return typeDescriptor.toKind();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj instanceof FieldInfo) {
-            FieldInfo that = (FieldInfo) obj;
-            if (that.offset != this.offset || that.isStatic() != this.isStatic()) {
-                return false;
-            } else if (this.holder.equals(that.holder)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     public Klass getType() {
@@ -91,17 +77,8 @@ public class FieldInfo implements ModifiersProvider {
         return type;
     }
 
-    @Override
-    public int hashCode() {
-        return holder.hashCode() ^ offset;
-    }
-
     public int getModifiers() {
         return modifiers & ModifiersProvider.jvmFieldModifiers();
-    }
-
-    public boolean isInternal() {
-        return (modifiers & config().jvmAccFieldInternal) != 0;
     }
 
     public Klass getDeclaringClass() {
@@ -112,6 +89,10 @@ public class FieldInfo implements ModifiersProvider {
         return name;
     }
 
+    public int getSlot() {
+        return slot;
+    }
+
     public TypeDescriptor getTypeDescriptor() {
         return typeDescriptor;
     }
@@ -120,26 +101,22 @@ public class FieldInfo implements ModifiersProvider {
         return offset;
     }
 
+    public boolean isInternal() {
+        // No internal fields.
+        return false;
+    }
+
     @Override
     public String toString() {
         return "EspressoField<" + getDeclaringClass() + "." + getName() + ">";
     }
 
-    public boolean isSynthetic() {
-        return (config().jvmAccSynthetic & modifiers) != 0;
-    }
-
-    /**
-     * Checks if this field has the {@link Stable} annotation.
-     *
-     * @return true if field has {@link Stable} annotation, false otherwise
-     */
-    public boolean isStable() {
-        return (config().jvmAccFieldStable & modifiers) != 0;
-    }
-
     public int getFlags() {
         return modifiers;
+    }
+
+    public AttributeInfo getRuntimeVisibleAnnotations() {
+        return runtimeVisibleAnnotations;
     }
 
     public static class Builder implements BuilderBase<FieldInfo> {
@@ -148,7 +125,8 @@ public class FieldInfo implements ModifiersProvider {
         private TypeDescriptor type;
         private long offset;
         private int modifiers;
-        private int index;
+        private int slot;
+        private AttributeInfo runtimeVisibleAnnotations;
 
         public Builder setDeclaringClass(Klass declaringClass) {
             this.declaringClass = declaringClass;
@@ -175,14 +153,23 @@ public class FieldInfo implements ModifiersProvider {
             return this;
         }
 
-        public Builder setIndex(int index) {
-            this.index = index;
+        public Builder setSlot(int slot) {
+            this.slot = slot;
+            return this;
+        }
+
+        public Builder setRuntimeVisibleAnnotations(AttributeInfo runtimeVisibleAnnotations) {
+            this.runtimeVisibleAnnotations = runtimeVisibleAnnotations;
             return this;
         }
 
         @Override
         public FieldInfo build() {
-            return new FieldInfo(declaringClass, name, type, offset, modifiers, index);
+            return new FieldInfo(declaringClass, name, type, offset, modifiers, slot, runtimeVisibleAnnotations);
+        }
+
+        public boolean isStatic() {
+            return Modifier.isStatic(modifiers);
         }
     }
 }

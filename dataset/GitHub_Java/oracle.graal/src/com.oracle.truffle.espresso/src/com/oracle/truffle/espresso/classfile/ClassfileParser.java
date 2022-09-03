@@ -232,7 +232,7 @@ public class ClassfileParser {
 
         parsedClasses.inc();
 
-        return new ObjectKlass(typeDescriptor.toString(), superClass, localInterfaces, methods, fields, accessFlags,
+        return ObjectKlass.create(typeDescriptor.toString(), superClass, localInterfaces, methods, fields, accessFlags,
                         (EnclosingMethodAttribute) optEnclosingMethod.orElse(null),
                         (InnerClassesAttribute) optInnerClasses.orElse(null),
                         pool,
