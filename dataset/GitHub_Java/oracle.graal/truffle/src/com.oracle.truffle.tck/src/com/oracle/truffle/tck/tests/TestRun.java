@@ -29,12 +29,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.tck.Snippet;
 import org.graalvm.polyglot.tck.TypeDescriptor;
 
-public final class TestRun {
+public class TestRun {
 
     private final Entry<String, ? extends Snippet> snippet;
     private final List<Entry<String, ? extends Snippet>> arguments;
@@ -46,6 +48,10 @@ public final class TestRun {
         Objects.requireNonNull(arguments);
         this.snippet = snippet;
         this.arguments = arguments;
+    }
+
+    String getID() {
+        return snippet.getKey();
     }
 
     Snippet getSnippet() {
@@ -70,8 +76,52 @@ public final class TestRun {
     }
 
     @Override
+    public boolean equals(Object obj) {
+        if (obj == this) {
+            return true;
+        }
+        if (obj == null || obj.getClass() != getClass()) {
+            return false;
+        }
+        final TestRun otherRun = (TestRun) obj;
+        if (!snippet.getKey().equals(otherRun.snippet.getKey()) ||
+                        !snippet.getValue().getId().equals(otherRun.snippet.getValue().getId()) ||
+                        snippet.getValue().getExecutableValue() != otherRun.snippet.getValue().getExecutableValue() ||
+                        arguments.size() != otherRun.arguments.size()) {
+            return false;
+        }
+        for (int i = 0; i < arguments.size(); i++) {
+            final Entry<String, ? extends Snippet> thisArg = arguments.get(i);
+            final Entry<String, ? extends Snippet> otherArg = otherRun.arguments.get(i);
+            if (!thisArg.getKey().equals(otherArg.getKey()) ||
+                            !thisArg.getValue().getId().equals(otherArg.getValue().getId()) ||
+                            !thisArg.getValue().getReturnType().equals(otherArg.getValue().getReturnType())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int res = 17;
+        res = res * 31 + snippet.getKey().hashCode();
+        res = res * 31 + snippet.getValue().getId().hashCode();
+        for (Entry<String, ? extends Snippet> argument : arguments) {
+            res = res * 31 + argument.getKey().hashCode();
+            res = res * 31 + argument.getValue().getId().hashCode();
+        }
+        return res;
+    }
+
+    @Override
     public String toString() {
-        return arguments.stream().map((p) -> p.getKey() + "::" + p.getValue().getId()).collect(Collectors.joining(
+        return arguments.stream().map(new Function<Entry<String, ? extends Snippet>, String>() {
+            @Override
+            public String apply(Entry<String, ? extends Snippet> e) {
+                return e.getKey() + "::" + e.getValue().getId();
+            }
+        }).collect(Collectors.joining(
                         ", ",
                         snippet.getKey() + "::" + snippet.getValue().getId() + "(",
                         ")"));

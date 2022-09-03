@@ -302,8 +302,8 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
-        public Object getCurrentContext(Object vmObject) {
-            return ((PolyglotLanguage) vmObject).requireProfile().get();
+        public Object contextReferenceGet(Object vmObject) {
+            return LANGUAGE.getContext(PolyglotContextImpl.requireContext().requireEnv((PolyglotLanguage) vmObject));
         }
 
         @Override
@@ -420,7 +420,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             PolyglotLanguageContext[] contexts = context.contexts;
             for (PolyglotLanguageContext languageContext : contexts) {
                 PolyglotLanguage language = languageContext.language;
-                if (!language.isInitialized()) {
+                if (!language.initialized) {
                     continue;
                 }
                 if (language.cache.singletonLanguage instanceof HostLanguage) {

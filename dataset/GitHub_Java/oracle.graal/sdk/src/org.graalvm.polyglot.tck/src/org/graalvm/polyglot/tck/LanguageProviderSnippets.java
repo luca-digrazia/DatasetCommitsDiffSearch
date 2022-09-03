@@ -29,8 +29,10 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
+import org.graalvm.polyglot.SourceSection;
 import org.graalvm.polyglot.Value;
 
 final class LanguageProviderSnippets {
@@ -71,22 +73,21 @@ final class LanguageProviderSnippets {
         @Override
         public Collection<? extends Snippet> createExpressions(Context context) {
             final Collection<Snippet> expressions = new ArrayList<>();
-            final TypeDescriptor numberOrBoolean = TypeDescriptor.union(
+            final TypeDescriptor numeric = TypeDescriptor.union(
                     TypeDescriptor.NUMBER,
                     TypeDescriptor.BOOLEAN);
-            final TypeDescriptor stringOrObject = TypeDescriptor.union(
+            final TypeDescriptor nonNumeric = TypeDescriptor.union(
                     TypeDescriptor.STRING,
-                    TypeDescriptor.OBJECT);
-            final TypeDescriptor stringOrObjectOrNumberOrBoolean = TypeDescriptor.union(
-                    stringOrObject,
-                    numberOrBoolean);
+                    TypeDescriptor.OBJECT,
+                    TypeDescriptor.ARRAY,
+                    TypeDescriptor.EXECUTABLE_ANY);
             Snippet.Builder builder = Snippet.newBuilder(
                     "+",
                     context.eval(
                             "js",
                             "(function (a, b){ return a + b;})"),
                     TypeDescriptor.NUMBER).
-                parameterTypes(numberOrBoolean, numberOrBoolean);
+                parameterTypes(numeric, numeric);
             expressions.add(builder.build());
             builder = Snippet.newBuilder(
                     "+",
@@ -94,7 +95,7 @@ final class LanguageProviderSnippets {
                             "js",
                             "(function (a, b){ return a + b;})"),
                     TypeDescriptor.STRING).
-                parameterTypes(stringOrObject, stringOrObjectOrNumberOrBoolean);
+                parameterTypes(nonNumeric, TypeDescriptor.ANY);
             expressions.add(builder.build());
             builder = Snippet.newBuilder(
                     "+",
@@ -102,7 +103,7 @@ final class LanguageProviderSnippets {
                             "js",
                             "(function (a, b){ return a + b;})"),
                     TypeDescriptor.STRING).
-                parameterTypes(numberOrBoolean, stringOrObject);
+                parameterTypes(TypeDescriptor.ANY, nonNumeric);
             expressions.add(builder.build());
             return expressions;
         }
@@ -157,6 +158,43 @@ final class LanguageProviderSnippets {
             }
         }
         // END: LanguageProviderSnippets#JsSnippets#createScripts
+        // @formatter:on
+
+        // @formatter:off
+        // BEGIN: LanguageProviderSnippets#JsSnippets#createInlineScripts
+        @Override
+        public Collection<? extends InlineSnippet>
+                    createInlineScripts(Context context) {
+            final Collection<InlineSnippet> inlineScripts = new ArrayList<>();
+            Snippet.Builder scriptBuilder = Snippet.newBuilder(
+                    "factorial",
+                    context.eval(
+                            "js",
+                            "(function (){\n" +
+                            "  let factorial = function(n) {\n" +
+                            "    let f = 1;\n" +
+                            "    for (let i = 2; i <= n; i++) {\n" +
+                            "      f *= i;\n" +
+                            "    }\n" +
+                            "  };\n" +
+                            "  return factorial(10);\n" +
+                            "})"),
+                    TypeDescriptor.NUMBER);
+            InlineSnippet.Builder builder = InlineSnippet.newBuilder(
+                    scriptBuilder.build(),
+                    "n * n").
+                locationPredicate((SourceSection section) -> {
+                    int line = section.getStartLine();
+                    return 3 <= line && line <= 6;
+                });
+            inlineScripts.add(builder.build());
+            builder = InlineSnippet.newBuilder(
+                    scriptBuilder.build(),
+                    "Math.sin(Math.PI)");
+            inlineScripts.add(builder.build());
+            return inlineScripts;
+        }
+        // END: LanguageProviderSnippets#JsSnippets#createInlineScripts
         // @formatter:on
 
         // @formatter:off
@@ -274,5 +312,19 @@ final class LanguageProviderSnippets {
         public Collection<? extends Source> createInvalidSyntaxScripts(Context context) {
             throw new UnsupportedOperationException("Not supported.");
         }
+    }
+
+    abstract static class TypeDescriptorSnippets implements LanguageProvider {
+        // @formatter:off
+        // BEGIN: LanguageProviderSnippets#TypeDescriptorSnippets#createValueConstructors
+        @Override
+        public Collection<? extends Snippet> createValueConstructors(Context context) {
+            return Collections.singleton(Snippet.newBuilder(
+                    "function",
+                    context.eval("js", "(function(){ return function(){}})"),
+                    TypeDescriptor.EXECUTABLE).build());
+        }
+        // END: LanguageProviderSnippets#TypeDescriptorSnippets#createValueConstructors
+        // @formatter:on
     }
 }
