@@ -32,8 +32,8 @@ import com.oracle.graal.hotspot.ri.*;
 
 public interface Compiler {
 
-    CompilerToVM getCompilerToVM();
-    VMToCompiler getVMToCompiler();
+    CompilerToVM getVMEntries();
+    VMToCompiler getVMExits();
     GraalCompiler getCompiler();
     RiType lookupType(String returnType, HotSpotTypeResolved accessingClass, boolean eagerResolve);
     HotSpotVMConfig getConfig();

@@ -92,7 +92,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
         if (GraalOptions.Debug) {
             Debug.enable();
-            HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter, GraalOptions.LogFile);
+            HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter);
             Debug.setConfig(hotspotDebugConfig);
         }
         // Install intrinsics.
@@ -113,11 +113,21 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
         }
 
         // Create compilation queue.
-        BlockingQueue<Runnable> queue = GraalOptions.PriorityCompileQueue ? new PriorityBlockingQueue<Runnable>() : new LinkedBlockingQueue<Runnable>();
+        final BlockingQueue<Runnable> queue;
+        if (GraalOptions.PriorityCompileQueue) {
+            queue = new PriorityBlockingQueue<>();
+        } else {
+            queue = new LinkedBlockingQueue<>();
+        }
         compileQueue = new ThreadPoolExecutor(GraalOptions.Threads, GraalOptions.Threads, 0L, TimeUnit.MILLISECONDS, queue, CompilerThread.FACTORY);
 
         if (GraalOptions.SlowCompileThreads) {
-            BlockingQueue<Runnable> slowQueue = GraalOptions.PriorityCompileQueue ? new PriorityBlockingQueue<Runnable>() : new LinkedBlockingQueue<Runnable>();
+            final BlockingQueue<Runnable> slowQueue;
+            if (GraalOptions.PriorityCompileQueue) {
+                slowQueue = new PriorityBlockingQueue<>();
+            } else {
+                slowQueue = new LinkedBlockingQueue<>();
+            }
             slowCompileQueue = new ThreadPoolExecutor(GraalOptions.Threads, GraalOptions.Threads, 0L, TimeUnit.MILLISECONDS, slowQueue, CompilerThread.LOW_PRIORITY_FACTORY);
         }
 
@@ -147,7 +157,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
     /**
      * This method is the first method compiled during bootstrapping. Put any code in there that warms up compiler paths
-     * that are otherwise not exercised during bootstrapping and lead to later deoptimization when application code is
+     * that are otherwise no exercised during bootstrapping and lead to later deoptimization when application code is
      * compiled.
      */
     @SuppressWarnings("unused")
@@ -161,48 +171,23 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
         TTY.flush();
         long startTime = System.currentTimeMillis();
 
-        boolean firstRun = true;
-        do {
-            // Initialize compile queue with a selected set of methods.
-            Class<Object> objectKlass = Object.class;
-            if (firstRun) {
-                enqueue(getClass().getDeclaredMethod("compileWarmup"));
-                enqueue(objectKlass.getDeclaredMethod("equals", Object.class));
-                enqueue(objectKlass.getDeclaredMethod("toString"));
-                firstRun = false;
-            } else {
-                for (int i = 0; i < 100; i++) {
-                    enqueue(getClass().getDeclaredMethod("bootstrap"));
-                }
-            }
+        // Initialize compile queue with a selected set of methods.
+        Class<Object> objectKlass = Object.class;
+        enqueue(getClass().getDeclaredMethod("compileWarmup"));
+        enqueue(objectKlass.getDeclaredMethod("equals", Object.class));
+        enqueue(objectKlass.getDeclaredMethod("toString"));
 
-            // Compile until the queue is empty.
-            int z = 0;
-            while (true) {
-                try {
-                    assert !CompilationTask.withinEnqueue.get();
-                    CompilationTask.withinEnqueue.set(Boolean.TRUE);
-                    if (slowCompileQueue == null) {
-                        if (compileQueue.getCompletedTaskCount() >= Math.max(3, compileQueue.getTaskCount())) {
-                            break;
-                        }
-                    } else {
-                        if (compileQueue.getCompletedTaskCount() + slowCompileQueue.getCompletedTaskCount() >= Math.max(3, compileQueue.getTaskCount() + slowCompileQueue.getTaskCount())) {
-                            break;
-                        }
-                    }
-                } finally {
-                    CompilationTask.withinEnqueue.set(Boolean.FALSE);
-                }
-
-                Thread.sleep(100);
-                while (z < compileQueue.getCompletedTaskCount() / 100) {
-                    ++z;
-                    TTY.print(".");
-                    TTY.flush();
-                }
+        // Compile until the queue is empty.
+        int z = 0;
+        while (compileQueue.getCompletedTaskCount() < Math.max(3, compileQueue.getTaskCount()) || (
+                        slowCompileQueue != null && slowCompileQueue.getCompletedTaskCount() < Math.max(3, slowCompileQueue.getTaskCount()))) {
+            Thread.sleep(100);
+            while (z < compileQueue.getCompletedTaskCount() / 100) {
+                ++z;
+                TTY.print(".");
+                TTY.flush();
             }
-        } while ((System.currentTimeMillis() - startTime) <= GraalOptions.TimedBootstrap);
+        }
         CiCompilationStatistics.clear("bootstrap");
 
         TTY.println(" in %d ms", System.currentTimeMillis() - startTime);
@@ -221,15 +206,9 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     }
 
     public void shutdownCompiler() throws Throwable {
-        try {
-            assert !CompilationTask.withinEnqueue.get();
-            CompilationTask.withinEnqueue.set(Boolean.TRUE);
-            compileQueue.shutdown();
-            if (slowCompileQueue != null) {
-                slowCompileQueue.shutdown();
-            }
-        } finally {
-            CompilationTask.withinEnqueue.set(Boolean.FALSE);
+        compileQueue.shutdown();
+        if (slowCompileQueue != null) {
+            slowCompileQueue.shutdown();
         }
 
         if (Debug.isEnabled()) {
@@ -327,49 +306,46 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
     @Override
     public boolean compileMethod(final HotSpotMethodResolved method, final int entryBCI, boolean blocking, int priority) throws Throwable {
-        if (CompilationTask.withinEnqueue.get()) {
-            // This is required to avoid deadlocking a compiler thread. The issue is that a
-            // java.util.concurrent.BlockingQueue is used to implement the compilation worker
-            // queues. If a compiler thread triggers a compilation, then it may be blocked trying
-            // to add something to its own queue.
-            return false;
-        }
-        CompilationTask.withinEnqueue.set(Boolean.TRUE);
-
-        try {
-            CompilationTask current = method.currentTask();
-            if (!blocking && current != null) {
-                if (GraalOptions.PriorityCompileQueue) {
-                    // normally compilation tasks will only be re-queued when they get a priority boost, so cancel the old task and add a new one
-                    current.cancel();
-                } else {
-                    // without a prioritizing compile queue it makes no sense to re-queue the compilation task
-                    return true;
-                }
+        if (Thread.currentThread() instanceof CompilerThread) {
+            if (method.holder().name().contains("java/util/concurrent")) {
+                // This is required to avoid deadlocking a compiler thread. The issue is that a
+                // java.util.concurrent.BlockingQueue is used to implement the compilation worker
+                // queues. If a compiler thread triggers a compilation, then it may be blocked trying
+                // to add something to its own queue.
+                return false;
             }
+        }
 
-            final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
-            int id = compileTaskIds.incrementAndGet();
-            CompilationTask task = CompilationTask.create(compiler, createHotSpotSpecificPhasePlan(optimisticOpts), optimisticOpts, method, id, priority);
-            if (blocking) {
-                task.runCompilation();
+        CompilationTask current = method.currentTask();
+        if (current != null) {
+            if (GraalOptions.PriorityCompileQueue) {
+                // normally compilation tasks will only be re-queued when they get a priority boost, so cancel the old task and add a new one
+                current.cancel();
             } else {
-                try {
-                    method.setCurrentTask(task);
-                    if (GraalOptions.SlowCompileThreads && priority > GraalOptions.SlowQueueCutoff) {
-                        slowCompileQueue.execute(task);
-                    } else {
-                        compileQueue.execute(task);
-                    }
-                } catch (RejectedExecutionException e) {
-                    // The compile queue was already shut down.
-                    return false;
-                }
+                // without a prioritizing compile queue it makes no sense to re-queue the compilation task
+                return true;
             }
-            return true;
-        } finally {
-            CompilationTask.withinEnqueue.set(Boolean.FALSE);
         }
+
+        final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
+        int id = compileTaskIds.incrementAndGet();
+        CompilationTask task = CompilationTask.create(compiler, createHotSpotSpecificPhasePlan(optimisticOpts), optimisticOpts, method, id, priority);
+        if (blocking) {
+            task.run();
+        } else {
+            try {
+                method.setCurrentTask(task);
+                if (GraalOptions.SlowCompileThreads && priority > GraalOptions.SlowQueueCutoff) {
+                    slowCompileQueue.execute(task);
+                } else {
+                    compileQueue.execute(task);
+                }
+            } catch (RejectedExecutionException e) {
+                // The compile queue was already shut down.
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override

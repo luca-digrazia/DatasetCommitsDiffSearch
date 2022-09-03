@@ -130,12 +130,8 @@ public class EscapeAnalysisPhase extends Phase {
 
         @Override
         public void loopEnds(LoopBeginNode loopBegin, List<BlockExitState> loopEndStates) {
-            while (!loopBegin.isPhiAtMerge(virtualObjectField)) {
-                if (virtualObjectField instanceof PhiNode) {
-                    virtualObjectField = ((PhiNode) virtualObjectField).valueAt(0);
-                } else {
-                    virtualObjectField = ((VirtualObjectFieldNode) virtualObjectField).lastState();
-                }
+            while (!(virtualObjectField instanceof PhiNode)) {
+                virtualObjectField = ((VirtualObjectFieldNode) virtualObjectField).lastState();
             }
             for (BlockExitState loopEndState : loopEndStates) {
                 ((PhiNode) virtualObjectField).addInput(loopEndState.virtualObjectField);

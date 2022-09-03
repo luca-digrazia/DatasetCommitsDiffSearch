@@ -36,15 +36,6 @@ import com.oracle.max.criutils.*;
 
 public final class CompilationTask implements Runnable, Comparable<CompilationTask> {
 
-
-    public static final ThreadLocal<Boolean> withinEnqueue = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.valueOf(Thread.currentThread() instanceof CompilerThread);
-        }
-    };
-
-
     private volatile boolean cancelled;
 
     private final Compiler compiler;
@@ -82,28 +73,16 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
 //    private static PrintStream out = System.out;
 
     public void run() {
-        withinEnqueue.set(Boolean.FALSE);
-        try {
-            if (cancelled) {
-                return;
-            }
-            if (GraalOptions.DynamicCompilePriority) {
-                int threadPriority = priority < GraalOptions.SlowQueueCutoff ? Thread.NORM_PRIORITY : Thread.MIN_PRIORITY;
-                if (Thread.currentThread().getPriority() != threadPriority) {
-    //                out.print(threadPriority);
-                    Thread.currentThread().setPriority(threadPriority);
-                }
-            }
-            runCompilation();
-            if (method.currentTask() == this) {
-                method.setCurrentTask(null);
-            }
-        } finally {
-            withinEnqueue.set(Boolean.TRUE);
+        if (cancelled) {
+            return;
         }
-    }
-
-    public void runCompilation() {
+        if (GraalOptions.DynamicCompilePriority) {
+            int threadPriority = priority < GraalOptions.SlowQueueCutoff ? Thread.NORM_PRIORITY : Thread.MIN_PRIORITY;
+            if (Thread.currentThread().getPriority() != threadPriority) {
+//                out.print(threadPriority);
+                Thread.currentThread().setPriority(threadPriority);
+            }
+        }
         CiCompilationStatistics stats = CiCompilationStatistics.create(method);
         try {
             final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
@@ -132,12 +111,8 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         } catch (CiBailout bailout) {
             Debug.metric("Bailouts").increment();
             if (GraalOptions.ExitVMOnBailout) {
-                TTY.cachedOut.println(CiUtil.format("%H.%n(%p)", method));
                 bailout.printStackTrace(TTY.cachedOut);
                 System.exit(-1);
-            } else if (GraalOptions.PrintBailout) {
-                TTY.cachedOut.println(CiUtil.format("%H.%n(%p)", method));
-                bailout.printStackTrace(TTY.cachedOut);
             }
         } catch (Throwable t) {
             if (GraalOptions.ExitVMOnException) {
@@ -146,6 +121,9 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
             }
         }
         stats.finish(method);
+        if (method.currentTask() == this) {
+            method.setCurrentTask(null);
+        }
     }
 
     @Override
