@@ -133,9 +133,6 @@ public class JavaMainWrapper {
     @CEntryPoint
     @CEntryPointOptions(prologue = EnterCreateIsolatePrologue.class, include = CEntryPointOptions.NotIncludedAutomatically.class)
     public static int run(int paramArgc, CCharPointerPointer paramArgv) throws Exception {
-        // Acquire a non-daemon java.lang.Thread object
-        JavaThreads.singleton().assignJavaThread("main", null, false);
-
         JavaMainWrapper.argc = paramArgc;
         JavaMainWrapper.argv = paramArgv;
         Architecture imageArchitecture = ImageSingletons.lookup(TargetDescription.class).arch;
