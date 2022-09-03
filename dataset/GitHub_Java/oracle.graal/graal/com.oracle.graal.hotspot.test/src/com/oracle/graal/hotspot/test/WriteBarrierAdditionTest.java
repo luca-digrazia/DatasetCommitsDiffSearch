@@ -147,6 +147,8 @@ public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
      */
     @Test
     public void test4() throws Exception {
+        // Exercise the snippet before compiling it to ensure that everything is resolved.
+        test4Snippet();
         testHelper("test4Snippet", config.useG1GC ? 5 : 2);
     }
 
@@ -277,7 +279,7 @@ public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
                 barriers = graph.getNodes().filter(SerialWriteBarrier.class).count();
             }
             if (expectedBarriers != barriers) {
-                Assert.assertEquals(getScheduledGraphString(graph), expectedBarriers, barriers);
+                Assert.assertEquals("UseG1GC = " + config.useG1GC + " " + getCanonicalGraphString(graph, false, false), expectedBarriers, barriers);
             }
             for (WriteNode write : graph.getNodes().filter(WriteNode.class)) {
                 if (config.useG1GC) {
