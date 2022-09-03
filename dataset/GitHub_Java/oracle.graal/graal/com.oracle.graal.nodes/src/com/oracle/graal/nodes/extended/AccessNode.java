@@ -26,14 +26,10 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
-/**
- * Accesses a value at an memory address specified by an {@linkplain #object object} and a
- * {@linkplain #location() location}. The access does not include a null check on the object.
- */
 public abstract class AccessNode extends FixedWithNextNode implements Access {
 
     @Input private ValueNode object;
-    @Input private ValueNode location;
+    @Input private LocationNode location;
     private boolean nullCheck;
 
     public ValueNode object() {
@@ -41,7 +37,7 @@ public abstract class AccessNode extends FixedWithNextNode implements Access {
     }
 
     public LocationNode location() {
-        return (LocationNode) location;
+        return location;
     }
 
     public boolean getNullCheck() {
@@ -52,7 +48,7 @@ public abstract class AccessNode extends FixedWithNextNode implements Access {
         this.nullCheck = check;
     }
 
-    public AccessNode(ValueNode object, ValueNode location, Stamp stamp) {
+    public AccessNode(ValueNode object, LocationNode location, Stamp stamp) {
         super(stamp);
         this.object = object;
         this.location = location;

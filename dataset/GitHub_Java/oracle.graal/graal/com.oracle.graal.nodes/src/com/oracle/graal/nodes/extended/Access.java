@@ -29,7 +29,7 @@ public interface Access {
 
     ValueNode object();
 
-    LocationNode nullCheckLocation();
+    LocationNode location();
 
     void setNullCheck(boolean check);
 
