@@ -302,10 +302,8 @@ public class PartialEvaluator {
 
         newConfig.setUseProfiling(false);
         Plugins plugins = newConfig.getPlugins();
-        ReplacementsImpl replacements = (ReplacementsImpl) providers.getReplacements();
         plugins.clearInlineInvokePlugins();
-        plugins.appendInlineInvokePlugin(replacements);
-        plugins.appendInlineInvokePlugin(new ParsingInlineInvokePlugin(replacements, parsingInvocationPlugins, loopExplosionPlugin));
+        plugins.appendInlineInvokePlugin(new ParsingInlineInvokePlugin((ReplacementsImpl) providers.getReplacements(), parsingInvocationPlugins, loopExplosionPlugin));
         if (!PrintTruffleExpansionHistogram.getValue()) {
             plugins.appendInlineInvokePlugin(new InlineDuringParsingPlugin());
         }
