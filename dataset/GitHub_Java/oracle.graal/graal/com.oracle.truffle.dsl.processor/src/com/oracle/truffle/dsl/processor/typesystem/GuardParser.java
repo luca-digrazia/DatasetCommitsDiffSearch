@@ -93,11 +93,9 @@ public class GuardParser extends NodeMethodParser<GuardData> {
             } else {
                 ActualParameter p;
                 if (parameter.getTypeSystemType() != null) {
-                    p = new ActualParameter(specializationParameter.getSpecification(), parameter.getTypeSystemType(), specializationParameter.getSpecificationIndex(),
-                                    specializationParameter.getVarArgsIndex(), parameter.isImplicit());
+                    p = new ActualParameter(specializationParameter.getSpecification(), parameter.getTypeSystemType(), specializationParameter.getIndex(), parameter.isImplicit());
                 } else {
-                    p = new ActualParameter(specializationParameter.getSpecification(), parameter.getType(), specializationParameter.getSpecificationIndex(),
-                                    specializationParameter.getVarArgsIndex(), parameter.isImplicit());
+                    p = new ActualParameter(specializationParameter.getSpecification(), parameter.getType(), specializationParameter.getIndex(), parameter.isImplicit());
                 }
                 newParameters.add(p);
             }

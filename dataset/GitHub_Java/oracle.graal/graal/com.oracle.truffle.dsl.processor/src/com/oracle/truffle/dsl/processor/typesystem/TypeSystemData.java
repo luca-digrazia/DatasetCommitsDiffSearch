@@ -36,7 +36,6 @@ public class TypeSystemData extends Template {
     private List<TypeMirror> primitiveTypeMirrors = new ArrayList<>();
     private List<TypeMirror> boxedTypeMirrors = new ArrayList<>();
 
-    private List<ImplicitCastData> implicitCasts;
     private List<TypeCastData> casts;
     private List<TypeCheckData> checks;
 
@@ -60,14 +59,6 @@ public class TypeSystemData extends Template {
                 boxedTypeMirrors.add(typeData.getBoxedType());
             }
         }
-    }
-
-    public void setImplicitCasts(List<ImplicitCastData> implicitCasts) {
-        this.implicitCasts = implicitCasts;
-    }
-
-    public List<ImplicitCastData> getImplicitCasts() {
-        return implicitCasts;
     }
 
     public void setCasts(List<TypeCastData> casts) {
@@ -97,9 +88,6 @@ public class TypeSystemData extends Template {
         }
         if (casts != null) {
             sinks.addAll(casts);
-        }
-        if (implicitCasts != null) {
-            sinks.addAll(implicitCasts);
         }
         return sinks;
     }
@@ -171,57 +159,6 @@ public class TypeSystemData extends Template {
     @Override
     public String toString() {
         return getClass().getSimpleName() + "[template = " + Utils.getSimpleName(getTemplateType()) + ", types = " + types + "]";
-    }
-
-    public Set<TypeData> lookupCastSourceTypes() {
-        if (getImplicitCasts() == null) {
-            return null;
-        }
-
-        Set<TypeData> sourceTypes = new TreeSet<>();
-        for (ImplicitCastData cast : getImplicitCasts()) {
-            sourceTypes.add(cast.getSourceType());
-        }
-        return sourceTypes;
-    }
-
-    public List<ImplicitCastData> lookupByTargetType(TypeData targetType) {
-        if (getImplicitCasts() == null) {
-            return Collections.emptyList();
-        }
-        List<ImplicitCastData> foundCasts = new ArrayList<>();
-        for (ImplicitCastData cast : getImplicitCasts()) {
-            if (cast.getTargetType().equals(targetType)) {
-                foundCasts.add(cast);
-            }
-        }
-        return foundCasts;
-    }
-
-    public ImplicitCastData lookupCast(TypeData sourceType, TypeData targetType) {
-        if (getImplicitCasts() == null) {
-            return null;
-        }
-        for (ImplicitCastData cast : getImplicitCasts()) {
-            if (cast.getSourceType().equals(sourceType) && cast.getTargetType().equals(targetType)) {
-                return cast;
-            }
-        }
-        return null;
-    }
-
-    public List<TypeData> lookupSourceTypes(TypeData type) {
-        List<TypeData> sourceTypes = new ArrayList<>();
-        sourceTypes.add(type);
-        if (getImplicitCasts() != null) {
-            for (ImplicitCastData cast : getImplicitCasts()) {
-                if (cast.getTargetType() == type) {
-                    sourceTypes.add(cast.getSourceType());
-                }
-            }
-        }
-        Collections.sort(sourceTypes);
-        return sourceTypes;
     }
 
 }

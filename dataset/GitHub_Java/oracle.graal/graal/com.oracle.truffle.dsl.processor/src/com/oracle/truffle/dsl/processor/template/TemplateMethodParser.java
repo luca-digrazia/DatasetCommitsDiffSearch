@@ -140,7 +140,7 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
 
         ParameterSpec returnTypeSpec = methodSpecification.getReturnType();
 
-        ActualParameter returnTypeMirror = matchParameter(returnTypeSpec, method.getReturnType(), template, 0, -1, false);
+        ActualParameter returnTypeMirror = matchParameter(returnTypeSpec, method.getReturnType(), template, 0, false);
         if (returnTypeMirror == null) {
             if (emitErrors) {
                 E invalidMethod = create(new TemplateMethod(id, template, methodSpecification, method, annotation, returnTypeMirror, Collections.<ActualParameter> emptyList()), true);
@@ -161,7 +161,7 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
             parameterTypes.add(var.asType());
         }
 
-        List<ActualParameter> parameters = parseParameters(methodSpecification, parameterTypes, method.isVarArgs());
+        List<ActualParameter> parameters = parseParameters(methodSpecification, parameterTypes);
         if (parameters == null) {
             if (isEmitErrors()) {
                 E invalidMethod = create(new TemplateMethod(id, template, methodSpecification, method, annotation, returnTypeMirror, Collections.<ActualParameter> emptyList()), true);
@@ -201,7 +201,7 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
      * ones are cut and used to parse the optional parameters. All those remaining parameters must
      * be consumed otherwise its an error.
      */
-    private List<ActualParameter> parseParameters(MethodSpec spec, List<TypeMirror> parameterTypes, boolean varArgs) {
+    private List<ActualParameter> parseParameters(MethodSpec spec, List<TypeMirror> parameterTypes) {
         List<TypeMirror> implicitTypes = spec.getImplicitRequiredTypes();
 
         int offset = -1;
@@ -211,7 +211,7 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
             offset++;
             types = new ConsumableListIterator<>(new ArrayList<>(implicitTypes));
             types.data.addAll(parameterTypes.subList(offset, parameterTypes.size()));
-            parsedRequired = parseParametersRequired(spec, types, varArgs);
+            parsedRequired = parseParametersRequired(spec, types);
         }
 
         if (parsedRequired == null && offset >= 0) {
@@ -244,7 +244,7 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
             int oldIndex = types.getIndex();
             int optionalCount = 1;
             for (ParameterSpec paramspec : optionals) {
-                ActualParameter optionalParam = matchParameter(paramspec, type, template, 0, -1, false);
+                ActualParameter optionalParam = matchParameter(paramspec, type, template, 0, false);
                 if (optionalParam != null) {
                     optionals.consume(optionalCount);
                     types.consume();
@@ -264,10 +264,9 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
         return parsedParams;
     }
 
-    private List<ActualParameter> parseParametersRequired(MethodSpec spec, ConsumableListIterator<TypeMirror> types, boolean varArgs) {
+    private List<ActualParameter> parseParametersRequired(MethodSpec spec, ConsumableListIterator<TypeMirror> types) {
         List<ActualParameter> parsedParams = new ArrayList<>();
 
-        int varArgsParameterIndex = -1;
         int specificationParameterIndex = 0;
         ConsumableListIterator<ParameterSpec> required = new ConsumableListIterator<>(spec.getRequired());
         while (required.get() != null || types.get() != null) {
@@ -279,15 +278,8 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
                 }
                 break;
             }
-            TypeMirror actualType = types.get();
-            if (varArgs && types.isLast()) {
-                if (actualType.getKind() == TypeKind.ARRAY) {
-                    actualType = ((ArrayType) actualType).getComponentType();
-                }
-                varArgsParameterIndex++;
-            }
             boolean implicit = types.getIndex() < spec.getImplicitRequiredTypes().size();
-            ActualParameter resolvedParameter = matchParameter(required.get(), actualType, template, specificationParameterIndex, varArgsParameterIndex, implicit);
+            ActualParameter resolvedParameter = matchParameter(required.get(), types.get(), template, specificationParameterIndex, implicit);
             if (resolvedParameter == null) {
                 if (required.get().getCardinality() == Cardinality.MANY) {
                     required.consume();
@@ -297,16 +289,7 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
                 return null;
             } else {
                 parsedParams.add(resolvedParameter);
-
-                if (varArgs && types.isLast()) {
-                    /* Both varargs spec and varargs definition. Need to consume to terminate. */
-                    if (required.get().getCardinality() == Cardinality.MANY) {
-                        types.consume();
-                    }
-                } else {
-                    types.consume();
-                }
-
+                types.consume();
                 if (required.get().getCardinality() == Cardinality.ONE) {
                     required.consume();
                     specificationParameterIndex = 0;
@@ -316,7 +299,7 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
             }
         }
 
-        if (!types.toList().isEmpty() && !(varArgs && types.isLast())) {
+        if (!types.toList().isEmpty()) {
             // additional types -> error
             return null;
         }
@@ -328,7 +311,7 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
         return parsedParams;
     }
 
-    private ActualParameter matchParameter(ParameterSpec specification, TypeMirror mirror, Template originalTemplate, int specificationIndex, int varArgsIndex, boolean implicit) {
+    private ActualParameter matchParameter(ParameterSpec specification, TypeMirror mirror, Template originalTemplate, int index, boolean implicit) {
         TypeMirror resolvedType = mirror;
         if (hasError(resolvedType)) {
             resolvedType = context.resolveNotYetCompiledType(mirror, originalTemplate);
@@ -340,9 +323,9 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
 
         TypeData resolvedTypeData = getTypeSystem().findTypeData(resolvedType);
         if (resolvedTypeData != null) {
-            return new ActualParameter(specification, resolvedTypeData, specificationIndex, varArgsIndex, implicit);
+            return new ActualParameter(specification, resolvedTypeData, index, implicit);
         } else {
-            return new ActualParameter(specification, resolvedType, specificationIndex, varArgsIndex, implicit);
+            return new ActualParameter(specification, resolvedType, index, implicit);
         }
     }
 
@@ -361,10 +344,6 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
                 return null;
             }
             return data.get(index);
-        }
-
-        public boolean isLast() {
-            return index == data.size() - 1;
         }
 
         public E consume() {

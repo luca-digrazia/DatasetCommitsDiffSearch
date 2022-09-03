@@ -192,10 +192,6 @@ public class Utils {
             return true;
         }
 
-        if (isObject(to)) {
-            return true;
-        }
-
         // JLS 5.1.2 widening primitives
         if (Utils.isPrimitive(from) && Utils.isPrimitive(to)) {
             TypeKind fromKind = from.getKind();
@@ -259,10 +255,6 @@ public class Utils {
 
         if (from instanceof ArrayType && to instanceof ArrayType) {
             return isAssignable(context, ((ArrayType) from).getComponentType(), ((ArrayType) to).getComponentType());
-        }
-
-        if (from instanceof ArrayType || to instanceof ArrayType) {
-            return false;
         }
 
         TypeElement fromType = Utils.fromTypeMirror(from);

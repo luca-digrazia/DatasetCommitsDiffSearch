@@ -20,55 +20,44 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.dsl.processor.node;
+package com.oracle.truffle.dsl.processor.typesystem;
 
 import java.lang.annotation.*;
-import java.util.*;
 
 import javax.lang.model.element.*;
-import javax.lang.model.type.*;
 
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.dsl.processor.*;
 import com.oracle.truffle.dsl.processor.template.*;
 
-public class GenericParser extends NodeMethodParser<SpecializationData> {
+class TypeCheckParser extends TypeSystemMethodParser<TypeCheckData> {
 
-    public GenericParser(ProcessorContext context, NodeData node) {
-        super(context, node);
+    public TypeCheckParser(ProcessorContext context, TypeSystemData typeSystem) {
+        super(context, typeSystem);
     }
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        return createDefaultMethodSpec(method, mirror, true, null);
-    }
-
-    @Override
-    protected ParameterSpec createValueParameterSpec(String valueName, NodeData nodeData, int evaluatedCount) {
-        List<ExecutableTypeData> execTypes = nodeData.findGenericExecutableTypes(getContext(), evaluatedCount);
-        List<TypeMirror> types = new ArrayList<>();
-        for (ExecutableTypeData type : execTypes) {
-            types.add(type.getType().getPrimitiveType());
+        TypeData targetType = findTypeByMethodName(method.getSimpleName().toString(), "is");
+        if (targetType == null) {
+            return null;
         }
-        ParameterSpec spec = new ParameterSpec(valueName, types);
-        spec.setSignature(true);
+        MethodSpec spec = new MethodSpec(new ParameterSpec("returnType", getContext().getType(boolean.class)));
+        spec.addRequired(new ParameterSpec("value", getTypeSystem().getPrimitiveTypeMirrors()));
         return spec;
     }
 
     @Override
-    protected ParameterSpec createReturnParameterSpec() {
-        return super.createValueParameterSpec("returnValue", getNode(), 0);
-    }
-
-    @Override
-    public SpecializationData create(TemplateMethod method, boolean invalid) {
-        SpecializationData data = new SpecializationData(method, true, false, false);
-        return data;
+    public TypeCheckData create(TemplateMethod method, boolean invalid) {
+        TypeData checkedType = findTypeByMethodName(method, "is");
+        assert checkedType != null;
+        ActualParameter parameter = method.findParameter("valueValue");
+        assert parameter != null;
+        return new TypeCheckData(method, checkedType, parameter.getTypeSystemType());
     }
 
     @Override
     public Class<? extends Annotation> getAnnotationType() {
-        return Generic.class;
+        return TypeCheck.class;
     }
-
 }
