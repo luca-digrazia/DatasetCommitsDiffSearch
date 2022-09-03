@@ -27,8 +27,11 @@ import java.lang.annotation.*;
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.snippets.*;
 
 /**
  * Represents a field in a HotSpot type.
@@ -86,10 +89,16 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
             }
             return constant;
         } else {
+            /*
+             * for non-static final fields, we must assume that they are only initialized if they
+             * have a non-default value.
+             */
             assert !Modifier.isStatic(flags);
-            // TODO (chaeubl) HotSpot does not trust final non-static fields (see ciField.cpp)
             if (Modifier.isFinal(getModifiers())) {
-                return readValue(receiver);
+                Constant value = readValue(receiver);
+                if (assumeNonStaticFinalFieldsAsFinal(receiver.asObject().getClass()) || !value.isDefaultForKind()) {
+                    return value;
+                }
             }
         }
         return null;
@@ -100,17 +109,21 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         if (receiver == null) {
             assert Modifier.isStatic(flags);
             if (holder.isInitialized()) {
-                return HotSpotGraalRuntime.getInstance().getRuntime().readUnsafeConstant(getKind(), holder.mirror(), offset);
+                return ReadNode.readUnsafeConstant(getKind(), holder.mirror(), offset);
             }
             return null;
         } else {
             assert !Modifier.isStatic(flags);
-            return HotSpotGraalRuntime.getInstance().getRuntime().readUnsafeConstant(getKind(), receiver.asObject(), offset);
+            return ReadNode.readUnsafeConstant(getKind(), receiver.asObject(), offset);
         }
     }
 
     private static boolean assumeStaticFieldsFinal(Class<?> clazz) {
         return clazz == GraalOptions.class;
+    }
+
+    private static boolean assumeNonStaticFinalFieldsAsFinal(Class<?> clazz) {
+        return clazz == SnippetCounter.class;
     }
 
     @Override
