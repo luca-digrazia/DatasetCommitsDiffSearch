@@ -29,33 +29,33 @@
  */
 package com.oracle.truffle.llvm.parser.model.symbols.instructions;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import com.oracle.truffle.llvm.parser.model.SymbolTable;
+import com.oracle.truffle.llvm.parser.model.symbols.Symbols;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.GetElementPointerConstant;
-import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
+import com.oracle.truffle.llvm.parser.model.visitors.InstructionVisitor;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.parser.model.SymbolImpl;
-import com.oracle.truffle.llvm.parser.model.ValueSymbol;
+import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
+import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
 public final class GetElementPointerInstruction extends ValueInstruction {
 
-    private SymbolImpl base;
+    private Symbol base;
 
-    private final SymbolImpl[] indices;
+    private final List<Symbol> indices;
 
     private final boolean isInbounds;
 
-    private GetElementPointerInstruction(Type type, boolean isInbounds, int numIndices) {
+    private GetElementPointerInstruction(Type type, boolean isInbounds) {
         super(type);
-        this.indices = new SymbolImpl[numIndices];
+        this.indices = new ArrayList<>();
         this.isInbounds = isInbounds;
     }
 
     @Override
-    public void accept(SymbolVisitor visitor) {
+    public void accept(InstructionVisitor visitor) {
         visitor.visit(this);
     }
 
@@ -70,12 +70,12 @@ public final class GetElementPointerInstruction extends ValueInstruction {
         }
     }
 
-    public SymbolImpl getBasePointer() {
+    public Symbol getBasePointer() {
         return base;
     }
 
-    public List<SymbolImpl> getIndices() {
-        return Collections.unmodifiableList(Arrays.asList(indices));
+    public List<Symbol> getIndices() {
+        return Collections.unmodifiableList(indices);
     }
 
     public boolean isInbounds() {
@@ -83,22 +83,22 @@ public final class GetElementPointerInstruction extends ValueInstruction {
     }
 
     @Override
-    public void replace(SymbolImpl original, SymbolImpl replacement) {
+    public void replace(Symbol original, Symbol replacement) {
         if (base == original) {
             base = replacement;
         }
-        for (int i = 0; i < indices.length; i++) {
-            if (indices[i] == original) {
-                indices[i] = replacement;
+        for (int i = 0; i < indices.size(); i++) {
+            if (indices.get(i) == original) {
+                indices.set(i, replacement);
             }
         }
     }
 
-    public static GetElementPointerInstruction fromSymbols(SymbolTable symbols, Type type, int pointer, List<Integer> indices, boolean isInbounds) {
-        final GetElementPointerInstruction inst = new GetElementPointerInstruction(type, isInbounds, indices.size());
-        inst.base = symbols.getForwardReferenced(pointer, inst);
-        for (int i = 0; i < indices.size(); i++) {
-            inst.indices[i] = symbols.getForwardReferenced(indices.get(i), inst);
+    public static GetElementPointerInstruction fromSymbols(Symbols symbols, Type type, int pointer, List<Integer> indices, boolean isInbounds) {
+        final GetElementPointerInstruction inst = new GetElementPointerInstruction(type, isInbounds);
+        inst.base = symbols.getSymbol(pointer, inst);
+        for (int index : indices) {
+            inst.indices.add(symbols.getSymbol(index, inst));
         }
         return inst;
     }
