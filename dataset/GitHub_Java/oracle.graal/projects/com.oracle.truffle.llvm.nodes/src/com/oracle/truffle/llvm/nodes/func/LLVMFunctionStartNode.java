@@ -32,6 +32,8 @@ package com.oracle.truffle.llvm.nodes.func;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -52,6 +54,8 @@ public class LLVMFunctionStartNode extends RootNode {
     @Children private final LLVMStackFrameNuller[] nullers;
     private final String name;
     private final int explicitArgumentsCount;
+    private final FrameSlot baseStackPointer;
+
     private final DebugInformation debugInformation;
 
     /*
@@ -72,15 +76,16 @@ public class LLVMFunctionStartNode extends RootNode {
 
     public LLVMFunctionStartNode(SourceSection sourceSection, LLVMLanguage language, LLVMExpressionNode node, LLVMExpressionNode[] beforeFunction, LLVMExpressionNode[] afterFunction,
                     FrameDescriptor frameDescriptor,
-                    String name, LLVMStackFrameNuller[] initNullers, int explicitArgumentsCount, String originalName, Source bcSource) {
+                    String name, LLVMStackFrameNuller[] initNullers, FrameSlot baseStackPointer, int explicitArgumentsCount, String originalName, Source bcSource) {
         super(language, frameDescriptor);
         this.debugInformation = new DebugInformation(sourceSection, originalName, bcSource);
-        this.explicitArgumentsCount = explicitArgumentsCount;
         this.node = node;
         this.beforeFunction = beforeFunction;
         this.afterFunction = afterFunction;
         this.nullers = initNullers;
         this.name = name;
+        this.explicitArgumentsCount = explicitArgumentsCount;
+        this.baseStackPointer = baseStackPointer;
     }
 
     @Override
@@ -100,25 +105,31 @@ public class LLVMFunctionStartNode extends RootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        long basePointer = getStack().getStackPointer().getVal();
+        try {
+            frame.setObject(baseStackPointer, getStack().getStackPointer());
 
-        nullStack(frame);
-        doBefore(frame);
-        Object result = node.executeGeneric(frame);
-        doAfter(frame);
+            nullStack(frame);
+            doBefore(frame);
+            Object result = node.executeGeneric(frame);
+            doAfter(frame);
 
-        assert assertDestroyStack(basePointer);
-        getStack().setStackPointer(LLVMAddress.fromLong(basePointer));
-        return result;
+            assert destroyStack(frame);
+            getStack().setStackPointer((LLVMAddress) frame.getObject(baseStackPointer));
+            return result;
+        } catch (FrameSlotTypeException e) {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException(e);
+        }
     }
 
     /*
      * Allows us to find broken stackpointers immediately because old stackregions are destroyed.
      */
     @SuppressWarnings("deprecation")
-    private boolean assertDestroyStack(long basePointer) {
+    private boolean destroyStack(VirtualFrame frame) throws FrameSlotTypeException {
+        LLVMAddress oldSp = (LLVMAddress) frame.getObject(baseStackPointer);
         LLVMAddress currSp = getStack().getStackPointer();
-        long size = basePointer - currSp.getVal();
+        long size = oldSp.getVal() - currSp.getVal();
         LLVMMemory.memset(currSp, size, (byte) 0xFF);
         return true;
     }
