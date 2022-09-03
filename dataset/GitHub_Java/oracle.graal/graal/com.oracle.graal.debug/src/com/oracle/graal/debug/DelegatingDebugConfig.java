@@ -83,18 +83,6 @@ public class DelegatingDebugConfig implements DebugConfig {
     private final Map<Feature, Boolean> featureState = new EnumMap<>(Feature.class);
 
     /**
-     * The debug levels of a {@link DelegatingDebugConfig} than can be
-     * {@linkplain DelegatingDebugConfig#override(Level, int) overridden} or
-     * {@linkplain DelegatingDebugConfig#delegate(Level) delegated}.
-     */
-    public enum Level {
-        LOG,
-        DUMP
-    }
-
-    private final Map<Level, Integer> levelState = new EnumMap<>(Level.class);
-
-    /**
      * Creates a config that delegates to the {@link DebugScope#getConfig() current config}.
      */
     public DelegatingDebugConfig() {
@@ -118,28 +106,18 @@ public class DelegatingDebugConfig implements DebugConfig {
         return this;
     }
 
-    public DelegatingDebugConfig override(Level level, int newLevel) {
-        levelState.put(level, newLevel);
-        return this;
-    }
-
     public DelegatingDebugConfig delegate(Feature feature) {
         featureState.put(feature, null);
         return this;
     }
 
-    public DelegatingDebugConfig delegate(Level level) {
-        levelState.put(level, null);
-        return this;
-    }
-
     @Override
-    public int getLogLevel() {
-        Integer ls = levelState.get(Level.LOG);
-        if (ls == null) {
-            return delegate.getLogLevel();
+    public boolean isLogEnabled() {
+        Boolean fs = featureState.get(Feature.LOG);
+        if (fs == null) {
+            return delegate.isLogEnabled();
         }
-        return ls.intValue();
+        return fs.booleanValue();
     }
 
     public boolean isLogEnabledForMethod() {
@@ -168,12 +146,12 @@ public class DelegatingDebugConfig implements DebugConfig {
     }
 
     @Override
-    public int getDumpLevel() {
-        Integer ls = levelState.get(Level.DUMP);
-        if (ls == null) {
-            return delegate.getDumpLevel();
+    public boolean isDumpEnabled() {
+        Boolean fs = featureState.get(Feature.DUMP);
+        if (fs == null) {
+            return delegate.isDumpEnabled();
         }
-        return ls.intValue();
+        return fs.booleanValue();
     }
 
     public boolean isDumpEnabledForMethod() {

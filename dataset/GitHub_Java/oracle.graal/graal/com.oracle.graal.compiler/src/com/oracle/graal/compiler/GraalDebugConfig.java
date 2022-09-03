@@ -121,8 +121,8 @@ public class GraalDebugConfig implements DebugConfig {
         this.output = output;
     }
 
-    public int getLogLevel() {
-        return getLevel(logFilter);
+    public boolean isLogEnabled() {
+        return isEnabled(logFilter);
     }
 
     public boolean isLogEnabledForMethod() {
@@ -137,8 +137,8 @@ public class GraalDebugConfig implements DebugConfig {
         return isEnabled(trackMemUseFilter);
     }
 
-    public int getDumpLevel() {
-        return getLevel(dumpFilter);
+    public boolean isDumpEnabled() {
+        return isEnabled(dumpFilter);
     }
 
     public boolean isDumpEnabledForMethod() {
@@ -162,27 +162,15 @@ public class GraalDebugConfig implements DebugConfig {
     }
 
     private boolean isEnabled(DebugFilter filter) {
-        return getLevel(filter) > 0;
-    }
-
-    private int getLevel(DebugFilter filter) {
-        int level = checkDebugFilter(Debug.currentScope(), filter);
-        if (level > 0 && !checkMethodFilter()) {
-            level = 0;
-        }
-        return level;
+        return checkDebugFilter(Debug.currentScope(), filter) && checkMethodFilter();
     }
 
     private boolean isEnabledForMethod(DebugFilter filter) {
         return filter != null && checkMethodFilter();
     }
 
-    private static int checkDebugFilter(String currentScope, DebugFilter filter) {
-        if (filter == null) {
-            return 0;
-        } else {
-            return filter.matchLevel(currentScope);
-        }
+    private static boolean checkDebugFilter(String currentScope, DebugFilter filter) {
+        return filter != null && filter.matches(currentScope);
     }
 
     /**
@@ -253,7 +241,7 @@ public class GraalDebugConfig implements DebugConfig {
         if (e instanceof BailoutException) {
             return null;
         }
-        Debug.setConfig(Debug.fixedConfig(Debug.DEFAULT_LOG_LEVEL, Debug.DEFAULT_LOG_LEVEL, false, false, false, false, dumpHandlers, verifyHandlers, output));
+        Debug.setConfig(Debug.fixedConfig(true, true, false, false, false, false, dumpHandlers, verifyHandlers, output));
         Debug.log(String.format("Exception occurred in scope: %s", Debug.currentScope()));
         for (Object o : Debug.context()) {
             if (o instanceof Graph) {

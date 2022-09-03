@@ -28,16 +28,9 @@ import java.util.*;
 public interface DebugConfig {
 
     /**
-     * Determines the current log level in the {@linkplain Debug#currentScope() current debug scope}
-     * .
+     * Determines if logging is on in the {@linkplain Debug#currentScope() current debug scope} .
      */
-    int getLogLevel();
-
-    /**
-     * Determines the current dump level in the {@linkplain Debug#currentScope() current debug
-     * scope}.
-     */
-    int getDumpLevel();
+    boolean isLogEnabled();
 
     /**
      * Determines if logging can be enabled in the current method, regardless of the
@@ -60,6 +53,14 @@ public interface DebugConfig {
      * @see Debug#memUseTracker(CharSequence)
      */
     boolean isMemUseTrackingEnabled();
+
+    /**
+     * Determines if dumping is enabled in the {@linkplain Debug#currentScope() current debug scope}
+     * .
+     *
+     * @see Debug#dump(Object, String)
+     */
+    boolean isDumpEnabled();
 
     /**
      * Determines if dumping can be enabled in the current method, regardless of the
