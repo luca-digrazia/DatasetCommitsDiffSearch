@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -28,7 +27,7 @@ import com.sun.c1x.debug.*;
 import com.sun.c1x.util.*;
 import com.sun.cri.ci.*;
 
-public final class Compare extends FloatingNode {
+public final class Compare extends Value {
 
     private static final int INPUT_COUNT = 2;
     private static final int INPUT_X = 0;
@@ -136,6 +135,7 @@ public final class Compare extends FloatingNode {
     public Node copy(Graph into) {
         Compare x = new Compare(null, condition, null, into);
         x.unorderedIsTrue = unorderedIsTrue;
+        x.setNonNull(isNonNull());
         return x;
     }
 }
