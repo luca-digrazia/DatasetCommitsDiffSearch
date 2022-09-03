@@ -24,13 +24,13 @@
  */
 package com.oracle.truffle.api.instrumentation.test;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.TruffleLanguage;
@@ -38,16 +38,19 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
-import com.oracle.truffle.api.instrumentation.SourceSectionFilter.IndexRange;
 import com.oracle.truffle.api.instrumentation.Tag;
+import com.oracle.truffle.api.instrumentation.SourceSectionFilter.IndexRange;
+import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.test.ReflectionUtils;
-import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 
-public class SourceSectionFilterTest extends AbstractPolyglotTest {
+import org.graalvm.polyglot.Engine;
+import org.graalvm.polyglot.Language;
+
+public class SourceSectionFilterTest {
 
     private static final int ROOT_NODE_BITS_UNINITIALIZED = 0;
     private static final int ROOT_NODE_BITS_SAME_SOURCE = 1 << 1;
@@ -60,10 +63,9 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     private static boolean isInstrumentedNode(SourceSectionFilter filter, Node instrumentedNode) {
         try {
-            boolean allows = filter.allows(instrumentedNode);
             Method m = filter.getClass().getDeclaredMethod("isInstrumentedNode", Set.class, Node.class, SourceSection.class);
             ReflectionUtils.setAccessible(m, true);
-            return allows && (boolean) m.invoke(filter, ALL_TAGS, instrumentedNode, instrumentedNode != null ? instrumentedNode.getSourceSection() : null);
+            return (boolean) m.invoke(filter, ALL_TAGS, instrumentedNode, instrumentedNode != null ? instrumentedNode.getSourceSection() : null);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -75,12 +77,6 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     private static boolean isInstrumentedRoot(SourceSectionFilter filter, Node root) {
         return isInstrumentedRoot(filter, root, ROOT_NODE_BITS_UNINITIALIZED);
-    }
-
-    @Before
-    public void setup() {
-        setupEnv();
-        context.initialize(InstrumentationTestLanguage.ID);
     }
 
     private static boolean isInstrumentedRoot(SourceSectionFilter filter, Node root, int rootNodeBits) {
@@ -131,18 +127,29 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
     }
 
     private static Node createNode(final SourceSection section, final Class<?>... tags) {
-        SourceSectionNode node = new SourceSectionNode(section, tags);
-        try {
-            RootNode rootNode = createRootNode(section, null, node);
-            rootNode.adoptChildren();
-        } catch (Exception e) {
-            Assert.fail();
-        }
-        return node;
+        return new SourceSectionNode(section, tags);
     }
 
     static RootNode createRootNode(final SourceSection section, final Boolean internal, Node... children) throws Exception {
-        TruffleLanguage<?> truffleLanguage = InstrumentationTestLanguage.current();
+        Engine engine = Engine.create();
+        return createRootNode(engine, section, internal, children);
+    }
+
+    static RootNode createRootNode(Engine engine, final SourceSection section, final Boolean internal, Node... children) throws Exception {
+        Language language = engine.getLanguages().get(InstrumentationTestLanguage.ID);
+        Field impl = Language.class.getDeclaredField("impl");
+        ReflectionUtils.setAccessible(impl, true);
+        Object polyglotLanguage = impl.get(language);
+        Method ensureInitialized = polyglotLanguage.getClass().getDeclaredMethod("ensureInitialized");
+        ReflectionUtils.setAccessible(ensureInitialized, true);
+        ensureInitialized.invoke(polyglotLanguage);
+        Field info = polyglotLanguage.getClass().getDeclaredField("info");
+        ReflectionUtils.setAccessible(info, true);
+        LanguageInfo languageInfo = (LanguageInfo) info.get(polyglotLanguage);
+        Field spi = LanguageInfo.class.getDeclaredField("spi");
+        ReflectionUtils.setAccessible(spi, true);
+        TruffleLanguage<?> truffleLanguage = (TruffleLanguage<?>) spi.get(languageInfo);
+
         return new RootNode(truffleLanguage) {
 
             @Node.Children Node[] rootChildren = children;
@@ -176,7 +183,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testEmpty() {
-        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         Node root = createNode(sampleSource.createSection(0, 23));
         Node unavailable = createNode(sampleSource.createUnavailableSection());
         SourceSectionFilter filter = SourceSectionFilter.ANY;
@@ -212,7 +219,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testLineIn() {
-        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         Node root = createNode(sampleSource.createSection(0, 23));
         Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().lineIn(2, 1).build(),
                         root, createNode(sampleSource.createSection(6, 5), tags())));
@@ -267,7 +274,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testLineStartIn() {
-        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         Node root = createNode(sampleSource.createSection(0, 23));
 
         Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().lineStartsIn(IndexRange.byLength(2, 1)).build(),
@@ -291,7 +298,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testLineEndsIn() {
-        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         Node root = createNode(sampleSource.createSection(0, 23));
 
         Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().lineEndsIn(IndexRange.byLength(2, 1)).build(),
@@ -315,7 +322,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testLineNotIn() {
-        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         Node root = createNode(sampleSource.createSection(0, 23));
         Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().lineNotIn(IndexRange.byLength(2, 1)).build(),
                         root, createNode(sampleSource.createSection(6, 5), tags())));
@@ -379,176 +386,11 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
     }
 
     @Test
-    public void testColumnIn() {
-        Source sampleSource = Source.newBuilder("123456789\n123456789").name("sampleSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
-        Node root = createNode(sampleSource.createSection(0, 19));
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnIn(2, 1).build(),
-                        root, createNode(sampleSource.createSection(1, 5), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnIn(1, 2).build(),
-                        root, createNode(sampleSource.createSection(0, 1), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnIn(1, 1).build(),
-                        root, createNode(sampleSource.createSection(1, 1), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnIn(2, 2).build(),
-                        root, createNode(sampleSource.createSection(4, 1), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnIn(2, 2).build(),
-                        root, createNode(sampleSource.createSection(1, 1), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnIn(2, 2).build(),
-                        root, createNode(sampleSource.createSection(1, 5), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnIn(2, 2).build(),
-                        root, createNode(sampleSource.createSection(0, 1), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnIn(2, 2).build(),
-                        root, createNode(sampleSource.createSection(0, 2), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnIn(2, 2).build(),
-                        root, createNode(sampleSource.createSection(1, 5), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnIn(2, 2).build(),
-                        root, createNode(sampleSource.createSection(1, 1), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnIn(2, 2).build(),
-                        root, createNode(sampleSource.createSection(0, 5), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnIn(1, 1).build(),
-                        root, createNode(sampleSource.createUnavailableSection())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnIn(IndexRange.byLength(1, 1)).build(),
-                        root, createNode(sampleSource.createSection(1, 1), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnIn(IndexRange.byLength(1, 1), IndexRange.between(2, 3), IndexRange.byLength(3, 1)).build(),
-                        root, createNode(sampleSource.createSection(1, 1), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnIn(IndexRange.byLength(1, 1), IndexRange.byLength(3, 1)).build(),
-                        root, createNode(sampleSource.createSection(1, 1), tags())));
-
-        Assert.assertNotNull(SourceSectionFilter.newBuilder().columnIn(2, 2).build().toString());
-    }
-
-    @Test
-    public void testColumnStartIn() {
-        Source sampleSource = Source.newBuilder("123456789\n123456789").name("sampleSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
-        Node root = createNode(sampleSource.createSection(0, 19));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnStartsIn(IndexRange.byLength(2, 1)).build(),
-                        root, createNode(sampleSource.createSection(1, 1))));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnStartsIn(IndexRange.byLength(2, 1)).build(),
-                        root, createNode(sampleSource.createSection(0, 2))));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnStartsIn(IndexRange.byLength(2, 2)).build(),
-                        root, createNode(sampleSource.createSection(0, 2))));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnStartsIn(IndexRange.byLength(1, 2)).build(),
-                        root, createNode(sampleSource.createSection(0, 2))));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnStartsIn(IndexRange.byLength(1, 2)).build(),
-                        root, createNode(sampleSource.createSection(1, 2))));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnStartsIn(IndexRange.byLength(1, 2)).build(),
-                        root, createNode(sampleSource.createSection(2, 1))));
-    }
-
-    @Test
-    public void testColumnEndsIn() {
-        Source sampleSource = Source.newBuilder("123456789\n123456789").name("sampleSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
-        Node root = createNode(sampleSource.createSection(0, 19));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnEndsIn(IndexRange.byLength(2, 1)).build(),
-                        root, createNode(sampleSource.createSection(1, 1))));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnEndsIn(IndexRange.byLength(2, 1)).build(),
-                        root, createNode(sampleSource.createSection(0, 1))));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnEndsIn(IndexRange.byLength(2, 2)).build(),
-                        root, createNode(sampleSource.createSection(0, 1))));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnEndsIn(IndexRange.byLength(1, 2)).build(),
-                        root, createNode(sampleSource.createSection(0, 1))));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnEndsIn(IndexRange.byLength(1, 2)).build(),
-                        root, createNode(sampleSource.createSection(1, 1))));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnEndsIn(IndexRange.byLength(1, 2)).build(),
-                        root, createNode(sampleSource.createSection(2, 1))));
-    }
-
-    @Test
-    public void testColumnNotIn() {
-        Source sampleSource = Source.newBuilder("123456789\n123456789").name("sampleSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
-        Node root = createNode(sampleSource.createSection(0, 19));
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(2, 1)).build(),
-                        root, createNode(sampleSource.createSection(1, 1), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(1, 2)).build(),
-                        root, createNode(sampleSource.createSection(0, 1), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(1, 1)).build(),
-                        root, createNode(sampleSource.createSection(1, 5), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(2, 2)).build(),
-                        root, createNode(sampleSource.createSection(3, 1), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(2, 2)).build(),
-                        root, createNode(sampleSource.createSection(2, 1), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(2, 2)).build(),
-                        root, createNode(sampleSource.createSection(2, 5), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(2, 2)).build(),
-                        root, createNode(sampleSource.createSection(0, 1), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(2, 2)).build(),
-                        root, createNode(sampleSource.createSection(0, 2), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(2, 2)).build(),
-                        root, createNode(sampleSource.createSection(0, 5), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(2, 2)).build(),
-                        root, createNode(sampleSource.createSection(1, 1), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(2, 2)).build(),
-                        root, createNode(sampleSource.createSection(1, 5), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(1, 1)).build(),
-                        root, createNode(sampleSource.createUnavailableSection())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(1, 1)).build(),
-                        root, createNode(sampleSource.createSection(0, 1), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(1, 1)).build(),
-                        root, createNode(sampleSource.createSection(1, 1), tags())));
-
-        Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(1, 1), IndexRange.between(2, 3), IndexRange.byLength(3, 1)).build(),
-                        root, createNode(sampleSource.createSection(1, 1), tags())));
-
-        Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().columnNotIn(IndexRange.byLength(1, 1), IndexRange.byLength(3, 1)).build(),
-                        root, createNode(sampleSource.createSection(1, 1), tags())));
-
-        Assert.assertNotNull(SourceSectionFilter.newBuilder().columnIn(2, 2).build().toString());
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testColumnInFail1() {
-        SourceSectionFilter.newBuilder().columnIn(0, 5);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testColumnInFail2() {
-        SourceSectionFilter.newBuilder().columnIn(3, -1);
-    }
-
-    @Test
     public void testMimeType() {
         String src = "line1\nline2\nline3\nline4";
-        Source mime1 = Source.newBuilder(src).name("mime1").mimeType("mime1").build();
-        Source mime2 = Source.newBuilder(src).name("mime2").mimeType("mime2").build();
-        Source mime3 = Source.newBuilder(src).name("mime3").mimeType("mime3").build();
+        Source mime1 = Source.newBuilder(src).name("unknown").mimeType("mime1").build();
+        Source mime2 = Source.newBuilder(src).name("unknown").mimeType("mime2").build();
+        Source mime3 = Source.newBuilder(src).name("unknown").mimeType("mime3").build();
 
         Assert.assertFalse(
                         isInstrumented(SourceSectionFilter.newBuilder().mimeTypeIs().build(),
@@ -575,7 +417,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testIndexIn() {
-        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         Node root = createNode(sampleSource.createSection(0, 23));
         Assert.assertFalse(isInstrumented(SourceSectionFilter.newBuilder().indexIn(0, 0).build(),
                         root, createNode(sampleSource.createSection(0, 5), tags())));
@@ -628,7 +470,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testIndexNotIn() {
-        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         Node root = createNode(sampleSource.createSection(0, 23));
         Assert.assertTrue(isInstrumented(SourceSectionFilter.newBuilder().indexNotIn(IndexRange.byLength(0, 0)).build(),
                         root, createNode(sampleSource.createSection(0, 5), tags())));
@@ -691,8 +533,8 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testRootNodeBits() {
-        Source sampleSource1 = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource1").mimeType("mime2").build();
-        Source sampleSource2 = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource2").mimeType("mime2").build();
+        Source sampleSource1 = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType("mime2").build();
+        Source sampleSource2 = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType("mime2").build();
 
         SourceSectionFilter filter = SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION, InstrumentationTestLanguage.DEFINE).//
                         tagIsNot(InstrumentationTestLanguage.DEFINE, InstrumentationTestLanguage.ROOT).//
@@ -718,9 +560,9 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testSourceIn() {
-        Source sampleSource1 = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource1").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
-        Source sampleSource2 = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource2").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
-        Source sampleSource3 = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource3").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource1 = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource2 = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource3 = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         Node root1 = createNode(sampleSource1.createSection(0, 23));
         Node root2 = createNode(sampleSource2.createSection(0, 23));
         Node root3 = createNode(sampleSource3.createSection(0, 23));
@@ -754,8 +596,8 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testSourceSectionEquals() {
-        Source sampleSource1 = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource1").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
-        Source sampleSource2 = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource2").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource1 = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource2 = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         Node root1 = createNode(sampleSource1.createSection(0, 23));
         Node root2 = createNode(sampleSource2.createSection(0, 23));
 
@@ -763,7 +605,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
                         isInstrumented(SourceSectionFilter.newBuilder().sourceSectionEquals(sampleSource1.createSection(1, 6)).build(),
                                         root1, createNode(sampleSource1.createSection(1, 6), tags())));
 
-        Assert.assertFalse(
+        Assert.assertTrue(
                         isInstrumented(SourceSectionFilter.newBuilder().sourceSectionEquals(sampleSource1.createSection(1, 6)).build(),
                                         root2, createNode(sampleSource2.createSection(1, 6), tags())));
 
@@ -792,7 +634,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testRootSourceSectionEquals() {
-        Source sampleSource1 = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource1").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source sampleSource1 = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
 
         Assert.assertTrue(isInstrumentedNode(SourceSectionFilter.newBuilder().rootSourceSectionEquals(sampleSource1.createSection(1, 6)).build(),
                         createNode(sampleSource1.createSection(6, 4))));
@@ -895,7 +737,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
         SourceSectionFilter defaultFilter = SourceSectionFilter.newBuilder().build();
         Assert.assertTrue(
                         isInstrumented(internalFilter, null, source()));
-        Source nonInternalSource = Source.newBuilder("line1\nline2\nline3\nline4").name("nonInternalSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        Source nonInternalSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         // Default non-internal RootNode
         RootNode root = createRootNode(nonInternalSource.createSection(0, 23), null);
         Assert.assertTrue(
@@ -906,7 +748,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
                         isInstrumented(internalFilter, root, createNode(nonInternalSource.createSection(1))));
         Assert.assertTrue(
                         isInstrumented(defaultFilter, root, createNode(nonInternalSource.createSection(1))));
-        Source internalSource = Source.newBuilder("line1\nline2\nline3\nline4").name("internalSource").mimeType(InstrumentationTestLanguage.MIME_TYPE).internal().build();
+        Source internalSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).internal().build();
         // Default internal RootNode
         root = createRootNode(internalSource.createSection(0, 23), null);
         Assert.assertFalse(
@@ -919,7 +761,7 @@ public class SourceSectionFilterTest extends AbstractPolyglotTest {
 
     @Test
     public void testComplexFilter() {
-        Source sampleSource1 = Source.newBuilder("line1\nline2\nline3\nline4").name("sampleSource1").mimeType("mime2").build();
+        Source sampleSource1 = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType("mime2").build();
         Node root = createNode(sampleSource1.createSection(0, 23));
 
         SourceSectionFilter filter = SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION, InstrumentationTestLanguage.DEFINE).//
