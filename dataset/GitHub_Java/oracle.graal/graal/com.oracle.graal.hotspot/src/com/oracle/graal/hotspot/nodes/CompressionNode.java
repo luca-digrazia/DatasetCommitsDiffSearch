@@ -23,8 +23,6 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.hotspot.*;
@@ -93,14 +91,6 @@ public final class CompressionNode extends FloatingNode implements LIRLowerable,
         throw GraalInternalError.shouldNotReachHere();
     }
 
-    public ValueNode getInput() {
-        return input;
-    }
-
-    public CompressEncoding getEncoding() {
-        return encoding;
-    }
-
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (input instanceof CompressionNode) {
@@ -115,21 +105,13 @@ public final class CompressionNode extends FloatingNode implements LIRLowerable,
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen.getLIRGeneratorTool();
-        boolean nonNull;
-        if (input.stamp() instanceof ObjectStamp) {
-            nonNull = StampTool.isObjectNonNull(input.stamp());
-        } else {
-            // metaspace pointers are never null
-            nonNull = true;
-        }
-
         Value result;
         switch (op) {
             case Compress:
-                result = hsGen.emitCompress(gen.operand(input), encoding, nonNull);
+                result = hsGen.emitCompress(gen.operand(input), encoding);
                 break;
             case Uncompress:
-                result = hsGen.emitUncompress(gen.operand(input), encoding, nonNull);
+                result = hsGen.emitUncompress(gen.operand(input), encoding);
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();

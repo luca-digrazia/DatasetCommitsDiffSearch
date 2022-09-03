@@ -25,11 +25,11 @@ package com.oracle.graal.loop;
 import static com.oracle.graal.nodes.calc.IntegerArithmeticNode.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.loop.InductionVariable.Direction;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.type.*;
 
 public class CountedLoopInfo {
 
@@ -37,9 +37,9 @@ public class CountedLoopInfo {
     private InductionVariable iv;
     private ValueNode end;
     private boolean oneOff;
-    private BeginNode body;
+    private AbstractBeginNode body;
 
-    CountedLoopInfo(LoopEx loop, InductionVariable iv, ValueNode end, boolean oneOff, BeginNode body) {
+    CountedLoopInfo(LoopEx loop, InductionVariable iv, ValueNode end, boolean oneOff, AbstractBeginNode body) {
         this.loop = loop;
         this.iv = iv;
         this.end = end;
@@ -62,7 +62,7 @@ public class CountedLoopInfo {
                 range = IntegerArithmeticNode.sub(graph, range, ConstantNode.forIntegerStamp(stamp, 1, graph));
             }
         }
-        IntegerDivNode div = graph.add(new IntegerDivNode(range, iv.strideNode()));
+        IntegerDivNode div = graph.add(new IntegerDivNode(iv.valueNode().stamp().unrestricted(), range, iv.strideNode()));
         graph.addBeforeFixed(loop.entryPoint(), div);
         ConstantNode zero = ConstantNode.forIntegerStamp(stamp, 0, graph);
         if (assumePositive) {
@@ -117,7 +117,7 @@ public class CountedLoopInfo {
         return oneOff;
     }
 
-    public BeginNode getBody() {
+    public AbstractBeginNode getBody() {
         return body;
     }
 
