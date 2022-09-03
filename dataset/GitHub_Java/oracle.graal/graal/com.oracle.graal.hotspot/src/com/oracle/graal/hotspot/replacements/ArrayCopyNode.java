@@ -84,9 +84,9 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
         // the canonicalization before loop unrolling is needed to propagate the length into
         // additions, etc.
         HighTierContext context = new HighTierContext(tool.getRuntime(), tool.assumptions(), tool.getReplacements());
-        new CanonicalizerPhase(true).apply(snippetGraph, context);
-        new LoopFullUnrollPhase(true).apply(snippetGraph, context);
-        new CanonicalizerPhase(true).apply(snippetGraph, context);
+        new CanonicalizerPhase().apply(snippetGraph, context);
+        new LoopFullUnrollPhase().apply(snippetGraph, context);
+        new CanonicalizerPhase().apply(snippetGraph, context);
     }
 
     @Override
@@ -116,22 +116,10 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
         return position >= 0 && position + length <= virtualObject.entryCount();
     }
 
-    private static boolean checkEntryTypes(int srcPos, int length, State srcState, ResolvedJavaType destComponentType, VirtualizerTool tool) {
+    private static boolean checkEntryTypes(int srcPos, int length, State srcState, ResolvedJavaType destComponentType) {
         if (destComponentType.getKind() == Kind.Object) {
             for (int i = 0; i < length; i++) {
-                ValueNode entry = srcState.getEntry(srcPos + i);
-                State state = tool.getObjectState(entry);
-                ResolvedJavaType type;
-                if (state != null) {
-                    if (state.getState() == EscapeState.Virtual) {
-                        type = state.getVirtualObject().type();
-                    } else {
-                        type = state.getMaterializedValue().objectStamp().type();
-                    }
-                } else {
-                    type = entry.objectStamp().type();
-                }
-                if (type == null || !destComponentType.isAssignableFrom(type)) {
+                if (!destComponentType.isAssignableFrom(srcState.getEntry(srcPos + i).objectStamp().type())) {
                     return false;
                 }
             }
@@ -151,16 +139,10 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
             if (srcState != null && srcState.getState() == EscapeState.Virtual && destState != null && destState.getState() == EscapeState.Virtual) {
                 VirtualObjectNode srcVirtual = srcState.getVirtualObject();
                 VirtualObjectNode destVirtual = destState.getVirtualObject();
-                if (!(srcVirtual instanceof VirtualArrayNode) || !(destVirtual instanceof VirtualArrayNode)) {
-                    return;
-                }
-                if (((VirtualArrayNode) srcVirtual).componentType().getKind() != Kind.Object || ((VirtualArrayNode) destVirtual).componentType().getKind() != Kind.Object) {
-                    return;
-                }
                 if (length < 0 || !checkBounds(srcPos, length, srcVirtual) || !checkBounds(destPos, length, destVirtual)) {
                     return;
                 }
-                if (!checkEntryTypes(srcPos, length, srcState, destVirtual.type().getComponentType(), tool)) {
+                if (!checkEntryTypes(srcPos, length, srcState, destVirtual.type().getComponentType())) {
                     return;
                 }
                 for (int i = 0; i < length; i++) {

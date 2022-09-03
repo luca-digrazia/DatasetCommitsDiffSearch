@@ -46,6 +46,7 @@ import com.oracle.graal.lir.LIRInstruction.StateProcedure;
 import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.util.*;
 
 /**
@@ -1577,7 +1578,7 @@ public final class LinearScan {
                     // check for duplicate edges between the same blocks (can happen with switch
                     // blocks)
                     if (!alreadyResolved.get(toBlock.getLinearScanNumber())) {
-                        if (TraceLinearScanLevel.getValue() >= 3) {
+                        if (GraalOptions.TraceLinearScanLevel.getValue() >= 3) {
                             TTY.println(" processing edge between B%d and B%d", fromBlock.getId(), toBlock.getId());
                         }
                         alreadyResolved.set(toBlock.getLinearScanNumber());

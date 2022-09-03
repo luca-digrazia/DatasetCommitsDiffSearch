@@ -30,17 +30,14 @@ import com.oracle.graal.options.*;
 
 public class HotSpotOptions {
 
-    private static final Map<String, OptionDescriptor> options = new HashMap<>();
+    private static final Map<String, OptionProvider> options = new HashMap<>();
 
     static {
-        ServiceLoader<Options> sl = ServiceLoader.loadInstalled(Options.class);
-        for (Options opts : sl) {
-            for (OptionDescriptor desc : opts) {
-                if (desc.getClass().getName().startsWith("com.oracle.graal")) {
-                    String name = desc.getName();
-                    OptionDescriptor existing = options.put(name, desc);
-                    assert existing == null : "Option named \"" + name + "\" has multiple definitions: " + existing.getLocation() + " and " + desc.getLocation();
-                }
+        ServiceLoader<OptionProvider> sl = ServiceLoader.loadInstalled(OptionProvider.class);
+        for (OptionProvider provider : sl) {
+            if (provider.getClass().getName().startsWith("com.oracle.graal")) {
+                String name = provider.getName();
+                options.put(name, provider);
             }
         }
     }
@@ -52,7 +49,7 @@ public class HotSpotOptions {
         }
 
         Object value = null;
-        String optionName = null;
+        String fieldName = null;
         String valueString = null;
 
         if (option.equals("+PrintFlags")) {
@@ -62,35 +59,35 @@ public class HotSpotOptions {
 
         char first = option.charAt(0);
         if (first == '+' || first == '-') {
-            optionName = option.substring(1);
+            fieldName = option.substring(1);
             value = (first == '+');
         } else {
             int index = option.indexOf('=');
             if (index == -1) {
-                optionName = option;
+                fieldName = option;
                 valueString = null;
             } else {
-                optionName = option.substring(0, index);
+                fieldName = option.substring(0, index);
                 valueString = option.substring(index + 1);
             }
         }
 
-        OptionDescriptor desc = options.get(optionName);
-        if (desc == null) {
-            Logger.info("Could not find option " + optionName + " (use -G:+PrintFlags to see Graal options)");
+        OptionProvider optionProvider = options.get(fieldName);
+        if (optionProvider == null) {
+            Logger.info("Could not find option " + fieldName + " (use -G:+PrintFlags to see Graal options)");
             return false;
         }
 
-        Class<?> optionType = desc.getType();
+        Class<?> optionType = optionProvider.getType();
 
         if (value == null) {
             if (optionType == Boolean.TYPE || optionType == Boolean.class) {
-                Logger.info("Value for boolean option '" + optionName + "' must use '-G:+" + optionName + "' or '-G:-" + optionName + "' format");
+                Logger.info("Value for boolean option '" + fieldName + "' must use '-G:+" + fieldName + "' or '-G:-" + fieldName + "' format");
                 return false;
             }
 
             if (valueString == null) {
-                Logger.info("Value for option '" + optionName + "' must use '-G:" + optionName + "=<value>' format");
+                Logger.info("Value for option '" + fieldName + "' must use '-G:" + fieldName + "=<value>' format");
                 return false;
             }
 
@@ -105,17 +102,16 @@ public class HotSpotOptions {
             }
         } else {
             if (optionType != Boolean.class) {
-                Logger.info("Value for option '" + optionName + "' must use '-G:" + optionName + "=<value>' format");
+                Logger.info("Value for option '" + fieldName + "' must use '-G:" + fieldName + "=<value>' format");
                 return false;
             }
         }
 
         if (value != null) {
-            OptionValue<?> optionValue = desc.getOptionValue();
-            optionValue.setValue(value);
+            optionProvider.getOptionValue().setValue(value);
             // Logger.info("Set option " + fieldName + " to " + value);
         } else {
-            Logger.info("Wrong value \"" + valueString + "\" for option " + optionName);
+            Logger.info("Wrong value \"" + valueString + "\" for option " + fieldName);
             return false;
         }
 
@@ -124,12 +120,12 @@ public class HotSpotOptions {
 
     private static void printFlags() {
         Logger.info("[Graal flags]");
-        SortedMap<String, OptionDescriptor> sortedOptions = new TreeMap<>(options);
-        for (Map.Entry<String, OptionDescriptor> e : sortedOptions.entrySet()) {
+        SortedMap<String, OptionProvider> sortedOptions = new TreeMap<>(options);
+        for (Map.Entry<String, OptionProvider> e : sortedOptions.entrySet()) {
             e.getKey();
-            OptionDescriptor desc = e.getValue();
-            Object value = desc.getOptionValue().getValue();
-            Logger.info(String.format("%9s %-40s = %-14s %s", desc.getType().getSimpleName(), e.getKey(), value, desc.getHelp()));
+            OptionProvider opt = e.getValue();
+            Object value = opt.getOptionValue().getValue();
+            Logger.info(String.format("%9s %-40s = %-14s %s", opt.getType().getSimpleName(), e.getKey(), value, opt.getHelp()));
         }
 
         System.exit(0);

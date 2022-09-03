@@ -38,7 +38,6 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.options.*;
@@ -141,22 +140,21 @@ public class GraalCompiler {
             new VerifyUsageWithEquals(runtime, Register.class).apply(graph);
         }
 
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(OptCanonicalizeReads.getValue());
-        HighTierContext highTierContext = new HighTierContext(runtime, assumptions, replacements);
-
         if (OptCanonicalizer.getValue()) {
-            canonicalizer.apply(graph, highTierContext);
+            new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
         }
+
+        HighTierContext highTierContext = new HighTierContext(runtime, assumptions, replacements);
 
         if (Inline.getValue() && !plan.isPhaseDisabled(InliningPhase.class)) {
             if (IterativeInlining.getValue()) {
-                new IterativeInliningPhase(replacements, cache, plan, optimisticOpts, OptEarlyReadElimination.getValue(), canonicalizer).apply(graph, highTierContext);
+                new IterativeInliningPhase(replacements, cache, plan, optimisticOpts, OptEarlyReadElimination.getValue()).apply(graph, highTierContext);
             } else {
                 new InliningPhase(runtime, null, replacements, assumptions, cache, plan, optimisticOpts).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
 
                 if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
-                    canonicalizer.apply(graph, highTierContext);
+                    new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
                     new IterativeConditionalEliminationPhase().apply(graph, highTierContext);
                 }
             }
@@ -173,12 +171,7 @@ public class GraalCompiler {
 
         LowTierContext lowTierContext = new LowTierContext(runtime, assumptions, replacements, target);
         Suites.DEFAULT.getLowTier().apply(graph, lowTierContext);
-
-        // we do not want to store statistics about OSR compilations because it may prevent inlining
-        boolean isOSRCompilation = graph.start() instanceof OSRStartNode;
-        if (!isOSRCompilation) {
-            InliningPhase.storeStatisticsAfterLowTier(graph);
-        }
+        InliningPhase.storeStatisticsAfterLowTier(graph);
 
         final SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);

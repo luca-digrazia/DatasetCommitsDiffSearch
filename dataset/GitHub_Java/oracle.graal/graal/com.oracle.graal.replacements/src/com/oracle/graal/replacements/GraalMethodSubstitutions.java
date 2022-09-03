@@ -41,7 +41,6 @@ public class GraalMethodSubstitutions implements ReplacementsProvider {
         }
 
         if (Intrinsify.getValue()) {
-            replacements.registerSubstitutions(ArraySubstitutions.class);
             replacements.registerSubstitutions(MathSubstitutionsX86.class);
             replacements.registerSubstitutions(DoubleSubstitutions.class);
             replacements.registerSubstitutions(FloatSubstitutions.class);

@@ -24,6 +24,7 @@ package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
 
@@ -124,14 +125,9 @@ public final class HotSpotMethodData extends CompilerObject {
         return unsafe.getShort(metaspaceMethodData + fullOffsetInBytes) & 0xFFFF;
     }
 
-    /**
-     * Since the values are stored in cells (platform words) this method uses
-     * {@link HotSpotGraalRuntime#unsafeReadWord} to read the right value on both little and big
-     * endian machines.
-     */
     private long readUnsignedInt(int position, int offsetInBytes) {
         long fullOffsetInBytes = computeFullOffset(position, offsetInBytes);
-        return unsafeReadWord(metaspaceMethodData + fullOffsetInBytes) & 0xFFFFFFFFL;
+        return unsafe.getInt(metaspaceMethodData + fullOffsetInBytes) & 0xFFFFFFFFL;
     }
 
     private int readUnsignedIntAsSignedInt(int position, int offsetInBytes) {
@@ -139,14 +135,9 @@ public final class HotSpotMethodData extends CompilerObject {
         return truncateLongToInt(value);
     }
 
-    /**
-     * Since the values are stored in cells (platform words) this method uses
-     * {@link HotSpotGraalRuntime#unsafeReadWord} to read the right value on both little and big
-     * endian machines.
-     */
     private int readInt(int position, int offsetInBytes) {
         long fullOffsetInBytes = computeFullOffset(position, offsetInBytes);
-        return (int) unsafeReadWord(metaspaceMethodData + fullOffsetInBytes);
+        return unsafe.getInt(metaspaceMethodData + fullOffsetInBytes);
     }
 
     private long readWord(int position, int offsetInBytes) {
@@ -385,7 +376,7 @@ public final class HotSpotMethodData extends CompilerObject {
         protected abstract long getTypesNotRecordedExecutionCount(HotSpotMethodData data, int position);
 
         private static JavaTypeProfile createTypeProfile(TriState nullSeen, ResolvedJavaType[] types, long[] counts, long totalCount, int entries) {
-            if (entries <= 0 || totalCount <= 0) {
+            if (entries <= 0 || totalCount < MatureExecutionsTypeProfile.getValue()) {
                 return null;
             }
 
@@ -493,7 +484,7 @@ public final class HotSpotMethodData extends CompilerObject {
         }
 
         private static JavaMethodProfile createMethodProfile(ResolvedJavaMethod[] methods, long[] counts, long totalCount, int entries) {
-            if (entries <= 0 || totalCount <= 0) {
+            if (entries <= 0 || totalCount < MatureExecutionsTypeProfile.getValue()) {
                 return null;
             }
 
@@ -549,7 +540,11 @@ public final class HotSpotMethodData extends CompilerObject {
             long notTakenCount = data.readUnsignedInt(position, NOT_TAKEN_COUNT_OFFSET);
             long total = takenCount + notTakenCount;
 
-            return total <= 0 ? -1 : takenCount / (double) total;
+            if (total < MatureExecutionsBranch.getValue()) {
+                return -1;
+            } else {
+                return takenCount / (double) total;
+            }
         }
 
         @Override
@@ -612,7 +607,7 @@ public final class HotSpotMethodData extends CompilerObject {
                 result[i - 1] = count;
             }
 
-            if (totalCount <= 0) {
+            if (totalCount < MatureExecutionsPerSwitchCase.getValue() * length) {
                 return null;
             } else {
                 for (int i = 0; i < length; i++) {

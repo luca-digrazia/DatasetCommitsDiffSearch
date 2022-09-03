@@ -87,24 +87,16 @@ class VirtualizerToolImpl implements VirtualizerTool {
         ObjectState obj = (ObjectState) objectState;
         assert obj != null && obj.isVirtual() : "not virtual: " + obj;
         ObjectState valueState = state.getObjectState(value);
-        ValueNode newValue = value;
         if (valueState == null) {
-            newValue = getReplacedValue(value);
-            assert obj.getEntry(index) == null || obj.getEntry(index).kind() == newValue.kind() || (isObjectEntry(obj.getEntry(index)) && isObjectEntry(newValue));
+            obj.setEntry(index, getReplacedValue(value));
         } else {
+            ValueNode newValue = value;
             if (valueState.getState() != EscapeState.Virtual) {
                 newValue = valueState.getMaterializedValue();
-                assert newValue.kind() == Kind.Object;
-            } else {
-                newValue = valueState.getVirtualObject();
             }
-            assert obj.getEntry(index) == null || isObjectEntry(obj.getEntry(index));
+            assert obj.getEntry(index) == null || obj.getEntry(index).kind() == newValue.kind();
+            obj.setEntry(index, newValue);
         }
-        obj.setEntry(index, newValue);
-    }
-
-    private static boolean isObjectEntry(ValueNode value) {
-        return value.kind() == Kind.Object || value instanceof VirtualObjectNode;
     }
 
     @Override

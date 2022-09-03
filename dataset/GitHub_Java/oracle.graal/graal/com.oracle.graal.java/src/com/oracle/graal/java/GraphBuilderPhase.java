@@ -546,7 +546,7 @@ public class GraphBuilderPhase extends Phase {
         ValueNode y = frameState.pop(result);
         ValueNode x = frameState.pop(result);
         boolean isStrictFP = isStrict(method.getModifiers());
-        BinaryNode v;
+        ArithmeticNode v;
         switch (opcode) {
             case IADD:
             case LADD:
@@ -914,12 +914,12 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void emitNullCheck(ValueNode receiver) {
-        if (ObjectStamp.isObjectNonNull(receiver.stamp())) {
+        if (receiver.stamp().nonNull()) {
             return;
         }
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
         BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
-        append(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 0.01));
+        append(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 0.1));
         lastInstr = falseSucc;
 
         if (OmitHotExceptionStacktrace.getValue()) {
@@ -943,7 +943,7 @@ public class GraphBuilderPhase extends Phase {
     private void emitBoundsCheck(ValueNode index, ValueNode length) {
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
         BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
-        append(new IfNode(currentGraph.unique(new IntegerBelowThanNode(index, length)), trueSucc, falseSucc, 0.99));
+        append(new IfNode(currentGraph.unique(new IntegerBelowThanNode(index, length)), trueSucc, falseSucc, 0.9));
         lastInstr = trueSucc;
 
         if (OmitHotExceptionStacktrace.getValue()) {
@@ -1103,11 +1103,8 @@ public class GraphBuilderPhase extends Phase {
         }
         // 1. check if the exact type of the receiver can be determined
         ResolvedJavaType exact = klass.asExactType();
-        if (exact == null && receiver.stamp() instanceof ObjectStamp) {
-            ObjectStamp receiverStamp = (ObjectStamp) receiver.stamp();
-            if (receiverStamp.isExactType()) {
-                exact = receiverStamp.type();
-            }
+        if (exact == null && receiver.objectStamp().isExactType()) {
+            exact = receiver.objectStamp().type();
         }
         if (exact != null) {
             // either the holder class is exact, or the receiver object has an exact type

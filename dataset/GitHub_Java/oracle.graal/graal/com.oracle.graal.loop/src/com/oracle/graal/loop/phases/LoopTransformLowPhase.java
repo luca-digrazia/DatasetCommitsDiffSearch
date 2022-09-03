@@ -25,7 +25,6 @@ package com.oracle.graal.loop.phases;
 import static com.oracle.graal.phases.GraalOptions.*;
 
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.*;
@@ -40,13 +39,15 @@ public class LoopTransformLowPhase extends Phase {
         if (graph.hasLoops()) {
             if (ReassociateInvariants.getValue()) {
                 final LoopsData dataReassociate = new LoopsData(graph);
-                try (Scope s = Debug.scope("ReassociateInvariants")) {
-                    for (LoopEx loop : dataReassociate.loops()) {
-                        loop.reassociateInvariants();
+                Debug.scope("ReassociateInvariants", new Runnable() {
+
+                    @Override
+                    public void run() {
+                        for (LoopEx loop : dataReassociate.loops()) {
+                            loop.reassociateInvariants();
+                        }
                     }
-                } catch (Throwable e) {
-                    throw Debug.handle(e);
-                }
+                });
             }
             if (LoopUnswitch.getValue()) {
                 boolean unswitched;

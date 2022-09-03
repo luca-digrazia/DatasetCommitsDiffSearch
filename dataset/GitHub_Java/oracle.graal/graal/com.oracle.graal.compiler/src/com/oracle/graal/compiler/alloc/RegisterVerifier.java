@@ -23,6 +23,8 @@
 package com.oracle.graal.compiler.alloc;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.phases.GraalOptions.*;
+
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
@@ -90,7 +92,7 @@ final class RegisterVerifier {
     }
 
     private void processBlock(Block block) {
-        if (allocator.getTraceLevel() >= 2) {
+        if (TraceLinearScanLevel.getValue() >= 2) {
             TTY.println();
             TTY.println("processBlock B%d", block.getId());
         }
@@ -98,7 +100,7 @@ final class RegisterVerifier {
         // must copy state because it is modified
         Interval[] inputState = copy(stateForBlock(block));
 
-        if (allocator.getTraceLevel() >= 4) {
+        if (TraceLinearScanLevel.getValue() >= 4) {
             TTY.println("Input-State of intervals:");
             TTY.print("    ");
             for (int i = 0; i < stateSize(); i++) {
@@ -140,7 +142,7 @@ final class RegisterVerifier {
                         savedStateCorrect = false;
                         savedState[i] = null;
 
-                        if (allocator.getTraceLevel() >= 4) {
+                        if (TraceLinearScanLevel.getValue() >= 4) {
                             TTY.println("processSuccessor B%d: invalidating slot %d", block.getId(), i);
                         }
                     }
@@ -149,12 +151,12 @@ final class RegisterVerifier {
 
             if (savedStateCorrect) {
                 // already processed block with correct inputState
-                if (allocator.getTraceLevel() >= 2) {
+                if (TraceLinearScanLevel.getValue() >= 2) {
                     TTY.println("processSuccessor B%d: previous visit already correct", block.getId());
                 }
             } else {
                 // must re-visit this block
-                if (allocator.getTraceLevel() >= 2) {
+                if (TraceLinearScanLevel.getValue() >= 2) {
                     TTY.println("processSuccessor B%d: must re-visit because input state changed", block.getId());
                 }
                 addToWorkList(block);
@@ -162,7 +164,7 @@ final class RegisterVerifier {
 
         } else {
             // block was not processed before, so set initial inputState
-            if (allocator.getTraceLevel() >= 2) {
+            if (TraceLinearScanLevel.getValue() >= 2) {
                 TTY.println("processSuccessor B%d: initial visit", block.getId());
             }
 
@@ -175,16 +177,16 @@ final class RegisterVerifier {
         return inputState.clone();
     }
 
-    static void statePut(Interval[] inputState, Value location, Interval interval, int traceLevel) {
+    static void statePut(Interval[] inputState, Value location, Interval interval) {
         if (location != null && isRegister(location)) {
             Register reg = asRegister(location);
             int regNum = reg.number;
             if (interval != null) {
-                if (traceLevel >= 4) {
+                if (TraceLinearScanLevel.getValue() >= 4) {
                     TTY.println("        %s = %s", reg, interval.operand);
                 }
             } else if (inputState[regNum] != null) {
-                if (traceLevel >= 4) {
+                if (TraceLinearScanLevel.getValue() >= 4) {
                     TTY.println("        %s = null", reg);
                 }
             }
@@ -207,7 +209,7 @@ final class RegisterVerifier {
         for (int i = 0; i < ops.size(); i++) {
             final LIRInstruction op = ops.get(i);
 
-            if (allocator.getTraceLevel() >= 4) {
+            if (TraceLinearScanLevel.getValue() >= 4) {
                 TTY.println(op.toStringWithIdPrefix());
             }
 
@@ -237,7 +239,7 @@ final class RegisterVerifier {
                             interval = interval.getSplitChildAtOpId(op.id(), mode, allocator);
                         }
 
-                        statePut(inputState, interval.location(), interval.splitParent(), allocator.getTraceLevel());
+                        statePut(inputState, interval.location(), interval.splitParent());
                     }
                     return operand;
                 }
@@ -248,7 +250,7 @@ final class RegisterVerifier {
             // invalidate all caller save registers at calls
             if (op.destroysCallerSavedRegisters()) {
                 for (Register r : allocator.frameMap.registerConfig.getCallerSaveRegisters()) {
-                    statePut(inputState, r.asValue(), null, allocator.getTraceLevel());
+                    statePut(inputState, r.asValue(), null);
                 }
             }
             op.forEachAlive(useProc);

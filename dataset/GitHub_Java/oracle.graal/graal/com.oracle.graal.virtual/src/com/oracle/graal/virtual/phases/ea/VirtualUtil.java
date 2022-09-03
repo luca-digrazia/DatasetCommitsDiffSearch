@@ -67,6 +67,9 @@ public final class VirtualUtil {
         }
 
         for (Node node : graph.getNodes()) {
+            if (node instanceof LocalNode) {
+                flood.add(node);
+            }
             if (flood.isMarked(node)) {
                 for (Node input : node.inputs()) {
                     flood.add(input);
@@ -108,7 +111,7 @@ public final class VirtualUtil {
         }
     }
 
-    public static boolean matches(StructuredGraph graph, String filter) {
+    static boolean matches(StructuredGraph graph, String filter) {
         if (filter != null) {
             if (filter.startsWith("~")) {
                 ResolvedJavaMethod method = graph.method();

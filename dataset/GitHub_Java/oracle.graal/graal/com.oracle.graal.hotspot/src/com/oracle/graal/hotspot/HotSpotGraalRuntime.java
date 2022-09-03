@@ -23,6 +23,7 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.graph.UnsafeAccess.*;
+//import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -31,16 +32,12 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
-
-//import static com.oracle.graal.phases.GraalOptions.*;
 
 /**
  * Singleton class holding the instance of the {@link GraalRuntime}.
@@ -89,11 +86,9 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         runtime.compilerToVm = toVM;
     }
 
-    private static final String DEFAULT_GRAAL_RUNTIME = "basic";
-
     // @formatter:off
     @Option(help = "The runtime configuration to use")
-    private static final OptionValue<String> GraalRuntime = new OptionValue<>(DEFAULT_GRAAL_RUNTIME);
+    private static final OptionValue<String> GraalRuntime = new OptionValue<>("basic");
     // @formatter:on
 
     protected static HotSpotGraalRuntimeFactory findFactory(String architecture) {
@@ -101,11 +96,6 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
             if (factory.getArchitecture().equals(architecture) && factory.getName().equals(GraalRuntime.getValue())) {
                 return factory;
             }
-        }
-        if (!DEFAULT_GRAAL_RUNTIME.equals(GraalRuntime.getValue())) {
-            // Fail fast if a non-default value for GraalRuntime was specified
-            // and the corresponding factory is not available
-            throw new GraalInternalError("Specified runtime \"%s\" not available for the %s architecture", GraalRuntime.getValue(), architecture);
         }
         return null;
     }
@@ -319,7 +309,7 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         if (clazz == GraalCodeCacheProvider.class || clazz == CodeCacheProvider.class || clazz == MetaAccessProvider.class) {
             return (T) getRuntime();
         }
-        if (clazz == DisassemblerProvider.class || clazz == BytecodeDisassemblerProvider.class || clazz == SuitesProvider.class) {
+        if (clazz == DisassemblerProvider.class || clazz == BytecodeDisassemblerProvider.class) {
             return (T) getRuntime();
         }
         if (clazz == HotSpotRuntime.class) {

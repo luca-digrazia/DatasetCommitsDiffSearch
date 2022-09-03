@@ -30,7 +30,6 @@ import java.util.*;
 import java.util.Map.Entry;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -97,8 +96,7 @@ public class HotSpotGraphCache implements GraphCache {
 
     private final Map<Long, WeakReference<ResolvedJavaMethod>> cachedGraphIds = Collections.synchronizedMap(new LRUCache());
 
-    public HotSpotGraphCache(CompilerToVM compilerToVM) {
-        this.compilerToVM = compilerToVM;
+    public HotSpotGraphCache() {
         if (PrintGraphCache.getValue()) {
             Runtime.getRuntime().addShutdownHook(new Thread() {
 
@@ -129,18 +127,14 @@ public class HotSpotGraphCache implements GraphCache {
     }
 
     @Override
-    public boolean put(StructuredGraph graph, boolean hasMatureProfilingInfo) {
+    public void put(StructuredGraph graph) {
         assert graph.method() != null;
-        if (hasMatureProfilingInfo) {
-            cachedGraphIds.put(graph.graphId(), new WeakReference<>(graph.method()));
-            graph.method().getCompilerStorage().put(this, graph);
+        cachedGraphIds.put(graph.graphId(), new WeakReference<>(graph.method()));
+        graph.method().getCompilerStorage().put(this, graph);
 
-            if (PrintGraphCache.getValue()) {
-                putCounter++;
-            }
-            return true;
+        if (PrintGraphCache.getValue()) {
+            putCounter++;
         }
-        return false;
     }
 
     public void clear() {
@@ -175,19 +169,6 @@ public class HotSpotGraphCache implements GraphCache {
             }
             if (PrintGraphCache.getValue()) {
                 removeCounter++;
-            }
-        }
-    }
-
-    private final CompilerToVM compilerToVM;
-
-    public void removeStaleGraphs() {
-        long[] deoptedGraphs = compilerToVM.getDeoptedLeafGraphIds();
-        if (deoptedGraphs != null) {
-            if (deoptedGraphs.length == 0) {
-                clear();
-            } else {
-                removeGraphs(deoptedGraphs);
             }
         }
     }

@@ -316,21 +316,16 @@ public class ReplacementsImpl implements Replacements {
          */
         protected StructuredGraph buildInitialGraph(final ResolvedJavaMethod methodToParse) {
             final StructuredGraph graph = new StructuredGraph(methodToParse);
-            Debug.scope("buildInitialGraph", graph, new Runnable() {
+            GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault();
+            GraphBuilderPhase graphBuilder = new GraphBuilderPhase(runtime, config, OptimisticOptimizations.NONE);
+            graphBuilder.apply(graph);
 
-                @Override
-                public void run() {
-                    GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault();
-                    GraphBuilderPhase graphBuilder = new GraphBuilderPhase(runtime, config, OptimisticOptimizations.NONE);
-                    graphBuilder.apply(graph);
+            new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
+            if (OptCanonicalizer.getValue()) {
+                new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
+                new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
+            }
 
-                    new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
-                    if (OptCanonicalizer.getValue()) {
-                        new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
-                        new CanonicalizerPhase.Instance(runtime, assumptions, true).apply(graph);
-                    }
-                }
-            });
             return graph;
         }
 
@@ -343,7 +338,7 @@ public class ReplacementsImpl implements Replacements {
         protected void afterInline(StructuredGraph caller, StructuredGraph callee) {
             if (OptCanonicalizer.getValue()) {
                 new WordTypeRewriterPhase(runtime, target.wordKind).apply(caller);
-                new CanonicalizerPhase.Instance(runtime, assumptions, true).apply(caller);
+                new CanonicalizerPhase.Instance(runtime, assumptions).apply(caller);
             }
         }
 
@@ -357,58 +352,53 @@ public class ReplacementsImpl implements Replacements {
 
             new DeadCodeEliminationPhase().apply(graph);
             if (OptCanonicalizer.getValue()) {
-                new CanonicalizerPhase.Instance(runtime, assumptions, true).apply(graph);
+                new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
             }
         }
 
         private StructuredGraph buildGraph(final ResolvedJavaMethod methodToParse, final SnippetInliningPolicy policy) {
             assert !Modifier.isAbstract(methodToParse.getModifiers()) && !Modifier.isNative(methodToParse.getModifiers()) : methodToParse;
             final StructuredGraph graph = buildInitialGraph(methodToParse);
-            Debug.scope("buildGraph", graph, new Runnable() {
 
-                @Override
-                public void run() {
-                    for (MethodCallTargetNode callTarget : graph.getNodes(MethodCallTargetNode.class)) {
-                        ResolvedJavaMethod callee = callTarget.targetMethod();
-                        if (callee == method) {
-                            final StructuredGraph originalGraph = new StructuredGraph(original);
-                            new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(originalGraph);
-                            InliningUtil.inline(callTarget.invoke(), originalGraph, true);
+            for (MethodCallTargetNode callTarget : graph.getNodes(MethodCallTargetNode.class)) {
+                ResolvedJavaMethod callee = callTarget.targetMethod();
+                if (callee == method) {
+                    final StructuredGraph originalGraph = new StructuredGraph(original);
+                    new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(originalGraph);
+                    InliningUtil.inline(callTarget.invoke(), originalGraph, true);
 
-                            Debug.dump(graph, "after inlining %s", callee);
-                            afterInline(graph, originalGraph);
-                            substituteCallsOriginal = true;
+                    Debug.dump(graph, "after inlining %s", callee);
+                    afterInline(graph, originalGraph);
+                    substituteCallsOriginal = true;
+                } else {
+                    StructuredGraph intrinsicGraph = InliningUtil.getIntrinsicGraph(ReplacementsImpl.this, callee);
+                    if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) &&
+                                    (policy.shouldInline(callee, methodToParse) || (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)))) {
+                        StructuredGraph targetGraph;
+                        if (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)) {
+                            targetGraph = intrinsicGraph;
                         } else {
-                            StructuredGraph intrinsicGraph = InliningUtil.getIntrinsicGraph(ReplacementsImpl.this, callee);
-                            if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) &&
-                                            (policy.shouldInline(callee, methodToParse) || (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)))) {
-                                StructuredGraph targetGraph;
-                                if (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)) {
-                                    targetGraph = intrinsicGraph;
-                                } else {
-                                    if (callee.getName().startsWith("$jacoco")) {
-                                        throw new GraalInternalError("Parsing call to JaCoCo instrumentation method " + format("%H.%n(%p)", callee) + " from " + format("%H.%n(%p)", methodToParse) +
-                                                        " while preparing replacement " + format("%H.%n(%p)", method) + ". Placing \"//JaCoCo Exclude\" anywhere in " +
-                                                        methodToParse.getDeclaringClass().getSourceFileName() + " should fix this.");
-                                    }
-                                    targetGraph = parseGraph(callee, policy);
-                                }
-                                InliningUtil.inline(callTarget.invoke(), targetGraph, true);
-                                Debug.dump(graph, "after inlining %s", callee);
-                                afterInline(graph, targetGraph);
+                            if (callee.getName().startsWith("$jacoco")) {
+                                throw new GraalInternalError("Parsing call to JaCoCo instrumentation method " + format("%H.%n(%p)", callee) + " from " + format("%H.%n(%p)", methodToParse) +
+                                                " while preparing replacement " + format("%H.%n(%p)", method) + ". Placing \"//JaCoCo Exclude\" anywhere in " +
+                                                methodToParse.getDeclaringClass().getSourceFileName() + " should fix this.");
                             }
+                            targetGraph = parseGraph(callee, policy);
                         }
+                        InliningUtil.inline(callTarget.invoke(), targetGraph, true);
+                        Debug.dump(graph, "after inlining %s", callee);
+                        afterInline(graph, targetGraph);
                     }
-
-                    afterInlining(graph);
-
-                    for (LoopEndNode end : graph.getNodes(LoopEndNode.class)) {
-                        end.disableSafepoint();
-                    }
-
-                    new DeadCodeEliminationPhase().apply(graph);
                 }
-            });
+            }
+
+            afterInlining(graph);
+
+            for (LoopEndNode end : graph.getNodes(LoopEndNode.class)) {
+                end.disableSafepoint();
+            }
+
+            new DeadCodeEliminationPhase().apply(graph);
             return graph;
         }
     }

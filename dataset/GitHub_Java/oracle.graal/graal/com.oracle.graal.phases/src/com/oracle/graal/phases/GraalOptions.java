@@ -87,7 +87,11 @@ public final class GraalOptions {
     @Option(help = "")
     public static final OptionValue<Integer> DeoptsToDisableOptimisticOptimization = new OptionValue<>(40);
     @Option(help = "")
-    public static final OptionValue<Integer> MatureProfilingInformationThreshold = new OptionValue<>(100);
+    public static final OptionValue<Integer> MatureExecutionsBranch = new OptionValue<>(1);
+    @Option(help = "")
+    public static final OptionValue<Integer> MatureExecutionsPerSwitchCase = new OptionValue<>(1);
+    @Option(help = "")
+    public static final OptionValue<Integer> MatureExecutionsTypeProfile = new OptionValue<>(1);
 
     // comilation queue
     @Option(help = "")
@@ -190,7 +194,7 @@ public final class GraalOptions {
     @Option(help = "")
     public static final OptionValue<Boolean> HotSpotPrintCompilation = new OptionValue<>(false);
     @Option(help = "")
-    public static final OptionValue<Boolean> HotSpotPrintInlining = new OptionValue<>(true);
+    public static final OptionValue<Boolean> HotSpotPrintInlining = new OptionValue<>(false);
 
     // Register allocator debugging
     @Option(help = "")
@@ -257,11 +261,11 @@ public final class GraalOptions {
     @Option(help = "")
     public static final OptionValue<Boolean> OptReadElimination = new OptionValue<>(true);
     @Option(help = "")
+    public static final OptionValue<Boolean> OptEarlyReadElimination = new OptionValue<>(true);
+    @Option(help = "")
     public static final OptionValue<Boolean> OptCanonicalizer = new OptionValue<>(true);
     @Option(help = "")
-    public static final OptionValue<Boolean> OptCanonicalizeReads = new OptionValue<>(true);
-    @Option(help = "")
-     public static final OptionValue<Boolean> OptScheduleOutOfLoops = new OptionValue<>(true);
+    public static final OptionValue<Boolean> OptScheduleOutOfLoops = new OptionValue<>(true);
     @Option(help = "")
     public static final OptionValue<Boolean> OptEliminateGuards = new OptionValue<>(true);
     @Option(help = "")

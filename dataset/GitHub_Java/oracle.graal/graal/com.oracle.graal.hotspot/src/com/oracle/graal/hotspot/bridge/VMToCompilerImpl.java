@@ -52,7 +52,6 @@ import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.printer.*;
 import com.oracle.graal.replacements.*;
 
 /**
@@ -73,14 +72,11 @@ public class VMToCompilerImpl implements VMToCompiler {
     @Option(help = "Print compilation queue activity periodically")
     private static final OptionValue<Boolean> PrintQueue = new OptionValue<>(false);
 
-    @Option(help = "")
-    public static final OptionValue<Integer> SlowQueueCutoff = new OptionValue<>(100000);
-
     @Option(help = "Time limit in milliseconds for bootstrap (-1 for no limit)")
     private static final OptionValue<Integer> TimedBootstrap = new OptionValue<>(-1);
 
     @Option(help = "Number of compilation threads to use")
-    private static final StableOptionValue<Integer> Threads = new StableOptionValue<Integer>() {
+    private static final OptionValue<Integer> Threads = new OptionValue<Integer>() {
 
         @Override
         public Integer initialValue() {
@@ -180,7 +176,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         }
 
         if (DebugEnabled.getValue()) {
-            DebugEnvironment.initialize(log);
+            Debug.enable();
         }
 
         // Install intrinsics.

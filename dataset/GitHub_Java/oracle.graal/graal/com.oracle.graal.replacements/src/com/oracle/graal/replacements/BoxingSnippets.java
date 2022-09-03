@@ -37,7 +37,6 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.replacements.Snippet.SnippetInliningPolicy;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
@@ -79,49 +78,49 @@ public class BoxingSnippets implements Snippets {
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Boolean booleanValueOf(boolean value) {
         valueOfCounter.inc();
-        return PiNode.piCast(Boolean.valueOf(value), StampFactory.forNodeIntrinsic());
+        return UnsafeCastNode.unsafeCast(Boolean.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Byte byteValueOf(byte value) {
         valueOfCounter.inc();
-        return PiNode.piCast(Byte.valueOf(value), StampFactory.forNodeIntrinsic());
+        return UnsafeCastNode.unsafeCast(Byte.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Character charValueOf(char value) {
         valueOfCounter.inc();
-        return PiNode.piCast(Character.valueOf(value), StampFactory.forNodeIntrinsic());
+        return UnsafeCastNode.unsafeCast(Character.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Double doubleValueOf(double value) {
         valueOfCounter.inc();
-        return PiNode.piCast(Double.valueOf(value), StampFactory.forNodeIntrinsic());
+        return UnsafeCastNode.unsafeCast(Double.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Float floatValueOf(float value) {
         valueOfCounter.inc();
-        return PiNode.piCast(Float.valueOf(value), StampFactory.forNodeIntrinsic());
+        return UnsafeCastNode.unsafeCast(Float.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Integer intValueOf(int value) {
         valueOfCounter.inc();
-        return PiNode.piCast(Integer.valueOf(value), StampFactory.forNodeIntrinsic());
+        return UnsafeCastNode.unsafeCast(Integer.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Long longValueOf(long value) {
         valueOfCounter.inc();
-        return PiNode.piCast(Long.valueOf(value), StampFactory.forNodeIntrinsic());
+        return UnsafeCastNode.unsafeCast(Long.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Short shortValueOf(short value) {
         valueOfCounter.inc();
-        return PiNode.piCast(Short.valueOf(value), StampFactory.forNodeIntrinsic());
+        return UnsafeCastNode.unsafeCast(Short.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
@@ -172,27 +171,27 @@ public class BoxingSnippets implements Snippets {
         return value.shortValue();
     }
 
-    public static FloatingNode canonicalizeBoxing(BoxNode box, MetaAccessProvider metaAccess) {
+    public static FloatingNode canonicalizeBoxing(BoxNode box, MetaAccessProvider runtime) {
         ValueNode value = box.getValue();
         if (value.isConstant()) {
             Constant sourceConstant = value.asConstant();
             switch (box.getBoxingKind()) {
                 case Boolean:
-                    return ConstantNode.forObject(Boolean.valueOf(sourceConstant.asInt() != 0), metaAccess, box.graph());
+                    return ConstantNode.forObject(Boolean.valueOf(sourceConstant.asInt() != 0), runtime, box.graph());
                 case Byte:
-                    return ConstantNode.forObject(Byte.valueOf((byte) sourceConstant.asInt()), metaAccess, box.graph());
+                    return ConstantNode.forObject(Byte.valueOf((byte) sourceConstant.asInt()), runtime, box.graph());
                 case Char:
-                    return ConstantNode.forObject(Character.valueOf((char) sourceConstant.asInt()), metaAccess, box.graph());
+                    return ConstantNode.forObject(Character.valueOf((char) sourceConstant.asInt()), runtime, box.graph());
                 case Short:
-                    return ConstantNode.forObject(Short.valueOf((short) sourceConstant.asInt()), metaAccess, box.graph());
+                    return ConstantNode.forObject(Short.valueOf((short) sourceConstant.asInt()), runtime, box.graph());
                 case Int:
-                    return ConstantNode.forObject(Integer.valueOf(sourceConstant.asInt()), metaAccess, box.graph());
+                    return ConstantNode.forObject(Integer.valueOf(sourceConstant.asInt()), runtime, box.graph());
                 case Long:
-                    return ConstantNode.forObject(Long.valueOf(sourceConstant.asLong()), metaAccess, box.graph());
+                    return ConstantNode.forObject(Long.valueOf(sourceConstant.asLong()), runtime, box.graph());
                 case Float:
-                    return ConstantNode.forObject(Float.valueOf(sourceConstant.asFloat()), metaAccess, box.graph());
+                    return ConstantNode.forObject(Float.valueOf(sourceConstant.asFloat()), runtime, box.graph());
                 case Double:
-                    return ConstantNode.forObject(Double.valueOf(sourceConstant.asDouble()), metaAccess, box.graph());
+                    return ConstantNode.forObject(Double.valueOf(sourceConstant.asDouble()), runtime, box.graph());
                 default:
                     assert false : "Unexpected source kind for boxing";
                     break;
@@ -206,39 +205,35 @@ public class BoxingSnippets implements Snippets {
         private final EnumMap<Kind, SnippetInfo> boxSnippets = new EnumMap<>(Kind.class);
         private final EnumMap<Kind, SnippetInfo> unboxSnippets = new EnumMap<>(Kind.class);
 
-        public Templates(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, CodeCacheProvider codeCache, LoweringProvider lowerer, Replacements replacements,
-                        TargetDescription target) {
-            super(metaAccess, constantReflection, codeCache, lowerer, replacements, target);
+        public Templates(MetaAccessProvider runtime, Replacements replacements, TargetDescription target) {
+            super(runtime, replacements, target);
             for (Kind kind : new Kind[]{Kind.Boolean, Kind.Byte, Kind.Char, Kind.Double, Kind.Float, Kind.Int, Kind.Long, Kind.Short}) {
                 boxSnippets.put(kind, snippet(BoxingSnippets.class, kind.getJavaName() + "ValueOf"));
                 unboxSnippets.put(kind, snippet(BoxingSnippets.class, kind.getJavaName() + "Value"));
             }
         }
 
-        public void lower(BoxNode box, LoweringTool tool) {
-            FloatingNode canonical = canonicalizeBoxing(box, metaAccess);
-            // if in AOT mode, we don't want to embed boxed constants.
-            if (canonical != null && !AOTCompilation.getValue()) {
-                box.graph().replaceFloating(box, canonical);
+        public void lower(BoxNode box) {
+            FloatingNode canonical = canonicalizeBoxing(box, runtime);
+            if (canonical != null) {
+                box.graph().replaceFixedWithFloating(box, canonical);
             } else {
-                Arguments args = new Arguments(boxSnippets.get(box.getBoxingKind()), box.graph().getGuardsStage());
+                Arguments args = new Arguments(boxSnippets.get(box.getBoxingKind()));
                 args.add("value", box.getValue());
 
                 SnippetTemplate template = template(args);
                 Debug.log("Lowering integerValueOf in %s: node=%s, template=%s, arguments=%s", box.graph(), box, template, args);
-                template.instantiate(metaAccess, box, DEFAULT_REPLACER, tool, args);
-                GraphUtil.killWithUnusedFloatingInputs(box);
+                template.instantiate(runtime, box, DEFAULT_REPLACER, args);
             }
         }
 
-        public void lower(UnboxNode unbox, LoweringTool tool) {
-            Arguments args = new Arguments(unboxSnippets.get(unbox.getBoxingKind()), unbox.graph().getGuardsStage());
+        public void lower(UnboxNode unbox) {
+            Arguments args = new Arguments(unboxSnippets.get(unbox.getBoxingKind()));
             args.add("value", unbox.getValue());
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering integerValueOf in %s: node=%s, template=%s, arguments=%s", unbox.graph(), unbox, template, args);
-            template.instantiate(metaAccess, unbox, DEFAULT_REPLACER, tool, args);
-            GraphUtil.killWithUnusedFloatingInputs(unbox);
+            template.instantiate(runtime, unbox, DEFAULT_REPLACER, args);
         }
     }
 

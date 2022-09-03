@@ -172,10 +172,12 @@ public class CheckCastSnippets implements Snippets {
             ValueNode hub = ConstantNode.forConstant(type.klass(), runtime, checkcast.graph());
 
             Arguments args;
-            if (hintInfo.exact != null) {
+            if (hintInfo.exact) {
+                ConstantNode[] hints = createHints(hintInfo, runtime, true, graph).hubs;
+                assert hints.length == 1;
                 args = new Arguments(exact);
                 args.add("object", object);
-                args.add("exactHub", ConstantNode.forConstant(((HotSpotResolvedObjectType) hintInfo.exact).klass(), runtime, graph));
+                args.add("exactHub", hints[0]);
             } else if (type.isPrimaryType()) {
                 args = new Arguments(primary);
                 args.add("hub", hub);

@@ -23,6 +23,8 @@
 package com.oracle.graal.compiler.alloc;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.phases.GraalOptions.*;
+
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
@@ -199,7 +201,7 @@ final class MoveResolver {
 
         insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
 
-        if (allocator.getTraceLevel() >= 4) {
+        if (TraceLinearScanLevel.getValue() >= 4) {
             TTY.println("MoveResolver: inserted move from %d (%s) to %d (%s)", fromInterval.operandNumber, fromInterval.location(), toInterval.operandNumber, toInterval.location());
         }
     }
@@ -211,7 +213,7 @@ final class MoveResolver {
         AllocatableValue toOpr = toInterval.operand;
         insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
 
-        if (allocator.getTraceLevel() >= 4) {
+        if (TraceLinearScanLevel.getValue() >= 4) {
             TTY.print("MoveResolver: inserted move from constant %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
         }
     }
@@ -283,7 +285,7 @@ final class MoveResolver {
                 }
                 spillInterval.assignLocation(spillSlot);
 
-                if (allocator.getTraceLevel() >= 4) {
+                if (TraceLinearScanLevel.getValue() >= 4) {
                     TTY.println("created new Interval %s for spilling", spillInterval.operand);
                 }
 
@@ -325,7 +327,7 @@ final class MoveResolver {
     }
 
     void addMapping(Interval fromInterval, Interval toInterval) {
-        if (allocator.getTraceLevel() >= 4) {
+        if (TraceLinearScanLevel.getValue() >= 4) {
             TTY.println("MoveResolver: adding mapping from interval %d (%s) to interval %d (%s)", fromInterval.operandNumber, fromInterval.location(), toInterval.operandNumber, toInterval.location());
         }
 
@@ -337,7 +339,7 @@ final class MoveResolver {
     }
 
     void addMapping(Value fromOpr, Interval toInterval) {
-        if (allocator.getTraceLevel() >= 4) {
+        if (TraceLinearScanLevel.getValue() >= 4) {
             TTY.println("MoveResolver: adding mapping from %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
         }
         assert isConstant(fromOpr) : "only for constants";

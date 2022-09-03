@@ -32,19 +32,17 @@ import com.oracle.graal.phases.tiers.*;
 public class MidTier extends PhaseSuite<MidTierContext> {
 
     public MidTier() {
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!AOTCompilation.getValue());
-
         if (OptPushThroughPi.getValue()) {
             addPhase(new PushThroughPiPhase());
             if (OptCanonicalizer.getValue()) {
-                addPhase(canonicalizer);
+                addPhase(new CanonicalizerPhase());
             }
         }
 
         if (OptFloatingReads.getValue()) {
-            IncrementalCanonicalizerPhase<MidTierContext> incCanonicalizer = new IncrementalCanonicalizerPhase<>();
-            incCanonicalizer.addPhase(new FloatingReadPhase());
-            addPhase(incCanonicalizer);
+            IncrementalCanonicalizerPhase<MidTierContext> canonicalizer = new IncrementalCanonicalizerPhase<>();
+            canonicalizer.addPhase(new FloatingReadPhase());
+            addPhase(canonicalizer);
             if (OptReadElimination.getValue()) {
                 addPhase(new ReadEliminationPhase());
             }
@@ -52,7 +50,7 @@ public class MidTier extends PhaseSuite<MidTierContext> {
         addPhase(new RemoveValueProxyPhase());
 
         if (OptCanonicalizer.getValue()) {
-            addPhase(canonicalizer);
+            addPhase(new CanonicalizerPhase());
         }
 
         if (OptEliminatePartiallyRedundantGuards.getValue()) {
@@ -68,7 +66,7 @@ public class MidTier extends PhaseSuite<MidTierContext> {
         }
 
         if (OptCanonicalizer.getValue()) {
-            addPhase(canonicalizer);
+            addPhase(new CanonicalizerPhase());
         }
 
         addPhase(new LoopSafepointEliminationPhase());
@@ -78,7 +76,7 @@ public class MidTier extends PhaseSuite<MidTierContext> {
         addPhase(new GuardLoweringPhase());
 
         if (OptCanonicalizer.getValue()) {
-            addPhase(canonicalizer);
+            addPhase(new CanonicalizerPhase());
         }
     }
 }
