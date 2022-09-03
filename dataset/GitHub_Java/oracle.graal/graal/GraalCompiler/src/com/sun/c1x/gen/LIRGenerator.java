@@ -27,6 +27,7 @@ import static com.sun.cri.bytecode.Bytecodes.MemoryBarriers.*;
 import static com.sun.cri.ci.CiCallingConvention.Type.*;
 import static com.sun.cri.ci.CiValue.*;
 
+import java.lang.reflect.*;
 import java.util.*;
 
 import com.sun.c1x.*;
@@ -42,6 +43,7 @@ import com.sun.c1x.opt.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
 import com.sun.c1x.value.FrameState.PhiProcedure;
+import com.sun.cri.bytecode.*;
 import com.sun.cri.bytecode.Bytecodes.MemoryBarriers;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -229,19 +231,6 @@ public abstract class LIRGenerator extends ValueVisitor {
 
         for (Instruction instr = block; instr != null; instr = instr.next()) {
             FrameState stateAfter = instr.stateAfter();
-            FrameState stateBefore = null;
-            if (instr instanceof StateSplit && ((StateSplit) instr).stateBefore() != null) {
-                stateBefore = ((StateSplit) instr).stateBefore();
-            }
-            if (stateBefore != null) {
-                lastState = stateBefore;
-                if (C1XOptions.TraceLIRGeneratorLevel >= 2) {
-                    TTY.println("STATE CHANGE (stateBefore)");
-                    if (C1XOptions.TraceLIRGeneratorLevel >= 3) {
-                        TTY.println(stateBefore.toString());
-                    }
-                }
-            }
             if (!(instr instanceof BlockBegin)) {
                 walkState(instr, stateAfter);
                 doRoot(instr);
@@ -279,10 +268,6 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitBase(Base x) {
-        // emit phi-instruction move after safepoint since this simplifies
-        // describing the state at the safepoint.
-        //moveToPhi();
-
         // all blocks with a successor must end with an unconditional jump
         // to the successor even if they are consecutive
         lir.jump(x.defaultSuccessor());
@@ -326,7 +311,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     public void visitInstanceOf(InstanceOf x) {
         XirArgument obj = toXirArgument(x.object());
         XirSnippet snippet = xir.genInstanceOf(site(x), obj, toXirArgument(x.targetClassInstruction()), x.targetClass());
-        emitXir(snippet, x, stateFor(x), null, true);
+        emitXir(snippet, x, maybeStateFor(x), null, true);
     }
 
     @Override
@@ -334,7 +319,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         XirArgument obj = toXirArgument(x.object());
         XirArgument lockAddress = toXirArgument(x.lockAddress());
         XirSnippet snippet = xir.genMonitorEnter(site(x), obj, lockAddress);
-        emitXir(snippet, x, stateFor(x), stateFor(x, x.stateAfter()), null, true, null);
+        emitXir(snippet, x, maybeStateFor(x), stateFor(x, x.stateAfter()), null, true, null);
     }
 
     @Override
@@ -342,7 +327,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         XirArgument obj = toXirArgument(x.object());
         XirArgument lockAddress = toXirArgument(x.lockAddress());
         XirSnippet snippet = xir.genMonitorExit(site(x), obj, lockAddress);
-        emitXir(snippet, x, stateFor(x), null, true);
+        emitXir(snippet, x, maybeStateFor(x), null, true);
     }
 
     @Override
@@ -352,7 +337,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         XirArgument index = toXirArgument(x.index());
         XirArgument value = toXirArgument(x.value());
         XirSnippet snippet = xir.genArrayStore(site(x), array, index, length, value, x.elementKind(), null);
-        emitXir(snippet, x, stateFor(x), null, true);
+        emitXir(snippet, x, maybeStateFor(x), null, true);
     }
 
     @Override
@@ -418,7 +403,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         });
 
         XirSnippet snippet = xir.genExceptionObject(site(x));
-        emitXir(snippet, x, stateFor(x), null, true);
+        emitXir(snippet, x, maybeStateFor(x), null, true);
     }
 
     @Override
@@ -458,25 +443,29 @@ public abstract class LIRGenerator extends ValueVisitor {
         lir.cmove(i.condition(), tVal, fVal, reg);
     }
 
-    protected FrameState stateBeforeInvoke(Invoke invoke) {
+    /*protected FrameState stateBeforeInvoke(Invoke invoke) {
         FrameState stateAfter = invoke.stateAfter();
         FrameStateBuilder builder = new FrameStateBuilder(compilation.method, invoke.graph());
+        System.out.println("stateBeforeInvoke(" + invoke + "); maxStack=" + compilation.method.maxStackSize());
+        System.out.println("stateAfter=" + stateAfter);
         builder.initializeFrom(stateAfter);
         if (invoke.kind != CiKind.Void) {
-            builder.pop(invoke.kind);
+            Value pop = builder.pop(invoke.kind);
+            System.out.println("pop " + pop);
         }
         int argumentCount = invoke.argumentCount(); // invoke.arguments() iterable?
         for (int i = 0; i < argumentCount; i++) {
             Value arg = invoke.argument(i);
+            System.out.println("push " + arg);
             builder.push(arg.kind, arg);
         }
         return builder.create(invoke.bci());
-    }
+    }*/
 
     @Override
     public void visitInvoke(Invoke x) {
         RiMethod target = x.target();
-        LIRDebugInfo info = stateFor(x, stateBeforeInvoke(x));
+        LIRDebugInfo info = stateFor(x);
 
         XirSnippet snippet = null;
 
@@ -561,7 +550,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         XirArgument index = toXirArgument(x.index());
         XirArgument length = toXirArgument(x.length());
         XirSnippet snippet = xir.genArrayLoad(site(x), array, index, length, x.elementKind(), null);
-        emitXir(snippet, x, stateFor(x), null, true);
+        emitXir(snippet, x, maybeStateFor(x), null, true);
     }
 
     protected GlobalStub stubFor(CiRuntimeCall runtimeCall) {
@@ -1012,18 +1001,14 @@ public abstract class LIRGenerator extends ValueVisitor {
         return operand;
     }
 
-    private FrameState stateBeforeRegisterFinalizer(RegisterFinalizer rf) {
-        Value object = rf.object();
-        FrameStateBuilder builder = new FrameStateBuilder(compilation.method, rf.graph());
-        builder.initializeFrom(rf.stateAfter());
-        builder.push(object.kind, object);
-        return builder.create(rf.bci());
-    }
-
     @Override
     public void visitRegisterFinalizer(RegisterFinalizer x) {
-        CiValue receiver = load(x.object());
-        LIRDebugInfo info = stateFor(x, stateBeforeRegisterFinalizer(x));
+        Value object = x.object();
+        CiValue receiver = load(object);
+        FrameStateBuilder builder = new FrameStateBuilder(compilation.method, x.graph());
+        builder.initializeFrom(x.stateAfter());
+        builder.push(object.kind, object);
+        LIRDebugInfo info = stateFor(x, builder.create(x.bci()));
         callRuntime(CiRuntimeCall.RegisterFinalizer, info, receiver);
         setNoResult(x);
     }
@@ -1465,7 +1450,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     private void walkStateValue(Value value) {
         if (value != null) {
-            assert !value.hasSubst() : "missed substitution on " + value.toString();
+            assert !value.hasSubst() : "missed substitution";
             if (value instanceof Phi && !value.isIllegal()) {
                 // phi's are special
                 operandForPhi((Phi) value);
@@ -1475,6 +1460,13 @@ public abstract class LIRGenerator extends ValueVisitor {
                 assert operand.isLegal() : "must be evaluated now";
             }
         }
+    }
+
+    protected LIRDebugInfo maybeStateFor(Instruction x) {
+        if (lastState == null) {
+            return null;
+        }
+        return stateFor(x, lastState);
     }
 
     protected LIRDebugInfo stateFor(Instruction x) {
@@ -1609,7 +1601,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
 
         public boolean requiresNullCheck() {
-            return current == null || current.canTrap() || current instanceof InstanceOf || current instanceof CheckCast;
+            return current == null || current.canTrap();
         }
 
         public boolean requiresBoundsCheck() {
@@ -1646,8 +1638,15 @@ public abstract class LIRGenerator extends ValueVisitor {
             return "XirSupport<" + current + ">";
         }
 
-
     }
+
+    private CiValue emitInvokeKnown(RiMethod method, FrameState stateBefore, Value... args) {
+        boolean isStatic = Modifier.isStatic(method.accessFlags());
+        Invoke invoke = new Invoke(isStatic ? Bytecodes.INVOKESTATIC : Bytecodes.INVOKESPECIAL, method.signature().returnKind(), args, method, null, stateBefore, null);
+        visitInvoke(invoke);
+        return invoke.operand();
+    }
+
 
     @Override
     public void visitFrameState(FrameState i) {
