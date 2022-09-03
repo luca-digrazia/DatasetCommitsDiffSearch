@@ -27,7 +27,7 @@ import java.util.*;
 
 import org.junit.*;
 
-import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
+import com.oracle.graal.compiler.hsail.test.infra.*;
 
 /**
  * This version of NBody causes Graal to generate register spilling code.
@@ -48,7 +48,7 @@ public class StaticNBodySpillTest extends GraalKernelTester {
     @Result private float[] invxyz = new float[bodies * 3];
     @Result private float[] outvxyz = new float[bodies * 3];
     static float[] seedxyz = new float[bodies * 3];
-    {
+    static {
         final float maxDist = width / 4;
         for (int body = 0; body < (bodies * 3); body += 3) {
             final float theta = (float) (Math.random() * Math.PI * 2);
@@ -95,10 +95,8 @@ public class StaticNBodySpillTest extends GraalKernelTester {
         dispatchMethodKernel(bodies, inxyz, outxyz, invxyz, outvxyz);
     }
 
-    // Marked to only run on hardware until simulator spill bug is fixed.
     @Test
     public void test() {
         testGeneratedHsail();
     }
-
 }

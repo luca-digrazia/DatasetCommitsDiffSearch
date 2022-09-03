@@ -62,8 +62,8 @@ public class HSAILHotSpotReplacementsImpl extends ReplacementsImpl {
 
     @Override
     public StructuredGraph getSnippet(ResolvedJavaMethod method) {
-        // Must work in cooperation with HSAILHotSpotLoweringProvider
-        return host.getSnippet(method);
+        // TODO must work in cooperation with HSAILHotSpotLoweringProvider
+        return null;
     }
 
     @Override

@@ -96,7 +96,7 @@ public class StaticNBodyTest extends GraalKernelTester {
     }
 
     @Test
-    public void test() throws Exception {
+    public void test() {
         testGeneratedHsail();
     }
 }

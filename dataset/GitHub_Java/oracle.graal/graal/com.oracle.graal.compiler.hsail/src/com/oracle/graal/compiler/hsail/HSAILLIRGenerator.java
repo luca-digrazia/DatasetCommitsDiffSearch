@@ -37,7 +37,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.hsail.*;
-import com.oracle.graal.lir.hsail.HSAILArithmetic.ConvertOp;
 import com.oracle.graal.lir.hsail.HSAILArithmetic.Op1Stack;
 import com.oracle.graal.lir.hsail.HSAILArithmetic.Op2Reg;
 import com.oracle.graal.lir.hsail.HSAILArithmetic.Op2Stack;
@@ -48,11 +47,11 @@ import com.oracle.graal.lir.hsail.HSAILControlFlow.FloatCompareBranchOp;
 import com.oracle.graal.lir.hsail.HSAILControlFlow.FloatCondMoveOp;
 import com.oracle.graal.lir.hsail.HSAILControlFlow.ReturnOp;
 import com.oracle.graal.lir.hsail.HSAILMove.LeaOp;
-import com.oracle.graal.lir.hsail.HSAILMove.MembarOp;
 import com.oracle.graal.lir.hsail.HSAILMove.MoveFromRegOp;
 import com.oracle.graal.lir.hsail.HSAILMove.MoveToRegOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.util.*;
 
 /**
@@ -171,7 +170,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
         append(new JumpOp(label));
     }
 
-    protected static HSAILCompare mapKindToCompareOp(Kind kind) {
+    private static HSAILCompare mapKindToCompareOp(Kind kind) {
         switch (kind) {
             case Int:
                 return ICMP;
@@ -613,8 +612,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitMembar(int barriers) {
-        int necessaryBarriers = target().arch.requiredBarriers(barriers);
-        append(new MembarOp(necessaryBarriers));
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
@@ -700,6 +698,11 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
 
     @Override
     protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key) {
+        throw GraalInternalError.unimplemented();
+    }
+
+    @Override
+    public void visitCompareAndSwap(LoweredCompareAndSwapNode node, Value address) {
         throw GraalInternalError.unimplemented();
     }
 

@@ -64,14 +64,6 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         return true;
     }
 
-    @Override
-    public void completeInitialization() {
-        final HotSpotProviders providers = getProviders();
-        HotSpotVMConfig config = getRuntime().getConfig();
-        final HotSpotLoweringProvider lowerer = (HotSpotLoweringProvider) providers.getLowerer();
-        lowerer.initialize(providers, config);
-    }
-
     /**
      * Use the HSAIL register set when the compilation target is HSAIL.
      */
