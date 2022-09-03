@@ -23,17 +23,17 @@
 package com.oracle.graal.asm.amd64;
 
 import static com.oracle.graal.asm.NumUtil.isByte;
+import static com.oracle.graal.asm.NumUtil.isUByte;
 import static com.oracle.graal.asm.NumUtil.isInt;
 import static com.oracle.graal.asm.NumUtil.isShiftCount;
-import static com.oracle.graal.asm.NumUtil.isUByte;
 import static com.oracle.graal.asm.amd64.AMD64AsmOptions.UseAddressNop;
 import static com.oracle.graal.asm.amd64.AMD64AsmOptions.UseNormalNop;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.ADD;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.AND;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.CMP;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.OR;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.SBB;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.SUB;
+import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.SBB;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.XOR;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MOp.DEC;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MOp.INC;
@@ -59,7 +59,6 @@ import static jdk.vm.ci.code.MemoryBarriers.STORE_LOAD;
 import com.oracle.graal.asm.Assembler;
 import com.oracle.graal.asm.Label;
 import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.amd64.AMD64.CPUFeature;
@@ -73,6 +72,12 @@ import jdk.vm.ci.code.TargetDescription;
 public class AMD64Assembler extends Assembler {
 
     private static final int MinEncodingNeedsRex = 8;
+
+    /**
+     * A sentinel value used as a place holder in an instruction stream for an address that will be
+     * patched.
+     */
+    private static final AMD64Address Placeholder = new AMD64Address(rip);
 
     /**
      * The x86 condition codes used for conditional jumps/moves.
@@ -231,11 +236,6 @@ public class AMD64Assembler extends Assembler {
                 assert imm == (byte) imm;
                 asm.emitByte(imm);
             }
-
-            @Override
-            protected int immediateSize() {
-                return 1;
-            }
         },
 
         WORD(2, 0x66) {
@@ -244,11 +244,6 @@ public class AMD64Assembler extends Assembler {
                 assert imm == (short) imm;
                 asm.emitShort(imm);
             }
-
-            @Override
-            protected int immediateSize() {
-                return 2;
-            }
         },
 
         DWORD(4) {
@@ -256,22 +251,12 @@ public class AMD64Assembler extends Assembler {
             protected void emitImmediate(AMD64Assembler asm, int imm) {
                 asm.emitInt(imm);
             }
-
-            @Override
-            protected int immediateSize() {
-                return 4;
-            }
         },
 
         QWORD(8) {
             @Override
             protected void emitImmediate(AMD64Assembler asm, int imm) {
                 asm.emitInt(imm);
-            }
-
-            @Override
-            protected int immediateSize() {
-                return 4;
             }
         },
 
@@ -322,11 +307,7 @@ public class AMD64Assembler extends Assembler {
          * @param imm
          */
         protected void emitImmediate(AMD64Assembler asm, int imm) {
-            throw new UnsupportedOperationException();
-        }
-
-        protected int immediateSize() {
-            throw new UnsupportedOperationException();
+            assert false;
         }
     }
 
@@ -369,55 +350,6 @@ public class AMD64Assembler extends Assembler {
 
             assert false : "invalid operand size " + size + " used in " + op;
             return false;
-        }
-    }
-
-    public abstract static class OperandDataAnnotation extends CodeAnnotation {
-        /**
-         * The position (bytes from the beginning of the method) of the operand.
-         */
-        public final int operandPosition;
-        /**
-         * The size of the operand, in bytes.
-         */
-        public final int operandSize;
-        /**
-         * The position (bytes from the beginning of the method) of the next instruction. On AMD64,
-         * RIP-relative operands are relative to this position.
-         */
-        public final int nextInstructionPosition;
-
-        OperandDataAnnotation(int instructionPosition, int operandPosition, int operandSize, int nextInstructionPosition) {
-            super(instructionPosition);
-
-            this.operandPosition = operandPosition;
-            this.operandSize = operandSize;
-            this.nextInstructionPosition = nextInstructionPosition;
-        }
-
-        @Override
-        public String toString() {
-            return getClass().getSimpleName() + " instruction [" + instructionPosition + ", " + nextInstructionPosition + "[ operand at " + operandPosition + " size " + operandSize;
-        }
-    }
-
-    /**
-     * Annotation that stores additional information about the displacement of a
-     * {@link Assembler#getPlaceholder placeholder address} that needs patching.
-     */
-    public static class AddressDisplacementAnnotation extends OperandDataAnnotation {
-        AddressDisplacementAnnotation(int instructionPosition, int operandPosition, int operndSize, int nextInstructionPosition) {
-            super(instructionPosition, operandPosition, operndSize, nextInstructionPosition);
-        }
-    }
-
-    /**
-     * Annotation that stores additional information about the immediate operand, e.g., of a call
-     * instruction, that needs patching.
-     */
-    public static class ImmediateOperandAnnotation extends OperandDataAnnotation {
-        ImmediateOperandAnnotation(int instructionPosition, int operandPosition, int operndSize, int nextInstructionPosition) {
-            super(instructionPosition, operandPosition, operndSize, nextInstructionPosition);
         }
     }
 
@@ -485,9 +417,9 @@ public class AMD64Assembler extends Assembler {
         emitModRM(reg.encoding & 0x07, rm);
     }
 
-    protected void emitOperandHelper(Register reg, AMD64Address addr, int additionalInstructionSize) {
+    protected void emitOperandHelper(Register reg, AMD64Address addr) {
         assert !reg.equals(Register.None);
-        emitOperandHelper(encode(reg), addr, false, additionalInstructionSize);
+        emitOperandHelper(encode(reg), addr, false);
     }
 
     /**
@@ -495,13 +427,13 @@ public class AMD64Assembler extends Assembler {
      *
      * @param force4Byte use 4 byte encoding for displacements that would normally fit in a byte
      */
-    protected void emitOperandHelper(Register reg, AMD64Address addr, boolean force4Byte, int additionalInstructionSize) {
+    protected void emitOperandHelper(Register reg, AMD64Address addr, boolean force4Byte) {
         assert !reg.equals(Register.None);
-        emitOperandHelper(encode(reg), addr, force4Byte, additionalInstructionSize);
+        emitOperandHelper(encode(reg), addr, force4Byte);
     }
 
-    protected void emitOperandHelper(int reg, AMD64Address addr, int additionalInstructionSize) {
-        emitOperandHelper(reg, addr, false, additionalInstructionSize);
+    protected void emitOperandHelper(int reg, AMD64Address addr) {
+        emitOperandHelper(reg, addr, false);
     }
 
     /**
@@ -509,11 +441,8 @@ public class AMD64Assembler extends Assembler {
      * extension in the R field.
      *
      * @param force4Byte use 4 byte encoding for displacements that would normally fit in a byte
-     * @param additionalInstructionSize the number of bytes that will be emitted after the operand,
-     *            so that the start position of the next instruction can be computed even though
-     *            this instruction has not been completely emitted yet.
      */
-    protected void emitOperandHelper(int reg, AMD64Address addr, boolean force4Byte, int additionalInstructionSize) {
+    protected void emitOperandHelper(int reg, AMD64Address addr, boolean force4Byte) {
         assert (reg & 0x07) == reg;
         int regenc = reg << 3;
 
@@ -523,13 +452,10 @@ public class AMD64Assembler extends Assembler {
         AMD64Address.Scale scale = addr.getScale();
         int disp = addr.getDisplacement();
 
-        if (base.equals(AMD64.rip)) { // also matches addresses returned by getPlaceholder()
+        if (base.equals(AMD64.rip)) { // also matches Placeholder
             // [00 000 101] disp32
             assert index.equals(Register.None) : "cannot use RIP relative addressing with index register";
             emitByte(0x05 | regenc);
-            if (codePatchingAnnotationConsumer != null && addr.instructionStartPosition >= 0) {
-                codePatchingAnnotationConsumer.accept(new AddressDisplacementAnnotation(addr.instructionStartPosition, position(), 4, position() + 4 + additionalInstructionSize));
-            }
             emitInt(disp);
         } else if (base.isValid()) {
             int baseenc = base.isValid() ? encode(base) : 0;
@@ -708,18 +634,10 @@ public class AMD64Assembler extends Assembler {
                 size.emitImmediate(asm, imm);
             }
         }
-
-        protected final int immediateSize(OperandSize size) {
-            if (immIsByte) {
-                return 1;
-            } else {
-                return size.bytes;
-            }
-        }
     }
 
     /**
-     * Opcode with operand order of either RM or MR for 2 address forms.
+     * Opcode with operand order of either RM or MR.
      */
     public abstract static class AMD64RROp extends AMD64Op {
 
@@ -732,22 +650,6 @@ public class AMD64Assembler extends Assembler {
         }
 
         public abstract void emit(AMD64Assembler asm, OperandSize size, Register dst, Register src);
-    }
-
-    /**
-     * Opcode with operand order of either RM or MR for 3 address forms.
-     */
-    public abstract static class AMD64RRROp extends AMD64Op {
-
-        protected AMD64RRROp(String opcode, int prefix1, int prefix2, int op, OpAssertion assertion, CPUFeature feature) {
-            super(opcode, prefix1, prefix2, op, assertion, feature);
-        }
-
-        protected AMD64RRROp(String opcode, int prefix1, int prefix2, int op, boolean dstIsByte, boolean srcIsByte, OpAssertion assertion, CPUFeature feature) {
-            super(opcode, prefix1, prefix2, op, dstIsByte, srcIsByte, assertion, feature);
-        }
-
-        public abstract void emit(AMD64Assembler asm, OperandSize size, Register dst, Register nds, Register src);
     }
 
     /**
@@ -962,130 +864,11 @@ public class AMD64Assembler extends Assembler {
                     asm.simdPrefix(dst, dst, src, pre, opc, attributes);
                 }
                 asm.emitByte(op);
-                asm.emitOperandHelper(dst, src, 0);
+                asm.emitOperandHelper(dst, src);
             } else {
                 emitOpcode(asm, size, getRXB(dst, src), dst.encoding, 0);
-                asm.emitOperandHelper(dst, src, 0);
+                asm.emitOperandHelper(dst, src);
             }
-        }
-    }
-
-    /**
-     * Opcode with operand order of RM.
-     */
-    public static class AMD64RRMOp extends AMD64RRROp {
-        protected AMD64RRMOp(String opcode, int op) {
-            this(opcode, 0, op);
-        }
-
-        protected AMD64RRMOp(String opcode, int op, OpAssertion assertion) {
-            this(opcode, 0, op, assertion);
-        }
-
-        protected AMD64RRMOp(String opcode, int prefix, int op) {
-            this(opcode, 0, prefix, op, null);
-        }
-
-        protected AMD64RRMOp(String opcode, int prefix, int op, OpAssertion assertion) {
-            this(opcode, 0, prefix, op, assertion, null);
-        }
-
-        protected AMD64RRMOp(String opcode, int prefix, int op, OpAssertion assertion, CPUFeature feature) {
-            this(opcode, 0, prefix, op, assertion, feature);
-        }
-
-        protected AMD64RRMOp(String opcode, int prefix, int op, boolean dstIsByte, boolean srcIsByte, OpAssertion assertion) {
-            super(opcode, 0, prefix, op, dstIsByte, srcIsByte, assertion, null);
-        }
-
-        protected AMD64RRMOp(String opcode, int prefix1, int prefix2, int op, CPUFeature feature) {
-            this(opcode, prefix1, prefix2, op, OpAssertion.IntegerAssertion, feature);
-        }
-
-        protected AMD64RRMOp(String opcode, int prefix1, int prefix2, int op, OpAssertion assertion, CPUFeature feature) {
-            super(opcode, prefix1, prefix2, op, assertion, feature);
-        }
-
-        @Override
-        public final void emit(AMD64Assembler asm, OperandSize size, Register dst, Register nds, Register src) {
-            assert verify(asm, size, dst, src);
-            int pre;
-            int opc;
-            boolean rexVexW = (size == QWORD) ? true : false;
-            AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, rexVexW, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, asm.target);
-            int curPrefix = size.sizePrefix | prefix1;
-            switch (curPrefix) {
-                case 0x66:
-                    pre = VexSimdPrefix.VEX_SIMD_66;
-                    break;
-                case 0xF2:
-                    pre = VexSimdPrefix.VEX_SIMD_F2;
-                    break;
-                case 0xF3:
-                    pre = VexSimdPrefix.VEX_SIMD_F3;
-                    break;
-                default:
-                    pre = VexSimdPrefix.VEX_SIMD_NONE;
-                    break;
-            }
-            switch (prefix2) {
-                case P_0F:
-                    opc = VexOpcode.VEX_OPCODE_0F;
-                    break;
-                case P_0F38:
-                    opc = VexOpcode.VEX_OPCODE_0F_38;
-                    break;
-                case P_0F3A:
-                    opc = VexOpcode.VEX_OPCODE_0F_3A;
-                    break;
-                default:
-                    opc = VexOpcode.VEX_OPCODE_NONE;
-                    break;
-            }
-            int encode;
-            encode = asm.simdPrefixAndEncode(dst, nds, src, pre, opc, attributes);
-            asm.emitByte(op);
-            asm.emitByte(0xC0 | encode);
-        }
-
-        public final void emit(AMD64Assembler asm, OperandSize size, Register dst, Register nds, AMD64Address src) {
-            assert verify(asm, size, dst, null);
-            int pre;
-            int opc;
-            boolean rexVexW = (size == QWORD) ? true : false;
-            AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, rexVexW, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, asm.target);
-            int curPrefix = size.sizePrefix | prefix1;
-            switch (curPrefix) {
-                case 0x66:
-                    pre = VexSimdPrefix.VEX_SIMD_66;
-                    break;
-                case 0xF2:
-                    pre = VexSimdPrefix.VEX_SIMD_F2;
-                    break;
-                case 0xF3:
-                    pre = VexSimdPrefix.VEX_SIMD_F3;
-                    break;
-                default:
-                    pre = VexSimdPrefix.VEX_SIMD_NONE;
-                    break;
-            }
-            switch (prefix2) {
-                case P_0F:
-                    opc = VexOpcode.VEX_OPCODE_0F;
-                    break;
-                case P_0F38:
-                    opc = VexOpcode.VEX_OPCODE_0F_38;
-                    break;
-                case P_0F3A:
-                    opc = VexOpcode.VEX_OPCODE_0F_3A;
-                    break;
-                default:
-                    opc = VexOpcode.VEX_OPCODE_NONE;
-                    break;
-            }
-            asm.simdPrefix(dst, nds, src, pre, opc, attributes);
-            asm.emitByte(op);
-            asm.emitOperandHelper(dst, src, 0);
         }
     }
 
@@ -1244,10 +1027,10 @@ public class AMD64Assembler extends Assembler {
                 }
                 asm.simdPrefix(src, Register.None, dst, pre, opc, attributes);
                 asm.emitByte(op);
-                asm.emitOperandHelper(src, dst, 0);
+                asm.emitOperandHelper(src, dst);
             } else {
                 emitOpcode(asm, size, getRXB(src, dst), src.encoding, 0);
-                asm.emitOperandHelper(src, dst, 0);
+                asm.emitOperandHelper(src, dst);
             }
         }
     }
@@ -1297,7 +1080,7 @@ public class AMD64Assembler extends Assembler {
         public final void emit(AMD64Assembler asm, OperandSize size, AMD64Address dst) {
             assert verify(asm, size, null, null);
             emitOpcode(asm, size, getRXB(null, dst), 0, 0);
-            asm.emitOperandHelper(ext, dst, 0);
+            asm.emitOperandHelper(ext, dst);
         }
     }
 
@@ -1336,16 +1119,13 @@ public class AMD64Assembler extends Assembler {
         public final void emit(AMD64Assembler asm, OperandSize size, AMD64Address dst, int imm) {
             assert verify(asm, size, null, null);
             emitOpcode(asm, size, getRXB(null, dst), 0, 0);
-            asm.emitOperandHelper(ext, dst, immediateSize(size));
+            asm.emitOperandHelper(ext, dst);
             emitImmediate(asm, size, imm);
         }
     }
 
     /**
      * Opcodes with operand order of RMI.
-     *
-     * We only have one form of round as the operation is always treated with single variant input,
-     * making its extension to 3 address forms redundant.
      */
     public static class AMD64RMIOp extends AMD64ImmOp {
         // @formatter:off
@@ -1365,129 +1145,16 @@ public class AMD64Assembler extends Assembler {
 
         public final void emit(AMD64Assembler asm, OperandSize size, Register dst, Register src, int imm) {
             assert verify(asm, size, dst, src);
-            boolean isSimd = false;
-            boolean noNds = false;
-
-            // TODO: add opcodes from the initializer here
-            switch (op) {
-                case 0x0A:
-                case 0x0B:
-                    isSimd = true;
-                    noNds = true;
-                    break;
-            }
-
-            if (isSimd) {
-                int pre;
-                int opc;
-                AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, asm.target);
-                int curPrefix = size.sizePrefix | prefix1;
-                switch (curPrefix) {
-                    case 0x66:
-                        pre = VexSimdPrefix.VEX_SIMD_66;
-                        break;
-                    case 0xF2:
-                        pre = VexSimdPrefix.VEX_SIMD_F2;
-                        break;
-                    case 0xF3:
-                        pre = VexSimdPrefix.VEX_SIMD_F3;
-                        break;
-                    default:
-                        pre = VexSimdPrefix.VEX_SIMD_NONE;
-                        break;
-                }
-                switch (prefix2) {
-                    case P_0F:
-                        opc = VexOpcode.VEX_OPCODE_0F;
-                        break;
-                    case P_0F38:
-                        opc = VexOpcode.VEX_OPCODE_0F_38;
-                        break;
-                    case P_0F3A:
-                        opc = VexOpcode.VEX_OPCODE_0F_3A;
-                        break;
-                    default:
-                        opc = VexOpcode.VEX_OPCODE_NONE;
-                        break;
-                }
-                int encode;
-                if (noNds) {
-                    encode = asm.simdPrefixAndEncode(dst, Register.None, src, pre, opc, attributes);
-                } else {
-                    encode = asm.simdPrefixAndEncode(dst, dst, src, pre, opc, attributes);
-                }
-                asm.emitByte(op);
-                asm.emitByte(0xC0 | encode);
-                emitImmediate(asm, size, imm);
-            } else {
-                emitOpcode(asm, size, getRXB(dst, src), dst.encoding, src.encoding);
-                asm.emitModRM(dst, src);
-                emitImmediate(asm, size, imm);
-            }
+            emitOpcode(asm, size, getRXB(dst, src), dst.encoding, src.encoding);
+            asm.emitModRM(dst, src);
+            emitImmediate(asm, size, imm);
         }
 
         public final void emit(AMD64Assembler asm, OperandSize size, Register dst, AMD64Address src, int imm) {
             assert verify(asm, size, dst, null);
-
-            boolean isSimd = false;
-            boolean noNds = false;
-
-            // TODO: add opcodes from the initializer here
-            switch (op) {
-                case 0x0A:
-                case 0x0B:
-                    isSimd = true;
-                    noNds = true;
-                    break;
-            }
-
-            if (isSimd) {
-                int pre;
-                int opc;
-                AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, asm.target);
-                int curPrefix = size.sizePrefix | prefix1;
-                switch (curPrefix) {
-                    case 0x66:
-                        pre = VexSimdPrefix.VEX_SIMD_66;
-                        break;
-                    case 0xF2:
-                        pre = VexSimdPrefix.VEX_SIMD_F2;
-                        break;
-                    case 0xF3:
-                        pre = VexSimdPrefix.VEX_SIMD_F3;
-                        break;
-                    default:
-                        pre = VexSimdPrefix.VEX_SIMD_NONE;
-                        break;
-                }
-                switch (prefix2) {
-                    case P_0F:
-                        opc = VexOpcode.VEX_OPCODE_0F;
-                        break;
-                    case P_0F38:
-                        opc = VexOpcode.VEX_OPCODE_0F_38;
-                        break;
-                    case P_0F3A:
-                        opc = VexOpcode.VEX_OPCODE_0F_3A;
-                        break;
-                    default:
-                        opc = VexOpcode.VEX_OPCODE_NONE;
-                        break;
-                }
-
-                if (noNds) {
-                    asm.simdPrefix(dst, Register.None, src, pre, opc, attributes);
-                } else {
-                    asm.simdPrefix(dst, dst, src, pre, opc, attributes);
-                }
-                asm.emitByte(op);
-                asm.emitOperandHelper(dst, src, immediateSize(size));
-                emitImmediate(asm, size, imm);
-            } else {
-                emitOpcode(asm, size, getRXB(dst, src), dst.encoding, 0);
-                asm.emitOperandHelper(dst, src, immediateSize(size));
-                emitImmediate(asm, size, imm);
-            }
+            emitOpcode(asm, size, getRXB(dst, src), dst.encoding, 0);
+            asm.emitOperandHelper(dst, src);
+            emitImmediate(asm, size, imm);
         }
     }
 
@@ -1523,33 +1190,6 @@ public class AMD64Assembler extends Assembler {
 
         protected SSEOp(String opcode, int mandatoryPrefix, int prefix, int op, OpAssertion assertion) {
             super(opcode, mandatoryPrefix, prefix, op, assertion, CPUFeature.SSE2);
-        }
-    }
-
-    public static class AVXOp extends AMD64RRMOp {
-        // @formatter:off
-        public static final AVXOp AND       = new AVXOp("AND",             P_0F, 0x54, OpAssertion.PackedFloatingAssertion);
-        public static final AVXOp ANDN      = new AVXOp("ANDN",            P_0F, 0x55, OpAssertion.PackedFloatingAssertion);
-        public static final AVXOp OR        = new AVXOp("OR",              P_0F, 0x56, OpAssertion.PackedFloatingAssertion);
-        public static final AVXOp XOR       = new AVXOp("XOR",             P_0F, 0x57, OpAssertion.PackedFloatingAssertion);
-        public static final AVXOp ADD       = new AVXOp("ADD",             P_0F, 0x58);
-        public static final AVXOp MUL       = new AVXOp("MUL",             P_0F, 0x59);
-        public static final AVXOp SUB       = new AVXOp("SUB",             P_0F, 0x5C);
-        public static final AVXOp MIN       = new AVXOp("MIN",             P_0F, 0x5D);
-        public static final AVXOp DIV       = new AVXOp("DIV",             P_0F, 0x5E);
-        public static final AVXOp MAX       = new AVXOp("MAX",             P_0F, 0x5F);
-        // @formatter:on
-
-        protected AVXOp(String opcode, int prefix, int op) {
-            this(opcode, prefix, op, OpAssertion.FloatingAssertion);
-        }
-
-        protected AVXOp(String opcode, int prefix, int op, OpAssertion assertion) {
-            this(opcode, 0, prefix, op, assertion);
-        }
-
-        protected AVXOp(String opcode, int mandatoryPrefix, int prefix, int op, OpAssertion assertion) {
-            super(opcode, mandatoryPrefix, prefix, op, assertion, CPUFeature.AVX);
         }
     }
 
@@ -1667,7 +1307,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(dst, dst, src, VexSimdPrefix.VEX_SIMD_66, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x58);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void addsd(Register dst, Register src) {
@@ -1683,7 +1323,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(dst, dst, src, VexSimdPrefix.VEX_SIMD_F2, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x58);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     private void addrNop4() {
@@ -1741,7 +1381,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(dst, dst, src, VexSimdPrefix.VEX_SIMD_66, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x54);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void bsrl(Register dst, Register src) {
@@ -1772,7 +1412,7 @@ public class AMD64Assembler extends Assembler {
         prefix(src, dst);
         emitByte(0x0F);
         emitByte(0x40 | cc.getValue());
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void cmpl(Register dst, int imm32) {
@@ -1798,7 +1438,7 @@ public class AMD64Assembler extends Assembler {
         prefix(adr, reg);
         emitByte(0x0F);
         emitByte(0xB1);
-        emitOperandHelper(reg, adr, 0);
+        emitOperandHelper(reg, adr);
     }
 
     public final void cvtsi2sdl(Register dst, Register src) {
@@ -1820,7 +1460,7 @@ public class AMD64Assembler extends Assembler {
     protected final void decl(AMD64Address dst) {
         prefix(dst);
         emitByte(0xFF);
-        emitOperandHelper(1, dst, 0);
+        emitOperandHelper(1, dst);
     }
 
     public final void divsd(Register dst, Register src) {
@@ -1846,7 +1486,7 @@ public class AMD64Assembler extends Assembler {
     protected final void incl(AMD64Address dst) {
         prefix(dst);
         emitByte(0xFF);
-        emitOperandHelper(0, dst, 0);
+        emitOperandHelper(0, dst);
     }
 
     public void jcc(ConditionFlag cc, int jumpTarget, boolean forceDisp32) {
@@ -1953,7 +1593,7 @@ public class AMD64Assembler extends Assembler {
     public final void leaq(Register dst, AMD64Address src) {
         prefixq(src, dst);
         emitByte(0x8D);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void leave() {
@@ -1983,7 +1623,7 @@ public class AMD64Assembler extends Assembler {
     public final void movb(AMD64Address dst, int imm8) {
         prefix(dst);
         emitByte(0xC6);
-        emitOperandHelper(0, dst, 1);
+        emitOperandHelper(0, dst);
         emitByte(imm8);
     }
 
@@ -1991,7 +1631,7 @@ public class AMD64Assembler extends Assembler {
         assert src.getRegisterCategory().equals(AMD64.CPU) : "must have byte register";
         prefix(dst, src, true);
         emitByte(0x88);
-        emitOperandHelper(src, dst, 0);
+        emitOperandHelper(src, dst);
     }
 
     public final void movl(Register dst, int imm32) {
@@ -2009,20 +1649,20 @@ public class AMD64Assembler extends Assembler {
     public final void movl(Register dst, AMD64Address src) {
         prefix(src, dst);
         emitByte(0x8B);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void movl(AMD64Address dst, int imm32) {
         prefix(dst);
         emitByte(0xC7);
-        emitOperandHelper(0, dst, 4);
+        emitOperandHelper(0, dst);
         emitInt(imm32);
     }
 
     public final void movl(AMD64Address dst, Register src) {
         prefix(dst, src);
         emitByte(0x89);
-        emitOperandHelper(src, dst, 0);
+        emitOperandHelper(src, dst);
     }
 
     /**
@@ -2036,7 +1676,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(dst, dst, src, VexSimdPrefix.VEX_SIMD_66, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x12);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void movlhps(Register dst, Register src) {
@@ -2056,12 +1696,12 @@ public class AMD64Assembler extends Assembler {
             AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ wide, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
             simdPrefix(dst, Register.None, src, VexSimdPrefix.VEX_SIMD_F3, VexOpcode.VEX_OPCODE_0F, attributes);
             emitByte(0x7E);
-            emitOperandHelper(dst, src, wide, 0);
+            emitOperandHelper(dst, src, wide);
         } else {
             // gpr version of movq
             prefixq(src, dst);
             emitByte(0x8B);
-            emitOperandHelper(dst, src, wide, 0);
+            emitOperandHelper(dst, src, wide);
         }
     }
 
@@ -2076,12 +1716,12 @@ public class AMD64Assembler extends Assembler {
             AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ true, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
             simdPrefix(src, Register.None, dst, VexSimdPrefix.VEX_SIMD_66, VexOpcode.VEX_OPCODE_0F, attributes);
             emitByte(0xD6);
-            emitOperandHelper(src, dst, 0);
+            emitOperandHelper(src, dst);
         } else {
             // gpr version of movq
             prefixq(dst, src);
             emitByte(0x89);
-            emitOperandHelper(src, dst, 0);
+            emitOperandHelper(src, dst);
         }
     }
 
@@ -2089,7 +1729,7 @@ public class AMD64Assembler extends Assembler {
         prefix(src, dst);
         emitByte(0x0F);
         emitByte(0xBE);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void movsbl(Register dst, Register src) {
@@ -2103,7 +1743,7 @@ public class AMD64Assembler extends Assembler {
         prefixq(src, dst);
         emitByte(0x0F);
         emitByte(0xBE);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void movsbq(Register dst, Register src) {
@@ -2126,7 +1766,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(dst, Register.None, src, VexSimdPrefix.VEX_SIMD_F2, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x10);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void movsd(AMD64Address dst, Register src) {
@@ -2134,7 +1774,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(src, Register.None, dst, VexSimdPrefix.VEX_SIMD_F2, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x11);
-        emitOperandHelper(src, dst, 0);
+        emitOperandHelper(src, dst);
     }
 
     public final void movss(Register dst, Register src) {
@@ -2150,7 +1790,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(dst, Register.None, src, VexSimdPrefix.VEX_SIMD_F3, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x10);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void movss(AMD64Address dst, Register src) {
@@ -2158,7 +1798,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(src, Register.None, dst, VexSimdPrefix.VEX_SIMD_F3, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x11);
-        emitOperandHelper(src, dst, 0);
+        emitOperandHelper(src, dst);
     }
 
     public final void mulpd(Register dst, Register src) {
@@ -2174,7 +1814,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(dst, dst, src, VexSimdPrefix.VEX_SIMD_66, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x59);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void mulsd(Register dst, Register src) {
@@ -2190,7 +1830,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(dst, dst, src, VexSimdPrefix.VEX_SIMD_F2, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x59);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void mulss(Register dst, Register src) {
@@ -2205,14 +1845,14 @@ public class AMD64Assembler extends Assembler {
         prefix(src, dst);
         emitByte(0x0F);
         emitByte(0xBF);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void movw(AMD64Address dst, int imm16) {
         emitByte(0x66); // switch to 16-bit mode
         prefix(dst);
         emitByte(0xC7);
-        emitOperandHelper(0, dst, 2);
+        emitOperandHelper(0, dst);
         emitShort(imm16);
     }
 
@@ -2220,21 +1860,21 @@ public class AMD64Assembler extends Assembler {
         emitByte(0x66);
         prefix(dst, src);
         emitByte(0x89);
-        emitOperandHelper(src, dst, 0);
+        emitOperandHelper(src, dst);
     }
 
     public final void movzbl(Register dst, AMD64Address src) {
         prefix(src, dst);
         emitByte(0x0F);
         emitByte(0xB6);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void movzwl(Register dst, AMD64Address src) {
         prefix(src, dst);
         emitByte(0x0F);
         emitByte(0xB7);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void negl(Register dst) {
@@ -2750,7 +2390,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(dst, dst, src, VexSimdPrefix.VEX_SIMD_F2, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x5C);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void testl(Register dst, int imm32) {
@@ -2777,7 +2417,7 @@ public class AMD64Assembler extends Assembler {
     public final void testl(Register dst, AMD64Address src) {
         prefix(src, dst);
         emitByte(0x85);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void unpckhpd(Register dst, Register src) {
@@ -3177,7 +2817,7 @@ public class AMD64Assembler extends Assembler {
         prefixq(src, dst);
         emitByte(0x0F);
         emitByte(0x40 | cc.getValue());
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void cmpq(Register dst, int imm32) {
@@ -3196,7 +2836,7 @@ public class AMD64Assembler extends Assembler {
         prefixq(adr, reg);
         emitByte(0x0F);
         emitByte(0xB1);
-        emitOperandHelper(reg, adr, 0);
+        emitOperandHelper(reg, adr);
     }
 
     public final void cvtdq2pd(Register dst, Register src) {
@@ -3279,7 +2919,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ true, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(dst, Register.None, src, VexSimdPrefix.VEX_SIMD_66, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x6E);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void movdq(AMD64Address dst, Register src) {
@@ -3288,7 +2928,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ true, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(src, Register.None, dst, VexSimdPrefix.VEX_SIMD_66, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x7E);
-        emitOperandHelper(src, dst, 0);
+        emitOperandHelper(src, dst);
     }
 
     public final void movdq(Register dst, Register src) {
@@ -3339,7 +2979,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_128bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         simdPrefix(dst, Register.None, src, VexSimdPrefix.VEX_SIMD_F3, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x6F);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void movdqu(Register dst, Register src) {
@@ -3356,7 +2996,7 @@ public class AMD64Assembler extends Assembler {
         AMD64InstructionAttr attributes = new AMD64InstructionAttr(AvxVectorLen.AVX_256bit, /* rexVexW */ false, /* legacyMode */ false, /* noMaskReg */ false, /* usesVl */ false, target);
         vexPrefix(src, Register.None, dst, VexSimdPrefix.VEX_SIMD_F3, VexOpcode.VEX_OPCODE_0F, attributes);
         emitByte(0x6F);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void vzeroupper() {
@@ -3369,14 +3009,14 @@ public class AMD64Assembler extends Assembler {
     public final void movslq(AMD64Address dst, int imm32) {
         prefixq(dst);
         emitByte(0xC7);
-        emitOperandHelper(0, dst, 4);
+        emitOperandHelper(0, dst);
         emitInt(imm32);
     }
 
     public final void movslq(Register dst, AMD64Address src) {
         prefixq(src, dst);
         emitByte(0x63);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void movslq(Register dst, Register src) {
@@ -3464,26 +3104,26 @@ public class AMD64Assembler extends Assembler {
         prefix(dst, src);
         emitByte(0x0F);
         emitByte(0xC1);
-        emitOperandHelper(src, dst, 0);
+        emitOperandHelper(src, dst);
     }
 
     public final void xaddq(AMD64Address dst, Register src) {
         prefixq(dst, src);
         emitByte(0x0F);
         emitByte(0xC1);
-        emitOperandHelper(src, dst, 0);
+        emitOperandHelper(src, dst);
     }
 
     public final void xchgl(Register dst, AMD64Address src) {
         prefix(src, dst);
         emitByte(0x87);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void xchgq(Register dst, AMD64Address src) {
         prefixq(src, dst);
         emitByte(0x87);
-        emitOperandHelper(dst, src, 0);
+        emitOperandHelper(dst, src);
     }
 
     public final void membar(int barriers) {
@@ -3563,10 +3203,6 @@ public class AMD64Assembler extends Assembler {
      * responsible to add the call address to the appropriate patching tables.
      */
     public final void call() {
-        if (codePatchingAnnotationConsumer != null) {
-            int pos = position();
-            codePatchingAnnotationConsumer.accept(new ImmediateOperandAnnotation(pos, pos + 1, 4, pos + 5));
-        }
         emitByte(0xE8);
         emitInt(0);
     }
@@ -3594,12 +3230,12 @@ public class AMD64Assembler extends Assembler {
 
     public final void fldd(AMD64Address src) {
         emitByte(0xDD);
-        emitOperandHelper(0, src, 0);
+        emitOperandHelper(0, src);
     }
 
     public final void flds(AMD64Address src) {
         emitByte(0xD9);
-        emitOperandHelper(0, src, 0);
+        emitOperandHelper(0, src);
     }
 
     public final void fldln2() {
@@ -3619,12 +3255,12 @@ public class AMD64Assembler extends Assembler {
 
     public final void fstps(AMD64Address src) {
         emitByte(0xD9);
-        emitOperandHelper(3, src, 0);
+        emitOperandHelper(3, src);
     }
 
     public final void fstpd(AMD64Address src) {
         emitByte(0xDD);
-        emitOperandHelper(3, src, 0);
+        emitOperandHelper(3, src);
     }
 
     private void emitFPUArith(int b1, int b2, int i) {
@@ -3685,8 +3321,8 @@ public class AMD64Assembler extends Assembler {
     }
 
     @Override
-    public AMD64Address getPlaceholder(int instructionStartPosition) {
-        return new AMD64Address(rip, Register.None, Scale.Times1, 0, instructionStartPosition);
+    public AMD64Address getPlaceholder() {
+        return Placeholder;
     }
 
     private void prefetchPrefix(AMD64Address src) {
@@ -3697,28 +3333,28 @@ public class AMD64Assembler extends Assembler {
     public void prefetchnta(AMD64Address src) {
         prefetchPrefix(src);
         emitByte(0x18);
-        emitOperandHelper(0, src, 0);
+        emitOperandHelper(0, src);
     }
 
     void prefetchr(AMD64Address src) {
         assert supports(CPUFeature.AMD_3DNOW_PREFETCH);
         prefetchPrefix(src);
         emitByte(0x0D);
-        emitOperandHelper(0, src, 0);
+        emitOperandHelper(0, src);
     }
 
     public void prefetcht0(AMD64Address src) {
         assert supports(CPUFeature.SSE);
         prefetchPrefix(src);
         emitByte(0x18);
-        emitOperandHelper(1, src, 0);
+        emitOperandHelper(1, src);
     }
 
     public void prefetcht1(AMD64Address src) {
         assert supports(CPUFeature.SSE);
         prefetchPrefix(src);
         emitByte(0x18);
-        emitOperandHelper(2, src, 0);
+        emitOperandHelper(2, src);
     }
 
     public void prefetcht2(AMD64Address src) {
@@ -3726,7 +3362,7 @@ public class AMD64Assembler extends Assembler {
         prefix(src);
         emitByte(0x0f);
         emitByte(0x18);
-        emitOperandHelper(3, src, 0);
+        emitOperandHelper(3, src);
     }
 
     public void prefetchw(AMD64Address src) {
@@ -3734,7 +3370,7 @@ public class AMD64Assembler extends Assembler {
         prefix(src);
         emitByte(0x0f);
         emitByte(0x0D);
-        emitOperandHelper(1, src, 0);
+        emitOperandHelper(1, src);
     }
 
     /**
