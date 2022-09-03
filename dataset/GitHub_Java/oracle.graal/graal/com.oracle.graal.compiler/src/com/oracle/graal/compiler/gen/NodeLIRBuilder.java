@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.compiler.gen;
 
-import static com.oracle.graal.compiler.common.BackendOptions.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.lir.LIR.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
-import static com.oracle.graal.debug.JVMCIDebugConfig.*;
+import static jdk.internal.jvmci.debug.JVMCIDebugConfig.*;
 
 import java.util.*;
 import java.util.Map.Entry;
@@ -34,10 +33,7 @@ import java.util.Map.Entry;
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
 import jdk.internal.jvmci.debug.*;
-
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
+import jdk.internal.jvmci.debug.Debug.*;
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.calc.*;
@@ -268,7 +264,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
                 emitPrologue(graph);
             } else {
                 assert block.getPredecessorCount() > 0;
-                if (ConstructionSSAlirDuringLirBuilding.getValue()) {
+                if (SSA_LIR.getValue()) {
                     // create phi-in value array
                     AbstractBeginNode begin = block.getBeginNode();
                     if (begin instanceof AbstractMergeNode) {
@@ -429,7 +425,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     public void visitEndNode(AbstractEndNode end) {
         AbstractMergeNode merge = end.merge();
         JumpOp jump = newJumpOp(getLIRBlock(merge));
-        if (ConstructionSSAlirDuringLirBuilding.getValue()) {
+        if (SSA_LIR.getValue()) {
             jump.setOutgoingValues(createPhiOut(merge, end));
         } else {
             moveToPhi(merge, end);

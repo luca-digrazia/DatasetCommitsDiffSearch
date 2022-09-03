@@ -35,7 +35,7 @@ import com.oracle.graal.virtual.nodes.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
-import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.debug.*;
 import jdk.internal.jvmci.meta.*;
 
 /**
@@ -95,7 +95,7 @@ public class DebugInfoBuilder {
                                 if (!currentField.values().get(i).isConstant() || currentField.values().get(i).asJavaConstant().getKind() != Kind.Illegal) {
                                     values[pos++] = toValue(currentField.values().get(i));
                                 } else {
-                                    assert currentField.values().get(i - 1).getStackKind() == Kind.Double || currentField.values().get(i - 1).getStackKind() == Kind.Long : vobj + " " + i + " " +
+                                    assert currentField.values().get(i - 1).getKind() == Kind.Double || currentField.values().get(i - 1).getKind() == Kind.Long : vobj + " " + i + " " +
                                                     currentField.values().get(i - 1);
                                 }
                             }

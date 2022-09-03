@@ -39,7 +39,7 @@ import com.oracle.graal.nodes.spi.*;
 
 import jdk.internal.jvmci.amd64.*;
 import jdk.internal.jvmci.code.*;
-import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.debug.*;
 import jdk.internal.jvmci.hotspot.*;
 import jdk.internal.jvmci.meta.*;
 
@@ -88,8 +88,6 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
         gen.emitIncomingValues(params);
 
         getGen().emitSaveRbp();
-
-        getGen().append(((HotSpotDebugInfoBuilder) getDebugInfoBuilder()).lockStack());
 
         for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
             Value paramValue = params[param.index()];

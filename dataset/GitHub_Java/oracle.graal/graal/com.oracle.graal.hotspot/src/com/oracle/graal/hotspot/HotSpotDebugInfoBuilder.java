@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,15 @@
  */
 package com.oracle.graal.hotspot;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import static jdk.internal.jvmci.code.BytecodeFrame.*;
+
 import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.nodes.spi.*;
+
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
 /**
  * Extends {@link DebugInfoBuilder} to allocate the extra debug information required for locks.
@@ -36,8 +39,8 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
 
     private final HotSpotLockStack lockStack;
 
-    public HotSpotDebugInfoBuilder(NodeMap<Value> nodeOperands, HotSpotLockStack lockStack) {
-        super(nodeOperands);
+    public HotSpotDebugInfoBuilder(NodeValueMap nodeValueMap, HotSpotLockStack lockStack) {
+        super(nodeValueMap);
         this.lockStack = lockStack;
     }
 
@@ -46,15 +49,25 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
     }
 
     @Override
-    protected Value computeLockValue(FrameState state, int i) {
-        int lockDepth = i;
-        for (FrameState outer = state.outerFrameState(); outer != null; outer = outer.outerFrameState()) {
-            lockDepth += outer.locksSize();
+    protected Value computeLockValue(FrameState state, int lockIndex) {
+        int lockDepth = lockIndex;
+        if (state.outerFrameState() != null) {
+            lockDepth += state.outerFrameState().nestedLockDepth();
         }
-        StackSlot slot = lockStack.makeLockSlot(lockDepth);
-        ValueNode lock = state.lockAt(i);
+        StackSlotValue slot = lockStack.makeLockSlot(lockDepth);
+        ValueNode lock = state.lockAt(lockIndex);
         Value object = toValue(lock);
-        boolean eliminated = lock instanceof VirtualObjectNode;
-        return new MonitorValue(object, slot, eliminated);
+        boolean eliminated = object instanceof VirtualObject || state.monitorIdAt(lockIndex) == null;
+        assert state.monitorIdAt(lockIndex) == null || state.monitorIdAt(lockIndex).getLockDepth() == lockDepth;
+        return new StackLockValue(object, slot, eliminated);
+    }
+
+    @Override
+    protected BytecodeFrame computeFrameForState(FrameState state) {
+        if (isPlaceholderBci(state.bci) && state.bci != BytecodeFrame.BEFORE_BCI) {
+            // This is really a hard error since an incorrect state could crash hotspot
+            throw JVMCIError.shouldNotReachHere("Invalid state " + BytecodeFrame.getPlaceholderBciName(state.bci) + " " + state);
+        }
+        return super.computeFrameForState(state);
     }
 }
