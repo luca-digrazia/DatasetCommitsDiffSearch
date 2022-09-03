@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -1861,7 +1859,7 @@ public class AMD64Assembler extends Assembler {
      * values were equal, and cleared otherwise.
      */
     public final void cmpxchgb(Register reg, AMD64Address adr) { // cmpxchg
-        prefixb(adr, reg);
+        prefix(adr, reg);
         emitByte(0x0F);
         emitByte(0xB0);
         emitOperandHelper(reg, adr, 0);
@@ -2138,7 +2136,7 @@ public class AMD64Assembler extends Assembler {
 
     public final void movb(AMD64Address dst, Register src) {
         assert src.getRegisterCategory().equals(AMD64.CPU) : "must have byte register";
-        prefixb(dst, src);
+        prefix(dst, src, true);
         emitByte(0x88);
         emitOperandHelper(src, dst, 0);
     }
@@ -3284,10 +3282,6 @@ public class AMD64Assembler extends Assembler {
         }
     }
 
-    private void prefixb(AMD64Address adr, Register reg) {
-        prefix(adr, reg, true);
-    }
-
     private void prefix(AMD64Address adr, Register reg) {
         prefix(adr, reg, false);
     }
@@ -3711,7 +3705,7 @@ public class AMD64Assembler extends Assembler {
     }
 
     public final void xaddb(AMD64Address dst, Register src) {
-        prefixb(dst, src);
+        prefix(dst, src);
         emitByte(0x0F);
         emitByte(0xC0);
         emitOperandHelper(src, dst, 0);
@@ -3740,7 +3734,7 @@ public class AMD64Assembler extends Assembler {
     }
 
     public final void xchgb(Register dst, AMD64Address src) {
-        prefixb(src, dst);
+        prefix(src, dst);
         emitByte(0x86);
         emitOperandHelper(dst, src, 0);
     }

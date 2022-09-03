@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -86,7 +84,6 @@ import org.graalvm.compiler.lir.amd64.AMD64Move.CompareAndSwapOp;
 import org.graalvm.compiler.lir.amd64.AMD64Move.MembarOp;
 import org.graalvm.compiler.lir.amd64.AMD64Move.StackLeaOp;
 import org.graalvm.compiler.lir.amd64.AMD64PauseOp;
-import org.graalvm.compiler.lir.amd64.AMD64ArrayIndexOfOp;
 import org.graalvm.compiler.lir.amd64.AMD64StringIndexOfOp;
 import org.graalvm.compiler.lir.amd64.AMD64ZapRegistersOp;
 import org.graalvm.compiler.lir.amd64.AMD64ZapStackOp;
@@ -563,13 +560,6 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         RegisterValue cnt2 = AMD64.rax.asValue(targetCount.getValueKind());
         emitMove(cnt2, targetCount);
         append(new AMD64StringIndexOfOp(this, result, source, target, cnt1, cnt2, AMD64.rcx.asValue(), AMD64.xmm0.asValue(), constantTargetCount, getVMPageSize()));
-        return result;
-    }
-
-    @Override
-    public Variable emitArrayIndexOf(JavaKind kind, Value arrayPointer, Value arrayLength, Value charValue) {
-        Variable result = newVariable(LIRKind.value(AMD64Kind.DWORD));
-        append(new AMD64ArrayIndexOfOp(kind, getVMPageSize(), this, result, asAllocatable(arrayPointer), asAllocatable(arrayLength), asAllocatable(charValue)));
         return result;
     }
 

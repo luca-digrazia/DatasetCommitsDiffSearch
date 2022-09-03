@@ -22,12 +22,8 @@
  */
 package org.graalvm.compiler.replacements.jdk9;
 
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import org.graalvm.compiler.api.test.Graal;
 import org.graalvm.compiler.replacements.test.MethodSubstitutionTest;
-import org.graalvm.compiler.runtime.RuntimeProvider;
 import org.graalvm.compiler.test.AddExports;
 import org.junit.Test;
 
@@ -170,44 +166,135 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
 
     @Test
     public void testCompareAndSet() {
-        TargetDescription target = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getTarget();
-        if (target.arch instanceof AMD64) {
-            testGraph("unsafeCompareAndSetBoolean");
-            testGraph("unsafeCompareAndSetByte");
-            testGraph("unsafeCompareAndSetChar");
-            testGraph("unsafeCompareAndSetShort");
-            testGraph("unsafeCompareAndSetInt");
-            testGraph("unsafeCompareAndSetLong");
-            testGraph("unsafeCompareAndSetFloat");
-            testGraph("unsafeCompareAndSetDouble");
-            testGraph("unsafeCompareAndSetObject");
-            testGraph("unsafeCompareAndExchangeBoolean");
-            testGraph("unsafeCompareAndExchangeByte");
-            testGraph("unsafeCompareAndExchangeChar");
-            testGraph("unsafeCompareAndExchangeShort");
-            testGraph("unsafeCompareAndExchangeInt");
-            testGraph("unsafeCompareAndExchangeLong");
-            testGraph("unsafeCompareAndExchangeFloat");
-            testGraph("unsafeCompareAndExchangeDouble");
-            testGraph("unsafeCompareAndExchangeObject");
-        }
+        testGraph("unsafeCompareAndSetBoolean");
         test("unsafeCompareAndSetBoolean");
+        testGraph("unsafeCompareAndSetByte");
         test("unsafeCompareAndSetByte");
+        testGraph("unsafeCompareAndSetChar");
         test("unsafeCompareAndSetChar");
+        testGraph("unsafeCompareAndSetShort");
         test("unsafeCompareAndSetShort");
+        testGraph("unsafeCompareAndSetInt");
         test("unsafeCompareAndSetInt");
+        testGraph("unsafeCompareAndSetLong");
         test("unsafeCompareAndSetLong");
+        testGraph("unsafeCompareAndSetFloat");
         test("unsafeCompareAndSetFloat");
+        testGraph("unsafeCompareAndSetDouble");
         test("unsafeCompareAndSetDouble");
+        testGraph("unsafeCompareAndSetObject");
         test("unsafeCompareAndSetObject");
+        testGraph("unsafeCompareAndExchangeBoolean");
         test("unsafeCompareAndExchangeBoolean");
+        testGraph("unsafeCompareAndExchangeByte");
         test("unsafeCompareAndExchangeByte");
+        testGraph("unsafeCompareAndExchangeChar");
         test("unsafeCompareAndExchangeChar");
+        testGraph("unsafeCompareAndExchangeShort");
         test("unsafeCompareAndExchangeShort");
+        testGraph("unsafeCompareAndExchangeInt");
         test("unsafeCompareAndExchangeInt");
+        testGraph("unsafeCompareAndExchangeLong");
         test("unsafeCompareAndExchangeLong");
+        testGraph("unsafeCompareAndExchangeFloat");
         test("unsafeCompareAndExchangeFloat");
+        testGraph("unsafeCompareAndExchangeDouble");
         test("unsafeCompareAndExchangeDouble");
+        testGraph("unsafeCompareAndExchangeObject");
         test("unsafeCompareAndExchangeObject");
+    }
+
+    public static int unsafeGetAndAddByte() {
+        Container container = new Container();
+        return unsafe.getAndAddByte(container, byteOffset, (byte) 2);
+    }
+
+    public static int unsafeGetAndAddChar() {
+        Container container = new Container();
+        return unsafe.getAndAddChar(container, charOffset, (char) 250);
+    }
+
+    public static int unsafeGetAndAddShort() {
+        Container container = new Container();
+        return unsafe.getAndAddShort(container, shortOffset, (short) 1250);
+    }
+
+    public static int unsafeGetAndAddInt() {
+        Container container = new Container();
+        return unsafe.getAndAddInt(container, intOffset, 104501);
+    }
+
+    public static long unsafeGetAndAddLong() {
+        Container container = new Container();
+        return unsafe.getAndAddLong(container, longOffset, 0x123456abcdL);
+    }
+
+    @Test
+    public void testGetAndAdd() {
+        testGraph("unsafeGetAndAddByte");
+        test("unsafeGetAndAddByte");
+        testGraph("unsafeGetAndAddChar");
+        test("unsafeGetAndAddChar");
+        testGraph("unsafeGetAndAddShort");
+        test("unsafeGetAndAddShort");
+        testGraph("unsafeGetAndAddInt");
+        test("unsafeGetAndAddInt");
+        testGraph("unsafeGetAndAddLong");
+        test("unsafeGetAndAddLong");
+    }
+
+    public static boolean unsafeGetAndSetBoolean() {
+        Container container = new Container();
+        return unsafe.getAndSetBoolean(container, booleanOffset, true);
+    }
+
+    public static byte unsafeGetAndSetByte() {
+        Container container = new Container();
+        return unsafe.getAndSetByte(container, byteOffset, (byte) 129);
+    }
+
+    public static char unsafeGetAndSetChar() {
+        Container container = new Container();
+        return unsafe.getAndSetChar(container, charOffset, (char) 21111);
+    }
+
+    public static short unsafeGetAndSetShort() {
+        Container container = new Container();
+        return unsafe.getAndSetShort(container, shortOffset, (short) 21111);
+    }
+
+    public static int unsafeGetAndSetInt() {
+        Container container = new Container();
+        return unsafe.getAndSetInt(container, intOffset, 0x1234af);
+    }
+
+    public static long unsafeGetAndSetLong() {
+        Container container = new Container();
+        return unsafe.getAndSetLong(container, longOffset, 0x12345678abL);
+    }
+
+    public static Object unsafeGetAndSetObject() {
+        Container container = new Container();
+        container.objectField = null;
+        Container other = new Container();
+        return unsafe.getAndSetObject(container, objectOffset, other);
+    }
+
+    @Test
+    public void testGetAndSet() {
+        testGraph("unsafeGetAndSetBoolean");
+        test("unsafeGetAndSetBoolean");
+        testGraph("unsafeGetAndSetByte");
+        test("unsafeGetAndSetByte");
+        testGraph("unsafeGetAndSetChar");
+        test("unsafeGetAndSetChar");
+        testGraph("unsafeGetAndSetShort");
+        test("unsafeGetAndSetShort");
+        testGraph("unsafeGetAndSetInt");
+        test("unsafeGetAndSetInt");
+        testGraph("unsafeGetAndSetLong");
+        test("unsafeGetAndSetLong");
+        testGraph("unsafeGetAndSetObject");
+        test("unsafeGetAndSetObject");
     }
 }
