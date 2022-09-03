@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,15 +29,13 @@ import java.util.List;
 public abstract class Loop<T extends AbstractBlockBase<T>> {
 
     private final Loop<T> parent;
-    private final ArrayList<Loop<T>> children;
+    private final List<Loop<T>> children;
 
     private final int depth;
     private final int index;
     private final T header;
-    private final ArrayList<T> blocks;
-    private final ArrayList<T> exits;
-    // "actual" exist, ignoring LoopExitNodes
-    private final ArrayList<T> cfgExits;
+    private final List<T> blocks;
+    private final List<T> exits;
 
     protected Loop(Loop<T> parent, int index, T header) {
         this.parent = parent;
@@ -53,7 +49,6 @@ public abstract class Loop<T extends AbstractBlockBase<T>> {
         this.blocks = new ArrayList<>();
         this.children = new ArrayList<>();
         this.exits = new ArrayList<>();
-        this.cfgExits = new ArrayList<>();
     }
 
     public abstract long numBackedges();
@@ -87,28 +82,12 @@ public abstract class Loop<T extends AbstractBlockBase<T>> {
         return blocks;
     }
 
-    /**
-     * Returns the loop exits.
-     *
-     * This might be a conservative set: before framestate assignment it matches the LoopExitNodes
-     * even if earlier blocks could be considered as exits.
-     *
-     * @see #getCfgExits()
-     */
     public List<T> getExits() {
         return exits;
     }
 
-    /**
-     * Returns the natural exit points: these are the earliest block that are guaranteed to never
-     * reach a back-edge.
-     *
-     * This can not be used in the context of preserving or using loop-closed form.
-     *
-     * @see #getExits()
-     */
-    public ArrayList<T> getCfgExits() {
-        return cfgExits;
+    public void addExit(T t) {
+        exits.add(t);
     }
 
     /**
