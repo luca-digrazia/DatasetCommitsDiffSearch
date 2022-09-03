@@ -38,6 +38,10 @@ abstract class Content {
 
     abstract String getCode();
 
+    String getCode(int offset, int length) {
+        return getCode().substring(offset, offset + length);
+    }
+
     abstract String getName();
 
     abstract String getShortName();
@@ -47,6 +51,10 @@ abstract class Content {
     abstract String getPath();
 
     abstract URL getURL();
+
+    int getCodeLength() {
+        return getCode().length();
+    }
 
     @SuppressWarnings("unused")
     void appendCode(CharSequence chars) {
