@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.meta;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 
 /**
@@ -35,40 +34,14 @@ public class HotSpotTypeUnresolved extends HotSpotJavaType {
     public final String simpleName;
     public final int dimensions;
 
-    /**
-     * Creates a new unresolved type for a specified type descriptor.
-     */
-    public HotSpotTypeUnresolved(String name) {
-        assert name.length() > 0 : "name cannot be empty";
-
-        int dims = 0;
-        int startIndex = 0;
-        while (name.charAt(startIndex) == '[') {
-            startIndex++;
-            dims++;
-        }
-
-        // Decode name if necessary.
-        if (name.charAt(name.length() - 1) == ';') {
-            assert name.charAt(startIndex) == 'L';
-            this.simpleName = name.substring(startIndex + 1, name.length() - 1);
-            this.name = name;
-        } else {
-            this.simpleName = name;
-            this.name = getFullName(name, dims);
-        }
-
-        this.dimensions = dims;
-    }
-
-    public HotSpotTypeUnresolved(String name, int dimensions) {
+    public HotSpotTypeUnresolved(String name, String simpleName, int dimensions) {
+        super(name);
         assert dimensions >= 0;
-        this.simpleName = name;
+        this.simpleName = simpleName;
         this.dimensions = dimensions;
-        this.name = getFullName(name, dimensions);
     }
 
-    private static String getFullName(String name, int dimensions) {
+    public static String getFullName(String name, int dimensions) {
         StringBuilder str = new StringBuilder(name.length() + dimensions + 2);
         for (int i = 0; i < dimensions; i++) {
             str.append('[');
@@ -78,18 +51,20 @@ public class HotSpotTypeUnresolved extends HotSpotJavaType {
     }
 
     @Override
-    public JavaType componentType() {
-        assert dimensions > 0 : "no array class" + name();
-        return new HotSpotTypeUnresolved(simpleName, dimensions - 1);
+    public JavaType getComponentType() {
+        assert dimensions > 0 : "no array class" + getName();
+        String name = getFullName(getName(), dimensions - 1);
+        return new HotSpotTypeUnresolved(name, simpleName, dimensions - 1);
     }
 
     @Override
-    public JavaType arrayOf() {
-        return new HotSpotTypeUnresolved(simpleName, dimensions + 1);
+    public JavaType getArrayClass() {
+        String name = getFullName(getName(), dimensions + 1);
+        return new HotSpotTypeUnresolved(name, simpleName, dimensions + 1);
     }
 
     @Override
-    public Kind kind() {
+    public Kind getKind() {
         return Kind.Object;
     }
 
@@ -109,17 +84,12 @@ public class HotSpotTypeUnresolved extends HotSpotJavaType {
     }
 
     @Override
-    public Kind getRepresentationKind(JavaType.Representation r) {
-        return Kind.Object;
-    }
-
-    @Override
     public ResolvedJavaType resolve(ResolvedJavaType accessingClass) {
-        return (ResolvedJavaType) HotSpotGraalRuntime.getInstance().lookupType(name, (HotSpotResolvedJavaType) accessingClass, true);
+        return (ResolvedJavaType) HotSpotGraalRuntime.getInstance().lookupType(getName(), (HotSpotResolvedJavaType) accessingClass, true);
     }
 
     @Override
-    public HotSpotKlassOop klassOop() {
-        throw GraalInternalError.shouldNotReachHere("HotSpotTypeUnresolved.klassOop");
+    public Class<?> mirror() {
+        return ((HotSpotJavaType) resolve(null)).mirror();
     }
 }

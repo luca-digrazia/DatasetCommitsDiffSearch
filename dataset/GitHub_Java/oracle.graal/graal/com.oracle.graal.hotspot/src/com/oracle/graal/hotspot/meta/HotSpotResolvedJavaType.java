@@ -495,15 +495,4 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
     public long prototypeMarkWord() {
         return HotSpotGraalRuntime.getInstance().getCompilerToVM().getPrototypeMarkWord(this);
     }
-
-    @Override
-    public ResolvedJavaField findInstanceFieldWithOffset(long offset) {
-        ResolvedJavaField[] declaredFields = getInstanceFields(true);
-        for (ResolvedJavaField field : declaredFields) {
-            if (((HotSpotResolvedJavaField) field).offset() == offset) {
-                return field;
-            }
-        }
-        return null;
-    }
 }

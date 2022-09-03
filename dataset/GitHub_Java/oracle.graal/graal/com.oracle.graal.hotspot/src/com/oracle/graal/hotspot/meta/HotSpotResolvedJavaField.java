@@ -29,7 +29,6 @@ import java.lang.reflect.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ResolvedJavaType.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.phases.*;
 
 /**
@@ -41,14 +40,14 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
     private static final int FIELD_INTERNAL_FLAG = 0x80000000;
 
     private static final long serialVersionUID = 7692985878836955683L;
-    private final HotSpotResolvedObjectType holder;
+    private final HotSpotResolvedJavaType holder;
     private final String name;
     private final JavaType type;
     private final int offset;
     private final int flags;
     private Constant constant;
 
-    public HotSpotResolvedJavaField(HotSpotResolvedObjectType holder, String name, JavaType type, int offset, int flags, boolean internal) {
+    public HotSpotResolvedJavaField(HotSpotResolvedJavaType holder, String name, JavaType type, int offset, int flags, boolean internal) {
         assert (flags & FIELD_INTERNAL_FLAG) == 0;
         this.holder = holder;
         this.name = name;
@@ -102,12 +101,12 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
             assert Modifier.isStatic(flags);
             if (holder.isInitialized()) {
                 Constant encoding = holder.getEncoding(getKind() == Kind.Object ? Representation.StaticObjectFields : Representation.StaticPrimitiveFields);
-                return ReadNode.readUnsafeConstant(getKind(), encoding.asObject(), offset);
+                return this.getKind().readUnsafeConstant(encoding.asObject(), offset);
             }
             return null;
         } else {
             assert !Modifier.isStatic(flags);
-            return ReadNode.readUnsafeConstant(getKind(), receiver.asObject(), offset);
+            return this.getKind().readUnsafeConstant(receiver.asObject(), offset);
         }
     }
 

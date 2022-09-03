@@ -31,7 +31,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
@@ -39,6 +38,7 @@ import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.phases.*;
+import com.oracle.graal.hotspot.snippets.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
@@ -51,16 +51,17 @@ import com.oracle.graal.snippets.*;
 public class VMToCompilerImpl implements VMToCompiler {
 
     private final HotSpotGraalRuntime graalRuntime;
+    private IntrinsifyArrayCopyPhase intrinsifyArrayCopy;
 
-    public final HotSpotResolvedPrimitiveType typeBoolean;
-    public final HotSpotResolvedPrimitiveType typeChar;
-    public final HotSpotResolvedPrimitiveType typeFloat;
-    public final HotSpotResolvedPrimitiveType typeDouble;
-    public final HotSpotResolvedPrimitiveType typeByte;
-    public final HotSpotResolvedPrimitiveType typeShort;
-    public final HotSpotResolvedPrimitiveType typeInt;
-    public final HotSpotResolvedPrimitiveType typeLong;
-    public final HotSpotResolvedPrimitiveType typeVoid;
+    public final HotSpotTypePrimitive typeBoolean;
+    public final HotSpotTypePrimitive typeChar;
+    public final HotSpotTypePrimitive typeFloat;
+    public final HotSpotTypePrimitive typeDouble;
+    public final HotSpotTypePrimitive typeByte;
+    public final HotSpotTypePrimitive typeShort;
+    public final HotSpotTypePrimitive typeInt;
+    public final HotSpotTypePrimitive typeLong;
+    public final HotSpotTypePrimitive typeVoid;
 
     private ThreadPoolExecutor compileQueue;
     private ThreadPoolExecutor slowCompileQueue;
@@ -73,18 +74,18 @@ public class VMToCompilerImpl implements VMToCompiler {
     public VMToCompilerImpl(HotSpotGraalRuntime compiler) {
         this.graalRuntime = compiler;
 
-        typeBoolean = new HotSpotResolvedPrimitiveType(Kind.Boolean);
-        typeChar = new HotSpotResolvedPrimitiveType(Kind.Char);
-        typeFloat = new HotSpotResolvedPrimitiveType(Kind.Float);
-        typeDouble = new HotSpotResolvedPrimitiveType(Kind.Double);
-        typeByte = new HotSpotResolvedPrimitiveType(Kind.Byte);
-        typeShort = new HotSpotResolvedPrimitiveType(Kind.Short);
-        typeInt = new HotSpotResolvedPrimitiveType(Kind.Int);
-        typeLong = new HotSpotResolvedPrimitiveType(Kind.Long);
-        typeVoid = new HotSpotResolvedPrimitiveType(Kind.Void);
+        typeBoolean = new HotSpotTypePrimitive(Kind.Boolean);
+        typeChar = new HotSpotTypePrimitive(Kind.Char);
+        typeFloat = new HotSpotTypePrimitive(Kind.Float);
+        typeDouble = new HotSpotTypePrimitive(Kind.Double);
+        typeByte = new HotSpotTypePrimitive(Kind.Byte);
+        typeShort = new HotSpotTypePrimitive(Kind.Short);
+        typeInt = new HotSpotTypePrimitive(Kind.Int);
+        typeLong = new HotSpotTypePrimitive(Kind.Long);
+        typeVoid = new HotSpotTypePrimitive(Kind.Void);
     }
 
-    private static void initMirror(HotSpotResolvedPrimitiveType type, long offset) {
+    private static void initMirror(HotSpotTypePrimitive type, long offset) {
         Class<?> mirror = type.mirror();
         unsafe.putObject(mirror, offset, type);
         assert unsafe.getObject(mirror, offset) == type;
@@ -134,10 +135,10 @@ public class VMToCompilerImpl implements VMToCompiler {
 
                 @Override
                 public void run() {
-                    Assumptions assumptions = new Assumptions(GraalOptions.OptAssumptions);
-                    SnippetInstaller installer = new SnippetInstaller(runtime, assumptions, runtime.getGraalRuntime().getTarget());
+                    VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime);
+                    SnippetInstaller installer = new SnippetInstaller(runtime, runtime.getGraalRuntime().getTarget());
                     GraalIntrinsics.installIntrinsics(installer);
-                    runtime.installSnippets(installer, assumptions);
+                    runtime.installSnippets(installer);
                 }
             });
 
@@ -372,7 +373,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public boolean compileMethod(long metaspaceMethod, final HotSpotResolvedObjectType holder, final int entryBCI, boolean blocking, int priority) throws Throwable {
+    public boolean compileMethod(long metaspaceMethod, final HotSpotResolvedJavaType holder, final int entryBCI, boolean blocking, int priority) throws Throwable {
         HotSpotResolvedJavaMethod method = holder.createMethod(metaspaceMethod);
         return compileMethod(method, entryBCI, blocking, priority);
     }
@@ -444,9 +445,14 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
+    public Signature createSignature(String signature) {
+        return new HotSpotSignature(signature);
+    }
+
+    @Override
     public JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags, boolean internal) {
         if (offset != -1) {
-            HotSpotResolvedObjectType resolved = (HotSpotResolvedObjectType) holder;
+            HotSpotResolvedJavaType resolved = (HotSpotResolvedJavaType) holder;
             return resolved.createField(name, type, offset, flags, internal);
         }
         return new HotSpotUnresolvedField(holder, name, type);
@@ -454,7 +460,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
     @Override
     public ResolvedJavaMethod createResolvedJavaMethod(JavaType holder, long metaspaceMethod) {
-        HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) holder;
+        HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) holder;
         return type.createMethod(metaspaceMethod);
     }
 
@@ -485,7 +491,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public HotSpotUnresolvedJavaType createUnresolvedJavaType(String name) {
+    public HotSpotTypeUnresolved createUnresolvedJavaType(String name) {
         int dims = 0;
         int startIndex = 0;
         while (name.charAt(startIndex) == '[') {
@@ -496,20 +502,20 @@ public class VMToCompilerImpl implements VMToCompiler {
         // Decode name if necessary.
         if (name.charAt(name.length() - 1) == ';') {
             assert name.charAt(startIndex) == 'L';
-            return new HotSpotUnresolvedJavaType(name, name.substring(startIndex + 1, name.length() - 1), dims);
+            return new HotSpotTypeUnresolved(name, name.substring(startIndex + 1, name.length() - 1), dims);
         } else {
-            return new HotSpotUnresolvedJavaType(HotSpotUnresolvedJavaType.getFullName(name, dims), name, dims);
+            return new HotSpotTypeUnresolved(HotSpotTypeUnresolved.getFullName(name, dims), name, dims);
         }
     }
 
     @Override
-    public HotSpotResolvedObjectType createResolvedJavaType(long metaspaceKlass,
+    public HotSpotResolvedJavaType createResolvedJavaType(long metaspaceKlass,
                     String name,
                     String simpleName,
                     Class javaMirror,
                     boolean hasFinalizableSubclass,
                     int sizeOrSpecies) {
-        HotSpotResolvedObjectType type = new HotSpotResolvedObjectType(
+        HotSpotResolvedJavaType type = new HotSpotResolvedJavaType(
                                         metaspaceKlass,
                                         name,
                                         simpleName,
@@ -520,7 +526,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         long offset = HotSpotGraalRuntime.getInstance().getConfig().graalMirrorInClassOffset;
         if (!unsafe.compareAndSwapObject(javaMirror, offset, null, type)) {
             // lost the race - return the existing value instead
-            type = (HotSpotResolvedObjectType) unsafe.getObject(javaMirror, offset);
+            type = (HotSpotResolvedJavaType) unsafe.getObject(javaMirror, offset);
         }
         return type;
     }
@@ -564,6 +570,9 @@ public class VMToCompilerImpl implements VMToCompiler {
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(graalRuntime.getRuntime(), GraphBuilderConfiguration.getDefault(), optimisticOpts));
         if (onStackReplacement) {
             phasePlan.addPhase(PhasePosition.AFTER_PARSING, new OnStackReplacementPhase());
+        }
+        if (GraalOptions.Intrinsify) {
+            phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
         }
         return phasePlan;
     }

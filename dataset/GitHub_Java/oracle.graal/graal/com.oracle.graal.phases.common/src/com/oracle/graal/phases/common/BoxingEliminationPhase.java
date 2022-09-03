@@ -37,12 +37,7 @@ import com.oracle.graal.phases.*;
 
 public class BoxingEliminationPhase extends Phase {
 
-    private final MetaAccessProvider metaAccess;
     private int virtualIds = Integer.MIN_VALUE;
-
-    public BoxingEliminationPhase(MetaAccessProvider metaAccess) {
-        this.metaAccess = metaAccess;
-    }
 
     @Override
     protected void run(StructuredGraph graph) {
@@ -76,7 +71,7 @@ public class BoxingEliminationPhase extends Phase {
             ObjectStamp stamp = phiNode.objectStamp();
             if (stamp.nonNull() && stamp.isExactType()) {
                 ResolvedJavaType type = stamp.type();
-                if (type != null && type.equals(metaAccess.lookupJavaType(kind.toBoxedJavaClass()))) {
+                if (type != null && type.isClass(kind.toBoxedJavaClass())) {
                     StructuredGraph graph = (StructuredGraph) phiNode.graph();
                     result = graph.add(new PhiNode(kind, phiNode.merge()));
                     phiReplacements.put(phiNode, result);

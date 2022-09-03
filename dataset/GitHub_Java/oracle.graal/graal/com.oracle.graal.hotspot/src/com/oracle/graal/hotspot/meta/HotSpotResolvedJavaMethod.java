@@ -48,7 +48,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
      */
     final long metaspaceMethod;
 
-    private final HotSpotResolvedObjectType holder;
+    private final HotSpotResolvedJavaType holder;
     private /*final*/ int codeSize;
     private /*final*/ int exceptionHandlerCount;
     private Signature signature;
@@ -60,7 +60,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     private CompilationTask currentTask;
 
-    HotSpotResolvedJavaMethod(HotSpotResolvedObjectType holder, long metaspaceMethod) {
+    HotSpotResolvedJavaMethod(HotSpotResolvedJavaType holder, long metaspaceMethod) {
         this.metaspaceMethod = metaspaceMethod;
         this.holder = holder;
         HotSpotGraalRuntime.getInstance().getCompilerToVM().initializeMethod(metaspaceMethod, this);
@@ -74,7 +74,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     @Override
     public int getModifiers() {
         HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
-        return unsafe.getInt(metaspaceMethod + config.methodAccessFlagsOffset) & Modifier.methodModifiers();
+        return unsafe.getInt(null, metaspaceMethod + config.methodAccessFlagsOffset) & Modifier.methodModifiers();
     }
 
     @Override
@@ -129,13 +129,13 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     @Override
     public int getMaxLocals() {
         HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
-        return unsafe.getShort(metaspaceMethod + config.methodMaxLocalsOffset) & 0xFFFF;
+        return unsafe.getShort(null, metaspaceMethod + config.methodMaxLocalsOffset) & 0xFFFF;
     }
 
     @Override
     public int getMaxStackSize() {
         HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
-        return config.extraStackEntries + (unsafe.getShort(metaspaceMethod + config.methodMaxStackOffset) & 0xFFFF);
+        return config.extraStackEntries + (unsafe.getShort(null, metaspaceMethod + config.methodMaxStackOffset) & 0xFFFF);
     }
 
     @Override
@@ -149,7 +149,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     }
 
     public ResolvedJavaMethod uniqueConcreteMethod() {
-        HotSpotResolvedObjectType[] resultHolder = {null};
+        HotSpotResolvedJavaType[] resultHolder = {null};
         long ucm = HotSpotGraalRuntime.getInstance().getCompilerToVM().getUniqueConcreteMethod(metaspaceMethod, resultHolder);
         if (ucm != 0L) {
             assert resultHolder[0] != null;
@@ -225,7 +225,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public ConstantPool getConstantPool() {
-        return ((HotSpotResolvedObjectType) getDeclaringClass()).constantPool();
+        return ((HotSpotResolvedJavaType) getDeclaringClass()).constantPool();
     }
 
     @Override
@@ -263,7 +263,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         int count = sig.getParameterCount(false);
         Class< ? >[] result = new Class< ? >[count];
         for (int i = 0; i < result.length; ++i) {
-            result[i] = ((HotSpotResolvedJavaType) sig.getParameterType(i, holder).resolve(holder)).mirror();
+            result[i] = ((HotSpotJavaType) sig.getParameterType(i, holder).resolve(holder)).mirror();
         }
         return result;
     }
