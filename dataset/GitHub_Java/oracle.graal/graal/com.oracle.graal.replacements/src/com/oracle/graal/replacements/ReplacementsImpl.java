@@ -41,8 +41,8 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
-import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.java.*;
 import com.oracle.graal.java.GraphBuilderPhase.Instance;
 import com.oracle.graal.nodes.*;
@@ -571,7 +571,7 @@ public class ReplacementsImpl implements Replacements {
                 MetaAccessProvider metaAccess = providers.getMetaAccess();
 
                 if (MethodsElidedInSnippets != null && methodToParse.getSignature().getReturnKind() == Kind.Void && MethodFilter.matches(MethodsElidedInSnippets, methodToParse)) {
-                    graph.addAfterFixed(graph.start(), graph.add(ReturnNode.create(null)));
+                    graph.addAfterFixed(graph.start(), graph.add(new ReturnNode(null)));
                 } else {
                     createGraphBuilder(metaAccess, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(graph);
                 }
