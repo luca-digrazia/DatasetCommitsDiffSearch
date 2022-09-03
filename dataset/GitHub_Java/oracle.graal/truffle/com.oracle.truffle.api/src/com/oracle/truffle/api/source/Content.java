@@ -32,6 +32,8 @@ import java.util.Objects;
 abstract class Content {
     String code;
 
+    abstract void reset();
+
     abstract String findMimeType() throws IOException;
 
     abstract Reader getReader() throws IOException;
