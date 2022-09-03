@@ -375,12 +375,15 @@ class EscapeAnalysisIteration {
                 if (op != null) {
                     changed = true;
                     trace("{{%s}} ", node);
-                    ResolvedJavaType type = op.type();
-                    EscapeField[] fields = op.fields();
+                    ResolvedJavaType type = op.type(node);
+                    EscapeField[] fields = op.fields(node);
                     VirtualObjectNode virtualObject = changeGraph ? graph.add(new VirtualObjectNode(virtualIds, type, fields.length)) : null;
                     EscapeRecord record = new EscapeRecord(type, fields, virtualObject);
-                    ValueNode[] fieldState = changeGraph ? op.fieldState() : new ValueNode[fields.length];
+                    ValueNode[] fieldState = new ValueNode[fields.length];
                     if (changeGraph) {
+                        for (int i = 0; i < fields.length; i++) {
+                            fieldState[i] = ConstantNode.defaultForKind(fields[i].type().kind(), virtualObject.graph());
+                        }
                         metricAllocationRemoved.increment();
                         metricAllocationFieldsRemoved.add(fieldState.length);
                     } else {
