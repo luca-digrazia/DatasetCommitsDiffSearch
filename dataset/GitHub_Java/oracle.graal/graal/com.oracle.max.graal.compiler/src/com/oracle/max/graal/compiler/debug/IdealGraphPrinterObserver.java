@@ -101,7 +101,7 @@ public class IdealGraphPrinterObserver implements CompilationObserver {
         try {
             socket = new Socket(host, port);
             if (socket.getInputStream().read() == 'y') {
-                stream = new BufferedOutputStream(socket.getOutputStream(), 0x4000);
+                stream = socket.getOutputStream();
             } else {
                 // server currently does not accept any input
                 socket.close();
@@ -109,7 +109,7 @@ public class IdealGraphPrinterObserver implements CompilationObserver {
                 return;
             }
 
-            printer = new IdealGraphPrinter(stream);
+            printer = new IdealGraphPrinter(new BufferedOutputStream(stream));
             if (GraalOptions.OmitDOTFrameStates) {
                 printer.addOmittedClass(FrameState.class);
             }

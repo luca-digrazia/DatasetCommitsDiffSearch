@@ -29,7 +29,6 @@ import java.util.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.ir.Phi.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -331,7 +330,7 @@ public final class FrameState extends Value implements FrameStateAccess {
                     return phi;
                 }
             }
-            Phi phi = new Phi(p.kind, block, PhiType.Value, graph());
+            Phi phi = new Phi(p.kind, block, graph());
             setValueAt(localsSize + i, phi);
             return phi;
         }
@@ -351,7 +350,7 @@ public final class FrameState extends Value implements FrameStateAccess {
                 return phi;
             }
         }
-        Phi phi = new Phi(p.kind, block, PhiType.Value, graph());
+        Phi phi = new Phi(p.kind, block, graph());
         storeLocal(i, phi);
         return phi;
     }
@@ -399,9 +398,11 @@ public final class FrameState extends Value implements FrameStateAccess {
                 Value y = other.valueAt(i);
                 if (x != y || ((x instanceof Phi) && ((Phi) x).merge() == block)) {
                     if (typeMismatch(x, y)) {
-                        if ((x instanceof Phi) && ((Phi) x).merge() == block) {
-                            x.replaceAtUsages(null);
-                            x.delete();
+                        if (x instanceof Phi) {
+                            Phi phi = (Phi) x;
+                            if (phi.merge() == block) {
+                                phi.makeDead();
+                            }
                         }
                         setValueAt(i, null);
                         continue;

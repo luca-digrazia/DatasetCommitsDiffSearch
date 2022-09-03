@@ -27,6 +27,7 @@ import java.util.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.phases.EscapeAnalysisPhase.EscapeField;
 import com.oracle.max.graal.compiler.phases.EscapeAnalysisPhase.EscapeOp;
+import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
@@ -117,7 +118,19 @@ public abstract class NewArray extends FixedNodeWithNext {
 
         @Override
         public boolean escape(Node node, Node usage) {
-            if (usage instanceof LoadIndexed) {
+            if (usage instanceof IsNonNull) {
+                IsNonNull x = (IsNonNull) usage;
+                assert x.object() == node;
+                return false;
+            } else if (usage instanceof IsType) {
+                IsType x = (IsType) usage;
+                assert x.object() == node;
+                return false;
+            } else if (usage instanceof FrameState) {
+                FrameState x = (FrameState) usage;
+                assert x.inputs().contains(node);
+                return true;
+            } else if (usage instanceof LoadIndexed) {
                 LoadIndexed x = (LoadIndexed) usage;
                 assert x.array() == node;
                 CiConstant index = x.index().asConstant();
@@ -137,15 +150,19 @@ public abstract class NewArray extends FixedNodeWithNext {
                 if (index == null || length == null || index.asInt() < 0 || index.asInt() >= length.asInt()) {
                     return true;
                 }
-                return x.value() == node && x.array() != node;
+                return x.value() == node;
+            } else if (usage instanceof AccessMonitor) {
+                AccessMonitor x = (AccessMonitor) usage;
+                assert x.object() == node;
+                return false;
             } else if (usage instanceof ArrayLength) {
                 ArrayLength x = (ArrayLength) usage;
                 assert x.array() == node;
                 return false;
-            } else if (usage instanceof VirtualObjectField) {
+            } else if (usage instanceof VirtualObject) {
                 return false;
             } else {
-                return super.escape(node, usage);
+                return true;
             }
         }
 
@@ -163,26 +180,45 @@ public abstract class NewArray extends FixedNodeWithNext {
 
         @Override
         public void beforeUpdate(Node node, Node usage) {
-            if (usage instanceof ArrayLength) {
+            if (usage instanceof IsNonNull) {
+                IsNonNull x = (IsNonNull) usage;
+                if (x.usages().size() == 1 && x.usages().get(0) instanceof FixedGuard) {
+                    FixedGuard guard = (FixedGuard) x.usages().get(0);
+                    guard.replaceAndDelete(guard.next());
+                }
+                x.delete();
+            } else if (usage instanceof IsType) {
+                IsType x = (IsType) usage;
+                assert x.type() == ((NewArray) node).exactType();
+                if (x.usages().size() == 1 && x.usages().get(0) instanceof FixedGuard) {
+                    FixedGuard guard = (FixedGuard) x.usages().get(0);
+                    guard.replaceAndDelete(guard.next());
+                }
+                x.delete();
+            } else if (usage instanceof AccessMonitor) {
+                AccessMonitor x = (AccessMonitor) usage;
+                x.replaceAndDelete(x.next());
+            } else if (usage instanceof ArrayLength) {
                 ArrayLength x = (ArrayLength) usage;
                 x.replaceAndDelete(((NewArray) node).dimension(0));
-            } else {
-                super.beforeUpdate(node, usage);
             }
         }
 
         @Override
         public int updateState(Node node, Node current, Map<Object, Integer> fieldIndex, Value[] fieldState) {
             if (current instanceof AccessIndexed) {
-                AccessIndexed x = (AccessIndexed) current;
-                if (x.array() == node) {
-                    int index = ((AccessIndexed) current).index().asConstant().asInt();
-                    if (current instanceof LoadIndexed) {
+                int index = ((AccessIndexed) current).index().asConstant().asInt();
+                if (current instanceof LoadIndexed) {
+                    LoadIndexed x = (LoadIndexed) current;
+                    if (x.array() == node) {
                         x.replaceAtUsages(fieldState[index]);
                         assert x.usages().size() == 0;
                         x.replaceAndDelete(x.next());
-                    } else if (current instanceof StoreIndexed) {
-                        fieldState[index] = ((StoreIndexed) x).value();
+                    }
+                } else if (current instanceof StoreIndexed) {
+                    StoreIndexed x = (StoreIndexed) current;
+                    if (x.array() == node) {
+                        fieldState[index] = x.value();
                         assert x.usages().size() == 0;
                         x.replaceAndDelete(x.next());
                         return index;
