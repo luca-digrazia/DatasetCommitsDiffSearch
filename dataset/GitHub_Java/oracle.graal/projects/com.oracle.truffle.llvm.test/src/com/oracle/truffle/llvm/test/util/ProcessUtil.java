@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -38,7 +38,6 @@ import java.util.concurrent.TimeUnit;
 import com.oracle.truffle.llvm.Sulong;
 import com.oracle.truffle.llvm.pipe.CaptureOutput;
 import com.oracle.truffle.llvm.test.options.TestOptions;
-import java.util.Objects;
 
 public class ProcessUtil {
 
@@ -55,11 +54,11 @@ public class ProcessUtil {
         private final String stdOutput;
         private final int returnValue;
 
-        private ProcessResult(String originalCommand, int returnValue, String stdErr, String stdOutput) {
+        private ProcessResult(String originalCommand, int returnValue, String stdErr, String stdInput) {
             this.originalCommand = originalCommand;
             this.returnValue = returnValue;
             this.stdErr = stdErr;
-            this.stdOutput = stdOutput;
+            this.stdOutput = stdInput;
         }
 
         /**
@@ -99,27 +98,6 @@ public class ProcessUtil {
             return sb.toString();
         }
 
-        @Override
-        public boolean equals(Object obj) {
-            // ignore originalCommand, two different commands can still produce the same output
-            if (!(obj instanceof ProcessResult)) {
-                return false;
-            }
-
-            ProcessResult other = (ProcessResult) obj;
-            return this.returnValue == other.returnValue &&
-                            Objects.equals(this.stdErr, other.stdErr) &&
-                            Objects.equals(this.stdOutput, other.stdOutput);
-        }
-
-        @Override
-        public int hashCode() {
-            int hash = 5;
-            hash = 97 * hash + Objects.hashCode(this.stdErr);
-            hash = 97 * hash + Objects.hashCode(this.stdOutput);
-            hash = 97 * hash + this.returnValue;
-            return hash;
-        }
     }
 
     public static ProcessResult executeSulongTestMain(File bitcodeFile, String[] args) throws Exception {
@@ -127,8 +105,8 @@ public class ProcessUtil {
             try (CaptureOutput out = new CaptureOutput()) {
                 int result = Sulong.executeMain(bitcodeFile, args);
                 System.out.flush();
-                System.err.flush();
-                return new ProcessResult(bitcodeFile.getName(), result, out.getStdErr(), out.getStdOut());
+                String stdout = out.getResult();
+                return new ProcessResult(bitcodeFile.getName(), result, "", stdout);
             }
         } else {
             String aotArgs = TestOptions.TEST_AOT_ARGS == null ? "" : TestOptions.TEST_AOT_ARGS + " ";
