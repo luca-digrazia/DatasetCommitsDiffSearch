@@ -41,11 +41,13 @@ public class LLVMOptions {
         for (PropertyCategory category : PropertyCategory.values()) {
             List<Property> properties = category.getProperties();
             if (!properties.isEmpty()) {
-                LLVMLogger.unconditionalInfo(category + ":");
+                // Checkstyle: stop
+                System.out.println(category + ":");
                 for (Property prop : properties) {
-                    LLVMLogger.unconditionalInfo(prop.toString());
+                    System.out.println(prop);
                 }
-                LLVMLogger.unconditionalInfo("");
+                System.out.println();
+                // Checkstyle: resume
             }
 
         }
@@ -220,12 +222,16 @@ public class LLVMOptions {
             if (key.startsWith(OPTION_PREFIX)) {
                 if (Property.fromKey(key) == null) {
                     wrongOptionName = true;
-                    LLVMLogger.error(key + " is an invalid option!");
+                    // Checkstyle: stop
+                    System.err.println(key + " is an invalid option!");
+                    // Checkstyle: resume
                 }
             }
         }
         if (wrongOptionName) {
-            LLVMLogger.error("\nvalid options:");
+            // Checkstyle: stop
+            System.err.println("\nvalid options:");
+            // Checkstyle: resume
             printOptions();
             System.exit(-1);
         }
@@ -239,8 +245,9 @@ public class LLVMOptions {
         Properties allProperties = System.getProperties();
         for (String key : allProperties.stringPropertyNames()) {
             if (key.startsWith(OBSOLETE_OPTION_PREFIX)) {
-                LLVMLogger.error(
-                                "The prefix '" + OBSOLETE_OPTION_PREFIX + "' in option '" + key + "' is an obsolete option prefix and has been replaced by the prefix '" + OPTION_PREFIX + "':");
+                // Checkstyle: stop
+                System.err.println("The prefix '" + OBSOLETE_OPTION_PREFIX + "' in option '" + key + "' is an obsolete option prefix and has been replaced by the prefix '" + OPTION_PREFIX + "':");
+                // Checkstyle: resume
                 printOptions();
                 System.exit(-1);
             }
