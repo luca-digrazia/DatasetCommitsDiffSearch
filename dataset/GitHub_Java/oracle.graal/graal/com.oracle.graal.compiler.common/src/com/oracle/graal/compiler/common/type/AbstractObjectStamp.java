@@ -22,9 +22,12 @@
  */
 package com.oracle.graal.compiler.common.type;
 
+import com.oracle.jvmci.meta.ResolvedJavaType;
+import com.oracle.jvmci.meta.Kind;
+import com.oracle.jvmci.meta.JavaConstant;
+import com.oracle.jvmci.meta.MetaAccessProvider;
+import com.oracle.jvmci.meta.Constant;
 import java.util.*;
-
-import jdk.internal.jvmci.meta.*;
 
 /**
  * Type describing all pointers to Java objects.
@@ -225,12 +228,12 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             joinExactType = false;
         }
         if (joinExactType && joinType == null) {
-            return empty();
+            return StampFactory.empty(Kind.Object);
         }
         if (joinAlwaysNull && joinNonNull) {
-            return empty();
+            return StampFactory.empty(Kind.Object);
         } else if (joinExactType && !isConcreteType(joinType)) {
-            return empty();
+            return StampFactory.empty(Kind.Object);
         }
         if (Objects.equals(joinType, type) && joinExactType == exactType && joinNonNull == nonNull() && joinAlwaysNull == alwaysNull()) {
             return this;
