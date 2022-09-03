@@ -5,9 +5,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -42,7 +40,6 @@ import org.graalvm.compiler.hotspot.HotSpotBackend;
 import org.graalvm.compiler.hotspot.HotSpotBackendFactory;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import org.graalvm.compiler.hotspot.HotSpotReplacementsImpl;
-import org.graalvm.compiler.hotspot.meta.AddressLoweringHotSpotSuitesProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotConstantFieldProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallsProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotGraalConstantFieldProvider;
@@ -58,11 +55,7 @@ import org.graalvm.compiler.hotspot.meta.HotSpotSuitesProvider;
 import org.graalvm.compiler.hotspot.word.HotSpotWordTypes;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.nodes.spi.LoweringProvider;
-import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.phases.Phase;
-import org.graalvm.compiler.phases.common.AddressLoweringByUsePhase;
-import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.phases.tiers.CompilerConfiguration;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.aarch64.AArch64GraphBuilderPlugins;
@@ -152,7 +145,7 @@ public class AArch64HotSpotBackendFactory implements HotSpotBackendFactory {
                 replacements.setGraphBuilderPlugins(plugins);
             }
             try (InitTimer rt = timer("create Suites provider")) {
-                suites = createSuites(config, graalRuntime, compilerConfiguration, plugins, replacements);
+                suites = createSuites(config, graalRuntime, compilerConfiguration, plugins);
             }
             providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, replacements, suites, registers,
                             snippetReflection, wordTypes,
@@ -168,7 +161,7 @@ public class AArch64HotSpotBackendFactory implements HotSpotBackendFactory {
                     HotSpotReplacementsImpl replacements, HotSpotWordTypes wordTypes, HotSpotStampProvider stampProvider) {
         Plugins plugins = HotSpotGraphBuilderPlugins.create(compilerConfiguration, config, wordTypes, metaAccess, constantReflection, snippetReflection, foreignCalls, lowerer, stampProvider,
                         replacements);
-        AArch64GraphBuilderPlugins.register(plugins, replacements.getDefaultReplacementBytecodeProvider(), false);
+        AArch64GraphBuilderPlugins.register(plugins, replacements.getDefaultReplacementBytecodeProvider());
         return plugins;
     }
 
@@ -189,11 +182,8 @@ public class AArch64HotSpotBackendFactory implements HotSpotBackendFactory {
         return new AArch64HotSpotForeignCallsProvider(jvmciRuntime, runtime, metaAccess, codeCache, wordTypes, nativeABICallerSaveRegisters);
     }
 
-    protected HotSpotSuitesProvider createSuites(GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, CompilerConfiguration compilerConfiguration, Plugins plugins,
-                    @SuppressWarnings("unused") Replacements replacements) {
-        AArch64SuitesCreator suitesCreator = new AArch64SuitesCreator(compilerConfiguration, plugins, SchedulePhase.class);
-        Phase addressLoweringPhase = new AddressLoweringByUsePhase(new AArch64AddressLoweringByUse(new AArch64LIRKindTool()));
-        return new AddressLoweringHotSpotSuitesProvider(suitesCreator, config, runtime, addressLoweringPhase);
+    protected HotSpotSuitesProvider createSuites(GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, CompilerConfiguration compilerConfiguration, Plugins plugins) {
+        return new AArch64HotSpotSuitesProvider(new AArch64SuitesCreator(compilerConfiguration, plugins), config, runtime, new AArch64AddressLoweringByUse(new AArch64LIRKindTool()));
     }
 
     protected HotSpotSnippetReflectionProvider createSnippetReflection(HotSpotGraalRuntimeProvider runtime, HotSpotConstantReflectionProvider constantReflection, WordTypes wordTypes) {

@@ -131,7 +131,7 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
         return getResult().getStub() != null;
     }
 
-    private LIRFrameState currentRuntimeCallInfo;
+    @SuppressWarnings("unused") private LIRFrameState currentRuntimeCallInfo;
 
     @Override
     protected void emitForeignCallOp(ForeignCallLinkage linkage, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
