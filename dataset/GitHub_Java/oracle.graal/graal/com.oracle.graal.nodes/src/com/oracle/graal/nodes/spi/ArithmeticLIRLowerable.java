@@ -22,13 +22,11 @@
  */
 package com.oracle.graal.nodes.spi;
 
-import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import jdk.internal.jvmci.code.*;
 
-public interface ArithmeticLIRLowerable extends LIRLowerable {
+import com.oracle.graal.lir.gen.*;
 
-    default void generate(NodeLIRBuilderTool builder) {
-        generate(builder, builder.getLIRGeneratorTool().getArithmetic());
-    }
+public interface ArithmeticLIRLowerable extends ArithmeticOperation {
 
-    void generate(NodeLIRBuilderTool builder, ArithmeticLIRGeneratorTool gen);
+    void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen);
 }

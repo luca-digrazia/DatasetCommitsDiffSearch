@@ -22,23 +22,19 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_20;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
-
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp.Abs;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Absolute value.
  */
-@NodeInfo(cycles = CYCLES_20, size = SIZE_1)
+@NodeInfo
 public final class AbsNode extends UnaryArithmeticNode<Abs> implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
     public static final NodeClass<AbsNode> TYPE = NodeClass.create(AbsNode.class);
 
@@ -59,7 +55,7 @@ public final class AbsNode extends UnaryArithmeticNode<Abs> implements Arithmeti
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
         nodeValueMap.setResult(this, gen.emitMathAbs(nodeValueMap.operand(getValue())));
     }
 }

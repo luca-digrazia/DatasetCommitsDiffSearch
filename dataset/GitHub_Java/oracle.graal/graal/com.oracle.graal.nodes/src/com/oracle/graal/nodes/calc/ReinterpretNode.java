@@ -22,38 +22,29 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+import java.nio.*;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.LIRKind;
-import com.oracle.graal.compiler.common.type.ArithmeticStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.SerializableConstant;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * The {@code ReinterpretNode} class represents a reinterpreting conversion that changes the stamp
  * of a primitive value to some other incompatible stamp. The new stamp must have the same width as
  * the old stamp.
  */
-@NodeInfo(cycles = CYCLES_1)
+@NodeInfo
 public final class ReinterpretNode extends UnaryNode implements ArithmeticLIRLowerable {
 
     public static final NodeClass<ReinterpretNode> TYPE = NodeClass.create(ReinterpretNode.class);
 
-    public ReinterpretNode(JavaKind to, ValueNode value) {
+    public ReinterpretNode(Kind to, ValueNode value) {
         this(StampFactory.forKind(to), value);
     }
 
@@ -92,24 +83,24 @@ public final class ReinterpretNode extends UnaryNode implements ArithmeticLIRLow
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool builder, ArithmeticLIRGeneratorTool gen) {
-        LIRKind kind = builder.getLIRGeneratorTool().getLIRKind(stamp());
-        builder.setResult(this, gen.emitReinterpret(kind, builder.operand(getValue())));
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
+        LIRKind kind = gen.getLIRKind(stamp());
+        nodeValueMap.setResult(this, gen.emitReinterpret(kind, nodeValueMap.operand(getValue())));
     }
 
-    public static ValueNode reinterpret(JavaKind toKind, ValueNode value) {
+    public static ValueNode reinterpret(Kind toKind, ValueNode value) {
         return value.graph().unique(new ReinterpretNode(toKind, value));
     }
 
     @NodeIntrinsic
-    public static native float reinterpret(@ConstantNodeParameter JavaKind kind, int value);
+    public static native float reinterpret(@ConstantNodeParameter Kind kind, int value);
 
     @NodeIntrinsic
-    public static native int reinterpret(@ConstantNodeParameter JavaKind kind, float value);
+    public static native int reinterpret(@ConstantNodeParameter Kind kind, float value);
 
     @NodeIntrinsic
-    public static native double reinterpret(@ConstantNodeParameter JavaKind kind, long value);
+    public static native double reinterpret(@ConstantNodeParameter Kind kind, long value);
 
     @NodeIntrinsic
-    public static native long reinterpret(@ConstantNodeParameter JavaKind kind, double value);
+    public static native long reinterpret(@ConstantNodeParameter Kind kind, double value);
 }

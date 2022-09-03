@@ -22,22 +22,18 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_30;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
-
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp.Sqrt;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Square root.
  */
-@NodeInfo(cycles = CYCLES_30, size = SIZE_1)
+@NodeInfo
 public final class SqrtNode extends UnaryArithmeticNode<Sqrt> implements ArithmeticLIRLowerable {
 
     public static final NodeClass<SqrtNode> TYPE = NodeClass.create(SqrtNode.class);
@@ -47,7 +43,7 @@ public final class SqrtNode extends UnaryArithmeticNode<Sqrt> implements Arithme
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
         nodeValueMap.setResult(this, gen.emitMathSqrt(nodeValueMap.operand(getValue())));
     }
 }

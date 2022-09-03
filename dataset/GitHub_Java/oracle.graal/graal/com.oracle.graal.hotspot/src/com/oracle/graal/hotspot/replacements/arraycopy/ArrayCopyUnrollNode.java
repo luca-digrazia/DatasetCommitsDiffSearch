@@ -22,24 +22,18 @@
  */
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import static jdk.vm.ci.meta.LocationIdentity.any;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
+import static jdk.internal.jvmci.meta.LocationIdentity.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.ArrayRangeWriteNode;
-import com.oracle.graal.nodes.memory.MemoryAccess;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.memory.MemoryNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
 
-@NodeInfo(allowedUsageTypes = InputType.Memory)
+@NodeInfo
 public class ArrayCopyUnrollNode extends ArrayRangeWriteNode implements MemoryCheckpoint.Single, Lowerable, MemoryAccess {
 
     public static final NodeClass<ArrayCopyUnrollNode> TYPE = NodeClass.create(ArrayCopyUnrollNode.class);
@@ -50,21 +44,21 @@ public class ArrayCopyUnrollNode extends ArrayRangeWriteNode implements MemoryCh
     @Input protected ValueNode destPos;
     @Input protected ValueNode length;
 
-    private JavaKind elementKind;
+    private Kind elementKind;
 
     private int unrolledLength;
 
     @OptionalInput(InputType.Memory) private MemoryNode lastLocationAccess;
 
-    public ArrayCopyUnrollNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, int unrolledLength, JavaKind elementKind) {
-        super(TYPE, StampFactory.forKind(JavaKind.Void));
+    public ArrayCopyUnrollNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, int unrolledLength, Kind elementKind) {
+        super(TYPE, StampFactory.forKind(Kind.Void));
         this.src = src;
         this.srcPos = srcPos;
         this.dest = dest;
         this.destPos = destPos;
         this.length = length;
         this.unrolledLength = unrolledLength;
-        assert elementKind != null && elementKind != JavaKind.Illegal;
+        assert elementKind != null && elementKind != Kind.Illegal;
         this.elementKind = elementKind;
     }
 
@@ -101,7 +95,7 @@ public class ArrayCopyUnrollNode extends ArrayRangeWriteNode implements MemoryCh
 
     @Override
     public boolean isObjectArray() {
-        return elementKind == JavaKind.Object;
+        return elementKind == Kind.Object;
     }
 
     @Override
@@ -110,14 +104,13 @@ public class ArrayCopyUnrollNode extends ArrayRangeWriteNode implements MemoryCh
     }
 
     @NodeIntrinsic
-    public static native void arraycopy(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, int length, @ConstantNodeParameter int unrolledLength,
-                    @ConstantNodeParameter JavaKind elementKind);
+    public static native void arraycopy(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, int length, @ConstantNodeParameter int unrolledLength, @ConstantNodeParameter Kind elementKind);
 
     public int getUnrollLength() {
         return unrolledLength;
     }
 
-    public JavaKind getElementKind() {
+    public Kind getElementKind() {
         return elementKind;
     }
 
@@ -134,12 +127,10 @@ public class ArrayCopyUnrollNode extends ArrayRangeWriteNode implements MemoryCh
         tool.getLowerer().lower(this, tool);
     }
 
-    @Override
     public MemoryNode getLastLocationAccess() {
         return lastLocationAccess;
     }
 
-    @Override
     public void setLastLocationAccess(MemoryNode lla) {
         updateUsagesInterface(lastLocationAccess, lla);
         lastLocationAccess = lla;

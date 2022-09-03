@@ -22,21 +22,18 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Add;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "+")
 public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArithmeticNode, BinaryCommutative<ValueNode> {
@@ -112,11 +109,11 @@ public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArit
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
         Value op1 = nodeValueMap.operand(getX());
         assert op1 != null : getX() + ", this=" + this;
         Value op2 = nodeValueMap.operand(getY());
-        if (shouldSwapInputs(nodeValueMap)) {
+        if (!getY().isConstant() && !BinaryArithmeticNode.livesLonger(this, getY(), nodeValueMap)) {
             Value tmp = op1;
             op1 = op2;
             op2 = tmp;

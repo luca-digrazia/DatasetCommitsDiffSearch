@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,33 +22,26 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Div;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.PrimitiveConstant;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "/")
-public class DivNode extends BinaryArithmeticNode<Div> {
+public final class DivNode extends BinaryArithmeticNode<Div> {
 
     public static final NodeClass<DivNode> TYPE = NodeClass.create(DivNode.class);
 
     public DivNode(ValueNode x, ValueNode y) {
         super(TYPE, ArithmeticOpTable::getDiv, x, y);
-    }
-
-    protected DivNode(NodeClass<? extends DivNode> c, ValueNode x, ValueNode y) {
-        super(c, ArithmeticOpTable::getDiv, x, y);
     }
 
     public static ValueNode create(ValueNode x, ValueNode y) {
@@ -74,7 +67,7 @@ public class DivNode extends BinaryArithmeticNode<Div> {
             if (getOp(forX, forY).isNeutral(c)) {
                 return forX;
             }
-            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getJavaKind().isNumericInteger()) {
+            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getKind().isNumericInteger()) {
                 long i = ((PrimitiveConstant) c).asLong();
                 boolean signFlip = false;
                 if (i < 0) {
@@ -98,7 +91,7 @@ public class DivNode extends BinaryArithmeticNode<Div> {
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
         nodeValueMap.setResult(this, gen.emitDiv(nodeValueMap.operand(getX()), nodeValueMap.operand(getY()), null));
     }
 }

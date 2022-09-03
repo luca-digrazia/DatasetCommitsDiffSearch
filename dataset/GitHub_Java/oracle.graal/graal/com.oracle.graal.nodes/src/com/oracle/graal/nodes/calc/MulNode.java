@@ -22,23 +22,19 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.PrimitiveConstant;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Mul;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "*")
 public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArithmeticNode, BinaryCommutative<ValueNode> {
@@ -81,7 +77,7 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
                 return forX;
             }
 
-            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getJavaKind().isNumericInteger()) {
+            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getKind().isNumericInteger()) {
                 long i = ((PrimitiveConstant) c).asLong();
                 if (i > 0 && CodeUtil.isPowerOf2(i)) {
                     return new LeftShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(i)));
@@ -97,10 +93,10 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
         Value op1 = nodeValueMap.operand(getX());
         Value op2 = nodeValueMap.operand(getY());
-        if (shouldSwapInputs(nodeValueMap)) {
+        if (!getY().isConstant() && !BinaryArithmeticNode.livesLonger(this, getY(), nodeValueMap)) {
             Value tmp = op1;
             op1 = op2;
             op2 = tmp;

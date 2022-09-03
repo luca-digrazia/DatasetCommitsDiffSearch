@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,65 +22,86 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.And;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "&")
-public final class AndNode extends BitLogicNode implements Canonicalizable {
+public final class AndNode extends BinaryArithmeticNode<And> implements NarrowableArithmeticNode, BinaryCommutative<ValueNode> {
 
-    public AndNode(Kind kind, ValueNode x, ValueNode y) {
-        super(kind, x, y);
+    public static final NodeClass<AndNode> TYPE = NodeClass.create(AndNode.class);
+
+    public AndNode(ValueNode x, ValueNode y) {
+        super(TYPE, ArithmeticOpTable::getAnd, x, y);
+    }
+
+    public static ValueNode create(ValueNode x, ValueNode y) {
+        BinaryOp<And> op = ArithmeticOpTable.forStamp(x.stamp()).getAnd();
+        Stamp stamp = op.foldStamp(x.stamp(), y.stamp());
+        ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp);
+        if (tryConstantFold != null) {
+            return tryConstantFold;
+        } else {
+            return new AndNode(x, y).maybeCommuteInputs();
+        }
     }
 
     @Override
-    public boolean inferStamp() {
-        return updateStamp(StampTool.and(x().stamp(), y().stamp()));
-    }
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        ValueNode ret = super.canonical(tool, forX, forY);
+        if (ret != this) {
+            return ret;
+        }
 
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x() == y()) {
-            return x();
+        if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
+            return forX;
         }
-        if (x().isConstant() && !y().isConstant()) {
-            return graph().unique(new AndNode(kind(), y(), x()));
+        if (forX.isConstant() && !forY.isConstant()) {
+            return new AndNode(forY, forX);
         }
-        if (x().isConstant()) {
-            if (kind() == Kind.Int) {
-                return ConstantNode.forInt(x().asConstant().asInt() & y().asConstant().asInt(), graph());
-            } else {
-                assert kind() == Kind.Long;
-                return ConstantNode.forLong(x().asConstant().asLong() & y().asConstant().asLong(), graph());
+        if (forY.isConstant()) {
+            Constant c = forY.asConstant();
+            if (getOp(forX, forY).isNeutral(c)) {
+                return forX;
             }
-        } else if (y().isConstant()) {
-            if (kind() == Kind.Int) {
-                int c = y().asConstant().asInt();
-                if (c == -1) {
-                    return x();
+
+            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getKind().isNumericInteger()) {
+                long rawY = ((PrimitiveConstant) c).asLong();
+                long mask = CodeUtil.mask(PrimitiveStamp.getBits(stamp()));
+                if ((rawY & mask) == 0) {
+                    return ConstantNode.forIntegerStamp(stamp(), 0);
                 }
-                if (c == 0) {
-                    return ConstantNode.forInt(0, graph());
+                if (forX instanceof SignExtendNode) {
+                    SignExtendNode ext = (SignExtendNode) forX;
+                    if (rawY == ((1L << ext.getInputBits()) - 1)) {
+                        return new ZeroExtendNode(ext.getValue(), ext.getResultBits());
+                    }
                 }
-            } else {
-                assert kind() == Kind.Long;
-                long c = y().asConstant().asLong();
-                if (c == -1) {
-                    return x();
-                }
-                if (c == 0) {
-                    return ConstantNode.forLong(0, graph());
+                IntegerStamp xStamp = (IntegerStamp) forX.stamp();
+                if (((xStamp.upMask() | xStamp.downMask()) & ~rawY) == 0) {
+                    // No bits are set which are outside the mask, so the mask will have no effect.
+                    return forX;
                 }
             }
-            return BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
+
+            return reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
         }
         return this;
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
-        gen.setResult(this, gen.emitAnd(gen.operand(x()), gen.operand(y())));
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
+        nodeValueMap.setResult(this, gen.emitAnd(nodeValueMap.operand(getX()), nodeValueMap.operand(getY())));
     }
 }

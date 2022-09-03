@@ -22,35 +22,20 @@
  */
 package com.oracle.graal.nodes.spi;
 
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.InfopointReason;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.BreakpointNode;
-import com.oracle.graal.nodes.DeoptimizingNode;
-import com.oracle.graal.nodes.FullInfopointNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.LoopEndNode;
-import com.oracle.graal.nodes.PauseNode;
-import com.oracle.graal.nodes.SafepointNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.ConditionalNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.extended.SwitchNode;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
 
 public interface NodeLIRBuilderTool extends NodeValueMap {
 
@@ -78,11 +63,9 @@ public interface NodeLIRBuilderTool extends NodeValueMap {
 
     void visitBreakpointNode(BreakpointNode i);
 
-    void visitPauseNode(PauseNode i);
-
     void visitFullInfopointNode(FullInfopointNode i);
 
-    void recordSimpleInfopoint(InfopointReason reason, BytecodePosition position);
+    void visitSimpleInfopointNode(SimpleInfopointNode i);
 
     LIRGeneratorTool getLIRGeneratorTool();
 

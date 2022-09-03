@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,21 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Rem;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "%")
-public class RemNode extends BinaryArithmeticNode<Rem> implements Lowerable {
+public final class RemNode extends BinaryArithmeticNode<Rem> implements Lowerable {
 
     public static final NodeClass<RemNode> TYPE = NodeClass.create(RemNode.class);
 
     public RemNode(ValueNode x, ValueNode y) {
-        this(TYPE, x, y);
-    }
-
-    protected RemNode(NodeClass<? extends RemNode> c, ValueNode x, ValueNode y) {
-        super(c, ArithmeticOpTable::getRem, x, y);
+        super(TYPE, ArithmeticOpTable::getRem, x, y);
     }
 
     @Override
@@ -51,7 +45,7 @@ public class RemNode extends BinaryArithmeticNode<Rem> implements Lowerable {
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
         nodeValueMap.setResult(this, gen.emitRem(nodeValueMap.operand(getX()), nodeValueMap.operand(getY()), null));
     }
 }

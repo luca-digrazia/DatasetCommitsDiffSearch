@@ -22,29 +22,24 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+import jdk.internal.jvmci.code.*;
 
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.Narrow;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.ZeroExtend;
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.PrimitiveStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-import jdk.vm.ci.code.CodeUtil;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * The {@code ZeroExtendNode} converts an integer to a wider integer using zero extension.
  */
-@NodeInfo(cycles = CYCLES_1)
+@NodeInfo
 public final class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow> {
 
     public static final NodeClass<ZeroExtendNode> TYPE = NodeClass.create(ZeroExtendNode.class);
@@ -121,7 +116,7 @@ public final class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow>
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
         nodeValueMap.setResult(this, gen.emitZeroExtend(nodeValueMap.operand(getValue()), getInputBits(), getResultBits()));
     }
 }
