@@ -41,7 +41,6 @@
 package com.oracle.truffle.sl.test;
 
 import java.io.IOException;
-
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
