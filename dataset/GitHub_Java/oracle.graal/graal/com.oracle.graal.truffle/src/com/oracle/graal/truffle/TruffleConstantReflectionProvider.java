@@ -58,15 +58,14 @@ public class TruffleConstantReflectionProvider implements ConstantReflectionProv
             JavaType fieldType = field.getType();
             if (field.isFinal() || field.getAnnotation(CompilationFinal.class) != null ||
                             (fieldType.getKind() == Kind.Object && (field.getAnnotation(Child.class) != null || field.getAnnotation(Children.class) != null))) {
-                final JavaConstant constant;
-                if (fieldType.getKind() == Kind.Object && fieldType instanceof ResolvedJavaType && ((ResolvedJavaType) fieldType).isArray() &&
-                                (field.getAnnotation(CompilationFinal.class) != null || field.getAnnotation(Children.class) != null)) {
-                    constant = graalConstantReflection.readStableFieldValue(field, receiver, true);
-                } else {
-                    constant = graalConstantReflection.readFieldValue(field, receiver);
-                }
+                JavaConstant constant = graalConstantReflection.readFieldValue(field, receiver);
                 assert verifyFieldValue(field, constant);
-                return constant;
+                if (constant.isNonNull() && fieldType.getKind() == Kind.Object && fieldType instanceof ResolvedJavaType && ((ResolvedJavaType) fieldType).isArray() &&
+                                (field.getAnnotation(CompilationFinal.class) != null || field.getAnnotation(Children.class) != null)) {
+                    return graalConstantReflection.readStableFieldValue(field, receiver, true);
+                } else {
+                    return graalConstantReflection.readFieldValue(field, receiver);
+                }
             }
         } else if (field.isStatic()) {
             if (field.getAnnotation(CompilationFinal.class) != null) {
