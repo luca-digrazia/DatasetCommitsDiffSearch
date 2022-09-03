@@ -244,27 +244,6 @@ public final class Debugger {
     }
 
     /**
-     * Request a pause. As soon as the execution arrives at a node holding a debugger tag,
-     * {@link SuspendedEvent} is emitted.
-     * <p>
-     * This method can be called in any thread. When called from the {@link SuspendedEvent} callback
-     * thread, execution is paused on a nearest next node holding a debugger tag.
-     *
-     * @return <code>true</code> when pause was requested on the current execution,
-     *         <code>false</code> when there is no running execution to pause.
-     * @since 0.14
-     */
-    public boolean pause() {
-        DebugExecutionContext dc = currentDebugContext;
-        if (dc != null) {
-            dc.doPause();
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    /**
      * Prepare to <em>Continue</em> when guest language program execution resumes. In this mode:
      * <ul>
      * <li>Execution will continue until either:
@@ -746,46 +725,6 @@ public final class Debugger {
         }
     }
 
-    private final class PauseHandler {
-
-        private EventBinding<?>[] bindings;
-
-        @TruffleBoundary
-        PauseHandler(final DebugExecutionContext debugContext) {
-            if (TRACE) {
-                debugContext.trace("PAUSE requested.");
-            }
-            ExecutionEventListener execListener = new ExecutionEventListener() {
-                @Override
-                public void onEnter(EventContext context, VirtualFrame frame) {
-                    debugContext.halt(context, frame.materialize(), HaltPosition.BEFORE, "Paused");
-                }
-
-                @Override
-                public void onReturnValue(EventContext context, VirtualFrame frame, Object result) {
-                    debugContext.halt(context, frame.materialize(), HaltPosition.AFTER, "Paused");
-                }
-
-                @Override
-                public void onReturnExceptional(EventContext context, VirtualFrame frame, Throwable exception) {
-                    debugContext.halt(context, frame.materialize(), HaltPosition.AFTER, "Paused");
-                }
-            };
-            bindings = new EventBinding<?>[]{
-                            instrumenter.attachListener(HALT_FILTER, execListener),
-                            instrumenter.attachListener(CALL_FILTER, execListener),
-            };
-        }
-
-        private void disable() {
-            for (EventBinding<?> eb : bindings) {
-                eb.dispose();
-            }
-            bindings = null;
-        }
-
-    }
-
     /**
      * Information and debugging state for a single Truffle execution (which make take place over
      * one or more suspended executions). This holds interaction state, for example what is
@@ -821,10 +760,6 @@ public final class Debugger {
 
         /** Where halted relative to the instrumented node. */
         private HaltPosition haltedPosition;
-
-        private final Object pauseHandlerLock = new Object();
-        /** Handler of pause requests. */
-        private PauseHandler pauseHandler;
 
         /** Subset of the Truffle stack corresponding to the current execution. */
         private List<FrameInstance> contextStack;
@@ -879,30 +814,6 @@ public final class Debugger {
             }
         }
 
-        void doPause() {
-            synchronized (pauseHandlerLock) {
-                if (pauseHandler != null) {
-                    // Pause was requested already
-                    return;
-                }
-                pauseHandler = new PauseHandler(this);
-            }
-        }
-
-        private void clearPause() {
-            boolean cleared = false;
-            synchronized (pauseHandlerLock) {
-                if (pauseHandler != null) {
-                    pauseHandler.disable();
-                    pauseHandler = null;
-                    cleared = true;
-                }
-            }
-            if (TRACE && cleared) {
-                trace("CLEAR PAUSE");
-            }
-        }
-
         /**
          * Handle a program halt, caused by a breakpoint, stepping action, or other cause.
          *
@@ -926,10 +837,7 @@ public final class Debugger {
             haltedPosition = position;
             running = false;
 
-            if (haltReason.startsWith("Step")) {
-                clearAction();
-            }
-            clearPause();
+            clearAction();
 
             // Clean up, just in cased the one-shot breakpoints got confused
             breakpoints.disposeOneShots();
@@ -959,7 +867,7 @@ public final class Debugger {
             contextStack = Collections.unmodifiableList(frames);
 
             if (TRACE) {
-                final String reason = haltReason;
+                final String reason = haltReason == null ? "" : haltReason;
                 trace("HALT %s: (%s) stack base=%d", haltedPosition.toString(), reason, contextStackBase);
             }
 
@@ -975,7 +883,7 @@ public final class Debugger {
                 // Presume that the client has set a new strategy (or default to Continue)
                 running = true;
                 if (TRACE) {
-                    final String reason = haltReason;
+                    final String reason = haltReason == null ? "" : haltReason;
                     trace("RESUME %s : (%s) stack base=%d", haltedPosition.toString(), reason, contextStackBase);
                 }
             } finally {
@@ -1099,9 +1007,7 @@ public final class Debugger {
                     final Debugger dbg = (Debugger) debugger[0];
                     dbg.executionStarted(currentDepth, s);
                 }
-                ExecutionEvent event = new ExecutionEvent(engine, currentDepth, debugger, s);
-                engineAccess().dispatchEvent(engine, event, EngineSupport.EXECUTION_EVENT);
-                event.dispose();
+                engineAccess().dispatchEvent(engine, new ExecutionEvent(engine, currentDepth, debugger, s), EngineSupport.EXECUTION_EVENT);
             }
 
             @Override
