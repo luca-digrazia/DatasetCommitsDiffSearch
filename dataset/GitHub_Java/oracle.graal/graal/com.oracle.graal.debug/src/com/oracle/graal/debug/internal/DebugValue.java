@@ -30,12 +30,10 @@ public abstract class DebugValue implements Comparable<DebugValue> {
 
     private final String name;
     private int index;
-    private boolean conditional;
 
-    protected DebugValue(String name, boolean conditional) {
+    protected DebugValue(String name) {
         this.name = name;
         this.index = -1;
-        this.conditional = conditional;
     }
 
     protected long getCurrentValue() {
@@ -46,14 +44,6 @@ public abstract class DebugValue implements Comparable<DebugValue> {
     protected void setCurrentValue(long l) {
         ensureInitialized();
         DebugScope.getInstance().setCurrentValue(index, l);
-    }
-
-    public void setConditional(boolean flag) {
-        conditional = flag;
-    }
-
-    public boolean isConditional() {
-        return conditional;
     }
 
     private void ensureInitialized() {
