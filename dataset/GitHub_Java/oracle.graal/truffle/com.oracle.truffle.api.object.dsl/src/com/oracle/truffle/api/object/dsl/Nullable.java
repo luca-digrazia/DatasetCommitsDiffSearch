@@ -34,8 +34,6 @@ import java.lang.annotation.Target;
  * being able to contain a null value. By default, properties are non-nullable.
  *
  * @see Layout
- *
- * @since 0.8 or earlier
  */
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.SOURCE)
