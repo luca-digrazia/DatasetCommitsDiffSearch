@@ -37,7 +37,6 @@ import org.eclipse.emf.ecore.EObject;
 
 import com.intel.llvm.ireditor.lLVM_IR.BitwiseBinaryInstruction;
 import com.intel.llvm.ireditor.lLVM_IR.FunctionDef;
-import com.intel.llvm.ireditor.lLVM_IR.FunctionHeader;
 import com.intel.llvm.ireditor.lLVM_IR.GlobalVariable;
 import com.intel.llvm.ireditor.lLVM_IR.Type;
 import com.intel.llvm.ireditor.types.ResolvedType;
@@ -269,11 +268,11 @@ public interface NodeFactoryFacade {
      * @param beforeFunction function prologue nodes
      * @param afterFunction function epilogue nodes
      * @param frameDescriptor
-     * @param functionHeader
+     * @param functionName
      * @return a function root node
      */
     RootNode createFunctionStartNode(LLVMExpressionNode functionBodyNode, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, SourceSection sourceSection, FrameDescriptor frameDescriptor,
-                    FunctionHeader functionHeader);
+                    String functionName);
 
     /**
      * Returns the index of the first argument of the formal parameter list.
@@ -323,6 +322,6 @@ public interface NodeFactoryFacade {
      */
     Optional<Boolean> hasStackPointerArgument();
 
-    LLVMStackFrameNuller createFrameNuller(String identifier, LLVMType type, FrameSlot slot);
+    LLVMStackFrameNuller createFrameNuller(String identifier, ResolvedType type, FrameSlot slot);
 
 }
