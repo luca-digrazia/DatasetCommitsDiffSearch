@@ -263,10 +263,6 @@ public class MIMETypeTest {
         }
     }
 
-    @Registration(id = "MimeTypeLanguageLegacy1", name = "", mimeType = "text/javascript")
-    public static class MIMETypeLanguageLegacy1 extends ProxyLanguage {
-    }
-
     @Test
     public void testMIMETypeLanguageLegacy1() {
         Engine engine = Engine.create();

@@ -233,7 +233,8 @@ public final class LanguageRegistrationProcessor extends AbstractProcessor {
                         continue;
                     }
 
-                    if (annotation.mimeType().length == 0) {
+                    if (annotation.mimeType().length > 0) {
+                    } else {
                         String id = annotation.id();
                         if (id.isEmpty()) {
                             emitError("The attribute id is mandatory.", e, mirror, null);
