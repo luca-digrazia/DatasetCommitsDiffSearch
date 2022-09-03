@@ -22,18 +22,29 @@
  */
 package com.oracle.graal.hotspot;
 
-import java.lang.reflect.*;
-import java.util.*;
+import static com.oracle.graal.hotspot.CompileTheWorld.Options.*;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.hotspot.logging.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.service.*;
+import com.oracle.graal.hotspot.CompileTheWorld.Config;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.service.*;
 
 @ServiceProvider(HotSpotVMEventListener.class)
 public class HotSpotGraalVMEventListener implements HotSpotVMEventListener {
+
+    @Override
+    public void notifyCompileTheWorld() throws Throwable {
+        CompilerToVM compilerToVM = HotSpotGraalRuntime.runtime().getJVMCIRuntime().getCompilerToVM();
+        int iterations = CompileTheWorld.Options.CompileTheWorldIterations.getValue();
+        for (int i = 0; i < iterations; i++) {
+            compilerToVM.resetCompilationStatistics();
+            TTY.println("CompileTheWorld : iteration " + i);
+            CompileTheWorld ctw = new CompileTheWorld(CompileTheWorldClasspath.getValue(), new Config(CompileTheWorldConfig.getValue()), CompileTheWorldStartAt.getValue(),
+                            CompileTheWorldStopAt.getValue(), CompileTheWorldMethodFilter.getValue(), CompileTheWorldExcludeMethodFilter.getValue(), CompileTheWorldVerbose.getValue());
+            ctw.compile();
+        }
+        System.exit(0);
+    }
 
     @Override
     public void notifyShutdown() {
@@ -41,41 +52,7 @@ public class HotSpotGraalVMEventListener implements HotSpotVMEventListener {
     }
 
     @Override
-    public void notifyInstall(HotSpotCodeCacheProvider codeCache, InstalledCode installedCode, CompilationResult compResult) {
-        if (Debug.isDumpEnabled()) {
-            Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
-        }
-        if (Debug.isLogEnabled()) {
-            Debug.log("%s", codeCache.disassemble(installedCode));
-        }
-    }
-
-    @Override
-    public CompilerToVM completeInitialization(HotSpotJVMCIRuntime runtime, CompilerToVM compilerToVM) {
-        CompilerToVM toVM = compilerToVM;
-        if (CountingProxy.ENABLED) {
-            toVM = CountingProxy.getProxy(CompilerToVM.class, toVM);
-        }
-
-        if (Boolean.valueOf(System.getProperty("jvmci.printconfig"))) {
-            printConfig(runtime.getConfig());
-        }
-
-        return toVM;
-    }
-
-    private static void printConfig(HotSpotVMConfig config) {
-        Field[] fields = config.getClass().getDeclaredFields();
-        Map<String, Field> sortedFields = new TreeMap<>();
-        for (Field f : fields) {
-            f.setAccessible(true);
-            sortedFields.put(f.getName(), f);
-        }
-        for (Field f : sortedFields.values()) {
-            try {
-                Logger.info(String.format("%9s %-40s = %s", f.getType().getSimpleName(), f.getName(), Logger.pretty(f.get(config))));
-            } catch (Exception e) {
-            }
-        }
+    public void compileMetaspaceMethod(long metaspaceMethod, int entryBCI, long jvmciEnv, int id) {
+        CompilationTask.compileMetaspaceMethod(metaspaceMethod, entryBCI, jvmciEnv, id);
     }
 }
