@@ -66,9 +66,9 @@ import com.oracle.truffle.llvm.nodes.impl.control.LLVMRetNodeFactory.LLVMIVarBit
 import com.oracle.truffle.llvm.nodes.impl.control.LLVMRetNodeFactory.LLVMStructRetNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.control.LLVMRetNodeFactory.LLVMVectorRetNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.control.LLVMRetNodeFactory.LLVMVoidReturnNodeGen;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMArgNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMArgNodeFactory;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMArgNodeFactory.LLVM80BitFloatArgNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.func.LLVMArgNodeFactory.LLVMAddressArgNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMArgNodeFactory.LLVMDoubleArgNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMArgNodeFactory.LLVMDoubleVectorArgNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMArgNodeFactory.LLVMFloatArgNodeGen;
@@ -147,14 +147,6 @@ public final class LLVMFunctionFactory {
                     return LLVMDoubleRetNodeGen.create((LLVMDoubleNode) retValue, retSlot);
                 case X86_FP80:
                     return LLVM80BitFloatRetNodeGen.create((LLVM80BitFloatNode) retValue, retSlot);
-                case I1_POINTER:
-                case I8_POINTER:
-                case I16_POINTER:
-                case I32_POINTER:
-                case I64_POINTER:
-                case HALF_POINTER:
-                case FLOAT_POINTER:
-                case DOUBLE_POINTER:
                 case ADDRESS:
                     return LLVMAddressRetNodeGen.create((LLVMAddressNode) retValue, retSlot);
                 case FUNCTION_ADDRESS:
@@ -201,17 +193,9 @@ public final class LLVMFunctionFactory {
                 return LLVMDoubleArgNodeGen.create(argIndex);
             case X86_FP80:
                 return LLVM80BitFloatArgNodeGen.create(argIndex);
-            case I1_POINTER:
-            case I8_POINTER:
-            case I16_POINTER:
-            case I32_POINTER:
-            case I64_POINTER:
-            case HALF_POINTER:
-            case FLOAT_POINTER:
-            case DOUBLE_POINTER:
             case ADDRESS:
             case STRUCT:
-                return LLVMAddressArgNodeGen.create(argIndex);
+                return new LLVMArgNode.LLVMAddressArgNode(argIndex);
             case FUNCTION_ADDRESS:
                 return LLVMFunctionArgNodeGen.create(argIndex);
             case I1_VECTOR:
@@ -260,14 +244,6 @@ public final class LLVMFunctionFactory {
                     return LLVMDoubleCallUnboxNodeGen.create(unresolvedCallNode);
                 case X86_FP80:
                     return LLVM80BitFloatCallUnboxNodeGen.create(unresolvedCallNode);
-                case I1_POINTER:
-                case I8_POINTER:
-                case I16_POINTER:
-                case I32_POINTER:
-                case I64_POINTER:
-                case HALF_POINTER:
-                case FLOAT_POINTER:
-                case DOUBLE_POINTER:
                 case ADDRESS:
                     return LLVMAddressCallUnboxNodeGen.create(unresolvedCallNode);
                 case FUNCTION_ADDRESS:
@@ -313,15 +289,13 @@ public final class LLVMFunctionFactory {
         } else if (clazz.equals(LLVMDoubleNode.class)) {
             argNode = LLVMArgNodeFactory.LLVMDoubleArgNodeGen.create(realIndex);
         } else if (clazz.equals(LLVMAddressNode.class)) {
-            argNode = LLVMArgNodeFactory.LLVMAddressArgNodeGen.create(realIndex);
+            argNode = new LLVMArgNode.LLVMAddressArgNode(realIndex);
         } else if (clazz.equals(LLVMFunctionNode.class)) {
             argNode = LLVMArgNodeFactory.LLVMFunctionArgNodeGen.create(realIndex);
         } else if (clazz.equals(LLVMI8Node.class)) {
             argNode = LLVMArgNodeFactory.LLVMI8ArgNodeGen.create(realIndex);
         } else if (clazz.equals(LLVMI1Node.class)) {
             argNode = LLVMArgNodeFactory.LLVMI1ArgNodeGen.create(realIndex);
-        } else if (clazz.equals(LLVMExpressionNode.class)) {
-            argNode = LLVMArgNodeFactory.LLVMAddressArgNodeGen.create(realIndex);
         } else {
             throw new AssertionError(clazz);
         }
