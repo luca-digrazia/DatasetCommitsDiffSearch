@@ -1396,7 +1396,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected void genStoreField(ValueNode receiver, ResolvedJavaField field, ValueNode value) {
-        StoreFieldNode storeFieldNode = new StoreFieldNode(receiver, field, maskSubWordValue(value, field.getJavaKind()));
+        StoreFieldNode storeFieldNode = new StoreFieldNode(receiver, field, value);
         append(storeFieldNode);
         storeFieldNode.setStateAfter(this.createFrameState(stream.nextBCI(), storeFieldNode));
     }
@@ -2531,7 +2531,12 @@ public class BytecodeParser implements GraphBuilderContext {
 
             // the bytecode verifier doesn't check that the value is in the correct range
             if (stamp.lowerBound() < returnKind.getMinValue() || returnKind.getMaxValue() < stamp.upperBound()) {
-                return maskSubWordValue(value, returnKind);
+                ValueNode narrow = append(genNarrow(value, returnKind.getBitCount()));
+                if (returnKind.isUnsigned()) {
+                    return append(genZeroExtend(narrow, 32));
+                } else {
+                    return append(genSignExtend(narrow, 32));
+                }
             }
         }
 
@@ -3649,21 +3654,6 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    private JavaKind refineComponentType(ValueNode array, JavaKind kind) {
-        if (kind == JavaKind.Byte) {
-            JavaType type = array.stamp(NodeView.DEFAULT).javaType(metaAccess);
-            if (type.isArray()) {
-                JavaType componentType = type.getComponentType();
-                if (componentType != null) {
-                    JavaKind refinedKind = componentType.getJavaKind();
-                    assert refinedKind == JavaKind.Byte || refinedKind == JavaKind.Boolean;
-                    return refinedKind;
-                }
-            }
-        }
-        return kind;
-    }
-
     private void genLoadIndexed(JavaKind kind) {
         ValueNode index = frameState.pop(JavaKind.Int);
         ValueNode array = frameState.pop(JavaKind.Object);
@@ -3677,8 +3667,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
 
-        JavaKind actualKind = refineComponentType(array, kind);
-        frameState.push(actualKind, append(genLoadIndexed(array, index, boundsCheck, actualKind)));
+        frameState.push(kind, append(genLoadIndexed(array, index, boundsCheck, kind)));
     }
 
     private void genStoreIndexed(JavaKind kind) {
@@ -3696,8 +3685,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
 
-        JavaKind actualKind = refineComponentType(array, kind);
-        genStoreIndexed(array, index, boundsCheck, storeCheck, actualKind, maskSubWordValue(value, actualKind));
+        genStoreIndexed(array, index, boundsCheck, storeCheck, kind, value);
     }
 
     private void genArithmeticOp(JavaKind kind, int opcode) {
