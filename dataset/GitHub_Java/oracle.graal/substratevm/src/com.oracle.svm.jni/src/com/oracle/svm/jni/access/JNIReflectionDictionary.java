@@ -148,60 +148,22 @@ public final class JNIReflectionDictionary {
         }
     }
 
-    private JNIAccessibleMethod findMethod(Class<?> clazz, JNIAccessibleMethodDescriptor descriptor, String dumpLabel) {
-        JNIAccessibleMethod method = getDeclaredMethod(clazz, descriptor, dumpLabel);
-        if (descriptor.isConstructor() || descriptor.isClassInitializer()) { // never recurse
-            return method;
-        }
-        if (method == null && clazz.getSuperclass() != null) {
-            method = findMethod(clazz.getSuperclass(), descriptor, null);
-        }
-        if (method == null) {
-            // NOTE: this likely needs special handling for resolving default methods.
-            method = findSuperinterfaceMethod(clazz, descriptor);
-        }
-        return method;
-    }
-
-    private JNIAccessibleMethod findSuperinterfaceMethod(Class<?> clazz, JNIAccessibleMethodDescriptor descriptor) {
-        for (Class<?> parent : clazz.getInterfaces()) {
-            JNIAccessibleMethod method = getDeclaredMethod(parent, descriptor, null);
-            if (method == null) {
-                method = findSuperinterfaceMethod(parent, descriptor);
-            }
-            if (method != null) {
-                return method;
-            }
-        }
-        return null;
-    }
-
-    public JNIMethodId getDeclaredMethodID(Class<?> classObject, JNIAccessibleMethodDescriptor descriptor, boolean isStatic) {
-        JNIAccessibleMethod method = getDeclaredMethod(classObject, descriptor, "getDeclaredMethodID");
-        return toMethodID(method, isStatic);
-    }
-
-    private JNIAccessibleMethod getDeclaredMethod(Class<?> classObject, JNIAccessibleMethodDescriptor descriptor, String dumpLabel) {
+    public JNIMethodId getMethodID(Class<?> classObject, JNIAccessibleMethodDescriptor descriptor, boolean isStatic) {
+        JNIMethodId methodID = WordFactory.nullPointer();
         JNIAccessibleClass clazz = classesByClassObject.get(classObject);
-        dump(clazz == null && dumpLabel != null, dumpLabel);
-        JNIAccessibleMethod method = null;
+        dump(clazz == null, "getMethodID");
         if (clazz != null) {
-            method = clazz.getMethod(descriptor);
+            JNIAccessibleMethod method = clazz.getMethod(descriptor);
+            if (method != null && method.isStatic() == isStatic) {
+                // safe because JNIAccessibleMethod is immutable (non-movable)
+                methodID = (JNIMethodId) Word.objectToUntrackedPointer(method);
+            }
         }
-        return method;
+        return methodID;
     }
 
     public JNIMethodId getMethodID(Class<?> classObject, String name, String signature, boolean isStatic) {
-        JNIAccessibleMethod method = findMethod(classObject, new JNIAccessibleMethodDescriptor(name, signature), "getMethodID");
-        return toMethodID(method, isStatic);
-    }
-
-    private JNIMethodId toMethodID(JNIAccessibleMethod method, boolean requireStatic) {
-        // Using the address is safe because JNIAccessibleMethod is immutable (non-movable)
-        if (method != null && method.isStatic() == requireStatic) {
-            return (JNIMethodId) Word.objectToUntrackedPointer(method);
-        }
-        return WordFactory.nullPointer();
+        return getMethodID(classObject, new JNIAccessibleMethodDescriptor(name, signature), isStatic);
     }
 
     public static JNIAccessibleMethod getMethodByID(JNIMethodId method) {
