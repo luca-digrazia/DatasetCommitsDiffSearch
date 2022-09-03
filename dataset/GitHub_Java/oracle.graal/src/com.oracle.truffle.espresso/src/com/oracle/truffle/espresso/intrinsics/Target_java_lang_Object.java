@@ -23,34 +23,25 @@
 
 package com.oracle.truffle.espresso.intrinsics;
 
+import static com.oracle.truffle.espresso.meta.Meta.meta;
+
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
+import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.runtime.StaticObjectWrapper;
-import com.oracle.truffle.espresso.runtime.Utils;
-
-import java.util.Arrays;
 
 @EspressoIntrinsics
 public class Target_java_lang_Object {
-    @Intrinsic(hasReceiver = true)
-    public static int hashCode(Object self) {
-        // (Identity) hash code must be respected for wrappers.
-        // The same object could be wrapped by two different instances of StaticObjectWrapper.
-        // Wrappers are transparent, it's identity comes from the wrapped object.
-        Object target = (self instanceof StaticObjectWrapper) ? ((StaticObjectWrapper) self).getWrapped() : self;
-        return System.identityHashCode(target);
-    }
-
     @Intrinsic(hasReceiver = true)
     public static @Type(Class.class) StaticObject getClass(Object self) {
         if (self instanceof StaticObject) {
             return ((StaticObject) self).getKlass().mirror();
         }
-        Meta meta = Utils.getContext().getMeta();
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         if (self instanceof int[]) {
             return meta.INT.array().rawKlass().mirror();
         } else if (self instanceof byte[]) {
@@ -73,10 +64,9 @@ public class Target_java_lang_Object {
 
     @Intrinsic(hasReceiver = true)
     public static @Type(Object.class) Object clone(Object self) {
-        // TODO(peterssen): self must implement Cloneable
         if (self instanceof StaticObjectArray) {
             // For arrays.
-            return ((StaticObjectArray) self).clone();
+            return ((StaticObjectArray) self).copy();
         }
 
         if (self instanceof int[]) {
@@ -97,17 +87,47 @@ public class Target_java_lang_Object {
             return ((short[]) self).clone();
         }
 
-        // Normal object just copy the
-        return ((StaticObjectImpl) self).clone();
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        if (!meta.knownKlass(Cloneable.class).isAssignableFrom(meta(((StaticObject) self).getKlass()))) {
+            throw meta.throwEx(java.lang.CloneNotSupportedException.class);
+        }
+
+        // Normal object just copy the fields.
+        return ((StaticObjectImpl) self).copy();
     }
 
-    @Intrinsic
-    public static void registerNatives() {
-        /* nop */
-    }
+//    @Intrinsic
+//    public static void registerNatives() {
+//        /* nop */
+//    }
 
+    @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .notify is just forwarded from the guest.")
     @Intrinsic(hasReceiver = true)
     public static void notifyAll(Object self) {
-        /* nop */
+        try {
+            MetaUtil.unwrap(self).notifyAll();
+        } catch (IllegalMonitorStateException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
+        }
+    }
+
+    @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .notify is just forwarded from the guest.")
+    @Intrinsic(hasReceiver = true)
+    public static void notify(Object self) {
+        try {
+            MetaUtil.unwrap(self).notify();
+        } catch (IllegalMonitorStateException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
+        }
+    }
+
+    @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .notify is just forwarded from the guest.")
+    @Intrinsic(hasReceiver = true)
+    public static void wait(Object self, long timeout) {
+        try {
+            MetaUtil.unwrap(self).wait(timeout);
+        } catch (InterruptedException | IllegalMonitorStateException | IllegalArgumentException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
+        }
     }
 }
