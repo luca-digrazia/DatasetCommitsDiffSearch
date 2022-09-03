@@ -176,7 +176,7 @@ abstract class ToJavaNode extends Node {
         Object primitiveValue = primitive.toPrimitive(truffleObject, null); // unbox
         if (primitiveValue != null) {
             return primitiveValue;
-        } else if (primitive.hasKeys(truffleObject) || primitive.hasSize(truffleObject)) {
+        } else if (primitive.hasKeys(truffleObject)) {
             return asJavaObject(truffleObject, Map.class, null, languageContext);
         } else if (isExecutable(truffleObject)) {
             return JavaInteropReflect.asDefaultJavaFunction(truffleObject, languageContext);
@@ -201,15 +201,13 @@ abstract class ToJavaNode extends Node {
                 throw newClassCastException(truffleObject, targetType, "has no size");
             }
         } else if (targetType == Map.class) {
-            Class<?> keyClazz = getGenericParameterType(genericType, 0).clazz;
-            TypeAndClass<?> valueType = getGenericParameterType(genericType, 1);
-            if (!isSupportedMapKeyType(keyClazz)) {
-                throw newInvalidKeyTypeException(keyClazz);
-            }
-            boolean hasKeys = (keyClazz == Object.class || keyClazz == String.class) && primitive.hasKeys(truffleObject);
-            boolean hasSize = (keyClazz == Object.class || Number.class.isAssignableFrom(keyClazz)) && primitive.hasSize(truffleObject);
-            if (hasKeys || hasSize) {
-                obj = TruffleMap.create(keyClazz, valueType.clazz, valueType.type, truffleObject, languageContext, hasKeys, hasSize);
+            if (primitive.hasKeys(truffleObject)) {
+                TypeAndClass<?> keyType = getGenericParameterType(genericType, 0);
+                TypeAndClass<?> valueType = getGenericParameterType(genericType, 1);
+                if (!isSupportedMapKeyType(keyType.clazz)) {
+                    throw newInvalidKeyTypeException(keyType.clazz);
+                }
+                obj = TruffleMap.create(keyType, valueType, truffleObject, languageContext);
             } else {
                 throw newClassCastException(truffleObject, targetType, "has no keys");
             }
