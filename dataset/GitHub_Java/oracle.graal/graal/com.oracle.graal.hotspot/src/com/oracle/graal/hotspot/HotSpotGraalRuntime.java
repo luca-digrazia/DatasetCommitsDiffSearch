@@ -142,7 +142,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         }
 
         if (Debug.isEnabled()) {
-            DebugEnvironment.initialize(TTY.out, hostBackend.getProviders().getSnippetReflection());
+            DebugEnvironment.initialize(TTY.out);
 
             String summary = DebugValueSummary.getValue();
             if (summary != null) {
@@ -202,7 +202,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         assert checkArrayIndexScaleInvariants();
 
         runtimeStartTime = System.nanoTime();
-        bootstrapJVMCI = config.getFlag("BootstrapJVMCI", Boolean.class);
     }
 
     private HotSpotBackend registerBackend(HotSpotBackend backend) {
@@ -288,7 +287,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         }
     }
 
-    private final boolean bootstrapJVMCI;
     private boolean bootstrapFinished;
 
     public void notifyBootstrapFinished() {
@@ -297,6 +295,9 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     @Override
     public boolean isBootstrapping() {
-        return bootstrapJVMCI && !bootstrapFinished;
+        if (config.getFlag("BootstrapJVMCI", Boolean.class)) {
+            return !bootstrapFinished;
+        }
+        return false;
     }
 }
