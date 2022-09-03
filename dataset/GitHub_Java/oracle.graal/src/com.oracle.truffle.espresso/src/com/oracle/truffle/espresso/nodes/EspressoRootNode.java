@@ -236,8 +236,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.api.frame.FrameUtil;
+import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -275,6 +274,8 @@ public class EspressoRootNode extends RootNode {
 
     @CompilerDirectives.CompilationFinal(dimensions = 1) private final FrameSlot[] locals;
 
+    private final FrameSlot stackSlot;
+
     private final BytecodeStream bs;
 
     @Override
@@ -291,60 +292,24 @@ public class EspressoRootNode extends RootNode {
         this.method = method;
         this.vm = vm;
         this.bs = new BytecodeStream(method.getCode());
-        this.locals = getFrameDescriptor().getSlots().toArray(new FrameSlot[0]);
+
+        FrameSlot[] slots = getFrameDescriptor().getSlots().toArray(new FrameSlot[0]);
+        locals = Arrays.copyOf(slots, slots.length - 1);
+        stackSlot = slots[slots.length - 1];
     }
 
     public MethodInfo getMethod() {
         return method;
     }
 
-    @ExplodeLoop
     private static FrameDescriptor initFrameDescriptor(MethodInfo method) {
         FrameDescriptor descriptor = new FrameDescriptor();
         int maxLocals = method.getMaxLocals();
         for (int i = 0; i < maxLocals; ++i) {
-            descriptor.addFrameSlot(i); // illegal by default
+            descriptor.addFrameSlot(i);
         }
-
-        boolean hasReceiver = !method.isStatic();
-        int argCount = method.getSignature().getParameterCount(false);
-        FrameSlot[] locals = descriptor.getSlots().toArray(new FrameSlot[0]);
-
-        int n = 0;
-        if (hasReceiver) {
-            descriptor.setFrameSlotKind(locals[0], FrameSlotKind.Object);
-            n += JavaKind.Object.getSlotCount();
-        }
-        for (int i = 0; i < argCount; ++i) {
-            JavaKind expectedkind = method.getSignature().getParameterKind(i);
-            switch (expectedkind) {
-                case Boolean:
-                case Byte:
-                case Short:
-                case Char:
-                case Int:
-                    descriptor.setFrameSlotKind(locals[n], FrameSlotKind.Int);
-                    break;
-                case Float:
-                    descriptor.setFrameSlotKind(locals[n], FrameSlotKind.Float);
-                    break;
-                case Long:
-                    descriptor.setFrameSlotKind(locals[n], FrameSlotKind.Long);
-                    break;
-                case Double:
-                    descriptor.setFrameSlotKind(locals[n], FrameSlotKind.Double);
-                    break;
-                case Object:
-                    descriptor.setFrameSlotKind(locals[n], FrameSlotKind.Object);
-                    break;
-                case Void:
-                case Illegal:
-                    CompilerDirectives.transferToInterpreter();
-                    throw EspressoError.shouldNotReachHere();
-            }
-            n += expectedkind.getSlotCount();
-        }
-
+        // Operand stack
+        descriptor.addFrameSlot(maxLocals);
         return descriptor;
     }
 
@@ -356,7 +321,9 @@ public class EspressoRootNode extends RootNode {
 
         // slots = locals... + stack
         final OperandStack stack = new DualStack(method.getMaxStackSize());
-        initArguments(frame);
+        frame.setObject(stackSlot, stack);
+
+        initArguments(frame, locals);
 
         loop: while (true) {
             try {
@@ -424,79 +391,79 @@ public class EspressoRootNode extends RootNode {
                         pushPoolConstant(stack, bs.readCPI(curBCI));
                         break;
                     case ILOAD:
-                        stack.pushInt(getIntLocal(frame, bs.readLocalIndex(curBCI)));
+                        stack.pushInt(frame.getInt(locals[bs.readLocalIndex(curBCI)]));
                         break;
                     case LLOAD:
-                        stack.pushLong(getLongLocal(frame, bs.readLocalIndex(curBCI)));
+                        stack.pushLong(frame.getLong(locals[bs.readLocalIndex(curBCI)]));
                         break;
                     case FLOAD:
-                        stack.pushFloat(getFloatLocal(frame, bs.readLocalIndex(curBCI)));
+                        stack.pushFloat(frame.getFloat(locals[bs.readLocalIndex(curBCI)]));
                         break;
                     case DLOAD:
-                        stack.pushDouble(getDoubleLocal(frame, bs.readLocalIndex(curBCI)));
+                        stack.pushDouble(frame.getDouble(locals[bs.readLocalIndex(curBCI)]));
                         break;
                     case ALOAD:
-                        stack.pushObject(getObjectLocal(frame, bs.readLocalIndex(curBCI)));
+                        stack.pushObject(frame.getObject(locals[bs.readLocalIndex(curBCI)]));
                         break;
                     case ILOAD_0:
-                        stack.pushInt(getIntLocal(frame, 0));
+                        stack.pushInt(frame.getInt(locals[0]));
                         break;
                     case ILOAD_1:
-                        stack.pushInt(getIntLocal(frame, 1));
+                        stack.pushInt(frame.getInt(locals[1]));
                         break;
                     case ILOAD_2:
-                        stack.pushInt(getIntLocal(frame, 2));
+                        stack.pushInt(frame.getInt(locals[2]));
                         break;
                     case ILOAD_3:
-                        stack.pushInt(getIntLocal(frame, 3));
+                        stack.pushInt(frame.getInt(locals[3]));
                         break;
                     case LLOAD_0:
-                        stack.pushLong(getLongLocal(frame, 0));
+                        stack.pushLong(frame.getLong(locals[0]));
                         break;
                     case LLOAD_1:
-                        stack.pushLong(getLongLocal(frame, 1));
+                        stack.pushLong(frame.getLong(locals[1]));
                         break;
                     case LLOAD_2:
-                        stack.pushLong(getLongLocal(frame, 2));
+                        stack.pushLong(frame.getLong(locals[2]));
                         break;
                     case LLOAD_3:
-                        stack.pushLong(getLongLocal(frame, 3));
+                        stack.pushLong(frame.getLong(locals[3]));
                         break;
                     case FLOAD_0:
-                        stack.pushFloat(getFloatLocal(frame, 0));
+                        stack.pushFloat(frame.getFloat(locals[0]));
                         break;
                     case FLOAD_1:
-                        stack.pushFloat(getFloatLocal(frame, 1));
+                        stack.pushFloat(frame.getFloat(locals[1]));
                         break;
                     case FLOAD_2:
-                        stack.pushFloat(getFloatLocal(frame, 2));
+                        stack.pushFloat(frame.getFloat(locals[2]));
                         break;
                     case FLOAD_3:
-                        stack.pushFloat(getFloatLocal(frame, 3));
+                        stack.pushFloat(frame.getFloat(locals[3]));
                         break;
                     case DLOAD_0:
-                        stack.pushDouble(getDoubleLocal(frame, 0));
+                        stack.pushDouble(frame.getDouble(locals[0]));
                         break;
                     case DLOAD_1:
-                        stack.pushDouble(getDoubleLocal(frame, 1));
+                        stack.pushDouble(frame.getDouble(locals[1]));
                         break;
                     case DLOAD_2:
-                        stack.pushDouble(getDoubleLocal(frame, 2));
+                        stack.pushDouble(frame.getDouble(locals[2]));
                         break;
                     case DLOAD_3:
-                        stack.pushDouble(getDoubleLocal(frame, 3));
+                        stack.pushDouble(frame.getDouble(locals[3]));
                         break;
                     case ALOAD_0:
-                        stack.pushObject(getObjectLocal(frame, 0));
+                        stack.pushObject(frame.getObject(locals[0]));
                         break;
                     case ALOAD_1:
-                        stack.pushObject(getObjectLocal(frame, 1));
+                        stack.pushObject(frame.getObject(locals[1]));
                         break;
                     case ALOAD_2:
-                        stack.pushObject(getObjectLocal(frame, 2));
+                        stack.pushObject(frame.getObject(locals[2]));
                         break;
                     case ALOAD_3:
-                        stack.pushObject(getObjectLocal(frame, 3));
+                        stack.pushObject(frame.getObject(locals[3]));
                         break;
                     case IALOAD:
                         stack.pushInt(vm.getArrayInt(stack.popInt(), nullCheck(stack.popObject())));
@@ -523,79 +490,79 @@ public class EspressoRootNode extends RootNode {
                         stack.pushInt(vm.getArrayShort(stack.popInt(), nullCheck(stack.popObject())));
                         break;
                     case ISTORE:
-                        setIntLocal(frame, bs.readLocalIndex(curBCI), stack.popInt());
+                        frame.setInt(locals[bs.readLocalIndex(curBCI)], stack.popInt());
                         break;
                     case LSTORE:
-                        setLongLocal(frame, bs.readLocalIndex(curBCI), stack.popLong());
+                        frame.setLong(locals[bs.readLocalIndex(curBCI)], stack.popLong());
                         break;
                     case FSTORE:
-                        setFloatLocal(frame, bs.readLocalIndex(curBCI), stack.popFloat());
+                        frame.setFloat(locals[bs.readLocalIndex(curBCI)], stack.popFloat());
                         break;
                     case DSTORE:
-                        setDoubleLocal(frame, bs.readLocalIndex(curBCI), stack.popDouble());
+                        frame.setDouble(locals[bs.readLocalIndex(curBCI)], stack.popDouble());
                         break;
                     case ASTORE:
-                        setObjectLocal(frame, bs.readLocalIndex(curBCI), stack.popObject());
+                        frame.setObject(locals[bs.readLocalIndex(curBCI)], stack.popObject());
                         break;
                     case ISTORE_0:
-                        setIntLocal(frame, 0, stack.popInt());
+                        frame.setInt(locals[0], stack.popInt());
                         break;
                     case ISTORE_1:
-                        setIntLocal(frame, 1, stack.popInt());
+                        frame.setInt(locals[1], stack.popInt());
                         break;
                     case ISTORE_2:
-                        setIntLocal(frame, 2, stack.popInt());
+                        frame.setInt(locals[2], stack.popInt());
                         break;
                     case ISTORE_3:
-                        setIntLocal(frame, 3, stack.popInt());
+                        frame.setInt(locals[3], stack.popInt());
                         break;
                     case LSTORE_0:
-                        setLongLocal(frame, 0, stack.popLong());
+                        frame.setLong(locals[0], stack.popLong());
                         break;
                     case LSTORE_1:
-                        setLongLocal(frame, 1, stack.popLong());
+                        frame.setLong(locals[1], stack.popLong());
                         break;
                     case LSTORE_2:
-                        setLongLocal(frame, 2, stack.popLong());
+                        frame.setLong(locals[2], stack.popLong());
                         break;
                     case LSTORE_3:
-                        setLongLocal(frame, 3, stack.popLong());
+                        frame.setLong(locals[3], stack.popLong());
                         break;
                     case FSTORE_0:
-                        setFloatLocal(frame, 0, stack.popFloat());
+                        frame.setFloat(locals[0], stack.popFloat());
                         break;
                     case FSTORE_1:
-                        setFloatLocal(frame, 1, stack.popFloat());
+                        frame.setFloat(locals[1], stack.popFloat());
                         break;
                     case FSTORE_2:
-                        setFloatLocal(frame, 2, stack.popFloat());
+                        frame.setFloat(locals[2], stack.popFloat());
                         break;
                     case FSTORE_3:
-                        setFloatLocal(frame, 3, stack.popFloat());
+                        frame.setFloat(locals[3], stack.popFloat());
                         break;
                     case DSTORE_0:
-                        setDoubleLocal(frame, 0, stack.popDouble());
+                        frame.setDouble(locals[0], stack.popDouble());
                         break;
                     case DSTORE_1:
-                        setDoubleLocal(frame, 1, stack.popDouble());
+                        frame.setDouble(locals[1], stack.popDouble());
                         break;
                     case DSTORE_2:
-                        setDoubleLocal(frame, 2, stack.popDouble());
+                        frame.setDouble(locals[2], stack.popDouble());
                         break;
                     case DSTORE_3:
-                        setDoubleLocal(frame, 3, stack.popDouble());
+                        frame.setDouble(locals[3], stack.popDouble());
                         break;
                     case ASTORE_0:
-                        setObjectLocal(frame, 0, stack.popObject());
+                        frame.setObject(locals[0], stack.popObject());
                         break;
                     case ASTORE_1:
-                        setObjectLocal(frame, 1, stack.popObject());
+                        frame.setObject(locals[1], stack.popObject());
                         break;
                     case ASTORE_2:
-                        setObjectLocal(frame, 2, stack.popObject());
+                        frame.setObject(locals[2], stack.popObject());
                         break;
                     case ASTORE_3:
-                        setObjectLocal(frame, 3, stack.popObject());
+                        frame.setObject(locals[3], stack.popObject());
                         break;
                     case IASTORE:
                         vm.setArrayInt(stack.popInt(), stack.popInt(), nullCheck(stack.popObject()));
@@ -757,7 +724,7 @@ public class EspressoRootNode extends RootNode {
                         stack.pushLong(stack.popLong() ^ stack.popLong());
                         break;
                     case IINC:
-                        setIntLocal(frame, bs.readLocalIndex(curBCI), getIntLocal(frame, bs.readLocalIndex(curBCI)) + bs.readIncrement(curBCI));
+                        iinc(locals, frame, bs, curBCI);
                         break;
                     case I2L:
                         stack.pushLong(stack.popInt());
@@ -913,9 +880,10 @@ public class EspressoRootNode extends RootNode {
                         curBCI = bs.readBranchDest(curBCI);
                         continue loop;
                     case RET:
-                        curBCI = getIntLocal(frame, bs.readLocalIndex(curBCI));
+                        curBCI = frame.getInt(locals[bs.readLocalIndex(curBCI)]);
                         continue loop;
                     case TABLESWITCH:
+                        // TODO(peterssen): Inline this.
                         curBCI = tableSwitch(bs, curBCI, stack.popInt());
                         continue loop;
                     case LOOKUPSWITCH:
@@ -1015,6 +983,9 @@ public class EspressoRootNode extends RootNode {
                         throw new UnsupportedOperationException("invokedynamic not supported."); // design
                         // fart
                 }
+            } catch (FrameSlotTypeException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new RuntimeException(e);
             } catch (EspressoException e) {
                 CompilerDirectives.transferToInterpreter();
                 ExceptionHandler handler = resolveExceptionHandlers(bs.currentBCI(curBCI), e.getException());
@@ -1063,115 +1034,49 @@ public class EspressoRootNode extends RootNode {
         return null;
     }
 
-    void setIntLocal(VirtualFrame frame, int n, int value) {
-        FrameDescriptor descriptor = getFrameDescriptor();
-        if (descriptor.getFrameSlotKind(locals[n]) != FrameSlotKind.Int) {
-            descriptor.setFrameSlotKind(locals[n], FrameSlotKind.Int);
-        }
-        frame.setInt(locals[n], value);
-    }
-
-    void setFloatLocal(VirtualFrame frame, int n, float value) {
-        FrameDescriptor descriptor = getFrameDescriptor();
-        if (descriptor.getFrameSlotKind(locals[n]) != FrameSlotKind.Float) {
-            descriptor.setFrameSlotKind(locals[n], FrameSlotKind.Float);
-        }
-        frame.setFloat(locals[n], value);
-    }
-
-    void setDoubleLocal(VirtualFrame frame, int n, double value) {
-        FrameDescriptor descriptor = getFrameDescriptor();
-        if (descriptor.getFrameSlotKind(locals[n]) != FrameSlotKind.Double) {
-            descriptor.setFrameSlotKind(locals[n], FrameSlotKind.Double);
-        }
-        frame.setDouble(locals[n], value);
-    }
-
-    void setLongLocal(VirtualFrame frame, int n, long value) {
-        FrameDescriptor descriptor = getFrameDescriptor();
-        if (descriptor.getFrameSlotKind(locals[n]) != FrameSlotKind.Long) {
-            descriptor.setFrameSlotKind(locals[n], FrameSlotKind.Long);
-        }
-        frame.setLong(locals[n], value);
-    }
-
-    void setObjectLocal(VirtualFrame frame, int n, Object value) {
-        FrameDescriptor descriptor = getFrameDescriptor();
-        if (descriptor.getFrameSlotKind(locals[n]) != FrameSlotKind.Object) {
-            descriptor.setFrameSlotKind(locals[n], FrameSlotKind.Object);
-        }
-        frame.setObject(locals[n], value);
-    }
-
-    int getIntLocal(VirtualFrame frame, int n) {
-        return FrameUtil.getIntSafe(frame, locals[n]);
-    }
-
-    float getFloatLocal(VirtualFrame frame, int n) {
-        return FrameUtil.getFloatSafe(frame, locals[n]);
-    }
-
-    double getDoubleLocal(VirtualFrame frame, int n) {
-        return FrameUtil.getDoubleSafe(frame, locals[n]);
-    }
-
-    long getLongLocal(VirtualFrame frame, int n) {
-        return FrameUtil.getLongSafe(frame, locals[n]);
-    }
-
-    Object getObjectLocal(VirtualFrame frame, int n) {
-        return FrameUtil.getObjectSafe(frame, locals[n]);
-    }
-
     @ExplodeLoop
-    private void initArguments(final VirtualFrame frame) {
-        boolean hasReceiver = !getMethod().isStatic();
-        int argCount = method.getSignature().getParameterCount(false);
+    private void initArguments(final VirtualFrame frame, final FrameSlot[] locals) {
+        boolean hasReceiver = !Modifier.isStatic(method.getModifiers());
+        int argCount = method.getSignature().getParameterCount(!method.isStatic());
 
         CompilerAsserts.partialEvaluationConstant(argCount);
         CompilerAsserts.partialEvaluationConstant(locals.length);
 
-        Object[] frameArguments = frame.getArguments();
-        Object[] arguments = hasReceiver
-                        ? Arrays.copyOfRange(frameArguments, 1, frameArguments.length)
-                        : frameArguments;
-
-        assert arguments.length == argCount;
-
+        Object[] arguments = frame.getArguments();
         int n = 0;
         if (hasReceiver) {
-            setObjectLocal(frame, n, frameArguments[0]);
+            frame.setObject(locals[n], arguments[0]);
             n += JavaKind.Object.getSlotCount();
         }
-        for (int i = 0; i < argCount; ++i) {
-            JavaKind expectedkind = method.getSignature().getParameterKind(i);
+        for (int i = hasReceiver ? 1 : 0; i < argCount; ++i) {
+            JavaKind expectedkind = method.getSignature().getParameterKind(i - (hasReceiver ? 1 : 0));
             switch (expectedkind) {
                 case Boolean:
-                    setIntLocal(frame, n, ((boolean) arguments[i]) ? 1 : 0);
+                    frame.setInt(locals[n], ((boolean) frame.getArguments()[i]) ? 1 : 0);
                     break;
                 case Byte:
-                    setIntLocal(frame, n, (int) ((byte) arguments[i]));
+                    frame.setInt(locals[n], (int) ((byte) frame.getArguments()[i]));
                     break;
                 case Short:
-                    setIntLocal(frame, n, (int) ((short) arguments[i]));
+                    frame.setInt(locals[n], (int) ((short) frame.getArguments()[i]));
                     break;
                 case Char:
-                    setIntLocal(frame, n, (int) ((char) arguments[i]));
+                    frame.setInt(locals[n], (int) ((char) frame.getArguments()[i]));
                     break;
                 case Int:
-                    setIntLocal(frame, n, (int) arguments[i]);
+                    frame.setInt(locals[n], (int) frame.getArguments()[i]);
                     break;
                 case Float:
-                    setFloatLocal(frame, n, (float) arguments[i]);
+                    frame.setFloat(locals[n], (float) frame.getArguments()[i]);
                     break;
                 case Long:
-                    setLongLocal(frame, n, (long) arguments[i]);
+                    frame.setLong(locals[n], (long) frame.getArguments()[i]);
                     break;
                 case Double:
-                    setDoubleLocal(frame, n, (double) arguments[i]);
+                    frame.setDouble(locals[n], (double) frame.getArguments()[i]);
                     break;
                 case Object:
-                    setObjectLocal(frame, n, arguments[i]);
+                    frame.setObject(locals[n], frame.getArguments()[i]);
                     break;
                 case Void:
                 case Illegal:
@@ -1219,7 +1124,6 @@ public class EspressoRootNode extends RootNode {
         return methodInfo;
     }
 
-    @CompilerDirectives.TruffleBoundary
     private MethodInfo resolveInterfaceMethod(int opcode, char cpi) {
         assert opcode == INVOKEINTERFACE;
         ConstantPool pool = getConstantPool();
@@ -1232,7 +1136,6 @@ public class EspressoRootNode extends RootNode {
         return target.call(arguments);
     }
 
-    @CompilerDirectives.TruffleBoundary
     private void invoke(OperandStack stack, MethodInfo method, Object receiver) {
         CallTarget redirectedMethod = vm.getIntrinsic(method);
         if (redirectedMethod != null) {
@@ -1247,7 +1150,6 @@ public class EspressoRootNode extends RootNode {
         }
     }
 
-    @CompilerDirectives.TruffleBoundary
     private void resolveAndInvoke(OperandStack stack, MethodInfo method) {
         // TODO(peterssen): Ignore return type on method signature.
         // TODO(peterssen): Intercept/hook methods on primitive arrays e.g. int[].clone().
@@ -1257,7 +1159,6 @@ public class EspressoRootNode extends RootNode {
         invoke(stack, target, receiver);
     }
 
-    @CompilerDirectives.TruffleBoundary
     private void invokeRedirectedMethodViaVM(OperandStack stack, MethodInfo originalMethod, CallTarget intrinsic) {
         Object[] originalCalleeParameters = popArguments(stack, originalMethod);
         Object returnValue = intrinsic.call(originalCalleeParameters);
@@ -1304,6 +1205,11 @@ public class EspressoRootNode extends RootNode {
 
     private boolean instanceOf(Object instance, Klass typeToCheck) {
         return vm.instanceOf(instance, typeToCheck);
+    }
+
+    private void iinc(FrameSlot[] locals, VirtualFrame frame, BytecodeStream bs, int curBCI) throws FrameSlotTypeException {
+        int index = bs.readLocalIndex(curBCI);
+        frame.setInt(locals[index], frame.getInt(locals[index]) + bs.readIncrement(curBCI));
     }
 
     private static Object exitMethodAndReturn(Object result) {
