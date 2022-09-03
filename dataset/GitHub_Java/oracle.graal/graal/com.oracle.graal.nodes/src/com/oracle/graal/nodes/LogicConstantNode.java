@@ -26,7 +26,8 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
- * The {@code LogicConstantNode} represents a boolean constant.
+ * The {@code ConstantNode} represents a constant such as an integer value, long, float, object
+ * reference, address, etc.
  */
 @NodeInfo(nameTemplate = "{p#value}")
 public class LogicConstantNode extends LogicNode implements LIRLowerable {
@@ -49,16 +50,10 @@ public class LogicConstantNode extends LogicNode implements LIRLowerable {
         return graph.unique(new LogicConstantNode(v));
     }
 
-    /**
-     * Gets a constant for {@code true}.
-     */
     public static LogicConstantNode tautology(Graph graph) {
         return forBoolean(true, graph);
     }
 
-    /**
-     * Gets a constant for {@code false}.
-     */
     public static LogicConstantNode contradiction(Graph graph) {
         return forBoolean(false, graph);
     }

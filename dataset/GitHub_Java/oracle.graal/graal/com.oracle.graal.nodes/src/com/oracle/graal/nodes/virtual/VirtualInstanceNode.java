@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.nodes.virtual;
 
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 
@@ -30,10 +32,21 @@ public class VirtualInstanceNode extends VirtualObjectNode {
 
     private final ResolvedJavaType type;
     private final ResolvedJavaField[] fields;
+    private final HashMap<ResolvedJavaField, Integer> fieldMap;
 
     public VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields) {
         this.type = type;
         this.fields = fields;
+        fieldMap = new HashMap<>();
+        for (int i = 0; i < fields.length; i++) {
+            fieldMap.put(fields[i], i);
+        }
+    }
+
+    private VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields, HashMap<ResolvedJavaField, Integer> fieldMap) {
+        this.type = type;
+        this.fields = fields;
+        this.fieldMap = fieldMap;
     }
 
     @Override
@@ -48,10 +61,6 @@ public class VirtualInstanceNode extends VirtualObjectNode {
 
     public ResolvedJavaField field(int index) {
         return fields[index];
-    }
-
-    public ResolvedJavaField[] getFields() {
-        return fields;
     }
 
     @Override
@@ -69,13 +78,8 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     }
 
     public int fieldIndex(ResolvedJavaField field) {
-        // on average fields.length == ~6, so a linear search is fast enough
-        for (int i = 0; i < fields.length; i++) {
-            if (fields[i] == field) {
-                return i;
-            }
-        }
-        return -1;
+        Integer index = fieldMap.get(field);
+        return index == null ? -1 : index;
     }
 
     @Override
@@ -91,6 +95,6 @@ public class VirtualInstanceNode extends VirtualObjectNode {
 
     @Override
     public VirtualInstanceNode duplicate() {
-        return new VirtualInstanceNode(type, fields);
+        return new VirtualInstanceNode(type, fields, fieldMap);
     }
 }

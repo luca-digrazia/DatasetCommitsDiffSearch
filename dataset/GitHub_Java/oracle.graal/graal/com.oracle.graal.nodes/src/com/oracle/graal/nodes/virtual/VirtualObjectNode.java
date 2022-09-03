@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import java.util.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -48,7 +46,9 @@ public abstract class VirtualObjectNode extends ValueNode implements LIRLowerabl
 
     public abstract String fieldName(int i);
 
-    public abstract void materializeAt(FixedWithNextNode materializeNode, List<ValueNode> values, boolean defaultValuesOnly, int lockCount);
+    public void materializeAt(@SuppressWarnings("unused") FixedNode fixed) {
+        // nothing to do in here - this method allows subclasses to respond to materialization
+    }
 
     public abstract int entryIndexForOffset(long constantOffset);
 

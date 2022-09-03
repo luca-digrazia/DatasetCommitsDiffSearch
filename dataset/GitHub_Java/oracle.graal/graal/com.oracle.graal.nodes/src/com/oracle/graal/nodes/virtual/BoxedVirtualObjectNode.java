@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,18 +27,52 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
-
 public class BoxedVirtualObjectNode extends VirtualObjectNode implements LIRLowerable, Node.ValueNumberable {
 
     @Input ValueNode unboxedValue;
+    private final ResolvedJavaType type;
+    private final Kind kind;
 
-    public BoxedVirtualObjectNode(int id, ResolvedJavaType type, ValueNode unboxedValue) {
-        super(id, type, new EscapeField[1]);
+    public BoxedVirtualObjectNode(ResolvedJavaType type, Kind kind, ValueNode unboxedValue) {
+        this.type = type;
+        this.kind = kind;
         this.unboxedValue = unboxedValue;
     }
 
-
     public ValueNode getUnboxedValue() {
         return unboxedValue;
+    }
+
+    @Override
+    public ResolvedJavaType type() {
+        return type;
+    }
+
+    @Override
+    public int entryCount() {
+        return 1;
+    }
+
+    @Override
+    public String fieldName(int index) {
+        assert index == 0;
+        return "value";
+    }
+
+    @Override
+    public int entryIndexForOffset(long constantOffset) {
+        // (lstadler) unsafe access to a newly created boxing object should only ever touch the
+        // value field
+        return 0;
+    }
+
+    @Override
+    public Kind entryKind(int index) {
+        return kind;
+    }
+
+    @Override
+    public BoxedVirtualObjectNode duplicate() {
+        return new BoxedVirtualObjectNode(type, kind, unboxedValue);
     }
 }
