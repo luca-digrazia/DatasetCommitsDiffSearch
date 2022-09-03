@@ -255,7 +255,6 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     int getUsageCountUpperBound() {
-        assert recordsUsages();
         if (usage0 == null) {
             return 0;
         }
@@ -266,20 +265,10 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     /**
-     * Gets the list of nodes that use this node (i.e., as an input).
+     * Gets the list of nodes that use this node (e.g., as an input).
      */
     public final NodeIterable<Node> usages() {
-        assert recordsUsages() : this;
         return new NodeUsageIterable();
-    }
-
-    /**
-     * Determines if this node records its usages (i.e. the nodes for which it is an input). All
-     * methods in {@link Node} that pertain to querying or updating usage information must not be
-     * called for a {@link Node} instance that returns false for this method.
-     */
-    public boolean recordsUsages() {
-        return true;
     }
 
     /**
@@ -322,7 +311,6 @@ public abstract class Node implements Cloneable, Formattable {
      * @param node the node to add
      */
     private void addUsage(Node node) {
-        assert recordsUsages();
         incUsageModCount();
         if (usage0 == null) {
             usage0 = node;
@@ -354,7 +342,6 @@ public abstract class Node implements Cloneable, Formattable {
      * @return whether or not {@code usage} was in the usage list
      */
     private boolean removeUsage(Node node) {
-        assert recordsUsages();
         // It is critical that this method maintains the invariant that
         // the usage list has no null element preceding a non-null element
         incUsageModCount();
@@ -405,7 +392,6 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     private void clearUsages() {
-        assert recordsUsages();
         incUsageModCount();
         usage0 = null;
         usage1 = null;
@@ -457,20 +443,16 @@ public abstract class Node implements Cloneable, Formattable {
     protected void updateUsages(Node oldInput, Node newInput) {
         if (oldInput != newInput) {
             if (oldInput != null) {
-                if (oldInput.recordsUsages()) {
-                    boolean result = removeThisFromUsages(oldInput);
-                    assert assertTrue(result, "not found in usages, old input: %s", oldInput);
-                }
+                boolean result = removeThisFromUsages(oldInput);
+                assert assertTrue(result, "not found in usages, old input: %s", oldInput);
             }
             if (newInput != null) {
-                if (newInput.recordsUsages()) {
-                    NodeChangedListener listener = graph.inputChangedListener;
-                    if (listener != null) {
-                        listener.nodeChanged(this);
-                    }
-                    newInput.addUsage(this);
+                NodeChangedListener listener = graph.inputChangedListener;
+                if (listener != null) {
+                    listener.nodeChanged(this);
                 }
-            } else if (oldInput != null && oldInput.recordsUsages() && oldInput.usages().isEmpty()) {
+                newInput.addUsage(this);
+            } else if (oldInput != null && oldInput.usages().isEmpty()) {
                 NodeChangedListener listener = graph.usagesDroppedToZeroListener;
                 if (listener != null) {
                     listener.nodeChanged(oldInput);
@@ -531,9 +513,7 @@ public abstract class Node implements Cloneable, Formattable {
                 if (listener != null) {
                     listener.nodeChanged(usage);
                 }
-                if (other.recordsUsages()) {
-                    other.addUsage(usage);
-                }
+                other.addUsage(usage);
             }
         }
         clearUsages();
@@ -574,13 +554,11 @@ public abstract class Node implements Cloneable, Formattable {
         assert assertFalse(isDeleted(), "cannot clear inputs of deleted node");
 
         for (Node input : inputs()) {
-            if (input.recordsUsages()) {
-                removeThisFromUsages(input);
-                if (input.usages().isEmpty()) {
-                    NodeChangedListener listener = graph.usagesDroppedToZeroListener;
-                    if (listener != null) {
-                        listener.nodeChanged(input);
-                    }
+            removeThisFromUsages(input);
+            if (input.usages().isEmpty()) {
+                NodeChangedListener listener = graph.usagesDroppedToZeroListener;
+                if (listener != null) {
+                    listener.nodeChanged(input);
                 }
             }
         }
@@ -602,9 +580,7 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     private boolean checkDeletion() {
-        if (recordsUsages()) {
-            assertTrue(usages().isEmpty(), "cannot delete node %s because of usages: %s", this, usages());
-        }
+        assertTrue(usages().isEmpty(), "cannot delete node %s because of usages: %s", this, usages());
         assertTrue(predecessor == null, "cannot delete node %s because of predecessor: %s", this, predecessor);
         return true;
     }
@@ -627,9 +603,7 @@ public abstract class Node implements Cloneable, Formattable {
         NodeClass clazz = getNodeClass();
         clazz.copyInputs(this, newNode);
         for (Node input : inputs()) {
-            if (input.recordsUsages()) {
-                input.addUsage(newNode);
-            }
+            input.addUsage(newNode);
         }
         return newNode;
     }
@@ -702,18 +676,16 @@ public abstract class Node implements Cloneable, Formattable {
         assertTrue(isAlive(), "cannot verify inactive nodes (id=%d)", id);
         assertTrue(graph() != null, "null graph");
         for (Node input : inputs()) {
-            assertTrue(!input.recordsUsages() || input.usages().contains(this), "missing usage in input %s", input);
+            assertTrue(input.usages().contains(this), "missing usage in input %s", input);
             assertTrue(input.graph() == graph(), "mismatching graph in input %s", input);
         }
         for (Node successor : successors()) {
             assertTrue(successor.predecessor() == this, "missing predecessor in %s (actual: %s)", successor, successor.predecessor());
             assertTrue(successor.graph() == graph(), "mismatching graph in successor %s", successor);
         }
-        if (recordsUsages()) {
-            for (Node usage : usages()) {
-                assertFalse(usage.isDeleted(), "usage must never be deleted");
-                assertTrue(usage.inputs().contains(this), "missing input in usage %s", usage);
-            }
+        for (Node usage : usages()) {
+            assertFalse(usage.isDeleted(), "usage must never be deleted");
+            assertTrue(usage.inputs().contains(this), "missing input in usage %s", usage);
         }
         if (predecessor != null) {
             assertFalse(predecessor.isDeleted(), "predecessor must never be deleted");

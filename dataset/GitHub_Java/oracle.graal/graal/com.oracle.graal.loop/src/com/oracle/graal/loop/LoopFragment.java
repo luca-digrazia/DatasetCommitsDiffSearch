@@ -32,7 +32,6 @@ import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
 import com.oracle.graal.nodes.VirtualState.VirtualClosure;
 import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.nodes.virtual.*;
 
 public abstract class LoopFragment {
 
@@ -72,10 +71,7 @@ public abstract class LoopFragment {
     @SuppressWarnings("unchecked")
     public <New extends Node, Old extends New> New getDuplicatedNode(Old n) {
         assert isDuplicate();
-        if (!n.isExternal()) {
-            return (New) duplicationMap.get(n);
-        }
-        return n;
+        return (New) duplicationMap.get(n);
     }
 
     protected <New extends Node, Old extends New> void putDuplicatedNode(Old oldNode, New newNode) {
@@ -185,16 +181,10 @@ public abstract class LoopFragment {
         final NodeBitMap notloopNodes = graph.createNodeBitMap(true);
         for (AbstractBeginNode b : blocks) {
             for (Node n : b.getBlockNodes()) {
-                if (n instanceof CommitAllocationNode) {
-                    for (VirtualObjectNode obj : ((CommitAllocationNode) n).getVirtualObjects()) {
-                        markFloating(obj, nodes, notloopNodes);
-                    }
-                }
                 for (Node usage : n.usages()) {
                     markFloating(usage, nodes, notloopNodes);
                 }
             }
-
         }
 
         return nodes;
