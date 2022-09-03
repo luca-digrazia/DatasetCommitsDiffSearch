@@ -328,7 +328,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             @Override
             protected void handleUnresolvedInstanceOf(JavaType type, ValueNode object) {
                 assert !graphBuilderConfig.eagerResolving();
-                BeginNode successor = currentGraph.add(BeginNode.create());
+                BlockPlaceholderNode successor = currentGraph.add(BlockPlaceholderNode.create(this));
                 DeoptimizeNode deopt = currentGraph.add(DeoptimizeNode.create(InvalidateRecompile, Unresolved));
                 append(IfNode.create(currentGraph.unique(IsNullNode.create(object)), successor, deopt, 1));
                 lastInstr = successor;
@@ -637,23 +637,27 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 if (StampTool.isPointerNonNull(receiver.stamp())) {
                     return;
                 }
-                BytecodeExceptionNode exception = currentGraph.add(BytecodeExceptionNode.create(metaAccess, NullPointerException.class));
-                BeginNode falseSucc = currentGraph.add(BeginNode.create());
-                append(IfNode.create(currentGraph.unique(IsNullNode.create(receiver)), exception, falseSucc, 0.01));
+                BlockPlaceholderNode trueSucc = currentGraph.add(BlockPlaceholderNode.create(this));
+                BlockPlaceholderNode falseSucc = currentGraph.add(BlockPlaceholderNode.create(this));
+                append(IfNode.create(currentGraph.unique(IsNullNode.create(receiver)), trueSucc, falseSucc, 0.01));
                 lastInstr = falseSucc;
 
+                BytecodeExceptionNode exception = currentGraph.add(BytecodeExceptionNode.create(metaAccess, NullPointerException.class));
                 exception.setStateAfter(frameState.create(bci()));
+                trueSucc.setNext(exception);
                 exception.setNext(handleException(exception, bci()));
             }
 
             @Override
             protected void emitBoundsCheck(ValueNode index, ValueNode length) {
-                BeginNode trueSucc = currentGraph.add(BeginNode.create());
-                BytecodeExceptionNode exception = currentGraph.add(BytecodeExceptionNode.create(metaAccess, ArrayIndexOutOfBoundsException.class, index));
-                append(IfNode.create(currentGraph.unique(IntegerBelowNode.create(index, length)), trueSucc, exception, 0.99));
+                BlockPlaceholderNode trueSucc = currentGraph.add(BlockPlaceholderNode.create(this));
+                BlockPlaceholderNode falseSucc = currentGraph.add(BlockPlaceholderNode.create(this));
+                append(IfNode.create(currentGraph.unique(IntegerBelowNode.create(index, length)), trueSucc, falseSucc, 0.99));
                 lastInstr = trueSucc;
 
+                BytecodeExceptionNode exception = currentGraph.add(BytecodeExceptionNode.create(metaAccess, ArrayIndexOutOfBoundsException.class, index));
                 exception.setStateAfter(frameState.create(bci()));
+                falseSucc.setNext(exception);
                 exception.setNext(handleException(exception, bci()));
             }
 
