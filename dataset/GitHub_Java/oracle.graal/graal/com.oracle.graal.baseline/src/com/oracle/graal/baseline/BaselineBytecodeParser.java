@@ -40,7 +40,6 @@ import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
-import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.calc.FloatConvertNode.FloatConvert;
@@ -52,8 +51,6 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
     protected LIRGenerator gen;
     private LIRGenerationResult lirGenRes;
     private BytecodeLIRBuilder lirBuilder;
-    @SuppressWarnings("unused") private BciBlock[] loopHeaders;
-    private LocalLiveness liveness;
 
     public BaselineBytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
                     LIRFrameStateBuilder frameState, BytecodeStream stream, ProfilingInfo profilingInfo, ConstantPool constantPool, int entryBCI, Backend backend) {
@@ -77,8 +74,6 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
             // compute the block map, setup exception handlers and get the entrypoint(s)
             BciBlockMapping blockMap = BciBlockMapping.create(method);
-            loopHeaders = blockMap.loopHeaders;
-            liveness = blockMap.liveness;
             // add predecessors
             for (BciBlock block : blockMap.blocks) {
                 for (BciBlock successor : block.getSuccessors()) {
@@ -359,6 +354,12 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
     }
 
     @Override
+    protected void genGoto() {
+        assert currentBlock.numNormalSuccessors() == 1;
+        gen.emitJump(LabelRef.forSuccessor(lirGenRes.getLIR(), currentBlock, 0));
+    }
+
+    @Override
     protected Value genObjectEquals(Value x, Value y) {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
@@ -376,7 +377,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
         BciBlock trueBlock = currentBlock.getSuccessors().get(0);
         BciBlock falseBlock = currentBlock.getSuccessors().get(1);
         if (trueBlock == falseBlock) {
-            genGoto();
+            gen.emitJump(LabelRef.forSuccessor(lirGenRes.getLIR(), currentBlock, 0));
             return;
         }
 
@@ -395,8 +396,8 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
             }
         }
 
-        LabelRef trueDestination = getSuccessor(0);
-        LabelRef falseDestination = getSuccessor(1);
+        LabelRef trueDestination = LabelRef.forSuccessor(lirGenRes.getLIR(), currentBlock, 0);
+        LabelRef falseDestination = LabelRef.forSuccessor(lirGenRes.getLIR(), currentBlock, 1);
 
         gen.emitCompareBranch(x.getKind(), x, y, cond, false, trueDestination, falseDestination, probability);
     }
@@ -545,7 +546,13 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
     }
 
     @Override
-    protected void genIntegerSwitch(Value value, ArrayList<BciBlock> actualSuccessors, int[] keys, double[] keyProbabilities, int[] keySuccessors) {
+    protected void setBlockSuccessor(Value switchNode, int i, Value createBlockTarget) {
+        // TODO Auto-generated method stub
+        throw GraalInternalError.unimplemented("Auto-generated method stub");
+    }
+
+    @Override
+    protected Value genIntegerSwitch(Value value, int size, int[] keys, double[] keyProbabilities, int[] keySuccessors) {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented("Auto-generated method stub");
     }
@@ -563,50 +570,28 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
         return v;
     }
 
-    private void createTarget(BciBlock block, LIRFrameStateBuilder state) {
-        assert block != null && state != null;
-        assert !block.isExceptionEntry || state.stackSize() == 1;
+    @Override
+    protected Value genDeoptimization() {
+        // TODO Auto-generated method stub
+        throw GraalInternalError.unimplemented("Auto-generated method stub");
+    }
 
-        if (block.firstInstruction == null) {
-            /*
-             * This is the first time we see this block as a branch target. Create and return a
-             * placeholder that later can be replaced with a MergeNode when we see this block again.
-             */
-            block.entryState = state.copy();
-            block.entryState.clearNonLiveLocals(block, liveness, true);
-
-            Debug.log("createTarget %s: first visit, result: %s", block, block.firstInstruction);
-        }
-
-        // We already saw this block before, so we have to merge states.
-        if (!((LIRFrameStateBuilder) block.entryState).isCompatibleWith(state)) {
-            throw new BailoutException("stacks do not match; bytecodes would not verify");
-        }
-
-        if (block.isLoopHeader) {
-            assert currentBlock.getId() >= block.getId() : "must be backward branch";
-            GraalInternalError.unimplemented("Loops not yet supported");
-        }
-        assert currentBlock == null || currentBlock.getId() < block.getId() : "must not be backward branch";
-
-        GraalInternalError.unimplemented("second block visit not yet implemented");
-        // if second visit
-        {
-            /*
-             * This is the second time we see this block. Create the actual MergeNode and the End
-             * Node for the already existing edge. For simplicity, we leave the placeholder in the
-             * graph and just append the new nodes after the placeholder.
-             */
-        }
-
-        // merge frame states e.g. block.entryState.merge(mergeNode, target.state);
-
-        Debug.log("createTarget %s: merging state", block);
+    @Override
+    protected Value createBlockTarget(double probability, BciBlock bciBlock, AbstractFrameStateBuilder<Value> stateAfter) {
+        // TODO Auto-generated method stub
+        throw GraalInternalError.unimplemented("Auto-generated method stub");
     }
 
     @Override
     protected void processBlock(BciBlock block) {
+        currentBlock = block;
         iterateBytecodesForBlock(block);
+    }
+
+    @Override
+    protected void appendGoto(Value target) {
+        // TODO Auto-generated method stub
+        throw GraalInternalError.unimplemented("Auto-generated method stub");
     }
 
     @Override
@@ -635,16 +620,19 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
             processBytecode(bci, opcode);
 
+            if (gen.hasBlockEnd(currentBlock)) {
+                break;
+            }
+
             stream.next();
             bci = stream.currentBCI();
 
             if (bci < endBCI) {
                 if (bci > block.endBci) {
-                    if (block.numNormalSuccessors() == 1) {
-                        assert !block.getSuccessor(0).isExceptionEntry;
-                        // we fell through to the next block, add a goto and break
-                        genGoto();
-                    }
+                    assert block.numNormalSuccessors() == 1;
+                    assert !block.getSuccessor(0).isExceptionEntry;
+                    // we fell through to the next block, add a goto and break
+                    genGoto();
                     break;
                 }
             }
@@ -656,16 +644,6 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, LIRFra
 
     public void storeLocal(int i, Value x) {
         frameState.storeLocal(i, x);
-    }
-
-    LabelRef getSuccessor(int index) {
-        createTarget(currentBlock.getSuccessor(index), frameState);
-        return LabelRef.forSuccessor(lirGenRes.getLIR(), currentBlock, 0);
-    }
-
-    @Override
-    protected void genGoto() {
-        gen.emitJump(getSuccessor(0));
     }
 
 }

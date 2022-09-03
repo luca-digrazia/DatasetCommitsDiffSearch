@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@ package com.oracle.graal.lir.sparc;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
 import com.oracle.graal.lir.*;
 
 /**
@@ -34,15 +33,11 @@ import com.oracle.graal.lir.*;
  *
  * <pre>
  *   Base       Contents
- * 
+ *
  *            :                                :  -----
  *   caller   | incoming overflow argument n   |    ^
  *   frame    :     ...                        :    | positive
  *            | incoming overflow argument 0   |    | offsets
- *            +--------------------------------+    |
- *            |                                |    |
- *            : register save area             :    |
- *            |                                |    |
  *   ---------+--------------------------------+---------------------------
  *            | spill slot 0                   |    | negative   ^      ^
  *            :     ...                        :    v offsets    |      |
@@ -93,7 +88,8 @@ public final class SPARCFrameMap extends FrameMap {
 
     @Override
     protected int alignFrameSize(int size) {
-        return NumUtil.roundUp(size, target.stackAlignment);
+        int x = size + (target.stackAlignment - 1);
+        return (x / target.stackAlignment) * target.stackAlignment;
     }
 
     @Override
@@ -102,19 +98,7 @@ public final class SPARCFrameMap extends FrameMap {
     }
 
     @Override
-    protected StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset) {
+    protected StackSlot allocateNewSpillSlot(PlatformKind kind, int additionalOffset) {
         return StackSlot.get(kind, -spillSize + additionalOffset, true);
-    }
-
-    /**
-     * We must add the calleSaveAreaSize() when it is a in or out parameter
-     */
-    @Override
-    public int offsetForStackSlot(StackSlot slot) {
-        int offset = super.offsetForStackSlot(slot);
-        if (slot.getRawOffset() >= 0) { // If In or Out parameter
-            offset += calleeSaveAreaSize();
-        }
-        return offset;
     }
 }

@@ -114,7 +114,7 @@ public class AllocatorTest extends GraalCompilerTest {
         SchedulePhase schedule = null;
         try (Scope s = Debug.scope("FrontEnd")) {
             schedule = GraalCompiler.emitFrontEnd(getProviders(), getBackend().getTarget(), graph, assumptions, null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.NONE,
-                            graph.method().getProfilingInfo(), null, getSuites());
+                            graph.method().getProfilingInfo(), new SpeculationLog(), getSuites());
         } catch (Throwable e) {
             throw Debug.handle(e);
         }

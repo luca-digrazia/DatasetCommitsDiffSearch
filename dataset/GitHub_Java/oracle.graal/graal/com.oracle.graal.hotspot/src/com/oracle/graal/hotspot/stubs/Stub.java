@@ -23,18 +23,18 @@
 package com.oracle.graal.hotspot.stubs;
 
 import static com.oracle.graal.compiler.GraalCompiler.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
 import com.oracle.graal.hotspot.meta.*;
@@ -62,11 +62,6 @@ public abstract class Stub {
      * The code installed for the stub.
      */
     protected InstalledCode code;
-
-    /**
-     * Compilation result from which {@link #code} was created.
-     */
-    protected CompilationResult compResult;
 
     /**
      * The registers destroyed by this stub.
@@ -100,7 +95,7 @@ public abstract class Stub {
 
     /**
      * Creates a new stub.
-     *
+     * 
      * @param linkage linkage details for a call to the stub
      */
     public Stub(HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
@@ -130,7 +125,8 @@ public abstract class Stub {
     }
 
     /**
-     * Gets the method the stub's code will be associated with once installed. This may be null.
+     * Gets the method the stub's code will be {@linkplain InstalledCode#getMethod() associated}
+     * with once installed. This may be null.
      */
     protected abstract ResolvedJavaMethod getInstalledCodeOwner();
 
@@ -157,7 +153,7 @@ public abstract class Stub {
                 CallingConvention incomingCc = linkage.getIncomingCallingConvention();
                 TargetDescription target = codeCache.getTarget();
 
-                compResult = new CompilationResult();
+                final CompilationResult compResult = new CompilationResult();
                 try (Scope s0 = Debug.scope("StubCompilation", graph, providers.getCodeCache())) {
                     Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
                     SchedulePhase schedule = emitFrontEnd(providers, target, graph, assumptions, null, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
@@ -187,18 +183,6 @@ public abstract class Stub {
             }
             assert code != null : "error installing stub " + this;
         }
-
         return code;
-    }
-
-    /**
-     * Gets the compilation result for this stub, compiling it first if necessary, and installing it
-     * in code.
-     */
-    public synchronized CompilationResult getCompilationResult(final Backend backend) {
-        if (code == null) {
-            getCode(backend);
-        }
-        return compResult;
     }
 }

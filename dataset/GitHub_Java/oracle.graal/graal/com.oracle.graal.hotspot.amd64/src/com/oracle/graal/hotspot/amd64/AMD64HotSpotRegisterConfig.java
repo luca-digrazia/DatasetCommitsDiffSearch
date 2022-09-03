@@ -23,7 +23,7 @@
 package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.amd64.AMD64.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
 
@@ -31,9 +31,10 @@ import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.type.*;
+import com.oracle.graal.phases.*;
 
 public class AMD64HotSpotRegisterConfig implements RegisterConfig {
 
@@ -222,14 +223,14 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
                 case Object:
                     if (!stackOnly && currentGeneral < generalParameterRegisters.length) {
                         Register register = generalParameterRegisters[currentGeneral++];
-                        locations[i] = register.asValue(target.getLIRKind(kind));
+                        locations[i] = register.asValue(kind);
                     }
                     break;
                 case Float:
                 case Double:
                     if (!stackOnly && currentXMM < xmmParameterRegisters.length) {
                         Register register = xmmParameterRegisters[currentXMM++];
-                        locations[i] = register.asValue(target.getLIRKind(kind));
+                        locations[i] = register.asValue(kind);
                     }
                     break;
                 default:
@@ -237,13 +238,13 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
             }
 
             if (locations[i] == null) {
-                locations[i] = StackSlot.get(target.getLIRKind(kind.getStackKind()), currentStackOffset, !type.out);
+                locations[i] = StackSlot.get(kind.getStackKind(), currentStackOffset, !type.out);
                 currentStackOffset += Math.max(target.getSizeInBytes(kind), target.wordSize);
             }
         }
 
         Kind returnKind = returnType == null ? Kind.Void : returnType.getKind();
-        AllocatableValue returnLocation = returnKind == Kind.Void ? Value.ILLEGAL : getReturnRegister(returnKind).asValue(target.getLIRKind(returnKind.getStackKind()));
+        AllocatableValue returnLocation = returnKind == Kind.Void ? Value.ILLEGAL : getReturnRegister(returnKind).asValue(returnKind.getStackKind());
         return new CallingConvention(currentStackOffset, returnLocation, locations);
     }
 

@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.sparc.SPARC.*;
 
 import java.util.*;
@@ -30,7 +30,7 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.sparc.*;
@@ -58,15 +58,7 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
         ArrayList<Register> list = new ArrayList<>();
         for (Register reg : getAllocatableRegisters()) {
             if (architecture.canStoreValue(reg.getRegisterCategory(), kind)) {
-                // Special treatment for double precision
-                if (kind == Kind.Double) {
-                    // Only even register numbers are valid double precision regs
-                    if (reg.number % 2 == 0) {
-                        list.add(reg);
-                    }
-                } else {
-                    list.add(reg);
-                }
+                list.add(reg);
             }
         }
 
@@ -106,27 +98,25 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
 
     private static Register[] initAllocatable(boolean reserveForHeapBase) {
         Register[] registers = null;
+        // @formatter:off
         if (reserveForHeapBase) {
-            // @formatter:off
-            registers = new Register[]{
+            registers = new Register[] {
                         // TODO this is not complete
                         o0, o1, o2, o3, o4, o5, /*o6,*/ o7,
                         l0, l1, l2, l3, l4, l5, l6, l7,
                         i0, i1, i2, i3, i4, i5, /*i6,*/ /*i7,*/
                         f0, f1, f2, f3, f4, f5, f6, f7
-            };
-            // @formatter:on
+                      };
         } else {
-            // @formatter:off
-            registers = new Register[]{
+            registers = new Register[] {
                         // TODO this is not complete
                         o0, o1, o2, o3, o4, o5, /*o6,*/ o7,
                         l0, l1, l2, l3, l4, l5, l6, l7,
                         i0, i1, i2, i3, i4, i5, /*i6,*/ /*i7,*/
                         f0, f1, f2, f3, f4, f5, f6, f7
-            };
-            // @formatter:on
+                      };
         }
+       // @formatter:on
 
         if (RegisterPressure.getValue() != null) {
             String[] names = RegisterPressure.getValue().split(",");
@@ -209,18 +199,8 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
                         locations[i] = register.asValue(kind);
                     }
                     break;
-                case Double:
-                    if (!stackOnly && currentFloating < fpuParameterRegisters.length) {
-                        if (currentFloating % 2 != 0) {
-                            // Make register number even to be a double reg
-                            currentFloating++;
-                        }
-                        Register register = fpuParameterRegisters[currentFloating];
-                        currentFloating += 2; // Only every second is a double register
-                        locations[i] = register.asValue(kind);
-                    }
-                    break;
                 case Float:
+                case Double:
                     if (!stackOnly && currentFloating < fpuParameterRegisters.length) {
                         Register register = fpuParameterRegisters[currentFloating++];
                         locations[i] = register.asValue(kind);

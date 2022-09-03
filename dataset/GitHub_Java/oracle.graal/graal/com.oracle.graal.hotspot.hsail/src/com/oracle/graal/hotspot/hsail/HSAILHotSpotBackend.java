@@ -412,7 +412,7 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
 
     @Override
     protected Assembler createAssembler(FrameMap frameMap) {
-        return new HSAILHotSpotAssembler(getTarget());
+        return new HSAILAssembler(getTarget());
     }
 
     @Override
