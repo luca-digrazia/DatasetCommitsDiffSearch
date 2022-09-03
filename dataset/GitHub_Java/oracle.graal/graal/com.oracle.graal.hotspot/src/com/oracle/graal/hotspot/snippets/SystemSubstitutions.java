@@ -31,7 +31,6 @@ import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.snippets.*;
-import com.oracle.graal.snippets.ClassSubstitution.MacroSubstitution;
 import com.oracle.graal.snippets.ClassSubstitution.MethodSubstitution;
 import com.oracle.graal.word.*;
 
@@ -43,9 +42,6 @@ public class SystemSubstitutions {
 
     public static final Descriptor JAVA_TIME_MILLIS = new Descriptor("javaTimeMillis", false, long.class);
     public static final Descriptor JAVA_TIME_NANOS = new Descriptor("javaTimeNanos", false, long.class);
-
-    @MacroSubstitution(macro = ArrayCopyNode.class, isStatic = true)
-    public static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length);
 
     @MethodSubstitution
     public static long currentTimeMillis() {
@@ -81,6 +77,5 @@ public class SystemSubstitutions {
     }
 
     @NodeIntrinsic(value = RuntimeCallNode.class, setStampFromReturnType = true)
-    public static native long callLong(@ConstantNodeParameter
-    Descriptor descriptor);
+    public static native long callLong(@ConstantNodeParameter Descriptor descriptor);
 }
