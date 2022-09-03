@@ -183,8 +183,6 @@ public class VMToCompilerImpl implements VMToCompiler {
             DebugEnvironment.initialize(log);
         }
 
-        assert VerifyHotSpotOptionsPhase.checkOptions();
-
         // Install intrinsics.
         final HotSpotRuntime runtime = graalRuntime.getCapability(HotSpotRuntime.class);
         final Replacements replacements = graalRuntime.getCapability(Replacements.class);

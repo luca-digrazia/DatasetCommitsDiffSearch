@@ -533,7 +533,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             HotSpotResolvedJavaField field = (HotSpotResolvedJavaField) loadField.field();
             ValueNode object = loadField.isStatic() ? ConstantNode.forObject(field.getDeclaringClass().mirror(), this, graph) : loadField.object();
             assert loadField.kind() != Kind.Illegal;
-            ReadNode memoryRead = graph.add(new ReadNode(object, createFieldLocation(graph, field), loadField.stamp(), WriteBarrierType.NONE, (loadField.kind() == Kind.Object)));
+            ReadNode memoryRead = graph.add(new ReadNode(object, createFieldLocation(graph, field), loadField.stamp(), WriteBarrierType.NONE,
+                            (loadField.kind() == Kind.Object && !field.getName().equals("classMirrorOffset"))));
             tool.createNullCheckGuard(memoryRead, object);
 
             graph.replaceFixedWithFixed(loadField, memoryRead);
@@ -616,10 +617,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             UnsafeLoadNode load = (UnsafeLoadNode) n;
             assert load.kind() != Kind.Illegal;
             IndexedLocationNode location = IndexedLocationNode.create(ANY_LOCATION, load.accessKind(), load.displacement(), load.offset(), graph, 1);
-            // Unsafe Accesses to the metaspace or to any
-            // absolute address do not perform uncompression.
-            boolean compress = (!load.object().isNullConstant() && load.accessKind() == Kind.Object);
-            ReadNode memoryRead = graph.add(new ReadNode(load.object(), location, load.stamp(), WriteBarrierType.NONE, compress));
+            ReadNode memoryRead = graph.add(new ReadNode(load.object(), location, load.stamp(), WriteBarrierType.NONE, (!load.object().isNullConstant() && load.accessKind() == Kind.Object)));
             // An unsafe read must not floating outside its block as may float above an explicit
             // null check on its object.
             memoryRead.setGuard(AbstractBeginNode.prevBegin(load));
@@ -1072,11 +1070,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
     public Suites createSuites() {
         Suites ret = Suites.createDefaultSuites();
-
-        if (AOTCompilation.getValue()) {
-            // lowering introduces class constants, therefore it must be after lowering
-            ret.getHighTier().addPhase(new LoadJavaMirrorWithKlassPhase());
-        }
 
         ret.getMidTier().addPhase(new WriteBarrierAdditionPhase());
         if (VerifyPhases.getValue()) {

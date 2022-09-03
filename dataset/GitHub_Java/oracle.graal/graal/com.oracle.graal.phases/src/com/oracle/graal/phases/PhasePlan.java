@@ -49,7 +49,8 @@ public class PhasePlan {
      * A compiler extension phase can chose to run at the end of periods 1-3.
      */
     public static enum PhasePosition {
-        AFTER_PARSING
+        AFTER_PARSING,
+        HIGH_LEVEL
     }
     // @formatter:on
 

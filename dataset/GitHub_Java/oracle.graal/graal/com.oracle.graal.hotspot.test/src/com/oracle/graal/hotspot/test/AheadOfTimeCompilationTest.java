@@ -30,7 +30,6 @@ import org.junit.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.java.*;
@@ -38,7 +37,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * use
@@ -58,6 +56,7 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
     }
 
     @Test
+    @Ignore
     public void testStaticFinalObject1() {
         StructuredGraph result2 = compile("getStaticFinalObject", true);
         assert result2.getNodes().filter(ConstantNode.class).count() == 1;
@@ -83,10 +82,8 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
         editPhasePlan(method, graph, phasePlan);
         CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
-        // create suites everytime, as we modify options for the compiler
-        final Suites suitesLocal = Graal.getRequiredCapability(SuitesProvider.class).createSuites();
         final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, method, runtime, replacements, backend, runtime().getTarget(), null, phasePlan, OptimisticOptimizations.ALL,
-                        new SpeculationLog(), suitesLocal);
+                        new SpeculationLog(), suites);
         addMethod(method, compResult, graphCopy);
 
         OptCanonicalizeReads.setValue(originalSetting);
