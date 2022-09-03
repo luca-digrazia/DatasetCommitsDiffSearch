@@ -47,7 +47,7 @@ public class NodeData extends Template {
 
     private List<SpecializationData> specializations;
     private List<SpecializationData> polymorphicSpecializations;
-    private SpecializationData genericPolymorphicSpecialization;
+    private SpecializationData genericPolymoprhicSpecialization;
     private List<SpecializationListenerData> specializationListeners;
     private Map<Integer, List<ExecutableTypeData>> executableTypes;
     private List<ShortCircuitData> shortCircuits;
@@ -522,12 +522,12 @@ public class NodeData extends Template {
         return polymorphicSpecializations;
     }
 
-    void setGenericPolymorphicSpecialization(SpecializationData genericPolymoprhicSpecialization) {
-        this.genericPolymorphicSpecialization = genericPolymoprhicSpecialization;
+    void setGenericPolymoprhicSpecialization(SpecializationData genericPolymoprhicSpecialization) {
+        this.genericPolymoprhicSpecialization = genericPolymoprhicSpecialization;
     }
 
-    public SpecializationData getGenericPolymorphicSpecialization() {
-        return genericPolymorphicSpecialization;
+    public SpecializationData getGenericPolymorphicSpecializtion() {
+        return genericPolymoprhicSpecialization;
     }
 
     void setSpecializationListeners(List<SpecializationListenerData> specializationListeners) {
