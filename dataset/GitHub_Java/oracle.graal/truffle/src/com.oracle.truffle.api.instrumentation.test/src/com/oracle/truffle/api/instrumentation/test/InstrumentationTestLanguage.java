@@ -603,7 +603,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
 
     private static class AllocationNode extends InstrumentedNode {
 
-        AllocationNode(BaseNode[] children) {
+        public AllocationNode(BaseNode[] children) {
             super(children);
         }
 
@@ -620,7 +620,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
         public static int state = 0;
         private int wasteCount = 1000;
 
-        WasteTime(BaseNode[] children) {
+        public WasteTime(BaseNode[] children) {
             super(children);
         }
 
