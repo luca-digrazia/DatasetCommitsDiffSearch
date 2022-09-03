@@ -25,7 +25,7 @@ package com.oracle.graal.api.meta.test;
 import org.junit.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.java.*;
+import com.oracle.graal.api.runtime.*;
 
 /**
  * Tests for {@link BytecodeDisassemblerProvider}.
@@ -40,7 +40,7 @@ public class TestBytecodeDisassemblerProvider extends MethodUniverse {
      */
     @Test
     public void disassembleTest() {
-        BytecodeDisassemblerProvider dis = new BytecodeDisassembler();
+        BytecodeDisassemblerProvider dis = Graal.getRuntime().getCapability(BytecodeDisassemblerProvider.class);
         if (dis != null) {
             int count = 0;
             for (ResolvedJavaMethod m : methods.values()) {
