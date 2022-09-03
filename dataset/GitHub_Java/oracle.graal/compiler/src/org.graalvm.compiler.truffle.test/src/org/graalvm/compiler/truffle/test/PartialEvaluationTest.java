@@ -50,7 +50,6 @@ import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleDebugJavaMethod;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
-import org.graalvm.compiler.truffle.runtime.CancellableCompileTask;
 import org.graalvm.compiler.truffle.runtime.DefaultInliningPolicy;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
@@ -100,7 +99,7 @@ public abstract class PartialEvaluationTest extends GraalCompilerTest {
         final OptimizedCallTarget compilable = (OptimizedCallTarget) (Truffle.getRuntime()).createCallTarget(root);
         CompilationIdentifier compilationId = getCompilationId(compilable);
         StructuredGraph actual = partialEval(compilable, arguments, AllowAssumptions.YES, compilationId);
-        truffleCompiler.compilePEGraph(actual, methodName, null, compilable, asCompilationRequest(compilationId), null, new CancellableCompileTask(true));
+        truffleCompiler.compilePEGraph(actual, methodName, null, compilable, asCompilationRequest(compilationId), null);
         return compilable;
     }
 
@@ -112,7 +111,7 @@ public abstract class PartialEvaluationTest extends GraalCompilerTest {
             try {
                 CompilationIdentifier compilationId = getCompilationId(compilable);
                 StructuredGraph actual = partialEval(compilable, arguments, AllowAssumptions.YES, compilationId);
-                truffleCompiler.compilePEGraph(actual, methodName, suite, compilable, asCompilationRequest(compilationId), null, new CancellableCompileTask(true));
+                truffleCompiler.compilePEGraph(actual, methodName, suite, compilable, asCompilationRequest(compilationId), null);
                 removeFrameStates(actual);
                 StructuredGraph expected = parseForComparison(methodName, actual.getDebug());
                 removeFrameStates(expected);
