@@ -40,7 +40,6 @@ import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -48,7 +47,6 @@ import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.nfi.hotspot.amd64.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -259,11 +257,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
 
             if (config.useCompressedClassPointers) {
                 Register register = r10;
-                AMD64HotSpotMove.decodeKlassPointer(asm, register, providers.getRegisters().getHeapBaseRegister(), src, config.getKlassEncoding());
-                if (config.narrowKlassBase != 0) {
-                    // The heap base register was destroyed above, so restore it
-                    asm.movq(providers.getRegisters().getHeapBaseRegister(), config.narrowOopBase);
-                }
+                AMD64HotSpotMove.decodeKlassPointer(asm, register, providers.getRegisters().getHeapBaseRegister(), src, config.narrowKlassBase, config.narrowOopBase, config.narrowKlassShift,
+                                config.logKlassAlignment);
                 asm.cmpq(inlineCacheKlass, register);
             } else {
                 asm.cmpq(inlineCacheKlass, src);
@@ -301,22 +296,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
         } else {
             // No need to emit the stubs for entries back into the method since
             // it has no calls that can cause such "return" entries
-
-            if (frameContext.omitFrame) {
-                // Cannot access slots in caller's frame if my frame is omitted
-                assert !frameMap.accessesCallerFrame() : lirGen.getGraph();
-            }
+            assert !frameMap.accessesCallerFrame() : lirGen.getGraph();
         }
-    }
-
-    @Override
-    public NativeFunctionInterface getNativeFunctionInterface() {
-        AMD64HotSpotNativeFunctionPointer libraryLoadPointer = new AMD64HotSpotNativeFunctionPointer(getRuntime().getConfig().libraryLoadAddress, "GNFI_UTIL_LOADLIBRARY");
-        AMD64HotSpotNativeFunctionPointer functionLookupPointer = new AMD64HotSpotNativeFunctionPointer(getRuntime().getConfig().functionLookupAddress, "GNFI_UTIL_FUNCTIONLOOKUP");
-        AMD64HotSpotNativeLibraryHandle rtldDefault = new AMD64HotSpotNativeLibraryHandle(getRuntime().getConfig().rtldDefault);
-        if (!libraryLoadPointer.isValid() || !functionLookupPointer.isValid()) {
-            throw GraalInternalError.shouldNotReachHere("Lookup Pointers null");
-        }
-        return new AMD64HotSpotNativeFunctionInterface(this.getProviders(), this, libraryLoadPointer, functionLookupPointer, rtldDefault);
     }
 }

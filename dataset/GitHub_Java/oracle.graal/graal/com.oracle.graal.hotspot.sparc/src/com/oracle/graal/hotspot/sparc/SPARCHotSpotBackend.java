@@ -32,7 +32,6 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import com.oracle.graal.compiler.gen.LIRGenerator;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -72,8 +71,8 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public LIRGenerator newLIRGenerator(StructuredGraph graph, Object stub, FrameMap frameMap, CallingConvention cc, LIR lir) {
-        return new SPARCHotSpotLIRGenerator(graph, stub, getProviders(), getRuntime().getConfig(), frameMap, cc, lir);
+    public LIRGenerator newLIRGenerator(StructuredGraph graph, FrameMap frameMap, CallingConvention cc, LIR lir) {
+        return new SPARCHotSpotLIRGenerator(graph, getProviders(), getRuntime().getConfig(), frameMap, cc, lir);
     }
 
     /**
@@ -147,7 +146,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    protected Assembler createAssembler(FrameMap frameMap) {
+    protected AbstractAssembler createAssembler(FrameMap frameMap) {
         return new SPARCMacroAssembler(getTarget(), frameMap.registerConfig);
     }
 
@@ -158,7 +157,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         assert gen.deoptimizationRescueSlot == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
 
         Stub stub = gen.getStub();
-        Assembler masm = createAssembler(frameMap);
+        AbstractAssembler masm = createAssembler(frameMap);
         // On SPARC we always use stack frames.
         HotSpotFrameContext frameContext = new HotSpotFrameContext(stub != null);
         CompilationResultBuilder crb = factory.createBuilder(getProviders().getCodeCache(), getProviders().getForeignCalls(), frameMap, masm, frameContext, compilationResult);
@@ -179,7 +178,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, LIR lir, ResolvedJavaMethod installedCodeOwner) {
+    public void emitCode(CompilationResultBuilder crb, LIRGenerator lirGen, ResolvedJavaMethod installedCodeOwner) {
         SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
         FrameMap frameMap = crb.frameMap;
         RegisterConfig regConfig = frameMap.registerConfig;
@@ -208,7 +207,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         crb.recordMark(Marks.MARK_VERIFIED_ENTRY);
 
         // Emit code for the LIR
-        crb.emit(lir);
+        crb.emit(lirGen.lir);
 
         HotSpotFrameContext frameContext = (HotSpotFrameContext) crb.frameContext;
         HotSpotForeignCallsProvider foreignCalls = getProviders().getForeignCalls();
@@ -220,6 +219,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         } else {
             // No need to emit the stubs for entries back into the method since
             // it has no calls that can cause such "return" entries
+            assert !frameMap.accessesCallerFrame() : lirGen.getGraph();
         }
 
         if (unverifiedStub != null) {
@@ -227,10 +227,5 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
             Register scratch = g3;
             SPARCCall.indirectJmp(crb, masm, scratch, foreignCalls.lookupForeignCall(IC_MISS_HANDLER));
         }
-    }
-
-    @Override
-    public NativeFunctionInterface getNativeFunctionInterface() {
-        throw GraalInternalError.unimplemented("No NativeFunctionInterface of SPARC");
     }
 }

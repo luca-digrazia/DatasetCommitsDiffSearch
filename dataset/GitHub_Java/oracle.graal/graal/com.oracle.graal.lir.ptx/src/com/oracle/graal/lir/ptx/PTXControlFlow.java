@@ -57,7 +57,7 @@ public class PTXControlFlow {
         }
     }
 
-    public static class ReturnNoValOp extends PTXLIRInstruction implements BlockEndOp {
+    public static class ReturnNoValOp extends PTXLIRInstruction {
 
         public ReturnNoValOp() {
         }
@@ -226,7 +226,7 @@ public class PTXControlFlow {
                         case Int:
                         case Long:
                             if (crb.codeCache.needsDataPatch(keyConstants[index])) {
-                                crb.recordInlineDataInCode(keyConstants[index]);
+                                crb.recordDataReferenceInCode(keyConstants[index], 0, true);
                             }
                             new Setp(EQ, keyConstants[index], key, predRegNum).emit(masm);
                             break;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,16 +26,16 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.nodes.calc.*;
 
 /**
  * This class encapsulates different strategies on how to generate code for switch instructions.
- *
- * The {@link #getBestStrategy(double[], JavaConstant[], LabelRef[])} method can be used to get
- * strategy with the smallest average effort (average number of comparisons until a decision is
- * reached). The strategy returned by this method will have its averageEffort set, while a strategy
- * constructed directly will not.
+ * 
+ * The {@link #getBestStrategy(double[], Constant[], LabelRef[])} method can be used to get strategy
+ * with the smallest average effort (average number of comparisons until a decision is reached). The
+ * strategy returned by this method will have its averageEffort set, while a strategy constructed
+ * directly will not.
  */
 public abstract class SwitchStrategy {
 
@@ -43,7 +43,7 @@ public abstract class SwitchStrategy {
         /**
          * Generates a conditional or unconditional jump. The jump will be unconditional if
          * condition is null. If defaultTarget is true, then the jump will go the the default.
-         *
+         * 
          * @param index Index of the value and the jump target (only used if defaultTarget == false)
          * @param condition The condition on which to jump (can be null)
          * @param defaultTarget true if the jump should go to the default target, false if index
@@ -54,7 +54,7 @@ public abstract class SwitchStrategy {
         /**
          * Generates a conditional jump to the target with the specified index. The fall through
          * should go to the default target.
-         *
+         * 
          * @param index Index of the value and the jump target
          * @param condition The condition on which to jump
          * @param canFallThrough true if this is the last instruction in the switch statement, to
@@ -64,7 +64,7 @@ public abstract class SwitchStrategy {
 
         /**
          * Create a new label and generate a conditional jump to it.
-         *
+         * 
          * @param index Index of the value and the jump target
          * @param condition The condition on which to jump
          * @return a new Label
@@ -89,11 +89,11 @@ public abstract class SwitchStrategy {
     public abstract static class BaseSwitchClosure implements SwitchClosure {
 
         private final CompilationResultBuilder crb;
-        private final Assembler masm;
+        private final AbstractAssembler masm;
         private final LabelRef[] keyTargets;
         private final LabelRef defaultTarget;
 
-        public BaseSwitchClosure(CompilationResultBuilder crb, Assembler masm, LabelRef[] keyTargets, LabelRef defaultTarget) {
+        public BaseSwitchClosure(CompilationResultBuilder crb, AbstractAssembler masm, LabelRef[] keyTargets, LabelRef defaultTarget) {
             this.crb = crb;
             this.masm = masm;
             this.keyTargets = keyTargets;
@@ -191,11 +191,11 @@ public abstract class SwitchStrategy {
     }
 
     public final double[] keyProbabilities;
-    public final JavaConstant[] keyConstants;
+    public final Constant[] keyConstants;
     private double averageEffort = -1;
     private EffortClosure effortClosure;
 
-    public SwitchStrategy(double[] keyProbabilities, JavaConstant[] keyConstants) {
+    public SwitchStrategy(double[] keyProbabilities, Constant[] keyConstants) {
         assert keyConstants.length == keyProbabilities.length && keyConstants.length >= 2;
         this.keyProbabilities = keyProbabilities;
         this.keyConstants = keyConstants;
@@ -254,7 +254,7 @@ public abstract class SwitchStrategy {
     public static class SequentialStrategy extends SwitchStrategy {
         private final Integer[] indexes;
 
-        public SequentialStrategy(final double[] keyProbabilities, JavaConstant[] keyConstants) {
+        public SequentialStrategy(final double[] keyProbabilities, Constant[] keyConstants) {
             super(keyProbabilities, keyConstants);
 
             int keyCount = keyConstants.length;
@@ -289,7 +289,7 @@ public abstract class SwitchStrategy {
     public static class RangesStrategy extends SwitchStrategy {
         private final Integer[] indexes;
 
-        public RangesStrategy(final double[] keyProbabilities, JavaConstant[] keyConstants) {
+        public RangesStrategy(final double[] keyProbabilities, Constant[] keyConstants) {
             super(keyProbabilities, keyConstants);
 
             int keyCount = keyConstants.length;
@@ -353,7 +353,7 @@ public abstract class SwitchStrategy {
 
         private final double[] probabilitySums;
 
-        public BinaryStrategy(double[] keyProbabilities, JavaConstant[] keyConstants) {
+        public BinaryStrategy(double[] keyProbabilities, Constant[] keyConstants) {
             super(keyProbabilities, keyConstants);
             probabilitySums = new double[keyProbabilities.length + 1];
             double sum = 0;
@@ -457,7 +457,7 @@ public abstract class SwitchStrategy {
 
     public abstract void run(SwitchClosure closure);
 
-    private static SwitchStrategy[] getStrategies(double[] keyProbabilities, JavaConstant[] keyConstants, LabelRef[] keyTargets) {
+    private static SwitchStrategy[] getStrategies(double[] keyProbabilities, Constant[] keyConstants, LabelRef[] keyTargets) {
         SwitchStrategy[] strategies = new SwitchStrategy[]{new SequentialStrategy(keyProbabilities, keyConstants), new RangesStrategy(keyProbabilities, keyConstants),
                         new BinaryStrategy(keyProbabilities, keyConstants)};
         for (SwitchStrategy strategy : strategies) {
@@ -473,7 +473,7 @@ public abstract class SwitchStrategy {
      * Creates all switch strategies for the given switch, evaluates them (based on average effort)
      * and returns the best one.
      */
-    public static SwitchStrategy getBestStrategy(double[] keyProbabilities, JavaConstant[] keyConstants, LabelRef[] keyTargets) {
+    public static SwitchStrategy getBestStrategy(double[] keyProbabilities, Constant[] keyConstants, LabelRef[] keyTargets) {
         SwitchStrategy[] strategies = getStrategies(keyProbabilities, keyConstants, keyTargets);
         double bestEffort = Integer.MAX_VALUE;
         SwitchStrategy bestStrategy = null;

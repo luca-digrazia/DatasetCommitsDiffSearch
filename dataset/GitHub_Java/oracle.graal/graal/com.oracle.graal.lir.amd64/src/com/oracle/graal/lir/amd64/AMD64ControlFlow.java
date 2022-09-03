@@ -161,38 +161,31 @@ public class AMD64ControlFlow {
         private final int lowKey;
         private final LabelRef defaultTarget;
         private final LabelRef[] targets;
-        @Use protected Value index;
-        @Temp({REG, HINT}) protected Value idxScratch;
+        @Alive protected Value index;
         @Temp protected Value scratch;
 
-        public TableSwitchOp(final int lowKey, final LabelRef defaultTarget, final LabelRef[] targets, Value index, Variable scratch, Variable idxScratch) {
+        public TableSwitchOp(final int lowKey, final LabelRef defaultTarget, final LabelRef[] targets, Variable index, Variable scratch) {
             this.lowKey = lowKey;
             this.defaultTarget = defaultTarget;
             this.targets = targets;
             this.index = index;
             this.scratch = scratch;
-            this.idxScratch = idxScratch;
         }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            Register indexReg = asIntReg(index);
-            Register idxScratchReg = asIntReg(idxScratch);
+            Register value = asIntReg(index);
             Register scratchReg = asLongReg(scratch);
-
-            if (!indexReg.equals(idxScratchReg)) {
-                masm.movl(idxScratchReg, indexReg);
-            }
 
             Buffer buf = masm.codeBuffer;
             // Compare index against jump table bounds
             int highKey = lowKey + targets.length - 1;
             if (lowKey != 0) {
                 // subtract the low value from the switch value
-                masm.subl(idxScratchReg, lowKey);
-                masm.cmpl(idxScratchReg, highKey - lowKey);
+                masm.subl(value, lowKey);
+                masm.cmpl(value, highKey - lowKey);
             } else {
-                masm.cmpl(idxScratchReg, highKey);
+                masm.cmpl(value, highKey);
             }
 
             // Jump to default target if index is not within the jump table
@@ -206,8 +199,8 @@ public class AMD64ControlFlow {
             int afterLea = buf.position();
 
             // Load jump table entry into scratch and jump to it
-            masm.movslq(idxScratchReg, new AMD64Address(scratchReg, idxScratchReg, Scale.Times4, 0));
-            masm.addq(scratchReg, idxScratchReg);
+            masm.movslq(value, new AMD64Address(scratchReg, value, Scale.Times4, 0));
+            masm.addq(scratchReg, value);
             masm.jmp(scratchReg);
 
             // Inserting padding so that jump table address is 4-byte aligned
