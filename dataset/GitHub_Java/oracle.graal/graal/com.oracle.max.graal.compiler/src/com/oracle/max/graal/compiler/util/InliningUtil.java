@@ -28,7 +28,6 @@ import java.util.concurrent.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.ri.RiType.Representation;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.cri.*;
@@ -171,20 +170,13 @@ public class InliningUtil {
         public void inline(StructuredGraph graph, GraalRuntime runtime, InliningCallback callback) {
             // receiver null check must be before the type check
             InliningUtil.receiverNullCheck(invoke);
-            ValueNode receiver = invoke.callTarget().receiver();
-            ReadHubNode objectClass = graph.add(new ReadHubNode(receiver));
+            ReadHubNode objectClass = graph.add(new ReadHubNode(invoke.callTarget().receiver()));
             IsTypeNode isTypeNode = graph.unique(new IsTypeNode(objectClass, type));
             FixedGuardNode guard = graph.add(new FixedGuardNode(isTypeNode));
-            AnchorNode anchor = graph.add(new AnchorNode());
             assert invoke.predecessor() != null;
-
-            ConstantNode typeConst = graph.unique(ConstantNode.forCiConstant(type.getEncoding(Representation.ObjectHub), runtime, graph));
-            CheckCastNode checkCast = graph.unique(new CheckCastNode(anchor, typeConst, type, receiver));
-            invoke.callTarget().replaceFirstInput(receiver, checkCast);
 
             graph.addBeforeFixed(invoke.node(), objectClass);
             graph.addBeforeFixed(invoke.node(), guard);
-            graph.addBeforeFixed(invoke.node(), anchor);
 
             Debug.log("inlining 1 method using 1 type check");
 
@@ -263,7 +255,7 @@ public class InliningUtil {
             // setup merge and phi nodes for results and exceptions
             MergeNode returnMerge = graph.add(new MergeNode());
             returnMerge.setProbability(invoke.probability());
-            returnMerge.setStateAfter(invoke.stateAfter().duplicate(invoke.stateAfter().bci));
+            returnMerge.setStateAfter(invoke.stateAfter());
 
             PhiNode returnValuePhi = null;
             if (hasReturnValue) {
@@ -279,7 +271,7 @@ public class InliningUtil {
 
                 exceptionMerge = graph.add(new MergeNode());
                 exceptionMerge.setProbability(exceptionEdge.probability());
-                exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicate(invoke.stateAfter().bci));
+                exceptionMerge.setStateAfter(exceptionEdge.stateAfter());
 
                 FixedNode exceptionSux = exceptionObject.next();
                 graph.addBeforeFixed(exceptionSux, exceptionMerge);
@@ -326,20 +318,6 @@ public class InliningUtil {
             for (int i = 0; i < calleeEntryNodes.length; i++) {
                 BeginNode node = calleeEntryNodes[i];
                 Invoke invokeForInlining = (Invoke) node.next();
-                int typeIdx = -1;
-                for (int j = 0; j < typesToConcretes.length; j++) {
-                    if (typesToConcretes[j] == i) {
-                        typeIdx = j;
-                        break;
-                    }
-                }
-                assert typeIdx >= 0;
-
-                ValueNode receiver = invokeForInlining.callTarget().receiver();
-                ConstantNode typeConst = graph.unique(ConstantNode.forCiConstant(types[typeIdx].getEncoding(Representation.ObjectHub), runtime, graph));
-                CheckCastNode checkCast = graph.unique(new CheckCastNode(node, typeConst, types[typeIdx], receiver));
-                invokeForInlining.callTarget().replaceFirstInput(receiver, checkCast);
-
                 RiResolvedMethod concrete = concretes.get(i);
                 StructuredGraph calleeGraph = getGraph(concrete, callback);
                 assert !IntrinsificationPhase.canIntrinsify(invokeForInlining, concrete, runtime);
@@ -387,7 +365,7 @@ public class InliningUtil {
             if (tsux instanceof MergeNode) {
                 EndNode endNode = graph.add(new EndNode());
                 result = graph.add(new IfNode(isTypeNode, endNode, nextNode, tsuxProbability));
-                ((MergeNode) tsux).addForwardEnd(endNode);
+                ((MergeNode) tsux).addEnd(endNode);
             } else {
                 result = graph.add(new IfNode(isTypeNode, tsux, nextNode, tsuxProbability));
             }
@@ -418,7 +396,7 @@ public class InliningUtil {
             EndNode endNode = graph.add(new EndNode());
             // TODO (ch) set probability
             duplicatedInvoke.setNext(endNode);
-            returnMerge.addForwardEnd(endNode);
+            returnMerge.addEnd(endNode);
             if (returnValuePhi != null) {
                 returnValuePhi.addInput(duplicatedInvoke.node());
             }
@@ -427,8 +405,6 @@ public class InliningUtil {
 
         private static Invoke duplicateInvokeForInlining(StructuredGraph graph, Invoke invoke, MergeNode exceptionMerge, PhiNode exceptionObjectPhi, boolean useForInlining) {
             Invoke result = (Invoke) invoke.node().copyWithInputs();
-            Node callTarget = result.callTarget().copyWithInputs();
-            result.node().replaceFirstInput(result.callTarget(), callTarget);
             result.setUseForInlining(useForInlining);
 
             CiKind kind = invoke.node().kind();
@@ -455,7 +431,7 @@ public class InliningUtil {
 
                 EndNode endNode = graph.add(new EndNode());
                 newExceptionObject.setNext(endNode);
-                exceptionMerge.addForwardEnd(endNode);
+                exceptionMerge.addEnd(endNode);
                 exceptionObjectPhi.addInput(newExceptionObject);
 
                 ((InvokeWithExceptionNode) result).setExceptionEdge(newExceptionEdge);
@@ -542,7 +518,7 @@ public class InliningUtil {
         }
         if (callTarget.receiver().exactType() != null) {
             RiResolvedType exact = callTarget.receiver().exactType();
-            assert exact.isSubtypeOf(targetMethod.holder()) : exact + " subtype of " + targetMethod.holder() + " for " + targetMethod;
+            assert exact.isSubtypeOf(targetMethod.holder()) : exact + " subtype of " + targetMethod.holder();
             RiResolvedMethod resolved = exact.resolveMethodImpl(targetMethod);
             if (checkTargetConditions(invoke, resolved)) {
                 double weight = callback == null ? 0 : callback.inliningWeight(parent, resolved, invoke);
@@ -815,7 +791,11 @@ public class InliningUtil {
             if (GraalOptions.ProbabilityAnalysis) {
                 if (node instanceof FixedNode) {
                     FixedNode fixed = (FixedNode) node;
-                    fixed.setProbability(fixed.probability() * invokeProbability);
+                    double newProbability = fixed.probability() * invokeProbability;
+                    if (GraalOptions.LimitInlinedProbability) {
+                        newProbability = Math.min(newProbability, invokeProbability);
+                    }
+                    fixed.setProbability(newProbability);
                 }
             }
             if (node instanceof FrameState) {
@@ -829,7 +809,6 @@ public class InliningUtil {
                     frameState.replaceAndDelete(stateAfter);
                 } else if (frameState.bci == FrameState.AFTER_EXCEPTION_BCI) {
                     if (frameState.isAlive()) {
-                        // TODO (ch) it happens sometimes that we have a FrameState.AFTER_EXCEPTION_BCI but no stateAtExceptionEdge
                         assert stateAtExceptionEdge != null;
                         frameState.replaceAndDelete(stateAtExceptionEdge);
                     } else {
