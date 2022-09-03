@@ -48,20 +48,20 @@ public class SimpleGetopt {
     }
 
     // overridable by tests
-    RuntimeException err(String messageKey, Object... args) {
-        throw ComponentInstaller.err(messageKey, args);
+    void err(String messageKey, Object... args) {
+        ComponentInstaller.err(messageKey, args);
     }
 
     private String findCommand(String cmdString) {
         String cmd = cmdString;
         if (cmd.isEmpty()) {
-            throw err("ERROR_MissingCommand"); // NOI18N
+            err("ERROR_MissingCommand"); // NOI18N
         }
         String selCommand = null;
         for (String s : commandOptions.keySet()) {
             if (s.startsWith(cmdString)) {
                 if (selCommand != null) {
-                    throw err("ERROR_AmbiguousCommand", cmdString, selCommand, s);
+                    err("ERROR_AmbiguousCommand", cmdString, selCommand, s);
                 }
                 selCommand = s;
                 if (s.length() == cmdString.length()) {
@@ -70,7 +70,7 @@ public class SimpleGetopt {
             }
         }
         if (selCommand == null) {
-            throw err("ERROR_UnknownCommand", cmdString); // NOI18N
+            err("ERROR_UnknownCommand", cmdString); // NOI18N
         }
         command = selCommand;
         return command;
@@ -88,7 +88,7 @@ public class SimpleGetopt {
                     Map<String, String> cOpts = commandOptions.get(command);
                     for (String s : optValues.keySet()) {
                         if ("X".equals(cOpts.get(s))) {
-                            throw err("ERROR_UnsupportedOption", s, command); // NOI18N
+                            err("ERROR_UnsupportedOption", s, command); // NOI18N
                         }
                     }
                     if (cOpts.containsKey(DO_NOT_PROCESS_OPTIONS)) { // NOI18N
@@ -139,13 +139,13 @@ public class SimpleGetopt {
         }
         if (optSpec == null) {
             if (command == null) {
-                throw err("ERROR_UnsupportedGlobalOption", o); // NOI18N
+                err("ERROR_UnsupportedGlobalOption", o); // NOI18N
             }
             Map<String, String> cmdSpec = commandOptions.get(command);
             if (cmdSpec.isEmpty()) {
-                throw err("ERROR_CommandWithNoOptions", command); // NOI18N
+                err("ERROR_CommandWithNoOptions", command); // NOI18N
             }
-            throw err("ERROR_UnsupportedOption", o, command); // NOI18N
+            err("ERROR_UnsupportedOption", o, command); // NOI18N
         }
         // no support for parametrized options now
         String optVal = "";
@@ -154,21 +154,22 @@ public class SimpleGetopt {
                 if (nextParam) {
                     optVal = parameters.poll();
                     if (optVal == null) {
-                        throw err("ERROR_OptionNeedsParameter", o, command); // NOI18N
+                        err("ERROR_OptionNeedsParameter", o, command); // NOI18N
                     }
                 } else {
                     if (optCharIndex < param.length()) {
                         optVal = param.substring(optCharIndex);
                         param = "";
                     } else if (parameters.isEmpty()) {
-                        throw err("ERROR_OptionNeedsParameter", o, command); // NOI18N
+                        err("ERROR_OptionNeedsParameter", o, command); // NOI18N
                     } else {
                         optVal = parameters.poll();
                     }
                 }
                 break;
             case "X":
-                throw err("ERROR_UnsupportedOption", o, command); // NOI18N
+                err("ERROR_UnsupportedOption", o, command); // NOI18N
+                break;
             case "":
                 break;
         }

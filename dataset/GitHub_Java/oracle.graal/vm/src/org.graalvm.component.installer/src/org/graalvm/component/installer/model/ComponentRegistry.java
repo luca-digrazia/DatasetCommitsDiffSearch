@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.Set;
 import org.graalvm.component.installer.CommonConstants;
-import org.graalvm.component.installer.FailedOperationException;
 import org.graalvm.component.installer.Feedback;
 
 /**
@@ -74,31 +73,9 @@ public final class ComponentRegistry {
 
     public ComponentInfo findComponent(String id) {
         if (!allLoaded) {
-            return loadSingleComponent(id, false, false);
+            return loadSingleComponent(id, false);
         }
-        ComponentInfo ci = components.get(id);
-        if (ci != null) {
-            return ci;
-        }
-        String fullId = findAbbreviatedId(id);
-        return fullId == null ? null : components.get(fullId);
-    }
-
-    private String findAbbreviatedId(String id) {
-        String candidate = null;
-        String end = "." + id; // NOI18N
-        for (String s : getComponentIDs()) {
-            if (s.equals(id)) {
-                return id;
-            }
-            if (s.toLowerCase().endsWith(end)) {
-                if (candidate != null) {
-                    throw env.failure("COMPONENT_AmbiguousIdFound", null, candidate, s);
-                }
-                candidate = s;
-            }
-        }
-        return candidate;
+        return components.get(id);
     }
 
     public Map<String, String> getGraalCapabilities() {
@@ -237,38 +214,23 @@ public final class ComponentRegistry {
     }
 
     public ComponentInfo loadSingleComponent(String id, boolean filelist) {
-        return loadSingleComponent(id, filelist, false);
-    }
-
-    ComponentInfo loadSingleComponent(String id, boolean filelist, boolean notFoundFailure) {
-        String fid = findAbbreviatedId(id);
-        if (fid == null) {
-            if (notFoundFailure) {
-                throw env.failure("REMOTE_UnknownComponentId", null, id);
-            }
-        }
-        ComponentInfo info = components.get(fid);
+        ComponentInfo info = components.get(id);
         if (info != null) {
             return info;
         }
-        String cid = id;
         try {
-            info = storage.loadComponentMetadata(fid);
+            info = storage.loadComponentMetadata(id);
             if (info == null) {
-                if (notFoundFailure) {
-                    throw env.failure("REMOTE_UnknownComponentId", null, id);
-                }
                 return null;
             }
-            cid = info.getId(); // may change if id was an abbreviation
             if (filelist) {
                 storage.loadComponentFiles(info);
-                components.put(cid, info);
+                components.put(id, info);
             }
         } catch (NoSuchFileException ex) {
             return null;
         } catch (IOException ex) {
-            throw env.failure("REGISTRY_ReadingComponentMetadata", ex, id, ex.getLocalizedMessage(), fid);
+            throw env.failure("REGISTRY_ReadingComponentMetadata", ex, id, ex.getLocalizedMessage());
         }
         return info;
     }
@@ -325,19 +287,4 @@ public final class ComponentRegistry {
         return dispCapName;
     }
 
-    public String shortenComponentId(ComponentInfo info) {
-        String id = info.getId();
-        if (id.startsWith(CommonConstants.GRAALVM_CORE_PREFIX)) {
-            String shortId = id.substring(CommonConstants.GRAALVM_CORE_PREFIX.length());
-            try {
-                ComponentInfo reg = findComponent(shortId);
-                if (reg == null || reg.getId().equals(id)) {
-                    return shortId;
-                }
-            } catch (FailedOperationException ex) {
-                // ambiguous, ignore
-            }
-        }
-        return id;
-    }
 }

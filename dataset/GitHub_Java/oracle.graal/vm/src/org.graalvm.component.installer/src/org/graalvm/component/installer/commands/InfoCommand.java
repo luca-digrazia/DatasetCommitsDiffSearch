@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,21 +28,15 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipException;
-import org.graalvm.component.installer.CommandInput;
 import org.graalvm.component.installer.Commands;
 import org.graalvm.component.installer.CommonConstants;
-import org.graalvm.component.installer.ComponentInstaller;
 import org.graalvm.component.installer.ComponentParam;
 import org.graalvm.component.installer.DependencyException;
-import org.graalvm.component.installer.FailedOperationException;
-import org.graalvm.component.installer.Feedback;
 import org.graalvm.component.installer.InstallerStopException;
 import org.graalvm.component.installer.MetadataException;
-import org.graalvm.component.installer.Version;
 import org.graalvm.component.installer.model.ComponentInfo;
 import org.graalvm.component.installer.model.Verifier;
 import org.graalvm.component.installer.persist.MetadataLoader;
@@ -55,29 +49,17 @@ public class InfoCommand extends QueryCommandBase {
 
     static {
         OPTIONS.putAll(BASE_OPTIONS);
-        OPTIONS.putAll(ComponentInstaller.componentOptions);
 
-        OPTIONS.put(Commands.OPTION_NO_VERIFY_JARS, "");
+        OPTIONS.put(Commands.OPTION_VERIFY_JARS, "");
         OPTIONS.put(Commands.OPTION_FULL_PATHS, "");
         OPTIONS.put(Commands.OPTION_IGNORE_OPEN_ERRORS, "");
         OPTIONS.put(Commands.OPTION_SUPPRESS_TABLE, "");
-        OPTIONS.put(Commands.OPTION_NO_DOWNLOAD_PROGRESS, "");
-
-        OPTIONS.put(Commands.LONG_OPTION_NO_VERIFY_JARS, Commands.OPTION_NO_VERIFY_JARS);
-        OPTIONS.put(Commands.LONG_OPTION_FULL_PATHS, Commands.OPTION_FULL_PATHS);
-        OPTIONS.put(Commands.LONG_OPTION_IGNORE_OPEN_ERRORS, Commands.OPTION_IGNORE_OPEN_ERRORS);
-        OPTIONS.put(Commands.LONG_OPTION_SUPPRESS_TABLE, Commands.OPTION_SUPPRESS_TABLE);
-        OPTIONS.put(Commands.LONG_OPTION_NO_DOWNLOAD_PROGRESS, Commands.OPTION_NO_DOWNLOAD_PROGRESS);
-
-        OPTIONS.put(Commands.OPTION_VERSION, "s");
-        OPTIONS.put(Commands.LONG_OPTION_VERSION, Commands.OPTION_VERSION);
     }
 
     private boolean ignoreOpenErrors;
     private boolean verifyJar;
     private boolean fullPath;
     private boolean suppressTable;
-    private Version.Match versionFilter;
 
     private final List<ComponentParam> components = new ArrayList<>();
     private final Map<ComponentInfo, MetadataLoader> map = new HashMap<>();
@@ -121,64 +103,11 @@ public class InfoCommand extends QueryCommandBase {
     }
 
     @Override
-    public void init(CommandInput commandInput, Feedback feedBack) {
-        super.init(commandInput, feedBack);
-        ignoreOpenErrors = input.optValue(Commands.OPTION_IGNORE_OPEN_ERRORS) != null;
-        verifyJar = input.optValue(Commands.OPTION_NO_VERIFY_JARS) == null;
-        suppressTable = input.optValue(Commands.OPTION_SUPPRESS_TABLE) != null;
-        fullPath = input.optValue(Commands.OPTION_FULL_PATHS) != null;
-
-        String vf = input.optValue(Commands.OPTION_VERSION);
-        if (vf != null) {
-            versionFilter = Version.versionFilter(vf);
-        }
-    }
-
-    void collectComponents() throws IOException {
-        for (Iterator<ComponentParam> it = input.existingFiles().matchVersion(versionFilter).allowIncompatible().iterator(); it.hasNext();) {
-            ComponentParam cp;
-            try {
-                cp = it.next();
-            } catch (FailedOperationException ex) {
-                feedback.error("INFO_InvalidComponent", ex, ex.getLocalizedMessage());
-                continue;
-            }
-            try {
-                // verifyjar set to false, as Verifier is not supported in SVM
-                // components.add(ldr = new ComponentPackageLoader(new JarFile(f, false),
-                // feedback));
-                processComponentParam(cp);
-            } catch (ZipException ex) {
-                if (ignoreOpenErrors) {
-                    feedback.error("INFO_ErrorOpeningBundle", ex,
-                                    cp.getDisplayName(),
-                                    ex.getLocalizedMessage());
-                } else {
-                    throw ex;
-                }
-            } catch (MetadataException ex) {
-                if (ignoreOpenErrors) {
-                    feedback.error("INFO_CorruptedBundleMetadata", ex,
-                                    cp.getDisplayName(),
-                                    ex.getOffendingHeader(),
-                                    ex.getLocalizedMessage());
-                } else {
-                    throw ex;
-                }
-            } catch (IOException ex) {
-                if (ignoreOpenErrors) {
-                    feedback.error("INFO_ErrorReadingBundle", ex,
-                                    cp.getDisplayName(),
-                                    ex.getLocalizedMessage());
-                } else {
-                    throw ex;
-                }
-            }
-        }
-    }
-
-    @Override
     public int execute() throws IOException {
+        init(input, feedback);
+        ignoreOpenErrors = input.optValue(Commands.OPTION_IGNORE_OPEN_ERRORS) != null;
+        verifyJar = input.optValue(Commands.OPTION_VERIFY_JARS) != null;
+        suppressTable = input.optValue(Commands.OPTION_SUPPRESS_TABLE) != null;
         if (input.optValue(Commands.OPTION_HELP) != null) {
             feedback.output("INFO_Help");
             return 0;
@@ -188,7 +117,48 @@ public class InfoCommand extends QueryCommandBase {
             return 1;
         }
         try {
-            collectComponents();
+            for (ComponentParam cp : input.existingFiles()) {
+                try {
+                    // verifyjar set to false, as Verifier is not supported in SVM
+                    // components.add(ldr = new ComponentPackageLoader(new JarFile(f, false),
+                    // feedback));
+                    MetadataLoader ldr = cp.createMetaLoader();
+
+                    components.add(cp);
+                    loadComponentDetails(cp, ldr);
+                    // registerFile(f, ldr.getComponentInfo(), ldr);
+                    addComponent(cp, ldr.getComponentInfo());
+                } catch (ZipException ex) {
+                    if (ignoreOpenErrors) {
+                        feedback.error("INFO_ErrorOpeningBundle", ex,
+                                        // feedback.translateFilename(f.toPath()),
+                                        cp.getDisplayName(),
+                                        ex.getLocalizedMessage());
+                    } else {
+                        throw ex;
+                    }
+                } catch (MetadataException ex) {
+                    if (ignoreOpenErrors) {
+                        feedback.error("INFO_CorruptedBundleMetadata", ex,
+                                        // feedback.translateFilename(f.toPath()),
+                                        cp.getDisplayName(),
+                                        ex.getOffendingHeader(),
+                                        ex.getLocalizedMessage());
+                    } else {
+                        throw ex;
+                    }
+                } catch (IOException ex) {
+                    if (ignoreOpenErrors) {
+                        feedback.error("INFO_ErrorReadingBundle", ex,
+                                        // feedback.translateFilename(f.toPath()),
+                                        cp.getDisplayName(),
+                                        ex.getLocalizedMessage());
+                    } else {
+                        throw ex;
+                    }
+                }
+            }
+
             printTable = getComponents().size() > 1 && !isVerbose() && !suppressTable;
             super.printComponents();
         } finally {
@@ -198,7 +168,7 @@ public class InfoCommand extends QueryCommandBase {
                 } catch (IOException ex) {
                     ComponentInfo ci = c.createMetaLoader().getComponentInfo();
                     feedback.error("INFO_ClosingComponent", ex,
-                                    ci == null ? c.getSpecification() : shortenComponentId(ci),
+                                    ci == null ? c.getSpecification() : ci.getId(),
                                     ex.getLocalizedMessage());
                 }
             }
@@ -206,22 +176,12 @@ public class InfoCommand extends QueryCommandBase {
         return 0;
     }
 
-    void processComponentParam(ComponentParam cp) throws IOException {
-        MetadataLoader ldr = cp.createMetaLoader();
-
-        components.add(cp);
-        loadComponentDetails(cp, ldr);
-        // registerFile(f, ldr.getComponentInfo(), ldr);
-        addComponent(cp, ldr.getComponentInfo());
-
-    }
-
     void registerFile(ComponentParam param, ComponentInfo info, MetadataLoader ldr) {
         files.put(info, param);
         map.put(info, ldr);
     }
 
-    void loadComponentDetails(ComponentParam param, MetadataLoader ldr) throws IOException {
+    void loadComponentDetails(ComponentParam param, MetadataLoader ldr) {
         ldr.infoOnly(true);
         ComponentInfo info = ldr.getComponentInfo();
         registerFile(param, info, ldr);
@@ -256,13 +216,13 @@ public class InfoCommand extends QueryCommandBase {
     void printDetails(ComponentParam param, ComponentInfo info) {
         if (printTable) {
             String line = String.format(feedback.l10n("INFO_ComponentShortList"),
-                            shortenComponentId(info), val(info.getVersion().displayString()), val(info.getName()),
+                            info.getId(), val(info.getVersionString()), val(info.getName()),
                             filePath(info));
             feedback.verbatimOut(line, false);
             return;
         } else {
             feedback.output("INFO_ComponentBasicInfo",
-                            shortenComponentId(info), val(info.getVersion().displayString()), val(info.getName()),
+                            info.getId(), val(info.getVersionString()), val(info.getName()),
                             param.getFullPath(), findRequiredGraalVMVersion(info));
             List<String> keys = new ArrayList<>(info.getRequiredGraalValues().keySet());
             keys.remove(CommonConstants.CAP_GRAALVM_VERSION);
@@ -270,7 +230,7 @@ public class InfoCommand extends QueryCommandBase {
                 Collections.sort(keys);
                 for (String cap : keys) {
                     feedback.verboseOutput("INFO_ComponentRequirement",
-                                    getRegistry().localizeCapabilityName(cap),
+                                    registry.localizeCapabilityName(cap),
                                     info.getRequiredGraalValues().get(cap));
                 }
             }
@@ -283,9 +243,9 @@ public class InfoCommand extends QueryCommandBase {
                 }
             }
 
-            Verifier vfy = new Verifier(feedback, input.getLocalRegistry(), catalog).collect(true).validateRequirements(info);
-            if (vfy.hasErrors()) {
-                feedback.message("INFO_ComponentWillNotInstall", shortenComponentId(info));
+            Verifier vfy = new Verifier(feedback, input.getLocalRegistry(), info).collect(true);
+            if (vfy.validateRequirements().hasErrors()) {
+                feedback.message("INFO_ComponentWillNotInstall", info.getId());
                 for (DependencyException ex : vfy.getErrors()) {
                     feedback.message("INFO_ComponentDependencyIndent", ex.getLocalizedMessage());
                 }

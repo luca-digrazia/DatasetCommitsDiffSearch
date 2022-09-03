@@ -24,27 +24,6 @@
  */
 package org.graalvm.component.installer;
 
-/**
- * Constants which do not fit elsewhere.
- */
-public class CommonConstants {
-    /**
-     * The installer's version. Printed as part of the help message.
-     */
-    public static final String INSTALLER_VERSION = "1.0.0"; // NOI18N
-
-    public static final String CAP_GRAALVM_VERSION = "graalvm_version";
-    public static final String CAP_OS_ARCH = "os_arch";
-    public static final String CAP_OS_NAME = "os_name";
-
-    /**
-     * Relative path for the component storage.
-     */
-    public static final String PATH_COMPONENT_STORAGE = "jre/lib/installer/components"; // NOI18N
-    // the trailing backspace is important !
-    public static final String PATH_POLYGLOT_REGISTRY = "jre/lib/installer/components/polyglot/"; // NOI18N
-
-    public static final String PATH_JRE_BIN = "jre/bin/"; // NOI18N
-
-    public static final String SYSPROP_CATALOG_URL = "org.graalvm.component.catalog"; // NOI18N
+public interface ComponentIterable extends Iterable<ComponentParam> {
+    void setVerifyJars(boolean verify);
 }

@@ -32,8 +32,8 @@ import java.nio.channels.ByteChannel;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
@@ -53,7 +53,6 @@ import org.graalvm.component.installer.BundleConstants;
 import org.graalvm.component.installer.CommonConstants;
 import org.graalvm.component.installer.model.ComponentRegistry;
 import org.graalvm.component.installer.Feedback;
-import org.graalvm.component.installer.SystemUtils;
 import org.graalvm.component.installer.model.ComponentInfo;
 import org.graalvm.component.installer.model.Verifier;
 
@@ -193,7 +192,7 @@ public class Installer implements Closeable {
         if (BundleConstants.PATH_LICENSE.equals(n)) {
             rel = getLicenseRelativePath();
         } else {
-            rel = SystemUtils.fromCommonString(n);
+            rel = Paths.get(n);
         }
         return getInstallPath().resolve(rel);
     }
@@ -236,7 +235,7 @@ public class Installer implements Closeable {
 
     boolean validateOneEntry(Path target, ZipEntry entry) throws IOException {
         if (entry.isDirectory()) {
-            Path dirPath = installPath.resolve(SystemUtils.fromCommonString(entry.getName()));
+            Path dirPath = installPath.resolve(entry.getName());
             if (Files.exists(dirPath)) {
                 if (!Files.isDirectory(dirPath)) {
                     throw new IOException(
@@ -369,7 +368,7 @@ public class Installer implements Closeable {
         List<String> paths = new ArrayList<>(permissions.keySet());
         Collections.sort(paths);
         for (String s : paths) {
-            Path p = installPath.resolve(SystemUtils.fromCommonString(s));
+            Path p = installPath.resolve(Paths.get(s));
             if (Files.exists(p)) {
                 String permissionString = permissions.get(s);
                 Set<PosixFilePermission> perms;
@@ -379,24 +378,19 @@ public class Installer implements Closeable {
                 } else {
                     perms = DEFAULT_CHANGE_PERMISSION;
                 }
-                if (Files.getFileAttributeView(p, PosixFileAttributeView.class) != null) {
-                    Files.setPosixFilePermissions(p, perms);
-                }
+                Files.setPosixFilePermissions(p, perms);
             }
         }
     }
 
     public void createSymlinks() throws IOException {
-        if (SystemUtils.isWindows()) {
-            return;
-        }
         List<String> createdRelativeLinks = new ArrayList<>();
         try {
             List<String> paths = new ArrayList<>(symlinks.keySet());
             Collections.sort(paths);
             for (String s : paths) {
-                Path source = installPath.resolve(SystemUtils.fromCommonString(s));
-                Path target = SystemUtils.fromCommonString(symlinks.get(s));
+                Path source = installPath.resolve(Paths.get(s));
+                Path target = Paths.get(symlinks.get(s));
                 ensurePathExists(source.getParent());
                 createdRelativeLinks.add(s);
                 trackedPaths.add(s);

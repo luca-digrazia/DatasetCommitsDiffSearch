@@ -84,11 +84,11 @@ public class CatalogIterable implements ComponentIterable {
         public ComponentParam next() {
             String s = input.nextParameter();
 
-            if (getRegistry().findComponent(s.toLowerCase()) == null) {
+            if (!getRegistry().getComponentIDs().contains(s.toLowerCase())) {
                 throw feedback.failure("REMOTE_UnknownComponentId", null, s);
             }
 
-            ComponentInfo info = getRegistry().loadSingleComponent(s.toLowerCase(), false);
+            ComponentInfo info = getRegistry().loadSingleComponent(s, false);
             if (info == null) {
                 throw feedback.failure("REMOTE_UnknownComponentId", null, s);
             }
@@ -109,7 +109,6 @@ public class CatalogIterable implements ComponentIterable {
         private final String spec;
         private final Feedback feedback;
         private final ComponentInfo catalogInfo;
-        private ComponentInfo fileInfo;
         private final boolean progress;
 
         private boolean verifyJars;
@@ -171,7 +170,6 @@ public class CatalogIterable implements ComponentIterable {
                     ComponentInfo i = super.createComponentInfo();
                     i.setRemoteURL(remoteURL);
                     complete = true;
-                    fileInfo = i;
                     return i;
                 }
 
@@ -217,7 +215,7 @@ public class CatalogIterable implements ComponentIterable {
 
         @Override
         public ComponentInfo getComponentInfo() {
-            return fileInfo != null ? fileInfo : catalogInfo;
+            return catalogInfo;
         }
 
         @Override

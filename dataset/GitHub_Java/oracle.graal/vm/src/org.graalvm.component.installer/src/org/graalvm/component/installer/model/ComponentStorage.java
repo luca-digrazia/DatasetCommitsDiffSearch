@@ -22,37 +22,58 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.component.installer;
+package org.graalvm.component.installer.model;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * Interface for individual commands.
+ * Serialization of {@link ComponentRegistry}.
  */
-public interface InstallerCommand {
-    /**
-     * Provides supported options for the command. The installer will fail if other options are
-     * specified on commandline than listed here. Place option specification into the Map under the
-     * option name's key. Parametrized options are not supported at this moment. Use empty string
-     * for parameter-less options.
-     * 
-     * @return supported options
-     */
-    Map<String, String> supportedOptions();
+public interface ComponentStorage {
 
     /**
-     * Executes a command.
+     * Deletes component's files.
      * 
-     * @param input access to parameters, options
-     * @param feedback output interface, use instead of Stderr, Stdout
+     * @param id component ID
+     * @throws IOException on load error
      */
-    void init(CommandInput input, Feedback feedback);
+    void deleteComponent(String id) throws IOException;
 
     /**
-     * Executes a command.
+     * Loads list of components.
      * 
-     * @throws IOException if file-level operation fails.
+     * @return set of component IDs
+     * @throws IOException when I/O fails
      */
-    int execute() throws IOException;
+    Set<String> listComponentIDs() throws IOException;
+
+    /**
+     * Loads component files into its metadata.
+     * 
+     * @param ci the component metadata
+     * @return the modified ComponentInfo
+     * @throws IOException on I/O errors
+     */
+    ComponentInfo loadComponentFiles(ComponentInfo ci) throws IOException;
+
+    /**
+     * Deserializes Component's metadata.
+     * 
+     * @param id component ID
+     * @return ComponentInfo instance
+     * @throws IOException on I/O errors
+     */
+    ComponentInfo loadComponentMetadata(String id) throws IOException;
+
+    Map<String, String> loadGraalVersionInfo();
+
+    Map<String, Collection<String>> readReplacedFiles() throws IOException;
+
+    void saveComponent(ComponentInfo info) throws IOException;
+
+    void updateReplacedFiles(Map<String, Collection<String>> replacedFiles) throws IOException;
+
 }

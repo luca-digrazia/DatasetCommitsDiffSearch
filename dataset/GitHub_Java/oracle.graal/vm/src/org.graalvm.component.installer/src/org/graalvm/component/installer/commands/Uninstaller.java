@@ -46,6 +46,10 @@ import org.graalvm.component.installer.Feedback;
 import org.graalvm.component.installer.model.ComponentInfo;
 import org.graalvm.component.installer.model.ComponentRegistry;
 
+/**
+ *
+ * @author sdedic
+ */
 public class Uninstaller {
     private final Feedback feedback;
     private final ComponentInfo componentInfo;

@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.text.MessageFormat;
 import java.util.ArrayList;
@@ -57,7 +58,6 @@ import static org.graalvm.component.installer.BundleConstants.META_INF_PATH;
 import static org.graalvm.component.installer.BundleConstants.META_INF_PERMISSIONS_PATH;
 import static org.graalvm.component.installer.BundleConstants.META_INF_SYMLINKS_PATH;
 import org.graalvm.component.installer.Feedback;
-import org.graalvm.component.installer.SystemUtils;
 import org.graalvm.component.installer.model.ComponentInfo;
 
 /**
@@ -213,8 +213,7 @@ public class ComponentPackageLoader implements Closeable, MetadataLoader {
                             info.addRequiredValues(parseHeader(BundleConstants.BUNDLE_REQUIRED).parseRequiredCapabilities());
                         },
                         () -> info.setPolyglotRebuild(parseHeader(BundleConstants.BUNDLE_POLYGLOT_PART, null).getBoolean(Boolean.FALSE)),
-                        () -> loadWorkingDirectories(),
-                        () -> loadMessages()
+                        () -> loadWorkingDirectories()
 
         );
         return info;
@@ -269,9 +268,9 @@ public class ComponentPackageLoader implements Closeable, MetadataLoader {
     @SuppressWarnings({"rawtypes", "unchecked"})
     Map<String, String> parseSymlinks(Properties links) {
         for (String key : new HashSet<>(links.stringPropertyNames())) {
-            Path p = SystemUtils.fromCommonString(key).normalize();
+            Path p = Paths.get(key).normalize();
             String prop = (String) links.remove(key);
-            links.setProperty(SystemUtils.toCommonPath(p), prop);
+            links.setProperty(p.toString(), prop);
         }
         if (noVerifySymlinks) {
             return new HashMap(links);
@@ -285,9 +284,9 @@ public class ComponentPackageLoader implements Closeable, MetadataLoader {
                     throw feedback.failure("ERROR_CircularSymlink", null, l);
                 }
                 String target = links.getProperty(l);
-                Path linkPath = SystemUtils.fromCommonString(l);
+                Path linkPath = Paths.get(l);
                 Path targetPath = linkPath.resolveSibling(target).normalize();
-                String targetString = SystemUtils.toCommonPath(targetPath);
+                String targetString = targetPath.toString();
                 if (fileList.contains(targetString)) {
                     break;
                 }
@@ -364,14 +363,6 @@ public class ComponentPackageLoader implements Closeable, MetadataLoader {
     public void close() throws IOException {
         if (jarFile != null) {
             jarFile.close();
-        }
-    }
-
-    private void loadMessages() {
-        String val = parseHeader(BundleConstants.BUNDLE_MESSAGE_POSTINST, null).getContents(null);
-        if (val != null) {
-            String text = val.replace("\\n", "\n").replace("\\\\", "\\"); // NOI18N
-            info.setPostinstMessage(text);
         }
     }
 }

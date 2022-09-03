@@ -32,7 +32,6 @@ import static org.graalvm.component.installer.BundleConstants.GRAALVM_CAPABILITY
 import org.graalvm.component.installer.ComponentInstaller;
 import org.graalvm.component.installer.DependencyException;
 import org.graalvm.component.installer.Feedback;
-import org.graalvm.component.installer.SuppressFBWarnings;
 
 public class Verifier {
     private final Feedback feedback;
@@ -110,7 +109,6 @@ public class Verifier {
     }
 
     @SuppressWarnings("StringEquality")
-    @SuppressFBWarnings(value = "ES_COMPARING_STRINGS_WITH_EQ", justification = "intentional comparison of strings using ==")
     public Verifier validateRequirements() {
         // check the component is not in the registry
         ComponentInfo existing = registry.findComponent(componentInfo.getId());

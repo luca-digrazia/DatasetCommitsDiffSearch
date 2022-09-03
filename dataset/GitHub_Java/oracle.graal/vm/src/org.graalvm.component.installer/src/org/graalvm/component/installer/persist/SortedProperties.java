@@ -22,29 +22,37 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.component.installer;
+package org.graalvm.component.installer.persist;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.Properties;
 
 /**
- * Constants which do not fit elsewhere.
+ * Provides sorted properties, for deterministic saves.
  */
-public class CommonConstants {
-    /**
-     * The installer's version. Printed as part of the help message.
-     */
-    public static final String INSTALLER_VERSION = "1.0.0"; // NOI18N
+public final class SortedProperties extends Properties {
 
-    public static final String CAP_GRAALVM_VERSION = "graalvm_version";
-    public static final String CAP_OS_ARCH = "os_arch";
-    public static final String CAP_OS_NAME = "os_name";
+    private static final long serialVersionUID = 1L;
 
-    /**
-     * Relative path for the component storage.
-     */
-    public static final String PATH_COMPONENT_STORAGE = "jre/lib/installer/components"; // NOI18N
-    // the trailing backspace is important !
-    public static final String PATH_POLYGLOT_REGISTRY = "jre/lib/installer/components/polyglot/"; // NOI18N
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public Enumeration<String> propertyNames() {
+        return (Enumeration) keys();
+    }
 
-    public static final String PATH_JRE_BIN = "jre/bin/"; // NOI18N
-
-    public static final String SYSPROP_CATALOG_URL = "org.graalvm.component.catalog"; // NOI18N
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public synchronized Enumeration<Object> keys() {
+        Enumeration<Object> keysEnum = super.keys();
+        List<String> keyList = new ArrayList<>();
+        while (keysEnum.hasMoreElements()) {
+            keyList.add((String) keysEnum.nextElement());
+        }
+        Collections.sort(keyList);
+        return Collections.enumeration((Collection) keyList);
+    }
 }
