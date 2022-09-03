@@ -25,12 +25,12 @@ package org.graalvm.compiler.lir.alloc.lsra;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
-import org.graalvm.compiler.lir.phases.AllocationPhase.AllocationContext;
+import org.graalvm.compiler.lir.phases.AllocationPhase;
 import org.graalvm.util.Pair;
 
 import jdk.vm.ci.code.TargetDescription;
 
-public final class LinearScanRegisterAllocationPhase extends LinearScanAllocationPhase {
+public final class LinearScanRegisterAllocationPhase extends AllocationPhase {
 
     private final LinearScan allocator;
 
@@ -57,7 +57,7 @@ public final class LinearScanRegisterAllocationPhase extends LinearScanAllocatio
 
             // allocate cpu registers
             LinearScanWalker lsw;
-            if (OptimizingLinearScanWalker.Options.LSRAOptimization.getValue(allocator.getOptions())) {
+            if (OptimizingLinearScanWalker.Options.LSRAOptimization.getValue()) {
                 lsw = new OptimizingLinearScanWalker(allocator, precoloredIntervals, notPrecoloredIntervals);
             } else {
                 lsw = new LinearScanWalker(allocator, precoloredIntervals, notPrecoloredIntervals);

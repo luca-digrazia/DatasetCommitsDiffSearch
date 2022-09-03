@@ -22,7 +22,6 @@
  */
 package org.graalvm.compiler.hotspot;
 
-import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.debug.GraalDebugConfig.areScopedGlobalMetricsEnabled;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.DebugValueSummary;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Dump;
@@ -50,6 +49,7 @@ import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.phases.tiers.CompilerConfiguration;
 import org.graalvm.compiler.replacements.SnippetCounter;
 import org.graalvm.compiler.runtime.RuntimeProvider;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
@@ -83,7 +83,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     private final HotSpotBackend hostBackend;
     private DebugValuesPrinter debugValuesPrinter;
 
-    private final EconomicMap<Class<? extends Architecture>, HotSpotBackend> backends = EconomicMap.create(Equivalence.IDENTITY);
+    private final EconomicMap<Class<? extends Architecture>, HotSpotBackend> backends = CollectionFactory.newMap(Equivalence.IDENTITY);
 
     private final GraalHotSpotVMConfig config;
 
@@ -95,7 +95,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     HotSpotGraalRuntime(HotSpotJVMCIRuntime jvmciRuntime, CompilerConfigurationFactory compilerConfigurationFactory) {
 
         HotSpotVMConfigStore store = jvmciRuntime.getConfigStore();
-        config = GeneratePIC.getValue() ? new AOTGraalHotSpotVMConfig(store) : new GraalHotSpotVMConfig(store);
+        config = new GraalHotSpotVMConfig(store);
         CompileTheWorldOptions.overrideWithNativeOptions(config);
 
         // Only set HotSpotPrintInlining if it still has its default value (false).

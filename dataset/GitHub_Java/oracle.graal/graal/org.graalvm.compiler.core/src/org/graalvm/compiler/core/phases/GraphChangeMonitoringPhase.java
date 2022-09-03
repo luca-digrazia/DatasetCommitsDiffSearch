@@ -33,6 +33,7 @@ import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.common.util.HashSetNodeEventListener;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicSet;
 
@@ -77,7 +78,7 @@ public class GraphChangeMonitoringPhase<C extends PhaseContext> extends PhaseSui
             }
         }
 
-        EconomicSet<Node> filteredNodes = EconomicSet.create(Equivalence.IDENTITY);
+        EconomicSet<Node> filteredNodes = CollectionFactory.newSet(Equivalence.IDENTITY);
         for (Node n : listener.getNodes()) {
             if (n instanceof LogicConstantNode) {
                 // Ignore LogicConstantNode since those are sometimes created and deleted as part of
@@ -91,12 +92,12 @@ public class GraphChangeMonitoringPhase<C extends PhaseContext> extends PhaseSui
             listener = new HashSetNodeEventListener();
             try (NodeEventScope s = graph.trackNodeEvents(listener)) {
                 try (Scope s2 = Debug.scope("WithGraphChangeMonitoring")) {
-                    if (Debug.isDumpEnabled(Debug.DETAILED_LOG_LEVEL)) {
-                        Debug.dump(Debug.DETAILED_LOG_LEVEL, graph, "*** Before phase %s", getName());
+                    if (Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL)) {
+                        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "*** Before phase %s", getName());
                     }
                     super.run(graph, context);
-                    if (Debug.isDumpEnabled(Debug.DETAILED_LOG_LEVEL)) {
-                        Debug.dump(Debug.DETAILED_LOG_LEVEL, graph, "*** After phase %s %s", getName(), filteredNodes);
+                    if (Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL)) {
+                        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "*** After phase %s %s", getName(), filteredNodes);
                     }
                     Debug.log("*** %s %s %s\n", message, graph, filteredNodes);
                 }

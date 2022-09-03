@@ -58,9 +58,10 @@ import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.salver.data.DataDict;
 import org.graalvm.compiler.salver.data.DataList;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
-import org.graalvm.util.UnmodifiableMapCursor;
+import org.graalvm.util.ImmutableMapCursor;
 
 public class GraphDumper extends AbstractMethodScopeDumper {
 
@@ -69,17 +70,16 @@ public class GraphDumper extends AbstractMethodScopeDumper {
     private static final EconomicMap<Class<?>, String> nodeClassCategoryMap;
 
     static {
-        EconomicMap<Class<?>, String> map = EconomicMap.create(Equivalence.IDENTITY);
-        map.put(ControlSinkNode.class, "ControlSink");
-        map.put(ControlSplitNode.class, "ControlSplit");
-        map.put(AbstractMergeNode.class, "Merge");
-        map.put(AbstractBeginNode.class, "Begin");
-        map.put(AbstractEndNode.class, "End");
-        map.put(FixedNode.class, "Fixed");
-        map.put(VirtualState.class, "State");
-        map.put(PhiNode.class, "Phi");
-        map.put(ProxyNode.class, "Proxy");
-        nodeClassCategoryMap = map;
+        nodeClassCategoryMap = CollectionFactory.newMap(Equivalence.IDENTITY);
+        nodeClassCategoryMap.put(ControlSinkNode.class, "ControlSink");
+        nodeClassCategoryMap.put(ControlSplitNode.class, "ControlSplit");
+        nodeClassCategoryMap.put(AbstractMergeNode.class, "Merge");
+        nodeClassCategoryMap.put(AbstractBeginNode.class, "Begin");
+        nodeClassCategoryMap.put(AbstractEndNode.class, "End");
+        nodeClassCategoryMap.put(FixedNode.class, "Fixed");
+        nodeClassCategoryMap.put(VirtualState.class, "State");
+        nodeClassCategoryMap.put(PhiNode.class, "Phi");
+        nodeClassCategoryMap.put(ProxyNode.class, "Proxy");
     }
 
     @Override
@@ -357,7 +357,7 @@ public class GraphDumper extends AbstractMethodScopeDumper {
     }
 
     private static String getNodeClassCategory(Class<?> clazz) {
-        UnmodifiableMapCursor<Class<?>, String> cursor = nodeClassCategoryMap.getEntries();
+        ImmutableMapCursor<Class<?>, String> cursor = nodeClassCategoryMap.getEntries();
         while (cursor.advance()) {
             if (cursor.getKey().isAssignableFrom(clazz)) {
                 return cursor.getValue();

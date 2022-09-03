@@ -40,10 +40,11 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 import org.graalvm.util.EconomicSet;
-import org.graalvm.util.UnmodifiableMapCursor;
+import org.graalvm.util.ImmutableMapCursor;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.MetaUtil;
@@ -493,7 +494,7 @@ public class InvocationPlugins {
 
     private final MetaAccessProvider metaAccess;
 
-    private final EconomicMap<String, ClassPlugins> registrations = EconomicMap.create(Equivalence.DEFAULT);
+    private final EconomicMap<String, ClassPlugins> registrations = CollectionFactory.newMap(Equivalence.DEFAULT);
 
     /**
      * Deferred registrations as well as guard for initialization. The guard uses double-checked
@@ -532,14 +533,14 @@ public class InvocationPlugins {
         void initializeMap() {
             if (!isClosed()) {
                 if (registrations.isEmpty()) {
-                    entries = EconomicMap.create(Equivalence.DEFAULT);
+                    entries = CollectionFactory.newMap(Equivalence.DEFAULT);
                 } else {
                     Class<?> declaringClass = resolveType(declaringType, true);
                     if (declaringClass == null) {
                         // An optional type that could not be resolved
-                        entries = EconomicMap.create(Equivalence.DEFAULT);
+                        entries = CollectionFactory.newMap(Equivalence.DEFAULT);
                     } else {
-                        EconomicMap<ResolvedJavaMethodKey, InvocationPlugin> newEntries = EconomicMap.create(Equivalence.DEFAULT);
+                        EconomicMap<ResolvedJavaMethodKey, InvocationPlugin> newEntries = CollectionFactory.newMap(Equivalence.DEFAULT);
                         for (MethodKey methodKey : registrations) {
                             ResolvedJavaMethod m = methodKey.resolve(declaringClass);
                             if (m != null) {
@@ -693,7 +694,7 @@ public class InvocationPlugins {
             if (classPlugins == null) {
                 classPlugins = new ClassPlugins(null);
                 registrations.put(internalName, classPlugins);
-                classPlugins.entries = EconomicMap.create(Equivalence.DEFAULT);
+                classPlugins.entries = CollectionFactory.newMap(Equivalence.DEFAULT);
             }
 
             classPlugins.entries.put(new ResolvedJavaMethodKey(method), plugin);
@@ -768,7 +769,7 @@ public class InvocationPlugins {
      * is called, no further registrations can be made.
      */
     public EconomicSet<ResolvedJavaMethod> getMethods() {
-        EconomicSet<ResolvedJavaMethod> res = EconomicSet.create(Equivalence.DEFAULT);
+        EconomicSet<ResolvedJavaMethod> res = CollectionFactory.newSet(Equivalence.DEFAULT);
         if (parent != null) {
             res.addAll(parent.getMethods());
         }
@@ -792,7 +793,7 @@ public class InvocationPlugins {
     @Override
     public String toString() {
         StringBuilder buf = new StringBuilder();
-        UnmodifiableMapCursor<String, ClassPlugins> entries = registrations.getEntries();
+        ImmutableMapCursor<String, ClassPlugins> entries = registrations.getEntries();
         while (entries.advance()) {
             buf.append(entries.getKey()).append('.').append(entries.getValue()).append(", ");
         }

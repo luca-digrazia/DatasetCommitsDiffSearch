@@ -69,6 +69,7 @@ import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionValue;
 import org.graalvm.compiler.options.StableOptionValue;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
@@ -826,7 +827,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             newNodes = new NodeMap<>(oldGraph);
         } else {
             // Use sparse map
-            newNodes = EconomicMap.create(Equivalence.IDENTITY);
+            newNodes = CollectionFactory.newMap(Equivalence.IDENTITY);
         }
         createNodeDuplicates(graph, nodes, replacements, newNodes);
 
@@ -1098,25 +1099,6 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
                     return new RawEdgesIterator(node, mask);
                 }
             }
-
-            @Override
-            public String toString() {
-                StringBuilder sb = new StringBuilder();
-                Iterator<Node> iterator = iterator();
-                boolean first = true;
-                sb.append("succs=");
-                sb.append('[');
-                while (iterator.hasNext()) {
-                    Node input = iterator.next();
-                    if (!first) {
-                        sb.append(", ");
-                    }
-                    sb.append(input);
-                    first = false;
-                }
-                sb.append(']');
-                return sb.toString();
-            }
         };
     }
 
@@ -1131,25 +1113,6 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
                 } else {
                     return new RawEdgesIterator(node, mask);
                 }
-            }
-
-            @Override
-            public String toString() {
-                StringBuilder sb = new StringBuilder();
-                Iterator<Node> iterator = iterator();
-                boolean first = true;
-                sb.append("inputs=");
-                sb.append('[');
-                while (iterator.hasNext()) {
-                    Node input = iterator.next();
-                    if (!first) {
-                        sb.append(", ");
-                    }
-                    sb.append(input);
-                    first = false;
-                }
-                sb.append(']');
-                return sb.toString();
             }
         };
     }

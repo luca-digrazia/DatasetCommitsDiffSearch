@@ -23,41 +23,16 @@
 package org.graalvm.util.impl;
 
 import java.util.Iterator;
-import java.util.Objects;
 import java.util.function.BiFunction;
 
-import org.graalvm.util.Equivalence;
+import org.graalvm.util.CompareStrategy;
 import org.graalvm.util.EconomicMap;
 import org.graalvm.util.EconomicSet;
-import org.graalvm.util.UnmodifiableEconomicMap;
-import org.graalvm.util.UnmodifiableEconomicSet;
+import org.graalvm.util.ImmutableEconomicMap;
+import org.graalvm.util.ImmutableEconomicSet;
+import org.graalvm.util.ImmutableMapCursor;
 import org.graalvm.util.MapCursor;
 
-/**
- * Implementation of a map with a memory-efficient structure that always preserves insertion order
- * when iterating over keys. Particularly efficient when number of entries is 0 or smaller equal
- * {@link #INITIAL_CAPACITY} or smaller 256.
- *
- * The key/value pairs are kept in an expanding flat object array with keys at even indices and
- * values at odd indices. If the map has smaller or equal to {@link #HASH_THRESHOLD} entries, there
- * is no additional hash data structure and comparisons are done via linear checking of the
- * key/value pairs. For the case where the equality check is particularly cheap (e.g., just an
- * object identity comparison), this limit below which the map is without an actual hash table is
- * higher and configured at {@link #HASH_THRESHOLD_IDENTITY_COMPARE}.
- *
- * When the hash table needs to be constructed, the field {@link #hashArray} becomes a new hash
- * array where an entry of 0 means no hit and otherwise denotes the entry number in the
- * {@link #entries} array. The hash array is interpreted as an actual byte array if the indices fit
- * within 8 bit, or as an array of short values if the indices fit within 16 bit, or as an array of
- * integer values in other cases.
- *
- * Hash collisions are handled by chaining a linked list of {@link CollisionLink} objects that take
- * the place of the values in the {@link #entries} array.
- *
- * Removing entries will put {@code null} into the {@link #entries} array. If the occupation of the
- * map falls below a specific threshold, the map will be compressed via the
- * {@link #maybeCompress(int)} method.
- */
 public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicSet<K> {
 
     /**
@@ -124,9 +99,9 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
 
     /**
      * The strategy used for comparing keys or {@code null} for denoting special strategy
-     * {@link Equivalence#IDENTITY}.
+     * {@link CompareStrategy#IDENTITY}.
      */
-    private final Equivalence strategy;
+    private final CompareStrategy strategy;
 
     /**
      * Intercept method for debugging purposes.
@@ -135,69 +110,72 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
         return map;
     }
 
-    public static <K, V> EconomicMapImpl<K, V> create(Equivalence strategy) {
+    public static <K, V> EconomicMapImpl<K, V> create(CompareStrategy strategy) {
         return intercept(new EconomicMapImpl<>(strategy));
     }
 
-    public static <K, V> EconomicMapImpl<K, V> create(Equivalence strategy, int initialCapacity) {
+    public static <K, V> EconomicMapImpl<K, V> create(CompareStrategy strategy, int initialCapacity) {
         return intercept(new EconomicMapImpl<>(strategy, initialCapacity));
     }
 
-    public static <K, V> EconomicMapImpl<K, V> create(Equivalence strategy, UnmodifiableEconomicMap<K, V> other) {
+    public static <K, V> EconomicMapImpl<K, V> create(CompareStrategy strategy, ImmutableEconomicMap<K, V> other) {
         return intercept(new EconomicMapImpl<>(strategy, other));
     }
 
-    public static <K, V> EconomicMapImpl<K, V> create(Equivalence strategy, UnmodifiableEconomicSet<K> other) {
+    public static <K, V> EconomicMapImpl<K, V> create(CompareStrategy strategy, ImmutableEconomicSet<K> other) {
         return intercept(new EconomicMapImpl<>(strategy, other));
     }
 
-    private EconomicMapImpl(Equivalence strategy) {
-        if (strategy == Equivalence.IDENTITY) {
+    private EconomicMapImpl(CompareStrategy strategy) {
+        if (strategy == CompareStrategy.IDENTITY) {
             this.strategy = null;
         } else {
             this.strategy = strategy;
         }
     }
 
-    private EconomicMapImpl(Equivalence strategy, int initialCapacity) {
+    private EconomicMapImpl(CompareStrategy strategy, int initialCapacity) {
         this(strategy);
         init(initialCapacity);
     }
 
-    private EconomicMapImpl(Equivalence strategy, UnmodifiableEconomicMap<K, V> other) {
+    private EconomicMapImpl(CompareStrategy strategy, ImmutableEconomicMap<K, V> other) {
         this(strategy);
-        if (!initFrom(other)) {
-            init(other.size());
-            putAll(other);
-        }
-    }
-
-    private EconomicMapImpl(Equivalence strategy, UnmodifiableEconomicSet<K> other) {
-        this(strategy);
-        if (!initFrom(other)) {
+        if (other instanceof EconomicMapImpl) {
+            initFrom((EconomicMapImpl<K, V>) other);
+        } else {
             init(other.size());
             addAll(other);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private boolean initFrom(Object o) {
-        if (o instanceof EconomicMapImpl) {
-            EconomicMapImpl<K, V> otherMap = (EconomicMapImpl<K, V>) o;
-            // We are only allowed to directly copy if the strategies of the two maps are the same.
-            if (strategy == otherMap.strategy) {
-                totalEntries = otherMap.totalEntries;
-                deletedEntries = otherMap.deletedEntries;
-                if (otherMap.entries != null) {
-                    entries = otherMap.entries.clone();
-                }
-                if (otherMap.hashArray != null) {
-                    hashArray = otherMap.hashArray.clone();
-                }
-                return true;
-            }
+    private EconomicMapImpl(CompareStrategy strategy, ImmutableEconomicSet<K> other) {
+        this(strategy);
+        if (other instanceof EconomicMapImpl) {
+            initFrom((EconomicMapImpl<K, V>) other);
+        } else {
+            init(other.size());
+            addAll(other);
         }
-        return false;
+    }
+
+    private void addAll(ImmutableEconomicMap<K, V> other) {
+        ImmutableMapCursor<K, V> entry = other.getEntries();
+        while (entry.advance()) {
+            put(entry.getKey(), entry.getValue());
+        }
+    }
+
+    private void initFrom(EconomicMapImpl<K, V> otherMap) {
+        totalEntries = otherMap.totalEntries;
+        deletedEntries = otherMap.deletedEntries;
+        if (otherMap.entries != null) {
+            entries = otherMap.entries.clone();
+        }
+        if (otherMap.hashArray != null) {
+            hashArray = otherMap.hashArray.clone();
+        }
     }
 
     private void init(int size) {
@@ -228,8 +206,9 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
     @SuppressWarnings("unchecked")
     @Override
     public V get(K key) {
-        Objects.requireNonNull(key);
-
+        if (key == null) {
+            throw new UnsupportedOperationException("null not supported as key!");
+        }
         int index = find(key);
         if (index != -1) {
             return (V) getValue(index);
@@ -259,8 +238,8 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
         if (key == entryKey) {
             return true;
         }
-        if (strategy != null && strategy != Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE) {
-            if (strategy == Equivalence.DEFAULT) {
+        if (strategy != null && strategy != CompareStrategy.IDENTITY_WITH_SYSTEM_HASHCODE) {
+            if (strategy == CompareStrategy.EQUALS) {
                 return key.equals(entryKey);
             } else {
                 return strategy.equals(key, entryKey);
@@ -392,8 +371,8 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
 
     private int getHashIndex(Object key) {
         int hash;
-        if (strategy != null && strategy != Equivalence.DEFAULT) {
-            if (strategy == Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE) {
+        if (strategy != null && strategy != CompareStrategy.EQUALS) {
+            if (strategy == CompareStrategy.IDENTITY_WITH_SYSTEM_HASHCODE) {
                 hash = System.identityHashCode(key);
             } else {
                 hash = strategy.hashCode(key);
@@ -448,7 +427,7 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
      * Number of entries above which a hash table should be constructed.
      */
     private int getHashThreshold() {
-        if (strategy == null || strategy == Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE) {
+        if (strategy == null || strategy == CompareStrategy.IDENTITY_WITH_SYSTEM_HASHCODE) {
             return HASH_THRESHOLD_IDENTITY_COMPARE;
         } else {
             return HASH_THRESHOLD;
@@ -456,6 +435,10 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
     }
 
     private void grow() {
+        if (maybeCompress()) {
+            return;
+        }
+
         int entriesLength = entries.length;
         int newSize = (entriesLength >> 1) + Math.max(MIN_CAPACITY_INCREASE, entriesLength >> 2);
         if (newSize > MAX_ELEMENT_COUNT) {
@@ -471,21 +454,15 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
         }
     }
 
-    /**
-     * Compresses the graph if there is a large number of deleted entries and returns the translated
-     * new next index.
-     */
-    private int maybeCompress(int nextIndex) {
+    private boolean maybeCompress() {
         if (entries.length != INITIAL_CAPACITY << 1 && deletedEntries >= (totalEntries >> 1) + (totalEntries >> 2)) {
-            return compressLarge(nextIndex);
+            compressLarge();
+            return true;
         }
-        return nextIndex;
+        return false;
     }
 
-    /**
-     * Compresses the graph and returns the translated new next index.
-     */
-    private int compressLarge(int nextIndex) {
+    private void compressLarge() {
         int size = INITIAL_CAPACITY;
         int remaining = totalEntries - deletedEntries;
 
@@ -495,12 +472,8 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
 
         Object[] newEntries = new Object[size << 1];
         int z = 0;
-        int newNextIndex = remaining;
         for (int i = 0; i < totalEntries; ++i) {
             Object key = getKey(i);
-            if (i == nextIndex) {
-                newNextIndex = z;
-            }
             if (key != null) {
                 newEntries[z << 1] = key;
                 newEntries[(z << 1) + 1] = getValue(i);
@@ -516,7 +489,6 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
         } else {
             createHash();
         }
-        return newNextIndex;
     }
 
     private int getHashTableSize() {
@@ -623,19 +595,15 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
         if (index != -1) {
             Object value = getValue(index);
             remove(index);
+            maybeCompress();
             return (V) value;
         }
         return null;
     }
 
-    /**
-     * Removes the element at the specific index and returns the index of the next element. This can
-     * be a different value if graph compression was triggered.
-     */
-    private int remove(int indexToRemove) {
+    private void remove(int indexToRemove) {
         int index = indexToRemove;
         int entriesAfterIndex = totalEntries - index - 1;
-        int result = index + 1;
 
         // Without hash array, compress immediately.
         if (entriesAfterIndex <= COMPRESS_IMMEDIATE_CAPACITY && !hasHashArray()) {
@@ -644,7 +612,6 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
                 setRawValue(index, getRawValue(index + 1));
                 index++;
             }
-            result--;
         }
 
         setKey(index, null);
@@ -659,10 +626,7 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
             }
         } else {
             deletedEntries++;
-            result = maybeCompress(result);
         }
-
-        return result;
     }
 
     private abstract class SparseMapIterator<E> implements Iterator<E> {
@@ -679,7 +643,12 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
             if (hasHashArray()) {
                 EconomicMapImpl.this.findAndRemoveHash(getKey(current - 1));
             }
-            current = EconomicMapImpl.this.remove(current - 1);
+            int oldTotal = totalEntries;
+            EconomicMapImpl.this.remove(current - 1);
+            if (oldTotal != totalEntries) {
+                // Compression happened.
+                current--;
+            }
         }
     }
 
@@ -756,7 +725,12 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
                 if (hasHashArray()) {
                     EconomicMapImpl.this.findAndRemoveHash(EconomicMapImpl.this.getKey(current));
                 }
-                current = EconomicMapImpl.this.remove(current) - 1;
+                int oldTotal = totalEntries;
+                EconomicMapImpl.this.remove(current);
+                if (oldTotal != totalEntries) {
+                    // Compression happened.
+                    current--;
+                }
             }
         };
     }
@@ -837,6 +811,13 @@ public final class EconomicMapImpl<K, V> implements EconomicMap<K, V>, EconomicS
     @Override
     public boolean contains(K element) {
         return containsKey(element);
+    }
+
+    @Override
+    public void addAll(Iterable<K> values) {
+        for (K k : values) {
+            add(k);
+        }
     }
 
     @SuppressWarnings("unchecked")

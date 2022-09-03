@@ -26,13 +26,11 @@ import java.util.Iterator;
 
 import org.graalvm.compiler.core.common.LocationIdentity;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
-/**
- * This class maintains a set of known values, identified by base object, locations and offset.
- */
-public final class ReadEliminationBlockState extends EffectsBlockState<ReadEliminationBlockState> {
+public class ReadEliminationBlockState extends EffectsBlockState<ReadEliminationBlockState> {
 
     final EconomicMap<CacheEntry<?>, ValueNode> readCache;
 
@@ -73,7 +71,7 @@ public final class ReadEliminationBlockState extends EffectsBlockState<ReadElimi
         public abstract LocationIdentity getIdentity();
     }
 
-    static final class LoadCacheEntry extends CacheEntry<LocationIdentity> {
+    static class LoadCacheEntry extends CacheEntry<LocationIdentity> {
 
         LoadCacheEntry(ValueNode object, LocationIdentity identity) {
             super(object, identity);
@@ -100,7 +98,7 @@ public final class ReadEliminationBlockState extends EffectsBlockState<ReadElimi
      * identity are separate so both must be considered when looking for optimizable memory
      * accesses.
      */
-    static final class UnsafeLoadCacheEntry extends CacheEntry<ValueNode> {
+    static class UnsafeLoadCacheEntry extends CacheEntry<ValueNode> {
 
         private final LocationIdentity locationIdentity;
 
@@ -146,11 +144,11 @@ public final class ReadEliminationBlockState extends EffectsBlockState<ReadElimi
     }
 
     public ReadEliminationBlockState() {
-        readCache = EconomicMap.create(Equivalence.DEFAULT);
+        readCache = CollectionFactory.newMap(Equivalence.DEFAULT);
     }
 
     public ReadEliminationBlockState(ReadEliminationBlockState other) {
-        readCache = EconomicMap.create(Equivalence.DEFAULT, other.readCache);
+        readCache = CollectionFactory.newMap(Equivalence.DEFAULT, other.readCache);
     }
 
     @Override

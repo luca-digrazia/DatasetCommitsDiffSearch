@@ -135,7 +135,6 @@ import jdk.vm.ci.meta.Local;
 import jdk.vm.ci.meta.LocalVariableTable;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaMethod.Parameter;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Signature;
 
@@ -191,29 +190,21 @@ public class SnippetTemplate {
 
             private boolean initNames(ResolvedJavaMethod method, int parameterCount) {
                 names = new String[parameterCount];
-                Parameter[] params = method.getParameters();
-                if (params != null) {
+                int slotIdx = 0;
+                LocalVariableTable localVariableTable = method.getLocalVariableTable();
+                if (localVariableTable != null) {
                     for (int i = 0; i < names.length; i++) {
-                        if (params[i].isNamePresent()) {
-                            names[i] = params[i].getName();
+                        Local local = localVariableTable.getLocal(slotIdx, 0);
+                        if (local != null) {
+                            names[i] = local.getName();
                         }
-                    }
-                } else {
-                    int slotIdx = 0;
-                    LocalVariableTable localVariableTable = method.getLocalVariableTable();
-                    if (localVariableTable != null) {
-                        for (int i = 0; i < names.length; i++) {
-                            Local local = localVariableTable.getLocal(slotIdx, 0);
-                            if (local != null) {
-                                names[i] = local.getName();
-                            }
-                            JavaKind kind = method.getSignature().getParameterKind(i);
-                            slotIdx += kind.getSlotCount();
-                        }
+                        JavaKind kind = method.getSignature().getParameterKind(i);
+                        slotIdx += kind.getSlotCount();
                     }
                 }
                 return true;
             }
+
         }
 
         /**

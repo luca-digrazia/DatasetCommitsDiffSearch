@@ -28,7 +28,6 @@ import java.util.Deque;
 import java.util.List;
 import java.util.function.Predicate;
 
-import org.graalvm.compiler.common.PermanentBailoutException;
 import org.graalvm.compiler.common.RetryableBailoutException;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.util.CompilationAlarm;
@@ -37,6 +36,7 @@ import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.cfg.Block;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
@@ -99,18 +99,14 @@ public final class ReentrantBlockIterator {
         /*
          * States are stored on EndNodes before merges, and on BeginNodes after ControlSplitNodes.
          */
-        EconomicMap<FixedNode, StateT> states = EconomicMap.create(Equivalence.IDENTITY);
+        EconomicMap<FixedNode, StateT> states = CollectionFactory.newMap(Equivalence.IDENTITY);
 
         StateT state = initialState;
         Block current = start;
 
         while (true) {
             if (CompilationAlarm.hasExpired()) {
-                if (CompilationAlarm.Options.CompilationExpirationPeriod.getValue() > 120) {
-                    throw new PermanentBailoutException("Compilation exceeded %d seconds during CFG traversal", CompilationAlarm.Options.CompilationExpirationPeriod.getValue());
-                } else {
-                    throw new RetryableBailoutException("Compilation exceeded %d seconds during CFG traversal", CompilationAlarm.Options.CompilationExpirationPeriod.getValue());
-                }
+                throw new RetryableBailoutException("Compilation exceeded %d seconds during CFG traversal", CompilationAlarm.Options.CompilationExpirationPeriod.getValue());
             }
             Block next = null;
             if (stopAtBlock != null && stopAtBlock.test(current)) {

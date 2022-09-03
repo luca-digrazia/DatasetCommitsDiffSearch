@@ -22,6 +22,8 @@
  */
 package org.graalvm.compiler.hotspot;
 
+import static org.graalvm.compiler.hotspot.stubs.StubUtil.newDescriptor;
+
 import java.util.EnumSet;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
@@ -32,6 +34,8 @@ import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.graph.Node.ConstantNodeParameter;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
+import org.graalvm.compiler.hotspot.nodes.DeoptimizationFetchUnrollInfoCallNode;
+import org.graalvm.compiler.hotspot.nodes.UncommonTrapCallNode;
 import org.graalvm.compiler.hotspot.nodes.VMErrorNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveConstantStubCall;
 import org.graalvm.compiler.hotspot.replacements.AESCryptSubstitutions;
@@ -40,6 +44,7 @@ import org.graalvm.compiler.hotspot.replacements.CipherBlockChainingSubstitution
 import org.graalvm.compiler.hotspot.replacements.SHA2Substitutions;
 import org.graalvm.compiler.hotspot.replacements.SHA5Substitutions;
 import org.graalvm.compiler.hotspot.replacements.SHASubstitutions;
+import org.graalvm.compiler.hotspot.stubs.DeoptimizationStub;
 import org.graalvm.compiler.hotspot.stubs.ExceptionHandlerStub;
 import org.graalvm.compiler.hotspot.stubs.Stub;
 import org.graalvm.compiler.hotspot.stubs.UnwindExceptionToCallerStub;
@@ -58,12 +63,12 @@ import org.graalvm.compiler.lir.framemap.FrameMap;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.options.OptionValue;
 import org.graalvm.compiler.phases.tiers.SuitesProvider;
 import org.graalvm.compiler.word.Pointer;
 import org.graalvm.compiler.word.Word;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 import org.graalvm.util.EconomicSet;
@@ -89,11 +94,13 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
 
     public static class Options {
         // @formatter:off
+        @Option(help = "Use Graal stubs instead of HotSpot stubs where possible")
+        public static final OptionValue<Boolean> PreferGraalStubs = new OptionValue<>(false);
         @Option(help = "Use Graal arithmetic stubs instead of HotSpot stubs where possible")
-        public static final OptionKey<Boolean> GraalArithmeticStubs = new OptionKey<>(true);
+        public static final OptionValue<Boolean> GraalArithmeticStubs = new OptionValue<>(true);
         @Option(help = "Enables instruction profiling on assembler level. Valid values are a comma separated list of supported instructions." +
                         " Compare with subclasses of Assembler.InstructionCounter.", type = OptionType.Debug)
-        public static final OptionKey<String> ASMInstructionProfiling = new OptionKey<>(null);
+        public static final OptionValue<String> ASMInstructionProfiling = new OptionValue<>(null);
         // @formatter:on
     }
 
@@ -126,6 +133,16 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
     public static final ForeignCallDescriptor EXCEPTION_HANDLER_IN_CALLER = new ForeignCallDescriptor("exceptionHandlerInCaller", void.class, Object.class, Word.class);
 
     private final HotSpotGraalRuntimeProvider runtime;
+
+    /**
+     * @see DeoptimizationFetchUnrollInfoCallNode
+     */
+    public static final ForeignCallDescriptor FETCH_UNROLL_INFO = new ForeignCallDescriptor("fetchUnrollInfo", Word.class, long.class, int.class);
+
+    /**
+     * @see DeoptimizationStub#unpackFrames(ForeignCallDescriptor, Word, int)
+     */
+    public static final ForeignCallDescriptor UNPACK_FRAMES = newDescriptor(DeoptimizationStub.class, "unpackFrames", int.class, Word.class, int.class);
 
     /**
      * @see AESCryptSubstitutions#encryptBlockStub(ForeignCallDescriptor, Word, Word, Pointer)
@@ -303,6 +320,11 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
     public static final ForeignCallDescriptor INVOCATION_EVENT = new ForeignCallDescriptor("invocation_event", void.class, MethodCountersPointer.class);
     public static final ForeignCallDescriptor BACKEDGE_EVENT = new ForeignCallDescriptor("backedge_event", void.class, MethodCountersPointer.class, int.class, int.class);
 
+    /**
+     * @see UncommonTrapCallNode
+     */
+    public static final ForeignCallDescriptor UNCOMMON_TRAP = new ForeignCallDescriptor("uncommonTrap", Word.class, Word.class, int.class, int.class);
+
     public HotSpotBackend(HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
         super(providers);
         this.runtime = runtime;
@@ -317,9 +339,8 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
      * runtime} object was initialized and this backend was registered with it.
      *
      * @param jvmciRuntime
-     * @param options
      */
-    public void completeInitialization(HotSpotJVMCIRuntime jvmciRuntime, OptionValues options) {
+    public void completeInitialization(HotSpotJVMCIRuntime jvmciRuntime) {
     }
 
     /**
@@ -329,7 +350,7 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
      * @return the registers that are defined by or used as temps for any instruction in {@code lir}
      */
     protected final EconomicSet<Register> gatherDestroyedCallerRegisters(LIR lir) {
-        final EconomicSet<Register> destroyedRegisters = EconomicSet.create(Equivalence.IDENTITY);
+        final EconomicSet<Register> destroyedRegisters = CollectionFactory.newSet(Equivalence.IDENTITY);
         ValueConsumer defConsumer = new ValueConsumer() {
 
             @Override
@@ -398,7 +419,7 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
     }
 
     protected void profileInstructions(LIR lir, CompilationResultBuilder crb) {
-        if (HotSpotBackend.Options.ASMInstructionProfiling.getValue(lir.getOptions()) != null) {
+        if (HotSpotBackend.Options.ASMInstructionProfiling.getValue() != null) {
             HotSpotInstructionProfiling.countInstructions(lir, crb.asm);
         }
     }

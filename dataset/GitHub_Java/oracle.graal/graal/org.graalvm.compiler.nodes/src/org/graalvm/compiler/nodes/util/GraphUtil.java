@@ -22,6 +22,9 @@
  */
 package org.graalvm.compiler.nodes.util;
 
+import static org.graalvm.compiler.graph.Graph.Options.VerifyGraalGraphEdges;
+import static org.graalvm.compiler.nodes.util.GraphUtil.Options.VerifyKillCFGUnusedNodes;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -66,8 +69,8 @@ import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValue;
 import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.EconomicSet;
 import org.graalvm.util.Equivalence;
+import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodePosition;
@@ -90,10 +93,10 @@ public class GraphUtil {
             EconomicSet<Node> unusedNodes = null;
             EconomicSet<Node> unsafeNodes = null;
             Graph.NodeEventScope nodeEventScope = null;
-            if (Graph.Options.VerifyGraalGraphEdges.getValue()) {
+            if (VerifyGraalGraphEdges.getValue()) {
                 unsafeNodes = collectUnsafeNodes(node.graph());
             }
-            if (GraphUtil.Options.VerifyKillCFGUnusedNodes.getValue()) {
+            if (VerifyKillCFGUnusedNodes.getValue()) {
                 EconomicSet<Node> collectedUnusedNodes = unusedNodes = CollectionFactory.newSet(Equivalence.IDENTITY);
                 nodeEventScope = node.graph().trackNodeEvents(new Graph.NodeEventListener() {
                     @Override
@@ -111,12 +114,12 @@ public class GraphUtil {
                     killCFG(n, tool, worklist);
                 }
             }
-            if (Graph.Options.VerifyGraalGraphEdges.getValue()) {
+            if (VerifyGraalGraphEdges.getValue()) {
                 EconomicSet<Node> newUnsafeNodes = collectUnsafeNodes(node.graph());
                 newUnsafeNodes.removeAll(unsafeNodes);
                 assert newUnsafeNodes.isEmpty() : "New unsafe nodes: " + newUnsafeNodes;
             }
-            if (GraphUtil.Options.VerifyKillCFGUnusedNodes.getValue()) {
+            if (VerifyKillCFGUnusedNodes.getValue()) {
                 nodeEventScope.close();
                 Iterator<Node> iterator = unusedNodes.iterator();
                 while (iterator.hasNext()) {

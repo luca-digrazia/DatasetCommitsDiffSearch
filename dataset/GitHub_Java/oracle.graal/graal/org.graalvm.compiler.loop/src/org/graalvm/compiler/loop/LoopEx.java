@@ -76,6 +76,7 @@ import org.graalvm.util.EconomicMap;
 import jdk.vm.ci.code.BytecodeFrame;
 
 public class LoopEx {
+
     private final Loop<Block> loop;
     private LoopFragmentInside inside;
     private LoopFragmentWhole whole;
@@ -339,8 +340,8 @@ public class LoopEx {
         LoopBeginNode loopBegin = loop.loopBegin();
         AbstractEndNode forwardEnd = loopBegin.forwardEnd();
         for (PhiNode phi : loopBegin.valuePhis()) {
-            ValueNode backValue = phi.singleBackValueOrThis();
-            if (backValue == phi) {
+            ValueNode backValue = phi.singleBackValue();
+            if (backValue == PhiNode.MULTIPLE_VALUES) {
                 continue;
             }
             ValueNode stride = addSub(loop, backValue, phi);

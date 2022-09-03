@@ -42,6 +42,7 @@ import org.graalvm.compiler.lir.StandardOp.ValueMoveOp;
 import org.graalvm.compiler.lir.framemap.FrameMap;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.phases.PostAllocationOptimizationPhase;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
@@ -103,7 +104,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
 
     private static final class Optimization {
 
-        EconomicMap<AbstractBlockBase<?>, BlockData> blockData = EconomicMap.create(Equivalence.IDENTITY);
+        EconomicMap<AbstractBlockBase<?>, BlockData> blockData = CollectionFactory.newMap(Equivalence.IDENTITY);
 
         RegisterArray callerSaveRegs;
 
@@ -116,7 +117,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
          * A map from the {@link StackSlot} {@link #getOffset offset} to an index into the state.
          * StackSlots of different kinds that map to the same location will map to the same index.
          */
-        EconomicMap<Integer, Integer> stackIndices = EconomicMap.create(Equivalence.DEFAULT);
+        EconomicMap<Integer, Integer> stackIndices = CollectionFactory.newMap(Equivalence.DEFAULT);
 
         int numRegs;
 
@@ -217,7 +218,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
         /**
          * Calculates the entry and exit states for all basic blocks.
          *
-         * @return Returns true on success and false if the control flow is too complex.
+         * @return Returns true on success and false if the the control flow is too complex.
          */
         @SuppressWarnings("try")
         private boolean solveDataFlow(LIR lir) {
@@ -385,7 +386,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
                     int sourceIdx = getStateIdx(moveOp.getInput());
                     int destIdx = getStateIdx(moveOp.getResult());
                     if (sourceIdx >= 0 && destIdx >= 0) {
-                        assert isObjectValue(state[sourceIdx]) || LIRKind.isValue(moveOp.getInput()) : "move op moves object but input is not defined as object " + moveOp;
+                        assert isObjectValue(state[sourceIdx]) || LIRKind.isValue(moveOp.getInput()) : "move op moves object but input is not defined as object";
                         state[destIdx] = state[sourceIdx];
                         Debug.log("move value %d from %d to %d", state[sourceIdx], sourceIdx, destIdx);
                         return initValueNum;

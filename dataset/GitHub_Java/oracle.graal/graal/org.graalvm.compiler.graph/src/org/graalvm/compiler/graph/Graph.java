@@ -390,18 +390,17 @@ public class Graph {
         return add(node);
     }
 
+    public <T extends Node> T addWithoutUniqueWithInputs(T node) {
+        addInputs(node);
+        return addHelper(node);
+    }
+
     public <T extends Node> T addOrUniqueWithInputs(T node) {
-        if (node.isAlive()) {
-            assert node.graph() == this;
-            return node;
-        } else {
-            assert node.isUnregistered();
-            addInputs(node);
-            if (node.getNodeClass().valueNumberable()) {
-                return uniqueHelper(node);
-            }
-            return add(node);
+        addInputs(node);
+        if (node.getNodeClass().valueNumberable()) {
+            return uniqueHelper(node);
         }
+        return add(node);
     }
 
     private final class AddInputsFilter extends Node.EdgeVisitor {

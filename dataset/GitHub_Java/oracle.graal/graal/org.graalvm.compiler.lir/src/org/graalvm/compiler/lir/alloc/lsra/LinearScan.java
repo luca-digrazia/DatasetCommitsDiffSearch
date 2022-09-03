@@ -56,11 +56,10 @@ import org.graalvm.compiler.lir.framemap.FrameMapBuilder;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool.MoveFactory;
 import org.graalvm.compiler.lir.phases.AllocationPhase.AllocationContext;
-import org.graalvm.compiler.options.NestedBooleanOptionKey;
+import org.graalvm.compiler.options.NestedBooleanOptionValue;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.options.OptionValue;
 import org.graalvm.util.Pair;
 
 import jdk.vm.ci.code.Register;
@@ -81,7 +80,7 @@ public class LinearScan {
     public static class Options {
         // @formatter:off
         @Option(help = "Enable spill position optimization", type = OptionType.Debug)
-        public static final OptionKey<Boolean> LIROptLSRAOptimizeSpillPosition = new NestedBooleanOptionKey(LIROptimization, true);
+        public static final OptionValue<Boolean> LIROptLSRAOptimizeSpillPosition = new NestedBooleanOptionValue(LIROptimization, true);
         // @formatter:on
     }
 
@@ -184,7 +183,6 @@ public class LinearScan {
      */
     protected final Interval intervalEndMarker;
     public final Range rangeEndMarker;
-    public final boolean detailedAsserts;
 
     protected LinearScan(TargetDescription target, LIRGenerationResult res, MoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig, AbstractBlockBase<?>[] sortedBlocks,
                     boolean neverSpillConstants) {
@@ -203,15 +201,10 @@ public class LinearScan {
         this.rangeEndMarker = new Range(Integer.MAX_VALUE, Integer.MAX_VALUE, null);
         this.intervalEndMarker = new Interval(Value.ILLEGAL, Interval.END_MARKER_OPERAND_NUMBER, null, rangeEndMarker);
         this.intervalEndMarker.next = intervalEndMarker;
-        this.detailedAsserts = DetailedAsserts.getValue(ir.getOptions());
     }
 
     public Interval intervalEndMarker() {
         return intervalEndMarker;
-    }
-
-    public OptionValues getOptions() {
-        return ir.getOptions();
     }
 
     public int getFirstLirInstructionId(AbstractBlockBase<?> block) {
@@ -559,7 +552,7 @@ public class LinearScan {
         assert list1Prev == null || list1Prev.next.isEndMarker() : "linear list ends not with sentinel";
         assert list2Prev == null || list2Prev.next.isEndMarker() : "linear list ends not with sentinel";
 
-        return Pair.create(list1, list2);
+        return new Pair<>(list1, list2);
     }
 
     protected void sortIntervalsBeforeAllocation() {
@@ -669,11 +662,13 @@ public class LinearScan {
     }
 
     @SuppressWarnings("try")
-    protected void allocate(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
+    protected void allocate(TargetDescription target, LIRGenerationResult lirGenRes, MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig) {
+
         /*
          * This is the point to enable debug logging for the whole register allocation.
          */
         try (Indent indent = Debug.logAndIndent("LinearScan allocate")) {
+            AllocationContext context = new AllocationContext(spillMoveFactory, registerAllocationConfig);
 
             createLifetimeAnalysisPhase().apply(target, lirGenRes, context);
 
@@ -682,21 +677,21 @@ public class LinearScan {
 
                 createRegisterAllocationPhase().apply(target, lirGenRes, context);
 
-                if (LinearScan.Options.LIROptLSRAOptimizeSpillPosition.getValue(getOptions())) {
+                if (LinearScan.Options.LIROptLSRAOptimizeSpillPosition.getValue()) {
                     createOptimizeSpillPositionPhase().apply(target, lirGenRes, context);
                 }
                 createResolveDataFlowPhase().apply(target, lirGenRes, context);
 
                 sortIntervalsAfterAllocation();
 
-                if (detailedAsserts) {
+                if (DetailedAsserts.getValue()) {
                     verify();
                 }
                 beforeSpillMoveElimination();
                 createSpillMoveEliminationPhase().apply(target, lirGenRes, context);
                 createAssignLocationsPhase().apply(target, lirGenRes, context);
 
-                if (detailedAsserts) {
+                if (DetailedAsserts.getValue()) {
                     verifyIntervals();
                 }
             } catch (Throwable e) {

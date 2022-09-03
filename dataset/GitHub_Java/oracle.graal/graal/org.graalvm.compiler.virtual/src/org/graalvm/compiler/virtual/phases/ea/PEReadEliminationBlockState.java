@@ -31,10 +31,11 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.virtual.AllocatedObjectNode;
 import org.graalvm.compiler.nodes.virtual.VirtualInstanceNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
-public final class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadEliminationBlockState> {
+public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadEliminationBlockState> {
 
     final EconomicMap<ReadCacheEntry, ValueNode> readCache;
 
@@ -73,12 +74,12 @@ public final class PEReadEliminationBlockState extends PartialEscapeBlockState<P
     }
 
     public PEReadEliminationBlockState() {
-        readCache = EconomicMap.create(Equivalence.DEFAULT);
+        readCache = CollectionFactory.newMap(Equivalence.DEFAULT);
     }
 
     public PEReadEliminationBlockState(PEReadEliminationBlockState other) {
         super(other);
-        readCache = EconomicMap.create(Equivalence.DEFAULT, other.readCache);
+        readCache = CollectionFactory.newMap(Equivalence.DEFAULT, other.readCache);
     }
 
     @Override

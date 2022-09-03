@@ -79,6 +79,7 @@ import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.word.Word;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
@@ -139,7 +140,19 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
             return null;
         }
         if (b.parsingIntrinsic()) {
+            if (hasGeneratedInvocationPluginAnnotation(method)) {
+                throw new GraalError("%s should have been handled by a %s", method.format("%H.%n(%p)"), GeneratedInvocationPlugin.class.getSimpleName());
+            }
+            if (hasGenericInvocationPluginAnnotation(method)) {
+                throw new GraalError("%s should have been handled by %s", method.format("%H.%n(%p)"), WordOperationPlugin.class.getSimpleName());
+            }
+
             assert b.getDepth() < MAX_GRAPH_INLINING_DEPTH : "inlining limit exceeded";
+
+            if (method.getName().startsWith("$jacoco")) {
+                throw new GraalError("Found call to JaCoCo instrumentation method " + method.format("%H.%n(%p)") + ". Placing \"//JaCoCo Exclude\" anywhere in " +
+                                b.getMethod().getDeclaringClass().getSourceFileName() + " should fix this.");
+            }
 
             // Force inlining when parsing replacements
             return createIntrinsicInlineInfo(method, bytecodeProvider);
@@ -155,13 +168,6 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         if (b.parsingIntrinsic()) {
             IntrinsicContext intrinsic = b.getIntrinsic();
             if (!intrinsic.isCallToOriginal(method)) {
-                if (hasGeneratedInvocationPluginAnnotation(method)) {
-                    throw new GraalError("%s should have been handled by a %s", method.format("%H.%n(%p)"), GeneratedInvocationPlugin.class.getSimpleName());
-                }
-                if (hasGenericInvocationPluginAnnotation(method)) {
-                    throw new GraalError("%s should have been handled by %s", method.format("%H.%n(%p)"), WordOperationPlugin.class.getSimpleName());
-                }
-
                 throw new GraalError("All non-recursive calls in the intrinsic %s must be inlined or intrinsified: found call to %s",
                                 intrinsic.getIntrinsicMethod().format("%H.%n(%p)"), method.format("%h.%n(%p)"));
             }
@@ -177,7 +183,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         this.snippetReflection = snippetReflection;
         this.target = target;
         this.graphs = new ConcurrentHashMap<>();
-        this.snippetTemplateCache = EconomicMap.create(Equivalence.DEFAULT);
+        this.snippetTemplateCache = CollectionFactory.newMap(Equivalence.DEFAULT);
         this.bytecodeProvider = bytecodeProvider;
     }
 

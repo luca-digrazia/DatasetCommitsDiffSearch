@@ -41,21 +41,21 @@ import org.graalvm.compiler.lir.StandardOp.ValueMoveOp;
 import org.graalvm.compiler.lir.alloc.lsra.Interval.SpillState;
 import org.graalvm.compiler.lir.alloc.lsra.LinearScan.IntervalPredicate;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
-import org.graalvm.compiler.lir.phases.AllocationPhase.AllocationContext;
-import org.graalvm.compiler.options.NestedBooleanOptionKey;
+import org.graalvm.compiler.lir.phases.AllocationPhase;
+import org.graalvm.compiler.options.NestedBooleanOptionValue;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
+import org.graalvm.compiler.options.OptionValue;
 
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.AllocatableValue;
 
-public class LinearScanEliminateSpillMovePhase extends LinearScanAllocationPhase {
+public class LinearScanEliminateSpillMovePhase extends AllocationPhase {
 
     public static class Options {
         // @formatter:off
         @Option(help = "Enable spill move elimination.", type = OptionType.Debug)
-        public static final OptionKey<Boolean> LIROptLSRAEliminateSpillMoves = new NestedBooleanOptionKey(LIROptimization, true);
+        public static final OptionValue<Boolean> LIROptLSRAEliminateSpillMoves = new NestedBooleanOptionValue(LIROptimization, true);
         // @formatter:on
     }
 
@@ -98,7 +98,7 @@ public class LinearScanEliminateSpillMovePhase extends LinearScanAllocationPhase
              */
             Interval interval;
             interval = allocator.createUnhandledLists(mustStoreAtDefinition, null).getLeft();
-            if (DetailedAsserts.getValue(allocator.getOptions())) {
+            if (DetailedAsserts.getValue()) {
                 checkIntervals(interval);
             }
 
@@ -120,7 +120,7 @@ public class LinearScanEliminateSpillMovePhase extends LinearScanAllocationPhase
                              * be correct. Only moves that have been inserted by LinearScan can be
                              * removed.
                              */
-                            if (Options.LIROptLSRAEliminateSpillMoves.getValue(allocator.getOptions()) && canEliminateSpillMove(block, move)) {
+                            if (Options.LIROptLSRAEliminateSpillMoves.getValue() && canEliminateSpillMove(block, move)) {
                                 /*
                                  * Move target is a stack slot that is always correct, so eliminate
                                  * instruction.

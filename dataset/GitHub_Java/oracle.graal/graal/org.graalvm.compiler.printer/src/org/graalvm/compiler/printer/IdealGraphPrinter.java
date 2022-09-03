@@ -33,7 +33,6 @@ import java.util.Set;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.bytecode.BytecodeDisassembler;
 import org.graalvm.compiler.debug.GraalDebugConfig.Options;
-import org.graalvm.compiler.debug.internal.DebugScope;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeMap;
@@ -51,8 +50,9 @@ import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
-import org.graalvm.util.EconomicSet;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
+import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -116,15 +116,15 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
     @Override
     public void print(Graph graph, String title, Map<Object, Object> properties) {
         beginGraph(title);
-        EconomicSet<Node> noBlockNodes = EconomicSet.create(Equivalence.IDENTITY);
+        EconomicSet<Node> noBlockNodes = CollectionFactory.newSet(Equivalence.IDENTITY);
         ScheduleResult schedule = null;
         if (graph instanceof StructuredGraph) {
             StructuredGraph structuredGraph = (StructuredGraph) graph;
             schedule = structuredGraph.getLastSchedule();
             if (schedule == null && tryToSchedule) {
-                if (Options.PrintIdealGraphSchedule.getValue(DebugScope.getConfig().getOptions())) {
+                if (Options.PrintIdealGraphSchedule.getValue()) {
                     try {
-                        SchedulePhase schedulePhase = new SchedulePhase(graph.getOptions());
+                        SchedulePhase schedulePhase = new SchedulePhase();
                         schedulePhase.apply(structuredGraph);
                         schedule = structuredGraph.getLastSchedule();
                     } catch (Throwable t) {
@@ -294,7 +294,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
         endSuccessors();
         beginBlockNodes();
 
-        EconomicSet<Node> nodes = EconomicSet.create(Equivalence.IDENTITY);
+        EconomicSet<Node> nodes = CollectionFactory.newSet(Equivalence.IDENTITY);
 
         if (nodeToBlock != null) {
             for (Node n : graph.getNodes()) {
@@ -315,7 +315,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
                 }
             }
 
-            EconomicSet<Node> snapshot = EconomicSet.create(Equivalence.IDENTITY, nodes);
+            EconomicSet<Node> snapshot = CollectionFactory.newSet(Equivalence.IDENTITY, nodes);
             // add all framestates and phis to their blocks
             for (Node node : snapshot) {
                 if (node instanceof StateSplit && ((StateSplit) node).stateAfter() != null) {

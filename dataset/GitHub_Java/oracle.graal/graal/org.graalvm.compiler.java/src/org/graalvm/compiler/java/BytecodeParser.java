@@ -400,6 +400,7 @@ import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
@@ -1629,7 +1630,7 @@ public class BytecodeParser implements GraphBuilderContext {
             receiverType = targetMethod.getDeclaringClass();
         }
         ResolvedJavaMethod resolvedMethod = receiverType.resolveMethod(targetMethod, method.getDeclaringClass());
-        if (resolvedMethod == null || resolvedMethod.equals(targetMethod)) {
+        if (resolvedMethod == null || resolvedMethod == targetMethod) {
             assert resolvedMethod == null || targetMethod.getDeclaringClass().isAssignableFrom(resolvedMethod.getDeclaringClass());
             Mark mark = graph.getMark();
             FixedWithNextNode currentLastInstr = lastInstr;
@@ -3748,7 +3749,7 @@ public class BytecodeParser implements GraphBuilderContext {
         int nofCases = bs.numberOfCases();
         double[] keyProbabilities = switchProbability(nofCases + 1, bci);
 
-        EconomicMap<Integer, SuccessorInfo> bciToBlockSuccessorIndex = EconomicMap.create(Equivalence.DEFAULT);
+        EconomicMap<Integer, SuccessorInfo> bciToBlockSuccessorIndex = CollectionFactory.newMap(Equivalence.DEFAULT);
         for (int i = 0; i < currentBlock.getSuccessorCount(); i++) {
             assert !bciToBlockSuccessorIndex.containsKey(currentBlock.getSuccessor(i).startBci);
             bciToBlockSuccessorIndex.put(currentBlock.getSuccessor(i).startBci, new SuccessorInfo(i));
