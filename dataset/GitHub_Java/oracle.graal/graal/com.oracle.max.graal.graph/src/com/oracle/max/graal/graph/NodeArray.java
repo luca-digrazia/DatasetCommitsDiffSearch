@@ -26,8 +26,6 @@ import java.util.AbstractList;
 import java.util.Arrays;
 import java.util.Iterator;
 
-import org.omg.PortableInterceptor.SUCCESSFUL;
-
 public class NodeArray extends AbstractList<Node> {
 
     private final Node node;
@@ -151,7 +149,6 @@ public class NodeArray extends AbstractList<Node> {
         assert !self().isDeleted() : "trying to setAndClear successor of deleted node: " + self().shortName();
         assert self().successors == this;
         Node value = clearedNode.successors.get(clearedIndex);
-        self().successorTags[index] = clearedNode.successorTags[clearedIndex];
         assert value != Node.Null;
         clearedNode.successors.nodes[clearedIndex] = Node.Null;
         set(index, Node.Null);

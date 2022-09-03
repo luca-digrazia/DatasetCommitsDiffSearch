@@ -41,8 +41,6 @@ public class InliningPhase extends Phase {
 
     private final Queue<Invoke> invokes = new ArrayDeque<Invoke>();
     private final Queue<RiMethod> methods = new ArrayDeque<RiMethod>();
-
-    private final Map<Invoke, RiMethod> parentMethod = new HashMap<Invoke, RiMethod>();
     private int inliningSize;
     private final boolean trace;
 
@@ -61,7 +59,6 @@ public class InliningPhase extends Phase {
     static HashMap<RiMethod, Integer> methodCount = new HashMap<RiMethod, Integer>();
     @Override
     protected void run(Graph graph) {
-        float ratio = GraalOptions.MaximumInlineRatio;
         inliningSize = compilation.method.code().length;
         for (int iterations = 0; iterations < GraalOptions.MaximumInlineLevel; iterations++) {
             for (Invoke invoke : graph.getNodes(Invoke.class)) {
@@ -72,9 +69,7 @@ public class InliningPhase extends Phase {
                     }
                     continue;
                 }
-
-                RiTypeProfile profile = compilation.method.typeProfile(invoke.bci);
-                if (!checkInliningConditions(invoke, profile, ratio) || !target.isResolved() || Modifier.isNative(target.accessFlags())) {
+                if (!checkInliningConditions(invoke) || !target.isResolved() || Modifier.isNative(target.accessFlags())) {
                     continue;
                 }
                 if (target.canBeStaticallyBound()) {
@@ -83,29 +78,13 @@ public class InliningPhase extends Phase {
                     }
                 } else {
                     RiMethod concrete = invoke.target.holder().uniqueConcreteMethod(invoke.target);
-                    if (concrete != null && concrete.isResolved() && !Modifier.isNative(concrete.accessFlags()) && checkInliningConditions(concrete, iterations)) {
-                        if (trace) {
-                            System.out.println("recording concrete method assumption...");
-                        }
-                        compilation.assumptions.recordConcreteMethod(invoke.target, concrete);
-                        addToQueue(invoke, concrete);
-                    } else if (profile != null && profile.probabilities != null && profile.probabilities.length > 0 && profile.morphism == 1) {
-                        // type check and inlining...
-                        concrete = profile.types[0].resolveMethodImpl(invoke.target);
-                        if (concrete != null && concrete.isResolved() && !Modifier.isNative(concrete.accessFlags()) && checkInliningConditions(concrete, iterations)) {
-                            IsType isType = new IsType(invoke.receiver(), profile.types[0], compilation.graph);
-                            FixedGuard guard = new FixedGuard(graph);
-                            guard.setNode(isType);
-                            assert invoke.predecessors().size() == 1;
-                            invoke.predecessors().get(0).successors().replace(invoke, guard);
-                            guard.setNext(invoke);
-
+                    if (concrete != null && concrete.isResolved() && !Modifier.isNative(concrete.accessFlags())) {
+                        if (checkInliningConditions(concrete, iterations)) {
                             if (trace) {
-                                System.out.println("inlining with type check, type probability: " + profile.probabilities[0]);
+                                System.out.println("recording concrete method assumption...");
                             }
+                            compilation.assumptions.recordConcreteMethod(invoke.target, concrete);
                             addToQueue(invoke, concrete);
-//                            System.out.println("inlining with type check " + profile.probabilities[0] + " " + profile.morphism + " " + profile.count);
-//                            System.out.println(invoke.target + " -> " + concrete + " (" + profile.types[0] + ")");
                         }
                     }
                 }
@@ -139,7 +118,6 @@ public class InliningPhase extends Phase {
                 }
                 break;
             }
-            ratio *= GraalOptions.MaximumInlineRatio;
         }
 
         if (trace) {
@@ -155,13 +133,9 @@ public class InliningPhase extends Phase {
         }
     }
 
-    private boolean checkInliningConditions(Invoke invoke, RiTypeProfile profile, float ratio) {
+    private boolean checkInliningConditions(Invoke invoke) {
         String name = !trace ? null : invoke.id() + ": " + CiUtil.format("%H.%n(%p):%r", invoke.target, false);
-        RiMethod parent = parentMethod.get(invoke);
-        if (parent == null) {
-            parent = compilation.method;
-        }
-        if (profile == null || profile.count < parent.invocationCount() * (1 - ratio)) {
+        if (invoke.profile() != null && invoke.profile().count < compilation.method.invocationCount() / 2) {
             if (trace) {
                 System.out.println("not inlining " + name + " because the invocation counter is too low");
             }
@@ -265,9 +239,7 @@ public class InliningPhase extends Phase {
         assert invoke.predecessors().size() == 1 : "size: " + invoke.predecessors().size();
         Instruction pred;
         if (withReceiver) {
-            FixedGuard clipNode = new FixedGuard(compilation.graph);
-            clipNode.setNode(new IsNonNull(parameters[0], compilation.graph));
-            pred = clipNode;
+            pred = new FixedNullCheck(parameters[0], compilation.graph);
         } else {
             pred = new Merge(compilation.graph);
         }
@@ -275,12 +247,6 @@ public class InliningPhase extends Phase {
         replacements.put(startNode, pred);
 
         Map<Node, Node> duplicates = compilation.graph.addDuplicate(nodes, replacements);
-
-        for (Node node : duplicates.values()) {
-            if (node instanceof Invoke) {
-                parentMethod.put((Invoke) node, method);
-            }
-        }
 
         int monitorIndexDelta = stateAfter.locksSize();
         if (monitorIndexDelta > 0) {
