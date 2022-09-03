@@ -721,8 +721,7 @@ public class DataSupport {
 	 * @return The number of rows affected.
 	 */
 	public static synchronized int deleteAll(Class<?> modelClass, String... conditions) {
-		DeleteHandler deleteHandler = new DeleteHandler(Connector.getDatabase());
-		return deleteHandler.onDeleteAll(modelClass, conditions);
+		return deleteAll(BaseUtility.changeCase(modelClass.getSimpleName()), conditions);
 	}
 
 	/**

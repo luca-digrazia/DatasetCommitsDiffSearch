@@ -1022,8 +1022,6 @@ abstract class DataHandler extends LitePalBase {
 			methodName = "getString";
 		} else if ("getDate".equals(methodName)) {
 			methodName = "getLong";
-		} else if ("getInteger".equals(methodName)) {
-			methodName = "getInt";
 		}
 		return methodName;
 	}
