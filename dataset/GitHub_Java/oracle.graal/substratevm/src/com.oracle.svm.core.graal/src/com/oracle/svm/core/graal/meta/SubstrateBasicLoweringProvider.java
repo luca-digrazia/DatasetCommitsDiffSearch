@@ -47,7 +47,6 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AndNode;
 import org.graalvm.compiler.nodes.calc.RemNode;
 import org.graalvm.compiler.nodes.calc.UnsignedRightShiftNode;
-import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
 import org.graalvm.compiler.nodes.java.NewInstanceNode;
@@ -63,7 +62,6 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.DefaultJavaLoweringProvider;
 import org.graalvm.compiler.replacements.SnippetCounter.Group;
-import org.graalvm.compiler.replacements.amd64.AMD64ArrayIndexOfDispatchNode;
 import org.graalvm.compiler.replacements.nodes.AssertionNode;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -141,8 +139,6 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
             /* No lowering necessary. */
         } else if (n instanceof AssertionNode) {
             lowerAssertionNode((AssertionNode) n);
-        } else if (n instanceof AMD64ArrayIndexOfDispatchNode) {
-            lowerArrayIndexOf((AMD64ArrayIndexOfDispatchNode) n);
         } else {
             super.lower(n, tool);
         }
@@ -213,6 +209,16 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
     }
 
     @Override
+    public int arrayBaseOffset(JavaKind kind) {
+        return getObjectLayout().getArrayBaseOffset(kind);
+    }
+
+    @Override
+    public int arrayScalingFactor(JavaKind elementKind) {
+        return getObjectLayout().getArrayIndexScale(elementKind);
+    }
+
+    @Override
     public NewInstanceNode createNewInstanceFromVirtual(VirtualObjectNode virtual) {
         if (virtual instanceof SubstrateVirtualInstanceNode) {
             return new SubstrateNewInstanceNode(virtual.type(), true, null);
@@ -231,12 +237,6 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
     private static void lowerAssertionNode(AssertionNode n) {
         // we discard the assertion if it was not handled by any other lowering
         n.graph().removeFixed(n);
-    }
-
-    private void lowerArrayIndexOf(AMD64ArrayIndexOfDispatchNode dispatchNode) {
-        StructuredGraph graph = dispatchNode.graph();
-        ForeignCallNode call = graph.add(new ForeignCallNode(foreignCalls, dispatchNode.getStubCallDescriptor(), dispatchNode.getStubCallArgs()));
-        graph.replaceFixed(dispatchNode, call);
     }
 
     @Override

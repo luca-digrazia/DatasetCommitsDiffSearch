@@ -25,7 +25,6 @@
 package com.oracle.svm.core.genscavenge;
 
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.Pointer;
@@ -35,7 +34,6 @@ import com.oracle.svm.core.annotate.AlwaysInline;
 import com.oracle.svm.core.heap.ObjectHeader;
 import com.oracle.svm.core.heap.ObjectReferenceVisitor;
 import com.oracle.svm.core.heap.ReferenceAccess;
-import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
 
@@ -60,7 +58,7 @@ public class GreyToBlackObjRefVisitor implements ObjectReferenceVisitor {
 
     @Override
     public boolean visitObjectReference(final Pointer objRef, boolean compressed) {
-        return visitObjectReferenceInline(objRef, 0, compressed);
+        return visitObjectReferenceInline(objRef, compressed);
     }
 
     /**
@@ -69,9 +67,7 @@ public class GreyToBlackObjRefVisitor implements ObjectReferenceVisitor {
      */
     @Override
     @AlwaysInline("GC performance")
-    public boolean visitObjectReferenceInline(final Pointer objRef, final int innerOffset, boolean compressed) {
-        assert innerOffset >= 0;
-
+    public boolean visitObjectReferenceInline(final Pointer objRef, boolean compressed) {
         getCounters().noteObjRef();
         final Log trace = Log.noopLog().string("[GreyToBlackObjRefVisitor.visitObjectReferenceInline:").string("  objRef: ").hex(objRef);
         if (objRef.isNull()) {
@@ -80,10 +76,7 @@ public class GreyToBlackObjRefVisitor implements ObjectReferenceVisitor {
             return true;
         }
         // Read the referenced Object, carefully.
-        final Pointer offsetP = ReferenceAccess.singleton().readObjectAsUntrackedPointer(objRef, compressed);
-        assert offsetP.isNonNull() || innerOffset == 0;
-        final Pointer p = offsetP.subtract(innerOffset);
-
+        final Pointer p = ReferenceAccess.singleton().readObjectAsUntrackedPointer(objRef, compressed);
         trace.string("  p: ").hex(p);
         // It might be null.
         if (p.isNull()) {
@@ -100,8 +93,7 @@ public class GreyToBlackObjRefVisitor implements ObjectReferenceVisitor {
             trace.string("  forwards to ");
             // Update the reference to point to the forwarded Object.
             final Object obj = ohi.getForwardedObject(p);
-            final Object offsetObj = (innerOffset == 0) ? obj : Word.objectToUntrackedPointer(obj).add(innerOffset).toObject();
-            ReferenceAccess.singleton().writeObjectAt(objRef, offsetObj, compressed);
+            ReferenceAccess.singleton().writeObjectAt(objRef, obj, compressed);
             trace.object(obj);
             if (trace.isEnabled()) {
                 trace.string("  objectHeader: ").string(ohi.toStringFromObject(obj)).string("]").newline();
@@ -110,7 +102,6 @@ public class GreyToBlackObjRefVisitor implements ObjectReferenceVisitor {
         }
         // It might be a real Object.
         final Object obj = p.toObject();
-        assert innerOffset < LayoutEncoding.getSizeFromObject(obj).rawValue();
         // If the object is not a heap object there's nothing to do.
         if (ohi.isNonHeapAllocatedHeader(header)) {
             getCounters().noteNonHeapReferent();
@@ -136,8 +127,7 @@ public class GreyToBlackObjRefVisitor implements ObjectReferenceVisitor {
         if (copy != obj) {
             getCounters().noteCopiedReferent();
             trace.string(" updating objRef: ").hex(objRef).string(" with copy: ").object(copy);
-            final Object offsetCopy = (innerOffset == 0) ? copy : Word.objectToUntrackedPointer(copy).add(innerOffset).toObject();
-            ReferenceAccess.singleton().writeObjectAt(objRef, offsetCopy, compressed);
+            ReferenceAccess.singleton().writeObjectAt(objRef, copy, compressed);
         } else {
             getCounters().noteUnmodifiedReference();
         }
