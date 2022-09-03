@@ -22,13 +22,19 @@
  */
 package com.oracle.graal.lir.dfa;
 
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static jdk.internal.jvmci.code.ValueUtil.asRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isStackSlot;
 
 import java.util.List;
 
-import com.oracle.graal.compiler.common.LIRKind;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.RegisterAttributes;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.Value;
+
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.LIRFrameState;
@@ -36,12 +42,8 @@ import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.framemap.FrameMap;
 import com.oracle.graal.lir.framemap.ReferenceMapBuilder;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.AllocationPhase;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterAttributes;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.Value;
 
 /**
  * Mark all live references for a frame state. The frame state use this information to build the OOP
@@ -50,11 +52,12 @@ import jdk.vm.ci.meta.Value;
 public final class LocationMarkerPhase extends AllocationPhase {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, AllocationContext context) {
-        new Marker(lirGenRes.getLIR(), lirGenRes.getFrameMap()).build();
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
+                    RegisterAllocationConfig registerAllocationConfig) {
+        new Marker<B>(lirGenRes.getLIR(), lirGenRes.getFrameMap()).build();
     }
 
-    static final class Marker extends LocationMarker<RegStackValueSet> {
+    static final class Marker<T extends AbstractBlockBase<T>> extends LocationMarker<T, RegStackValueSet> {
 
         private final RegisterAttributes[] registerAttributes;
 
@@ -70,18 +73,7 @@ public final class LocationMarkerPhase extends AllocationPhase {
 
         @Override
         protected boolean shouldProcessValue(Value operand) {
-            if (isRegister(operand)) {
-                Register reg = asRegister(operand);
-                if (!reg.mayContainReference() || !attributes(reg).isAllocatable()) {
-                    // register that's not allocatable or not part of the reference map
-                    return false;
-                }
-            } else if (!isStackSlot(operand)) {
-                // neither register nor stack slot
-                return false;
-            }
-
-            return !operand.getValueKind().equals(LIRKind.Illegal);
+            return (isRegister(operand) && attributes(asRegister(operand)).isAllocatable() || isStackSlot(operand)) && !operand.getLIRKind().equals(LIRKind.Illegal);
         }
 
         /**

@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.lir.dfa;
 
-import static jdk.vm.ci.code.ValueUtil.isIllegal;
+import static jdk.internal.jvmci.code.ValueUtil.isIllegal;
 
 import java.util.EnumSet;
 import java.util.List;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.PlatformKind;
+import jdk.internal.jvmci.meta.Value;
 
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.cfg.BlockMap;
@@ -69,10 +69,9 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends V
 
     @SuppressWarnings("unchecked")
     void build() {
-        AbstractBlockBase<?>[] blocks = lir.getControlFlowGraph().getBlocks();
-        UniqueWorkList<T> worklist = new UniqueWorkList<>(blocks.length);
-        for (int i = blocks.length - 1; i >= 0; i--) {
-            worklist.add((T) blocks[i]);
+        UniqueWorkList<T> worklist = new UniqueWorkList<>(lir.getControlFlowGraph().getBlocks().size());
+        for (int i = lir.getControlFlowGraph().getBlocks().size() - 1; i >= 0; i--) {
+            worklist.add((T) lir.getControlFlowGraph().getBlocks().get(i));
         }
         for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
             liveInMap.put(block, newLiveValueSet());
