@@ -484,7 +484,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         return !(location instanceof IndexedLocationNode) && location.displacement() < 4096;
     }
 
-    protected void emitPrologue() {
+    private void emitPrologue() {
         CiCallingConvention incomingArguments = frameMap.registerConfig.getCallingConvention(JavaCallee, CiUtil.signatureToKinds(method), target, false);
 
         CiValue[] params = new CiValue[incomingArguments.locations.length];
@@ -509,8 +509,10 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public void visitCheckCast(CheckCastNode x) {
-        XirSnippet snippet = xir.genCheckCast(site(x, x.object()), toXirArgument(x.object()), toXirArgument(x.targetClassInstruction()), x.targetClass(), x.hints(), x.hintsExact());
-        emitXir(snippet, x, state(), true);
+        if (x.emitCode()) {
+            XirSnippet snippet = xir.genCheckCast(site(x, x.object()), toXirArgument(x.object()), toXirArgument(x.targetClassInstruction()), x.targetClass(), x.hints(), x.hintsExact());
+            emitXir(snippet, x, state(), true);
+        }
         // The result of a checkcast is the unmodified object, so no need to allocate a new variable for it.
         setResult(x, operand(x.object()));
     }
@@ -912,9 +914,11 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     protected abstract LabelRef createDeoptStub(RiDeoptAction action, RiDeoptReason reason, LIRDebugInfo info, Object deoptInfo);
 
     @Override
-    public Variable emitCall(@SuppressWarnings("hiding") Object target, CiKind result, CiKind[] arguments, boolean canTrap, CiValue... args) {
+    public Variable emitCallToRuntime(CiRuntimeCall runtimeCall, boolean canTrap, CiValue... args) {
         LIRDebugInfo info = canTrap ? state() : null;
 
+        CiKind result = runtimeCall.resultKind;
+        CiKind[] arguments = runtimeCall.arguments;
         CiValue physReg = resultOperandFor(result);
 
         List<CiValue> argumentList;
@@ -935,7 +939,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             argumentList = Collections.emptyList();
         }
 
-        emitCall(target, physReg, argumentList, CiConstant.forLong(0), info, null);
+        emitCall(runtimeCall, physReg, argumentList, CiConstant.forLong(0), info, null);
 
         if (isLegal(physReg)) {
             return emitMove(physReg);

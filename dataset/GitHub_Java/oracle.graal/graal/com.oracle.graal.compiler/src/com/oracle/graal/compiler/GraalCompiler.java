@@ -170,6 +170,9 @@ public class GraalCompiler {
             if (GraalOptions.OptLoopTransform) {
                 new LoopTransformPhase().apply(graph);
             }
+            if (GraalOptions.OptSafepointElimination) {
+                new SafepointPollingEliminationPhase().apply(graph);
+            }
         }
         new RemoveValueProxyPhase().apply(graph);
         if (GraalOptions.OptCanonicalizer) {
@@ -207,11 +210,6 @@ public class GraalCompiler {
         plan.runPhases(PhasePosition.MID_LEVEL, graph);
 
         plan.runPhases(PhasePosition.LOW_LEVEL, graph);
-
-        // Add safepoints to loops
-        if (GraalOptions.GenLoopSafepoints) {
-            new LoopSafepointInsertionPhase().apply(graph);
-        }
 
         final SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);

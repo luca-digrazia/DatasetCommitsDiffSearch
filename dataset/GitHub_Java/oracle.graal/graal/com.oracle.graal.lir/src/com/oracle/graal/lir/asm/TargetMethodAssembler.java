@@ -26,13 +26,13 @@ import static com.oracle.max.cri.ci.CiValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIR.Code;
 import com.oracle.max.asm.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIR.*;
 
 public class TargetMethodAssembler {
 
@@ -51,11 +51,7 @@ public class TargetMethodAssembler {
     public final CiTarget target;
     public final RiRuntime runtime;
     public final FrameMap frameMap;
-
-    /**
-     * Out-of-line stubs to be emitted.
-     */
-    public final List<Code> stubs;
+    public final List<Code> slowPaths;
 
     /**
      * The object that emits code for managing a method's frame.
@@ -66,11 +62,11 @@ public class TargetMethodAssembler {
     private List<ExceptionInfo> exceptionInfoList;
     private int lastSafepointPos;
 
-    public TargetMethodAssembler(CiTarget target, RiRuntime runtime, FrameMap frameMap, AbstractAssembler asm, FrameContext frameContext, List<Code> stubs) {
+    public TargetMethodAssembler(CiTarget target, RiRuntime runtime, FrameMap frameMap, AbstractAssembler asm, FrameContext frameContext) {
         this.target = target;
         this.runtime = runtime;
         this.frameMap = frameMap;
-        this.stubs = stubs;
+        this.slowPaths = new ArrayList<>();
         this.asm = asm;
         this.targetMethod = new CiTargetMethod();
         this.frameContext = frameContext;

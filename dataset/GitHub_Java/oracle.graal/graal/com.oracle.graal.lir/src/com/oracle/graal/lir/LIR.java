@@ -54,11 +54,9 @@ public class LIR {
      */
     private final List<Block> codeEmittingOrder;
 
-    /**
-     * Various out-of-line stubs to be emitted near the end of the method
-     * after all other LIR code has been emitted.
-     */
-    public final List<Code> stubs;
+    public final List<Code> slowPaths;
+
+    public final List<Code> deoptimizationStubs;
 
     private int numVariables;
 
@@ -76,10 +74,6 @@ public class LIR {
      */
     public interface Code {
         void emitCode(TargetMethodAssembler tasm);
-        /**
-         * A description of this code stub useful for commenting the code in a disassembly.
-         */
-        String description();
     }
 
     /**
@@ -93,7 +87,8 @@ public class LIR {
         this.codeEmittingOrder = codeEmittingOrder;
         this.linearScanOrder = linearScanOrder;
 
-        stubs = new ArrayList<>();
+        slowPaths = new ArrayList<>();
+        deoptimizationStubs = new ArrayList<>();
     }
 
     /**
@@ -146,9 +141,16 @@ public class LIR {
             emitBlock(tasm, b);
         }
 
-        // generate code stubs
-        for (Code c : stubs) {
-            emitCodeStub(tasm, c);
+        // generate code for slow cases
+        for (Code sp : slowPaths) {
+            emitSlowPath(tasm, sp);
+        }
+        for (Code sp : tasm.slowPaths) {
+            emitSlowPath(tasm, sp);
+        }
+        // generate deoptimization stubs
+        for (Code sp : deoptimizationStubs) {
+            emitSlowPath(tasm, sp);
         }
     }
 
@@ -180,11 +182,11 @@ public class LIR {
         }
     }
 
-    private static void emitCodeStub(TargetMethodAssembler tasm, Code code) {
+    private static void emitSlowPath(TargetMethodAssembler tasm, Code sp) {
         if (Debug.isDumpEnabled()) {
-            tasm.blockComment(String.format("code stub: %s", code.description()));
+            tasm.blockComment(String.format("slow case %s", sp.getClass().getName()));
         }
-        code.emitCode(tasm);
+        sp.emitCode(tasm);
     }
 
     public void setHasArgInCallerFrame() {
