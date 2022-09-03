@@ -27,7 +27,6 @@ import static com.oracle.graal.compiler.common.GraalOptions.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.java.*;
-import com.oracle.graal.java.GraphBuilderConfiguration.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
@@ -76,11 +75,7 @@ public class HotSpotSuitesProvider implements SuitesProvider {
 
     protected PhaseSuite<HighTierContext> createGraphBuilderSuite() {
         PhaseSuite<HighTierContext> suite = new PhaseSuite<>();
-        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault();
-        if (runtime.getCompilerToVM().shouldDebugNonSafepoints()) {
-            config = config.withDebugInfoMode(DebugInfoMode.Simple);
-        }
-        suite.appendPhase(new GraphBuilderPhase(config));
+        suite.appendPhase(new GraphBuilderPhase(GraphBuilderConfiguration.getDefault()));
         return suite;
     }
 }
