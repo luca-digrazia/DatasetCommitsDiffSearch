@@ -23,32 +23,57 @@
 package com.oracle.graal.graph;
 
 import java.util.AbstractMap.SimpleEntry;
-import java.util.Arrays;
-import java.util.Iterator;
+import java.util.*;
 import java.util.Map.Entry;
 
+public class NodeMap<T> extends NodeIdAccessor {
 
-public final class NodeMap<T> {
-    private final Graph graph;
-    private Object[] values;
-    private int size;
+    private final boolean autogrow;
+    protected Object[] values;
 
     public NodeMap(Graph graph) {
-        this.graph = graph;
-        values = new Object[graph.nodeIdCount()];
-        size = values.length;
+        this(graph, false);
+    }
+
+    public NodeMap(Graph graph, boolean autogrow) {
+        super(graph);
+        this.values = new Object[graph.nodeIdCount()];
+        this.autogrow = autogrow;
     }
 
     public NodeMap(NodeMap<T> copyFrom) {
-        this.graph = copyFrom.graph;
+        super(copyFrom.graph);
         this.values = Arrays.copyOf(copyFrom.values, copyFrom.values.length);
-        this.size = copyFrom.size;
+        this.autogrow = copyFrom.autogrow;
     }
 
     @SuppressWarnings("unchecked")
     public T get(Node node) {
         check(node);
-        return (T) values[node.id()];
+        return (T) values[getNodeId(node)];
+    }
+
+    public boolean isEmpty() {
+        return !entries().iterator().hasNext();
+    }
+
+    public boolean containsKey(Object key) {
+        if (key instanceof Node) {
+            Node node = (Node) key;
+            if (node.graph() == graph()) {
+                return get(node) != null;
+            }
+        }
+        return false;
+    }
+
+    public boolean containsValue(Object value) {
+        for (Object o : values) {
+            if (o == value) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public Graph graph() {
@@ -57,37 +82,42 @@ public final class NodeMap<T> {
 
     public void set(Node node, T value) {
         check(node);
-        values[node.id()] = value;
+        values[getNodeId(node)] = value;
     }
 
     public int size() {
-        return size;
+        return values.length;
     }
 
     public boolean isNew(Node node) {
-        return node.id() >= size;
+        return getNodeId(node) >= size();
     }
 
-    public void grow(Node upTo) {
-        if (isNew(upTo)) {
-            size = upTo.id() + 1;
-            if (values.length < size) {
-                values = Arrays.copyOf(values, size + 9); // TODO implement a better growth policy
-            }
-        }
+    public void grow() {
+        this.values = Arrays.copyOf(values, graph.nodeIdCount());
     }
 
     private void check(Node node) {
+        if (autogrow && isNew(node)) {
+            grow();
+        }
         assert node.graph() == graph : "this node is not part of the graph";
         assert !isNew(node) : "this node was added to the graph after creating the node map : " + node;
     }
 
+    public void clear() {
+        Arrays.fill(values, null);
+    }
+
     public Iterable<Entry<Node, T>> entries() {
         return new Iterable<Entry<Node, T>>() {
+
             @Override
             public Iterator<Entry<Node, T>> iterator() {
                 return new Iterator<Entry<Node, T>>() {
+
                     int i = 0;
+
                     @Override
                     public boolean hasNext() {
                         forward();
@@ -102,8 +132,10 @@ public final class NodeMap<T> {
                         T value = (T) NodeMap.this.values[pos];
                         i++;
                         forward();
-                        return new SimpleEntry<Node, T>(key, value){
+                        return new SimpleEntry<Node, T>(key, value) {
+
                             private static final long serialVersionUID = 7813842391085737738L;
+
                             @Override
                             public T setValue(T v) {
                                 T oldv = super.setValue(v);
@@ -126,5 +158,28 @@ public final class NodeMap<T> {
                 };
             }
         };
+    }
+
+    @Override
+    public String toString() {
+        Iterator<Entry<Node, T>> i = entries().iterator();
+        if (!i.hasNext()) {
+            return "{}";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append('{');
+        while (true) {
+            Entry<Node, T> e = i.next();
+            Node key = e.getKey();
+            T value = e.getValue();
+            sb.append(key);
+            sb.append('=');
+            sb.append(value);
+            if (!i.hasNext()) {
+                return sb.append('}').toString();
+            }
+            sb.append(',').append(' ');
+        }
     }
 }
