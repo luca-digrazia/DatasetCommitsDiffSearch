@@ -24,6 +24,7 @@
 package com.oracle.graal.hotspot.bridge;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 
@@ -61,34 +62,19 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native long lookupType(String name, Class<?> accessingClass, boolean eagerResolve);
 
     @Override
-    public native long lookupKlassByName(String name, Class<?> accessingClass);
-
-    @Override
     public native Object lookupConstantInPool(long metaspaceConstantPool, int cpi);
 
     @Override
-    public native int lookupNameAndTypeRefIndexInPool(long metaspaceConstantPool, int cpi);
+    public native JavaMethod lookupMethodInPool(long metaspaceConstantPool, int cpi, byte opcode);
 
     @Override
-    public native long lookupNameRefInPool(long metaspaceConstantPool, int cpi);
+    public native JavaType lookupTypeInPool(long metaspaceConstantPool, int cpi);
 
     @Override
-    public native long lookupSignatureRefInPool(long metaspaceConstantPool, int cpi);
+    public native JavaField lookupFieldInPool(long metaspaceConstantPool, int cpi, byte opcode);
 
     @Override
-    public native int lookupKlassRefIndexInPool(long metaspaceConstantPool, int cpi);
-
-    @Override
-    public native long lookupKlassInPool(long metaspaceConstantPool, int cpi);
-
-    @Override
-    public native long lookupMethodInPool(long metaspaceConstantPool, int cpi, byte opcode);
-
-    @Override
-    public native long resolveField(long metaspaceConstantPool, int cpi, byte opcode, long[] info);
-
-    @Override
-    public native void loadReferencedTypeInPool(long metaspaceConstantPool, int cpi, byte opcode);
+    public native void lookupReferencedTypeInPool(long metaspaceConstantPool, int cpi, byte opcode);
 
     @Override
     public native Object lookupAppendixInPool(long metaspaceConstantPool, int cpi);
