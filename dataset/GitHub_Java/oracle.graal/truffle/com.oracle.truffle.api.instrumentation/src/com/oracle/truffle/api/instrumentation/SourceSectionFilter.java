@@ -659,18 +659,21 @@ public final class SourceSectionFilter {
 
             private final SourceSection[] sourceSections;
 
+            @SuppressWarnings("deprecation")
             SourceSectionEquals(SourceSection... sourceSection) {
                 this.sourceSections = sourceSection;
                 // clear tags
                 for (int i = 0; i < sourceSection.length; i++) {
-                    sourceSections[i] = sourceSection[i];
+                    sourceSections[i] = sourceSection[i].withTags();
                 }
             }
 
             @Override
+            @SuppressWarnings("deprecation")
             boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection s) {
+                SourceSection withoutTags = s.withTags();
                 for (SourceSection compareSection : sourceSections) {
-                    if (s.equals(compareSection)) {
+                    if (withoutTags.equals(compareSection)) {
                         return true;
                     }
                 }
@@ -709,11 +712,12 @@ public final class SourceSectionFilter {
 
             private final SourceSection[] sourceSections;
 
+            @SuppressWarnings("deprecation")
             RootSourceSectionEquals(SourceSection... sourceSection) {
                 this.sourceSections = sourceSection;
                 // clear tags
                 for (int i = 0; i < sourceSection.length; i++) {
-                    sourceSections[i] = sourceSection[i];
+                    sourceSections[i] = sourceSection[i].withTags();
                 }
             }
 
@@ -723,13 +727,15 @@ public final class SourceSectionFilter {
             }
 
             @Override
+            @SuppressWarnings("deprecation")
             boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection) {
                 if (rootSection == null) {
                     return false;
                 }
 
+                SourceSection withoutTags = rootSection.withTags();
                 for (SourceSection compareSection : sourceSections) {
-                    if (rootSection.equals(compareSection)) {
+                    if (withoutTags.equals(compareSection)) {
                         return true;
                     }
                 }

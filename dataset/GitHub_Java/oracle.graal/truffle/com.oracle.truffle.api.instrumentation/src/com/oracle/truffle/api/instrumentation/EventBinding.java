@@ -106,8 +106,8 @@ public final class EventBinding<T> {
     public synchronized void dispose() throws IllegalStateException {
         CompilerAsserts.neverPartOfCompilation();
         if (!disposed) {
-            instrumenter.disposeBinding(this);
             disposed = true;
+            instrumenter.disposeBinding(this);
         }
     }
 

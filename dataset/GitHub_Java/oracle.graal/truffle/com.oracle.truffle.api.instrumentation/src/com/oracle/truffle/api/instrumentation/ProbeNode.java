@@ -71,13 +71,13 @@ public final class ProbeNode extends Node {
     private final InstrumentationHandler handler;
     private final EventContext context;
 
-    @Child private volatile ProbeNode.EventChainNode chain;
+    @Child private ProbeNode.EventChainNode chain;
 
     /*
      * We cache to ensure that the instrumented tags and source sections are always compilation
      * final for listeners and factories.
      */
-    @CompilationFinal private volatile Assumption version;
+    @CompilationFinal private Assumption version;
 
     /** Instantiated by the instrumentation framework. */
     ProbeNode(InstrumentationHandler handler, SourceSection sourceSection) {
@@ -92,9 +92,8 @@ public final class ProbeNode extends Node {
      * @since 0.12
      */
     public void onEnter(VirtualFrame frame) {
-        EventChainNode localChain = lazyUpdate(frame);
-        if (localChain != null) {
-            localChain.onEnter(context, frame);
+        if (lazyUpdate(frame)) {
+            chain.onEnter(context, frame);
         }
     }
 
@@ -106,9 +105,8 @@ public final class ProbeNode extends Node {
      * @since 0.12
      */
     public void onReturnValue(VirtualFrame frame, Object result) {
-        EventChainNode localChain = lazyUpdate(frame);
-        if (localChain != null) {
-            localChain.onReturnValue(context, frame, result);
+        if (lazyUpdate(frame)) {
+            chain.onReturnValue(context, frame, result);
         }
     }
 
@@ -123,9 +121,8 @@ public final class ProbeNode extends Node {
         if (exception instanceof ThreadDeath) {
             throw (ThreadDeath) exception;
         }
-        EventChainNode localChain = lazyUpdate(frame);
-        if (localChain != null) {
-            localChain.onReturnExceptional(context, frame, exception);
+        if (lazyUpdate(frame)) {
+            chain.onReturnExceptional(context, frame, exception);
         }
     }
 
@@ -145,44 +142,38 @@ public final class ProbeNode extends Node {
         return (WrapperNode) parent;
     }
 
-    synchronized void invalidate() {
-        Assumption localVersion = this.version;
-        if (localVersion != null) {
-            localVersion.invalidate();
+    void invalidate() {
+        if (version != null) {
+            version.invalidate();
+        } else {
+            assert chain == null;
         }
     }
 
-    private EventChainNode lazyUpdate(VirtualFrame frame) {
-        Assumption localVersion = this.version;
-        if (localVersion == null || !localVersion.isValid()) {
+    private boolean lazyUpdate(VirtualFrame frame) {
+        if (version == null || !version.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             // Ok to pass in the virtual frame as its instances are always materialized
             return lazyUpdatedImpl(frame);
         }
-        return this.chain;
+        return true;
     }
 
-    private EventChainNode lazyUpdatedImpl(VirtualFrame frame) {
-        EventChainNode nextChain = handler.createBindings(ProbeNode.this);
+    private boolean lazyUpdatedImpl(VirtualFrame frame) {
+        Node nextChain = handler.installBindings(ProbeNode.this);
         if (nextChain == null) {
             // chain is null -> remove wrapper;
             // Note: never set child nodes to null, can cause races
             InstrumentationHandler.removeWrapper(ProbeNode.this);
-            return null;
+            return false;
         }
-
-        EventChainNode oldChain;
-        synchronized (this) {
-            oldChain = this.chain;
-            this.chain = insert(nextChain);
-            this.version = Truffle.getRuntime().createAssumption("Instruments unchanged");
-        }
-
+        EventChainNode oldChain = this.chain;
         if (oldChain != null) {
             oldChain.onDispose(context, frame);
         }
-
-        return nextChain;
+        this.chain = (EventChainNode) insert(nextChain);
+        this.version = Truffle.getRuntime().createAssumption("Instruments unchanged");
+        return true;
     }
 
     ProbeNode.EventChainNode createEventChainCallback(EventBinding<?> binding) {

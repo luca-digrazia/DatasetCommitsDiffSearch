@@ -87,8 +87,6 @@ public abstract class Accessor {
         public abstract void dispatchEvent(Object vm, Object event, int type);
 
         public abstract boolean isMimeTypeSupported(Object vm, String mimeType);
-
-        public abstract void registerDebugger(Object vm, Object debugger);
     }
 
     public abstract static class LanguageSupport {
@@ -131,6 +129,8 @@ public abstract class Accessor {
         public abstract void detachLanguageFromInstrumentation(Object vm, Env context);
 
         public abstract void onFirstExecution(RootNode rootNode);
+
+        public abstract void onLoad(RootNode rootNode);
     }
 
     public abstract static class OldInstrumentSupport {

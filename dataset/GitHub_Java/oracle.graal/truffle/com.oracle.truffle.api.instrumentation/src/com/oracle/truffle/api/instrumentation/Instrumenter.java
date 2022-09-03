@@ -72,7 +72,7 @@ public abstract class Instrumenter {
      * @param filter a filter on which sources trigger events. Only filters are allowed.
      * @param listener a listener that gets notified if a source was loaded
      * @param includeExistingSources whether or not this listener should be notified for sources
-     *            which were already loaded at the time when this listener was attached.
+     *            which where already loaded at the time when this listener is attached.
      *
      * @see LoadSourceEventListener#onLoad(Source)
      *
@@ -87,7 +87,8 @@ public abstract class Instrumenter {
      * @param filter a filter on which sources sections trigger events
      * @param listener a listener that gets notified if a source section was loaded
      * @param includeExistingSourceSections whether or not this listener should be notified for
-     *            sources which were already loaded at the time when this listener was attached.
+     *            source sections which where already loaded at the time when this listener is
+     *            attached.
      *
      * @see LoadSourceSectionEventListener#onLoad(SourceSection, Node)
      *

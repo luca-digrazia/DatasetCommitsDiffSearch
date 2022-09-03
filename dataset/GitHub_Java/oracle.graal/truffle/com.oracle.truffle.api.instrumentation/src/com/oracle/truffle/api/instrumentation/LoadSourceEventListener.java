@@ -50,9 +50,9 @@ public interface LoadSourceEventListener {
      * {@link Source source} as their root.
      * </p>
      *
-     * @param event an event with context information
+     * @param source the source that was loaded
      * @since 0.15
      */
-    void onLoad(LoadSourceEvent event);
+    void onLoad(Source source);
 
 }

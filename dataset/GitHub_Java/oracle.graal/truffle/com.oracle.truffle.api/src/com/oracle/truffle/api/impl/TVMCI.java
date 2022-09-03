@@ -29,6 +29,7 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.impl.Accessor.InstrumentSupport;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * An interface between Truffle API and hosting virtual machine. Not interesting for regular Truffle
@@ -43,10 +44,8 @@ public abstract class TVMCI {
      * @since 0.12
      */
     protected TVMCI() {
-        // export only for select packages
-        assert getClass().getPackage().getName().equals("org.graalvm.compiler.truffle") ||
-                        getClass().getPackage().getName().equals("com.oracle.graal.truffle") ||
-                        getClass().getPackage().getName().equals("com.oracle.truffle.api.impl");
+        // export only for com.oracle.graal.truffle and com.oracle.truffle.api.impl
+        assert getClass().getPackage().getName().equals("com.oracle.graal.truffle") || getClass().getPackage().getName().equals("com.oracle.truffle.api.impl");
     }
 
     /**
@@ -80,6 +79,13 @@ public abstract class TVMCI {
         final Accessor.InstrumentSupport accessor = Accessor.instrumentAccess();
         if (accessor != null) {
             accessor.onFirstExecution(rootNode);
+        }
+        Accessor.DebugSupport debugAccessor = Accessor.debugAccess();
+        if (debugAccessor != null) {
+            final SourceSection section = rootNode.getSourceSection();
+            if (section != null) {
+                debugAccessor.executionSourceSection(section);
+            }
         }
     }
 
