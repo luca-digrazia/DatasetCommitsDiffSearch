@@ -112,13 +112,6 @@ public final class SSAUtil {
         return (JumpOp) op;
     }
 
-    public static JumpOp phiOutOrNull(LIR lir, AbstractBlockBase<?> block) {
-        if (block.getSuccessorCount() != 1) {
-            return null;
-        }
-        return phiOut(lir, block);
-    }
-
     public static int phiOutIndex(LIR lir, AbstractBlockBase<?> block) {
         assert block.getSuccessorCount() == 1;
         ArrayList<LIRInstruction> instructions = lir.getLIRforBlock(block);
