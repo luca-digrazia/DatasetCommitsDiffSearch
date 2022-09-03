@@ -48,12 +48,11 @@ import com.oracle.truffle.api.TruffleOptions;
 final class LanguageCache {
     private static final boolean PRELOAD;
     private static final Map<String, LanguageCache> CACHE;
-    private final TruffleLanguage<?> language;
+    private TruffleLanguage<?> language;
     private final String className;
     private final Set<String> mimeTypes;
     private final String name;
     private final String version;
-    private final ClassLoader loader;
 
     static {
         CACHE = TruffleOptions.AOT ? initializeLanguages(loader()) : null;
@@ -69,25 +68,15 @@ final class LanguageCache {
      * @param loader The classloader to be used for finding languages.
      * @return A map of initialized languages.
      */
-    private static Map<String, LanguageCache> initializeLanguages(final ClassLoader loader) {
-        Map<String, LanguageCache> map;
-
-        PolyglotLocator singleLoaderLocator = new PolyglotLocator() {
-            @Override
-            public void locate(PolyglotLocator.Response response) {
-                response.registerClassLoader(loader);
-            }
-        };
-
-        map = createLanguages(singleLoaderLocator);
+    private static Map<String, LanguageCache> initializeLanguages(ClassLoader loader) {
+        Map<String, LanguageCache> map = createLanguages(loader);
         for (LanguageCache info : map.values()) {
-            info.createLanguage();
+            info.createLanguage(loader);
         }
         return map;
     }
 
-    private LanguageCache(String prefix, Properties info, TruffleLanguage<?> language, ClassLoader loader) {
-        this.loader = loader;
+    private LanguageCache(String prefix, Properties info, TruffleLanguage<?> language) {
         this.className = info.getProperty(prefix + "className");
         this.name = info.getProperty(prefix + "name");
         this.version = info.getProperty(prefix + "version");
@@ -116,22 +105,15 @@ final class LanguageCache {
         return l;
     }
 
-    static Map<String, LanguageCache> languages(PolyglotLocator locator) {
+    static Map<String, LanguageCache> languages() {
         if (PRELOAD) {
             return CACHE;
         }
-        return createLanguages(locator);
+        return createLanguages(loader());
     }
 
-    private static Map<String, LanguageCache> createLanguages(PolyglotLocator locator) {
+    private static Map<String, LanguageCache> createLanguages(ClassLoader loader) {
         Map<String, LanguageCache> map = new LinkedHashMap<>();
-        for (ClassLoader loader : PolyglotLocator.Response.loaders(locator)) {
-            createLanguages(loader, map);
-        }
-        return map;
-    }
-
-    private static void createLanguages(ClassLoader loader, Map<String, LanguageCache> map) {
         Enumeration<URL> en;
         try {
             en = loader.getResources("META-INF/truffle/language");
@@ -152,21 +134,16 @@ final class LanguageCache {
             }
             for (int cnt = 1;; cnt++) {
                 String prefix = "language" + cnt + ".";
-                String name = p.getProperty(prefix + "name");
-                if (name == null) {
+                if (p.getProperty(prefix + "name") == null) {
                     break;
                 }
-                TruffleLanguage<?> lang = null;
-                if (PRELOAD) {
-                    String className = p.getProperty(prefix + "className");
-                    lang = loadLanguage(name, className, loader);
-                }
-                LanguageCache l = new LanguageCache(prefix, p, lang, loader);
+                LanguageCache l = new LanguageCache(prefix, p, null);
                 for (String mimeType : l.getMimeTypes()) {
                     map.put(mimeType, l);
                 }
             }
         }
+        return map;
     }
 
     Set<String> getMimeTypes() {
@@ -181,28 +158,25 @@ final class LanguageCache {
         return version;
     }
 
-    String getClassName() {
-        return className;
-    }
-
-    TruffleLanguage<?> loadLanguage() {
+    TruffleLanguage<?> getImpl(boolean create) {
         if (PRELOAD) {
             return language;
         }
-        return loadLanguage(name, className, loader());
-    }
-
-    private static TruffleLanguage<?> loadLanguage(String name, String className, ClassLoader loader) {
-        try {
-            Class<?> langClazz = Class.forName(className, true, loader);
-            return (TruffleLanguage<?>) langClazz.getField("INSTANCE").get(null);
-        } catch (Exception ex) {
-            throw new IllegalStateException("Cannot initialize " + name + " language with implementation " + className, ex);
+        if (create) {
+            createLanguage(loader());
         }
+        return language;
     }
 
-    private TruffleLanguage<?> createLanguage() {
-        return loadLanguage(name, className, loader);
+    private void createLanguage(ClassLoader loader) {
+        try {
+            TruffleLanguage<?> result;
+            Class<?> langClazz = Class.forName(className, true, loader);
+            result = (TruffleLanguage<?>) langClazz.getField("INSTANCE").get(null);
+            language = result;
+        } catch (Exception ex) {
+            throw new IllegalStateException("Cannot initialize " + getName() + " language with implementation " + className, ex);
+        }
     }
 
 }
