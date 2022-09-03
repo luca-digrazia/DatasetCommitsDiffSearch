@@ -31,7 +31,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
@@ -44,7 +43,6 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.phases.ea.*;
 
 public class GraalCompiler {
@@ -157,8 +155,21 @@ public class GraalCompiler {
             new PartialEscapeAnalysisPhase(runtime, assumptions, true, GraalOptions.OptEarlyReadElimination).apply(graph);
         }
 
-        HighTierContext highTierContext = new HighTierContext(runtime, assumptions);
-        Suites.HIGH_TIER.apply(graph, highTierContext);
+        if (GraalOptions.OptConvertDeoptsToGuards) {
+            new ConvertDeoptimizeToGuardPhase().apply(graph);
+        }
+
+        new LockEliminationPhase().apply(graph);
+
+        if (GraalOptions.OptLoopTransform) {
+            new LoopTransformHighPhase().apply(graph);
+            new LoopTransformLowPhase().apply(graph);
+        }
+        new RemoveValueProxyPhase().apply(graph);
+
+        if (GraalOptions.CullFrameStates) {
+            new CullFrameStatesPhase().apply(graph);
+        }
 
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase(runtime, assumptions).apply(graph);
