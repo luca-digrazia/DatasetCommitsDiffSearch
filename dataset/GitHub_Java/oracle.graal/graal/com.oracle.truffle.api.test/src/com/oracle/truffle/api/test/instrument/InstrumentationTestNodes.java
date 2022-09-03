@@ -167,22 +167,17 @@ class InstrumentationTestNodes {
         }
     }
 
-    static class TestToolEvalCounterNode extends ToolEvalNode {
+    static class TestSplicedCounterNode extends SplicedNode {
 
         private long count;
 
         @Override
-        public Object executeToolEvalNode(Node node, VirtualFrame vFrame) {
+        public void enter(Node node, VirtualFrame vFrame) {
             count++;
-            return null;
         }
 
         public long getCount() {
             return count;
-        }
-
-        public String instrumentationInfo() {
-            return null;
         }
     }
 }
