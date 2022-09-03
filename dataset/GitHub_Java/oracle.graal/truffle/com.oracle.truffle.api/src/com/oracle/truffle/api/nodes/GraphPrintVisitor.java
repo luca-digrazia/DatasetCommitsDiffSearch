@@ -319,7 +319,7 @@ public class GraphPrintVisitor implements Closeable {
             for (Map.Entry<String, Object> property : node.getProperties().entrySet()) {
                 xmlstream.writeStartElement("p");
                 xmlstream.writeAttribute("name", property.getKey());
-                xmlstream.writeCharacters(safeToString(property.getValue()));
+                xmlstream.writeCharacters(String.valueOf(property.getValue()));
                 xmlstream.writeEndElement(); // p
             }
             xmlstream.writeEndElement(); // properties
@@ -539,14 +539,6 @@ public class GraphPrintVisitor implements Closeable {
         }
 
         return nodes;
-    }
-
-    private static String safeToString(Object value) {
-        try {
-            return String.valueOf(value);
-        } catch (Throwable ex) {
-            return value.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(value));
-        }
     }
 
     public class GraphPrintAdapter {
