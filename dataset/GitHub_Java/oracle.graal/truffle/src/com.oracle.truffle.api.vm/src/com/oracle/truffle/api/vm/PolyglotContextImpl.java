@@ -513,7 +513,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         PolyglotLanguage language = requirePublicLanguage(languageId);
         Object prev = enter();
         PolyglotLanguageContext languageContext = contexts[language.index];
-        languageContext.checkAccess();
         try {
             com.oracle.truffle.api.source.Source source = (com.oracle.truffle.api.source.Source) sourceImpl;
             CallTarget target = languageContext.sourceCache.get(source);
@@ -541,7 +540,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
 
     private PolyglotLanguage requirePublicLanguage(String languageId) {
         PolyglotLanguage language = engine.idToLanguage.get(languageId);
-        if (language == null || language.cache.isInternal()) {
+        if (language == null) {
             engine.requirePublicLanguage(languageId); // will trigger the error
             assert false;
             return null;
