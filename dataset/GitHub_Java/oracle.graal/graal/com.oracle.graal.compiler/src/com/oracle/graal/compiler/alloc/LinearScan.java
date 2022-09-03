@@ -100,7 +100,7 @@ public final class LinearScan {
     /**
      * List of blocks in linear-scan order. This is only correct as long as the CFG does not change.
      */
-    final List<Block> sortedBlocks;
+    final Block[] sortedBlocks;
 
     /**
      * Map from {@linkplain #operandNumber(Value) operand numbers} to intervals.
@@ -160,7 +160,7 @@ public final class LinearScan {
         this.ir = ir;
         this.gen = gen;
         this.frameMap = frameMap;
-        this.sortedBlocks = ir.linearScanOrder();
+        this.sortedBlocks = ir.linearScanOrder().toArray(new Block[ir.linearScanOrder().size()]);
         this.registerAttributes = frameMap.registerConfig.getAttributesMap();
 
         this.registers = target.arch.getRegisters();
@@ -313,11 +313,13 @@ public final class LinearScan {
 
     // access to block list (sorted in linear scan order)
     int blockCount() {
-        return sortedBlocks.size();
+        assert sortedBlocks.length == ir.linearScanOrder().size() : "invalid cached block list";
+        return sortedBlocks.length;
     }
 
     Block blockAt(int index) {
-        return sortedBlocks.get(index);
+        assert sortedBlocks[index] == ir.linearScanOrder().get(index) : "invalid cached block list";
+        return sortedBlocks[index];
     }
 
     /**
@@ -501,7 +503,9 @@ public final class LinearScan {
         }
 
         LIRInsertionBuffer insertionBuffer = new LIRInsertionBuffer();
-        for (Block block : sortedBlocks) {
+        int numBlocks = blockCount();
+        for (int i = 0; i < numBlocks; i++) {
+            Block block = blockAt(i);
             List<LIRInstruction> instructions = ir.lir(block);
             int numInst = instructions.size();
 
@@ -606,9 +610,10 @@ public final class LinearScan {
         };
 
         // Assign IDs to LIR nodes and build a mapping, lirOps, from ID to LIRInstruction node.
+        int numBlocks = blockCount();
         int numInstructions = 0;
-        for (Block block : sortedBlocks) {
-            numInstructions += ir.lir(block).size();
+        for (int i = 0; i < numBlocks; i++) {
+            numInstructions += ir.lir(blockAt(i)).size();
         }
 
         // initialize with correct length
@@ -617,7 +622,9 @@ public final class LinearScan {
 
         int opId = 0;
         int index = 0;
-        for (Block block : sortedBlocks) {
+
+        for (int i = 0; i < numBlocks; i++) {
+            Block block = blockAt(i);
             blockData.put(block, new BlockData());
 
             List<LIRInstruction> instructions = ir.lir(block);
@@ -659,7 +666,8 @@ public final class LinearScan {
         intervalInLoop = new BitMap2D(operandSize(), numLoops());
 
         // iterate all blocks
-        for (final Block block : sortedBlocks) {
+        for (int i = 0; i < numBlocks; i++) {
+            final Block block = blockAt(i);
             final BitSet liveGen = new BitSet(liveSize);
             final BitSet liveKill = new BitSet(liveSize);
 
@@ -839,7 +847,7 @@ public final class LinearScan {
         } while (changeOccurred);
 
         if (GraalOptions.DetailedAsserts) {
-            verifyLiveness();
+            verifyLiveness(numBlocks);
         }
 
         // check that the liveIn set of the first block is empty
@@ -873,7 +881,8 @@ public final class LinearScan {
 
                 Deque<Block> definedIn = new ArrayDeque<>();
                 HashSet<Block> usedIn = new HashSet<>();
-                for (Block block : sortedBlocks) {
+                for (int j = 0; j < numBlocks; j++) {
+                    Block block = blockAt(j);
                     if (blockData.get(block).liveGen.get(operandNum)) {
                         usedIn.add(block);
                         TTY.println("  used in block B%d", block.getId());
@@ -923,10 +932,11 @@ public final class LinearScan {
         }
     }
 
-    private void verifyLiveness() {
+    private void verifyLiveness(int numBlocks) {
         // check that fixed intervals are not live at block boundaries
         // (live set must be empty at fixed intervals)
-        for (Block block : sortedBlocks) {
+        for (int i = 0; i < numBlocks; i++) {
+            Block block = blockAt(i);
             for (int j = 0; j <= maxRegisterNumber(); j++) {
                 assert !blockData.get(block).liveIn.get(j) : "liveIn  set of fixed register must be empty";
                 assert !blockData.get(block).liveOut.get(j) : "liveOut set of fixed register must be empty";
@@ -1518,7 +1528,9 @@ public final class LinearScan {
         BitSet blockCompleted = new BitSet(numBlocks);
         BitSet alreadyResolved = new BitSet(numBlocks);
 
-        for (Block block : sortedBlocks) {
+        int i;
+        for (i = 0; i < numBlocks; i++) {
+            Block block = blockAt(i);
 
             // check if block has only one predecessor and only one successor
             if (block.getPredecessorCount() == 1 && block.getSuccessorCount() == 1) {
@@ -1549,11 +1561,13 @@ public final class LinearScan {
             }
         }
 
-        for (Block fromBlock : sortedBlocks) {
-            if (!blockCompleted.get(fromBlock.getLinearScanNumber())) {
+        for (i = 0; i < numBlocks; i++) {
+            if (!blockCompleted.get(i)) {
+                Block fromBlock = blockAt(i);
                 alreadyResolved.clear();
                 alreadyResolved.or(blockCompleted);
 
+                int numSux = fromBlock.getSuccessorCount();
                 for (Block toBlock : fromBlock.getSuccessors()) {
 
                     // check for duplicate edges between the same blocks (can happen with switch blocks)
@@ -2005,7 +2019,9 @@ public final class LinearScan {
         otherIntervals.addRange(Integer.MAX_VALUE - 2, Integer.MAX_VALUE - 1);
         IntervalWalker iw = new IntervalWalker(this, fixedIntervals, otherIntervals);
 
-        for (Block block : sortedBlocks) {
+        for (int i = 0; i < blockCount(); i++) {
+            Block block = blockAt(i);
+
             List<LIRInstruction> instructions = ir.lir(block);
 
             for (int j = 0; j < instructions.size(); j++) {
@@ -2041,7 +2057,10 @@ public final class LinearScan {
     }
 
     void verifyConstants() {
-        for (Block block : sortedBlocks) {
+        int numBlocks = blockCount();
+
+        for (int i = 0; i < numBlocks; i++) {
+            Block block = blockAt(i);
             BitSet liveAtEdge = blockData.get(block).liveIn;
 
             // visit all operands where the liveAtEdge bit is set
