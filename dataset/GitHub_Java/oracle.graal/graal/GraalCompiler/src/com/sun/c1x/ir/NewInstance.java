@@ -24,13 +24,14 @@ package com.sun.c1x.ir;
 
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
+import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code NewInstance} instruction represents the allocation of an instance class object.
  */
-public final class NewInstance extends Instruction {
+public final class NewInstance extends StateSplit {
 
     private static final int INPUT_COUNT = 0;
     private static final int SUCCESSOR_COUNT = 0;
@@ -46,8 +47,8 @@ public final class NewInstance extends Instruction {
      * @param stateBefore the state before executing this instruction
      * @param graph
      */
-    public NewInstance(RiType type, int cpi, RiConstantPool constantPool, Graph graph) {
-        super(CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public NewInstance(RiType type, int cpi, RiConstantPool constantPool, FrameState stateBefore, Graph graph) {
+        super(CiKind.Object, stateBefore, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.instanceClass = type;
         this.cpi = cpi;
         this.constantPool = constantPool;
@@ -70,11 +71,6 @@ public final class NewInstance extends Instruction {
     @Override
     public RiType exactType() {
         return instanceClass;
-    }
-
-    @Override
-    public boolean canTrap() {
-        return true;
     }
 
     @Override
