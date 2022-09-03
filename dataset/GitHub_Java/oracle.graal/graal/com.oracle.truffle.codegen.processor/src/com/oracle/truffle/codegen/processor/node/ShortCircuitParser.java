@@ -29,11 +29,10 @@ import javax.lang.model.element.*;
 
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
-import com.oracle.truffle.codegen.processor.node.NodeFieldData.ExecutionKind;
+import com.oracle.truffle.codegen.processor.node.NodeChildData.ExecutionKind;
 import com.oracle.truffle.codegen.processor.template.*;
 
-
-public class ShortCircuitParser extends MethodParser<ShortCircuitData> {
+public class ShortCircuitParser extends NodeMethodParser<ShortCircuitData> {
 
     private final Set<String> shortCircuitValues;
 
@@ -41,39 +40,36 @@ public class ShortCircuitParser extends MethodParser<ShortCircuitData> {
         super(context, node);
 
         shortCircuitValues = new HashSet<>();
-        NodeFieldData[] shortCircuitFields = node.filterFields(null, ExecutionKind.SHORT_CIRCUIT);
-        for (NodeFieldData field : shortCircuitFields) {
+        NodeChildData[] shortCircuitFields = node.filterFields(ExecutionKind.SHORT_CIRCUIT);
+        for (NodeChildData field : shortCircuitFields) {
             shortCircuitValues.add(field.getName());
         }
     }
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        String shortCircuitValue = Utils.getAnnotationValueString(mirror, "value");
-
-        if (!shortCircuitValues.contains(shortCircuitValue)) {
-            getContext().getLog().error(method, mirror, "Invalid short circuit value %s.", shortCircuitValue);
-            return null;
-        }
-
-        return createDefaultMethodSpec(shortCircuitValue);
+        String shortCircuitValue = Utils.getAnnotationValue(String.class, mirror, "value");
+        return createDefaultMethodSpec(method, mirror, true, shortCircuitValue);
     }
 
     @Override
     protected ParameterSpec createReturnParameterSpec() {
-        return new ParameterSpec("has", getContext().getType(boolean.class), false);
+        return new ParameterSpec("has", getContext().getType(boolean.class));
     }
 
     @Override
     public ShortCircuitData create(TemplateMethod method) {
-        String shortCircuitValue = Utils.getAnnotationValueString(method.getMarkerAnnotation(), "value");
-        assert shortCircuitValue != null;
-        assert shortCircuitValues.contains(shortCircuitValue);
+        String shortCircuitValue = Utils.getAnnotationValue(String.class, method.getMarkerAnnotation(), "value");
+
+        if (!shortCircuitValues.contains(shortCircuitValue)) {
+            method.addError("Invalid short circuit value %s.", shortCircuitValue);
+        }
+
         return new ShortCircuitData(method, shortCircuitValue);
     }
 
     @Override
-    public Class< ? extends Annotation> getAnnotationType() {
+    public Class<? extends Annotation> getAnnotationType() {
         return ShortCircuit.class;
     }
 

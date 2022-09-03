@@ -22,14 +22,10 @@
  */
 package com.oracle.truffle.codegen.processor.node;
 
-import java.util.*;
-
 import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 
-import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
-import com.oracle.truffle.codegen.processor.typesystem.*;
 
 public class NodeChildData extends MessageContainer {
 
@@ -58,9 +54,6 @@ public class NodeChildData extends MessageContainer {
 
     private final Cardinality cardinality;
     private final ExecutionKind executionKind;
-
-    private List<NodeChildData> executeWith = Collections.emptyList();
-
     private NodeData nodeData;
 
     public NodeChildData(Element sourceElement, AnnotationMirror sourceMirror, String name, TypeMirror nodeType, Element accessElement, Cardinality cardinality, ExecutionKind executionKind) {
@@ -71,34 +64,6 @@ public class NodeChildData extends MessageContainer {
         this.accessElement = accessElement;
         this.cardinality = cardinality;
         this.executionKind = executionKind;
-    }
-
-    public List<NodeChildData> getExecuteWith() {
-        return executeWith;
-    }
-
-    void setExecuteWith(List<NodeChildData> executeWith) {
-        this.executeWith = executeWith;
-    }
-
-    public ExecutableTypeData findExecutableType(ProcessorContext context, TypeData targetType) {
-        ExecutableTypeData executableType = nodeData.findExecutableType(targetType, getExecuteWith().size());
-        if (executableType == null) {
-            executableType = findAnyGenericExecutableType(context);
-        }
-        return executableType;
-    }
-
-    public List<ExecutableTypeData> findGenericExecutableTypes(ProcessorContext context) {
-        return nodeData.findGenericExecutableTypes(context, getExecuteWith().size());
-    }
-
-    public ExecutableTypeData findAnyGenericExecutableType(ProcessorContext context) {
-        return nodeData.findAnyGenericExecutableType(context, getExecuteWith().size());
-    }
-
-    public List<ExecutableTypeData> findExecutableTypes() {
-        return nodeData.getExecutableTypes(getExecuteWith().size());
     }
 
     @Override
@@ -117,9 +82,7 @@ public class NodeChildData extends MessageContainer {
 
     void setNode(NodeData nodeData) {
         this.nodeData = nodeData;
-        if (nodeData != null) {
-            getMessages().addAll(nodeData.collectMessages());
-        }
+        getMessages().addAll(nodeData.collectMessages());
     }
 
     public Element getAccessElement() {

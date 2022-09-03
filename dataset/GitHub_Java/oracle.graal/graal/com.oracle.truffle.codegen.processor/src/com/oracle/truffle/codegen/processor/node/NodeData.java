@@ -144,10 +144,6 @@ public class NodeData extends Template {
         if (specializations == null) {
             return false;
         }
-        if (getTemplateType().getModifiers().contains(Modifier.PRIVATE)) {
-            return false;
-        }
-
         boolean noSpecialization = true;
         for (SpecializationData specialization : specializations) {
             noSpecialization = noSpecialization && specialization.isGeneric() || specialization.isUninitialized();

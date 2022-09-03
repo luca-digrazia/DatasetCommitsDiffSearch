@@ -44,7 +44,6 @@ public abstract class ClassElementFactory<M> extends CodeElementFactory<M> {
     @Override
     protected abstract CodeTypeElement create(M m);
 
-
     @Override
     public CodeTypeElement getElement() {
         return (CodeTypeElement) super.getElement();
@@ -87,7 +86,6 @@ public abstract class ClassElementFactory<M> extends CodeElementFactory<M> {
         return method;
     }
 
-
     private static ExecutableElement findConstructor(TypeElement clazz) {
         List<ExecutableElement> constructors = ElementFilter.constructorsIn(clazz.getEnclosedElements());
         if (constructors.isEmpty()) {
@@ -101,7 +99,6 @@ public abstract class ClassElementFactory<M> extends CodeElementFactory<M> {
         if (element.getModifiers().contains(Modifier.PRIVATE)) {
             return null;
         }
-
         CodeExecutableElement executable = CodeExecutableElement.clone(getContext().getEnvironment(), element);
         executable.setReturnType(null);
         executable.setSimpleName(CodeNames.of(type.getSimpleName().toString()));
@@ -117,7 +114,6 @@ public abstract class ClassElementFactory<M> extends CodeElementFactory<M> {
         return executable;
     }
 
-
     protected CodeTypeElement createClass(Template model, Set<Modifier> modifiers, String simpleName, TypeMirror superType, boolean enumType) {
         TypeElement templateType = model.getTemplateType();
 
@@ -131,6 +127,10 @@ public abstract class ClassElementFactory<M> extends CodeElementFactory<M> {
 
         CodeAnnotationMirror generatedByAnnotation = new CodeAnnotationMirror((DeclaredType) getContext().getType(GeneratedBy.class));
         generatedByAnnotation.setElementValue(generatedByAnnotation.findExecutableElement("value"), new CodeAnnotationValue(templateType.asType()));
+        if (model.getTemplateMethodName() != null) {
+            generatedByAnnotation.setElementValue(generatedByAnnotation.findExecutableElement("methodName"), new CodeAnnotationValue(model.getTemplateMethodName()));
+        }
+
         clazz.addAnnotationMirror(generatedByAnnotation);
 
         context.registerType(model.getTemplateType(), clazz.asType());

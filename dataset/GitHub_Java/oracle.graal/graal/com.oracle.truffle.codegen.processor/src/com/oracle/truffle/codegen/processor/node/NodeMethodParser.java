@@ -42,8 +42,7 @@ public abstract class NodeMethodParser<E extends TemplateMethod> extends Templat
         return template;
     }
 
-    @SuppressWarnings("unused")
-    protected ParameterSpec createValueParameterSpec(String valueName, NodeData nodeData, int evaluatedCount) {
+    protected ParameterSpec createValueParameterSpec(String valueName, NodeData nodeData) {
         ParameterSpec spec = new ParameterSpec(valueName, nodeTypeMirrors(nodeData));
         spec.setSignature(true);
         return spec;
@@ -62,7 +61,7 @@ public abstract class NodeMethodParser<E extends TemplateMethod> extends Templat
     }
 
     protected ParameterSpec createReturnParameterSpec() {
-        return createValueParameterSpec("returnValue", getNode(), 0);
+        return createValueParameterSpec("returnValue", getNode());
     }
 
     @Override
@@ -96,7 +95,7 @@ public abstract class NodeMethodParser<E extends TemplateMethod> extends Templat
         if (getNode().getChildren() != null) {
             for (NodeChildData child : getNode().getChildren()) {
                 if (child.getExecutionKind() == ExecutionKind.DEFAULT) {
-                    ParameterSpec spec = createValueParameterSpec(child.getName(), child.getNodeData(), child.getExecuteWith().size());
+                    ParameterSpec spec = createValueParameterSpec(child.getName(), child.getNodeData());
                     if (child.getCardinality().isMany()) {
                         spec.setCardinality(Cardinality.MANY);
                         spec.setIndexed(true);
@@ -111,7 +110,7 @@ public abstract class NodeMethodParser<E extends TemplateMethod> extends Templat
                     if (shortCircuitsEnabled) {
                         methodSpec.addRequired(new ParameterSpec(shortCircuitValueName(valueName), getContext().getType(boolean.class)));
                     }
-                    methodSpec.addRequired(createValueParameterSpec(valueName, child.getNodeData(), child.getExecuteWith().size()));
+                    methodSpec.addRequired(createValueParameterSpec(valueName, child.getNodeData()));
                 } else {
                     assert false;
                 }
@@ -124,7 +123,7 @@ public abstract class NodeMethodParser<E extends TemplateMethod> extends Templat
     protected void resolveAndAddImplicitThis(MethodSpec methodSpec, ExecutableElement method) {
         TypeMirror declaredType = Utils.findNearestEnclosingType(method).asType();
 
-        if (!method.getModifiers().contains(Modifier.STATIC) && !Utils.isAssignable(getContext(), declaredType, getContext().getTruffleTypes().getNode())) {
+        if (!method.getModifiers().contains(Modifier.STATIC) && !Utils.isAssignable(declaredType, getContext().getTruffleTypes().getNode())) {
             methodSpec.addImplicitRequiredType(getNode().getTemplateType().asType());
         }
     }

@@ -59,6 +59,11 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
         }
     }
 
+    /* Support JDK8 langtools. */
+    public boolean isDefault() {
+        return false;
+    }
+
     @Override
     public List<TypeMirror> getThrownTypes() {
         return throwables;
@@ -79,7 +84,7 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
     }
 
     @Override
-    public List< ? extends TypeParameterElement> getTypeParameters() {
+    public List<? extends TypeParameterElement> getTypeParameters() {
         return Collections.emptyList();
     }
 
@@ -109,7 +114,7 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
     }
 
     public CodeTreeBuilder createBuilder() {
-        CodeTreeBuilder builder = new CodeTreeBuilder();
+        CodeTreeBuilder builder = new CodeTreeBuilder(null);
         this.bodyTree = builder.getTree();
         this.bodyTree.setEnclosingElement(this);
         this.body = null;
@@ -156,7 +161,6 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
         parameters.remove(parameter);
     }
 
-
     public void removeParameter(String varName) {
         VariableElement remove = null;
         for (VariableElement var : getParameters()) {
@@ -200,7 +204,7 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
         return v.visitExecutable(this, p);
     }
 
-    public static CodeExecutableElement clone(ProcessingEnvironment env, ExecutableElement method) {
+    public static CodeExecutableElement clone(@SuppressWarnings("unused") ProcessingEnvironment env, ExecutableElement method) {
         CodeExecutableElement copy = new CodeExecutableElement(method.getReturnType(), method.getSimpleName().toString());
         for (TypeMirror thrownType : method.getThrownTypes()) {
             copy.addThrownType(thrownType);
@@ -211,13 +215,13 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
             copy.addAnnotationMirror(mirror);
         }
         for (VariableElement var : method.getParameters()) {
-            copy.addParameter(var);
+            copy.addParameter(CodeVariableElement.clone(var));
         }
         for (Element element : method.getEnclosedElements()) {
             copy.add(element);
         }
-        copy.setBody(Utils.getMethodBody(env, method));
         copy.getModifiers().addAll(method.getModifiers());
+        copy.setVarArgs(method.isVarArgs());
         return copy;
     }
 
