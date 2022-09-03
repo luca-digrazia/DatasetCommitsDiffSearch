@@ -53,7 +53,6 @@ public final class ObjectLocationIdentity extends LocationIdentity {
     }
 
     private ObjectLocationIdentity(JavaConstant object) {
-        super(false);
         this.object = object;
     }
 
