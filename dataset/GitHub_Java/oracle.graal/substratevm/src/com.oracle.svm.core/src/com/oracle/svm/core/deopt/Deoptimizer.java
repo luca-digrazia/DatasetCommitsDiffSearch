@@ -778,13 +778,7 @@ public final class Deoptimizer {
                             assert totalOffset >= targetContentSize;
                             result.values[idx] = DeoptimizedFrame.ConstantEntry.factory(totalOffset, con);
 
-                            int size;
-                            if (targetValue.getKind().isObject() && !targetValue.isCompressedReference()) {
-                                size = FrameAccess.uncompressedReferenceSize();
-                            } else {
-                                size = ConfigurationValues.getObjectLayout().sizeInBytes(con.getJavaKind());
-                            }
-                            int endOffset = totalOffset + size;
+                            int endOffset = totalOffset + ConfigurationValues.getObjectLayout().sizeInBytes(con.getJavaKind(), targetValue.isCompressedReference());
                             if (endOffset > newEndOfParams) {
                                 newEndOfParams = endOffset;
                             }
@@ -896,12 +890,12 @@ public final class Deoptimizer {
         if (LayoutEncoding.isArray(hub.getLayoutEncoding())) {
             /* For arrays, the second encoded value is the array length. */
             int length = readValue(encodings[1], sourceFrame).asInt();
-            obj = Array.newInstance(DynamicHub.toClass(hub.getComponentHub()), length);
+            obj = Array.newInstance(hub.getComponentHub().asClass(), length);
             curOffset = LayoutEncoding.getArrayBaseOffset(hub.getLayoutEncoding());
             curIdx = 2;
         } else {
             try {
-                obj = UnsafeAccess.UNSAFE.allocateInstance(DynamicHub.toClass(hub));
+                obj = UnsafeAccess.UNSAFE.allocateInstance(hub.asClass());
             } catch (InstantiationException ex) {
                 throw VMError.shouldNotReachHere(ex);
             }
@@ -914,12 +908,15 @@ public final class Deoptimizer {
             Heap.getHeap().getGC().collect("from Deoptimizer.materializeObject because of testGCinDeoptimizer");
         }
 
+        /* Objects must contain only compressed references when compression is enabled */
+        boolean useCompressedReferences = ReferenceAccess.singleton().haveCompressedReferences();
+
         while (curIdx < encodings.length) {
             ValueInfo value = encodings[curIdx];
             JavaKind kind = value.getKind();
             JavaConstant con = readValue(value, sourceFrame);
             writeValueInMaterializedObj(obj, curOffset, con);
-            curOffset = curOffset.add(objectLayout.sizeInBytes(kind));
+            curOffset = curOffset.add(objectLayout.sizeInBytes(kind, useCompressedReferences));
             curIdx++;
         }
 
@@ -1090,8 +1087,8 @@ public final class Deoptimizer {
         private static final int sizeofInt = JavaKind.Int.getByteCount();
         private static final int sizeofLong = JavaKind.Long.getByteCount();
         /** All references in deopt frames are compressed when compressed references are enabled. */
-        private final int sizeofCompressedReference = ConfigurationValues.getObjectLayout().getReferenceSize();
-        private final int sizeofUncompressedReference = FrameAccess.uncompressedReferenceSize();
+        private final int sizeofCompressedReference = ConfigurationValues.getObjectLayout().getCompressedReferenceSize();
+        private final int sizeofUncompressedReference = ConfigurationValues.getObjectLayout().getReferenceSize();
         /**
          * The offset of the within the array object. I do not have to scale the offsets.
          */

@@ -27,16 +27,17 @@ package com.oracle.svm.core;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 import java.util.Arrays;
 
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.nodes.BreakpointNode;
-import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.c.function.CEntryPointContext;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
@@ -55,6 +56,7 @@ import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.code.CodeInfoTable;
+import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.deopt.DeoptimizationSupport;
 import com.oracle.svm.core.deopt.DeoptimizedFrame;
 import com.oracle.svm.core.deopt.Deoptimizer;
@@ -147,10 +149,30 @@ public class SubstrateUtil {
         return n;
     }
 
-    /** @deprecated replaced by {@link CTypeConversion#asByteBuffer(PointerBase, int)} */
-    @Deprecated
+    @TargetClass(className = "java.nio.DirectByteBuffer")
+    @SuppressWarnings("unused")
+    static final class Target_java_nio_DirectByteBuffer {
+        @Alias
+        Target_java_nio_DirectByteBuffer(long addr, int cap) {
+        }
+
+        @Alias
+        public native long address();
+    }
+
+    /**
+     * Wraps a pointer to C memory into a {@link ByteBuffer}.
+     *
+     * @param pointer The pointer to C memory.
+     * @param size The size of the C memory.
+     * @return A new {@link ByteBuffer} wrapping the pointer.
+     */
     public static ByteBuffer wrapAsByteBuffer(PointerBase pointer, int size) {
-        return CTypeConversion.asByteBuffer(pointer, size);
+        return KnownIntrinsics.unsafeCast(new Target_java_nio_DirectByteBuffer(pointer.rawValue(), size), ByteBuffer.class).order(ConfigurationValues.getTarget().arch.getByteOrder());
+    }
+
+    public static <T extends PointerBase> T getBaseAddress(MappedByteBuffer buffer) {
+        return WordFactory.pointer(KnownIntrinsics.unsafeCast(buffer, Target_java_nio_DirectByteBuffer.class).address());
     }
 
     /**
@@ -226,7 +248,7 @@ public class SubstrateUtil {
             dumpException(log, "dumpVMThreads", e);
         }
 
-        IsolateThread currentThread = CurrentIsolate.getCurrentThread();
+        IsolateThread currentThread = CEntryPointContext.getCurrentIsolateThread();
         try {
             dumpVMThreadState(log, currentThread);
         } catch (Exception e) {
@@ -273,7 +295,7 @@ public class SubstrateUtil {
 
         if (VMOperationControl.isFrozen()) {
             for (IsolateThread vmThread = VMThreads.firstThread(); vmThread != VMThreads.nullThread(); vmThread = VMThreads.nextThread(vmThread)) {
-                if (vmThread == CurrentIsolate.getCurrentThread()) {
+                if (vmThread == CEntryPointContext.getCurrentIsolateThread()) {
                     continue;
                 }
                 try {
