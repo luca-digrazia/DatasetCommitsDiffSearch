@@ -971,9 +971,4 @@ public class DominatorConditionalEliminationPhase extends BasePhase<PhaseContext
         }
 
     }
-
-    @Override
-    public float codeSizeIncrease() {
-        return 1.5f;
-    }
 }

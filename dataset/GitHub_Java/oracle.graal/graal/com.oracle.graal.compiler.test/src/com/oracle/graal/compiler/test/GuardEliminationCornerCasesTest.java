@@ -22,18 +22,27 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.graal.api.directives.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.api.directives.GraalDirectives;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.BeginNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.GuardNode;
+import com.oracle.graal.nodes.LogicNode;
+import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.nodes.java.InstanceOfNode;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.ValueProxy;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.ConvertDeoptimizeToGuardPhase;
+import com.oracle.graal.phases.common.DominatorConditionalEliminationPhase;
+import com.oracle.graal.phases.common.LoweringPhase;
+import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.phases.tiers.HighTierContext;
 
 public class GuardEliminationCornerCasesTest extends GraalCompilerTest {
 
@@ -62,11 +71,11 @@ public class GuardEliminationCornerCasesTest extends GraalCompilerTest {
                     if (b instanceof C) {
                         return 1;
                     } else {
-                        GraalDirectives.deoptimize();
+                        GraalDirectives.deoptimizeAndInvalidate();
                     }
                 }
             } else {
-                GraalDirectives.deoptimize();
+                GraalDirectives.deoptimizeAndInvalidate();
             }
         }
         return 0;
@@ -79,13 +88,13 @@ public class GuardEliminationCornerCasesTest extends GraalCompilerTest {
         new ConvertDeoptimizeToGuardPhase().apply(graph, context);
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
         new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
-        Debug.dump(graph, "after parsing");
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "after parsing");
 
         GuardNode myGuardNode = null;
         for (Node n : graph.getNodes()) {
             if (n instanceof GuardNode) {
                 GuardNode guardNode = (GuardNode) n;
-                LogicNode condition = guardNode.condition();
+                LogicNode condition = guardNode.getCondition();
                 if (condition instanceof InstanceOfNode) {
                     InstanceOfNode instanceOfNode = (InstanceOfNode) condition;
                     if (instanceOfNode.getValue() instanceof ValueProxy) {
@@ -100,9 +109,9 @@ public class GuardEliminationCornerCasesTest extends GraalCompilerTest {
         AbstractBeginNode prevBegin = BeginNode.prevBegin((FixedNode) myBegin.predecessor());
         myGuardNode.setAnchor(prevBegin);
 
-        Debug.dump(graph, "after manual modification");
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "after manual modification");
         graph.reverseUsageOrder();
-        new ConditionalEliminationPhase().apply(graph);
+        new DominatorConditionalEliminationPhase(true).apply(graph, context);
         new SchedulePhase(SchedulePhase.SchedulingStrategy.EARLIEST).apply(graph);
     }
 }

@@ -23,7 +23,6 @@
 package com.oracle.graal.truffle;
 
 import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
-import static com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.createStandardInlineInfo;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.PrintTruffleExpansionHistogram;
 
 import java.lang.invoke.MethodHandle;
@@ -243,12 +242,12 @@ public class PartialEvaluator {
                     if (decision != null && decision.isInline()) {
                         inlining.push(decision);
                         builder.getAssumptions().record(new AssumptionValidAssumption((OptimizedAssumption) decision.getTarget().getNodeRewritingAssumption()));
-                        return createStandardInlineInfo(callInlinedMethod);
+                        return new InlineInfo(callInlinedMethod, false);
                     }
                 }
             }
 
-            return createStandardInlineInfo(original);
+            return new InlineInfo(original, false);
         }
 
         @Override
@@ -306,7 +305,7 @@ public class PartialEvaluator {
                  * We want to inline invokes that have a constant MethodHandle parameter to remove
                  * invokedynamic related calls as early as possible.
                  */
-                return createStandardInlineInfo(original);
+                return new InlineInfo(original, false);
             }
             return null;
         }
@@ -405,6 +404,7 @@ public class PartialEvaluator {
         GraphBuilderConfiguration newConfig = config.copy();
         InvocationPlugins invocationPlugins = newConfig.getPlugins().getInvocationPlugins();
         registerTruffleInvocationPlugins(invocationPlugins, canDelayIntrinsification);
+        invocationPlugins.closeRegistration();
         boolean mustInstrumentBranches = TruffleCompilerOptions.TruffleInstrumentBranches.getValue();
         return newConfig.withNodeSourcePosition(newConfig.trackNodeSourcePosition() || mustInstrumentBranches);
     }

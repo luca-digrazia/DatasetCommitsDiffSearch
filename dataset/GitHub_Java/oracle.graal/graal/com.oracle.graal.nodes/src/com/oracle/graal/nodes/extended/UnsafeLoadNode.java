@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,58 +22,77 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.cri.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.java.LoadFieldNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
- * Load of a value from a location specified as an offset relative to an object.
+ * Load of a value from a location specified as an offset relative to an object. No null check is
+ * performed before the load.
  */
-public class UnsafeLoadNode extends AbstractStateSplit implements Lowerable {
+@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtualizable {
+    public static final NodeClass<UnsafeLoadNode> TYPE = NodeClass.create(UnsafeLoadNode.class);
 
-    @Input private ValueNode object;
-    @Input private ValueNode offset;
-    @Data private final int displacement;
-    @Data private final CiKind loadKind;
-
-    public ValueNode object() {
-        return object;
+    public UnsafeLoadNode(ValueNode object, ValueNode offset, JavaKind accessKind, LocationIdentity locationIdentity) {
+        super(TYPE, StampFactory.forKind(accessKind.getStackKind()), object, offset, accessKind, locationIdentity);
     }
 
-    public int displacement() {
-        return displacement;
-    }
-
-    public ValueNode offset() {
-        return offset;
-    }
-
-    public UnsafeLoadNode(ValueNode object, ValueNode offset, CiKind kind) {
-        this(object, 0, offset, kind);
-    }
-
-    public UnsafeLoadNode(ValueNode object, int displacement, ValueNode offset, CiKind kind) {
-        super(StampFactory.forKind(kind.stackKind()));
-        this.object = object;
-        this.displacement = displacement;
-        this.offset = offset;
-        this.loadKind = kind;
-    }
-
-    public CiKind loadKind() {
-        return loadKind;
+    public UnsafeLoadNode(NodeClass<? extends UnsafeLoadNode> c, ValueNode object, ValueNode offset, JavaKind accessKind, LocationIdentity locationIdentity) {
+        super(c, StampFactory.forKind(accessKind.getStackKind()), object, offset, accessKind, locationIdentity);
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
     }
 
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static <T> T load(Object object, long offset, @ConstantNodeParameter CiKind kind) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(object());
+        if (alias instanceof VirtualObjectNode) {
+            VirtualObjectNode virtual = (VirtualObjectNode) alias;
+            ValueNode offsetValue = tool.getAlias(offset());
+            if (offsetValue.isConstant()) {
+                long off = offsetValue.asJavaConstant().asLong();
+                int entryIndex = virtual.entryIndexForOffset(off, accessKind());
+
+                if (entryIndex != -1) {
+                    ValueNode entry = tool.getEntry(virtual, entryIndex);
+                    JavaKind entryKind = virtual.entryKind(entryIndex);
+                    if (entry.getStackKind() == getStackKind() || entryKind == accessKind()) {
+                        tool.replaceWith(entry);
+                    }
+                }
+            }
+        }
     }
+
+    @Override
+    protected ValueNode cloneAsFieldAccess(Assumptions assumptions, ResolvedJavaField field) {
+        return LoadFieldNode.create(assumptions, object(), field);
+    }
+
+    @Override
+    protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity) {
+        return new UnsafeLoadNode(object(), location, accessKind(), identity);
+    }
+
+    @NodeIntrinsic
+    public static native Object load(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
 }

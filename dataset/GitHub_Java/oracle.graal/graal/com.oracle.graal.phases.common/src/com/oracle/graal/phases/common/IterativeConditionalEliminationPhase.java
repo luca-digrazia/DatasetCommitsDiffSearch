@@ -22,52 +22,58 @@
  */
 package com.oracle.graal.phases.common;
 
-import java.util.*;
+import static com.oracle.graal.graph.Graph.NodeEvent.NODE_ADDED;
+import static com.oracle.graal.graph.Graph.NodeEvent.ZERO_USAGES;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.Graph.InputChangedListener;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
+import com.oracle.graal.graph.Graph.NodeEventScope;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.spi.Simplifiable;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.phases.BasePhase;
+import com.oracle.graal.phases.common.util.HashSetNodeEventListener;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
+import jdk.vm.ci.code.BailoutException;
 
-public class IterativeConditionalEliminationPhase extends Phase {
-    private final TargetDescription target;
-    private final MetaAccessProvider runtime;
-    private final Assumptions assumptions;
+public class IterativeConditionalEliminationPhase extends BasePhase<PhaseContext> {
 
-    public IterativeConditionalEliminationPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions) {
-        this.target = target;
-        this.runtime = runtime;
-        this.assumptions = assumptions;
+    private static final int MAX_ITERATIONS = 256;
+
+    private final CanonicalizerPhase canonicalizer;
+    private final boolean fullSchedule;
+
+    public IterativeConditionalEliminationPhase(CanonicalizerPhase canonicalizer, boolean fullSchedule) {
+        this.canonicalizer = canonicalizer;
+        this.fullSchedule = fullSchedule;
     }
 
     @Override
-    protected void run(StructuredGraph graph) {
-        Set<Node> canonicalizationRoots = new HashSet<>();
-        ConditionalEliminationPhase eliminate = new ConditionalEliminationPhase();
-        Listener listener = new Listener(canonicalizationRoots);
+    @SuppressWarnings("try")
+    protected void run(StructuredGraph graph, PhaseContext context) {
+        HashSetNodeEventListener listener = new HashSetNodeEventListener().exclude(NODE_ADDED).exclude(ZERO_USAGES);
+        int count = 0;
         while (true) {
-            graph.trackInputChange(listener);
-            eliminate.apply(graph);
-            graph.stopTrackingInputChange();
-            if (canonicalizationRoots.isEmpty()) {
+            try (NodeEventScope nes = graph.trackNodeEvents(listener)) {
+                new DominatorConditionalEliminationPhase(fullSchedule).apply(graph, context);
+            }
+            if (listener.getNodes().isEmpty()) {
                 break;
             }
-            new CanonicalizerPhase(target, runtime, assumptions, canonicalizationRoots, null).apply(graph);
-            canonicalizationRoots.clear();
+            for (Node node : graph.getNodes()) {
+                if (node instanceof Simplifiable) {
+                    listener.getNodes().add(node);
+                }
+            }
+            canonicalizer.applyIncremental(graph, context, listener.getNodes());
+            listener.getNodes().clear();
+            if (++count > MAX_ITERATIONS) {
+                throw new BailoutException("Number of iterations in ConditionalEliminationPhase phase exceeds %d", MAX_ITERATIONS);
+            }
         }
     }
 
-    private static class Listener implements InputChangedListener {
-        private final Set<Node> canonicalizationRoots;
-        public Listener(Set<Node> canonicalizationRoots) {
-            this.canonicalizationRoots = canonicalizationRoots;
-        }
-        @Override
-        public void inputChanged(Node node) {
-            canonicalizationRoots.add(node);
-        }
+    @Override
+    public float codeSizeIncrease() {
+        return 2.0f;
     }
 }
