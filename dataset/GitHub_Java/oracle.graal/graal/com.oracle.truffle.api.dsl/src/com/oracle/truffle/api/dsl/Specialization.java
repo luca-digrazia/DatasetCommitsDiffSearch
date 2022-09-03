@@ -158,11 +158,13 @@ public @interface Specialization {
      * int doAddNoOverflow(int a, int b) {
      *     return ExactMath.addExact(a, b);
      * }
+     * 
      * &#064;Specialization
      * long doAddWithOverflow(int a, int b) {
      *     return a + b;
      * }
      * ...
+     * 
      * Example executions:
      *   execute(Integer.MAX_VALUE - 1, 1) => doAddNoOverflow(Integer.MAX_VALUE - 1, 1)
      *   execute(Integer.MAX_VALUE, 1)     => doAddNoOverflow(Integer.MAX_VALUE, 1)
@@ -194,15 +196,18 @@ public @interface Specialization {
      * void doDivPowerTwo(int a, int b) {
      *     return a >> 1;
      * }
+     * 
      * &#064;Specialization(contains ="doDivPowerTwo", guards = "b > 0")
      * void doDivPositive(int a, int b) {
      *     return a / b;
      * }
      * ...
+     * 
      * Example executions with contains="doDivPowerTwo":
      *   execute(4, 2) => doDivPowerTwo(4, 2)
      *   execute(9, 3) => doDivPositive(9, 3) // doDivPowerTwo instances get removed
      *   execute(4, 2) => doDivPositive(4, 2)
+     * 
      * Same executions without contains="doDivPowerTwo"
      *   execute(4, 2) => doDivPowerTwo(4, 2)
      *   execute(9, 3) => doDivPositive(9, 3)
@@ -248,6 +253,7 @@ public @interface Specialization {
      *     assert operand <= 42;
      *     return operand & 1 == 1;
      * }
+     * 
      * &#064;Specialization(guards = {"operand <= 42", "acceptOperand(operand)"})
      * void doSpecialization(int operand) {...}
      * </pre>
@@ -264,16 +270,16 @@ public @interface Specialization {
      * Declares assumption guards that optimistically assume that the state of an {@link Assumption}
      * remains valid. Assumption expressions are cached once per specialization instantiation. If
      * one of the returned assumptions gets invalidated then the specialization instance is removed.
-     * If the assumption expression returns an array of assumptions then all assumptions of the
-     * array are checked. This is limited to one-dimensional arrays.
+     * An assumption expression may return different assumptions per specialization instance. The
+     * returned assumption instance must not be <code>null</code>.
      * </p>
      * <p>
      * Assumption expressions are defined using a subset of Java. This subset includes
      * field/parameter accesses, function calls, type exact infix comparisons (==, !=, <, <=, >,
      * >=), logical negation (!), logical disjunction (||) and integer literals. The return type of
-     * the expression must be {@link Assumption} or an array of {@link Assumption} instances.
-     * Assumption expressions are not allowed to bind to dynamic parameter values of the
-     * specialization. Bound elements without receivers are resolved using the following order:
+     * the expression must be {@link Assumption}. Assumption expressions are not allowed to bind to
+     * dynamic parameter values of the specialization. Bound elements without receivers are resolved
+     * using the following order:
      * <ol>
      * <li>Cached parameters of the enclosing specialization.</li>
      * <li>Fields defined using {@link NodeField} for the enclosing node.</li>
@@ -295,6 +301,7 @@ public @interface Specialization {
      *      abstract Assumption getUnmodifiedAssuption();
      *      ...
      * }
+     * 
      * &#064;Specialization(guards = "operand.getShape() == cachedShape", assumptions = "cachedShape.getUnmodifiedAssumption()")
      * void doAssumeUnmodifiedShape(DynamicObject operand, @Cached("operand.getShape()") Shape cachedShape) {...}
      * </pre>
@@ -338,6 +345,7 @@ public @interface Specialization {
      * static int getCacheLimit() {
      *     return Integer.parseInt(System.getProperty("language.cacheLimit"));
      * }
+     * 
      * &#064;Specialization(guards = "operand == cachedOperand", limit = "getCacheLimit()")
      * void doCached(Object operand, @Cached("operand") Object cachedOperand) {...}
      * </pre>
