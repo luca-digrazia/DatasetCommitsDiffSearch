@@ -53,11 +53,9 @@ import java.util.concurrent.TimeUnit;
 
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Language;
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractLanguageImpl;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.InstrumentInfo;
@@ -396,7 +394,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                         Thread t = context.boundThread;
                         try {
                             boolean performClose = true;
-                            if (t != null && t != Thread.currentThread()) {
+                            if (t != null) {
                                 if (!ignoreCloseFailure) {
                                     if (cancelIfExecuting) {
                                         performClose = true;
@@ -417,9 +415,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                             }
                         }
                     }
-                    if (cancelIfExecuting) {
-                        getCancelHandler().waitForClosing(localContexts);
-                    }
+                    getCancelHandler().waitForClosing(localContexts);
 
                     contexts.clear();
                     for (Instrument instrument : idToInstrument.values()) {
@@ -670,16 +666,4 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         addContext(contextImpl);
         return impl.getAPIAccess().newPolyglotContext(api, contextImpl);
     }
-
-    @Override
-    @SuppressWarnings("hiding")
-    public synchronized Context createContext(OutputStream out, OutputStream err, InputStream in, Map<String, String> options, Map<String, String[]> arguments,
-                    Language primaryLanguage,
-                    AbstractLanguageImpl onlyLanguage) {
-        checkState();
-        PolyglotContextImpl contextImpl = new PolyglotContextImpl(this, out, err, in, options, arguments, (PolyglotLanguageImpl) onlyLanguage);
-        addContext(contextImpl);
-        return impl.getAPIAccess().newContext(contextImpl, primaryLanguage);
-    }
-
 }
