@@ -31,19 +31,18 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
-public class LIRInstructionClass<T> extends LIRIntrospection<T> {
+public class LIRInstructionClass extends LIRIntrospection {
 
-    @SuppressWarnings("unchecked")
-    public static final <T extends LIRInstruction> LIRInstructionClass<T> get(Class<T> c) {
-        LIRInstructionClass<T> clazz = (LIRInstructionClass<T>) allClasses.get(c);
+    public static final LIRInstructionClass get(Class<? extends LIRInstruction> c) {
+        LIRInstructionClass clazz = (LIRInstructionClass) allClasses.get(c);
         if (clazz != null) {
             return clazz;
         }
 
         // We can have a race of multiple threads creating the LIRInstructionClass at the same time.
         // However, only one will be put into the map, and this is the one returned by all threads.
-        clazz = new LIRInstructionClass<>(c);
-        LIRInstructionClass<T> oldClazz = (LIRInstructionClass<T>) allClasses.putIfAbsent(c, clazz);
+        clazz = new LIRInstructionClass(c);
+        LIRInstructionClass oldClazz = (LIRInstructionClass) allClasses.putIfAbsent(c, clazz);
         if (oldClazz != null) {
             return oldClazz;
         } else {
@@ -63,11 +62,11 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
     private String opcodeConstant;
     private int opcodeIndex;
 
-    private LIRInstructionClass(Class<T> clazz) {
+    private LIRInstructionClass(Class<? extends LIRInstruction> clazz) {
         this(clazz, new FieldsScanner.DefaultCalcOffset());
     }
 
-    public LIRInstructionClass(Class<T> clazz, FieldsScanner.CalcOffset calcOffset) {
+    public LIRInstructionClass(Class<? extends LIRInstruction> clazz, FieldsScanner.CalcOffset calcOffset) {
         super(clazz);
         assert INSTRUCTION_CLASS.isAssignableFrom(clazz);
 

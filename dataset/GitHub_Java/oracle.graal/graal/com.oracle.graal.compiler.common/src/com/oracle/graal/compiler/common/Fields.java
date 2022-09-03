@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.compiler.common;
 
-import static jdk.internal.jvmci.common.UnsafeAccess.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.common.*;
 import sun.misc.*;
 
 /**
@@ -49,8 +48,6 @@ public class Fields {
      */
     private final Class<?>[] types;
 
-    private final Class<?>[] declaringClasses;
-
     public static Fields forClass(Class<?> clazz, Class<?> endClazz, boolean includeTransient, FieldsScanner.CalcOffset calcOffset) {
         FieldsScanner scanner = new FieldsScanner(calcOffset == null ? new FieldsScanner.DefaultCalcOffset() : calcOffset);
         scanner.scan(clazz, endClazz, includeTransient);
@@ -61,14 +58,12 @@ public class Fields {
         Collections.sort(fields);
         this.offsets = new long[fields.size()];
         this.names = new String[offsets.length];
-        this.types = new Class<?>[offsets.length];
-        this.declaringClasses = new Class<?>[offsets.length];
+        this.types = new Class[offsets.length];
         int index = 0;
         for (FieldsScanner.FieldInfo f : fields) {
             offsets[index] = f.offset;
             names[index] = f.name;
             types[index] = f.type;
-            declaringClasses[index] = f.declaringClass;
             index++;
         }
     }
@@ -82,7 +77,7 @@ public class Fields {
 
     public static void translateInto(Fields fields, ArrayList<FieldsScanner.FieldInfo> infos) {
         for (int index = 0; index < fields.getCount(); index++) {
-            infos.add(new FieldsScanner.FieldInfo(fields.offsets[index], fields.names[index], fields.types[index], fields.declaringClasses[index]));
+            infos.add(new FieldsScanner.FieldInfo(fields.offsets[index], fields.names[index], fields.types[index]));
         }
     }
 
@@ -183,47 +178,11 @@ public class Fields {
     }
 
     /**
-     * Gets the value of a field for a given object.
-     *
-     * @param object the object whose field is to be read
-     * @param index the index of the field (between 0 and {@link #getCount()})
-     * @return the value of the specified field which will be boxed if the field type is primitive
-     */
-    public long getRawPrimitive(Object object, int index) {
-        long offset = offsets[index];
-        Class<?> type = types[index];
-
-        if (type == Integer.TYPE) {
-            return unsafe.getInt(object, offset);
-        } else if (type == Long.TYPE) {
-            return unsafe.getLong(object, offset);
-        } else if (type == Boolean.TYPE) {
-            return unsafe.getBoolean(object, offset) ? 1 : 0;
-        } else if (type == Float.TYPE) {
-            return Float.floatToRawIntBits(unsafe.getFloat(object, offset));
-        } else if (type == Double.TYPE) {
-            return Double.doubleToRawLongBits(unsafe.getDouble(object, offset));
-        } else if (type == Short.TYPE) {
-            return unsafe.getShort(object, offset);
-        } else if (type == Character.TYPE) {
-            return unsafe.getChar(object, offset);
-        } else if (type == Byte.TYPE) {
-            return unsafe.getByte(object, offset);
-        } else {
-            throw JVMCIError.shouldNotReachHere();
-        }
-    }
-
-    /**
      * Determines if a field in the domain of this object is the same as the field denoted by the
      * same index in another {@link Fields} object.
      */
     public boolean isSame(Fields other, int index) {
         return other.offsets[index] == offsets[index];
-    }
-
-    public long[] getOffsets() {
-        return offsets;
     }
 
     /**
@@ -242,10 +201,6 @@ public class Fields {
      */
     public Class<?> getType(int index) {
         return types[index];
-    }
-
-    public Class<?> getDeclaringClass(int index) {
-        return declaringClasses[index];
     }
 
     /**
@@ -286,30 +241,6 @@ public class Fields {
         } else {
             assert checkAssignableFrom(object, index, value);
             unsafe.putObject(object, offset, value);
-        }
-    }
-
-    public void setRawPrimitive(Object object, int index, long value) {
-        long offset = offsets[index];
-        Class<?> type = types[index];
-        if (type == Integer.TYPE) {
-            unsafe.putInt(object, offset, (int) value);
-        } else if (type == Long.TYPE) {
-            unsafe.putLong(object, offset, value);
-        } else if (type == Boolean.TYPE) {
-            unsafe.putBoolean(object, offset, value != 0);
-        } else if (type == Float.TYPE) {
-            unsafe.putFloat(object, offset, Float.intBitsToFloat((int) value));
-        } else if (type == Double.TYPE) {
-            unsafe.putDouble(object, offset, Double.longBitsToDouble(value));
-        } else if (type == Short.TYPE) {
-            unsafe.putShort(object, offset, (short) value);
-        } else if (type == Character.TYPE) {
-            unsafe.putChar(object, offset, (char) value);
-        } else if (type == Byte.TYPE) {
-            unsafe.putByte(object, offset, (byte) value);
-        } else {
-            throw JVMCIError.shouldNotReachHere();
         }
     }
 
