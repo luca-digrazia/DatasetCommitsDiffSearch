@@ -41,42 +41,44 @@ public class TruffleCompilerOptions {
      * Element = Include | '~' Exclude ;
      * </pre>
      */
-    @Option(help = "Restrict compilation to comma-separated list of includes (or excludes prefixed with tilde)")
+    @Option(help = "")
     public static final OptionValue<String> TruffleCompileOnly = new OptionValue<>(null);
-    @Option(help = "Compile call target when call count exceeds this threshold")
+    @Option(help = "")
     public static final OptionValue<Integer> TruffleCompilationThreshold = new OptionValue<>(1000);
-    @Option(help = "Minimum number of calls before a call target is compiled")
+    @Option(help = "")
     public static final OptionValue<Integer> TruffleMinInvokeThreshold = new OptionValue<>(3);
-    @Option(help = "Delay compilation after an invalidation to allow for reprofiling")
+    @Option(help = "")
     public static final OptionValue<Integer> TruffleInvalidationReprofileCount = new OptionValue<>(3);
-    @Option(help = "Delay compilation after a node replacement")
+    @Option(help = "")
     public static final OptionValue<Integer> TruffleReplaceReprofileCount = new OptionValue<>(10);
-    @Option(help = "Enable automatic inlining of call targets")
+    @Option(help = "")
+    public static final OptionValue<Integer> TruffleInliningReprofileCount = new OptionValue<>(100);
+    @Option(help = "")
     public static final OptionValue<Boolean> TruffleFunctionInlining = new OptionValue<>(true);
-    @Option(help = "Maximum number of Graal IR nodes during partial evaluation")
+    @Option(help = "")
     public static final OptionValue<Integer> TruffleGraphMaxNodes = new OptionValue<>(30000);
-    @Option(help = "Stop inlining if caller's cumulative tree size would exceed this limit")
+    @Option(help = "")
+    public static final OptionValue<Integer> TruffleInliningMaxRecursiveDepth = new OptionValue<>(2);
+    @Option(help = "")
     public static final OptionValue<Integer> TruffleInliningMaxCallerSize = new OptionValue<>(2250);
-    @Option(help = "Skip inlining candidate if its tree size exceeds this limit")
+    @Option(help = "")
     public static final OptionValue<Integer> TruffleInliningMaxCalleeSize = new OptionValue<>(250);
-    @Option(help = "Call frequency relative to call target")
-    public static final OptionValue<Double> TruffleInliningMinFrequency = new OptionValue<>(0.3);
-    @Option(help = "Allow inlining of less hot candidates if tree size is small")
+    @Option(help = "")
     public static final OptionValue<Integer> TruffleInliningTrivialSize = new OptionValue<>(10);
-    @Option(help = "Enable call target splitting")
+    @Option(help = "")
+    public static final OptionValue<Double> TruffleInliningMinFrequency = new OptionValue<>(0.3);
+    @Option(help = "")
     public static final OptionValue<Boolean> TruffleSplittingEnabled = new OptionValue<>(true);
-    @Option(help = "Disable call target splitting if tree size exceeds this limit")
+    @Option(help = "")
     public static final OptionValue<Integer> TruffleSplittingMaxCalleeSize = new OptionValue<>(50);
-    @Option(help = "Number of most recently used methods in truffle cache")
-    public static final OptionValue<Integer> TruffleMaxCompilationCacheSize = new OptionValue<>(512);
-    @Option(help = "Enable asynchronous truffle compilation in background thread")
-    public static final OptionValue<Boolean> TruffleBackgroundCompilation = new OptionValue<>(true);
     @Option(help = "")
     public static final OptionValue<Boolean> TruffleUseTimeForCompilationDecision = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<Integer> TruffleCompilationDecisionTime = new OptionValue<>(100);
     @Option(help = "")
     public static final OptionValue<Boolean> TruffleCompilationDecisionTimePrintFail = new OptionValue<>(false);
+    @Option(help = "")
+    public static final OptionValue<Boolean> TruffleBackgroundCompilation = new OptionValue<>(true);
 
     // tracing
     @Option(help = "")
@@ -101,8 +103,6 @@ public class TruffleCompilerOptions {
     public static final OptionValue<Boolean> TraceTruffleInliningTree = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<Boolean> TraceTruffleInliningDetails = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<Boolean> TraceTruffleSplitting = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<Boolean> TruffleCallTargetProfiling = new StableOptionValue<>(false);
     // @formatter:on

@@ -43,7 +43,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
@@ -73,7 +72,6 @@ public class PartialEvaluator {
     private Set<Constant> constantReceivers;
     private final GraphCache cache;
     private final TruffleCache truffleCache;
-    private final ResolvedJavaType frameType;
 
     public PartialEvaluator(RuntimeProvider runtime, Providers providers, TruffleCache truffleCache, GraphBuilderConfiguration config) {
         this.providers = providers;
@@ -82,7 +80,6 @@ public class PartialEvaluator {
         this.config = config;
         this.cache = runtime.getGraphCache();
         this.truffleCache = truffleCache;
-        this.frameType = providers.getMetaAccess().lookupJavaType(FrameWithoutBoxing.class);
         try {
             executeHelperMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.class.getDeclaredMethod("executeHelper", PackedFrame.class, Arguments.class));
         } catch (NoSuchMethodException ex) {
@@ -186,7 +183,7 @@ public class PartialEvaluator {
             changed = false;
             for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.class)) {
                 InvokeKind kind = methodCallTargetNode.invokeKind();
-                if (kind == InvokeKind.Static || (kind == InvokeKind.Special && (methodCallTargetNode.receiver().isConstant() || isFrame(methodCallTargetNode.receiver())))) {
+                if (kind == InvokeKind.Static || (kind == InvokeKind.Special && (methodCallTargetNode.receiver().isConstant() || methodCallTargetNode.receiver() instanceof NewFrameNode))) {
                     if (TraceTruffleCompilationHistogram.getValue() && kind == InvokeKind.Special) {
                         ConstantNode constantNode = (ConstantNode) methodCallTargetNode.arguments().first();
                         constantReceivers.add(constantNode.asConstant());
@@ -238,10 +235,6 @@ public class PartialEvaluator {
         if (TraceTruffleExpansion.getValue()) {
             expansionLogger.print();
         }
-    }
-
-    private boolean isFrame(ValueNode receiver) {
-        return receiver instanceof NewFrameNode || Objects.equals(ObjectStamp.typeOrNull(receiver.stamp()), frameType);
     }
 
     private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final PhaseContext phaseContext) {

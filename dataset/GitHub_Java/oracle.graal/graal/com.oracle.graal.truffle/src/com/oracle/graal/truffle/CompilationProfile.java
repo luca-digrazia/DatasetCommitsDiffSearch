@@ -137,13 +137,6 @@ public class CompilationProfile {
         callAndLoopCount++;
     }
 
-    void reportInlinedCall() {
-        callCount++;
-        callAndLoopCount++;
-        compilationCallThreshold++;
-        compilationCallAndLoopThreshold++;
-    }
-
     void reportInterpreterCalls(int calls) {
         this.callCount += calls;
         this.callAndLoopCount += calls;

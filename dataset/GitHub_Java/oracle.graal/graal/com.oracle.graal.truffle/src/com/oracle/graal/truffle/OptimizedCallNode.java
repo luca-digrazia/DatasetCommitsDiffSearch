@@ -65,11 +65,6 @@ abstract class OptimizedCallNode extends DefaultCallNode {
     }
 
     @Override
-    public final OptimizedCallTarget getCurrentCallTarget() {
-        return (OptimizedCallTarget) super.getCurrentCallTarget();
-    }
-
-    @Override
     public OptimizedCallTarget getSplitCallTarget() {
         return null;
     }
@@ -79,7 +74,11 @@ abstract class OptimizedCallNode extends DefaultCallNode {
             throw new IllegalStateException("CallNode must be adopted before it is split.");
         }
 
-        return replace(new InlinedOptimizedCallNode(getCallTarget(), getSplitCallTarget(), getCurrentCallTarget().getRootNode(), callCount));
+        return replace(new InlinedOptimizedCallNode(getCallTarget(), getSplitCallTarget(), getExecutedCallTarget().getRootNode(), callCount));
+    }
+
+    public final OptimizedCallTarget getExecutedCallTarget() {
+        return getSplitCallTarget() != null ? getSplitCallTarget() : getCallTarget();
     }
 
     public static OptimizedCallNode create(OptimizedCallTarget target) {
@@ -127,7 +126,7 @@ abstract class OptimizedCallNode extends DefaultCallNode {
             int nodeCount = NodeUtil.countNodes(getCallTarget().getRootNode(), null, false);
 
             // max one child call and callCount > 2 and kind of small number of nodes
-            if (callCount > 2 && isMaxSingleCall()) {
+            if (callCount > 2 && isCallMethod()) {
                 if (nodeCount <= 100) {
                     return true;
                 }
@@ -139,9 +138,9 @@ abstract class OptimizedCallNode extends DefaultCallNode {
             return countPolymorphic() > 1 || countGeneric() > 0;
         }
 
-        private boolean isMaxSingleCall() {
+        private boolean isCallMethod() {
             final AtomicInteger count = new AtomicInteger(0);
-            getCurrentCallTarget().getRootNode().accept(new NodeVisitor() {
+            getExecutedCallTarget().getRootNode().accept(new NodeVisitor() {
 
                 public boolean visit(Node node) {
                     if (node instanceof CallNode) {
@@ -180,7 +179,8 @@ abstract class OptimizedCallNode extends DefaultCallNode {
         }
 
         private OptimizedCallNode splitImpl(boolean heuristic) {
-            OptimizedCallTarget splitCallTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(getCallTarget().getRootNode().split());
+            RootNode splittedRoot = getCallTarget().getRootNode().split();
+            OptimizedCallTarget splitCallTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(splittedRoot);
             splitCallTarget.setSplitSource(getCallTarget());
             if (heuristic) {
                 OptimizedCallTarget.logSplit(this, getCallTarget(), splitCallTarget);
@@ -210,6 +210,7 @@ abstract class OptimizedCallNode extends DefaultCallNode {
             this.inlinedRoot = inlinedRoot;
             this.splittedTarget = splittedTarget;
             this.callCount = callCount;
+            installParentInlinedCall();
         }
 
         @Override
@@ -232,6 +233,11 @@ abstract class OptimizedCallNode extends DefaultCallNode {
         @Override
         public boolean isInlined() {
             return true;
+        }
+
+        @Override
+        public RootNode getInlinedRoot() {
+            return inlinedRoot;
         }
 
         @Override
