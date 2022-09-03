@@ -28,10 +28,11 @@ import org.graalvm.compiler.test.AddExports;
 import org.junit.Test;
 
 @AddExports("java.base/jdk.internal.misc")
-public class UnsafeReplacementsTest extends MethodSubstitutionTest {
+public class UnsafeReplacementsTest extends MethodSubstitutionTest  {
 
     // See GR-9819.
-    @SuppressWarnings("unused") ResolvedJavaMethod method = null;
+    @SuppressWarnings("unused")
+    ResolvedJavaMethod method = null;
 
     static class Container {
         public volatile boolean booleanField;
@@ -69,7 +70,7 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
             doubleOffset = unsafe.objectFieldOffset(Container.class.getDeclaredField("doubleField"));
             objectOffset = unsafe.objectFieldOffset(Container.class.getDeclaredField("objectField"));
         } catch (NoSuchFieldException e) {
-            throw new RuntimeException(e);
+          throw new RuntimeException(e);
         }
     }
 
@@ -115,8 +116,7 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
 
     public static boolean unsafeCompareAndSetObject() {
         Container container = new Container();
-        return unsafe.compareAndSetObject(container, objectOffset, container, new Object() {
-        });
+        return unsafe.compareAndSetObject(container, objectOffset, container, new Object() {});
     }
 
     public static boolean unsafeCompareAndExchangeBoolean() {

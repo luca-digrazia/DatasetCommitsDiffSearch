@@ -53,7 +53,6 @@ import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow.StrategySwitchOp;
 import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow.TableSwitchOp;
 import org.graalvm.compiler.lir.aarch64.AArch64Move;
 import org.graalvm.compiler.lir.aarch64.AArch64AtomicMove.CompareAndSwapOp;
-import org.graalvm.compiler.lir.aarch64.AArch64AtomicMove.AtomicReadAndWriteOp;
 import org.graalvm.compiler.lir.aarch64.AArch64Move.MembarOp;
 import org.graalvm.compiler.lir.aarch64.AArch64PauseOp;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
@@ -128,7 +127,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitLogicCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
+    public Variable emitLogicCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
         Variable prevValue = newVariable(expectedValue.getValueKind());
         Variable scratch = newVariable(LIRKind.value(AArch64Kind.DWORD));
         append(new CompareAndSwapOp(prevValue, loadReg(expectedValue), loadReg(newValue), asAllocatable(address), scratch));
@@ -139,19 +138,10 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitValueCompareAndSwap(Value address, Value expectedValue, Value newValue) {
+    public Variable emitValueCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue) {
         Variable result = newVariable(newValue.getValueKind());
         Variable scratch = newVariable(LIRKind.value(AArch64Kind.WORD));
         append(new CompareAndSwapOp(result, loadNonCompareConst(expectedValue), loadReg(newValue), asAllocatable(address), scratch));
-        return result;
-    }
-
-    @Override
-    public Value emitAtomicReadAndWrite(Value address, Value newValue) {
-        ValueKind<?> kind = newValue.getValueKind();
-        Variable result = newVariable(newValue.getValueKind());
-        Variable scratch = newVariable(LIRKind.value(AArch64Kind.WORD));
-        append(new AtomicReadAndWriteOp((AArch64Kind) kind.getPlatformKind(), asAllocatable(result), asAllocatable(address), asAllocatable(newValue), asAllocatable(scratch)));
         return result;
     }
 

@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -81,7 +79,6 @@ import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.meta.Value;
 import jdk.vm.ci.meta.ValueKind;
 import jdk.vm.ci.sparc.SPARC;
@@ -194,7 +191,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
             emitMove(operand, input);
         }
         Register thread = getProviders().getRegisters().getThreadRegister();
-        append(new SPARCHotSpotReturnOp(operand, getStub() != null, config, thread, getSafepointAddressValue(), getResult().requiresReservedStackAccessCheck()));
+        append(new SPARCHotSpotReturnOp(operand, getStub() != null, config, thread, getSafepointAddressValue()));
     }
 
     @Override
@@ -233,8 +230,8 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     @Override
     public void emitDeoptimizeCaller(DeoptimizationAction action, DeoptimizationReason reason) {
         Value actionAndReason = emitJavaConstant(getMetaAccess().encodeDeoptActionAndReason(action, reason, 0));
-        Value speculation = emitJavaConstant(getMetaAccess().encodeSpeculation(SpeculationLog.NO_SPECULATION));
-        moveDeoptValuesToThread(actionAndReason, speculation);
+        Value nullValue = emitJavaConstant(JavaConstant.NULL_POINTER);
+        moveDeoptValuesToThread(actionAndReason, nullValue);
         append(new SPARCHotSpotDeoptimizeCallerOp());
     }
 
