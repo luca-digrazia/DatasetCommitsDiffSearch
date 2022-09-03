@@ -68,8 +68,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
     public static final class RuntimeCalls {
 
-        public static final ForeignCallDescriptor CREATE_NULL_POINTER_EXCEPTION = new ForeignCallDescriptor("createNullPointerException", NullPointerException.class);
-        public static final ForeignCallDescriptor CREATE_OUT_OF_BOUNDS_EXCEPTION = new ForeignCallDescriptor("createOutOfBoundsException", IndexOutOfBoundsException.class, int.class);
+        public static final ForeignCallDescriptor CREATE_NULL_POINTER_EXCEPTION = new ForeignCallDescriptor("createNullPointerException", Object.class);
+        public static final ForeignCallDescriptor CREATE_OUT_OF_BOUNDS_EXCEPTION = new ForeignCallDescriptor("createOutOfBoundsException", Object.class, int.class);
     }
 
     /**
@@ -214,6 +214,16 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             return getName() + " " + MetaUtil.format("%H.%n(%p):%r", method);
         }
 
+        private BciBlockMapping createBlockMap() {
+            BciBlockMapping map = new BciBlockMapping(method);
+            map.build();
+            if (Debug.isDumpEnabled()) {
+                Debug.dump(map, MetaUtil.format("After block building %f %R %H.%n(%P)", method));
+            }
+
+            return map;
+        }
+
         protected void build() {
             if (PrintProfilingInformation.getValue()) {
                 TTY.println("Profiling info for " + MetaUtil.format("%H.%n(%p)", method));
@@ -223,7 +233,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             Indent indent = Debug.logAndIndent("build graph for %s", method);
 
             // compute the block map, setup exception handlers and get the entrypoint(s)
-            BciBlockMapping blockMap = BciBlockMapping.create(method);
+            BciBlockMapping blockMap = createBlockMap();
             loopHeaders = blockMap.loopHeaders;
 
             lastInstr = currentGraph.start();
@@ -293,11 +303,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             return unwindBlock;
         }
 
-        protected BytecodeStream stream() {
+        public BytecodeStream stream() {
             return stream;
         }
 
-        protected int bci() {
+        public int bci() {
             return stream.currentBCI();
         }
 
@@ -315,6 +325,14 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 value = frameState.pop(kind);
             }
             frameState.storeLocal(index, value);
+        }
+
+        public static boolean covers(ExceptionHandler handler, int bci) {
+            return handler.getStartBCI() <= bci && bci < handler.getEndBCI();
+        }
+
+        public static boolean isCatchAll(ExceptionHandler handler) {
+            return handler.catchTypeCPI() == 0;
         }
 
         /**
@@ -580,35 +598,35 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             switch (opcode) {
                 case IADD:
                 case LADD:
-                    v = new IntegerAddNode(StampFactory.forKind(result), x, y);
+                    v = new IntegerAddNode(result, x, y);
                     break;
                 case FADD:
                 case DADD:
-                    v = new FloatAddNode(StampFactory.forKind(result), x, y, isStrictFP);
+                    v = new FloatAddNode(result, x, y, isStrictFP);
                     break;
                 case ISUB:
                 case LSUB:
-                    v = new IntegerSubNode(StampFactory.forKind(result), x, y);
+                    v = new IntegerSubNode(result, x, y);
                     break;
                 case FSUB:
                 case DSUB:
-                    v = new FloatSubNode(StampFactory.forKind(result), x, y, isStrictFP);
+                    v = new FloatSubNode(result, x, y, isStrictFP);
                     break;
                 case IMUL:
                 case LMUL:
-                    v = new IntegerMulNode(StampFactory.forKind(result), x, y);
+                    v = new IntegerMulNode(result, x, y);
                     break;
                 case FMUL:
                 case DMUL:
-                    v = new FloatMulNode(StampFactory.forKind(result), x, y, isStrictFP);
+                    v = new FloatMulNode(result, x, y, isStrictFP);
                     break;
                 case FDIV:
                 case DDIV:
-                    v = new FloatDivNode(StampFactory.forKind(result), x, y, isStrictFP);
+                    v = new FloatDivNode(result, x, y, isStrictFP);
                     break;
                 case FREM:
                 case DREM:
-                    v = new FloatRemNode(StampFactory.forKind(result), x, y, isStrictFP);
+                    v = new FloatRemNode(result, x, y, isStrictFP);
                     break;
                 default:
                     throw new GraalInternalError("should not reach");
@@ -623,11 +641,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             switch (opcode) {
                 case IDIV:
                 case LDIV:
-                    v = new IntegerDivNode(StampFactory.forKind(result), x, y);
+                    v = new IntegerDivNode(result, x, y);
                     break;
                 case IREM:
                 case LREM:
-                    v = new IntegerRemNode(StampFactory.forKind(result), x, y);
+                    v = new IntegerRemNode(result, x, y);
                     break;
                 default:
                     throw new GraalInternalError("should not reach");
@@ -646,15 +664,15 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             switch (opcode) {
                 case ISHL:
                 case LSHL:
-                    v = new LeftShiftNode(StampFactory.forKind(kind), x, s);
+                    v = new LeftShiftNode(kind, x, s);
                     break;
                 case ISHR:
                 case LSHR:
-                    v = new RightShiftNode(StampFactory.forKind(kind), x, s);
+                    v = new RightShiftNode(kind, x, s);
                     break;
                 case IUSHR:
                 case LUSHR:
-                    v = new UnsignedRightShiftNode(StampFactory.forKind(kind), x, s);
+                    v = new UnsignedRightShiftNode(kind, x, s);
                     break;
                 default:
                     throw new GraalInternalError("should not reach");
@@ -665,20 +683,19 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
         private void genLogicOp(Kind kind, int opcode) {
             ValueNode y = frameState.pop(kind);
             ValueNode x = frameState.pop(kind);
-            Stamp stamp = StampFactory.forKind(kind);
             BitLogicNode v;
             switch (opcode) {
                 case IAND:
                 case LAND:
-                    v = new AndNode(stamp, x, y);
+                    v = new AndNode(kind, x, y);
                     break;
                 case IOR:
                 case LOR:
-                    v = new OrNode(stamp, x, y);
+                    v = new OrNode(kind, x, y);
                     break;
                 case IXOR:
                 case LXOR:
-                    v = new XorNode(stamp, x, y);
+                    v = new XorNode(kind, x, y);
                     break;
                 default:
                     throw new GraalInternalError("should not reach");
@@ -723,7 +740,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             int delta = stream().readIncrement();
             ValueNode x = frameState.loadLocal(index);
             ValueNode y = appendConstant(Constant.forInt(delta));
-            frameState.storeLocal(index, append(new IntegerAddNode(StampFactory.forKind(Kind.Int), x, y)));
+            frameState.storeLocal(index, append(new IntegerAddNode(Kind.Int, x, y)));
         }
 
         private void genGoto() {
@@ -820,12 +837,10 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             eagerResolvingForSnippets(cpi, opcode);
             JavaMethod result = constantPool.lookupMethod(cpi, opcode);
             /*
-             * In general, one cannot assume that the declaring class being initialized is useful,
-             * since the actual concrete receiver may be a different class (except for static
-             * calls). Also, interfaces are initialized only under special circumstances, so that
-             * this assertion would often fail for interface calls.
+             * assert !graphBuilderConfig.unresolvedIsError() || ((result instanceof
+             * ResolvedJavaMethod) && ((ResolvedJavaMethod)
+             * result).getDeclaringClass().isInitialized()) : result;
              */
-            assert !graphBuilderConfig.unresolvedIsError() || (result instanceof ResolvedJavaMethod && (opcode != INVOKESTATIC || ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized())) : result;
             return result;
         }
 
@@ -1004,7 +1019,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 trueSucc.setNext(handleException(exception, bci()));
             } else {
                 DeferredForeignCallNode call = currentGraph.add(new DeferredForeignCallNode(CREATE_NULL_POINTER_EXCEPTION));
-                call.setStamp(StampFactory.exactNonNull(metaAccess.lookupJavaType(CREATE_NULL_POINTER_EXCEPTION.getResultType())));
                 call.setStateAfter(frameState.create(bci()));
                 trueSucc.setNext(call);
                 call.setNext(handleException(call, bci()));
@@ -1029,7 +1043,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 falseSucc.setNext(handleException(exception, bci()));
             } else {
                 DeferredForeignCallNode call = currentGraph.add(new DeferredForeignCallNode(CREATE_OUT_OF_BOUNDS_EXCEPTION, index));
-                call.setStamp(StampFactory.exactNonNull(metaAccess.lookupJavaType(CREATE_OUT_OF_BOUNDS_EXCEPTION.getResultType())));
                 call.setStateAfter(frameState.create(bci()));
                 falseSucc.setNext(call);
                 call.setNext(handleException(call, bci()));

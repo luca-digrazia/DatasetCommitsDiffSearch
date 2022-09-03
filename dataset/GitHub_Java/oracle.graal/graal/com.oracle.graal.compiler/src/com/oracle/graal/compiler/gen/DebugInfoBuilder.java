@@ -56,6 +56,9 @@ public class DebugInfoBuilder {
         FrameState current = topState;
         do {
             for (EscapeObjectState state : current.virtualObjectMappings()) {
+                if (objectStates == null) {
+                    objectStates = new IdentityHashMap<>();
+                }
                 if (!objectStates.containsKey(state.object())) {
                     if (!(state instanceof MaterializedObjectState) || ((MaterializedObjectState) state).materializedValue() != state.object()) {
                         objectStates.put(state.object(), state);
