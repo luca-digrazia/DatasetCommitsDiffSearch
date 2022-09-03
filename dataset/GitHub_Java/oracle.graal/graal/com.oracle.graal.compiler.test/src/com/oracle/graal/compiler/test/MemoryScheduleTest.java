@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static org.junit.Assert.*;
-
 import java.util.concurrent.*;
 
 import org.junit.*;
@@ -33,9 +31,7 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.Lowerable.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
 
@@ -50,7 +46,7 @@ import com.oracle.graal.phases.schedule.*;
 public class MemoryScheduleTest extends GraphScheduleTest {
 
     private static enum TestMode {
-        WITH_FRAMESTATES, WITHOUT_FRAMESTATES, INLINED_WITHOUT_FRAMESTATES
+        WITH_FRAMESTATES, WITHOUT_FRAMESTATES
     }
 
     public static class Container {
@@ -62,10 +58,8 @@ public class MemoryScheduleTest extends GraphScheduleTest {
 
     private static final Container container = new Container();
 
-    /**
-     * In this test the read should be scheduled before the write.
-     */
     public static int testSimpleSnippet() {
+        // in this test the read should be scheduled before the write
         try {
             return container.a;
         } finally {
@@ -173,23 +167,6 @@ public class MemoryScheduleTest extends GraphScheduleTest {
         assertReadWithinStartBlock(schedule, false);
     }
 
-    /**
-     * Here the read should float to the end (into the same block as the return).
-     */
-    public static int testArrayCopySnippet(Integer intValue, char[] a, char[] b, int len) {
-        System.arraycopy(a, 0, b, 0, len);
-        return intValue.intValue();
-    }
-
-    @Test
-    public void testArrayCopy() {
-        SchedulePhase schedule = getFinalSchedule("testArrayCopySnippet", TestMode.INLINED_WITHOUT_FRAMESTATES);
-        StructuredGraph graph = (StructuredGraph) schedule.getCFG().getStartBlock().getBeginNode().graph();
-        ReturnNode ret = graph.getNodes(ReturnNode.class).first();
-        assertTrue(ret.result() instanceof FloatingReadNode);
-        assertEquals(schedule.getCFG().blockFor(ret), schedule.getCFG().blockFor(ret.result()));
-    }
-
     private void assertReadAfterWrite(SchedulePhase schedule, boolean readAfterWrite) {
         boolean writeEncountered = false;
         assertEquals(1, schedule.getCFG().getBlocks().length);
@@ -218,12 +195,7 @@ public class MemoryScheduleTest extends GraphScheduleTest {
             @Override
             public SchedulePhase call() throws Exception {
                 StructuredGraph graph = parse(snippet);
-                if (mode == TestMode.INLINED_WITHOUT_FRAMESTATES) {
-                    Assumptions assumptions = new Assumptions(false);
-                    new InliningPhase(runtime(), null, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-                }
-                new LoweringPhase(null, runtime(), replacements, new Assumptions(false), LoweringType.BEFORE_GUARDS).apply(graph);
-                if (mode == TestMode.WITHOUT_FRAMESTATES || mode == TestMode.INLINED_WITHOUT_FRAMESTATES) {
+                if (mode == TestMode.WITHOUT_FRAMESTATES) {
                     for (Node node : graph.getNodes()) {
                         if (node instanceof StateSplit) {
                             FrameState stateAfter = ((StateSplit) node).stateAfter();
@@ -234,9 +206,8 @@ public class MemoryScheduleTest extends GraphScheduleTest {
                         }
                     }
                 }
+                new LoweringPhase(null, runtime(), new Assumptions(false)).apply(graph);
                 new FloatingReadPhase().apply(graph);
-
-                new RemoveValueProxyPhase().apply(graph);
 
                 SchedulePhase schedule = new SchedulePhase();
                 schedule.apply(graph);

@@ -39,7 +39,6 @@ public class ControlFlowGraph {
     public static ControlFlowGraph compute(StructuredGraph graph, boolean connectBlocks, boolean computeLoops, boolean computeDominators, boolean computePostdominators) {
         ControlFlowGraph cfg = new ControlFlowGraph(graph);
         cfg.identifyBlocks();
-
         if (connectBlocks || computeLoops || computeDominators || computePostdominators) {
             cfg.connectBlocks();
         }
@@ -52,14 +51,13 @@ public class ControlFlowGraph {
         if (computePostdominators) {
             cfg.computePostdominators();
         }
-        // there's not much to verify when connectBlocks == false
-        assert !connectBlocks || CFGVerifier.verify(cfg);
+        assert CFGVerifier.verify(cfg);
         return cfg;
     }
 
     protected ControlFlowGraph(StructuredGraph graph) {
         this.graph = graph;
-        this.nodeToBlock = graph.createNodeMap(true);
+        this.nodeToBlock = graph.createNodeMap();
     }
 
     public Block[] getBlocks() {
@@ -113,15 +111,16 @@ public class ControlFlowGraph {
     public void clearNodeToBlock() {
         nodeToBlock.clear();
         for (Block block : reversePostOrder) {
-            identifyBlock(block);
+            identifyBlock(block, block.beginNode);
         }
     }
 
     protected static final int BLOCK_ID_INITIAL = -1;
     protected static final int BLOCK_ID_VISITED = -2;
 
-    private void identifyBlock(Block block) {
-        Node cur = block.getBeginNode();
+    private void identifyBlock(Block block, BeginNode begin) {
+        block.beginNode = begin;
+        Node cur = begin;
         Node last;
         do {
             assert !cur.isDeleted();
@@ -136,7 +135,7 @@ public class ControlFlowGraph {
 
             last = cur;
             cur = cur.successors().first();
-        } while (cur != null && !(cur instanceof AbstractBeginNode));
+        } while (cur != null && !(cur instanceof BeginNode));
 
         block.endNode = (FixedNode) last;
     }
@@ -145,10 +144,10 @@ public class ControlFlowGraph {
         // Find all block headers
         int numBlocks = 0;
         for (Node node : graph.getNodes()) {
-            if (node instanceof AbstractBeginNode) {
-                Block block = new Block((AbstractBeginNode) node);
+            if (node instanceof BeginNode) {
+                Block block = new Block();
                 numBlocks++;
-                identifyBlock(block);
+                identifyBlock(block, (BeginNode) node);
             }
         }
 
@@ -248,7 +247,7 @@ public class ControlFlowGraph {
                 for (Block b : loop.blocks) {
                     for (Block sux : b.getSuccessors()) {
                         if (sux.loop != loop) {
-                            AbstractBeginNode begin = sux.getBeginNode();
+                            BeginNode begin = sux.getBeginNode();
                             if (!(begin instanceof LoopExitNode && ((LoopExitNode) begin).loopBegin() == loopBegin)) {
                                 Debug.log("Unexpected loop exit with %s, including whole branch in the loop", sux);
                                 unexpected.add(sux);
@@ -336,29 +335,21 @@ public class ControlFlowGraph {
     }
 
     private void computePostdominators() {
-        outer: for (Block block : postOrder()) {
+        for (Block block : postOrder()) {
             if (block.isLoopEnd()) {
                 // We do not want the loop header registered as the postdominator of the loop end.
                 continue;
             }
-            if (block.getSuccessorCount() == 0) {
-                // No successors => no postdominator.
-                continue;
-            }
-            Block firstSucc = block.getSuccessors().get(0);
-            if (block.getSuccessorCount() == 1) {
-                block.postdominator = firstSucc;
-                continue;
-            }
-            Block postdominator = firstSucc;
+            Block postdominator = null;
             for (Block sux : block.getSuccessors()) {
-                postdominator = commonPostdominator(postdominator, sux);
-                if (postdominator == null) {
-                    // There is a dead end => no postdominator available.
-                    continue outer;
+                if (sux.isExceptionEntry()) {
+                    // We ignore exception handlers.
+                } else if (postdominator == null) {
+                    postdominator = sux;
+                } else {
+                    postdominator = commonPostdominator(postdominator, sux);
                 }
             }
-            assert !block.getSuccessors().contains(postdominator) : "Block " + block + " has a wrong post dominator: " + postdominator;
             block.postdominator = postdominator;
         }
     }

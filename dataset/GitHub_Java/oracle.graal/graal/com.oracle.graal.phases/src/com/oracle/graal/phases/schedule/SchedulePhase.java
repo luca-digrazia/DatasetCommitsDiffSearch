@@ -45,7 +45,7 @@ public final class SchedulePhase extends Phase {
 
     /**
      * This closure iterates over all nodes of a scheduled graph (it expects a
-     * {@link SchedulingStrategy#EARLIEST} schedule) and keeps a list of "active" reads. Whenever it
+     * {@link SchedulingStrategy#EARLIEST} schedule) and keeps a list of "actuve" reads. Whenever it
      * encounters a read, it adds it to the active reads. Whenever it encounters a memory
      * checkpoint, it adds all reads that need to be committed before this checkpoint to the
      * "phantom" usages and inputs, so that the read is scheduled before the checkpoint afterwards.
@@ -134,6 +134,10 @@ public final class SchedulePhase extends Phase {
     private BlockMap<List<ScheduledNode>> blockToNodesMap;
     private final Map<FloatingNode, List<FixedNode>> phantomUsages = new IdentityHashMap<>();
     private final Map<FixedNode, List<FloatingNode>> phantomInputs = new IdentityHashMap<>();
+
+    public SchedulePhase() {
+        super("Schedule");
+    }
 
     @Override
     protected void run(StructuredGraph graph) {
@@ -580,7 +584,7 @@ public final class SchedulePhase extends Phase {
             if (usage instanceof VirtualState) {
                 // only fixed nodes can have VirtualState -> no need to schedule them
             } else {
-                if (i instanceof LoopExitNode && usage instanceof ProxyNode) {
+                if (i instanceof LoopExitNode && usage instanceof ValueProxyNode) {
                     // value proxies should be scheduled before the loopexit, not after
                 } else {
                     addToEarliestSorting(b, (ScheduledNode) usage, sortedInstructions, visited);
@@ -589,11 +593,11 @@ public final class SchedulePhase extends Phase {
         }
 
         if (i instanceof BeginNode) {
-            ArrayList<ProxyNode> proxies = (i instanceof LoopExitNode) ? new ArrayList<ProxyNode>() : null;
+            ArrayList<ValueProxyNode> proxies = (i instanceof LoopExitNode) ? new ArrayList<ValueProxyNode>() : null;
             for (ScheduledNode inBlock : blockToNodesMap.get(b)) {
                 if (!visited.isMarked(inBlock)) {
-                    if (inBlock instanceof ProxyNode) {
-                        proxies.add((ProxyNode) inBlock);
+                    if (inBlock instanceof ValueProxyNode) {
+                        proxies.add((ValueProxyNode) inBlock);
                     } else {
                         addToEarliestSorting(b, inBlock, sortedInstructions, visited);
                     }
