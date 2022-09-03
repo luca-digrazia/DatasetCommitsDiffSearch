@@ -153,23 +153,15 @@ abstract class ToJavaNode extends Node {
         return false;
     }
 
-    boolean canConvert(Object value, Class<?> targetType, Type genericType, Object languageContext, int priority) {
-        return canConvert(value, targetType, genericType, languageContext != null, priority);
-    }
-
-    boolean canConvert(Object value, Class<?> targetType, int priority) {
-        return canConvert(value, targetType, null, true, priority);
-    }
-
     @SuppressWarnings({"unused"})
-    private boolean canConvert(Object value, Class<?> targetType, Type genericType, boolean allowValue, int priority) {
+    boolean canConvert(Object value, Class<?> targetType, Type genericType, Object languageContext, int priority) {
         if (canConvertToPrimitive(value, targetType, priority)) {
             return true;
         }
         if (priority <= STRICT) {
             return false;
         }
-        if (targetType == Value.class && allowValue) {
+        if (targetType == Value.class && languageContext != null) {
             return true;
         } else if (value instanceof TruffleObject) {
             TruffleObject tValue = (TruffleObject) value;
@@ -201,7 +193,7 @@ abstract class ToJavaNode extends Node {
                         return false;
                     }
                 } else {
-                    if (JavaInteropReflect.isFunctionalInterface(targetType) && (isExecutable(tValue) || isInstantiable(tValue))) {
+                    if (JavaInterop.isJavaFunctionInterface(targetType) && (isExecutable(tValue) || isInstantiable(tValue))) {
                         return true;
                     } else if (targetType.isInterface() && ForeignAccess.sendHasKeys(hasKeysNode, tValue)) {
                         return true;
@@ -309,7 +301,7 @@ abstract class ToJavaNode extends Node {
                 throw JavaInteropErrors.cannotConvert(languageContext, truffleObject, targetType, "Value must have array elements.");
             }
         } else if (!TruffleOptions.AOT && targetType.isInterface()) {
-            if (JavaInteropReflect.isFunctionalInterface(targetType) && (isExecutable(truffleObject) || isInstantiable(truffleObject))) {
+            if (JavaInterop.isJavaFunctionInterface(targetType) && (isExecutable(truffleObject) || isInstantiable(truffleObject))) {
                 obj = JavaInteropReflect.asJavaFunction(targetType, truffleObject, languageContext);
             } else if (ForeignAccess.sendHasKeys(hasKeysNode, truffleObject)) {
                 obj = JavaInteropReflect.newProxyInstance(targetType, truffleObject, languageContext);
