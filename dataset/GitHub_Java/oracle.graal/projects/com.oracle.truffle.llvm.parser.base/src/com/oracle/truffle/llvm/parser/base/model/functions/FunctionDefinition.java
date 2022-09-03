@@ -94,6 +94,7 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
         for (int i = 0; i < count; i++) {
             blocks[i] = new InstructionBlock(this, i);
         }
+        blocks[0].setName("0");
     }
 
     @Override
@@ -105,12 +106,13 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
 
     @Override
     public void exitFunction() {
-        int symbolIndex = 0;
+        int valueSymbolIdentifier = 0;
+        int blockIdentifier = 1; // Zero clashes with entry block in sulong
 
         // in K&R style function declarations the parameters are not assigned names
         for (final FunctionParameter parameter : parameters) {
             if (ValueSymbol.UNKNOWN.equals(parameter.getName())) {
-                parameter.setName(String.valueOf(symbolIndex++));
+                parameter.setName(String.valueOf(valueSymbolIdentifier++));
             }
         }
 
@@ -118,14 +120,14 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
             if (block.getName().equals(ValueSymbol.UNKNOWN)) {
                 // compilers like to assign numbers as blocknames, we name unnamed blocks this way
                 // to prevent name clashes
-                block.setName(String.format("%s\"%d\"", ValueSymbol.UNKNOWN, symbolIndex++));
+                block.setName(String.format("%s\"%d\"", ValueSymbol.UNKNOWN, blockIdentifier++));
             }
             for (int i = 0; i < block.getInstructionCount(); i++) {
                 final Instruction instruction = block.getInstruction(i);
                 if (instruction instanceof ValueInstruction) {
                     final ValueInstruction value = (ValueInstruction) instruction;
                     if (value.getName().equals(ValueSymbol.UNKNOWN)) {
-                        value.setName(String.valueOf(symbolIndex++));
+                        value.setName(String.valueOf(valueSymbolIdentifier++));
                     }
                 }
             }
