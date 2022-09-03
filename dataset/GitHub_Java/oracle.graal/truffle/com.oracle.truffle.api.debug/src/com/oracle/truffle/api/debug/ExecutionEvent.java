@@ -24,6 +24,9 @@
  */
 package com.oracle.truffle.api.debug;
 
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
+
 /**
  * This event is delivered to all
  * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#onEvent(com.oracle.truffle.api.vm.EventConsumer)
@@ -41,10 +44,16 @@ package com.oracle.truffle.api.debug;
  */
 @SuppressWarnings("javadoc")
 public final class ExecutionEvent {
-    private final Debugger debugger;
+    private Object[] debugger;
+    private final PolyglotEngine engine;
+    private final int currentDepth;
+    private final Source source;
 
-    ExecutionEvent(Debugger prepares) {
-        this.debugger = prepares;
+    ExecutionEvent(PolyglotEngine engine, int currentDepth, Object[] debugger, Source source) {
+        this.debugger = debugger;
+        this.engine = engine;
+        this.currentDepth = currentDepth;
+        this.source = source;
     }
 
     /**
@@ -56,8 +65,17 @@ public final class ExecutionEvent {
      *         ones in the same {@link com.oracle.truffle.api.vm.PolyglotEngine}.
      * @since 0.9
      */
-    public Debugger getDebugger() {
-        return debugger;
+    public synchronized Debugger getDebugger() {
+        if (debugger == null) {
+            throw new IllegalStateException("Event was disposed.");
+        }
+        if (debugger[0] instanceof Debugger) {
+            return (Debugger) debugger[0];
+        }
+        Debugger dbg = Debugger.find(engine, true);
+        dbg.executionStarted(currentDepth, source);
+        debugger[0] = dbg;
+        return dbg;
     }
 
     /**
@@ -75,7 +93,7 @@ public final class ExecutionEvent {
      * @since 0.9
      */
     public void prepareContinue() {
-        debugger.prepareContinue(-1);
+        getDebugger().prepareContinue(-1);
     }
 
     /**
@@ -85,9 +103,7 @@ public final class ExecutionEvent {
      * <li>User breakpoints are disabled.</li>
      * <li>Execution will continue until either:
      * <ol>
-     * <li>execution arrives at a node with the tag
-     * {@linkplain com.oracle.truffle.api.instrument.StandardSyntaxTag#STATEMENT STATMENT},
-     * <strong>or:</strong></li>
+     * <li>execution arrives at a node with the tag representing halt <strong>or:</strong></li>
      * <li>execution completes.</li>
      * </ol>
      * <li>StepInto mode persists only through one resumption (i.e. {@code stepIntoCount} steps),
@@ -98,6 +114,10 @@ public final class ExecutionEvent {
      * @since 0.9
      */
     public void prepareStepInto() {
-        debugger.prepareStepInto(1);
+        getDebugger().prepareStepInto(1);
+    }
+
+    synchronized void dispose() {
+        debugger = null;
     }
 }
