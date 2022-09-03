@@ -33,6 +33,7 @@ import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ci.CiCallingConvention.*;
 import com.sun.cri.ri.*;
+import com.sun.cri.util.*;
 
 /**
  * This class is used to build the stack frame layout for a compiled method.
@@ -129,7 +130,7 @@ public final class FrameMap {
             incomingArguments = new CiCallingConvention(new CiValue[0], 0);
         } else {
             CiKind receiver = !isStatic(method.accessFlags()) ? method.holder().kind() : null;
-            incomingArguments = getCallingConvention(CiUtil.signatureToKinds(method.signature(), receiver), JavaCallee);
+            incomingArguments = getCallingConvention(CRIUtil.signatureToKinds(method.signature(), receiver), JavaCallee);
         }
     }
 
@@ -141,7 +142,7 @@ public final class FrameMap {
      * @return a {@link CiCallingConvention} instance describing the location of parameters and the return value
      */
     public CiCallingConvention getCallingConvention(CiKind[] signature, Type type) {
-        CiCallingConvention cc = compilation.registerConfig.getCallingConvention(type, signature, compilation.target, false);
+        CiCallingConvention cc = compilation.registerConfig.getCallingConvention(type, signature, compilation.target);
         if (type == RuntimeCall) {
             assert cc.stackSize == 0 : "runtime call should not have stack arguments";
         } else if (type.out) {
@@ -188,7 +189,7 @@ public final class FrameMap {
 
         this.spillSlotCount = spillSlotCount;
         int frameSize = offsetToStackBlocksEnd();
-        frameSize += compilation.registerConfig.getCalleeSaveLayout().size;
+        frameSize += compilation.registerConfig.getCalleeSaveArea().size;
         this.frameSize = compilation.target.alignFrameSize(frameSize);
     }
 
@@ -363,7 +364,7 @@ public final class FrameMap {
     }
 
     public int offsetToCalleeSaveAreaStart() {
-        return offsetToCalleeSaveAreaEnd() - compilation.registerConfig.getCalleeSaveLayout().size;
+        return offsetToCalleeSaveAreaEnd() - compilation.registerConfig.getCalleeSaveArea().size;
     }
 
     public int offsetToCalleeSaveAreaEnd() {

@@ -40,7 +40,6 @@ public abstract class Node {
     final ArrayList<Node> usages;
     final ArrayList<Node> predecessors;
     final ArrayList<Integer> predecessorsIndex;
-    final int[] successorTags;
 
     public Node(int inputCount, int successorCount, Graph graph) {
         assert graph != null : "cannot create a node for a null graph";
@@ -48,7 +47,6 @@ public abstract class Node {
         this.id = graph.register(this);
         this.inputs = new NodeArray(this, inputCount);
         this.successors = new NodeArray(this, successorCount);
-        this.successorTags = new int[successorCount];
         this.predecessors = new ArrayList<Node>();
         this.usages = new ArrayList<Node>();
         this.predecessorsIndex = new ArrayList<Integer>();
@@ -72,10 +70,6 @@ public abstract class Node {
 
     public NodeArray successors() {
         return successors;
-    }
-    
-    public int[] successorTags() {
-        return successorTags;
     }
 
     public int id() {
@@ -103,7 +97,7 @@ public abstract class Node {
         int z = 0;
         for (Node predecessor : predecessors) {
             int predIndex = predecessorsIndex.get(z);
-            predecessor.successors.silentSet(predIndex, other);
+            predecessor.successors.nodes[predIndex] = other;
             ++z;
         }
         if (other != null) {
@@ -132,11 +126,12 @@ public abstract class Node {
         usages.clear();
         predecessors.clear();
         predecessorsIndex.clear();
+        delete();
     }
 
     public void delete() {
         assert !isDeleted();
-        assert checkDeletion() : "Could not delete " + this;
+        assert checkDeletion();
         assert predecessorsIndex.size() == 0;
         for (int i = 0; i < inputs.size(); ++i) {
             inputs.set(i, Null);
