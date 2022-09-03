@@ -398,17 +398,24 @@ public class TruffleGraphBuilderPlugins {
                         } else {
                             piStamp = StampFactory.declaredTrusted(javaType, nonNull.asJavaConstant().asInt() != 0);
                         }
-                        LogicNode compareNode = CompareNode.createCompareNode(object.graph(), Condition.EQ, condition, ConstantNode.forBoolean(true, object.graph()), constantReflection);
-                        boolean skipAnchor = false;
-                        if (compareNode instanceof LogicConstantNode) {
-                            LogicConstantNode logicConstantNode = (LogicConstantNode) compareNode;
-                            if (logicConstantNode.getValue()) {
-                                skipAnchor = true;
-                            }
-                        }
+
                         ConditionAnchorNode valueAnchorNode = null;
-                        if (!skipAnchor) {
-                            valueAnchorNode = b.add(new ConditionAnchorNode(compareNode));
+                        if (condition.isConstant() && condition.asJavaConstant().asInt() == 1) {
+                            // Nothing to do.
+                        } else {
+                            boolean skipAnchor = false;
+                            LogicNode compareNode = CompareNode.createCompareNode(object.graph(), Condition.EQ, condition, ConstantNode.forBoolean(true, object.graph()), constantReflection);
+
+                            if (compareNode instanceof LogicConstantNode) {
+                                LogicConstantNode logicConstantNode = (LogicConstantNode) compareNode;
+                                if (logicConstantNode.getValue()) {
+                                    skipAnchor = true;
+                                }
+                            }
+
+                            if (!skipAnchor) {
+                                valueAnchorNode = b.add(new ConditionAnchorNode(compareNode));
+                            }
                         }
                         b.addPush(JavaKind.Object, new PiNode(object, piStamp, valueAnchorNode));
                     }

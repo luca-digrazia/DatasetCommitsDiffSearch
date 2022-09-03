@@ -128,19 +128,18 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
 
         GuardingNode g = getGuard();
         if (g == null) {
-
             // Try to merge the pi node with a load node.
             if (o instanceof LoadFieldNode) {
                 LoadFieldNode loadFieldNode = (LoadFieldNode) o;
-                loadFieldNode.setStamp(loadFieldNode.stamp().improveWith(this.piStamp));
+                loadFieldNode.setStamp(loadFieldNode.stamp().improveWith(this.stamp()));
                 return loadFieldNode;
             } else if (o instanceof UnsafeLoadNode) {
                 UnsafeLoadNode unsafeLoadNode = (UnsafeLoadNode) o;
-                unsafeLoadNode.setStamp(unsafeLoadNode.stamp().improveWith(this.piStamp));
+                unsafeLoadNode.setStamp(unsafeLoadNode.stamp().improveWith(this.stamp()));
                 return unsafeLoadNode;
             } else if (o instanceof LoadIndexedNode) {
                 LoadIndexedNode loadIndexedNode = (LoadIndexedNode) o;
-                loadIndexedNode.setStamp(loadIndexedNode.stamp().improveWith(this.piStamp));
+                loadIndexedNode.setStamp(loadIndexedNode.stamp().improveWith(this.stamp()));
                 return loadIndexedNode;
             }
         } else {
