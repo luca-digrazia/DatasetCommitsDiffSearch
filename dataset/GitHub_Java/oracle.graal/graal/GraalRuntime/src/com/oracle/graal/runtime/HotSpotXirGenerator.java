@@ -29,14 +29,17 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-import com.oracle.max.asm.target.amd64.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ci.CiAddress.*;
+import com.sun.c1x.target.amd64.*;
+import com.sun.cri.ci.CiAddress.Scale;
 import com.sun.cri.ci.CiRegister.*;
+import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
-import com.sun.cri.ri.RiType.*;
+import com.sun.cri.ri.RiType.Representation;
 import com.sun.cri.xir.*;
-import com.sun.cri.xir.CiXirAssembler.*;
+import com.sun.cri.xir.CiXirAssembler.XirLabel;
+import com.sun.cri.xir.CiXirAssembler.XirMark;
+import com.sun.cri.xir.CiXirAssembler.XirOperand;
+import com.sun.cri.xir.CiXirAssembler.XirParameter;
 
 public class HotSpotXirGenerator implements RiXirGenerator {
 
@@ -182,6 +185,24 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             asm.pstore(CiKind.Long, thread, asm.i(config.threadExceptionPcOffset), asm.l(0), false);
 
             return asm.finishTemplate("exception object");
+        }
+    };
+
+    private SimpleTemplates resolveClassTemplates = new SimpleTemplates(UNRESOLVED) {
+
+        @Override
+        protected XirTemplate create(CiXirAssembler asm, long flags) {
+            XirOperand result = asm.restart(CiKind.Word);
+            if (is(UNRESOLVED, flags)) {
+                UnresolvedClassPatching patching = new UnresolvedClassPatching(asm, result, config);
+                patching.emitInline();
+                // -- out of line -------------------------------------------------------
+                patching.emitOutOfLine();
+            } else {
+                XirOperand type = asm.createConstantInputParameter("type", CiKind.Object);
+                asm.mov(result, type);
+            }
+            return asm.finishTemplate(is(UNRESOLVED, flags) ? "resolve class (unresolved)" : "resolve class");
         }
     };
 
@@ -342,13 +363,20 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         }
     };
 
-    private KindTemplates getFieldTemplates = new KindTemplates(NULL_CHECK) {
+    private KindTemplates getFieldTemplates = new KindTemplates(NULL_CHECK, UNRESOLVED) {
 
         @Override
         protected XirTemplate create(CiXirAssembler asm, long flags, CiKind kind) {
             XirOperand result = asm.restart(kind);
             XirParameter object = asm.createInputParameter("object", CiKind.Object);
 
+            if (is(UNRESOLVED, flags)) {
+                UnresolvedFieldPatching fieldPatching = new UnresolvedFieldPatching(asm, object, result, false, is(NULL_CHECK, flags), config);
+                fieldPatching.emitInline();
+                // -- out of line -------------------------------------------------------
+                fieldPatching.emitOutOfLine();
+                return asm.finishTemplate("getfield<" + kind + ">");
+            }
             XirParameter fieldOffset = asm.createConstantInputParameter("fieldOffset", CiKind.Int);
             if (is(NULL_CHECK, flags)) {
                 asm.nop(1);
@@ -375,13 +403,21 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         }
     };
 
-    private KindTemplates putFieldTemplates = new KindTemplates(WRITE_BARRIER, NULL_CHECK) {
+    private KindTemplates putFieldTemplates = new KindTemplates(WRITE_BARRIER, NULL_CHECK, UNRESOLVED) {
 
         @Override
         protected XirTemplate create(CiXirAssembler asm, long flags, CiKind kind) {
             asm.restart(CiKind.Void);
             XirParameter object = asm.createInputParameter("object", CiKind.Object);
             XirParameter value = asm.createInputParameter("value", kind);
+
+            if (is(UNRESOLVED, flags)) {
+                UnresolvedFieldPatching fieldPatching = new UnresolvedFieldPatching(asm, object, value, true, is(NULL_CHECK, flags), config);
+                fieldPatching.emitInline();
+                // -- out of line -------------------------------------------------------
+                fieldPatching.emitOutOfLine();
+                return asm.finishTemplate("putfield<" + kind + ">");
+            }
             XirParameter fieldOffset = asm.createConstantInputParameter("fieldOffset", CiKind.Int);
             if (kind == CiKind.Object) {
                 verifyPointer(asm, value);
@@ -451,6 +487,26 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         }
     };
 
+    private SimpleTemplates newInstanceUnresolvedTemplates = new SimpleTemplates() {
+
+        @Override
+        protected XirTemplate create(CiXirAssembler asm, long flags) {
+            XirOperand result = asm.restart(CiKind.Word);
+            XirOperand arg = asm.createRegisterTemp("runtime call argument", CiKind.Object, AMD64.rdx);
+
+            UnresolvedClassPatching patching = new UnresolvedClassPatching(asm, arg, config);
+
+            patching.emitInline();
+            useRegisters(asm, AMD64.rbx, AMD64.rcx, AMD64.rsi, AMD64.rax);
+            asm.callRuntime(config.unresolvedNewInstanceStub, result);
+
+            // -- out of line -------------------------------------------------------
+            patching.emitOutOfLine();
+
+            return asm.finishTemplate("new instance");
+        }
+    };
+
     private SimpleTemplates newObjectArrayCloneTemplates = new SimpleTemplates() {
 
         @Override
@@ -471,12 +527,12 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         }
     };
 
-    private SimpleTemplates newObjectArrayTemplates = new SimpleTemplates() {
+    private SimpleTemplates newObjectArrayTemplates = new SimpleTemplates(UNRESOLVED) {
 
         @Override
         protected XirTemplate create(CiXirAssembler asm, long flags) {
             emitNewTypeArray(asm, flags, CiKind.Object, config.useFastNewObjectArray, config.newObjectArrayStub);
-            return asm.finishTemplate("newObjectArray");
+            return asm.finishTemplate(is(UNRESOLVED, flags) ? "newObjectArray (unresolved)" : "newObjectArray");
         }
     };
 
@@ -495,7 +551,15 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         XirOperand temp3 = asm.createRegisterTemp("temp3", CiKind.Word, AMD64.rdi);
         XirOperand size = asm.createRegisterTemp("size", CiKind.Int, AMD64.rsi);
 
-        asm.mov(hub, asm.createConstantInputParameter("hub", CiKind.Object));
+        UnresolvedClassPatching patching = null;
+        if (is(UNRESOLVED, flags)) {
+            // insert the patching code for class resolving - the hub will end up in "hub"
+            patching = new UnresolvedClassPatching(asm, hub, config);
+            patching.emitInline();
+        } else {
+            asm.mov(hub, asm.createConstantInputParameter("hub", CiKind.Object));
+        }
+
         asm.mov(length, lengthParam);
 
         if (useFast) {
@@ -558,6 +622,10 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         } else {
             asm.callRuntime(slowPathStub, result);
         }
+
+        if (patching != null) {
+            patching.emitOutOfLine();
+        }
     }
 
     private KindTemplates newTypeArrayTemplates = new KindTemplates() {
@@ -568,7 +636,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         }
     };
 
-    private final IndexTemplates multiNewArrayTemplate = new IndexTemplates() {
+    private final IndexTemplates multiNewArrayTemplate = new IndexTemplates(UNRESOLVED) {
 
         @Override
         protected XirTemplate create(CiXirAssembler asm, long flags, int dimensions) {
@@ -584,23 +652,42 @@ public class HotSpotXirGenerator implements RiXirGenerator {
                 asm.pstore(CiKind.Int, sizes, asm.i(i * target.sizeInBytes(CiKind.Int)), length, false);
             }
 
-            asm.mov(hub, asm.createConstantInputParameter("hub", CiKind.Object));
+            UnresolvedClassPatching patching = null;
+            if (is(UNRESOLVED, flags)) {
+                // insert the patching code for class resolving - the hub will end up in "hub"
+                patching = new UnresolvedClassPatching(asm, hub, config);
+                patching.emitInline();
+            } else {
+                asm.mov(hub, asm.createConstantInputParameter("hub", CiKind.Object));
+            }
 
             asm.mov(rank, asm.i(dimensions));
             useRegisters(asm, AMD64.rax);
             asm.callRuntime(config.newMultiArrayStub, result);
-            return asm.finishTemplate("multiNewArray" + dimensions);
+            if (is(UNRESOLVED, flags)) {
+                patching.emitOutOfLine();
+            }
+            return asm.finishTemplate(is(UNRESOLVED, flags) ? "multiNewArray" + dimensions + " (unresolved)" : "multiNewArray" + dimensions);
         }
     };
 
-    private SimpleTemplates checkCastTemplates = new SimpleTemplates(NULL_CHECK) {
+    private SimpleTemplates checkCastTemplates = new SimpleTemplates(NULL_CHECK, UNRESOLVED) {
 
         @Override
         protected XirTemplate create(CiXirAssembler asm, long flags) {
             asm.restart();
             XirParameter object = asm.createInputParameter("object", CiKind.Object);
             final XirOperand hub;
-            hub = asm.createConstantInputParameter("hub", CiKind.Object);
+            final UnresolvedClassPatching patching;
+            if (is(UNRESOLVED, flags)) {
+                hub = asm.createTemp("hub", CiKind.Object);
+                // insert the patching code for class resolving - the hub will end up in "hub"
+                patching = new UnresolvedClassPatching(asm, hub, config);
+                patching.emitInline();
+            } else {
+                hub = asm.createConstantInputParameter("hub", CiKind.Object);
+                patching = null;
+            }
 
             XirOperand objHub = asm.createTemp("objHub", CiKind.Object);
 
@@ -627,18 +714,31 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             asm.callRuntime(CiRuntimeCall.Deoptimize, null);
             asm.shouldNotReachHere();
 
+            if (is(UNRESOLVED, flags)) {
+                patching.emitOutOfLine();
+            }
+
             return asm.finishTemplate(object, "instanceof");
         }
     };
 
-    private SimpleTemplates instanceOfTemplates = new SimpleTemplates(NULL_CHECK) {
+    private SimpleTemplates instanceOfTemplates = new SimpleTemplates(NULL_CHECK, UNRESOLVED) {
 
         @Override
         protected XirTemplate create(CiXirAssembler asm, long flags) {
             XirOperand result = asm.restart(CiKind.Boolean);
             XirParameter object = asm.createInputParameter("object", CiKind.Object);
             final XirOperand hub;
-            hub = asm.createConstantInputParameter("hub", CiKind.Object);
+            final UnresolvedClassPatching patching;
+            if (is(UNRESOLVED, flags)) {
+                hub = asm.createTemp("hub", CiKind.Object);
+                // insert the patching code for class resolving - the hub will end up in "hub"
+                patching = new UnresolvedClassPatching(asm, hub, config);
+                patching.emitInline();
+            } else {
+                hub = asm.createConstantInputParameter("hub", CiKind.Object);
+                patching = null;
+            }
 
             XirOperand objHub = asm.createTemp("objHub", CiKind.Object);
 
@@ -661,6 +761,10 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             asm.bindOutOfLine(slowPath);
             checkSubtype(asm, result, objHub, hub);
             asm.jmp(end);
+
+            if (is(UNRESOLVED, flags)) {
+                patching.emitOutOfLine();
+            }
 
             return asm.finishTemplate("instanceof");
         }
@@ -1042,7 +1146,11 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
     @Override
     public XirSnippet genResolveClass(XirSite site, RiType type, Representation rep) {
-        throw new CiBailout("Xir ResolveClass not available");
+        assert rep == Representation.ObjectHub || rep == Representation.StaticFields || rep == Representation.JavaClass : "unexpected representation: " + rep;
+        if (type.isResolved()) {
+            return new XirSnippet(resolveClassTemplates.get(site), XirArgument.forObject(type.getEncoding(rep).asObject()));
+        }
+        return new XirSnippet(resolveClassTemplates.get(site, UNRESOLVED));
     }
 
     @Override
@@ -1082,8 +1190,10 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
     @Override
     public XirSnippet genGetField(XirSite site, XirArgument object, RiField field) {
-        assert field.isResolved();
-        return new XirSnippet(getFieldTemplates.get(site, field.kind()), object, XirArgument.forInt(((HotSpotField) field).offset()));
+        if (field.isResolved()) {
+            return new XirSnippet(getFieldTemplates.get(site, field.kind()), object, XirArgument.forInt(((HotSpotField) field).offset()));
+        }
+        return new XirSnippet(getFieldTemplates.get(site, field.kind(), UNRESOLVED), object);
     }
 
     @Override
@@ -1093,34 +1203,44 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
     @Override
     public XirSnippet genPutField(XirSite site, XirArgument object, RiField field, XirArgument value) {
-        assert field.isResolved();
-        return new XirSnippet(putFieldTemplates.get(site, field.kind()), object, value, XirArgument.forInt(((HotSpotField) field).offset()));
+        if (field.isResolved()) {
+            return new XirSnippet(putFieldTemplates.get(site, field.kind()), object, value, XirArgument.forInt(((HotSpotField) field).offset()));
+        }
+        return new XirSnippet(putFieldTemplates.get(site, field.kind(), UNRESOLVED), object, value);
     }
 
     @Override
     public XirSnippet genGetStatic(XirSite site, XirArgument object, RiField field) {
-        assert field.isResolved();
-        return new XirSnippet(getFieldTemplates.get(site, field.kind()), object, XirArgument.forInt(((HotSpotField) field).offset()));
+        if (field.isResolved()) {
+            return new XirSnippet(getFieldTemplates.get(site, field.kind()), object, XirArgument.forInt(((HotSpotField) field).offset()));
+        }
+        return new XirSnippet(getFieldTemplates.get(site, field.kind(), UNRESOLVED), object);
     }
 
     @Override
     public XirSnippet genPutStatic(XirSite site, XirArgument object, RiField field, XirArgument value) {
-        assert field.isResolved();
-        return new XirSnippet(putFieldTemplates.get(site, field.kind()), object, value, XirArgument.forInt(((HotSpotField) field).offset()));
+        if (field.isResolved()) {
+            return new XirSnippet(putFieldTemplates.get(site, field.kind()), object, value, XirArgument.forInt(((HotSpotField) field).offset()));
+        }
+        return new XirSnippet(putFieldTemplates.get(site, field.kind(), UNRESOLVED), object, value);
     }
 
     @Override
     public XirSnippet genNewInstance(XirSite site, RiType type) {
-        assert type.isResolved();
-        int instanceSize = ((HotSpotTypeResolved) type).instanceSize();
-        return new XirSnippet(newInstanceTemplates.get(site, instanceSize), XirArgument.forObject(type));
+        if (type.isResolved()) {
+            int instanceSize = ((HotSpotTypeResolved) type).instanceSize();
+            return new XirSnippet(newInstanceTemplates.get(site, instanceSize), XirArgument.forObject(type));
+        }
+        return new XirSnippet(newInstanceUnresolvedTemplates.get(site));
     }
 
     @Override
     public XirSnippet genNewArray(XirSite site, XirArgument length, CiKind elementKind, RiType componentType, RiType arrayType) {
         if (elementKind == CiKind.Object) {
-            assert arrayType.isResolved();
-            return new XirSnippet(newObjectArrayTemplates.get(site), length, XirArgument.forObject(arrayType));
+            if (arrayType.isResolved()) {
+                return new XirSnippet(newObjectArrayTemplates.get(site), length, XirArgument.forObject(arrayType));
+            }
+            return new XirSnippet(newObjectArrayTemplates.get(site, UNRESOLVED), length);
         }
         assert arrayType == null;
         arrayType = compiler.getVMEntries().getPrimitiveArrayType(elementKind);
@@ -1134,22 +1254,28 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
     @Override
     public XirSnippet genNewMultiArray(XirSite site, XirArgument[] lengths, RiType type) {
-        assert type.isResolved();
-        XirArgument[] params = Arrays.copyOf(lengths, lengths.length + 1);
-        params[lengths.length] = XirArgument.forObject(type);
-        return new XirSnippet(multiNewArrayTemplate.get(site, lengths.length), params);
+        if (type.isResolved()) {
+            XirArgument[] params = Arrays.copyOf(lengths, lengths.length + 1);
+            params[lengths.length] = XirArgument.forObject(type);
+            return new XirSnippet(multiNewArrayTemplate.get(site, lengths.length), params);
+        }
+        return new XirSnippet(multiNewArrayTemplate.get(site, lengths.length, UNRESOLVED), lengths);
     }
 
     @Override
     public XirSnippet genCheckCast(XirSite site, XirArgument receiver, XirArgument hub, RiType type) {
-        assert type.isResolved();
-        return new XirSnippet(checkCastTemplates.get(site), receiver, hub);
+        if (type.isResolved()) {
+            return new XirSnippet(checkCastTemplates.get(site), receiver, hub);
+        }
+        return new XirSnippet(checkCastTemplates.get(site, UNRESOLVED), receiver);
     }
 
     @Override
     public XirSnippet genInstanceOf(XirSite site, XirArgument object, XirArgument hub, RiType type) {
-        assert type.isResolved();
-        return new XirSnippet(instanceOfTemplates.get(site), object, hub);
+        if (type.isResolved()) {
+            return new XirSnippet(instanceOfTemplates.get(site), object, hub);
+        }
+        return new XirSnippet(instanceOfTemplates.get(site, UNRESOLVED), object);
     }
 
     @Override
@@ -1195,6 +1321,137 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         this.globalAsm = asm;
         List<XirTemplate> templates = new ArrayList<XirTemplate>();
         return templates;
+    }
+
+    private static class UnresolvedClassPatching {
+
+        private final XirLabel patchSite;
+        private final XirLabel replacement;
+        private final XirLabel patchStub;
+        private final CiXirAssembler asm;
+        private final HotSpotVMConfig config;
+        private final XirOperand arg;
+        private State state;
+
+        private enum State {
+            New, Inline, Finished
+        }
+
+        public UnresolvedClassPatching(CiXirAssembler asm, XirOperand arg, HotSpotVMConfig config) {
+            this.asm = asm;
+            this.arg = arg;
+            this.config = config;
+            patchSite = asm.createInlineLabel("patch site");
+            replacement = asm.createOutOfLineLabel("replacement");
+            patchStub = asm.createOutOfLineLabel("patch stub");
+
+            state = State.New;
+        }
+
+        public void emitInline() {
+            assert state == State.New;
+
+            asm.bindInline(patchSite);
+            asm.mark(MARK_DUMMY_OOP_RELOCATION);
+
+            asm.jmp(patchStub);
+
+            // TODO: make this more generic & safe - this is needed to create space for patching
+            asm.nop(5);
+
+            state = State.Inline;
+        }
+
+        public void emitOutOfLine() {
+            assert state == State.Inline;
+
+            asm.bindOutOfLine(replacement);
+            XirMark begin = asm.mark(null);
+            asm.mov(arg, asm.createConstant(CiConstant.NULL_OBJECT));
+            XirMark end = asm.mark(null);
+            // make this piece of data look like an instruction
+            asm.rawBytes(new byte[] {(byte) 0xb8, 0, 0, 0x05, 0});
+            asm.mark(MARK_KLASS_PATCHING, begin, end);
+            asm.bindOutOfLine(patchStub);
+            asm.callRuntime(config.loadKlassStub, null);
+            asm.jmp(patchSite);
+
+            state = State.Finished;
+        }
+    }
+
+    private static class UnresolvedFieldPatching {
+
+        private final XirLabel patchSite;
+        private final XirLabel replacement;
+        private final XirLabel patchStub;
+        private final CiXirAssembler asm;
+        private final HotSpotVMConfig config;
+        private State state;
+        private final XirOperand receiver;
+        private final XirOperand value;
+        private final boolean put;
+        private final boolean nullCheck;
+
+        private enum State {
+            New, Inline, Finished
+        }
+
+        public UnresolvedFieldPatching(CiXirAssembler asm, XirOperand receiver, XirOperand value, boolean put, boolean nullCheck, HotSpotVMConfig config) {
+            this.asm = asm;
+            this.receiver = receiver;
+            this.value = value;
+            this.put = put;
+            this.nullCheck = nullCheck;
+            this.config = config;
+            patchSite = asm.createInlineLabel("patch site");
+            replacement = asm.createOutOfLineLabel("replacement");
+            patchStub = asm.createOutOfLineLabel("patch stub");
+
+            state = State.New;
+        }
+
+        public void emitInline() {
+            assert state == State.New;
+            if (nullCheck) {
+                asm.nop(1);
+            }
+            asm.bindInline(patchSite);
+            asm.mark(MARK_DUMMY_OOP_RELOCATION);
+            if (nullCheck) {
+                asm.mark(MARK_IMPLICIT_NULL);
+            }
+            asm.safepoint();
+            asm.jmp(patchStub);
+
+            // TODO: make this more generic & safe - this is needed to create space for patching
+            asm.nop(5);
+
+            state = State.Inline;
+        }
+
+        public void emitOutOfLine() {
+            assert state == State.Inline;
+
+            asm.bindOutOfLine(replacement);
+            XirMark begin = asm.mark(null);
+            if (put) {
+                asm.pstore(value.kind, receiver, asm.i(Integer.MAX_VALUE), value, false);
+            } else {
+                asm.pload(value.kind, value, receiver, asm.i(Integer.MAX_VALUE), false);
+            }
+            XirMark end = asm.mark(null);
+            // make this piece of data look like an instruction
+            asm.rawBytes(new byte[] {(byte) 0xb8, 0, 0, 0x05, 0});
+            asm.mark(MARK_ACCESS_FIELD_PATCHING, begin, end);
+            asm.bindOutOfLine(patchStub);
+            asm.callRuntime(config.accessFieldStub, null);
+            asm.jmp(patchSite);
+
+            // Check if we need NOP instructions like in C1 to "not destroy the world".
+
+            state = State.Finished;
+        }
     }
 
     private void verifyPointer(CiXirAssembler asm, XirOperand pointer) {
