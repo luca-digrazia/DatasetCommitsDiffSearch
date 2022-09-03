@@ -28,6 +28,7 @@ import java.io.*;
 import java.lang.annotation.*;
 
 import com.oracle.truffle.api.debug.*;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.Node;
@@ -174,36 +175,17 @@ public abstract class TruffleLanguage<C> {
     protected abstract DebugSupportProvider getDebugSupport();
 
     /**
-     * Allows a language implementor to create a node that can effectively lookup up the context
-     * associated with current execution. The context is created by
-     * {@link #createContext(com.oracle.truffle.api.TruffleLanguage.Env)} method.
-     * 
-     * @return node to be inserted into program to effectively find out current execution context
-     *         for this language
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
     protected final Node createFindContextNode() {
         final Class<? extends TruffleLanguage<?>> c = (Class<? extends TruffleLanguage<?>>) getClass();
         return new FindContextNode(c);
     }
-
-    /**
-     * Uses the {@link #createFindContextNode()} node to obtain the current context.
-     * 
-     * @param n the node created by this language's {@link #createFindContextNode()}
-     * @return the context created by
-     *         {@link #createContext(com.oracle.truffle.api.TruffleLanguage.Env)} method at the
-     *         beginning of the language execution
-     * @throws ClassCastException if the node has not been created by <code>this</code>.
-     *             {@link #createFindContextNode()} method.
-     */
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    protected final C findContext(Node n) {
+    
+    public final C findContext(Node n, VirtualFrame frame) {
         FindContextNode fcn = (FindContextNode) n;
-        if (fcn.getLanguageClass() != getClass()) {
-            throw new ClassCastException();
-        }
-        return (C) fcn.executeFindContext();
+        assert fcn.type() == getClass();
+        return (C) fcn.executeFindContext(frame);
     }
 
     private static final class LangCtx<C> {
