@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,7 +22,6 @@
  */
 package org.graalvm.compiler.replacements.jdk9;
 
-import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -246,7 +243,7 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
     @Test
     public void testGetAndAdd() {
         TargetDescription target = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getTarget();
-        if (target.arch instanceof AMD64 || target.arch instanceof AArch64) {
+        if (target.arch instanceof AMD64) {
             testGraph("unsafeGetAndAddByte");
             testGraph("unsafeGetAndAddChar");
             testGraph("unsafeGetAndAddShort");
@@ -300,7 +297,7 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
     @Test
     public void testGetAndSet() {
         TargetDescription target = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getTarget();
-        if (target.arch instanceof AMD64 || target.arch instanceof AArch64) {
+        if (target.arch instanceof AMD64) {
             testGraph("unsafeGetAndSetBoolean");
             testGraph("unsafeGetAndSetByte");
             testGraph("unsafeGetAndSetChar");
