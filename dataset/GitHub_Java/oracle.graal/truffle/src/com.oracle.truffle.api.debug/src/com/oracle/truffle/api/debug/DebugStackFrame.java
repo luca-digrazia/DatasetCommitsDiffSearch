@@ -37,6 +37,7 @@ import com.oracle.truffle.api.debug.DebugValue.HeapValue;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -66,12 +67,10 @@ public final class DebugStackFrame implements Iterable<DebugValue> {
 
     final SuspendedEvent event;
     private final FrameInstance currentFrame;
-    private final int depth;    // The frame depth on stack. 0 is the top frame
 
-    DebugStackFrame(SuspendedEvent session, FrameInstance instance, int depth) {
+    DebugStackFrame(SuspendedEvent session, FrameInstance instance) {
         this.event = session;
         this.currentFrame = instance;
-        this.depth = depth;
     }
 
     /**
@@ -149,7 +148,7 @@ public final class DebugStackFrame implements Iterable<DebugValue> {
     public SourceSection getSourceSection() {
         verifyValidState(true);
         if (currentFrame == null) {
-            SuspendedContext context = getContext();
+            EventContext context = getContext();
             return context.getInstrumentedSourceSection();
         } else {
             Node callNode = currentFrame.getCallNode();
@@ -175,7 +174,7 @@ public final class DebugStackFrame implements Iterable<DebugValue> {
      */
     public DebugScope getScope() {
         verifyValidState(false);
-        SuspendedContext context = getContext();
+        EventContext context = getContext();
         RootNode root = findCurrentRoot();
         if (root == null) {
             return null;
@@ -348,12 +347,8 @@ public final class DebugStackFrame implements Iterable<DebugValue> {
         }
     }
 
-    int getDepth() {
-        return depth;
-    }
-
-    private SuspendedContext getContext() {
-        SuspendedContext context = event.getContext();
+    private EventContext getContext() {
+        EventContext context = event.getContext();
         if (context == null) {
             // there is a race condition here if the event
             // got disposed between the parent verifyValidState and getContext.
@@ -366,7 +361,7 @@ public final class DebugStackFrame implements Iterable<DebugValue> {
     }
 
     RootNode findCurrentRoot() {
-        SuspendedContext context = getContext();
+        EventContext context = getContext();
         if (currentFrame == null) {
             return context.getInstrumentedNode().getRootNode();
         } else {
