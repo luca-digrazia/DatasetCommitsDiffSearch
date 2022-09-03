@@ -48,7 +48,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
     private final CompilationProfile compilationProfile;
     private final CompilationPolicy compilationPolicy;
     private final TruffleInlining inlining;
-    private boolean compilationEnabled;
+    private boolean disableCompilation;
     private int callCount;
 
     protected OptimizedCallTarget(RootNode rootNode, FrameDescriptor descriptor, TruffleCompiler compiler, int invokeCounter, int compilationThreshold) {
@@ -63,7 +63,6 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
         } else {
             compilationPolicy = new DefaultCompilationPolicy();
         }
-        this.compilationEnabled = true;
 
         if (TruffleCallTargetProfiling.getValue()) {
             registerCallTarget(this);
@@ -130,48 +129,43 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
     private Object interpreterCall(PackedFrame caller, Arguments args) {
         CompilerAsserts.neverPartOfCompilation();
         compilationProfile.reportInterpreterCall();
-        if (compilationEnabled) {
-            boolean inlined = shouldInline() && inline();
-            if (!inlined && shouldCompile()) {
-                compile();
-            }
+        if (disableCompilation || !compilationPolicy.shouldCompile(compilationProfile)) {
+            return executeHelper(caller, args);
+        } else {
+            return compileOrInline(caller, args);
         }
-        return executeHelper(caller, args);
     }
 
-    private boolean shouldCompile() {
-        return compilationPolicy.shouldCompile(compilationProfile);
-    }
-
-    private static boolean shouldInline() {
-        return TruffleFunctionInlining.getValue();
-    }
-
-    public void compile() {
-        CompilerAsserts.neverPartOfCompilation();
+    private Object compileOrInline(PackedFrame caller, Arguments args) {
         if (installedCodeTask != null) {
             // There is already a compilation running.
             if (installedCodeTask.isCancelled()) {
                 installedCodeTask = null;
             } else {
                 if (installedCodeTask.isDone()) {
-                    installedCode = receiveInstalledCode();
+                    receiveInstalledCode();
                 }
-                return;
+                return executeHelper(caller, args);
             }
         }
 
-        this.installedCodeTask = compiler.compile(this);
-        if (!TruffleBackgroundCompilation.getValue()) {
-            installedCode = receiveInstalledCode();
+        if (TruffleFunctionInlining.getValue() && inline()) {
+            compilationProfile.reportInliningPerformed();
+            return call(caller, args);
+        } else {
+            compile();
+            return executeHelper(caller, args);
         }
     }
 
-    private InstalledCode receiveInstalledCode() {
+    private void receiveInstalledCode() {
         try {
-            return installedCodeTask.get();
+            this.installedCode = installedCodeTask.get();
+            if (TruffleCallTargetProfiling.getValue()) {
+                resetProfiling();
+            }
         } catch (InterruptedException | ExecutionException e) {
-            compilationEnabled = false;
+            disableCompilation = true;
             OUT.printf("[truffle] opt failed %-48s  %s\n", rootNode, e.getMessage());
             if (e.getCause() instanceof BailoutException) {
                 // Bailout => move on.
@@ -183,21 +177,21 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
                     System.exit(-1);
                 }
             }
-            return null;
         }
+        installedCodeTask = null;
     }
 
-    /**
-     * Forces inlining whether or not function inlining is enabled.
-     * 
-     * @return true if an inlining was performed
-     */
     public boolean inline() {
-        boolean result = inlining.performInlining(this);
-        if (result) {
-            compilationProfile.reportInliningPerformed();
+        CompilerAsserts.neverPartOfCompilation();
+        return inlining.performInlining(this);
+    }
+
+    public void compile() {
+        CompilerAsserts.neverPartOfCompilation();
+        this.installedCodeTask = compiler.compile(this);
+        if (!TruffleBackgroundCompilation.getValue()) {
+            receiveInstalledCode();
         }
-        return result;
     }
 
     public Object executeHelper(PackedFrame caller, Arguments args) {
@@ -223,6 +217,12 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
     public void nodeReplaced() {
         compilationProfile.reportNodeReplaced();
         invalidate();
+    }
+
+    private static void resetProfiling() {
+        for (OptimizedCallTarget callTarget : OptimizedCallTarget.callTargets.keySet()) {
+            callTarget.callCount = 0;
+        }
     }
 
     private static void printProfiling() {
@@ -252,7 +252,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
             int nodeCount = NodeUtil.countNodes(callTarget.rootNode);
             int inlinedCallSiteCount = NodeUtil.countNodes(callTarget.rootNode, InlinedCallSite.class);
             String comment = callTarget.installedCode == null ? " int" : "";
-            comment += callTarget.compilationEnabled ? "" : " fail";
+            comment += callTarget.disableCompilation ? " fail" : "";
             OUT.printf("%-50s | %10d | %15d | %15d | %10d | %3d%s\n", callTarget.getRootNode(), callTarget.callCount, inlinedCallSiteCount, notInlinedCallSiteCount, nodeCount,
                             callTarget.getCompilationProfile().getInvalidationCount(), comment);
 

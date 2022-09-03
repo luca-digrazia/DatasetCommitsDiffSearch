@@ -24,8 +24,6 @@ package com.oracle.graal.truffle;
 
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-import java.io.*;
-
 public class TimedCompilationPolicy extends DefaultCompilationPolicy {
 
     @Override
@@ -41,8 +39,9 @@ public class TimedCompilationPolicy extends DefaultCompilationPolicy {
             // maybe introduce another method?
             profile.reportTiminingFailed(timestamp);
             if (TruffleCompilationDecisionTimePrintFail.getValue()) {
-                PrintStream out = System.out;
-                out.println(profile.getName() + ": timespan  " + (timespan / 1000000) + " ms  larger than threshold");
+                // Checkstyle: stop
+                System.out.println(profile.getName() + ": timespan  " + (timespan / 1000000) + " ms  larger than threshold");
+                // Checkstyle: resume
             }
         }
         return false;

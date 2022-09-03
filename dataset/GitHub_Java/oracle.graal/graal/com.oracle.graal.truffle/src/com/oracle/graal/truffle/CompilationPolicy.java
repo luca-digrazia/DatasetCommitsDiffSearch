@@ -22,11 +22,8 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.truffle.api.*;
-
 public interface CompilationPolicy {
 
-    boolean shouldCompile(CompilationProfile profile, CompilerOptions options);
+    boolean shouldCompile(CompilationProfile profile);
 
-    void recordCompilationFailure(Throwable t);
 }
