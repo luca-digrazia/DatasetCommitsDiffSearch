@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -65,17 +63,14 @@ import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
 import com.oracle.svm.core.c.function.CEntryPointSetup.LeaveDetachThreadEpilogue;
 import com.oracle.svm.core.log.Log;
-import com.oracle.svm.core.os.IsDefined;
 import com.oracle.svm.core.os.VirtualMemoryProvider;
 import com.oracle.svm.core.posix.PosixUtils;
 import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.LibC;
 import com.oracle.svm.core.posix.headers.Pthread;
 import com.oracle.svm.core.posix.headers.Pthread.pthread_attr_t;
-import com.oracle.svm.core.posix.headers.darwin.DarwinPthread;
 import com.oracle.svm.core.posix.headers.Sched;
 import com.oracle.svm.core.posix.headers.Time;
-import com.oracle.svm.core.posix.headers.linux.LinuxPthread;
 import com.oracle.svm.core.posix.pthread.PthreadConditionUtils;
 import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.thread.ParkEvent;
@@ -120,7 +115,7 @@ public final class PosixJavaThreads extends JavaThreads {
         }
 
         PosixUtils.checkStatusIs0(
-                        Pthread.pthread_attr_setguardsize(attributes, VirtualMemoryProvider.get().getGranularity()),
+                        Pthread.pthread_attr_setguardsize(attributes, VirtualMemoryProvider.get().getPageSize()),
                         "PosixJavaThreads.start0: pthread_attr_setguardsize");
 
         ThreadStartData startData = UnmanagedMemory.malloc(SizeOf.get(ThreadStartData.class));
@@ -152,26 +147,15 @@ public final class PosixJavaThreads extends JavaThreads {
         return toTarget(thread).hasPthreadIdentifier;
     }
 
-    /**
-     * Try to set the native name of the current thread.
-     *
-     * Failures are ignored.
-     */
     @Override
-    protected void setNativeName(String name) {
-        if (hasThreadIdentifier(Thread.currentThread())) {
-            /* Use at most 15 characters from the right end of the name. */
-            final int startIndex = Math.max(0, name.length() - 15);
-            final String pthreadName = name.substring(startIndex);
+    protected void setNativeName(Thread thread, String name) {
+        if (hasThreadIdentifier(thread)) {
+            String pthreadName = name.substring(Math.max(0, name.length() - 15), name.length());
             assert pthreadName.length() < 16 : "thread name for pthread has a maximum length of 16 characters including the terminating 0";
             try (CCharPointerHolder threadNameHolder = CTypeConversion.toCString(pthreadName)) {
-                if (IsDefined.isLinux()) {
-                    LinuxPthread.pthread_setname_np(getPthreadIdentifier(Thread.currentThread()), threadNameHolder.get());
-                } else if (IsDefined.isDarwin()) {
-                    DarwinPthread.pthread_setname_np(threadNameHolder.get());
-                } else {
-                    VMError.unsupportedFeature("PosixJavaThreads.setNativeName on unknown OS");
-                }
+                PosixUtils.checkStatusIs0(
+                                Pthread.pthread_setname_np(getPthreadIdentifier(thread), threadNameHolder.get()),
+                                "PosixJavaThreads.setNativeName: pthread_setname_np");
             }
         }
     }
@@ -230,7 +214,7 @@ public final class PosixJavaThreads extends JavaThreads {
 
         /* Complete the initialization of the thread, now that it is (nearly) running. */
         setPthreadIdentifier(thread, Pthread.pthread_self());
-        singleton().setNativeName(thread.getName());
+        singleton().setNativeName(thread, thread.getName());
 
         singleton().noteThreadStart(thread);
 

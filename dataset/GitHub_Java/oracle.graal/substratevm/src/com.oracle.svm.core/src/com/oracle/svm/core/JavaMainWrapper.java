@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Feature;
@@ -56,6 +57,7 @@ import com.oracle.svm.core.c.function.CEntryPointSetup.EnterCreateIsolatePrologu
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.jdk.RuntimeFeature;
 import com.oracle.svm.core.jdk.RuntimeSupport;
+import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.RuntimeOptionParser;
 import com.oracle.svm.core.option.XOptions;
 import com.oracle.svm.core.properties.RuntimePropertyParser;
@@ -82,6 +84,36 @@ public class JavaMainWrapper {
     private static String[] mainArgs;
 
     public static class JavaMainSupport {
+
+        public static void executeStartupHooks() {
+            RuntimeSupport runtimeSupport = RuntimeSupport.getRuntimeSupport();
+            executeHooks(runtimeSupport.getStartupHooks(), runtimeSupport::removeStartupHook);
+        }
+
+        public static void executeShutdownHooks() {
+            RuntimeSupport runtimeSupport = RuntimeSupport.getRuntimeSupport();
+            executeHooks(runtimeSupport.getShutdownHooks(), runtimeSupport::removeShutdownHook);
+        }
+
+        private static void executeHooks(List<Runnable> hooks, Consumer<Runnable> deleteHookAction) {
+            List<Throwable> hookExceptions = new ArrayList<>();
+
+            for (Runnable hook : hooks) {
+                deleteHookAction.accept(hook);
+                try {
+                    hook.run();
+                } catch (Throwable ex) {
+                    hookExceptions.add(ex);
+                }
+            }
+
+            // report all hook exceptions, but do not re-throw
+            if (hookExceptions.size() > 0) {
+                for (Throwable ex : hookExceptions) {
+                    ex.printStackTrace(Log.logStream());
+                }
+            }
+        }
 
         private final Method javaMainMethod;
 
@@ -123,12 +155,7 @@ public class JavaMainWrapper {
     }
 
     /** A shutdown hook to print the PrintGCSummary output. */
-    public static class PrintGCSummaryShutdownHook extends Thread {
-
-        public PrintGCSummaryShutdownHook() {
-            super("PrintGCSummaryShutdownHook");
-        }
-
+    public static class PrintGCSummaryShutdownHook implements Runnable {
         @Override
         public void run() {
             Heap.getHeap().getGC().printGCSummary();
@@ -158,28 +185,29 @@ public class JavaMainWrapper {
             args = RuntimePropertyParser.parse(args);
         }
         mainArgs = args;
-        final RuntimeSupport rs = RuntimeSupport.getRuntimeSupport();
         try {
-            try {
-                if (AllocationSite.Options.AllocationProfiling.getValue()) {
-                    Runtime.getRuntime().addShutdownHook(new AllocationSite.AllocationProfilingShutdownHook());
-                }
-                if (SubstrateOptions.PrintGCSummary.getValue()) {
-                    Runtime.getRuntime().addShutdownHook(new PrintGCSummaryShutdownHook());
-                }
-                rs.executeStartupHooks();
-                ImageSingletons.lookup(JavaMainSupport.class).getJavaMainMethod().invoke(null, (Object) mainArgs);
-                rs.executeShutdownHooks();
-            } catch (Throwable ex) {
-                JavaThreads.dispatchUncaughtException(Thread.currentThread(), ex);
+            final RuntimeSupport rs = RuntimeSupport.getRuntimeSupport();
+            if (AllocationSite.Options.AllocationProfiling.getValue()) {
+                rs.addShutdownHook(new AllocationSite.AllocationProfilingShutdownHook());
             }
-        } finally {
-            /* Shutdown before joining non-daemon threads. */
-            rs.shutdown();
+            if (SubstrateOptions.PrintGCSummary.getValue()) {
+                rs.addShutdownHook(new PrintGCSummaryShutdownHook());
+            }
+            try {
+                JavaMainSupport.executeStartupHooks();
+                ImageSingletons.lookup(JavaMainSupport.class).getJavaMainMethod().invoke(null, (Object) mainArgs);
+            } finally { // always execute the shutdown hooks
+                JavaMainSupport.executeShutdownHooks();
+            }
+        } catch (Throwable ex) {
+            JavaThreads.dispatchUncaughtException(Thread.currentThread(), ex);
         }
 
         JavaThreads.singleton().joinAllNonDaemons();
         Counter.logValues();
+
+        /* Shut down the VM. */
+        RuntimeSupport.getRuntimeSupport().shutdown();
 
         return 0;
     }
