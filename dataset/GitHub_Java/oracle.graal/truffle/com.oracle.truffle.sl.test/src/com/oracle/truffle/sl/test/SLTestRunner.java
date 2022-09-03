@@ -54,7 +54,6 @@ import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -91,6 +90,8 @@ import com.oracle.truffle.sl.runtime.SLUndefinedNameException;
 import com.oracle.truffle.sl.test.SLTestRunner.TestCase;
 
 public class SLTestRunner extends ParentRunner<TestCase> {
+
+    private static int repeats = 1;
 
     private static final String SOURCE_SUFFIX = ".sl";
     private static final String INPUT_SUFFIX = ".input";
@@ -233,7 +234,7 @@ public class SLTestRunner extends ParentRunner<TestCase> {
                     File dir = path.getParentFile();
                     dir.mkdirs();
                     assert dir.exists();
-                    Files.copy(jarfile.getInputStream(e), path.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    Files.copy(jarfile.getInputStream(e), path.toPath());
                 }
             }
             return jarfileDir.toFile().getAbsolutePath();
@@ -282,6 +283,10 @@ public class SLTestRunner extends ParentRunner<TestCase> {
         return outFile.toString();
     }
 
+    public static void setRepeats(int repeats) {
+        SLTestRunner.repeats = repeats;
+    }
+
     private static final List<NodeFactory<? extends SLBuiltinNode>> builtins = new ArrayList<>();
 
     public static void installBuiltin(NodeFactory<? extends SLBuiltinNode> builtin) {
@@ -292,18 +297,20 @@ public class SLTestRunner extends ParentRunner<TestCase> {
     protected void runChild(TestCase testCase, RunNotifier notifier) {
         notifier.fireTestStarted(testCase.name);
 
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
         PolyglotEngine engine = null;
         try {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            engine = PolyglotEngine.newBuilder().setIn(new ByteArrayInputStream(testCase.testInput.getBytes("UTF-8"))).setOut(out).build();
+            engine = PolyglotEngine.newBuilder().setIn(new ByteArrayInputStream(repeat(testCase.testInput, repeats).getBytes("UTF-8"))).setOut(out).build();
+            String script = readAllLines(testCase.path);
+
             PrintWriter printer = new PrintWriter(out);
             run(engine, testCase.path, printer);
             printer.flush();
 
             String actualOutput = new String(out.toByteArray());
-            Assert.assertEquals(testCase.name.toString(), testCase.expectedOutput, actualOutput);
+            Assert.assertEquals(script, repeat(testCase.expectedOutput, repeats), actualOutput);
         } catch (Throwable ex) {
-            notifier.fireTestFailure(new Failure(testCase.name, ex));
+            notifier.fireTestFailure(new Failure(testCase.name, new IllegalStateException("Cannot run " + testCase.sourceName, ex)));
         } finally {
             if (engine != null) {
                 engine.dispose();
@@ -320,7 +327,6 @@ public class SLTestRunner extends ParentRunner<TestCase> {
         }
 
         /* Parse the SL source file. */
-
         Source source = Source.newBuilder(path.toFile()).build();
         context.getFunctionRegistry().register(Parser.parseSL(source));
 
@@ -330,17 +336,27 @@ public class SLTestRunner extends ParentRunner<TestCase> {
             throw new SLException("No function main() defined in SL source file.");
         }
 
-        /* Call the main entry point, without any arguments. */
-        try {
-            Object result = mainFunction.getCallTarget().call();
-            if (result != SLNull.SINGLETON) {
-                out.println(result);
+        for (int i = 0; i < repeats; i++) {
+            /* Call the main entry point, without any arguments. */
+            try {
+                Object result = mainFunction.getCallTarget().call();
+                if (result != SLNull.SINGLETON) {
+                    out.println(result);
+                }
+            } catch (UnsupportedSpecializationException ex) {
+                out.println(SLMain.formatTypeError(ex));
+            } catch (SLUndefinedNameException ex) {
+                out.println(ex.getMessage());
             }
-        } catch (UnsupportedSpecializationException ex) {
-            out.println(SLMain.formatTypeError(ex));
-        } catch (SLUndefinedNameException ex) {
-            out.println(ex.getMessage());
         }
+    }
+
+    private static String repeat(String s, int count) {
+        StringBuilder result = new StringBuilder(s.length() * count);
+        for (int i = 0; i < count; i++) {
+            result.append(s);
+        }
+        return result.toString();
     }
 
     public static void runInMain(Class<?> testClass, String[] args) throws InitializationError, NoTestsRemainException {
