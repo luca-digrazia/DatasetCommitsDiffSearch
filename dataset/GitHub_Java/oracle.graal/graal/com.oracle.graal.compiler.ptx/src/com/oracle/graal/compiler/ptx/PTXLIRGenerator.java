@@ -66,6 +66,7 @@ import com.oracle.graal.nodes.java.*;
 
 import java.lang.annotation.*;
 
+
 /**
  * This class implements the PTX specific portion of the LIR generator.
  */
@@ -87,7 +88,9 @@ public class PTXLIRGenerator extends LIRGenerator {
         }
     }
 
-    public PTXLIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, CallingConvention cc, LIR lir) {
+    public PTXLIRGenerator(StructuredGraph graph, CodeCacheProvider runtime,
+                           TargetDescription target, FrameMap frameMap,
+                           CallingConvention cc, LIR lir) {
         super(graph, runtime, target, frameMap, cc, lir);
         lir.spillMoveFactory = new PTXSpillMoveFactory();
         int callVariables = cc.getArgumentCount() + (cc.getReturn() == Value.ILLEGAL ? 0 : 1);
@@ -124,7 +127,9 @@ public class PTXLIRGenerator extends LIRGenerator {
             if (isRegister(value)) {
                 return asRegister(value).asValue(value.getKind().getStackKind());
             } else if (isStackSlot(value)) {
-                return StackSlot.get(value.getKind().getStackKind(), asStackSlot(value).getRawOffset(), asStackSlot(value).getRawAddFrameSize());
+                return StackSlot.get(value.getKind().getStackKind(),
+                                     asStackSlot(value).getRawOffset(),
+                                     asStackSlot(value).getRawAddFrameSize());
             } else {
                 throw GraalInternalError.shouldNotReachHere();
             }
@@ -328,11 +333,15 @@ public class PTXLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitIntegerTestBranch(Value left, Value right, boolean negated, LabelRef label) {
-        throw GraalInternalError.unimplemented("PTXLIRGenerator.emitIntegerTestBranch()");
+        /// emitIntegerTest(left, right);
+       //  append(new BranchOp(negated ? Condition.NE : Condition.EQ, label));
+        throw GraalInternalError.unimplemented("emitIntegerTestBranch()");
     }
 
     @Override
-    public Variable emitConditionalMove(Value left, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
+    public Variable emitConditionalMove(Value left, Value right,
+                                        Condition cond, boolean unorderedIsTrue,
+                                        Value trueValue, Value falseValue) {
 
         Condition finalCondition = LIRValueUtil.isVariable(right) ? cond.mirror() : cond;
 
@@ -343,12 +352,16 @@ public class PTXLIRGenerator extends LIRGenerator {
             case Int:
             case Long:
             case Object:
-                append(new CondMoveOp(result, finalCondition, load(trueValue), loadNonConst(falseValue), nextPredRegNum));
+                append(new CondMoveOp(result, finalCondition,
+                                      load(trueValue), loadNonConst(falseValue),
+                                      nextPredRegNum));
                 nextPredRegNum++;
                 break;
             case Float:
             case Double:
-                append(new FloatCondMoveOp(result, finalCondition, unorderedIsTrue, load(trueValue), load(falseValue), nextPredRegNum));
+                append(new FloatCondMoveOp(result, finalCondition, unorderedIsTrue,
+                                           load(trueValue), load(falseValue),
+                                           nextPredRegNum));
                 nextPredRegNum++;
                 break;
             default:
@@ -358,9 +371,9 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     /**
-     * This method emits the compare instruction, and may reorder the operands. It returns true if
-     * it did so.
-     * 
+     * This method emits the compare instruction, and may reorder the operands. 
+     * It returns true if it did so.
+     *
      * @param a the left operand of the comparison
      * @param b the right operand of the comparison
      * @return true if the left and right operands were switched, false otherwise
@@ -400,9 +413,32 @@ public class PTXLIRGenerator extends LIRGenerator {
         return mirrored;
     }
 
+
     @Override
-    public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
-        throw new InternalError("NYI");
+    public Variable emitIntegerTestMove(Value left, Value right,
+                                        Value trueValue, Value falseValue) {
+
+        emitIntegerTest(left, right);
+        Variable result = newVariable(trueValue.getKind());
+        append(new CondMoveOp(result, Condition.EQ,
+                              load(trueValue), loadNonConst(falseValue),
+                              nextPredRegNum));
+        nextPredRegNum++;
+
+        return result;
+    }
+
+
+    private void emitIntegerTest(Value a, Value b) {
+
+        assert a.getKind().getStackKind() == Kind.Int ||
+               a.getKind() == Kind.Long;
+
+        if (LIRValueUtil.isVariable(b)) {
+            append(new PTXTestOp(load(b), loadNonConst(a), nextPredRegNum));
+        } else {
+            append(new PTXTestOp(load(a), loadNonConst(b), nextPredRegNum));
+        }
     }
 
     @Override
