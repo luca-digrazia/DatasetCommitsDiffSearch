@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,11 +22,8 @@
  */
 package org.graalvm.compiler.debug;
 
-import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
-
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.AccessDeniedException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -121,15 +116,7 @@ public class PathUtilities {
                 if (createDirectory) {
                     return Files.createDirectory(result);
                 } else {
-                    try {
-                        return Files.createFile(result);
-                    } catch (AccessDeniedException e) {
-                        /*
-                         * Thrown on Windows if a directory with the same name already exists, so
-                         * convert it to FileAlreadyExistsException if that's the case.
-                         */
-                        throw Files.isDirectory(result, NOFOLLOW_LINKS) ? new FileAlreadyExistsException(e.getFile()) : e;
-                    }
+                    return Files.createFile(result);
                 }
             } catch (FileAlreadyExistsException e) {
                 uniqueTag = "_" + dumpCounter++;
