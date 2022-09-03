@@ -24,27 +24,11 @@ package com.oracle.graal.compiler.match;
 
 import java.lang.annotation.*;
 
-import com.oracle.graal.nodes.*;
-
 /**
- * This annotation declares a textual pattern for matching an HIR DAG. It's an s-expression with a
- * node followed by its inputs. Node types are always uppercase and lowercase words are the names of
- * nodes.
- *
- * <pre>
- *   NAME := [a-z][a-zA-Z0-9]*
- *   NODETYPE := [A-Z][a-zA-Z0-9]*
- *   NODEORNAME :=  NODE [ = NAME ] | NAME
- *   EXPRESSION := ( NODEORNAME [ EXPRESSION | NODEORNAME [ EXPRESSION | NODEORNAME ] )
- * </pre>
- *
- * All matched nodes except the root of the match and {@link ConstantNode}s must have a single user.
- * All matched nodes must be in the same block.
+ * The repeatable representation of {@link MatchRule}. Should never be used directly.
  */
-
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-@Repeatable(value = MatchRules.class)
-public @interface MatchRule {
-    String value();
+public @interface MatchRules {
+    MatchRule[] value();
 }

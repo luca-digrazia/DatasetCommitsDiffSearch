@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,8 +39,8 @@ public enum AMD64Arithmetic {
 
     // @formatter:off
 
-    IADD, ISUB, IMUL, IUMUL, IDIV, IDIVREM, IREM, IUDIV, IUREM, IAND, IOR, IXOR, ISHL, ISHR, IUSHR, IROL, IROR,
-    LADD, LSUB, LMUL, LUMUL, LDIV, LDIVREM, LREM, LUDIV, LUREM, LAND, LOR, LXOR, LSHL, LSHR, LUSHR, LROL, LROR,
+    IADD, ISUB, IMUL, IDIV, IDIVREM, IREM, IUDIV, IUREM, IAND, IOR, IXOR, ISHL, ISHR, IUSHR, IROL, IROR,
+    LADD, LSUB, LMUL, LDIV, LDIVREM, LREM, LUDIV, LUREM, LAND, LOR, LXOR, LSHL, LSHR, LUSHR, LROL, LROR,
     FADD, FSUB, FMUL, FDIV, FREM, FAND, FOR, FXOR,
     DADD, DSUB, DMUL, DDIV, DREM, DAND, DOR, DXOR,
     INEG, LNEG, INOT, LNOT,
@@ -342,75 +342,19 @@ public enum AMD64Arithmetic {
         }
     }
 
-    public static class MulHighOp extends AMD64LIRInstruction {
-
-        @Opcode private final AMD64Arithmetic opcode;
-        @Def({REG}) public AllocatableValue lowResult;
-        @Def({REG}) public AllocatableValue highResult;
-        @Use({REG}) public AllocatableValue x;
-        @Use({REG, STACK}) public AllocatableValue y;
-
-        public MulHighOp(AMD64Arithmetic opcode, LIRKind kind, AllocatableValue y) {
-            this.opcode = opcode;
-            this.x = AMD64.rax.asValue(kind);
-            this.y = y;
-            this.lowResult = AMD64.rax.asValue(kind);
-            this.highResult = AMD64.rdx.asValue(kind);
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            if (isRegister(y)) {
-                switch (opcode) {
-                    case IMUL:
-                        masm.imull(asRegister(y));
-                        break;
-                    case IUMUL:
-                        masm.mull(asRegister(y));
-                        break;
-                    case LMUL:
-                        masm.imulq(asRegister(y));
-                        break;
-                    case LUMUL:
-                        masm.mulq(asRegister(y));
-                        break;
-                    default:
-                        throw GraalInternalError.shouldNotReachHere();
-                }
-            } else {
-                switch (opcode) {
-                    case IMUL:
-                        masm.imull((AMD64Address) crb.asAddress(y));
-                        break;
-                    case IUMUL:
-                        masm.mull((AMD64Address) crb.asAddress(y));
-                        break;
-                    case LMUL:
-                        masm.imulq((AMD64Address) crb.asAddress(y));
-                        break;
-                    case LUMUL:
-                        masm.mulq((AMD64Address) crb.asAddress(y));
-                        break;
-                    default:
-                        throw GraalInternalError.shouldNotReachHere();
-                }
-            }
-        }
-    }
-
     public static class DivRemOp extends AMD64LIRInstruction {
 
         @Opcode private final AMD64Arithmetic opcode;
-        @Def public AllocatableValue divResult;
-        @Def public AllocatableValue remResult;
+        @Def protected AllocatableValue divResult;
+        @Def protected AllocatableValue remResult;
         @Use protected AllocatableValue x;
         @Alive protected AllocatableValue y;
         @State protected LIRFrameState state;
 
         public DivRemOp(AMD64Arithmetic opcode, AllocatableValue x, AllocatableValue y, LIRFrameState state) {
             this.opcode = opcode;
-            this.divResult = AMD64.rax.asValue(LIRKind.derive(x, y));
-            this.remResult = AMD64.rdx.asValue(LIRKind.derive(x, y));
+            this.divResult = AMD64.rax.asValue(x.getPlatformKind());
+            this.remResult = AMD64.rdx.asValue(x.getPlatformKind());
             this.x = x;
             this.y = y;
             this.state = state;
@@ -444,7 +388,7 @@ public enum AMD64Arithmetic {
         public FPDivRemOp(AMD64Arithmetic opcode, AllocatableValue result, AllocatableValue x, AllocatableValue y) {
             this.opcode = opcode;
             this.result = result;
-            this.raxTemp = AMD64.rax.asValue(LIRKind.value(Kind.Int));
+            this.raxTemp = AMD64.rax.asValue(Kind.Int);
             this.x = x;
             this.y = y;
         }

@@ -22,29 +22,14 @@
  */
 package com.oracle.graal.compiler.match;
 
-import java.lang.annotation.*;
-
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.gen.*;
 
 /**
- * This annotation declares a textual pattern for matching an HIR DAG. It's an s-expression with a
- * node followed by its inputs. Node types are always uppercase and lowercase words are the names of
- * nodes.
- *
- * <pre>
- *   NAME := [a-z][a-zA-Z0-9]*
- *   NODETYPE := [A-Z][a-zA-Z0-9]*
- *   NODEORNAME :=  NODE [ = NAME ] | NAME
- *   EXPRESSION := ( NODEORNAME [ EXPRESSION | NODEORNAME [ EXPRESSION | NODEORNAME ] )
- * </pre>
- *
- * All matched nodes except the root of the match and {@link ConstantNode}s must have a single user.
- * All matched nodes must be in the same block.
+ * A closure that can be evaluated to produce the LIR for some complex match. Using a closure allows
+ * normal evaluation in NodeLIRBuilder for all the simple nodes with the complex nodes evaluated at
+ * the proper time.
  */
-
-@Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.METHOD)
-@Repeatable(value = MatchRules.class)
-public @interface MatchRule {
-    String value();
+public interface ComplexMatchResult {
+    Value evaluate(NodeLIRBuilder gen);
 }

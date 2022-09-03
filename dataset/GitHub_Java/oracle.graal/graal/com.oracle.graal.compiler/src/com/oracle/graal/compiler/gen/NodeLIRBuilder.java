@@ -23,7 +23,6 @@
 package com.oracle.graal.compiler.gen;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.lir.LIR.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
@@ -72,9 +71,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
         this.gen = gen;
         this.nodeOperands = graph.createNodeMap();
         this.debugInfoBuilder = createDebugInfoBuilder(nodeOperands);
-        if (MatchExpressions.getValue()) {
-            matchRules = MatchRuleRegistry.lookup(getClass());
-        }
+        matchRules = MatchRuleRegistry.lookup(getClass());
     }
 
     @SuppressWarnings("hiding")
@@ -213,9 +210,11 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
 
         List<ScheduledNode> nodes = blockMap.get(block);
 
-        // Allow NodeLIRBuilder subclass to specialize code generation of any interesting groups
-        // of instructions
-        matchComplexExpressions(nodes);
+        if (MatchExpressions.getValue()) {
+            // Allow NodeLIRBuilder subclass to specialize code generation of any interesting groups
+            // of instructions
+            matchComplexExpressions(nodes);
+        }
 
         for (int i = 0; i < nodes.size(); i++) {
             Node instr = nodes.get(i);
@@ -275,13 +274,6 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
     protected void matchComplexExpressions(List<ScheduledNode> nodes) {
         if (matchRules != null) {
             try (Scope s = Debug.scope("MatchComplexExpressions")) {
-                if (LogVerbose.getValue()) {
-                    int i = 0;
-                    for (ScheduledNode node : nodes) {
-                        Debug.log("%d: (%s) %1S", i++, node.usages().count(), node);
-                    }
-                }
-
                 // Match the nodes in backwards order to encourage longer matches.
                 for (int index = nodes.size() - 1; index >= 0; index--) {
                     ScheduledNode snode = nodes.get(index);
@@ -289,9 +281,6 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
                         continue;
                     }
                     ValueNode node = (ValueNode) snode;
-                    if (getOperand(node) != null) {
-                        continue;
-                    }
                     // See if this node is the root of any MatchStatements
                     List<MatchStatement> statements = matchRules.get(node.getClass());
                     if (statements != null) {

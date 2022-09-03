@@ -111,25 +111,23 @@ public class MatchPattern {
      * The expected type of the node. It must match exactly.
      */
     private final Class<? extends ValueNode> nodeClass;
-
     /**
      * An optional name for this node. A name can occur multiple times in a match and that name must
      * always refer to the same node of the match will fail.
      */
     private final String name;
-
     /**
-     * Patterns to match the inputs.
+     * An optional pattern for the first input.
      */
-    private final MatchPattern[] patterns;
-
+    private final MatchPattern first;
+    /**
+     * An optional pattern for the second input.
+     */
+    private final MatchPattern second;
     /**
      * Helper class to visit the inputs.
      */
     private final MatchNodeAdapter adapter;
-
-    private static final MatchPattern[] EMPTY_PATTERNS = new MatchPattern[0];
-
     /**
      * Can there only be one user of the node. Constant nodes can be matched even if there are other
      * users.
@@ -137,44 +135,23 @@ public class MatchPattern {
     private final boolean singleUser;
 
     public MatchPattern(String name, boolean singleUser) {
-        this(null, name, singleUser);
+        this(null, name, null, null, null, singleUser);
     }
 
     public MatchPattern(Class<? extends ValueNode> nodeClass, String name, boolean singleUser) {
-        this.nodeClass = nodeClass;
-        this.name = name;
-        this.singleUser = singleUser;
-        this.patterns = EMPTY_PATTERNS;
-        this.adapter = null;
+        this(nodeClass, name, null, null, null, singleUser);
     }
 
     public MatchPattern(Class<? extends ValueNode> nodeClass, String name, MatchPattern first, MatchNodeAdapter adapter, boolean singleUser) {
-        this.nodeClass = nodeClass;
-        this.name = name;
-        this.singleUser = singleUser;
-        this.patterns = new MatchPattern[1];
-        patterns[0] = first;
-        this.adapter = adapter;
+        this(nodeClass, name, first, null, adapter, singleUser);
     }
 
     public MatchPattern(Class<? extends ValueNode> nodeClass, String name, MatchPattern first, MatchPattern second, MatchNodeAdapter adapter, boolean singleUser) {
         this.nodeClass = nodeClass;
         this.name = name;
         this.singleUser = singleUser;
-        this.patterns = new MatchPattern[2];
-        patterns[0] = first;
-        patterns[1] = second;
-        this.adapter = adapter;
-    }
-
-    public MatchPattern(Class<? extends ValueNode> nodeClass, String name, MatchPattern first, MatchPattern second, MatchPattern third, MatchNodeAdapter adapter, boolean singleUser) {
-        this.nodeClass = nodeClass;
-        this.name = name;
-        this.singleUser = singleUser;
-        this.patterns = new MatchPattern[3];
-        patterns[0] = first;
-        patterns[1] = second;
-        patterns[2] = third;
+        this.first = first;
+        this.second = second;
         this.adapter = adapter;
     }
 
@@ -220,10 +197,10 @@ public class MatchPattern {
             result = context.captureNamedValue(name, nodeClass, node);
         }
 
-        for (int input = 0; input < patterns.length; input++) {
-            result = patterns[input].matchUsage(adapter.getInput(input, node), context, false);
-            if (result != Result.OK) {
-                return result;
+        if (first != null) {
+            result = first.matchUsage(adapter.getFirstInput(node), context, false);
+            if (result == Result.OK && second != null) {
+                result = second.matchUsage(adapter.getSecondInput(node), context, false);
             }
         }
 
@@ -254,10 +231,10 @@ public class MatchPattern {
             }
         }
 
-        for (int input = 0; input < patterns.length; input++) {
-            result = patterns[input].matchShape(adapter.getInput(input, node), statement, false);
-            if (result != Result.OK) {
-                return result;
+        if (first != null) {
+            result = first.matchShape(adapter.getFirstInput(node), statement, false);
+            if (result == Result.OK && second != null) {
+                result = second.matchShape(adapter.getSecondInput(node), statement, false);
             }
         }
 
@@ -271,18 +248,10 @@ public class MatchPattern {
      */
     public String formatMatch(ValueNode root) {
         String result = String.format("%s", root);
-        if (patterns.length == 0) {
+        if (first == null && second == null) {
             return result;
         } else {
-            StringBuilder sb = new StringBuilder();
-            sb.append("(");
-            sb.append(result);
-            for (int input = 0; input < patterns.length; input++) {
-                sb.append(" ");
-                sb.append(patterns[input].formatMatch(adapter.getInput(input, root)));
-            }
-            sb.append(")");
-            return sb.toString();
+            return "(" + result + (first != null ? " " + first.formatMatch(adapter.getFirstInput(root)) : "") + (second != null ? " " + second.formatMatch(adapter.getSecondInput(root)) : "") + ")";
         }
     }
 
@@ -291,21 +260,11 @@ public class MatchPattern {
         if (nodeClass == null) {
             return name;
         } else {
+            String pre = first != null || second != null ? "(" : "";
+            String post = first != null || second != null ? ")" : "";
             String nodeName = nodeClass.getSimpleName();
             nodeName = nodeName.substring(0, nodeName.length() - 4);
-            if (patterns.length == 0) {
-                return nodeName + (name != null ? "=" + name : "");
-            } else {
-                StringBuilder sb = new StringBuilder();
-                sb.append("(");
-                sb.append(nodeName);
-                for (int index = 0; index < patterns.length; index++) {
-                    sb.append(" ");
-                    sb.append(patterns[index].toString());
-                }
-                sb.append(")");
-                return sb.toString();
-            }
+            return pre + nodeName + (name != null ? "=" + name : "") + (first != null ? (" " + first.toString()) : "") + (second != null ? (" " + second.toString()) : "") + post;
         }
     }
 }

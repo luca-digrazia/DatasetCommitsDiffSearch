@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.match.*;
 import com.oracle.graal.nodes.*;
 
@@ -30,11 +29,8 @@ import com.oracle.graal.nodes.*;
 public class HotSpotMatchableNodes {
     public static class CompressionNodeAdapter extends MatchNodeAdapter {
         @Override
-        public ValueNode getInput(int input, ValueNode node) {
-            if (input == 0) {
-                return ((CompressionNode) node).getInput();
-            }
-            throw GraalInternalError.shouldNotReachHere();
+        protected ValueNode getFirstInput(ValueNode node) {
+            return ((CompressionNode) node).getInput();
         }
     }
 
