@@ -22,20 +22,13 @@
  */
 package org.graalvm.compiler.phases.schedule;
 
-import static org.graalvm.compiler.core.common.GraalOptions.GuardPriorities;
 import static org.graalvm.compiler.core.common.GraalOptions.OptScheduleOutOfLoops;
 import static org.graalvm.compiler.core.common.cfg.AbstractControlFlowGraph.strictlyDominates;
-import static org.graalvm.util.Equivalence.IDENTITY;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.Formatter;
-import java.util.Iterator;
 import java.util.List;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import java.util.function.Function;
 
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.core.common.cfg.AbstractControlFlowGraph;
@@ -79,25 +72,15 @@ import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
 import org.graalvm.compiler.nodes.spi.ValueProxy;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.Phase;
-import org.graalvm.util.EconomicSet;
 import org.graalvm.word.LocationIdentity;
 
 public final class SchedulePhase extends Phase {
 
     public enum SchedulingStrategy {
-        EARLIEST_WITH_GUARD_ORDER,
         EARLIEST,
         LATEST,
         LATEST_OUT_OF_LOOPS,
-        FINAL_SCHEDULE;
-
-        public boolean isEarliest() {
-            return this == EARLIEST || this == EARLIEST_WITH_GUARD_ORDER;
-        }
-
-        public boolean isLatest() {
-            return !isEarliest();
-        }
+        FINAL_SCHEDULE
     }
 
     private final SchedulingStrategy selectedStrategy;
@@ -180,9 +163,9 @@ public final class SchedulePhase extends Phase {
             this.nodeToBlockMap = currentNodeMap;
             this.blockToNodesMap = earliestBlockToNodesMap;
 
-            scheduleEarliestIterative(earliestBlockToNodesMap, currentNodeMap, visited, graph, immutableGraph, selectedStrategy == SchedulingStrategy.EARLIEST_WITH_GUARD_ORDER);
+            scheduleEarliestIterative(earliestBlockToNodesMap, currentNodeMap, visited, graph, immutableGraph);
 
-            if (!selectedStrategy.isEarliest()) {
+            if (selectedStrategy != SchedulingStrategy.EARLIEST) {
                 // For non-earliest schedules, we need to do a second pass.
                 BlockMap<List<Node>> latestBlockToNodesMap = new BlockMap<>(cfg);
                 for (Block b : cfg.getBlocks()) {
@@ -660,7 +643,7 @@ public final class SchedulePhase extends Phase {
              */
             public void add(Node node) {
                 assert !(node instanceof FixedNode) : node;
-                NodeEntry newTail = new NodeEntry(node);
+                NodeEntry newTail = new NodeEntry(node, null);
                 if (tail == null) {
                     tail = head = newTail;
                 } else {
@@ -674,16 +657,7 @@ public final class SchedulePhase extends Phase {
              * Number of nodes in this micro block.
              */
             public int getNodeCount() {
-                assert getActualNodeCount() == nodeCount : getActualNodeCount() + " != " + nodeCount;
                 return nodeCount;
-            }
-
-            private int getActualNodeCount() {
-                int count = 0;
-                for (NodeEntry e = head; e != null; e = e.next) {
-                    count++;
-                }
-                return count;
             }
 
             /**
@@ -709,7 +683,6 @@ public final class SchedulePhase extends Phase {
              */
             public void prependChildrenTo(MicroBlock newBlock) {
                 if (tail != null) {
-                    assert head != null;
                     tail.next = newBlock.head;
                     newBlock.head = head;
                     head = tail = null;
@@ -722,11 +695,6 @@ public final class SchedulePhase extends Phase {
             public String toString() {
                 return String.format("MicroBlock[id=%d]", id);
             }
-
-            @Override
-            public int hashCode() {
-                return id;
-            }
         }
 
         /**
@@ -736,9 +704,9 @@ public final class SchedulePhase extends Phase {
             private final Node node;
             private NodeEntry next;
 
-            NodeEntry(Node node) {
+            NodeEntry(Node node, NodeEntry next) {
                 this.node = node;
-                this.next = null;
+                this.next = next;
             }
 
             public NodeEntry getNext() {
@@ -750,8 +718,7 @@ public final class SchedulePhase extends Phase {
             }
         }
 
-        private void scheduleEarliestIterative(BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap visited, StructuredGraph graph, boolean immutableGraph,
-                        boolean withGuardOrder) {
+        private void scheduleEarliestIterative(BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap visited, StructuredGraph graph, boolean immutableGraph) {
 
             NodeMap<MicroBlock> entries = graph.createNodeMap();
             NodeStack stack = new NodeStack();
@@ -771,18 +738,11 @@ public final class SchedulePhase extends Phase {
                 }
             }
 
-            if (graph.getGuardsStage().allowsFloatingGuards() && graph.getNodes(GuardNode.TYPE).isNotEmpty()) {
-                // Now process guards.
-                for (GuardNode guard : graph.getNodes(GuardNode.TYPE)) {
-                    if (entries.get(guard) == null) {
-                        processStack(guard, startBlock, entries, visited, stack);
-                    }
+            // Now process guards.
+            for (GuardNode guardNode : graph.getNodes(GuardNode.TYPE)) {
+                if (entries.get(guardNode) == null) {
+                    processStack(guardNode, startBlock, entries, visited, stack);
                 }
-                if (GuardPriorities.getValue(graph.getOptions()) && withGuardOrder) {
-                    GuardOrder.resortGuards(graph, entries, stack);
-                }
-            } else {
-                assert graph.getNodes(GuardNode.TYPE).isEmpty();
             }
 
             // Now process inputs of fixed nodes.
@@ -942,134 +902,6 @@ public final class SchedulePhase extends Phase {
             }
         }
 
-        private static class GuardOrder {
-            private static void resortGuards(StructuredGraph graph, NodeMap<MicroBlock> entries, NodeStack stack) {
-                assert stack.isEmpty();
-                EconomicSet<MicroBlock> blocksWithGuards = EconomicSet.create(IDENTITY);
-                for (GuardNode guard : graph.getNodes(GuardNode.TYPE)) {
-                    MicroBlock block = entries.get(guard);
-                    assert block != null : guard + "should already be scheduled to a micro-block";
-                    blocksWithGuards.add(block);
-                }
-                assert !blocksWithGuards.isEmpty();
-                NodeMap<GuardNode.GuardPriority> priorities = graph.createNodeMap();
-                NodeBitMap blockNodes = graph.createNodeBitMap();
-                for (MicroBlock block : blocksWithGuards) {
-                    MicroBlock newBlock = resortGuards(block, stack, blockNodes, priorities);
-                    assert stack.isEmpty();
-                    assert blockNodes.isEmpty();
-                    if (newBlock != null) {
-                        assert block.getNodeCount() == newBlock.getNodeCount();
-                        block.head = newBlock.head;
-                        block.tail = newBlock.tail;
-                    }
-                }
-            }
-
-            private static MicroBlock resortGuards(MicroBlock block, NodeStack stack, NodeBitMap blockNodes, NodeMap<GuardNode.GuardPriority> priorities) {
-                if (!propagatePriority(block, stack, priorities, blockNodes)) {
-                    return null;
-                }
-
-                Function<GuardNode, GuardNode.GuardPriority> transitiveGuardPriorityGetter = priorities::get;
-                Comparator<GuardNode> globalGuardPriorityComparator = Comparator.comparing(transitiveGuardPriorityGetter).thenComparing(GuardNode::computePriority).thenComparingInt(Node::hashCode);
-
-                SortedSet<GuardNode> availableGuards = new TreeSet<>(globalGuardPriorityComparator);
-                MicroBlock newBlock = new MicroBlock(block.getId());
-
-                NodeBitMap sorted = blockNodes;
-                sorted.invert();
-
-                for (NodeEntry e = block.head; e != null; e = e.next) {
-                    checkIfAvailable(e.node, stack, sorted, newBlock, availableGuards, false);
-                }
-                do {
-                    while (!stack.isEmpty()) {
-                        checkIfAvailable(stack.pop(), stack, sorted, newBlock, availableGuards, true);
-                    }
-                    Iterator<GuardNode> iterator = availableGuards.iterator();
-                    if (iterator.hasNext()) {
-                        addNodeToResort(iterator.next(), stack, sorted, newBlock, true);
-                        iterator.remove();
-                    }
-                } while (!stack.isEmpty() || !availableGuards.isEmpty());
-
-                blockNodes.clearAll();
-                return newBlock;
-            }
-
-            private static void checkIfAvailable(Node n, NodeStack stack, NodeBitMap sorted, Instance.MicroBlock newBlock, SortedSet<GuardNode> availableGuardNodes, boolean pushUsages) {
-                if (sorted.isMarked(n)) {
-                    return;
-                }
-                for (Node in : n.inputs()) {
-                    if (!sorted.isMarked(in)) {
-                        return;
-                    }
-                }
-                if (n instanceof GuardNode) {
-                    availableGuardNodes.add((GuardNode) n);
-                } else {
-                    addNodeToResort(n, stack, sorted, newBlock, pushUsages);
-                }
-            }
-
-            private static void addNodeToResort(Node n, NodeStack stack, NodeBitMap sorted, MicroBlock newBlock, boolean pushUsages) {
-                sorted.mark(n);
-                newBlock.add(n);
-                if (pushUsages) {
-                    for (Node u : n.usages()) {
-                        if (!sorted.isMarked(u)) {
-                            stack.push(u);
-                        }
-                    }
-                }
-            }
-
-            private static boolean propagatePriority(MicroBlock block, NodeStack stack, NodeMap<GuardNode.GuardPriority> priorities, NodeBitMap blockNodes) {
-                assert stack.isEmpty();
-                assert blockNodes.isEmpty();
-                GuardNode.GuardPriority singlePriority = null;
-                boolean hasSinglePriority = true;
-                for (NodeEntry e = block.head; e != null; e = e.next) {
-                    blockNodes.mark(e.node);
-                    if (e.node instanceof GuardNode) {
-                        GuardNode guard = (GuardNode) e.node;
-                        GuardNode.GuardPriority priority = guard.computePriority();
-                        if (singlePriority == null) {
-                            singlePriority = priority;
-                        } else if (priority != singlePriority) {
-                            hasSinglePriority = false;
-                        }
-                        stack.push(guard);
-                        priorities.set(guard, priority);
-                    }
-                }
-                if (hasSinglePriority) {
-                    stack.clear();
-                    blockNodes.clearAll();
-                    return false;
-                }
-
-                do {
-                    Node current = stack.pop();
-                    assert blockNodes.isMarked(current);
-                    GuardNode.GuardPriority priority = priorities.get(current);
-                    for (Node input : current.inputs()) {
-                        if (!blockNodes.isMarked(input)) {
-                            continue;
-                        }
-                        GuardNode.GuardPriority inputPriority = priorities.get(input);
-                        if (inputPriority == null || inputPriority.ordinal() > priority.ordinal()) {
-                            priorities.set(input, priority);
-                            stack.push(input);
-                        }
-                    }
-                } while (!stack.isEmpty());
-                return true;
-            }
-        }
-
         /**
          * Processes the inputs of given block. Pushes unprocessed inputs onto the stack. Returns
          * null if there were still unprocessed inputs, otherwise returns the earliest block given
@@ -1086,7 +918,7 @@ public final class SchedulePhase extends Phase {
                 if (inputBlock == null) {
                     earliestBlock = null;
                     stack.push(input);
-                } else if (earliestBlock != null && inputBlock.getId() > earliestBlock.getId()) {
+                } else if (earliestBlock != null && inputBlock.getId() >= earliestBlock.getId()) {
                     earliestBlock = inputBlock;
                 }
             }
