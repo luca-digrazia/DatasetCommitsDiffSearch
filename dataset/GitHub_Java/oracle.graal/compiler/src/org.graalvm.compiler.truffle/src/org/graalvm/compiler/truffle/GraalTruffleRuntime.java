@@ -576,37 +576,24 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
         if (!mayBeAsynchronous) {
             try {
-                waitForFutureAndKeepInterrupt(future);
+                future.get();
             } catch (ExecutionException e) {
                 if (TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown) && !(e.getCause() instanceof BailoutException && !((BailoutException) e.getCause()).isPermanent())) {
                     throw new RuntimeException(e.getCause());
                 } else {
-                    // silently ignored
+                    // silenlty ignored
                 }
+            } catch (InterruptedException e) {
+                /*
+                 * Compilation cancellation happens cooperatively. A compiler thread (which is a VM
+                 * thread) must never throw an interrupted exception.
+                 */
+                GraalError.shouldNotReachHere(e);
             } catch (CancellationException e) {
                 /*
                  * Silently ignored as future might have undergone a "soft" cancel(false).
                  */
             }
-        }
-    }
-
-    private static void waitForFutureAndKeepInterrupt(Future<?> future) throws ExecutionException {
-        // We want to keep the interrupt bit if we are interrupted.
-        // But we also want to maintain the semantics of foreground compilation:
-        // waiting for the compilation to finish, even if it takes long,
-        // so that compilation errors or effects are still properly waited for.
-        boolean interrupted = false;
-        while (true) {
-            try {
-                future.get();
-                break;
-            } catch (InterruptedException e) {
-                interrupted = true;
-            }
-        }
-        if (interrupted) {
-            Thread.currentThread().interrupt();
         }
     }
 

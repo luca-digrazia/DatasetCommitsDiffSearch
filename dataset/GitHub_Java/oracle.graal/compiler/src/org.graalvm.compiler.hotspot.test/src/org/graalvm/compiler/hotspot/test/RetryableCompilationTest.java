@@ -22,11 +22,14 @@
  */
 package org.graalvm.compiler.hotspot.test;
 
+import static org.graalvm.compiler.test.SubprocessUtil.formatExecutedCommand;
 import static org.graalvm.compiler.test.SubprocessUtil.getVMCommandLine;
 import static org.graalvm.compiler.test.SubprocessUtil.withoutDebuggerArguments;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
@@ -35,8 +38,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import org.graalvm.compiler.core.test.GraalCompilerTest;
-import org.graalvm.compiler.test.SubprocessUtil;
-import org.graalvm.compiler.test.SubprocessUtil.Subprocess;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -49,23 +50,26 @@ public class RetryableCompilationTest extends GraalCompilerTest {
      * Tests compilation requested by the VM.
      */
     @Test
-    public void testVMCompilation() throws IOException, InterruptedException {
-        testHelper(Arrays.asList("-XX:+BootstrapJVMCI", "-XX:+UseJVMCICompiler", "-Dgraal.CrashAt=Object.*,String.*", "-version"));
+    public void testVMCompilation() throws IOException {
+        testHelper("-XX:+BootstrapJVMCI", "-XX:+UseJVMCICompiler", "-Dgraal.CrashAt=Object.*,String.*", "-version");
     }
 
     /**
      * Tests compilation requested by Truffle.
      */
     @Test
-    public void testTruffleCompilation() throws IOException, InterruptedException {
-        testHelper(Arrays.asList("-Dgraal.CrashAt=root test1"), "org.graalvm.compiler.truffle.test.SLTruffleGraalTestSuite", "test");
+    public void testTruffleCompilation() throws IOException {
+        testHelper("-Dgraal.CrashAt=root test1", "org.graalvm.compiler.truffle.test.SLTruffleGraalTestSuite", "test");
     }
 
-    private static void testHelper(List<String> extraVmArgs, String... mainClassAndArgs) throws IOException, InterruptedException {
-        List<String> vmArgs = withoutDebuggerArguments(getVMCommandLine());
-        vmArgs.addAll(extraVmArgs);
+    private static void testHelper(String... subprocessArgs) throws IOException {
+        List<String> args = withoutDebuggerArguments(getVMCommandLine());
+        args.addAll(Arrays.asList(subprocessArgs));
 
-        Subprocess proc = SubprocessUtil.java(vmArgs, mainClassAndArgs);
+        ProcessBuilder processBuilder = new ProcessBuilder(args);
+        processBuilder.redirectErrorStream(true);
+        Process process = processBuilder.start();
+        BufferedReader stdout = new BufferedReader(new InputStreamReader(process.getInputStream()));
 
         String forcedCrashString = "Forced crash after compiling";
         String diagnosticOutputFilePrefix = "Graal diagnostic output saved in ";
@@ -73,7 +77,11 @@ public class RetryableCompilationTest extends GraalCompilerTest {
         boolean seenForcedCrashString = false;
         String diagnosticOutputZip = null;
 
-        for (String line : proc.output) {
+        List<String> outputLines = new ArrayList<>();
+
+        String line;
+        while ((line = stdout.readLine()) != null) {
+            outputLines.add(line);
             if (line.contains(forcedCrashString)) {
                 seenForcedCrashString = true;
             } else if (diagnosticOutputZip == null) {
@@ -83,11 +91,12 @@ public class RetryableCompilationTest extends GraalCompilerTest {
                 }
             }
         }
+        String dashes = "-------------------------------------------------------";
         if (!seenForcedCrashString) {
-            Assert.fail(String.format("Did not find '%s' in output of command:%n%s", forcedCrashString, proc));
+            Assert.fail(String.format("Did not find '%s' in output of command:%n%s", forcedCrashString, formatExecutedCommand(args, outputLines, dashes, dashes)));
         }
         if (diagnosticOutputZip == null) {
-            Assert.fail(String.format("Did not find '%s' in output of command:%n%s", diagnosticOutputFilePrefix, proc));
+            Assert.fail(String.format("Did not find '%s' in output of command:%n%s", diagnosticOutputFilePrefix, formatExecutedCommand(args, outputLines, dashes, dashes)));
         }
 
         File zip = new File(diagnosticOutputZip).getAbsoluteFile();
