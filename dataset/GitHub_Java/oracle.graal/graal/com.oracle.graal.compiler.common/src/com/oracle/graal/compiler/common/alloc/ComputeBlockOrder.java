@@ -23,14 +23,9 @@
 
 package com.oracle.graal.compiler.common.alloc;
 
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.Comparator;
-import java.util.List;
-import java.util.PriorityQueue;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.cfg.Loop;
+import com.oracle.graal.compiler.common.cfg.*;
 
 /**
  * Computes an ordering of the block that can be used by the linear scan register allocator and the
@@ -110,9 +105,7 @@ public final class ComputeBlockOrder {
     private static <T extends AbstractBlockBase<T>> void computeLinearScanOrder(List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
         while (!worklist.isEmpty()) {
             T nextImportantPath = worklist.poll();
-            do {
-                nextImportantPath = addPathToLinearScanOrder(nextImportantPath, order, worklist, visitedBlocks);
-            } while (nextImportantPath != null);
+            addPathToLinearScanOrder(nextImportantPath, order, worklist, visitedBlocks);
         }
     }
 
@@ -129,7 +122,7 @@ public final class ComputeBlockOrder {
     /**
      * Add a linear path to the linear scan order greedily following the most likely successor.
      */
-    private static <T extends AbstractBlockBase<T>> T addPathToLinearScanOrder(T block, List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
+    private static <T extends AbstractBlockBase<T>> void addPathToLinearScanOrder(T block, List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
         block.setLinearScanNumber(order.size());
         order.add(block);
         T mostLikelySuccessor = findAndMarkMostLikelySuccessor(block, visitedBlocks);
@@ -148,12 +141,11 @@ public final class ComputeBlockOrder {
                 if (unscheduledSum > block.probability() / PENALTY_VERSUS_UNSCHEDULED) {
                     // Add this merge only after at least one additional predecessor gets scheduled.
                     visitedBlocks.clear(mostLikelySuccessor.getId());
-                    return null;
+                    return;
                 }
             }
-            return mostLikelySuccessor;
+            addPathToLinearScanOrder(mostLikelySuccessor, order, worklist, visitedBlocks);
         }
-        return null;
     }
 
     /**

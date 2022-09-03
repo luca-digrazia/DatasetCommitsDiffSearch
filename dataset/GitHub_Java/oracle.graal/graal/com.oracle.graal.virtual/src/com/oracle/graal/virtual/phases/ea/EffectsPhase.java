@@ -79,7 +79,7 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
                     schedule = null;
                     cfg = ControlFlowGraph.compute(graph, true, true, false, false);
                 } else {
-                    schedule = new SchedulePhase(SchedulePhase.SchedulingStrategy.EARLIEST);
+                    schedule = new SchedulePhase(SchedulePhase.SchedulingStrategy.LATEST);
                     schedule.apply(graph, false);
                     cfg = schedule.getCFG();
                 }
@@ -101,7 +101,7 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
                     Debug.dump(graph, "after " + getName() + " iteration");
                 }
 
-                new DeadCodeEliminationPhase(Required).apply(graph);
+                new DeadCodeEliminationPhase(Optional).apply(graph);
 
                 Set<Node> changedNodes = listener.getNodes();
                 for (Node node : graph.getNodes()) {
