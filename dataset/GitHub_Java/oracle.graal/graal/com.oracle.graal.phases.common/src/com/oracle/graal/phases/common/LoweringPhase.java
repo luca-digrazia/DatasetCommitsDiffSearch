@@ -135,7 +135,6 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
     private final LoweringType loweringType;
 
     public LoweringPhase(LoweringType loweringType) {
-        super("Lowering (" + loweringType.name() + ")");
         this.loweringType = loweringType;
     }
 
