@@ -3217,7 +3217,7 @@ public class BytecodeParser implements GraphBuilderContext {
             default:
                 throw shouldNotReachHere();
         }
-        frameState.push(kind, recursiveAppend(v));
+        frameState.push(kind, append(v));
     }
 
     private void genCompareOp(JavaKind kind, boolean isUnorderedLess) {
