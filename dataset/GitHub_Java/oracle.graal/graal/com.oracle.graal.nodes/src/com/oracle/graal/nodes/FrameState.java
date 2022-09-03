@@ -68,12 +68,6 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
      */
     public static final int AFTER_EXCEPTION_BCI = -3;
 
-    /**
-     * This BCI should be used for frame states that cannot be the target of a deoptimization, like
-     * snippet frame states.
-     */
-    public static final int INVALID_FRAMESTATE_BCI = -5;
-
     @Input private FrameState outerFrameState;
 
     @Input private final NodeInputList<ValueNode> values;
@@ -270,18 +264,6 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
      */
     public int locksSize() {
         return values.size() - localsSize - stackSize;
-    }
-
-    /**
-     * Gets the number of locked monitors in this frame state and all
-     * {@linkplain #outerFrameState() outer} frame states.
-     */
-    public int nestedLockDepth() {
-        int depth = locksSize();
-        for (FrameState outer = outerFrameState(); outer != null; outer = outer.outerFrameState()) {
-            depth += outer.locksSize();
-        }
-        return depth;
     }
 
     /**
