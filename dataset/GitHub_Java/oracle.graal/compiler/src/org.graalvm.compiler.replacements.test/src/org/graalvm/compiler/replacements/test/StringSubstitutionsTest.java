@@ -119,7 +119,7 @@ public class StringSubstitutionsTest extends MethodSubstitutionTest {
     }
 
     public int indexOfConstantUTF16() {
-        return ("grga " + ((char) 0x10D) + "varak").indexOf(((char) 0x10D) + "varak");
+        return "grga čvarak".indexOf("čvarak");
     }
 
     @Test
