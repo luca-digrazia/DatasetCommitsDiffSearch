@@ -24,6 +24,7 @@ package com.oracle.graal.phases.graph;
 
 import java.util.*;
 
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
@@ -64,7 +65,9 @@ public class ComputeProbabilityClosure {
 
     public NodesToDoubles apply() {
         new PropagateProbability(graph.start()).apply();
+        Debug.dump(graph, "After PropagateProbability");
         computeLoopFactors();
+        Debug.dump(graph, "After computeLoopFactors");
         new PropagateLoopFrequency(graph.start()).apply();
         return nodeProbabilities;
     }
@@ -74,11 +77,6 @@ public class ComputeProbabilityClosure {
             double frequency = info.loopFrequency(nodeProbabilities);
             assert frequency != -1;
         }
-    }
-
-    private static boolean isRelativeProbability(double prob) {
-        // 1.01 to allow for some rounding errors
-        return prob >= 0 && prob <= 1.01;
     }
 
     public static class LoopInfo {
@@ -128,6 +126,7 @@ public class ComputeProbabilityClosure {
         public LoopInfo loopInfo;
 
         public Probability(double probability, HashSet<LoopInfo> loops) {
+            assert probability >= 0.0;
             this.probability = probability;
             this.loops = new HashSet<>(4);
             if (loops != null) {
@@ -171,7 +170,7 @@ public class ComputeProbabilityClosure {
                 }
                 loops = intersection;
                 mergeLoops.put(merge, new HashSet<>(intersection));
-                assert isRelativeProbability(probability) : probability;
+                probability = Math.max(0.0, probability);
             }
             return true;
         }
@@ -205,7 +204,7 @@ public class ComputeProbabilityClosure {
         }
 
         @Override
-        public void afterSplit(BeginNode node) {
+        public void afterSplit(AbstractBeginNode node) {
             assert node.predecessor() != null;
             Node pred = node.predecessor();
             if (pred instanceof Invoke) {
@@ -216,7 +215,10 @@ public class ComputeProbabilityClosure {
             } else {
                 assert pred instanceof ControlSplitNode;
                 ControlSplitNode x = (ControlSplitNode) pred;
-                probability *= x.probability(node);
+                double nodeProbability = x.probability(node);
+                assert nodeProbability >= 0.0 : "Node " + x + " provided negative probability for begin " + node + ": " + nodeProbability;
+                probability *= nodeProbability;
+                assert probability >= 0.0;
             }
         }
     }
@@ -272,7 +274,7 @@ public class ComputeProbabilityClosure {
         }
 
         @Override
-        public void afterSplit(BeginNode node) {
+        public void afterSplit(AbstractBeginNode node) {
             // nothing to do...
         }
     }
