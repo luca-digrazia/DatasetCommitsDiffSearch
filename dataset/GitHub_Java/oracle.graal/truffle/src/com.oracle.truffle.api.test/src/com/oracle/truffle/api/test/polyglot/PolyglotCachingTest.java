@@ -55,7 +55,7 @@ import com.oracle.truffle.api.nodes.RootNode;
  */
 public class PolyglotCachingTest {
 
-    private static final int ITERATIONS = 15;
+    private static final int ITERATIONS = 5;
 
     @Test
     public void testDisableCaching() throws Exception {
@@ -68,8 +68,8 @@ public class PolyglotCachingTest {
             }
         });
         Context c = Context.create();
-        Source cachedSource = Source.newBuilder(ProxyLanguage.ID, "testSourceInstanceIsEqual", "name").cached(true).build();
-        Source uncachedSource = Source.newBuilder(ProxyLanguage.ID, "testSourceInstanceIsEqual", "name").cached(false).build();
+        Source cachedSource = Source.newBuilder(ProxyLanguage.ID, "testSourceInstanceIsEqual", "name").cached(true).buildLiteral();
+        Source uncachedSource = Source.newBuilder(ProxyLanguage.ID, "testSourceInstanceIsEqual", "name").cached(false).buildLiteral();
         assertEquals(0, parseCalled.get());
         c.eval(uncachedSource);
         assertEquals(1, parseCalled.get());
