@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,28 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.api.code.CallingConvention.Type.*;
+import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.debug.Debug.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.hotspot.InitTimer.*;
 import static com.oracle.graal.hotspot.meta.HotSpotSuitesProvider.*;
 import static com.oracle.graal.nodes.StructuredGraph.*;
-import static com.oracle.jvmci.code.CallingConvention.Type.*;
-import static com.oracle.jvmci.code.CodeUtil.*;
-import static com.oracle.jvmci.common.UnsafeAccess.*;
-import static com.oracle.jvmci.debug.Debug.*;
 
 import java.lang.management.*;
 import java.util.concurrent.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CallingConvention.Type;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.internal.*;
+import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.events.*;
 import com.oracle.graal.hotspot.events.EventProvider.CompilationEvent;
 import com.oracle.graal.hotspot.events.EventProvider.CompilerFailureEvent;
@@ -49,17 +57,19 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.OptimisticOptimizations.Optimization;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.printer.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.code.CallingConvention.Type;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
-import com.oracle.jvmci.debug.internal.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.meta.*;
 
 //JaCoCo Exclude
 
 public class CompilationTask {
+
+    static {
+        try (InitTimer t = timer("initialize CompilationTask")) {
+            // Must be first to ensure any options accessed by the rest of the class
+            // initializer are initialized from the command line.
+            HotSpotOptions.initialize();
+        }
+    }
+
     private static final DebugMetric BAILOUTS = Debug.metric("Bailouts");
 
     private final HotSpotBackend backend;
@@ -286,7 +296,7 @@ public class CompilationTask {
             }
 
             if (graalEnv != 0) {
-                long ctask = unsafe.getAddress(graalEnv + config.jvmciEnvTaskOffset);
+                long ctask = unsafe.getAddress(graalEnv + config.graalEnvTaskOffset);
                 assert ctask != 0L;
                 unsafe.putInt(ctask + config.compileTaskNumInlinedBytecodesOffset, compiledBytecodes);
             }
@@ -309,7 +319,7 @@ public class CompilationTask {
         if (config.ciTime || config.ciTimeEach || CompiledBytecodes.isEnabled()) {
             return false;
         }
-        if (graalEnv == 0 || unsafe.getByte(graalEnv + config.jvmciEnvJvmtiCanHotswapOrPostBreakpointOffset) != 0) {
+        if (graalEnv == 0 || unsafe.getByte(graalEnv + config.graalEnvJvmtiCanHotswapOrPostBreakpointOffset) != 0) {
             return false;
         }
         return true;
@@ -343,10 +353,11 @@ public class CompilationTask {
      *
      * @param metaspaceMethod
      * @param entryBCI
-     * @param jvmciEnv address of native GraalEnv object
+     * @param graalEnv address of native GraalEnv object
      * @param id CompileTask::_compile_id
      */
-    static void compileMetaspaceMethod(long metaspaceMethod, int entryBCI, long jvmciEnv, int id) {
+    @SuppressWarnings("unused")
+    private static void compileMetaspaceMethod(long metaspaceMethod, int entryBCI, long graalEnv, int id) {
         // Ensure a Graal runtime is initialized prior to Debug being initialized as the former
         // may include processing command line options used by the latter.
         Graal.getRuntime();
@@ -357,7 +368,7 @@ public class CompilationTask {
         }
 
         HotSpotResolvedJavaMethod method = HotSpotResolvedJavaMethodImpl.fromMetaspace(metaspaceMethod);
-        compileMethod(method, entryBCI, jvmciEnv, id);
+        compileMethod(method, entryBCI, graalEnv, id);
     }
 
     /**
