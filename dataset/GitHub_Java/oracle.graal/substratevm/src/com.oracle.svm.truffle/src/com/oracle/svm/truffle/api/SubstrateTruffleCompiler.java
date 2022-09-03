@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.truffle.api;
 
+import java.io.PrintStream;
 import java.util.Map;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
@@ -39,7 +40,6 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.tiers.Suites;
-import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
@@ -61,9 +61,8 @@ public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
     private final String compilerConfigurationName;
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public SubstrateTruffleCompiler(TruffleCompilerRuntime runtime, Plugins plugins, Suites suites, LIRSuites lirSuites, Backend backend,
-                    Suites firstTierSuites, LIRSuites firstTierLIRSuites, Providers firstTierProviders, SnippetReflectionProvider snippetReflection) {
-        super(runtime, plugins, suites, lirSuites, backend, firstTierSuites, firstTierLIRSuites, firstTierProviders, snippetReflection);
+    public SubstrateTruffleCompiler(TruffleCompilerRuntime runtime, Plugins plugins, Suites suites, LIRSuites lirSuites, Backend backend, SnippetReflectionProvider snippetReflection) {
+        super(runtime, plugins, suites, lirSuites, backend, null, null, null, snippetReflection);
         compilerConfigurationName = GraalConfiguration.instance().getCompilerConfigurationName();
     }
 
@@ -94,8 +93,8 @@ public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
     }
 
     @Override
-    public DebugContext createDebugContext(OptionValues options, CompilationIdentifier compilationId, CompilableTruffleAST callTarget) {
-        return GraalSupport.get().openDebugContext(options, compilationId, callTarget);
+    public DebugContext createDebugContext(OptionValues options, CompilationIdentifier compilationId, CompilableTruffleAST callTarget, PrintStream logStream) {
+        return GraalSupport.get().openDebugContext(options, compilationId, callTarget, logStream);
     }
 
     @Override

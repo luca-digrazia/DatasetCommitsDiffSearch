@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,9 +28,9 @@ import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
 import java.io.PrintStream;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.Map;
 
-import jdk.vm.ci.code.Architecture;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.CompilationWrapper;
 import org.graalvm.compiler.core.CompilationWrapper.ExceptionAction;
@@ -46,10 +46,9 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
-import org.graalvm.nativeimage.ImageSingletons;
 
-import com.oracle.svm.core.CPUFeatureAccess;
 import com.oracle.svm.core.SubstrateUtil;
+import com.oracle.svm.core.amd64.AMD64CPUFeatureAccess;
 import com.oracle.svm.core.graal.code.SubstrateCompilationIdentifier;
 import com.oracle.svm.core.graal.code.SubstrateCompilationResult;
 import com.oracle.svm.core.graal.meta.InstalledCodeBuilder;
@@ -60,6 +59,7 @@ import com.oracle.svm.core.option.RuntimeOptionKey;
 import com.oracle.svm.graal.meta.SubstrateInstalledCodeImpl;
 import com.oracle.svm.graal.meta.SubstrateMethod;
 
+import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.InstalledCode;
 
 public class SubstrateGraalUtils {
@@ -182,12 +182,12 @@ public class SubstrateGraalUtils {
 
         if (!architectureInitialized) {
             architectureInitialized = true;
-            CPUFeatureAccess cpuFeatureAccess = ImageSingletons.lookup(CPUFeatureAccess.class);
-            if (cpuFeatureAccess != null) {
-                cpuFeatureAccess.verifyHostSupportsArchitecture(graalBackend.getCodeCache().getTarget().arch);
-                Architecture architecture = graalBackend.getCodeCache().getTarget().arch;
-                cpuFeatureAccess.enableFeatures(architecture);
-            }
+
+            AMD64CPUFeatureAccess.verifyHostSupportsArchitecture(graalBackend.getCodeCache().getTarget().arch);
+
+            AMD64 architecture = (AMD64) graalBackend.getCodeCache().getTarget().arch;
+            EnumSet<AMD64.CPUFeature> features = AMD64CPUFeatureAccess.determineHostCPUFeatures();
+            architecture.getFeatures().addAll(features);
         }
     }
 

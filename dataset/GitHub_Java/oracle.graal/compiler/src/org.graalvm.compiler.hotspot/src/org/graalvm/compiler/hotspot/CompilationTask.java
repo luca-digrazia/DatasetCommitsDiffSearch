@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -368,14 +368,8 @@ public class CompilationTask {
         installedCode = null;
         Object[] context = {new DebugDumpScope(getIdString(), true), codeCache, getMethod(), compResult};
         try (DebugContext.Scope s = debug.scope("CodeInstall", context)) {
-            HotSpotCompilationRequest request = getRequest();
-            installedCode = (HotSpotInstalledCode) backend.createInstalledCode(debug,
-                            request.getMethod(),
-                            request,
-                            compResult,
-                            null,
-                            installAsDefault,
-                            context);
+            installedCode = (HotSpotInstalledCode) backend.createInstalledCode(debug, getRequest().getMethod(), getRequest(), compResult,
+                            getRequest().getMethod().getSpeculationLog(), null, installAsDefault, context);
         } catch (Throwable e) {
             throw debug.handle(e);
         }
