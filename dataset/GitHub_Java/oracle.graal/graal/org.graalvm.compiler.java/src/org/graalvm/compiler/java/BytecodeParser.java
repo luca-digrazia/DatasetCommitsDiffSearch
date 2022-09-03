@@ -23,8 +23,6 @@
 package org.graalvm.compiler.java;
 
 import static java.lang.String.format;
-import static java.lang.reflect.Modifier.STATIC;
-import static java.lang.reflect.Modifier.SYNCHRONIZED;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateRecompile;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.JavaSubroutineMismatch;
@@ -267,7 +265,6 @@ import org.graalvm.compiler.bytecode.BytecodeStream;
 import org.graalvm.compiler.bytecode.BytecodeSwitch;
 import org.graalvm.compiler.bytecode.BytecodeTableSwitch;
 import org.graalvm.compiler.bytecode.Bytecodes;
-import org.graalvm.compiler.bytecode.Bytes;
 import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecode;
 import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecodeProvider;
 import org.graalvm.compiler.common.PermanentBailoutException;
@@ -1835,33 +1832,6 @@ public class BytecodeParser implements GraphBuilderContext {
         return null;
     }
 
-    private static final int ACCESSOR_BYTECODE_LENGTH = 5;
-
-    /**
-     * Tries to inline {@code targetMethod} if it is an instance field accessor. This avoids the
-     * overhead of creating and using a nested {@link BytecodeParser} object.
-     */
-    private boolean tryFastInlineAccessor(ValueNode[] args, ResolvedJavaMethod targetMethod) {
-        byte[] bytecode = targetMethod.getCode();
-        if (bytecode.length == ACCESSOR_BYTECODE_LENGTH &&
-                        Bytes.beU1(bytecode, 0) == ALOAD_0 &&
-                        Bytes.beU1(bytecode, 1) == GETFIELD) {
-            int b4 = Bytes.beU1(bytecode, 4);
-            if (b4 >= IRETURN && b4 <= ARETURN) {
-                int cpi = Bytes.beU2(bytecode, 2);
-                JavaField field = targetMethod.getConstantPool().lookupField(cpi, targetMethod, GETFIELD);
-                if (field instanceof ResolvedJavaField) {
-                    ValueNode receiver = invocationPluginReceiver.init(targetMethod, args).get();
-                    ResolvedJavaField resolvedField = (ResolvedJavaField) field;
-                    genGetFieldHelper(receiver, resolvedField);
-                    printInlining(targetMethod, targetMethod, true, "inline accessor method (bytecode parsing)");
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
     @Override
     public boolean intrinsify(BytecodeProvider intrinsicBytecodeProvider, ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, InvocationPlugin.Receiver receiver, ValueNode[] args) {
         if (receiver != null) {
@@ -1873,16 +1843,14 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private boolean inline(ResolvedJavaMethod targetMethod, ResolvedJavaMethod inlinedMethod, BytecodeProvider intrinsicBytecodeProvider, ValueNode[] args) {
-        traceInlining(targetMethod, inlinedMethod);
-        IntrinsicContext intrinsic = this.intrinsicContext;
-
-        if (intrinsic == null && !graphBuilderConfig.insertFullInfopoints() &&
-                        targetMethod.equals(inlinedMethod) &&
-                        (targetMethod.getModifiers() & (STATIC | SYNCHRONIZED)) == 0 &&
-                        tryFastInlineAccessor(args, targetMethod)) {
-            return true;
+        if (TraceInlineDuringParsing.getValue() || TraceParserPlugins.getValue()) {
+            if (targetMethod.equals(inlinedMethod)) {
+                traceWithContext("inlining call to %s", inlinedMethod.format("%h.%n(%p)"));
+            } else {
+                traceWithContext("inlining call to %s as intrinsic for %s", inlinedMethod.format("%h.%n(%p)"), targetMethod.format("%h.%n(%p)"));
+            }
         }
-
+        IntrinsicContext intrinsic = this.intrinsicContext;
         if (intrinsic != null && intrinsic.isCallToOriginal(targetMethod)) {
             if (intrinsic.isCompilationRoot()) {
                 // A root compiled intrinsic needs to deoptimize
@@ -1925,16 +1893,6 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
         return true;
-    }
-
-    private void traceInlining(ResolvedJavaMethod targetMethod, ResolvedJavaMethod inlinedMethod) {
-        if (TraceInlineDuringParsing.getValue() || TraceParserPlugins.getValue()) {
-            if (targetMethod.equals(inlinedMethod)) {
-                traceWithContext("inlining call to %s", inlinedMethod.format("%h.%n(%p)"));
-            } else {
-                traceWithContext("inlining call to %s as intrinsic for %s", inlinedMethod.format("%h.%n(%p)"), targetMethod.format("%h.%n(%p)"));
-            }
-        }
     }
 
     private void printInlining(ResolvedJavaMethod targetMethod, ResolvedJavaMethod inlinedMethod, boolean success, String msg) {
@@ -3619,29 +3577,21 @@ public class BytecodeParser implements GraphBuilderContext {
         }
         ResolvedJavaField resolvedField = (ResolvedJavaField) field;
 
-        genGetFieldHelper(receiver, resolvedField);
-    }
-
-    /**
-     * @return whether a plugin handled the field load
-     */
-    private boolean genGetFieldHelper(ValueNode receiver, ResolvedJavaField resolvedField) {
         if (!parsingIntrinsic() && GeneratePIC.getValue()) {
             graph.recordField(resolvedField);
         }
 
         for (NodePlugin plugin : graphBuilderConfig.getPlugins().getNodePlugins()) {
             if (plugin.handleLoadField(this, receiver, resolvedField)) {
-                return true;
+                return;
             }
         }
 
-        frameState.push(resolvedField.getJavaKind(), append(genLoadField(receiver, resolvedField)));
+        frameState.push(field.getJavaKind(), append(genLoadField(receiver, resolvedField)));
         if (resolvedField.getDeclaringClass().getName().equals("Ljava/lang/ref/Reference;") && resolvedField.getName().equals("referent")) {
             LocationIdentity referentIdentity = new FieldLocationIdentity(resolvedField);
             append(new MembarNode(0, referentIdentity));
         }
-        return false;
     }
 
     /**
