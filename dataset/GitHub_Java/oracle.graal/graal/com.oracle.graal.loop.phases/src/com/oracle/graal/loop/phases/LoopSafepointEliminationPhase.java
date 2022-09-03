@@ -59,7 +59,7 @@ public class LoopSafepointEliminationPhase extends BasePhase<MidTierContext> {
                 blocks: while (b != loop.loop().getHeader()) {
                     assert b != null;
                     for (FixedNode node : b.getNodes()) {
-                        if (node instanceof Invoke || (node instanceof ForeignCallNode && ((ForeignCallNode) node).isGuaranteedSafepoint())) {
+                        if (node instanceof Invoke || node instanceof ForeignCallNode) {
                             loopEnd.disableSafepoint();
                             break blocks;
                         }
