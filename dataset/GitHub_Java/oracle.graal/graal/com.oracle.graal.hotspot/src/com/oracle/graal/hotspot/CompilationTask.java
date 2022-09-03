@@ -79,6 +79,8 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         cancelled = true;
     }
 
+//    private static PrintStream out = System.out;
+
     public void run() {
         withinEnqueue.set(Boolean.FALSE);
         try {
@@ -151,10 +153,10 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         Debug.scope("CodeInstall", new Object[] {compiler.getCompiler(), method}, new Runnable() {
             @Override
             public void run() {
-                final RiCodeInfo[] info = Debug.isDumpEnabled() ? new RiCodeInfo[1] : null;
+                final HotSpotCodeInfo info = Debug.isDumpEnabled() ? new HotSpotCodeInfo(compiler, tm, method) : null;
                 compiler.getRuntime().installMethod(method, tm, info);
                 if (info != null) {
-                    Debug.dump(info[0], "After code installation");
+                    Debug.dump(info, "After code installation");
                 }
             }
 
