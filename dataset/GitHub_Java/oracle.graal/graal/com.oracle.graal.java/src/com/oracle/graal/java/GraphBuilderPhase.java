@@ -173,7 +173,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
         public class BytecodeParser extends AbstractBytecodeParser<ValueNode, HIRFrameStateBuilder> implements GraphBuilderContext {
 
-            private BciBlockMapping blockMap;
+            private BciBlock[] loopHeaders;
             private LocalLiveness liveness;
             protected final int entryBCI;
             private int currentDepth;
@@ -183,6 +183,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             private int currentLineNumber;
 
             private ValueNode methodSynchronizedObject;
+            private ExceptionDispatchBlock unwindBlock;
+            private BciBlock returnBlock;
 
             private ValueNode returnValue;
             private FixedWithNextNode beforeReturnNode;
@@ -193,6 +195,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             private final boolean explodeLoops;
             private Stack<ExplodedLoopContext> explodeLoopsContext;
             private int nextPeelIteration = 1;
+            private int returnCount;
             private boolean controlFlowSplit;
 
             /**
@@ -244,7 +247,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 try (Indent indent = Debug.logAndIndent("build graph for %s", method)) {
 
                     // compute the block map, setup exception handlers and get the entrypoint(s)
-                    this.blockMap = BciBlockMapping.create(stream, method);
+                    BciBlockMapping blockMap = BciBlockMapping.create(stream, method);
+                    loopHeaders = blockMap.getLoopHeaders();
 
                     if (graphBuilderConfig.doLivenessAnalysis()) {
                         try (Scope s = Debug.scope("LivenessAnalysis")) {
@@ -254,6 +258,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                             throw Debug.handle(e);
                         }
                     }
+                    returnCount = blockMap.getReturnCount();
 
                     lastInstr = startInstruction;
                     this.setCurrentFrameState(startFrameState);
@@ -294,6 +299,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
                     int index = 0;
                     BciBlock[] blocks = blockMap.getBlocks();
+                    this.returnBlock = blockMap.getReturnBlock();
+                    this.unwindBlock = blockMap.getUnwindBlock();
                     while (index < blocks.length) {
                         BciBlock block = blocks[index];
                         index = iterateBlock(blocks, block);
@@ -345,6 +352,14 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
                 explodeLoopsContext.pop();
                 return header.loopEnd + 1;
+            }
+
+            private BciBlock returnBlock() {
+                return returnBlock;
+            }
+
+            private BciBlock unwindBlock() {
+                return unwindBlock;
             }
 
             /**
@@ -462,7 +477,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                  * unwind immediately.
                  */
                 if (bci != currentBlock.endBci || dispatchBlock == null) {
-                    dispatchBlock = blockMap.getUnwindBlock();
+                    dispatchBlock = unwindBlock();
                 }
 
                 HIRFrameStateBuilder dispatchState = frameState.copy();
@@ -997,9 +1012,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     beforeReturn(x);
                     append(new ReturnNode(x));
                 } else {
-                    if (blockMap.getReturnCount() == 1 || !controlFlowSplit) {
+                    if (returnCount == 1 || !controlFlowSplit) {
                         // There is only a single return.
-                        beforeReturn(x);
                         this.returnValue = x;
                         this.beforeReturnNode = this.lastInstr;
                         this.lastInstr = null;
@@ -1009,8 +1023,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         if (x != null) {
                             frameState.push(x.getKind(), x);
                         }
-                        assert blockMap.getReturnCount() > 1;
-                        appendGoto(blockMap.getReturnBlock());
+                        assert returnCount > 1;
+                        appendGoto(returnBlock());
                     }
                 }
             }
@@ -1170,7 +1184,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         do {
                             long lMask = 1L << pos;
                             if ((exits & lMask) != 0) {
-                                exitLoops.add(blockMap.getLoopHeader(pos));
+                                exitLoops.add(loopHeaders[pos]);
                                 exits &= ~lMask;
                             }
                             pos++;
@@ -1415,14 +1429,14 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         }
                     }
 
-                    if (block == blockMap.getReturnBlock()) {
+                    if (block == returnBlock) {
                         Kind returnKind = method.getSignature().getReturnKind().getStackKind();
                         ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
                         assert frameState.stackSize() == 0;
                         beforeReturn(x);
                         this.returnValue = x;
                         this.beforeReturnNode = this.lastInstr;
-                    } else if (block == blockMap.getUnwindBlock()) {
+                    } else if (block == unwindBlock) {
                         if (currentDepth == 0) {
                             frameState.setRethrowException(false);
                             createUnwind();
@@ -1499,7 +1513,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     ResolvedJavaType resolvedCatchType = (ResolvedJavaType) catchType;
                     for (ResolvedJavaType skippedType : graphBuilderConfig.getSkippedExceptionTypes()) {
                         if (skippedType.isAssignableFrom(resolvedCatchType)) {
-                            BciBlock nextBlock = block.getSuccessorCount() == 1 ? blockMap.getUnwindBlock() : block.getSuccessor(1);
+                            BciBlock nextBlock = block.getSuccessorCount() == 1 ? unwindBlock() : block.getSuccessor(1);
                             ValueNode exception = frameState.stackAt(0);
                             FixedNode trueSuccessor = currentGraph.add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
                             FixedNode nextDispatch = createTarget(nextBlock, frameState);
@@ -1510,7 +1524,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
 
                 if (initialized) {
-                    BciBlock nextBlock = block.getSuccessorCount() == 1 ? blockMap.getUnwindBlock() : block.getSuccessor(1);
+                    BciBlock nextBlock = block.getSuccessorCount() == 1 ? unwindBlock() : block.getSuccessor(1);
                     ValueNode exception = frameState.stackAt(0);
                     CheckCastNode checkCast = currentGraph.add(new CheckCastNode((ResolvedJavaType) catchType, exception, null, false));
                     frameState.apop();
