@@ -438,7 +438,7 @@ public class CheckGraalIntrinsics extends GraalTest {
         List<VMIntrinsicMethod> intrinsics = store.getIntrinsics();
 
         List<String> missing = new ArrayList<>();
-        EconomicMap<String, List<Binding>> bindings = invocationPlugins.getBindings(true);
+        EconomicMap<String, List<Binding>> bindings = invocationPlugins.getBindings();
         for (VMIntrinsicMethod intrinsic : intrinsics) {
             InvocationPlugin plugin = findPlugin(bindings, intrinsic);
             if (plugin == null) {
