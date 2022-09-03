@@ -31,18 +31,9 @@ package com.oracle.truffle.llvm;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.ServiceLoader;
 
-import com.oracle.truffle.api.frame.Frame;
-import com.oracle.truffle.api.metadata.ScopeProvider;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceScope;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Context;
@@ -64,7 +55,7 @@ import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
                 Sulong.SULONG_LIBRARY_MIME_TYPE, Sulong.LLVM_ELF_SHARED_MIME_TYPE, Sulong.LLVM_ELF_EXEC_MIME_TYPE}, internal = false, interactive = false)
 // TODO: remove Sulong.SULONG_LIBRARY_MIME_TYPE after GR-5904 is closed.
 @ProvidedTags({StandardTags.StatementTag.class, StandardTags.CallTag.class})
-public final class Sulong extends LLVMLanguage implements ScopeProvider<LLVMContext> {
+public final class Sulong extends LLVMLanguage {
 
     private static final List<Configuration> configurations = new ArrayList<>();
 
@@ -77,7 +68,7 @@ public final class Sulong extends LLVMLanguage implements ScopeProvider<LLVMCont
 
     @Override
     protected LLVMContext createContext(com.oracle.truffle.api.TruffleLanguage.Env env) {
-        return new LLVMContext(env, getContextExtensions());
+        return new LLVMContext(env);
     }
 
     @Override
@@ -149,17 +140,6 @@ public final class Sulong extends LLVMLanguage implements ScopeProvider<LLVMCont
         }
     }
 
-    private static Map<Class<?>, Object> getContextExtensions() {
-        Map<Class<?>, Object> extensions = new HashMap<>();
-        for (Configuration c : configurations) {
-            Object extension = c.createContextExtension();
-            if (extension != null) {
-                extensions.put(extension.getClass(), extension);
-            }
-        }
-        return extensions;
-    }
-
     @Override
     protected OptionDescriptors getOptionDescriptors() {
         List<OptionDescriptor> optionDescriptors = new ArrayList<>();
@@ -200,24 +180,5 @@ public final class Sulong extends LLVMLanguage implements ScopeProvider<LLVMCont
         if (thread != threadingStack.getDefaultThread()) {
             threadingStack.initializeThread();
         }
-    }
-
-    @Override
-    protected SourceSection findSourceLocation(LLVMContext context, Object value) {
-        LLVMSourceLocation location = null;
-        if (value instanceof LLVMSourceType) {
-            location = ((LLVMSourceType) value).getLocation();
-        } else if (value instanceof LLVMDebugObject) {
-            location = ((LLVMDebugObject) value).getDeclaration();
-        }
-        if (location != null) {
-            return location.getSourceSection();
-        }
-        return null;
-    }
-
-    @Override
-    public AbstractScope findScope(LLVMContext context, Node node, Frame frame) {
-        return LLVMSourceScope.create(node, context);
     }
 }
