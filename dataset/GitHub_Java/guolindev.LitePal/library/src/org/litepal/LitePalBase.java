@@ -1,3 +1,19 @@
+/*
+ * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.litepal;
 
 import java.lang.reflect.Field;
@@ -16,6 +32,7 @@ import org.litepal.parser.LitePalAttr;
 import org.litepal.tablemanager.model.AssociationsModel;
 import org.litepal.tablemanager.model.TableModel;
 import org.litepal.tablemanager.typechange.BooleanOrm;
+import org.litepal.tablemanager.typechange.DateOrm;
 import org.litepal.tablemanager.typechange.DecimalOrm;
 import org.litepal.tablemanager.typechange.NumericOrm;
 import org.litepal.tablemanager.typechange.OrmChange;
@@ -50,7 +67,7 @@ public abstract class LitePalBase {
 	 * All the supporting mapping types currently in the array.
 	 */
 	private OrmChange[] typeChangeRules = { new NumericOrm(), new TextOrm(), new BooleanOrm(),
-			new DecimalOrm() };
+			new DecimalOrm(), new DateOrm() };
 
 	/**
 	 * The collection contains all association models.
@@ -152,8 +169,7 @@ public abstract class LitePalBase {
 		try {
 			dynamicClass = Class.forName(className);
 		} catch (ClassNotFoundException e) {
-			throw new DatabaseGenerateException(DatabaseGenerateException.CLASS_NOT_FOUND
-					+ className);
+			throw new DatabaseGenerateException(DatabaseGenerateException.CLASS_NOT_FOUND + className);
 		}
 		Field[] fields = dynamicClass.getDeclaredFields();
 		for (Field field : fields) {
@@ -275,8 +291,7 @@ public abstract class LitePalBase {
 			}
 		} catch (ClassNotFoundException ex) {
 			ex.printStackTrace();
-			throw new DatabaseGenerateException(DatabaseGenerateException.CLASS_NOT_FOUND
-					+ className);
+			throw new DatabaseGenerateException(DatabaseGenerateException.CLASS_NOT_FOUND + className);
 		}
 	}
 
@@ -318,8 +333,7 @@ public abstract class LitePalBase {
 	 * 
 	 * @throws ClassNotFoundException
 	 */
-	private void oneToAnyConditions(String className, Field field, int action)
-			throws ClassNotFoundException {
+	private void oneToAnyConditions(String className, Field field, int action) throws ClassNotFoundException {
 		Class<?> fieldTypeClass = field.getType();
 		// If the mapping list contains the class name
 		// defined in one class.
@@ -344,8 +358,7 @@ public abstract class LitePalBase {
 									fieldTypeClass.getName(), Const.Model.ONE_TO_ONE);
 						} else if (action == GET_ASSOCIATION_INFO_ACTION) {
 							addIntoAssociationInfoCollection(className, fieldTypeClass.getName(),
-									fieldTypeClass.getName(), field, reverseField,
-									Const.Model.ONE_TO_ONE);
+									fieldTypeClass.getName(), field, reverseField, Const.Model.ONE_TO_ONE);
 						}
 						reverseAssociations = true;
 					}
@@ -356,13 +369,11 @@ public abstract class LitePalBase {
 						String genericTypeName = getGenericTypeName(reverseField);
 						if (className.equals(genericTypeName)) {
 							if (action == GET_ASSOCIATIONS_ACTION) {
-								addIntoAssociationModelCollection(className,
-										fieldTypeClass.getName(), className,
-										Const.Model.MANY_TO_ONE);
+								addIntoAssociationModelCollection(className, fieldTypeClass.getName(),
+										className, Const.Model.MANY_TO_ONE);
 							} else if (action == GET_ASSOCIATION_INFO_ACTION) {
-								addIntoAssociationInfoCollection(className,
-										fieldTypeClass.getName(), className, field, reverseField,
-										Const.Model.MANY_TO_ONE);
+								addIntoAssociationInfoCollection(className, fieldTypeClass.getName(),
+										className, field, reverseField, Const.Model.MANY_TO_ONE);
 							}
 							reverseAssociations = true;
 						}
@@ -409,8 +420,7 @@ public abstract class LitePalBase {
 	 * 
 	 * @throws ClassNotFoundException
 	 */
-	private void manyToAnyConditions(String className, Field field, int action)
-			throws ClassNotFoundException {
+	private void manyToAnyConditions(String className, Field field, int action) throws ClassNotFoundException {
 		if (isCollection(field.getType())) {
 			String genericTypeName = getGenericTypeName(field);
 			// If the mapping list contains the genericTypeName, begin to check
@@ -434,9 +444,8 @@ public abstract class LitePalBase {
 								addIntoAssociationModelCollection(className, genericTypeName,
 										genericTypeName, Const.Model.MANY_TO_ONE);
 							} else if (action == GET_ASSOCIATION_INFO_ACTION) {
-								addIntoAssociationInfoCollection(className, genericTypeName,
-										genericTypeName, field, reverseField,
-										Const.Model.MANY_TO_ONE);
+								addIntoAssociationInfoCollection(className, genericTypeName, genericTypeName,
+										field, reverseField, Const.Model.MANY_TO_ONE);
 							}
 							reverseAssociations = true;
 						}
@@ -447,11 +456,11 @@ public abstract class LitePalBase {
 							String reverseGenericTypeName = getGenericTypeName(reverseField);
 							if (className.equals(reverseGenericTypeName)) {
 								if (action == GET_ASSOCIATIONS_ACTION) {
-									addIntoAssociationModelCollection(className, genericTypeName,
-											null, Const.Model.MANY_TO_MANY);
+									addIntoAssociationModelCollection(className, genericTypeName, null,
+											Const.Model.MANY_TO_MANY);
 								} else if (action == GET_ASSOCIATION_INFO_ACTION) {
-									addIntoAssociationInfoCollection(className, genericTypeName,
-											null, field, reverseField, Const.Model.MANY_TO_MANY);
+									addIntoAssociationInfoCollection(className, genericTypeName, null, field,
+											reverseField, Const.Model.MANY_TO_MANY);
 								}
 								reverseAssociations = true;
 							}
@@ -463,8 +472,8 @@ public abstract class LitePalBase {
 								addIntoAssociationModelCollection(className, genericTypeName,
 										genericTypeName, Const.Model.MANY_TO_ONE);
 							} else if (action == GET_ASSOCIATION_INFO_ACTION) {
-								addIntoAssociationInfoCollection(className, genericTypeName,
-										genericTypeName, field, null, Const.Model.MANY_TO_ONE);
+								addIntoAssociationInfoCollection(className, genericTypeName, genericTypeName,
+										field, null, Const.Model.MANY_TO_ONE);
 							}
 						}
 					}
@@ -490,10 +499,8 @@ public abstract class LitePalBase {
 			String classHoldsForeignKey, int associationType) {
 		AssociationsModel associationModel = new AssociationsModel();
 		associationModel.setTableName(DBUtility.getTableNameByClassName(className));
-		associationModel.setAssociatedTableName(DBUtility
-				.getTableNameByClassName(associatedClassName));
-		associationModel.setTableHoldsForeignKey(DBUtility
-				.getTableNameByClassName(classHoldsForeignKey));
+		associationModel.setAssociatedTableName(DBUtility.getTableNameByClassName(associatedClassName));
+		associationModel.setTableHoldsForeignKey(DBUtility.getTableNameByClassName(classHoldsForeignKey));
 		associationModel.setAssociationType(associationType);
 		mAssociationModels.add(associationModel);
 	}
