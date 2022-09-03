@@ -554,18 +554,7 @@ public final class GraphBuilder {
     private void genShiftOp(CiKind kind, int opcode) {
         Value s = frameState.ipop();
         Value x = frameState.pop(kind);
-        Shift v;
-        switch(opcode){
-            case ISHL:
-            case LSHL: v = new LeftShift(kind, x, s, graph); break;
-            case ISHR:
-            case LSHR: v = new RightShift(kind, x, s, graph); break;
-            case IUSHR:
-            case LUSHR: v = new UnsignedRightShift(kind, x, s, graph); break;
-            default:
-                throw new CiBailout("should not reach");
-        }
-        frameState.push(kind, append(v));
+        frameState.push(kind, append(new Shift(opcode, x, s, graph)));
     }
 
     private void genLogicOp(CiKind kind, int opcode) {
