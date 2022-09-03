@@ -16,18 +16,18 @@
 
 package org.litepal.util;
 
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
-import android.text.TextUtils;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.litepal.exceptions.DatabaseGenerateException;
 import org.litepal.tablemanager.model.ColumnModel;
 import org.litepal.tablemanager.model.TableModel;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.text.TextUtils;
 
 /**
  * A utility class to help LitePal with some database actions. These actions can
@@ -38,8 +38,6 @@ import java.util.regex.Pattern;
  * @since 1.0
  */
 public class DBUtility {
-
-    private static final String TAG = "DBUtility";
 
     private static final String SQLITE_KEYWORDS = ",abort,add,after,all,alter,and,as,asc,autoincrement,before,begin,between,by,cascade,check,collate,column,commit,conflict,constraint,create,cross,database,deferrable,deferred,delete,desc,distinct,drop,each,end,escape,except,exclusive,exists,foreign,from,glob,group,having,in,index,inner,insert,intersect,into,is,isnull,join,like,limit,match,natural,not,notnull,null,of,offset,on,or,order,outer,plan,pragma,primary,query,raise,references,regexp,reindex,release,rename,replace,restrict,right,rollback,row,savepoint,select,set,table,temp,temporary,then,to,transaction,trigger,union,unique,update,using,vacuum,values,view,virtual,when,where,";
 
@@ -441,55 +439,24 @@ public class DBUtility {
         return columns;
     }
 
-    /**
-     * If the field name is conflicted with SQLite keywords. Return true if conflicted, return false
-     * otherwise.
-     * @param fieldName
-     *          Name of the field.
-     * @return True if conflicted, false otherwise.
-     */
-    public static boolean isFieldNameConflictWithSQLiteKeywords(String fieldName) {
+    public static String convertFieldNameToColumnName(String fieldName) {
         String fieldNameWithComma = "," + fieldName + ",";
         if (SQLITE_KEYWORDS.contains(fieldNameWithComma)) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Convert the field name to valid column name if field name is conflicted with SQLite keywords.
-     * The convert rule is to append {@link #KEYWORDS_COLUMN_SUFFIX} to field name as column name.
-     * @param fieldName
-     *          Name of the field.
-     * @return Converted name as column name if field name is conflicted with SQLite keywords.
-     */
-    public static String convertFieldNameToColumnName(String fieldName) {
-        if (isFieldNameConflictWithSQLiteKeywords(fieldName)) {
             return fieldName + KEYWORDS_COLUMN_SUFFIX;
+        } else {
+            return fieldName;
         }
-        return fieldName;
     }
 
-    /**
-     * Convert the where clause if it contains invalid column which conflict with SQLite keywords.
-     * @param whereClause
-     *          where clause for query, update or delete.
-     * @return Converted where clause with valid columns.
-     */
     public static String convertWhereClauseToColumnName(String whereClause) {
         try {
-            StringBuffer convertedWhereClause = new StringBuffer();
             Pattern p = Pattern.compile("(\\w+" + REG_OPERATOR + "|\\w+" + REG_FUZZY + "|\\w+" + REG_COLLECTION + ")");
             Matcher m = p.matcher(whereClause);
             while (m.find()) {
-                String matches = m.group();
-                String column = matches.replaceAll("(" + REG_OPERATOR + "|" + REG_FUZZY + "|" + REG_COLLECTION + ")", "");
-                String rest = matches.replace(column, "");
-                column = convertFieldNameToColumnName(column);
-                m.appendReplacement(convertedWhereClause, column + rest);
+                String result = m.group().replaceAll("(" + REG_OPERATOR + "|" + REG_FUZZY + "|" + REG_COLLECTION + ")", "");
+                System.out.println(result);
             }
-            m.appendTail(convertedWhereClause);
-            return convertedWhereClause.toString();
+            return null;
         } catch (Exception e) {
             e.printStackTrace();
         }
