@@ -29,7 +29,7 @@ import com.oracle.truffle.api.interop.AcceptMessage;
 @AcceptMessage(value = "READ", receiverType = ValidTruffleObject.class, language = TestTruffleLanguage.class)
 public final class ReadNode4 extends BaseReadNode4 {
 
-    @Override
+    @SuppressWarnings({"static-method", "unused"})
     @ExpectError({"access method has to have 3 arguments"})
     protected int access(VirtualFrame frame, Object receiver, Object name, int i) {
         return 0;

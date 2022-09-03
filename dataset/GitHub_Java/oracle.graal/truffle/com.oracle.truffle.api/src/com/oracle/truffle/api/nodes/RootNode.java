@@ -66,7 +66,6 @@ public abstract class RootNode extends Node {
         this(language, sourceSection, frameDescriptor, true);
     }
 
-    @SuppressWarnings("deprecation")
     private RootNode(Class<? extends TruffleLanguage> language, SourceSection sourceSection, FrameDescriptor frameDescriptor, boolean checkLanguage) {
         super(sourceSection);
         if (checkLanguage) {
@@ -108,7 +107,7 @@ public abstract class RootNode extends Node {
      * heuristics can use the loop count to guide compilation and inlining.
      */
     public final void reportLoopCount(int count) {
-        CompilerAsserts.neverPartOfCompilation("do not call RootNode.reportLoopCount from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
         if (getCallTarget() instanceof LoopCountReceiver) {
             ((LoopCountReceiver) getCallTarget()).reportLoopCount(count);
         }
@@ -141,7 +140,7 @@ public abstract class RootNode extends Node {
      * stack) without prior knowledge of the language it has come from.
      *
      * Used for instance to determine the language of a <code>RootNode<code>:
-     * 
+     *
      * <pre>
      * <code>
      * rootNode.getExecutionContext().getLanguageShortName();
