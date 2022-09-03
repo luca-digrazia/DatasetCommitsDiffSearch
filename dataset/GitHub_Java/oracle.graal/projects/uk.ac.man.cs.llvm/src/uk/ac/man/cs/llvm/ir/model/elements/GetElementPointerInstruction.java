@@ -27,47 +27,32 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (c) 2016 University of Manchester
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package uk.ac.man.cs.llvm.ir.model.elements;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import uk.ac.man.cs.llvm.ir.model.InstructionVisitor;
 import uk.ac.man.cs.llvm.ir.model.Symbol;
+import uk.ac.man.cs.llvm.ir.model.Symbols;
 import uk.ac.man.cs.llvm.ir.model.ValueSymbol;
+import uk.ac.man.cs.llvm.ir.model.constants.GetElementPointerConstant;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
 public final class GetElementPointerInstruction extends ValueInstruction {
 
     private Symbol base;
 
-    private final List<Symbol> indices = new ArrayList<>();
+    private final List<Symbol> indices;
 
     private final boolean isInbounds;
 
-    public GetElementPointerInstruction(Type type, boolean isInbounds) {
+    private String referenceName = null;
+
+    private GetElementPointerInstruction(Type type, boolean isInbounds) {
         super(type);
+        this.indices = new ArrayList<>();
         this.isInbounds = isInbounds;
     }
 
@@ -76,13 +61,15 @@ public final class GetElementPointerInstruction extends ValueInstruction {
         visitor.visit(this);
     }
 
-    public void addIndex(Symbol index) {
-        indices.add(index);
-    }
-
     @Override
     public int getAlign() {
-        return ((ValueSymbol) base).getAlign();
+        if (base instanceof ValueSymbol) {
+            return ((ValueSymbol) base).getAlign();
+        } else if (base instanceof GetElementPointerConstant) {
+            return ((ValueSymbol) ((GetElementPointerConstant) base).getBasePointer()).getAlign();
+        } else {
+            throw new IllegalStateException("Unknown Source of Alignment: " + base.getClass());
+        }
     }
 
     public Symbol getIndex(int index) {
@@ -95,6 +82,18 @@ public final class GetElementPointerInstruction extends ValueInstruction {
 
     public Symbol getBasePointer() {
         return base;
+    }
+
+    public void setReferenceName(String referenceName) {
+        this.referenceName = referenceName;
+    }
+
+    public String getReferenceName() {
+        return referenceName;
+    }
+
+    public List<Symbol> getIndices() {
+        return Collections.unmodifiableList(indices);
     }
 
     public boolean isInbounds() {
@@ -113,7 +112,12 @@ public final class GetElementPointerInstruction extends ValueInstruction {
         }
     }
 
-    public void setBasePointer(Symbol base) {
-        this.base = base;
+    public static GetElementPointerInstruction fromSymbols(Symbols symbols, Type type, int pointer, int[] indices, boolean isInbounds) {
+        final GetElementPointerInstruction inst = new GetElementPointerInstruction(type, isInbounds);
+        inst.base = symbols.getSymbol(pointer, inst);
+        for (int index : indices) {
+            inst.indices.add(symbols.getSymbol(index, inst));
+        }
+        return inst;
     }
 }
