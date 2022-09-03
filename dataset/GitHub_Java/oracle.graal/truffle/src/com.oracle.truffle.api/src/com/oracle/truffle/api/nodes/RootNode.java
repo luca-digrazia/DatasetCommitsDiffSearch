@@ -183,9 +183,7 @@ public abstract class RootNode extends ExecutableNode {
      * @since 0.27
      */
     public final <C, T extends TruffleLanguage<C>> C getCurrentContext(Class<T> languageClass) {
-        if (languageInfo == null) {
-            return null;
-        }
+        CompilerAsserts.partialEvaluationConstant(languageClass);
         return getLanguage(languageClass).getContextReference().get();
     }
 
@@ -369,11 +367,10 @@ public abstract class RootNode extends ExecutableNode {
     }
 
     /**
-     * Returns the {@link com.oracle.truffle.api.ExecutionContext} associated with this
-     * <code>RootNode</code>. This allows the correct <code>ExecutionContext</code> to be determined
-     * for a <code>RootNode</code> (and so also for a {@link RootCallTarget} and a
-     * {@link FrameInstance} obtained from the call stack) without prior knowledge of the language
-     * it has come from.
+     * Returns the {@link ExecutionContext} associated with this <code>RootNode</code>. This allows
+     * the correct <code>ExecutionContext</code> to be determined for a <code>RootNode</code> (and
+     * so also for a {@link RootCallTarget} and a {@link FrameInstance} obtained from the call
+     * stack) without prior knowledge of the language it has come from.
      *
      * Returns <code>null</code> by default.
      *
