@@ -143,7 +143,7 @@ public final class CompileTheWorld {
     }
 
     // Some runtime instances we need.
-    private final HotSpotGraalRuntimeProvider runtime = runtime();
+    private final HotSpotGraalRuntime runtime = runtime();
 
     /** List of Zip/Jar files to compile (see {@link Options#CompileTheWorldClasspath}). */
     private final String files;
@@ -293,7 +293,7 @@ public final class CompileTheWorld {
 
                             // Compile each constructor/method in the class.
                             for (Constructor<?> constructor : javaClass.getDeclaredConstructors()) {
-                                HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaMethod(constructor);
+                                HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaConstructor(constructor);
                                 if (canBeCompiled(javaMethod, constructor.getModifiers())) {
                                     compileMethod(javaMethod);
                                 }

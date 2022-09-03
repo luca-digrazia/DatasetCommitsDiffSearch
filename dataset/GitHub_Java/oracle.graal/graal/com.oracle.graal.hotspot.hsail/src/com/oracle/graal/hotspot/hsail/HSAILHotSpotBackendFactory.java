@@ -36,13 +36,13 @@ import com.oracle.graal.phases.util.*;
 @ServiceProvider(HotSpotBackendFactory.class)
 public class HSAILHotSpotBackendFactory implements HotSpotBackendFactory {
 
-    protected HotSpotLoweringProvider createLowerer(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
+    protected HotSpotLoweringProvider createLowerer(HotSpotGraalRuntime runtime, MetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
                     TargetDescription target) {
         return new HSAILHotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers, target);
     }
 
     @Override
-    public HSAILHotSpotBackend createBackend(HotSpotGraalRuntimeProvider runtime, HotSpotBackend hostBackend) {
+    public HSAILHotSpotBackend createBackend(HotSpotGraalRuntime runtime, HotSpotBackend hostBackend) {
         HotSpotProviders host = hostBackend.getProviders();
 
         HotSpotRegisters registers = new HotSpotRegisters(HSAIL.threadRegister, Register.None, Register.None);
@@ -55,7 +55,7 @@ public class HSAILHotSpotBackendFactory implements HotSpotBackendFactory {
         // Replacements cannot have speculative optimizations since they have
         // to be valid for the entire run of the VM.
         Assumptions assumptions = new Assumptions(false);
-        Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null, new HotSpotStampProvider());
+        Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null);
         Replacements replacements = new HSAILHotSpotReplacementsImpl(p, host.getSnippetReflection(), assumptions, codeCache.getTarget(), host.getReplacements());
         HotSpotDisassemblerProvider disassembler = host.getDisassembler();
         SuitesProvider suites = new HotSpotSuitesProvider(runtime);
