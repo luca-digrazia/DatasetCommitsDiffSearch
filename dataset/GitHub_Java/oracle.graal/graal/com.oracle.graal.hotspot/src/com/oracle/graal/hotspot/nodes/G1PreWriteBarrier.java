@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,28 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_50;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
 
-public class G1PreWriteBarrier extends WriteBarrier implements DeoptimizingNode {
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.DeoptimizingNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
 
-    @Input private FrameState deoptimizationState;
-    private final boolean nullCheck;
-    private final boolean doLoad;
+@NodeInfo(cycles = CYCLES_50, size = SIZE_50)
+public final class G1PreWriteBarrier extends ObjectWriteBarrier implements DeoptimizingNode.DeoptBefore {
 
-    public G1PreWriteBarrier(ValueNode object, ValueNode expectedObject, LocationNode location, boolean doLoad, boolean nullCheck) {
-        super(object, expectedObject, location, true);
+    public static final NodeClass<G1PreWriteBarrier> TYPE = NodeClass.create(G1PreWriteBarrier.class);
+
+    @OptionalInput(InputType.State) FrameState stateBefore;
+    protected final boolean nullCheck;
+    protected final boolean doLoad;
+
+    public G1PreWriteBarrier(AddressNode address, ValueNode expectedObject, boolean doLoad, boolean nullCheck) {
+        super(TYPE, address, expectedObject, true);
         this.doLoad = doLoad;
         this.nullCheck = nullCheck;
     }
@@ -56,18 +66,13 @@ public class G1PreWriteBarrier extends WriteBarrier implements DeoptimizingNode 
     }
 
     @Override
-    public FrameState getDeoptimizationState() {
-        return deoptimizationState;
+    public FrameState stateBefore() {
+        return stateBefore;
     }
 
     @Override
-    public void setDeoptimizationState(FrameState state) {
-        updateUsages(deoptimizationState, state);
-        deoptimizationState = state;
-    }
-
-    @Override
-    public DeoptimizationReason getDeoptimizationReason() {
-        return DeoptimizationReason.NullCheckException;
+    public void setStateBefore(FrameState state) {
+        updateUsages(stateBefore, state);
+        stateBefore = state;
     }
 }

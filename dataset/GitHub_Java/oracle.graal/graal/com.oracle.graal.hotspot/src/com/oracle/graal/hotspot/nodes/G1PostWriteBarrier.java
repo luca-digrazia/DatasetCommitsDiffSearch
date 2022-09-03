@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,26 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_50;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
 
-public class G1PostWriteBarrier extends WriteBarrier {
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
 
-    private boolean alwaysNull;
+@NodeInfo(cycles = CYCLES_50, size = SIZE_50)
+public class G1PostWriteBarrier extends ObjectWriteBarrier {
 
-    public G1PostWriteBarrier(ValueNode object, ValueNode value, LocationNode location, boolean precise, boolean alwaysNull) {
-        super(object, value, location, precise);
+    public static final NodeClass<G1PostWriteBarrier> TYPE = NodeClass.create(G1PostWriteBarrier.class);
+    protected final boolean alwaysNull;
+
+    public G1PostWriteBarrier(AddressNode address, ValueNode value, boolean precise, boolean alwaysNull) {
+        this(TYPE, address, value, precise, alwaysNull);
+    }
+
+    protected G1PostWriteBarrier(NodeClass<? extends G1PostWriteBarrier> c, AddressNode address, ValueNode value, boolean precise, boolean alwaysNull) {
+        super(c, address, value, precise);
         this.alwaysNull = alwaysNull;
     }
 

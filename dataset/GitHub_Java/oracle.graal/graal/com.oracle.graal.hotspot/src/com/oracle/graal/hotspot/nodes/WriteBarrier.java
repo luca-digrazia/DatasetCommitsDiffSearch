@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,25 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 
-public abstract class WriteBarrier extends FixedWithNextNode {
+@NodeInfo
+public abstract class WriteBarrier extends FixedWithNextNode implements Lowerable {
 
-    public WriteBarrier() {
-        super(StampFactory.illegal());
+    public static final NodeClass<WriteBarrier> TYPE = NodeClass.create(WriteBarrier.class);
+
+    protected WriteBarrier(NodeClass<? extends WriteBarrier> c) {
+        super(c, StampFactory.forVoid());
     }
 
-    protected void generateBarrier(CiValue adr, LIRGeneratorTool gen) {
-        HotSpotVMConfig config = CompilerImpl.getInstance().getConfig();
-        CiValue base = gen.emitUShr(adr, CiConstant.forInt(config.cardtableShift));
-
-        long startAddress = config.cardtableStartAddress;
-        int displacement = 0;
-        if (((int) startAddress) == startAddress) {
-            displacement = (int) startAddress;
-        } else {
-            base = gen.emitAdd(base, CiConstant.forLong(config.cardtableStartAddress));
-        }
-        gen.emitStore(new CiAddress(CiKind.Boolean, base, displacement), CiConstant.FALSE, false);
+    @Override
+    public void lower(LoweringTool tool) {
+        assert graph().getGuardsStage().areFrameStatesAtDeopts();
+        tool.getLowerer().lower(this, tool);
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,23 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_8;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_3;
 
-public class SerialWriteBarrier extends WriteBarrier {
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.memory.address.AddressNode;
 
-    private boolean alwaysNull;
+@NodeInfo(cycles = CYCLES_8, size = SIZE_3)
+public class SerialWriteBarrier extends ObjectWriteBarrier {
 
-    public SerialWriteBarrier(ValueNode object, LocationNode location, boolean precise, boolean alwaysNull) {
-        super(object, null, location, precise);
-        this.alwaysNull = alwaysNull;
+    public static final NodeClass<SerialWriteBarrier> TYPE = NodeClass.create(SerialWriteBarrier.class);
+
+    public SerialWriteBarrier(AddressNode address, boolean precise) {
+        this(TYPE, address, precise);
     }
 
-    public boolean alwaysNull() {
-        return alwaysNull;
+    protected SerialWriteBarrier(NodeClass<? extends SerialWriteBarrier> c, AddressNode address, boolean precise) {
+        super(c, address, null, precise);
     }
 }
