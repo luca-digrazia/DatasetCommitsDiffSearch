@@ -114,7 +114,6 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
             if (method.currentTask() == this) {
                 method.setCurrentTask(null);
             }
-            graalRuntime.getCompilerToVM().clearQueuedForCompilation(method);
             inProgress = false;
             withinEnqueue.set(Boolean.TRUE);
         }
