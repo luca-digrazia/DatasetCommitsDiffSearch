@@ -75,19 +75,15 @@ public class InliningLog {
             }
         }
 
-        public static BytecodePositionWithId create(FrameState state) {
-            return create(state, true);
-        }
-
         @SuppressWarnings("deprecation")
-        private static BytecodePositionWithId create(FrameState state, boolean topLevel) {
+        public static BytecodePositionWithId create(FrameState state) {
             if (state == null) {
                 return null;
             }
             ResolvedJavaMethod method = state.getMethod();
-            int bci = topLevel ? state.bci - 3 : state.bci;
+            int bci = state.bci;
             int id = state.getId();
-            return new BytecodePositionWithId(create(state.outerFrameState(), false), method, bci, id);
+            return new BytecodePositionWithId(create(state.outerFrameState()), method, bci, id);
         }
 
         @Override
