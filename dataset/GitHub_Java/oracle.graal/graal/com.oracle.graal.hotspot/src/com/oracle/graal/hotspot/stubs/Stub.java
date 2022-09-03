@@ -39,7 +39,6 @@ import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.java.*;
-import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
@@ -153,19 +152,23 @@ public abstract class Stub {
                 // The stub itself needs the incoming calling convention.
                 CallingConvention incomingCc = linkage.getIncomingCallingConvention();
                 final CompilationResult compResult = GraalCompiler.compileGraph(graph, incomingCc, getInstalledCodeOwner(), providers, backend, codeCache.getTarget(), null, phasePlan,
-                                OptimisticOptimizations.ALL, new SpeculationLog(), providers.getSuites().getDefaultSuites(), true, new CompilationResult(), CompilationResultBuilderFactory.Default);
+                                OptimisticOptimizations.ALL, new SpeculationLog(), providers.getSuites().getDefaultSuites(), new CompilationResult());
 
                 assert destroyedRegisters != null;
                 try (Scope s = Debug.scope("CodeInstall")) {
                     Stub stub = Stub.this;
                     HotSpotRuntimeStub installedCode = new HotSpotRuntimeStub(stub);
                     HotSpotCompiledCode hsCompResult = new HotSpotCompiledRuntimeStub(stub, compResult);
-
                     CodeInstallResult result = runtime().getCompilerToVM().installCode(hsCompResult, installedCode, null);
                     if (result != CodeInstallResult.OK) {
                         throw new GraalInternalError("Error installing stub %s: %s", Stub.this, result);
                     }
-                    ((HotSpotCodeCacheProvider) codeCache).logOrDump(installedCode, compResult);
+                    if (Debug.isDumpEnabled()) {
+                        Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
+                    }
+                    if (Debug.isLogEnabled()) {
+                        Debug.log("%s", providers.getDisassembler().disassemble(installedCode));
+                    }
                     code = installedCode;
                 } catch (Throwable e) {
                     throw Debug.handle(e);

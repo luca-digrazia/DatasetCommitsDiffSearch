@@ -30,9 +30,7 @@ import java.util.*;
 
 import com.oracle.graal.alloc.*;
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CompilationResult.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.ProfilingInfo.*;
 import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
@@ -132,48 +130,49 @@ public class GraalCompiler {
      * @param installedCodeOwner the method the compiled code will be
      *            {@linkplain InstalledCode#getMethod() associated} with once installed. This
      *            argument can be null.
-     * @param withScope specifies if a {@link DebugScope} with the name {@code "GraalCompiler"}
-     *            should be used for the compilation
      * @return the result of the compilation
      */
     public static <T extends CompilationResult> T compileGraph(StructuredGraph graph, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend,
-                    TargetDescription target, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, SpeculationLog speculationLog, Suites suites,
-                    boolean withScope, T compilationResult, CompilationResultBuilderFactory factory) {
-        try (Scope s0 = withScope ? Debug.scope("GraalCompiler", graph, providers.getCodeCache()) : null) {
-            Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
-            LIR lir = null;
-            try (Scope s = Debug.scope("FrontEnd"); TimerCloseable a = FrontEnd.start()) {
-                lir = emitHIR(providers, target, graph, assumptions, cache, plan, optimisticOpts, profilingInfo, speculationLog, suites);
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
-            try (TimerCloseable a = BackEnd.start()) {
-                LIRGenerator lirGen = null;
-                try (Scope s = Debug.scope("BackEnd", lir)) {
-                    lirGen = emitLIR(backend, target, lir, graph, cc);
-                } catch (Throwable e) {
-                    throw Debug.handle(e);
-                }
-                try (Scope s = Debug.scope("CodeGen", lirGen)) {
-                    emitCode(backend, getLeafGraphIdArray(graph), assumptions, lirGen, compilationResult, installedCodeOwner, factory);
-                } catch (Throwable e) {
-                    throw Debug.handle(e);
-                }
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
+                    TargetDescription target, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts, SpeculationLog speculationLog, Suites suites, T compilationResult) {
+        try (Scope s = Debug.scope("GraalCompiler", graph, providers.getCodeCache())) {
+            compileGraphNoScope(graph, cc, installedCodeOwner, providers, backend, target, cache, plan, optimisticOpts, speculationLog, suites, compilationResult);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
         return compilationResult;
     }
 
-    public static ProfilingInfo getProfilingInfo(StructuredGraph graph) {
-        if (graph.method() != null) {
-            return graph.method().getProfilingInfo();
-        } else {
-            return DefaultProfilingInfo.get(TriState.UNKNOWN);
+    /**
+     * Same as {@link #compileGraph} but without entering a
+     * {@linkplain Debug#scope(String, Object...) debug scope}.
+     */
+    public static <T extends CompilationResult> T compileGraphNoScope(StructuredGraph graph, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend,
+                    TargetDescription target, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts, SpeculationLog speculationLog, Suites suites, T compilationResult) {
+        Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
+
+        LIR lir = null;
+        try (Scope s = Debug.scope("FrontEnd"); TimerCloseable a = FrontEnd.start()) {
+            lir = emitHIR(providers, target, graph, assumptions, cache, plan, optimisticOpts, speculationLog, suites);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
         }
+        try (TimerCloseable a = BackEnd.start()) {
+            LIRGenerator lirGen = null;
+            try (Scope s = Debug.scope("BackEnd", lir)) {
+                lirGen = emitLIR(backend, target, lir, graph, cc);
+            } catch (Throwable e) {
+                throw Debug.handle(e);
+            }
+            try (Scope s = Debug.scope("CodeGen", lirGen)) {
+                emitCode(backend, getLeafGraphIdArray(graph), assumptions, lirGen, compilationResult, installedCodeOwner);
+            } catch (Throwable e) {
+                throw Debug.handle(e);
+            }
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
+
+        return compilationResult;
     }
 
     private static long[] getLeafGraphIdArray(StructuredGraph graph) {
@@ -190,7 +189,7 @@ public class GraalCompiler {
      * Builds the graph, optimizes it.
      */
     public static LIR emitHIR(Providers providers, TargetDescription target, StructuredGraph graph, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts,
-                    ProfilingInfo profilingInfo, SpeculationLog speculationLog, Suites suites) {
+                    SpeculationLog speculationLog, Suites suites) {
 
         if (speculationLog != null) {
             speculationLog.snapshot();
@@ -207,7 +206,7 @@ public class GraalCompiler {
         suites.getHighTier().apply(graph, highTierContext);
         graph.maybeCompress();
 
-        MidTierContext midTierContext = new MidTierContext(providers, assumptions, target, optimisticOpts, profilingInfo);
+        MidTierContext midTierContext = new MidTierContext(providers, assumptions, target, optimisticOpts);
         suites.getMidTier().apply(graph, midTierContext);
         graph.maybeCompress();
 
@@ -262,12 +261,13 @@ public class GraalCompiler {
             for (Block b : lir.linearScanOrder()) {
                 emitBlock(lirGen, b);
             }
-            lirGen.beforeRegisterAllocation();
 
             Debug.dump(lir, "After LIR generation");
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
+
+        lirGen.beforeRegisterAllocation();
 
         try (Scope s = Debug.scope("Allocator")) {
             if (backend.shouldAllocateRegisters()) {
@@ -279,43 +279,19 @@ public class GraalCompiler {
         return lirGen;
     }
 
-    public static void emitCode(Backend backend, long[] leafGraphIds, Assumptions assumptions, LIRGenerator lirGen, CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner,
-                    CompilationResultBuilderFactory factory) {
-        CompilationResultBuilder crb = backend.newCompilationResultBuilder(lirGen, compilationResult, factory);
-        backend.emitCode(crb, lirGen, installedCodeOwner);
-        crb.finish();
+    public static void emitCode(Backend backend, long[] leafGraphIds, Assumptions assumptions, LIRGenerator lirGen, CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner) {
+        TargetMethodAssembler tasm = backend.newAssembler(lirGen, compilationResult);
+        backend.emitCode(tasm, lirGen, installedCodeOwner);
+        CompilationResult result = tasm.finishTargetMethod(lirGen.getGraph());
         if (!assumptions.isEmpty()) {
-            compilationResult.setAssumptions(assumptions);
+            result.setAssumptions(assumptions);
         }
-        compilationResult.setLeafGraphIds(leafGraphIds);
-
-        if (Debug.isMeterEnabled()) {
-            List<DataPatch> ldp = compilationResult.getDataReferences();
-            DebugMetric[] dms = new DebugMetric[Kind.values().length];
-            for (int i = 0; i < dms.length; i++) {
-                dms[i] = Debug.metric("DataPatches-" + Kind.values()[i].toString());
-            }
-            DebugMetric dmRaw = Debug.metric("DataPatches-raw");
-
-            for (DataPatch dp : ldp) {
-                if (dp.constant != null) {
-                    dms[dp.constant.getKind().ordinal()].add(1);
-                } else {
-                    dmRaw.add(1);
-                }
-            }
-
-            Debug.metric("CompilationResults").increment();
-            Debug.metric("CodeBytesEmitted").add(compilationResult.getTargetCodeSize());
-            Debug.metric("InfopointsEmitted").add(compilationResult.getInfopoints().size());
-            Debug.metric("DataPatches").add(ldp.size());
-            Debug.metric("ExceptionHandlersEmitted").add(compilationResult.getExceptionHandlers().size());
-        }
+        result.setLeafGraphIds(leafGraphIds);
 
         if (Debug.isLogEnabled()) {
-            Debug.log("%s", backend.getProviders().getCodeCache().disassemble(compilationResult, null));
+            Debug.log("%s", backend.getProviders().getCodeCache().disassemble(result, null));
         }
 
-        Debug.dump(compilationResult, "After code generation");
+        Debug.dump(result, "After code generation");
     }
 }

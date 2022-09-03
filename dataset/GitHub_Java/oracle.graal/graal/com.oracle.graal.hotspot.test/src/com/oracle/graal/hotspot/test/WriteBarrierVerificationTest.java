@@ -37,7 +37,6 @@ import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.graph.*;
@@ -616,12 +615,12 @@ public class WriteBarrierVerificationTest extends GraalCompilerTest {
             HighTierContext highTierContext = new HighTierContext(getProviders(), new Assumptions(false), null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
             new InliningPhase(new CanonicalizerPhase(true)).apply(graph, highTierContext);
 
-            MidTierContext midTierContext = new MidTierContext(getProviders(), new Assumptions(false), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
+            MidTierContext midTierContext = new MidTierContext(getProviders(), new Assumptions(false), getCodeCache().getTarget(), OptimisticOptimizations.ALL);
 
-            new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highTierContext);
+            new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, highTierContext);
             new GuardLoweringPhase().apply(graph, midTierContext);
             new LoopSafepointInsertionPhase().apply(graph);
-            new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, highTierContext);
+            new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, highTierContext);
 
             new WriteBarrierAdditionPhase().apply(graph);
 

@@ -1268,7 +1268,7 @@ public class InliningUtil {
             return logNotInlinedMethodAndReturnFalse(invoke, data.inliningDepth(), method, "it is marked non-inlinable");
         } else if (data.countRecursiveInlining(method) > MaximumRecursiveInlining.getValue()) {
             return logNotInlinedMethodAndReturnFalse(invoke, data.inliningDepth(), method, "it exceeds the maximum recursive inlining depth");
-        } else if (new OptimisticOptimizations(method.getProfilingInfo()).lessOptimisticThan(optimisticOpts)) {
+        } else if (new OptimisticOptimizations(method).lessOptimisticThan(optimisticOpts)) {
             return logNotInlinedMethodAndReturnFalse(invoke, data.inliningDepth(), method, "the callee uses less optimistic optimizations than caller");
         } else {
             return true;
@@ -1297,7 +1297,6 @@ public class InliningUtil {
     public static Map<Node, Node> inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck) {
         final NodeInputList<ValueNode> parameters = invoke.callTarget().arguments();
         StructuredGraph graph = invoke.asNode().graph();
-        assert inlineGraph.getGuardsStage().ordinal() >= graph.getGuardsStage().ordinal();
 
         FrameState stateAfter = invoke.stateAfter();
         assert stateAfter == null || stateAfter.isAlive();

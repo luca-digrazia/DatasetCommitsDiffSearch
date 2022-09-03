@@ -23,6 +23,7 @@
 package com.oracle.graal.compiler.test.inlining;
 
 import static org.junit.Assert.*;
+
 import java.lang.reflect.*;
 
 import org.junit.*;
@@ -32,12 +33,11 @@ import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.test.*;
 
 public class InliningTest extends GraalCompilerTest {
 
@@ -72,7 +72,7 @@ public class InliningTest extends GraalCompilerTest {
         assertInlined(getGraph("invokeMethodOnFieldSnippet", false));
     }
 
-    @Test
+    @LongTest
     public void testStaticBindableInliningIP() {
         assertManyMethodInfopoints(assertInlined(getGraph("invokeConstructorSnippet", true)));
         assertManyMethodInfopoints(assertInlined(getGraph("invokeFinalMethodSnippet", true)));
@@ -81,7 +81,7 @@ public class InliningTest extends GraalCompilerTest {
     }
 
     @Ignore("would need read elimination/EA before inlining")
-    @Test
+    @LongTest
     public void testDependentStaticBindableInliningIP() {
         assertManyMethodInfopoints(assertInlined(getGraph("invokeMethodOnFinalFieldSnippet", true)));
         assertManyMethodInfopoints(assertInlined(getGraph("invokeMethodOnFieldSnippet", true)));
@@ -179,7 +179,7 @@ public class InliningTest extends GraalCompilerTest {
         assertNotInlined(getGraph("invokeOverriddenInterfaceMethodSnippet", false));
     }
 
-    @Test
+    @LongTest
     public void testClassHierarchyAnalysisIP() {
         assertManyMethodInfopoints(assertInlined(getGraph("invokeLeafClassMethodSnippet", true)));
         assertManyMethodInfopoints(assertInlined(getGraph("invokeConcreteMethodSnippet", true)));
@@ -232,9 +232,9 @@ public class InliningTest extends GraalCompilerTest {
         try (Scope s = Debug.scope("InliningTest", new DebugDumpScope(snippet))) {
             Method method = getMethod(snippet);
             StructuredGraph graph = eagerInfopointMode ? parseDebug(method) : parse(method);
-            PhaseSuite<HighTierContext> graphBuilderSuite = eagerInfopointMode ? getCustomGraphBuilderSuite(GraphBuilderConfiguration.getEagerInfopointDefault()) : getDefaultGraphBuilderSuite();
+            PhasePlan phasePlan = getDefaultPhasePlan(eagerInfopointMode);
             Assumptions assumptions = new Assumptions(true);
-            HighTierContext context = new HighTierContext(getProviders(), assumptions, null, graphBuilderSuite, OptimisticOptimizations.ALL);
+            HighTierContext context = new HighTierContext(getProviders(), assumptions, null, phasePlan, OptimisticOptimizations.ALL);
             Debug.dump(graph, "Graph");
             new CanonicalizerPhase(true).apply(graph, context);
             new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);

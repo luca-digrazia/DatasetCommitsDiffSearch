@@ -35,11 +35,13 @@ public final class DebugScope implements Debug.Scope {
         private static final String INDENTATION_INCREMENT = "  ";
 
         final String indent;
+        boolean enabled;
         final IndentImpl parentIndent;
 
-        IndentImpl(IndentImpl parentIndent) {
+        IndentImpl(IndentImpl parentIndent, boolean enabled) {
             this.parentIndent = parentIndent;
             this.indent = (parentIndent == null ? "" : parentIndent.indent + INDENTATION_INCREMENT);
+            this.enabled = enabled;
         }
 
         private void printScopeName() {
@@ -54,7 +56,7 @@ public final class DebugScope implements Debug.Scope {
 
         @Override
         public void log(String msg, Object... args) {
-            if (isLogEnabled()) {
+            if (enabled) {
                 printScopeName();
                 output.println(indent + String.format(msg, args));
                 lastUsedIndent = this;
@@ -62,8 +64,13 @@ public final class DebugScope implements Debug.Scope {
         }
 
         @Override
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        @Override
         public Indent indent() {
-            lastUsedIndent = new IndentImpl(this);
+            lastUsedIndent = new IndentImpl(this, enabled);
             return lastUsedIndent;
         }
 
@@ -87,10 +94,10 @@ public final class DebugScope implements Debug.Scope {
         }
     }
 
-    private static final ThreadLocal<DebugScope> instanceTL = new ThreadLocal<>();
-    private static final ThreadLocal<DebugScope> lastClosedTL = new ThreadLocal<>();
-    private static final ThreadLocal<DebugConfig> configTL = new ThreadLocal<>();
-    private static final ThreadLocal<Throwable> lastExceptionThrownTL = new ThreadLocal<>();
+    private static ThreadLocal<DebugScope> instanceTL = new ThreadLocal<>();
+    private static ThreadLocal<DebugScope> lastClosedTL = new ThreadLocal<>();
+    private static ThreadLocal<DebugConfig> configTL = new ThreadLocal<>();
+    private static ThreadLocal<Throwable> lastExceptionThrownTL = new ThreadLocal<>();
 
     private final DebugScope parent;
     private final DebugConfig parentConfig;
@@ -108,7 +115,6 @@ public final class DebugScope implements Debug.Scope {
     private boolean meterEnabled;
     private boolean timeEnabled;
     private boolean dumpEnabled;
-    private boolean logEnabled;
 
     private PrintStream output;
 
@@ -135,10 +141,10 @@ public final class DebugScope implements Debug.Scope {
         this.context = context;
         this.qualifiedName = qualifiedName;
         if (parent != null) {
-            lastUsedIndent = new IndentImpl(parent.lastUsedIndent);
+            lastUsedIndent = new IndentImpl(parent.lastUsedIndent, parent.isLogEnabled());
             logScopeName = !parent.qualifiedName.equals(qualifiedName);
         } else {
-            lastUsedIndent = new IndentImpl(null);
+            lastUsedIndent = new IndentImpl(null, false);
             logScopeName = true;
         }
 
@@ -163,7 +169,7 @@ public final class DebugScope implements Debug.Scope {
 
     public void close() {
         instanceTL.set(parent);
-        configTL.set(parentConfig);
+        setConfig(parentConfig);
         lastClosedTL.set(this);
     }
 
@@ -172,7 +178,11 @@ public final class DebugScope implements Debug.Scope {
     }
 
     public boolean isLogEnabled() {
-        return logEnabled;
+        return lastUsedIndent.enabled;
+    }
+
+    public void setLogEnabled(boolean enabled) {
+        lastUsedIndent.setEnabled(enabled);
     }
 
     public boolean isMeterEnabled() {
@@ -226,21 +236,23 @@ public final class DebugScope implements Debug.Scope {
      * disjoint top level scope.
      * 
      * @param name the name of the new scope
-     * @param sandboxConfig the configuration to use for a new top level scope, or null if the new
-     *            scope should be a child scope
+     * @param sandbox specifies if the scope is a child of the current scope or a top level scope
+     * @param sandboxConfig the configuration to use for a new top level scope (ignored if
+     *            {@code sandbox == false})
      * @param context objects to be appended to the debug context
      * @return the new scope which will be exited when its {@link #close()} method is called
      */
     @SuppressWarnings("hiding")
-    public DebugScope scope(String name, DebugConfig sandboxConfig, Object... context) {
+    public DebugScope scope(String name, boolean sandbox, DebugConfig sandboxConfig, Object... context) {
         DebugScope newScope = null;
-        if (sandboxConfig != null) {
+        if (sandbox) {
             newScope = new DebugScope(name, name, this, true, context);
-            configTL.set(sandboxConfig);
+            setConfig(sandboxConfig);
         } else {
             newScope = this.createChild(name, context);
         }
         instanceTL.set(newScope);
+        newScope.setLogEnabled(this.isLogEnabled());
         newScope.updateFlags();
         return newScope;
     }
@@ -286,15 +298,17 @@ public final class DebugScope implements Debug.Scope {
             meterEnabled = config.isMeterEnabled();
             timeEnabled = config.isTimeEnabled();
             dumpEnabled = config.isDumpEnabled();
-            logEnabled = config.isLogEnabled();
             output = config.output();
+            if (config.isLogEnabled()) {
+                setLogEnabled(true);
+            }
         }
     }
 
     private RuntimeException interceptException(final Throwable e) {
         final DebugConfig config = getConfig();
         if (config != null) {
-            try (DebugScope s = scope("InterceptException", null, e)) {
+            try (DebugScope s = scope("InterceptException", false, null, e)) {
                 return config.interceptException(e);
             } catch (Throwable t) {
                 return new RuntimeException("Exception while intercepting exception", t);

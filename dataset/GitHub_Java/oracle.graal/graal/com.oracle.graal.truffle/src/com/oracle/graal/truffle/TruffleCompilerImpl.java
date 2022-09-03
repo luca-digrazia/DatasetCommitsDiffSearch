@@ -85,13 +85,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         // Create compilation queue.
         CompilerThreadFactory factory = new CompilerThreadFactory("TruffleCompilerThread", new DebugConfigAccess() {
             public GraalDebugConfig getDebugConfig() {
-                if (Debug.isEnabled()) {
-                    GraalDebugConfig debugConfig = DebugEnvironment.initialize(TTY.out().out());
-                    debugConfig.dumpHandlers().add(new TruffleTreeDumpHandler());
-                    return debugConfig;
-                } else {
-                    return null;
-                }
+                return Debug.isEnabled() ? DebugEnvironment.initialize(TTY.out().out()) : null;
             }
         });
         compileQueue = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), factory);

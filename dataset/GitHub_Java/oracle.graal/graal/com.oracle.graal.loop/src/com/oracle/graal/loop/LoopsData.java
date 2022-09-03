@@ -24,7 +24,6 @@ package com.oracle.graal.loop;
 
 import java.util.*;
 
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
@@ -32,7 +31,7 @@ import com.oracle.graal.nodes.cfg.*;
 
 public class LoopsData {
 
-    private Map<Loop<Block>, LoopEx> lirLoopToEx = new IdentityHashMap<>();
+    private Map<Loop, LoopEx> lirLoopToEx = new IdentityHashMap<>();
     private Map<LoopBeginNode, LoopEx> loopBeginToEx = new IdentityHashMap<>();
     private ControlFlowGraph cfg;
 
@@ -43,14 +42,14 @@ public class LoopsData {
             throw Debug.handle(e);
         }
 
-        for (Loop<Block> lirLoop : cfg.getLoops()) {
+        for (Loop lirLoop : cfg.getLoops()) {
             LoopEx ex = new LoopEx(lirLoop, this);
             lirLoopToEx.put(lirLoop, ex);
             loopBeginToEx.put(ex.loopBegin(), ex);
         }
     }
 
-    public LoopEx loop(Loop<?> lirLoop) {
+    public LoopEx loop(Loop lirLoop) {
         return lirLoopToEx.get(lirLoop);
     }
 
@@ -68,7 +67,7 @@ public class LoopsData {
 
             @Override
             public int compare(LoopEx o1, LoopEx o2) {
-                return o1.lirLoop().getDepth() - o2.lirLoop().getDepth();
+                return o1.lirLoop().depth - o2.lirLoop().depth;
             }
         });
         return loops;
@@ -80,7 +79,7 @@ public class LoopsData {
 
             @Override
             public int compare(LoopEx o1, LoopEx o2) {
-                return o2.lirLoop().getDepth() - o1.lirLoop().getDepth();
+                return o2.lirLoop().depth - o1.lirLoop().depth;
             }
         });
         return loops;

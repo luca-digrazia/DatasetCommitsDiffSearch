@@ -33,7 +33,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -43,7 +42,6 @@ import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.schedule.*;
 
 public class AllocatorTest extends GraalCompilerTest {
 
@@ -109,18 +107,22 @@ public class AllocatorTest extends GraalCompilerTest {
     }
 
     private RegisterStats getRegisterStats(final StructuredGraph graph) {
+        final PhasePlan phasePlan = getDefaultPhasePlan();
         final Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
 
-        SchedulePhase schedule = null;
+        LIR lir = null;
         try (Scope s = Debug.scope("FrontEnd")) {
-            schedule = GraalCompiler.emitHIR(getProviders(), getBackend().getTarget(), graph, assumptions, null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.NONE,
-                            graph.method().getProfilingInfo(), new SpeculationLog(), getSuites());
+            lir = GraalCompiler.emitHIR(getProviders(), getBackend().getTarget(), graph, assumptions, null, phasePlan, OptimisticOptimizations.NONE, new SpeculationLog(), getSuites());
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
 
-        CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
-        LIRGenerator lirGen = GraalCompiler.emitLIR(getBackend(), getBackend().getTarget(), schedule, graph, cc);
-        return new RegisterStats(lirGen.lir);
+        try (Scope s = Debug.scope("BackEnd", lir)) {
+            CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
+            GraalCompiler.emitLIR(getBackend(), getBackend().getTarget(), lir, graph, cc);
+            return new RegisterStats(lir);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
     }
 }

@@ -434,7 +434,7 @@ public final class BciBlockMapping {
         predecessor.successors.add(sux);
     }
 
-    private final ArrayList<Block> jsrVisited = new ArrayList<>();
+    private final HashSet<Block> jsrVisited = new HashSet<>();
 
     private void createJsrAlternatives(Block block) {
         jsrVisited.add(block);

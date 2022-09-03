@@ -35,7 +35,6 @@ import com.oracle.graal.phases.schedule.*;
 
 public class DecompilerDebugDumpHandler implements DebugDumpHandler {
 
-    public static boolean printToNowhere;
     private final PrintStream infoPrintStream = System.out;
     private File file;
     private FileOutputStream fos;
@@ -54,15 +53,6 @@ public class DecompilerDebugDumpHandler implements DebugDumpHandler {
             String filter = DecompileAfterPhase.getValue();
             if (filter.endsWith("Phase")) {
                 filter = filter.substring(0, filter.indexOf("Phase"));
-            }
-
-            if (printToNowhere) {
-                printStream = new PrintStream(new OutputStream() {
-                    @Override
-                    public void write(int b) throws IOException {
-                        // DO NOTHING
-                    }
-                });
             }
 
             if (printStream == null) {

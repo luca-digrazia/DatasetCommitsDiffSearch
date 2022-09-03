@@ -325,7 +325,7 @@ public class SnippetTemplate {
             this.method = info.method;
             this.guardsStage = guardsStage;
             this.values = new Object[info.getParameterCount()];
-            this.hash = info.method.hashCode() + 31 * guardsStage.hashCode();
+            this.hash = info.method.hashCode();
         }
 
         protected void setParam(int paramIdx, Object value) {
@@ -511,7 +511,7 @@ public class SnippetTemplate {
 
         Debug.dump(snippetCopy, "Before specialization");
         if (!nodeReplacements.isEmpty()) {
-            providers.getReplacements().notifyAfterConstantsBound(snippetCopy);
+            providers.getReplacements().prepareSnippetCopyAfterInstantiation(snippetCopy);
         }
 
         // Gather the template parameters

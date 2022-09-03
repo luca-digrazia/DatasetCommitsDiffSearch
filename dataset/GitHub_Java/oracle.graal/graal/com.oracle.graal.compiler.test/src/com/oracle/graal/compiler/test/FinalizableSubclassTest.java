@@ -38,7 +38,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 
 public class FinalizableSubclassTest extends GraalCompilerTest {
@@ -60,21 +59,21 @@ public class FinalizableSubclassTest extends GraalCompilerTest {
         }
     }
 
-    private StructuredGraph parseAndProcess(Class<?> cl, Assumptions assumptions) {
+    private StructuredGraph parseAndProcess(Class cl, Assumptions assumptions) {
         Constructor<?>[] constructors = cl.getConstructors();
         Assert.assertTrue(constructors.length == 1);
         final ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaConstructor(constructors[0]);
         StructuredGraph graph = new StructuredGraph(javaMethod);
 
         GraphBuilderConfiguration conf = GraphBuilderConfiguration.getSnippetDefault();
-        new GraphBuilderPhase.Instance(getMetaAccess(), conf, OptimisticOptimizations.ALL).apply(graph);
-        HighTierContext context = new HighTierContext(getProviders(), assumptions, null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+        new GraphBuilderPhase(getMetaAccess(), getForeignCalls(), conf, OptimisticOptimizations.ALL).apply(graph);
+        HighTierContext context = new HighTierContext(getProviders(), assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
         new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
         new CanonicalizerPhase(true).apply(graph, context);
         return graph;
     }
 
-    private void checkForRegisterFinalizeNode(Class<?> cl, boolean shouldContainFinalizer, boolean optimistic) {
+    private void checkForRegisterFinalizeNode(Class cl, boolean shouldContainFinalizer, boolean optimistic) {
         Assumptions assumptions = new Assumptions(optimistic);
         StructuredGraph graph = parseAndProcess(cl, assumptions);
         Assert.assertTrue(graph.getNodes().filter(RegisterFinalizerNode.class).count() == (shouldContainFinalizer ? 1 : 0));
@@ -110,7 +109,7 @@ public class FinalizableSubclassTest extends GraalCompilerTest {
         private static int loaderInstance = 0;
 
         private final String replaceTo;
-        private HashMap<String, Class<?>> cache = new HashMap<>();
+        private HashMap<String, Class> cache = new HashMap<>();
 
         public ClassTemplateLoader() {
             loaderInstance++;
@@ -150,7 +149,7 @@ public class FinalizableSubclassTest extends GraalCompilerTest {
             }
             dumpStringsInByteArray(classData);
 
-            Class<?> c = defineClass(null, classData, 0, classData.length);
+            Class c = defineClass(null, classData, 0, classData.length);
             cache.put(nameReplaced, c);
             return c;
         }

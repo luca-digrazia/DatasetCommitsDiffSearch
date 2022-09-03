@@ -110,13 +110,13 @@ public class ReplacementsImpl implements Replacements {
     }
 
     @Override
-    public void notifyAfterConstantsBound(StructuredGraph specializedSnippet) {
+    public void prepareSnippetCopyAfterInstantiation(StructuredGraph snippetCopy) {
 
         // Do deferred intrinsification of node intrinsics
 
-        new NodeIntrinsificationPhase(providers).apply(specializedSnippet);
-        new CanonicalizerPhase(true).apply(specializedSnippet, new PhaseContext(providers, assumptions));
-        NodeIntrinsificationVerificationPhase.verify(specializedSnippet);
+        new NodeIntrinsificationPhase(providers).apply(snippetCopy);
+        new CanonicalizerPhase(true).apply(snippetCopy, new PhaseContext(providers, assumptions));
+        NodeIntrinsificationVerificationPhase.verify(snippetCopy);
     }
 
     @Override
@@ -413,7 +413,13 @@ public class ReplacementsImpl implements Replacements {
                 for (MethodCallTargetNode callTarget : graph.getNodes(MethodCallTargetNode.class)) {
                     ResolvedJavaMethod callee = callTarget.targetMethod();
                     if (callee == method) {
-                        final StructuredGraph originalGraph = buildInitialGraph(original);
+                        final StructuredGraph originalGraph = new StructuredGraph(original);
+                        MetaAccessProvider metaAccess = providers.getMetaAccess();
+                        ForeignCallsProvider foreignCalls = providers.getForeignCalls();
+                        new GraphBuilderPhase(metaAccess, foreignCalls, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(originalGraph);
+                        new WordTypeVerificationPhase(metaAccess, target.wordKind).apply(graph);
+                        new WordTypeRewriterPhase(metaAccess, target.wordKind).apply(graph);
+
                         InliningUtil.inline(callTarget.invoke(), originalGraph, true);
 
                         Debug.dump(graph, "after inlining %s", callee);

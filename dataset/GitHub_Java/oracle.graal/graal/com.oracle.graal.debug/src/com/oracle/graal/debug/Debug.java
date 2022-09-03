@@ -69,17 +69,6 @@ public class Debug {
         return ENABLED;
     }
 
-    public static boolean isDumpEnabledForMethod() {
-        if (!ENABLED) {
-            return false;
-        }
-        DebugConfig config = DebugScope.getConfig();
-        if (config == null) {
-            return false;
-        }
-        return config.isDumpEnabledForMethod();
-    }
-
     public static boolean isDumpEnabled() {
         return ENABLED && DebugScope.getInstance().isDumpEnabled();
     }
@@ -90,17 +79,6 @@ public class Debug {
 
     public static boolean isTimeEnabled() {
         return ENABLED && DebugScope.getInstance().isTimeEnabled();
-    }
-
-    public static boolean isLogEnabledForMethod() {
-        if (!ENABLED) {
-            return false;
-        }
-        DebugConfig config = DebugScope.getConfig();
-        if (config == null) {
-            return false;
-        }
-        return config.isLogEnabledForMethod();
     }
 
     public static boolean isLogEnabled() {
@@ -453,10 +431,6 @@ public class Debug {
                 return isLogEnabled;
             }
 
-            public boolean isLogEnabledForMethod() {
-                return isLogEnabled;
-            }
-
             @Override
             public boolean isMeterEnabled() {
                 return isMeterEnabled;
@@ -464,10 +438,6 @@ public class Debug {
 
             @Override
             public boolean isDumpEnabled() {
-                return isDumpEnabled;
-            }
-
-            public boolean isDumpEnabledForMethod() {
                 return isDumpEnabled;
             }
 
