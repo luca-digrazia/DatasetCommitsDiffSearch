@@ -38,18 +38,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import org.graalvm.polyglot.Context;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.oracle.truffle.llvm.pipe.CaptureNativeOutput;
-import com.oracle.truffle.llvm.pipe.CaptureOutput;
 import com.oracle.truffle.llvm.test.options.TestOptions;
 import com.oracle.truffle.llvm.test.util.ProcessUtil;
 import com.oracle.truffle.llvm.test.util.ProcessUtil.ProcessResult;
@@ -59,73 +55,6 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
     private static final List<Path> passingTests = new ArrayList<>();
     private static final List<Path> failingTests = new ArrayList<>();
 
-    protected Function<Context.Builder, CaptureOutput> getCaptureOutput() {
-        return c -> new CaptureNativeOutput();
-    }
-
-    /**
-     * This function is used to look up the array of string arguments to be used to run a given
-     * binary. Subclasses should override this to provide their own arguments.
-     *
-     * @param executable The executable for which the stdin arguments should be looked up
-     * @return An array of Strings specifying the list of stdin arguments
-     */
-    protected String[] getInputArgs(Path executable) {
-        return new String[]{};
-    }
-
-    /**
-     * Validate the results of the candidate sulong binary against the output of the reference
-     * binary. On failure, the function will throw an unchecked exception.
-     *
-     * @param referenceBinary Name of the reference binary.
-     * @param referenceResult Output from the reference binary.
-     * @param candidateBinary Name of the candidate binary.
-     * @param candidateResult Output from the candidate binary.
-     */
-    protected void validateResults(Path referenceBinary, ProcessUtil.ProcessResult referenceResult,
-                    Path candidateBinary, ProcessUtil.ProcessResult candidateResult) {
-        String testName = candidateBinary.getFileName().toString() + " in " + getTestDirectory().toAbsolutePath().toString();
-        try {
-            Assert.assertEquals(testName, referenceResult, candidateResult);
-        } catch (AssertionError e) {
-            fail(getTestName(), e);
-        }
-    }
-
-    private void runCandidate(Path referenceBinary, ProcessResult referenceResult, Path candidateBinary) {
-        if (!filterFileName().test(candidateBinary.getFileName().toString())) {
-            return;
-        }
-        if (!candidateBinary.toAbsolutePath().toFile().exists()) {
-            fail(getTestName(), new AssertionError("File " + candidateBinary.toAbsolutePath().toFile() + " does not exist."));
-        }
-
-        String[] inputArgs = getInputArgs(candidateBinary);
-        ProcessResult result;
-        try {
-            result = ProcessUtil.executeSulongTestMain(candidateBinary.toAbsolutePath().toFile(), inputArgs, getContextOptions(), getCaptureOutput());
-        } catch (Exception e) {
-            fail(getTestName(), e);
-            // Returning here to suppress uninitialized result warning below
-            return;
-        }
-
-        int sulongRet = result.getReturnValue();
-        if (sulongRet != (sulongRet & 0xFF)) {
-            fail(getTestName(), new AssertionError("Broken unittest " + getTestDirectory() + ". Test exits with invalid value: " + sulongRet));
-        }
-
-        validateResults(referenceBinary, referenceResult, candidateBinary, result);
-    }
-
-    private ProcessResult runReference(Path referenceBinary) {
-        String[] inputArgs = getInputArgs(referenceBinary);
-        String cmdlineArgs = String.join(" ", inputArgs);
-        String cmd = String.join(" ", referenceBinary.toAbsolutePath().toString(), cmdlineArgs);
-        return ProcessUtil.executeNativeCommand(cmd);
-    }
-
     @Override
     @Test
     public void test() throws Exception {
@@ -134,13 +63,31 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
             // some tests do not compile with certain versions of clang
             return;
         }
-
-        Path referenceBinary = files.get(0);
-        ProcessResult referenceResult = runReference(referenceBinary);
-
+        Path referenceFile = files.get(0);
         List<Path> testCandidates = Files.walk(getTestDirectory()).filter(isFile).filter(getIsSulongFilter()).collect(Collectors.toList());
+        ProcessResult referenceResult = ProcessUtil.executeNativeCommand(referenceFile.toAbsolutePath().toString());
+
         for (Path candidate : testCandidates) {
-            runCandidate(referenceBinary, referenceResult, candidate);
+            if (!filterFileName().test(candidate.getFileName().toString())) {
+                continue;
+            }
+
+            if (!candidate.toAbsolutePath().toFile().exists()) {
+                fail(getTestName(), new AssertionError("File " + candidate.toAbsolutePath().toFile() + " does not exist."));
+            }
+            ProcessResult result = ProcessUtil.executeSulongTestMain(candidate.toAbsolutePath().toFile(), new String[]{}, getContextOptions());
+
+            int sulongRet = result.getReturnValue();
+            if (sulongRet != (sulongRet & 0xFF)) {
+                fail(getTestName(), new AssertionError("Broken unittest " + getTestDirectory() + ". Test exits with invalid value: " + sulongRet));
+            }
+
+            String testName = candidate.getFileName().toString() + " in " + getTestDirectory().toAbsolutePath().toString();
+            try {
+                Assert.assertEquals(testName, referenceResult, result);
+            } catch (AssertionError e) {
+                fail(getTestName(), e);
+            }
         }
         pass(getTestName());
     }
@@ -152,11 +99,6 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
     protected static void fail(String testName, AssertionError error) {
         failingTests.add(Paths.get(testName));
         throw error;
-    }
-
-    protected static void fail(String testName, Exception e) {
-        failingTests.add(Paths.get(testName));
-        throw new RuntimeException(e);
     }
 
     protected static void pass(String testName) {
