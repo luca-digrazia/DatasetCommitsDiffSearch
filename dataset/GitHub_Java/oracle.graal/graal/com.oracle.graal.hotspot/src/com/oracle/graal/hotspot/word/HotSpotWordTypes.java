@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,15 @@
  */
 package com.oracle.graal.hotspot.word;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.hotspot.nodes.type.*;
-import com.oracle.graal.word.phases.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
+import com.oracle.graal.hotspot.nodes.type.MethodPointerStamp;
+import com.oracle.graal.word.WordTypes;
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Extends {@link WordTypes} with information about HotSpot metaspace pointer types.
@@ -47,7 +52,7 @@ public class HotSpotWordTypes extends WordTypes {
      */
     private final ResolvedJavaType methodPointerType;
 
-    public HotSpotWordTypes(MetaAccessProvider metaAccess, Kind wordKind) {
+    public HotSpotWordTypes(MetaAccessProvider metaAccess, JavaKind wordKind) {
         super(metaAccess, wordKind);
         this.metaspacePointerType = metaAccess.lookupJavaType(MetaspacePointer.class);
         this.klassPointerType = metaAccess.lookupJavaType(KlassPointer.class);
@@ -55,15 +60,15 @@ public class HotSpotWordTypes extends WordTypes {
     }
 
     @Override
-    public boolean isWord(ResolvedJavaType type) {
-        if (type != null && metaspacePointerType.isAssignableFrom(type)) {
+    public boolean isWord(JavaType type) {
+        if (type instanceof ResolvedJavaType && metaspacePointerType.isAssignableFrom((ResolvedJavaType) type)) {
             return true;
         }
         return super.isWord(type);
     }
 
     @Override
-    public Kind asKind(JavaType type) {
+    public JavaKind asKind(JavaType type) {
         if (klassPointerType.equals(type) || methodPointerType.equals(type)) {
             return getWordKind();
         }
