@@ -34,7 +34,7 @@ import com.oracle.graal.nodes.virtual.*;
  * the fields or array elements (called "entries") and the lock count if the object is still
  * virtual. If the object was materialized, it contains the current materialized value.
  */
-public class ObjectState extends Virtualizable.State {
+class ObjectState extends Virtualizable.State {
 
     private static final int[] EMPTY_INT_ARRAY = new int[0];
 
@@ -137,7 +137,7 @@ public class ObjectState extends Virtualizable.State {
     }
 
     public void escape(ValueNode materialized, EscapeState newState) {
-        assert state == EscapeState.Virtual && newState == EscapeState.Materialized;
+        assert state == EscapeState.Virtual || (state == EscapeState.ThreadLocal && newState == EscapeState.Global);
         state = newState;
         materializedValue = materialized;
         entries = null;
@@ -146,7 +146,7 @@ public class ObjectState extends Virtualizable.State {
 
     @Override
     public ValueNode getMaterializedValue() {
-        assert state == EscapeState.Materialized;
+        assert state == EscapeState.ThreadLocal || state == EscapeState.Global;
         return materializedValue;
     }
 
