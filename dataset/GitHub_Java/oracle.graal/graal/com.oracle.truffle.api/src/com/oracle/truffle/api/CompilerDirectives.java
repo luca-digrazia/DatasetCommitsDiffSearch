@@ -147,7 +147,7 @@ public class CompilerDirectives {
      */
     @Unsafe
     public static <T> T unsafeCast(Object value, Class<T> clazz) {
-        return unsafeCast(value, clazz, null, null);
+        return unsafeCast(value, clazz, null);
     }
 
     /**
@@ -168,13 +168,12 @@ public class CompilerDirectives {
      * 
      * @param value the value that is known to have the specified type
      * @param clazz the specified type of the value
-     * @param receiver the receiver on which the custom type is tested
      * @param customType the custom type that if present on a value makes this unsafe cast safe
      * @return the value
      */
     @SuppressWarnings("unchecked")
     @Unsafe
-    public static <T> T unsafeCast(Object value, Class<T> clazz, Object receiver, Object customType) {
+    public static <T> T unsafeCast(Object value, Class<T> clazz, Object customType) {
         return (T) value;
     }
 
