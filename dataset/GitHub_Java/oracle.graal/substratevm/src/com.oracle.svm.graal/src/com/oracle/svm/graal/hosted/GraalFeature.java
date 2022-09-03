@@ -311,8 +311,6 @@ public final class GraalFeature implements Feature {
 
         objectReplacer = new GraalObjectReplacer(config.getUniverse(), config.getMetaAccess());
         config.registerObjectReplacer(objectReplacer);
-
-        config.registerClassReachabilityListener(GraalSupport::registerPhaseStatistics);
     }
 
     @Override
@@ -349,7 +347,9 @@ public final class GraalFeature implements Feature {
         featureHandler.forEachGraalFeature(feature -> feature.registerCodeObserver(runtimeConfig));
         Suites suites = NativeImageGenerator.createSuites(featureHandler, runtimeConfig, runtimeConfig.getSnippetReflection(), false);
         LIRSuites lirSuites = NativeImageGenerator.createLIRSuites(featureHandler, runtimeConfig.getProviders(), false);
-        GraalSupport.setRuntimeConfig(runtimeConfig, suites, lirSuites);
+        Suites firstTierSuites = NativeImageGenerator.createFirstTierSuites(featureHandler, runtimeConfig, runtimeConfig.getSnippetReflection(), false);
+        LIRSuites firstTierLirSuites = NativeImageGenerator.createFirstTierLIRSuites(featureHandler, runtimeConfig.getProviders(), false);
+        GraalSupport.setRuntimeConfig(runtimeConfig, suites, lirSuites, firstTierSuites, firstTierLirSuites);
 
         NodeClass<?>[] snippetNodeClasses = ((SubstrateReplacements) runtimeProviders.getReplacements()).getSnippetNodeClasses();
         for (NodeClass<?> nodeClass : snippetNodeClasses) {
@@ -428,6 +428,8 @@ public final class GraalFeature implements Feature {
     @Override
     public void duringAnalysis(DuringAnalysisAccess c) {
         DuringAnalysisAccessImpl config = (DuringAnalysisAccessImpl) c;
+
+        GraalSupport.registerPhaseStatistics(config);
 
         Deque<CallTreeNode> worklist = new ArrayDeque<>();
         worklist.addAll(methods.values());
