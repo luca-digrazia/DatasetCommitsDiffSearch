@@ -31,8 +31,6 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Executable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -657,8 +655,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         }
     }
 
-    protected Object referenceInvoke(ResolvedJavaMethod method, Object receiver, Object... args)
-                    throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, InstantiationException {
+    protected Object referenceInvoke(ResolvedJavaMethod method, Object receiver, Object... args) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
         return invoke(method, receiver, args);
     }
 
@@ -1056,12 +1053,12 @@ public abstract class GraalCompilerTest extends GraalTest {
         return backend.createDefaultInstalledCode(method, compilationResult);
     }
 
-    private final Map<ResolvedJavaMethod, Executable> methodMap = new HashMap<>();
+    private final Map<ResolvedJavaMethod, Method> methodMap = new HashMap<>();
 
     /**
      * Converts a reflection {@link Method} to a {@link ResolvedJavaMethod}.
      */
-    protected ResolvedJavaMethod asResolvedJavaMethod(Executable method) {
+    protected ResolvedJavaMethod asResolvedJavaMethod(Method method) {
         ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
         methodMap.put(javaMethod, method);
         return javaMethod;
@@ -1083,21 +1080,17 @@ public abstract class GraalCompilerTest extends GraalTest {
      * Gets the reflection {@link Method} from which a given {@link ResolvedJavaMethod} was created
      * or null if {@code javaMethod} does not correspond to a reflection method.
      */
-    protected Executable lookupMethod(ResolvedJavaMethod javaMethod) {
+    protected Method lookupMethod(ResolvedJavaMethod javaMethod) {
         return methodMap.get(javaMethod);
     }
 
-    protected Object invoke(ResolvedJavaMethod javaMethod, Object receiver, Object... args) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, InstantiationException {
-        Executable method = lookupMethod(javaMethod);
+    protected Object invoke(ResolvedJavaMethod javaMethod, Object receiver, Object... args) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+        Method method = lookupMethod(javaMethod);
         Assert.assertTrue(method != null);
         if (!method.isAccessible()) {
             method.setAccessible(true);
         }
-        if (method instanceof Method) {
-            return ((Method) method).invoke(receiver, applyArgSuppliers(args));
-        }
-        assert receiver == null : "no receiver for constructor invokes";
-        return ((Constructor<?>) method).newInstance(applyArgSuppliers(args));
+        return method.invoke(receiver, applyArgSuppliers(args));
     }
 
     /**
