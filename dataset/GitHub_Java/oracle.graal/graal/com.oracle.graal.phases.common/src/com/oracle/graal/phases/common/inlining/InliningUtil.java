@@ -211,7 +211,10 @@ public class InliningUtil {
         if (callTarget.targetMethod() == null) {
             return "target method is null";
         }
-        assert invoke.stateAfter() != null;
+        if (invoke.stateAfter() == null) {
+            // TODO (chaeubl): why should an invoke not have a state after?
+            return "the invoke has no after state";
+        }
         if (!invoke.useForInlining()) {
             return "the invoke is marked to be not used for inlining";
         }
@@ -543,7 +546,7 @@ public class InliningUtil {
     }
 
     public static boolean canIntrinsify(Replacements replacements, ResolvedJavaMethod target) {
-        return replacements.getMethodSubstitutionMethod(target) != null || getMacroNodeClass(replacements, target) != null;
+        return getIntrinsicGraph(replacements, target) != null || getMacroNodeClass(replacements, target) != null;
     }
 
     public static StructuredGraph getIntrinsicGraph(Replacements replacements, ResolvedJavaMethod target) {
