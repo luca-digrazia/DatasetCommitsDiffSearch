@@ -22,34 +22,19 @@
  */
 package com.oracle.graal.phases;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.ListIterator;
+import java.util.*;
 
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.*;
 
 /**
  * A compiler phase that can apply an ordered collection of phases to a graph.
  */
 public class PhaseSuite<C> extends BasePhase<C> {
 
-    private List<BasePhase<? super C>> phases;
-    private boolean immutable;
+    private final List<BasePhase<? super C>> phases;
 
     public PhaseSuite() {
         this.phases = new ArrayList<>();
-    }
-
-    public boolean isImmutable() {
-        return immutable;
-    }
-
-    public synchronized void setImmutable() {
-        if (!immutable) {
-            phases = Collections.unmodifiableList(phases);
-            immutable = true;
-        }
     }
 
     /**
@@ -68,46 +53,17 @@ public class PhaseSuite<C> extends BasePhase<C> {
 
     public final ListIterator<BasePhase<? super C>> findPhase(Class<? extends BasePhase<? super C>> phaseClass) {
         ListIterator<BasePhase<? super C>> it = phases.listIterator();
-        if (findNextPhase(it, phaseClass)) {
-            return it;
-        } else {
-            return null;
-        }
+        findNextPhase(it, phaseClass);
+        return it;
     }
 
-    public static <C> boolean findNextPhase(ListIterator<BasePhase<? super C>> it, Class<? extends BasePhase<? super C>> phaseClass) {
+    public static <C> void findNextPhase(ListIterator<BasePhase<? super C>> it, Class<? extends BasePhase<? super C>> phaseClass) {
         while (it.hasNext()) {
             BasePhase<? super C> phase = it.next();
             if (phaseClass.isInstance(phase)) {
-                return true;
+                break;
             }
         }
-        return false;
-    }
-
-    /**
-     * Removes the first instance of the given phase class, looking recursively into inner phase
-     * suites.
-     */
-    public boolean removePhase(Class<? extends BasePhase<? super C>> phaseClass) {
-        ListIterator<BasePhase<? super C>> it = phases.listIterator();
-        while (it.hasNext()) {
-            BasePhase<? super C> phase = it.next();
-            if (phaseClass.isInstance(phase)) {
-                it.remove();
-                return true;
-            } else if (phase instanceof PhaseSuite) {
-                @SuppressWarnings("unchecked")
-                PhaseSuite<C> innerSuite = (PhaseSuite<C>) phase;
-                if (innerSuite.removePhase(phaseClass)) {
-                    if (innerSuite.phases.isEmpty()) {
-                        it.remove();
-                    }
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     @Override
@@ -115,11 +71,5 @@ public class PhaseSuite<C> extends BasePhase<C> {
         for (BasePhase<? super C> phase : phases) {
             phase.apply(graph, context);
         }
-    }
-
-    public PhaseSuite<C> copy() {
-        PhaseSuite<C> suite = new PhaseSuite<>();
-        suite.phases.addAll(phases);
-        return suite;
     }
 }
