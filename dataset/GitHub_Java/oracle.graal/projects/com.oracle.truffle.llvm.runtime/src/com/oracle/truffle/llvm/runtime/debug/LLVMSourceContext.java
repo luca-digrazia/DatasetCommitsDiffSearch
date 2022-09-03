@@ -30,40 +30,38 @@
 package com.oracle.truffle.llvm.runtime.debug;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMFrameValueAccess;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObjectBuilder;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 
 import java.util.HashMap;
 
 public final class LLVMSourceContext {
 
-    private final HashMap<LLVMSourceSymbol, LLVMDebugObjectBuilder> staticValues;
-    private final HashMap<LLVMSourceSymbol, LLVMFrameValueAccess> frameValues;
+    private final HashMap<String, LLVMSourceLocation> sourceScopes;
+    private final HashMap<LLVMSourceSymbol, LLVMDebugValue> globals;
 
     @TruffleBoundary
     public LLVMSourceContext() {
-        staticValues = new HashMap<>();
-        frameValues = new HashMap<>();
+        sourceScopes = new HashMap<>();
+        globals = new HashMap<>();
     }
 
     @TruffleBoundary
-    public void registerStatic(LLVMSourceSymbol symbol, LLVMDebugObjectBuilder value) {
-        staticValues.put(symbol, value);
+    public synchronized void registerSourceScope(String symbolName, LLVMSourceLocation scope) {
+        sourceScopes.put(symbolName, scope);
     }
 
     @TruffleBoundary
-    public LLVMDebugObjectBuilder getStatic(LLVMSourceSymbol symbol) {
-        return staticValues.get(symbol);
+    public LLVMSourceLocation getSourceScope(String symbolName) {
+        return sourceScopes.get(symbolName);
     }
 
     @TruffleBoundary
-    public void registerFrameValue(LLVMSourceSymbol symbol, LLVMFrameValueAccess value) {
-        frameValues.put(symbol, value);
+    public void registerGlobal(LLVMSourceSymbol symbol, LLVMDebugValue value) {
+        globals.put(symbol, value);
     }
 
     @TruffleBoundary
-    public LLVMFrameValueAccess getFrameValue(LLVMSourceSymbol symbol) {
-        return frameValues.get(symbol);
+    public LLVMDebugValue getGlobal(LLVMSourceSymbol symbol) {
+        return globals.get(symbol);
     }
 }

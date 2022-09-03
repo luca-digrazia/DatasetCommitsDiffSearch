@@ -31,39 +31,40 @@ package com.oracle.truffle.llvm;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.ServiceLoader;
 
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.metadata.ScopeProvider;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceScope;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.parser.NodeFactory;
-import com.oracle.truffle.llvm.runtime.ContextExtension;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugObject;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceScope;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 @TruffleLanguage.Registration(id = "llvm", name = "llvm", version = "0.01", mimeType = {Sulong.LLVM_BITCODE_MIME_TYPE, Sulong.LLVM_BITCODE_BASE64_MIME_TYPE,
                 Sulong.SULONG_LIBRARY_MIME_TYPE, Sulong.LLVM_ELF_SHARED_MIME_TYPE, Sulong.LLVM_ELF_EXEC_MIME_TYPE}, internal = false, interactive = false)
 // TODO: remove Sulong.SULONG_LIBRARY_MIME_TYPE after GR-5904 is closed.
-@ProvidedTags({StandardTags.StatementTag.class, StandardTags.CallTag.class, StandardTags.RootTag.class})
-public final class Sulong extends LLVMLanguage {
+@ProvidedTags({StandardTags.StatementTag.class, StandardTags.CallTag.class})
+public final class Sulong extends LLVMLanguage implements ScopeProvider<LLVMContext> {
 
     private static final List<Configuration> configurations = new ArrayList<>();
 
@@ -76,7 +77,7 @@ public final class Sulong extends LLVMLanguage {
 
     @Override
     protected LLVMContext createContext(com.oracle.truffle.api.TruffleLanguage.Env env) {
-        return new LLVMContext(env, getContextExtensions(env));
+        return new LLVMContext(env, getContextExtensions());
     }
 
     @Override
@@ -97,7 +98,6 @@ public final class Sulong extends LLVMLanguage {
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     protected Object lookupSymbol(LLVMContext context, String globalName) {
         String atname = "@" + globalName; // for interop
         if (context.getGlobalScope().functionExists(atname)) {
@@ -149,14 +149,15 @@ public final class Sulong extends LLVMLanguage {
         }
     }
 
-    private List<ContextExtension> getContextExtensions(com.oracle.truffle.api.TruffleLanguage.Env env) {
-        String config = env.getOptions().get(SulongEngineOption.CONFIGURATION);
+    private static Map<Class<?>, Object> getContextExtensions() {
+        Map<Class<?>, Object> extensions = new HashMap<>();
         for (Configuration c : configurations) {
-            if (config.equals(c.getConfigurationName())) {
-                return c.createContextExtensions(env, this);
+            Object extension = c.createContextExtension();
+            if (extension != null) {
+                extensions.put(extension.getClass(), extension);
             }
         }
-        throw new IllegalStateException();
+        return extensions;
     }
 
     @Override
@@ -216,7 +217,7 @@ public final class Sulong extends LLVMLanguage {
     }
 
     @Override
-    protected Iterable<Scope> findLocalScopes(LLVMContext context, Node node, Frame frame) {
-        return LLVMSourceScope.create(node, frame, context);
+    public AbstractScope findScope(LLVMContext context, Node node, Frame frame) {
+        return LLVMSourceScope.create(node, context);
     }
 }
