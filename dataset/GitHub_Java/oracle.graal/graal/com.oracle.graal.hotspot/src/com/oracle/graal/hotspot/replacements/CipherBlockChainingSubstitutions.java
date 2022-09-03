@@ -22,18 +22,18 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.word.*;
 
 /**
@@ -63,42 +63,65 @@ public class CipherBlockChainingSubstitutions {
     }
 
     @Fold
-    private static Class<?> getAESCryptClass() {
+    private static Class getAESCryptClass() {
         return AESCryptSubstitutions.AESCryptClass;
     }
 
-    @MethodSubstitution(isStatic = false)
-    static int encrypt(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
+    @MethodSubstitution(isStatic = false, optional = true)
+    static void encrypt(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
+        Object embeddedCipher = UnsafeLoadNode.load(rcvr, embeddedCipherOffset, Kind.Object, LocationIdentity.ANY_LOCATION);
+        if (getAESCryptClass().isInstance(embeddedCipher)) {
+            Object aesCipher = PiNode.piCastNonNull(embeddedCipher, AESCryptSubstitutions.AESCryptClass);
+            crypt(rcvr, in, inOffset, inLength, out, outOffset, aesCipher, true);
+        } else {
+            encrypt(rcvr, in, inOffset, inLength, out, outOffset);
+        }
+    }
+
+    @MethodSubstitution(isStatic = false, optional = true)
+    static void decrypt(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
         Object realReceiver = PiNode.piCastNonNull(rcvr, cipherBlockChainingClass);
-        Object embeddedCipher = UnsafeLoadNode.load(realReceiver, embeddedCipherOffset, Kind.Object, LocationIdentity.any());
+        Object embeddedCipher = UnsafeLoadNode.load(realReceiver, embeddedCipherOffset, Kind.Object, LocationIdentity.ANY_LOCATION);
+        if (in != out && getAESCryptClass().isInstance(embeddedCipher)) {
+            Object aesCipher = PiNode.piCastNonNull(embeddedCipher, AESCryptSubstitutions.AESCryptClass);
+            crypt(realReceiver, in, inOffset, inLength, out, outOffset, aesCipher, false);
+        } else {
+            decrypt(realReceiver, in, inOffset, inLength, out, outOffset);
+        }
+    }
+
+    @MethodSubstitution(value = "encrypt", isStatic = false, optional = true)
+    static int encryptInt(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
+        Object realReceiver = PiNode.piCastNonNull(rcvr, cipherBlockChainingClass);
+        Object embeddedCipher = UnsafeLoadNode.load(realReceiver, embeddedCipherOffset, Kind.Object, LocationIdentity.ANY_LOCATION);
         if (getAESCryptClass().isInstance(embeddedCipher)) {
             Object aesCipher = PiNode.piCastNonNull(embeddedCipher, AESCryptSubstitutions.AESCryptClass);
             crypt(realReceiver, in, inOffset, inLength, out, outOffset, aesCipher, true);
             return inLength;
         } else {
-            return encrypt(realReceiver, in, inOffset, inLength, out, outOffset);
+            return encryptInt(realReceiver, in, inOffset, inLength, out, outOffset);
         }
     }
 
-    @MethodSubstitution(isStatic = false)
-    static int decrypt(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
+    @MethodSubstitution(value = "decrypt", isStatic = false, optional = true)
+    static int decryptInt(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset) {
         Object realReceiver = PiNode.piCastNonNull(rcvr, cipherBlockChainingClass);
-        Object embeddedCipher = UnsafeLoadNode.load(realReceiver, embeddedCipherOffset, Kind.Object, LocationIdentity.any());
+        Object embeddedCipher = UnsafeLoadNode.load(realReceiver, embeddedCipherOffset, Kind.Object, LocationIdentity.ANY_LOCATION);
         if (in != out && getAESCryptClass().isInstance(embeddedCipher)) {
             Object aesCipher = PiNode.piCastNonNull(embeddedCipher, AESCryptSubstitutions.AESCryptClass);
             crypt(realReceiver, in, inOffset, inLength, out, outOffset, aesCipher, false);
             return inLength;
         } else {
-            return decrypt(realReceiver, in, inOffset, inLength, out, outOffset);
+            return decryptInt(realReceiver, in, inOffset, inLength, out, outOffset);
         }
     }
 
     private static void crypt(Object rcvr, byte[] in, int inOffset, int inLength, byte[] out, int outOffset, Object embeddedCipher, boolean encrypt) {
         Object realReceiver = PiNode.piCastNonNull(rcvr, cipherBlockChainingClass);
-        Object kObject = UnsafeLoadNode.load(embeddedCipher, AESCryptSubstitutions.kOffset, Kind.Object, LocationIdentity.any());
-        Object rObject = UnsafeLoadNode.load(realReceiver, rOffset, Kind.Object, LocationIdentity.any());
-        Word kAddr = Word.fromWordBase(Word.fromObject(kObject).add(arrayBaseOffset(Kind.Byte)));
-        Word rAddr = Word.fromWordBase(Word.fromObject(rObject).add(arrayBaseOffset(Kind.Byte)));
+        Object kObject = UnsafeLoadNode.load(embeddedCipher, AESCryptSubstitutions.kOffset, Kind.Object, LocationIdentity.ANY_LOCATION);
+        Object rObject = UnsafeLoadNode.load(realReceiver, rOffset, Kind.Object, LocationIdentity.ANY_LOCATION);
+        Word kAddr = (Word) Word.fromObject(kObject).add(arrayBaseOffset(Kind.Byte));
+        Word rAddr = (Word) Word.fromObject(rObject).add(arrayBaseOffset(Kind.Byte));
         Word inAddr = Word.unsigned(GetObjectAddressNode.get(in) + arrayBaseOffset(Kind.Byte) + inOffset);
         Word outAddr = Word.unsigned(GetObjectAddressNode.get(out) + arrayBaseOffset(Kind.Byte) + outOffset);
         if (encrypt) {
@@ -107,6 +130,9 @@ public class CipherBlockChainingSubstitutions {
             decryptAESCryptStub(DECRYPT, inAddr, outAddr, kAddr, rAddr, inLength);
         }
     }
+
+    public static final ForeignCallDescriptor ENCRYPT = new ForeignCallDescriptor("encrypt", void.class, Word.class, Word.class, Word.class, Word.class, int.class);
+    public static final ForeignCallDescriptor DECRYPT = new ForeignCallDescriptor("decrypt", void.class, Word.class, Word.class, Word.class, Word.class, int.class);
 
     @NodeIntrinsic(ForeignCallNode.class)
     public static native void encryptAESCryptStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Word in, Word out, Word key, Word r, int inLength);
