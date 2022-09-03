@@ -132,12 +132,7 @@ public final class AMD64ArrayEqualsOp extends AMD64LIRInstruction {
         masm.leaq(array2, new AMD64Address(asRegister(array2Value), arrayBaseOffset));
 
         // Get array length in bytes.
-        if (arrayIndexScale == 1) {
-            masm.movl(length, asRegister(lengthValue)); // no need to scale
-        } else {
-            masm.imull(length, asRegister(lengthValue), arrayIndexScale); // scale length
-        }
-
+        masm.imull(length, asRegister(lengthValue), arrayIndexScale);
         masm.movl(result, length); // copy
 
         if (supportsAVX2(crb.target)) {
