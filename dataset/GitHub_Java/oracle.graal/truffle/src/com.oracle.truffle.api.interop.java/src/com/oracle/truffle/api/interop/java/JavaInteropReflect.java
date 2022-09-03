@@ -32,11 +32,11 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
-
-import org.graalvm.collections.EconomicSet;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -156,6 +156,7 @@ final class JavaInteropReflect {
             if (!readable) {
                 if ("class".equals(name)) {
                     readable = true;
+                    internal = true;
                 }
             }
             if (!readable) {
@@ -241,11 +242,10 @@ final class JavaInteropReflect {
     @CompilerDirectives.TruffleBoundary
     static String[] findUniquePublicMemberNames(Class<?> clazz, boolean onlyStatic, boolean includeInternal) throws SecurityException {
         JavaClassDesc classDesc = JavaClassDesc.forClass(clazz);
-        EconomicSet<String> names = EconomicSet.create();
+        Collection<String> names = new LinkedHashSet<>();
         names.addAll(classDesc.getFieldNames(onlyStatic));
         names.addAll(classDesc.getMethodNames(onlyStatic, includeInternal));
         if (onlyStatic) {
-            names.add("class");
             if (Modifier.isPublic(clazz.getModifiers())) {
                 // no support for non-static member types now
                 for (Class<?> t : clazz.getClasses()) {
@@ -256,7 +256,7 @@ final class JavaInteropReflect {
                 }
             }
         }
-        return names.toArray(new String[names.size()]);
+        return names.toArray(new String[0]);
     }
 
     @SuppressWarnings({"unchecked"})

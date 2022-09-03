@@ -26,31 +26,14 @@ package com.oracle.truffle.api.interop.java;
 
 import java.lang.reflect.Type;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.Accessor;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 
-@SuppressWarnings("deprecation")
 final class JavaInteropAccessor extends Accessor {
 
     EngineSupport engine() {
         return engineSupport();
-    }
-
-    static final JavaInteropAccessor ACCESSOR = new JavaInteropAccessor();
-
-    static boolean isGuestPrimitive(Object obj) {
-        return (obj instanceof Boolean ||
-                        obj instanceof Byte ||
-                        obj instanceof Short ||
-                        obj instanceof Integer ||
-                        obj instanceof Long ||
-                        obj instanceof Float ||
-                        obj instanceof Double ||
-                        obj instanceof Character ||
-                        obj instanceof String);
     }
 
     @Override
@@ -68,44 +51,17 @@ final class JavaInteropAccessor extends Accessor {
             }
 
             @Override
-            public boolean isHostObject(Object object) {
-                return object instanceof JavaObject;
-            }
-
-            @Override
-            public Object asHostObject(Object obj) {
-                assert isHostObject(obj);
-                JavaObject javaObject = (JavaObject) obj;
-                return javaObject.obj;
-            }
-
-            @Override
-            public Object toGuestObject(Object obj, Object languageContext) {
+            public Object toJavaGuestObject(Object obj, Object languageContext) {
                 return JavaInterop.asTruffleObject(obj, languageContext);
             }
 
             @Override
-            public Object boxGuestObject(Object hostObject, Object languageContext) {
-                if (isGuestPrimitive(hostObject)) {
-                    return JavaObject.forObject(hostObject, languageContext);
-                } else if (hostObject instanceof TruffleObject) {
-                    return hostObject;
-                } else {
-                    CompilerDirectives.transferToInterpreter();
-                    throw new IllegalArgumentException("Provided value not an interop value.");
-                }
+            public boolean isJavaFunction(Object object) {
+                return JavaInterop.isJavaFunction(object);
             }
 
             @Override
-            public boolean isHostFunction(Object object) {
-                if (TruffleOptions.AOT) {
-                    return false;
-                }
-                return object instanceof JavaFunctionObject;
-            }
-
-            @Override
-            public String javaGuestFunctionToString(Object object) {
+            public String javaFunctionToString(Object object) {
                 if (TruffleOptions.AOT) {
                     return "";
                 }

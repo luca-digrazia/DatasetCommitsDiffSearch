@@ -146,5 +146,4 @@ final class JavaObject implements TruffleObject {
         }
         return "JavaObject[" + obj + " (" + getObjectClass().getTypeName() + ")" + "]";
     }
-
 }

@@ -50,6 +50,7 @@ import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.vm.HostLanguage.HostContext;
@@ -57,7 +58,6 @@ import com.oracle.truffle.api.vm.HostLanguage.HostContext;
 /*
  * Java host language implementation.
  */
-@SuppressWarnings("deprecation")
 class HostLanguage extends TruffleLanguage<HostContext> {
 
     static final class HostContext {
@@ -156,7 +156,7 @@ class HostLanguage extends TruffleLanguage<HostContext> {
     @Override
     protected boolean isObjectOfLanguage(Object object) {
         if (object instanceof TruffleObject) {
-            return PolyglotProxy.isProxyGuestObject((TruffleObject) object) || VMAccessor.JAVAINTEROP.isHostObject(object) || VMAccessor.JAVAINTEROP.isHostFunction(object);
+            return PolyglotProxy.isProxyGuestObject((TruffleObject) object) || JavaInterop.isJavaObject((TruffleObject) object) || VMAccessor.JAVAINTEROP.isJavaFunction(object);
         } else {
             return false;
         }
@@ -164,13 +164,11 @@ class HostLanguage extends TruffleLanguage<HostContext> {
 
     @Override
     protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
-        String sourceString = request.getSource().getCharacters().toString();
+        Class<?> allTarget = getContextReference().get().findClass(request.getSource().getCharacters().toString());
         return Truffle.getRuntime().createCallTarget(new RootNode(this) {
             @Override
             public Object execute(VirtualFrame frame) {
-                HostContext context = getContextReference().get();
-                Class<?> allTarget = context.findClass(sourceString);
-                return VMAccessor.JAVAINTEROP.toGuestObject(allTarget, getContextReference().get().internalContext);
+                return JavaInterop.asTruffleObject(allTarget);
             }
         });
     }
@@ -232,8 +230,8 @@ class HostLanguage extends TruffleLanguage<HostContext> {
     private String toStringImpl(HostContext context, Object value, int level) {
         if (value instanceof TruffleObject) {
             TruffleObject to = (TruffleObject) value;
-            if (VMAccessor.JAVAINTEROP.isHostObject(to)) {
-                Object javaObject = VMAccessor.JAVAINTEROP.asHostObject(to);
+            if (JavaInterop.isJavaObject(to)) {
+                Object javaObject = JavaInterop.asJavaObject(to);
                 try {
                     if (javaObject == null) {
                         return "null";
@@ -254,8 +252,8 @@ class HostLanguage extends TruffleLanguage<HostContext> {
                 } catch (Throwable t) {
                     throw PolyglotImpl.wrapHostException(context.internalContext, t);
                 }
-            } else if (VMAccessor.JAVAINTEROP.isHostFunction(value)) {
-                return VMAccessor.JAVAINTEROP.javaGuestFunctionToString(value);
+            } else if (VMAccessor.JAVAINTEROP.isJavaFunction(value)) {
+                return VMAccessor.JAVAINTEROP.javaFunctionToString(value);
             } else {
                 return "Foreign Object";
             }
@@ -268,30 +266,30 @@ class HostLanguage extends TruffleLanguage<HostContext> {
     protected Object findMetaObject(HostContext context, Object value) {
         if (value instanceof TruffleObject) {
             TruffleObject to = (TruffleObject) value;
-            if (VMAccessor.JAVAINTEROP.isHostObject(to)) {
-                Object javaObject = VMAccessor.JAVAINTEROP.asHostObject(to);
+            if (JavaInterop.isJavaObject(to)) {
+                Object javaObject = JavaInterop.asJavaObject(to);
                 Class<?> javaType;
                 if (javaObject == null) {
                     javaType = Void.class;
                 } else {
                     javaType = javaObject.getClass();
                 }
-                return javaClassToGuestObject(javaType, context.internalContext);
+                return javaClassToGuestObject(javaType);
             } else if (PolyglotProxy.isProxyGuestObject(to)) {
                 Proxy proxy = PolyglotProxy.toProxyHostObject(to);
-                return javaClassToGuestObject(proxy.getClass(), context.internalContext);
-            } else if (VMAccessor.JAVAINTEROP.isHostFunction(value)) {
+                return javaClassToGuestObject(proxy.getClass());
+            } else if (VMAccessor.JAVAINTEROP.isJavaFunction(value)) {
                 return "Bound Method";
             } else {
                 return "Foreign Object";
             }
         } else {
-            return javaClassToGuestObject(value.getClass(), context.internalContext);
+            return javaClassToGuestObject(value.getClass());
         }
     }
 
-    private static Object javaClassToGuestObject(Class<?> clazz, Object context) {
-        return VMAccessor.JAVAINTEROP.toGuestObject(clazz, context);
+    private static Object javaClassToGuestObject(Class<?> clazz) {
+        return VMAccessor.JAVAINTEROP.toJavaGuestObject(clazz, VMAccessor.engine().getCurrentHostContext());
     }
 
     static final class TopScopeObject implements TruffleObject {
@@ -351,7 +349,7 @@ class HostLanguage extends TruffleLanguage<HostContext> {
 
                 @TruffleBoundary
                 public Object access(TopScopeObject ts, String name) {
-                    return VMAccessor.JAVAINTEROP.asStaticClassObject(ts.context.findClass(name), ts.context.internalContext);
+                    return VMAccessor.JAVAINTEROP.asStaticClassObject(ts.context.findClass(name), VMAccessor.engine().getCurrentHostContext());
                 }
             }
         }
