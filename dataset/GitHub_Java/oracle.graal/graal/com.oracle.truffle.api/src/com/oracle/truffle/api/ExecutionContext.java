@@ -122,7 +122,7 @@ public abstract class ExecutionContext {
      * Returns all existing probes with specific tag, or all probes if {@code tag = null}; empty
      * collection if no probes found.
      */
-    public final Collection<Probe> findProbesTaggedAs(SyntaxTag tag) {
+    public final Collection<Probe> findProbesTaggedAs(PhylumTag tag) {
         return probeManager.findProbesTaggedAs(tag);
     }
 
@@ -140,9 +140,9 @@ public abstract class ExecutionContext {
      *
      * @throws IllegalStateException if a trap is already set
      */
-    public final void setTagTrap(SyntaxTagTrap trap) throws IllegalStateException {
+    public final void setPhylumTrap(PhylumTrap trap) throws IllegalStateException {
         // TODO (mlvdv) consider allowing multiple traps (without inhibiting Truffle inlining)
-        probeManager.setTagTrap(trap);
+        probeManager.setPhylumTrap(trap);
     }
 
     /**
@@ -150,8 +150,8 @@ public abstract class ExecutionContext {
      *
      * @throws IllegalStateException if no trap is set.
      */
-    public final void clearTagTrap() {
-        probeManager.clearTagTrap();
+    public final void clearPhylumTrap() {
+        probeManager.clearPhylumTrap();
     }
 
     /**
