@@ -29,12 +29,12 @@ import java.util.*;
 import java.util.Map.Entry;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.schedule.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.graph.NodeClass.Position;
+import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.phases.schedule.*;
 
 public class BinaryGraphPrinter implements GraphPrinter{
     private static final int CONSTANT_POOL_MAX_SIZE = 2000;
@@ -214,13 +214,17 @@ public class BinaryGraphPrinter implements GraphPrinter{
             writeByte(POOL_NULL);
             return;
         }
+        if (object instanceof ResolvedJavaType) {
+            writePoolObject(((ResolvedJavaType) object).toJava());
+            return;
+        }
         Integer id = constantPool.get(object);
         if (id == null) {
             addPoolEntry(object);
         } else {
             if (object instanceof Enum<?>) {
                 writeByte(POOL_ENUM);
-            } else if (object instanceof Class<?> || object instanceof JavaType) {
+            } else if (object instanceof Class<?>) {
                 writeByte(POOL_CLASS);
             } else if (object instanceof NodeClass) {
                 writeByte(POOL_NODE_CLASS);
@@ -266,11 +270,6 @@ public class BinaryGraphPrinter implements GraphPrinter{
             writeByte(POOL_ENUM);
             writePoolObject(object.getClass());
             writeInt(((Enum) object).ordinal());
-        } else if (object instanceof JavaType) {
-            JavaType type = (JavaType) object;
-            writeByte(POOL_CLASS);
-            writeString(MetaUtil.toJavaName(type));
-            writeByte(KLASS);
         } else if (object instanceof NodeClass) {
             NodeClass nodeClass = (NodeClass) object;
             writeByte(POOL_NODE_CLASS);
@@ -289,27 +288,27 @@ public class BinaryGraphPrinter implements GraphPrinter{
         } else if (object instanceof ResolvedJavaMethod) {
             writeByte(POOL_METHOD);
             ResolvedJavaMethod method = ((ResolvedJavaMethod) object);
-            writePoolObject(method.getDeclaringClass());
-            writePoolObject(method.getName());
-            writePoolObject(method.getSignature());
-            writeInt(method.getModifiers());
-            writeBytes(method.getCode());
+            writePoolObject(method.holder());
+            writePoolObject(method.name());
+            writePoolObject(method.signature());
+            writeInt(method.accessFlags());
+            writeBytes(method.code());
         } else if (object instanceof ResolvedJavaField) {
             writeByte(POOL_FIELD);
             ResolvedJavaField field = ((ResolvedJavaField) object);
-            writePoolObject(field.getDeclaringClass());
-            writePoolObject(field.getName());
-            writePoolObject(field.getType().getName());
-            writeInt(field.getModifiers());
+            writePoolObject(field.holder());
+            writePoolObject(field.name());
+            writePoolObject(field.type().name());
+            writeInt(field.accessFlags());
         } else if (object instanceof Signature) {
             writeByte(POOL_SIGNATURE);
             Signature signature = ((Signature) object);
-            int args = signature.getParameterCount(false);
+            int args = signature.argumentCount(false);
             writeShort((char) args);
             for (int i = 0; i < args; i++) {
-                writePoolObject(signature.getParameterType(i, null).getName());
+                writePoolObject(signature.argumentTypeAt(i, null).name());
             }
-            writePoolObject(signature.getReturnType(null).getName());
+            writePoolObject(signature.returnType(null).name());
         } else {
             writeByte(POOL_STRING);
             writeString(object.toString());
@@ -439,12 +438,8 @@ public class BinaryGraphPrinter implements GraphPrinter{
     }
 
     @Override
-    public void close() {
-        try {
-            flush();
-            channel.close();
-        } catch (IOException ex) {
-            throw new Error(ex);
-        }
+    public void close() throws IOException {
+        flush();
+        channel.close();
     }
 }

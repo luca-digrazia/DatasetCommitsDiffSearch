@@ -25,71 +25,91 @@ package com.oracle.graal.nodes.java;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
-@NodeInfo(nameTemplate = "Materialize {p#type/s}")
-public final class MaterializeObjectNode extends FixedWithNextNode implements Lowerable, Node.IterableNodeType {
+@NodeInfo(nameTemplate = "Materialize {i#virtualObject}")
+public final class MaterializeObjectNode extends FixedWithNextNode implements EscapeAnalyzable, Lowerable, Node.IterableNodeType, Canonicalizable {
 
     @Input private final NodeInputList<ValueNode> values;
-    private final ResolvedJavaType type;
-    private final EscapeField[] fields;
+    @Input private final VirtualObjectNode virtualObject;
 
-    public MaterializeObjectNode(ResolvedJavaType type, EscapeField[] fields, ValueNode[] values) {
-        super(StampFactory.exactNonNull(type));
-        this.type = type;
-        this.fields = fields;
-        this.values = new NodeInputList<>(this, values);
+    public MaterializeObjectNode(VirtualObjectNode virtualObject) {
+        super(StampFactory.exactNonNull(virtualObject.type()));
+        this.virtualObject = virtualObject;
+        this.values = new NodeInputList<>(this, virtualObject.entryCount());
     }
 
-    public ResolvedJavaType type() {
-        return type;
-    }
-
-    public EscapeField[] getFields() {
-        return fields;
-    }
-
-    public NodeInputList<ValueNode> getValues() {
+    public NodeInputList<ValueNode> values() {
         return values;
     }
 
     @Override
     public void lower(LoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) graph();
-        if (type.isArrayClass()) {
-            ResolvedJavaType element = type.componentType();
-            NewArrayNode newArray;
-            if (element.kind() == Kind.Object) {
-                newArray = graph.add(new NewObjectArrayNode(element, ConstantNode.forInt(fields.length, graph)));
-            } else {
-                newArray = graph.add(new NewPrimitiveArrayNode(element, ConstantNode.forInt(fields.length, graph)));
-            }
-            this.replaceAtUsages(newArray);
-            graph.addAfterFixed(this, newArray);
+        if (virtualObject instanceof VirtualInstanceNode) {
+            VirtualInstanceNode virtual = (VirtualInstanceNode) virtualObject;
 
-            FixedWithNextNode position = newArray;
-            for (int i = 0; i < fields.length; i++) {
-                StoreIndexedNode store = graph.add(new StoreIndexedNode(newArray, ConstantNode.forInt(i, graph), element.kind(), values.get(i), -1));
+            NewInstanceNode newInstance = graph.add(new NewInstanceNode(virtual.type(), false));
+            this.replaceAtUsages(newInstance);
+            graph.addAfterFixed(this, newInstance);
+
+            FixedWithNextNode position = newInstance;
+            for (int i = 0; i < virtual.entryCount(); i++) {
+                StoreFieldNode store = graph.add(new StoreFieldNode(newInstance, virtual.field(i), values.get(i), -1));
                 graph.addAfterFixed(position, store);
                 position = store;
             }
 
             graph.removeFixed(this);
         } else {
-            NewInstanceNode newInstance = graph.add(new NewInstanceNode(type));
-            this.replaceAtUsages(newInstance);
-            graph.addAfterFixed(this, newInstance);
+            assert virtualObject instanceof VirtualArrayNode;
+            VirtualArrayNode virtual = (VirtualArrayNode) virtualObject;
 
-            FixedWithNextNode position = newInstance;
-            for (int i = 0; i < fields.length; i++) {
-                StoreFieldNode store = graph.add(new StoreFieldNode(newInstance, (ResolvedJavaField) fields[i].representation(), values.get(i), -1));
+            ResolvedJavaType element = virtual.componentType();
+            NewArrayNode newArray;
+            if (element.kind() == Kind.Object) {
+                newArray = graph.add(new NewObjectArrayNode(element, ConstantNode.forInt(virtual.entryCount(), graph), false));
+            } else {
+                newArray = graph.add(new NewPrimitiveArrayNode(element, ConstantNode.forInt(virtual.entryCount(), graph), false));
+            }
+            this.replaceAtUsages(newArray);
+            graph.addAfterFixed(this, newArray);
+
+            FixedWithNextNode position = newArray;
+            for (int i = 0; i < virtual.entryCount(); i++) {
+                StoreIndexedNode store = graph.add(new StoreIndexedNode(newArray, ConstantNode.forInt(i, graph), element.kind(), values.get(i), -1));
                 graph.addAfterFixed(position, store);
                 position = store;
             }
 
             graph.removeFixed(this);
         }
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool) {
+        if (usages().isEmpty()) {
+            return null;
+        } else {
+            return this;
+        }
+    }
+
+    @Override
+    public EscapeOp getEscapeOp() {
+        return new EscapeOp() {
+
+            @Override
+            public ValueNode[] fieldState() {
+                return values.toArray(new ValueNode[values.size()]);
+            }
+
+            @Override
+            public VirtualObjectNode virtualObject(int virtualId) {
+                return virtualObject;
+            }
+        };
     }
 }

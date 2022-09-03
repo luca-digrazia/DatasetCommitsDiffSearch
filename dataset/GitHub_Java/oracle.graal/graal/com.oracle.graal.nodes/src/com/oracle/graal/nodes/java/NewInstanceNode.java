@@ -35,24 +35,20 @@ import com.oracle.graal.nodes.virtual.*;
  * The {@code NewInstanceNode} represents the allocation of an instance class object.
  */
 @NodeInfo(nameTemplate = "New {p#instanceClass/s}")
-public final class NewInstanceNode extends FixedWithNextNode implements EscapeAnalyzable, Lowerable, Node.IterableNodeType {
+public final class NewInstanceNode extends FixedWithNextNode implements EscapeAnalyzable, Lowerable, LIRLowerable, Node.IterableNodeType {
 
     private final ResolvedJavaType instanceClass;
     private final boolean fillContents;
-    private final boolean locked;
 
     /**
      * Constructs a NewInstanceNode.
      *
      * @param type the class being allocated
-     * @param fillContents determines whether the new object's fields should be initialized to zero/null.
-     * @param locked determines whether the new object should be locked immediately.
      */
-    public NewInstanceNode(ResolvedJavaType type, boolean fillContents, boolean locked) {
+    public NewInstanceNode(ResolvedJavaType type, boolean fillContents) {
         super(StampFactory.exactNonNull(type));
         this.instanceClass = type;
         this.fillContents = fillContents;
-        this.locked = locked;
     }
 
     /**
@@ -64,18 +60,8 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
         return instanceClass;
     }
 
-    /**
-     * @return <code>true</code> if the fields of the new object will be initialized.
-     */
     public boolean fillContents() {
         return fillContents;
-    }
-
-    /**
-     * @return <code>true</code> if the new object will be locked immediately.
-     */
-    public boolean locked() {
-        return locked;
     }
 
     @Override
@@ -83,10 +69,15 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
         tool.getRuntime().lower(this, tool);
     }
 
+    @Override
+    public void generate(LIRGeneratorTool gen) {
+        gen.visitNewInstance(this);
+    }
+
     private void fillEscapeFields(ResolvedJavaType type, List<ResolvedJavaField> escapeFields) {
         if (type != null) {
-            fillEscapeFields(type.getSuperclass(), escapeFields);
-            for (ResolvedJavaField field : type.getDeclaredFields()) {
+            fillEscapeFields(type.superType(), escapeFields);
+            for (ResolvedJavaField field : type.declaredFields()) {
                 escapeFields.add(field);
             }
         }
@@ -105,13 +96,13 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
                 public ValueNode[] fieldState() {
                     ValueNode[] state = new ValueNode[fields.length];
                     for (int i = 0; i < state.length; i++) {
-                        state[i] = ConstantNode.defaultForKind(fields[i].getType().getKind(), graph());
+                        state[i] = ConstantNode.defaultForKind(fields[i].type().kind(), graph());
                     }
                     return state;
                 }
 
                 @Override
-                public VirtualObjectNode virtualObject(long virtualId) {
+                public VirtualObjectNode virtualObject(int virtualId) {
                     return new VirtualInstanceNode(virtualId, instanceClass(), fields);
                 }
             };
