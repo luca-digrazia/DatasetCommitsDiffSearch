@@ -39,6 +39,7 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.MemoryUtil;
+import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
@@ -49,7 +50,6 @@ import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.os.OSInterface;
-import com.oracle.svm.core.os.VirtualMemoryProvider;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 
 import jdk.vm.ci.code.MemoryBarriers;
@@ -113,9 +113,10 @@ final class Target_sun_misc_Unsafe {
     }
 
     @Substitute
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    int pageSize() {
-        return (int) VirtualMemoryProvider.get().getPageSize().rawValue();
+    private int pageSize() {
+        // This assumes that the page size of the Substrate VM
+        // is the same as the page size of the hosted VM.
+        return Util_sun_misc_Unsafe.hostedVMPageSize;
     }
 
     @Substitute
@@ -159,6 +160,13 @@ final class Target_sun_misc_Unsafe {
         }
         // no-op: all classes that exist in our image must have been initialized
     }
+}
+
+final class Util_sun_misc_Unsafe {
+    /**
+     * Cache the size of a page in the hosted VM for use in the SubstrateVM.
+     */
+    static final int hostedVMPageSize = UnsafeAccess.UNSAFE.pageSize();
 }
 
 @TargetClass(sun.misc.MessageUtils.class)
