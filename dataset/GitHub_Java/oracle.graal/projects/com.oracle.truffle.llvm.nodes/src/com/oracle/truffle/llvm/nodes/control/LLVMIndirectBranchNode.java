@@ -40,14 +40,14 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 public class LLVMIndirectBranchNode extends LLVMControlFlowNode {
 
     @Child private LLVMExpressionNode address;
-    @CompilationFinal(dimensions = 2) private final LLVMExpressionNode[][] phiWriteNodes;
+    @Children private final LLVMExpressionNode[] writeNodes;
     @CompilationFinal(dimensions = 1) private final int[] successors;
 
-    public LLVMIndirectBranchNode(LLVMExpressionNode address, int[] indices, LLVMExpressionNode[][] phiWriteNodes) {
+    public LLVMIndirectBranchNode(LLVMExpressionNode address, int[] indices, LLVMExpressionNode[] writeNodes) {
         assert indices.length > 1;
         this.successors = indices;
         this.address = address;
-        this.phiWriteNodes = phiWriteNodes;
+        this.writeNodes = writeNodes;
     }
 
     @Override
@@ -56,10 +56,9 @@ public class LLVMIndirectBranchNode extends LLVMControlFlowNode {
     }
 
     @ExplodeLoop
-    public void writePhis(VirtualFrame frame, int successorIndex) {
-        LLVMExpressionNode[] phis = phiWriteNodes[successorIndex];
-        for (int i = 0; i < phis.length; i++) {
-            phis[i].executeGeneric(frame);
+    public void writePhis(VirtualFrame frame) {
+        for (int j = 0; j < writeNodes.length; j++) {
+            writeNodes[j].executeGeneric(frame);
         }
     }
 

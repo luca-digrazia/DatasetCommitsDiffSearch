@@ -101,15 +101,9 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
                 if (exceptionSourceSection == null) {
                     throw t;
                 } else {
-                    StringBuilder messageBuilder = new StringBuilder();
-                    messageBuilder.append("LLVM error in ");
-                    String sourceDescription = statement.getSourceDescription();
-                    if (sourceDescription == null) {
-                        messageBuilder.append(getRootNode().getName());
-                    } else {
-                        messageBuilder.append(sourceDescription);
-                    }
-                    throw new RuntimeException(messageBuilder.toString(), t);
+                    String message = String.format("LLVM error in %s in %s - %s", statement.getSourceDescription(),
+                                    exceptionSourceSection.getSource() != null ? exceptionSourceSection.getSource().getName() : "<unknow>", t.getMessage());
+                    throw new RuntimeException(message, t);
                 }
             }
         }

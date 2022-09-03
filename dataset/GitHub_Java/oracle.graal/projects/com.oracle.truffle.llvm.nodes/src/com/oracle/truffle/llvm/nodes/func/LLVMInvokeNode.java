@@ -33,7 +33,6 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMException;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -60,8 +59,7 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
     public LLVMInvokeNode(FunctionType type, FrameSlot returnValueSlot,
                     FrameSlot exceptionValueSlot,
                     int normalSuccessor, int unwindSuccessor,
-                    LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes, SourceSection sourceSection) {
-        super(sourceSection);
+                    LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes) {
         assert (type.getReturnType() instanceof VoidType) || returnValueSlot != null;
         this.normalSuccessor = normalSuccessor;
         this.unwindSuccessor = unwindSuccessor;
@@ -156,8 +154,8 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
         public LLVMSubstitutionInvokeNode(FunctionType type, LLVMExpressionNode substitution, FrameSlot returnValueSlot,
                         FrameSlot exceptionValueSlot,
                         int normalSuccessor, int unwindSuccessor,
-                        LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes, SourceSection sourceSection) {
-            super(type, returnValueSlot, exceptionValueSlot, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes, sourceSection);
+                        LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes) {
+            super(type, returnValueSlot, exceptionValueSlot, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes);
             this.substitution = substitution;
         }
 
@@ -177,8 +175,8 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
         public LLVMFunctionInvokeNode(FunctionType type, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes, FrameSlot returnValueSlot,
                         FrameSlot exceptionValueSlot,
                         int normalSuccessor, int unwindSuccessor,
-                        LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes, SourceSection sourceSection) {
-            super(type, returnValueSlot, exceptionValueSlot, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes, sourceSection);
+                        LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes) {
+            super(type, returnValueSlot, exceptionValueSlot, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes);
             this.functionNode = functionNode;
             this.argumentNodes = argumentNodes;
             this.dispatchNode = LLVMLookupDispatchNodeGen.create(type);

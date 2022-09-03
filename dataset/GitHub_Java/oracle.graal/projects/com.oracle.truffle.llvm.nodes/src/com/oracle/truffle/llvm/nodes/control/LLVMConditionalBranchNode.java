@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.nodes.control;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
@@ -46,9 +45,7 @@ public class LLVMConditionalBranchNode extends LLVMControlFlowNode {
     public static final int TRUE_SUCCESSOR = 0;
     public static final int FALSE_SUCCESSOR = 1;
 
-    public LLVMConditionalBranchNode(int trueSuccessor, int falseSuccessor, LLVMExpressionNode[] truePhiWriteNodes, LLVMExpressionNode[] falsePhiWriteNodes, LLVMExpressionNode condition,
-                    SourceSection sourceSection) {
-        super(sourceSection);
+    public LLVMConditionalBranchNode(int trueSuccessor, int falseSuccessor, LLVMExpressionNode[] truePhiWriteNodes, LLVMExpressionNode[] falsePhiWriteNodes, LLVMExpressionNode condition) {
         this.trueSuccessor = trueSuccessor;
         this.falseSuccessor = falseSuccessor;
         this.truePhiWriteNodes = truePhiWriteNodes;
