@@ -33,7 +33,7 @@ class TypedGraphNodeIterator<T extends IterableNodeType> implements Iterator<T> 
     private int currentIdIndex;
     private boolean needsForward;
 
-    public TypedGraphNodeIterator(NodeClass<?> clazz, Graph graph) {
+    public TypedGraphNodeIterator(NodeClass clazz, Graph graph) {
         this.graph = graph;
         ids = clazz.iterableIds();
         currentIdIndex = 0;
@@ -47,7 +47,7 @@ class TypedGraphNodeIterator<T extends IterableNodeType> implements Iterator<T> 
             forward();
         } else {
             Node c = current();
-            Node afterDeleted = graph.getIterableNodeNext(c);
+            Node afterDeleted = skipDeleted(c);
             if (afterDeleted == null) {
                 needsForward = true;
             } else if (c != afterDeleted) {
@@ -60,16 +60,25 @@ class TypedGraphNodeIterator<T extends IterableNodeType> implements Iterator<T> 
         return current();
     }
 
+    private static Node skipDeleted(Node node) {
+        Node n = node;
+        while (n != null && n.isDeleted()) {
+            n = n.typeCacheNext;
+        }
+        return n;
+    }
+
     private void forward() {
         needsForward = false;
         int startIdx = currentIdIndex;
         while (true) {
             Node next;
             if (current() == Graph.PLACE_HOLDER) {
-                next = graph.getIterableNodeStart(ids[currentIdIndex]);
+                next = graph.getStartNode(ids[currentIdIndex]);
             } else {
-                next = graph.getIterableNodeNext(current().typeCacheNext);
+                next = current().typeCacheNext;
             }
+            next = skipDeleted(next);
             if (next == null) {
                 currentIdIndex++;
                 if (currentIdIndex >= ids.length) {
