@@ -28,19 +28,20 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Reader;
 import java.io.StringReader;
-import java.lang.ref.WeakReference;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import java.util.jar.JarOutputStream;
+import java.util.zip.ZipEntry;
+import org.junit.Assert;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -48,9 +49,10 @@ import org.junit.runner.RunWith;
 public class SourceBuilderTest {
     @Test
     public void assignMimeTypeAndIdentity() {
-        Source s1 = Source.fromText("// a comment\n", "Empty comment");
-        assertNull("No mime type assigned", s1.getMimeType());
-        Source s2 = s1.withMimeType("text/x-c");
+        Source.Builder<RuntimeException, MissingMIMETypeException, RuntimeException> builder = Source.newBuilder("// a comment\n").name("Empty comment");
+        Source s1 = builder.mimeType("content/unknown").build();
+        assertEquals("No mime type assigned", "content/unknown", s1.getMimeType());
+        Source s2 = builder.mimeType("text/x-c").build();
         assertEquals("They have the same content", s1.getCode(), s2.getCode());
         assertNotEquals("But different type", s1.getMimeType(), s2.getMimeType());
         assertNotEquals("So they are different", s1, s2);
@@ -58,11 +60,11 @@ public class SourceBuilderTest {
         assertEquals("Source with different MIME type has the same URI", s1.getURI(), s2.getURI());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void assignMimeTypeAndIdentityForApppendable() {
         Source s1 = Source.fromAppendableText("<stdio>");
         assertEquals("<stdio>", s1.getName());
-        assertEquals("<stdio>", s1.getShortName());
         assertEquals("Appendable path is based on name", "<stdio>", s1.getPath());
         assertNull("No mime type assigned", s1.getMimeType());
         s1.appendCode("// Hello");
@@ -76,25 +78,12 @@ public class SourceBuilderTest {
     }
 
     @Test
-    public void assignMimeTypeAndIdentityForBytes() {
-        String text = "// Hello";
-        Source s1 = Source.fromBytes(text.getBytes(StandardCharsets.UTF_8), "Hello", StandardCharsets.UTF_8);
-        assertNull("No mime type assigned", s1.getMimeType());
-        Source s2 = s1.withMimeType("text/x-c");
-        assertEquals("They have the same content", s1.getCode(), s2.getCode());
-        assertEquals("// Hello", s1.getCode());
-        assertNotEquals("But different type", s1.getMimeType(), s2.getMimeType());
-        assertNotEquals("So they are different", s1, s2);
-        assertNotNull("Every source must have URI", s1.getURI());
-        assertEquals("Source with different MIME type has the same URI", s1.getURI(), s2.getURI());
-    }
-
-    @Test
     public void assignMimeTypeAndIdentityForReader() throws IOException {
         String text = "// Hello";
-        Source s1 = Source.fromReader(new StringReader(text), "Hello");
-        assertNull("No mime type assigned", s1.getMimeType());
-        Source s2 = s1.withMimeType("text/x-c");
+        Source.Builder<IOException, MissingMIMETypeException, RuntimeException> builder = Source.newBuilder(new StringReader(text)).name("test.txt");
+        Source s1 = builder.name("Hello").mimeType("text/plain").build();
+        assertEquals("Base type assigned", "text/plain", s1.getMimeType());
+        Source s2 = builder.mimeType("text/x-c").build();
         assertEquals("They have the same content", s1.getCode(), s2.getCode());
         assertEquals("// Hello", s1.getCode());
         assertNotEquals("But different type", s1.getMimeType(), s2.getMimeType());
@@ -105,7 +94,7 @@ public class SourceBuilderTest {
 
     @Test
     public void assignMimeTypeAndIdentityForFile() throws IOException {
-        File file = File.createTempFile("Hello", ".java");
+        File file = File.createTempFile("Hello", ".java").getCanonicalFile();
         file.deleteOnExit();
 
         String text;
@@ -119,11 +108,10 @@ public class SourceBuilderTest {
         String nonCannonical = file.getParent() + File.separatorChar + ".." + File.separatorChar + file.getParentFile().getName() + File.separatorChar + file.getName();
         final File nonCannonicalFile = new File(nonCannonical);
         assertTrue("Exists, as it is the same file", nonCannonicalFile.exists());
-        final Source.Builder<Source> builder = Source.newFromFile(new File(nonCannonical));
+        Source.Builder<IOException, RuntimeException, RuntimeException> builder = Source.newBuilder(nonCannonicalFile);
 
         Source s1 = builder.build();
         assertEquals("Path is cannonicalized", file.getPath(), s1.getPath());
-        assertEquals("Just the name of the file", file.getName(), s1.getShortName());
         assertEquals("Name is short", file.getName(), s1.getName());
         assertEquals("Recognized as Java", "text/x-java", s1.getMimeType());
         Source s2 = builder.mimeType("text/x-c").build();
@@ -136,16 +124,118 @@ public class SourceBuilderTest {
     }
 
     @Test
-    public void assignMimeTypeAndIdentityForVirtualFile() throws IOException {
-        File file = File.createTempFile("Hello", ".java");
+    public void mimeTypeIsDetectedFromALocator() throws IOException {
+        File file = File.createTempFile("Hello", ".locme").getCanonicalFile();
+        file.deleteOnExit();
+
+        String text;
+        try (FileWriter w = new FileWriter(file)) {
+            text = "// Hello";
+            w.write(text);
+        }
+
+        Source source = Source.newBuilder(file).build();
+        assertEquals("application/x-locator", source.getMimeType());
+    }
+
+    @Test
+    public void mimeTypeIsDetectedForURIFromALocator() throws IOException {
+        File file = File.createTempFile("Hello", ".locme").getCanonicalFile();
+        file.deleteOnExit();
+
+        String text;
+        try (FileWriter w = new FileWriter(file)) {
+            text = "// Hello";
+            w.write(text);
+        }
+
+        Source source = Source.newBuilder(file.toURI().toURL()).build();
+        assertEquals("application/x-locator", source.getMimeType());
+    }
+
+    @Test
+    public void mimeTypeIsDetectedRandomBytes() throws IOException {
+        File file = File.createTempFile("Hello", ".bin").getCanonicalFile();
+        file.deleteOnExit();
+
+        try (FileOutputStream w = new FileOutputStream(file)) {
+            w.write(0x04);
+            w.write(0x05);
+        }
+
+        Source source = Source.newBuilder(file).build();
+        assertEither(source.getMimeType(), "content/unknown", "application/octet-stream", "text/plain", "application/macbinary");
+    }
+
+    @Test
+    public void mimeTypeIsDetectedRandomBytesForURI() throws IOException {
+        File file = File.createTempFile("Hello", ".bin").getCanonicalFile();
+        file.deleteOnExit();
+
+        try (FileOutputStream w = new FileOutputStream(file)) {
+            w.write(0x04);
+            w.write(0x05);
+        }
+
+        Source source = Source.newBuilder(file.toURI().toURL()).build();
+        assertEither(source.getMimeType(), "content/unknown", "application/octet-stream", "text/plain", "application/macbinary");
+    }
+
+    @Test
+    public void ioExceptionWhenFileDoesntExist() throws Exception {
+        File file = File.createTempFile("Hello", ".java").getCanonicalFile();
+        file.delete();
+        assertFalse("Doesn't exist", file.exists());
+
+        Source.Builder<IOException, RuntimeException, RuntimeException> builder = Source.newBuilder(file);
+
+        Source s1 = null;
+        try {
+            s1 = builder.build();
+        } catch (IOException e) {
+            // OK, file doesn't exist
+            return;
+        }
+        fail("No source should be created: " + s1);
+    }
+
+    @Test
+    public void ioExceptionWhenReaderThrowsIt() throws Exception {
+        final IOException ioEx = new IOException();
+        Reader reader = new Reader() {
+            @Override
+            public int read(char[] cbuf, int off, int len) throws IOException {
+                throw ioEx;
+            }
+
+            @Override
+            public void close() throws IOException {
+            }
+        };
+
+        Source.Builder<IOException, RuntimeException, RuntimeException> builder = Source.newBuilder(reader).name("unloadable.txt").mimeType("text/plain");
+
+        Source s1 = null;
+        try {
+            s1 = builder.build();
+        } catch (IOException e) {
+            Assert.assertSame(ioEx, e);
+            return;
+        }
+        fail("No source should be created: " + s1);
+    }
+
+    @Test
+    public void assignMimeTypeAndIdentityForVirtualFile() throws Exception {
+        File file = File.createTempFile("Hello", ".java").getCanonicalFile();
         file.deleteOnExit();
 
         String text = "// Hello";
-
+        Source.Builder<RuntimeException, RuntimeException, RuntimeException> builder = Source.newBuilder(file).content(text).mimeType("text/x-java");
         // JDK8 default fails on OS X: https://bugs.openjdk.java.net/browse/JDK-8129632
-        Source s1 = Source.fromFileName(text, file.getPath()).withMimeType("text/x-java");
+        Source s1 = builder.build();
         assertEquals("Recognized as Java", "text/x-java", s1.getMimeType());
-        Source s2 = s1.withMimeType("text/x-c");
+        Source s2 = builder.mimeType("text/x-c").build();
         assertEquals("They have the same content", s1.getCode(), s2.getCode());
         assertEquals("// Hello", s1.getCode());
         assertNotEquals("But different type", s1.getMimeType(), s2.getMimeType());
@@ -154,8 +244,33 @@ public class SourceBuilderTest {
         assertEquals("Source with different MIME type has the same URI", s1.getURI(), s2.getURI());
     }
 
-    /* Test currently fails on Sparc. */
-    @Ignore
+    @Test
+    public void noIOWhenContentSpecified() {
+        File file = new File("some.js");
+
+        String text = "// Hello";
+
+        Source source = Source.newBuilder(file).content(text).build();
+        assertEquals("The content has been changed", text, source.getCode());
+        assertNotNull("Mime type specified", source.getMimeType());
+        assertTrue("Recognized as JavaScript", source.getMimeType().endsWith("/javascript"));
+        assertEquals("some.js", source.getName());
+    }
+
+    @Test
+    public void fromTextWithFileURI() {
+        File file = new File("some.js");
+
+        String text = "// Hello";
+
+        Source source = Source.newBuilder(text).uri(file.toURI()).mimeType("plain/text").name("another.js").build();
+        assertEquals("The content has been changed", text, source.getCode());
+        assertNotNull("Mime type specified", source.getMimeType());
+        assertEquals("Assigned MIME type", "plain/text", source.getMimeType());
+        assertEquals("another.js", source.getName());
+        assertEquals("Using the specified URI", file.toURI(), source.getURI());
+    }
+
     @Test
     public void assignMimeTypeAndIdentityForURL() throws IOException {
         File file = File.createTempFile("Hello", ".java");
@@ -166,10 +281,11 @@ public class SourceBuilderTest {
             text = "// Hello";
             w.write(text);
         }
+        Source.Builder<IOException, RuntimeException, RuntimeException> builder = Source.newBuilder(file.toURI().toURL()).name("Hello.java");
 
-        Source s1 = Source.fromURL(file.toURI().toURL(), "Hello.java");
+        Source s1 = builder.build();
         assertEquals("Recognized as Java", "text/x-java", s1.getMimeType());
-        Source s2 = s1.withMimeType("text/x-c");
+        Source s2 = builder.mimeType("text/x-c").build();
         assertEquals("They have the same content", s1.getCode(), s2.getCode());
         assertEquals("// Hello", s1.getCode());
         assertNotEquals("But different type", s1.getMimeType(), s2.getMimeType());
@@ -182,11 +298,9 @@ public class SourceBuilderTest {
     public void literalSources() throws IOException {
         final String code = "test code";
         final String description = "test description";
-        final Source literal = Source.fromText(code, description);
+        final Source literal = Source.newBuilder(code).name(description).mimeType("content/unknown").build();
         assertEquals(literal.getName(), description);
-        assertEquals(literal.getShortName(), description);
         assertEquals(literal.getCode(), code);
-        assertEquals("Non-appendable path is based on name", description, literal.getPath());
         assertNull(literal.getURL());
         assertNotNull("Every source must have URI", literal.getURI());
         final char[] buffer = new char[code.length()];
@@ -195,14 +309,14 @@ public class SourceBuilderTest {
     }
 
     @Test
-    public void clientManagedSourceChange() throws IOException {
+    public void clientManagedSourceChange() {
         final String path = "test.input";
         final String code1 = "test\ntest";
         final String code2 = "test\ntest\nlonger\ntest";
-        final Source source1 = Source.fromFileName(code1, path);
+        final Source source1 = Source.newBuilder(new File(path)).content(code1).mimeType("content/unknown").build();
         assertEquals(source1.getCode(), code1);
         assertEquals(source1.getLineNumber(code1.length() - 1), 2);
-        final Source source2 = Source.fromFileName(code2, path);
+        final Source source2 = Source.newBuilder(new File(path)).content(code2).mimeType("content/unknown").build();
         assertEquals(source2.getCode(), code2);
         assertEquals(source2.getLineNumber(code2.length() - 1), 4);
         assertEquals("File URI", new File(path).toURI(), source1.getURI());
@@ -210,14 +324,14 @@ public class SourceBuilderTest {
     }
 
     @Test
-    public void clientManagedSourceChangeAbsolute() throws IOException {
+    public void clientManagedSourceChangeAbsolute() {
         final String path = new File("test.input").getAbsolutePath();
         final String code1 = "test\ntest";
         final String code2 = "test\ntest\nlonger\ntest";
-        final Source source1 = Source.fromFileName(code1, path);
+        final Source source1 = Source.newBuilder(new File(path)).content(code1).mimeType("x-application/input").build();
         assertEquals(source1.getCode(), code1);
         assertEquals(source1.getLineNumber(code1.length() - 1), 2);
-        final Source source2 = Source.fromFileName(code2, path);
+        final Source source2 = Source.newBuilder(new File(path)).content(code2).mimeType("x-application/input").build();
         assertEquals(source2.getCode(), code2);
         assertEquals(source2.getLineNumber(code2.length() - 1), 4);
         assertEquals("File URI", new File("test.input").getAbsoluteFile().toURI(), source1.getURI());
@@ -225,75 +339,37 @@ public class SourceBuilderTest {
     }
 
     @Test
-    public void withName() throws Exception {
-        final String tmpName = "/tmp/hi.tmp";
-        final String realName = "/path/hi.txt";
-
-        Source orig = Source.fromText("Hi", tmpName);
-        assertEquals(tmpName, orig.getName());
-        Source foundOrig = Source.find(tmpName);
-        assertEquals(orig, foundOrig);
-
-        Source source = orig.withName(realName);
-        assertEquals(realName, source.getName());
-
-        Source foundSource = Source.find(realName);
-        assertSame(source, foundSource);
-
-        WeakReference<Source> refOrig = new WeakReference<>(orig);
-        orig = null;
-        foundOrig = null;
-
-        assertGC("The source can disappear", refOrig);
-
-        Source notFoundSource = Source.find(tmpName);
-        assertNull("Original source isn't there anymore", notFoundSource);
-    }
-
-    @Test
-    public void withShortName() throws Exception {
-        Source orig = Source.fromText("Hi", "/tmp/hi.tmp");
-        assertEquals("/tmp/hi.tmp", orig.getShortName());
-        Source source = orig.withShortName("hi.txt");
-        assertEquals("hi.txt", source.getShortName());
-    }
-
-    @Test
-    public void withPath() throws Exception {
-        Source orig = Source.fromText("Hi", "/tmp/hi.tmp");
-        assertEquals("Path is derived from name", "/tmp/hi.tmp", orig.getPath());
-        Source source = orig.withPath("c:\\temp\\hi.txt");
-        assertEquals("c:\\temp\\hi.txt", source.getPath());
-    }
-
-    /* Test currently fails on Sparc. */
-    @Ignore
-    @Test
-    public void relativeURL() throws Exception {
-        URL resource = SourceSnippets.class.getResource("sample.js");
-        assertNotNull("Sample js file found", resource);
-        SourceSnippets.fromURL();
-    }
-
-    /* Test currently fails on Sparc. */
-    @Test
-    public void fileSample() throws Exception {
-        File sample = File.createTempFile("sample", ".java");
+    public void jarURLGetsAName() throws IOException {
+        File sample = File.createTempFile("sample", ".jar");
         sample.deleteOnExit();
-        SourceSnippets.fromFile(sample.getParentFile(), sample.getName());
+        JarOutputStream os = new JarOutputStream(new FileOutputStream(sample));
+        os.putNextEntry(new ZipEntry("x.js"));
+        os.write("Hi!".getBytes("UTF-8"));
+        os.closeEntry();
+        os.close();
+
+        URL resource = new URL("jar:" + sample.toURI() + "!/x.js");
+        assertNotNull("Resource found", resource);
+        assertEquals("JAR protocol", "jar", resource.getProtocol());
+        Source s = Source.newBuilder(resource).build();
+        assertEquals("Hi!", s.getCode());
+        assertEquals("x.js", s.getName());
+
         sample.delete();
     }
 
     @Test
-    public void stringSample() throws Exception {
-        Source source = SourceSnippets.fromAString();
-        assertNotNull("Every source must have URI", source.getURI());
-    }
+    public void whatAreTheDefaultValuesOfNewFromReader() throws Exception {
+        StringReader r = new StringReader("Hi!");
+        Source source = Source.newBuilder(r).name("almostEmpty").mimeType("text/plain").build();
 
-    @Test
-    public void readerSample() throws Exception {
-        Source source = SourceSnippets.fromReader();
-        assertNotNull("Every source must have URI", source.getURI());
+        assertEquals("Hi!", source.getCode());
+        assertEquals("almostEmpty", source.getName());
+        assertNull(source.getPath());
+        assertNotNull(source.getURI());
+        assertEquals("truffle", source.getURI().getScheme());
+        assertNull(source.getURL());
+        assertEquals("text/plain", source.getMimeType());
     }
 
     @Test
@@ -307,7 +383,7 @@ public class SourceBuilderTest {
             w.write(text);
         }
 
-        Source original = Source.fromFileName(file.getPath());
+        Source original = Source.newBuilder(file).build();
         assertEquals(text, original.getCode());
 
         String newText;
@@ -316,43 +392,36 @@ public class SourceBuilderTest {
             w.write(newText);
         }
 
-        Source still = Source.fromFileName(file.getPath(), false);
-        assertEquals(original, still);
-        assertEquals(text, still.getCode());
-        assertEquals(file.toURI(), still.getURI());
-
-        Source reloaded = Source.fromFileName(file.getPath(), true);
+        Source reloaded = Source.newBuilder(file).build();
         assertNotEquals(original, reloaded);
         assertEquals("New source has the new text", newText, reloaded.getCode());
-        assertEquals("New source has the same URI", reloaded.getURI(), still.getURI());
 
         assertEquals("Old source1 remains unchanged", text, original.getCode());
-        assertEquals("Old source2 remains unchanged", text, still.getCode());
     }
 
     @Test
-    public void normalSourceIsntInternal() throws IOException {
-        Source source = Source.newWithText("anything").mimeType("text/plain").build();
+    public void normalSourceIsNotInternal() {
+        Source source = Source.newBuilder("anything").mimeType("text/plain").name("anyname").build();
 
         assertFalse("Not internal", source.isInternal());
     }
 
     @Test
-    public void markSourceAsInternal() throws IOException {
-        Source source = Source.newWithText("anything internal").mimeType("text/plain").internal(true).build();
+    public void markSourceAsInternal() {
+        Source source = Source.newBuilder("anything internal").mimeType("text/plain").name("internalsrc").internal().build();
 
         assertTrue("This source is internal", source.isInternal());
     }
 
     public void subSourceHashAndEquals() {
-        Source src = Source.fromText("One Two Three", "counting.en");
-        Source one = Source.subSource(src, 0, 3);
-        Source two = Source.subSource(src, 4, 3);
-        Source three = Source.subSource(src, 8);
+        Source src = Source.newBuilder("One Two Three").name("counting.en").mimeType("content/unknown").build();
+        Source one = src.subSource(0, 3);
+        Source two = src.subSource(4, 3);
+        Source three = src.subSource(8, src.getLength() - 8);
 
-        Source oneSnd = Source.subSource(src, 0, 3);
-        Source twoSnd = Source.subSource(src, 4, 3);
-        Source threeSnd = Source.subSource(src, 8);
+        Source oneSnd = src.subSource(0, 3);
+        Source twoSnd = src.subSource(4, 3);
+        Source threeSnd = src.subSource(8, src.getLength() - 8);
 
         assertNotEquals("One: " + one.getCode() + " two: " + two.getCode(), one, two);
         assertNotEquals(three, two);
@@ -375,8 +444,8 @@ public class SourceBuilderTest {
 
     @Test
     public void subSourceFromTwoFiles() throws Exception {
-        File f1 = File.createTempFile("subSource", ".js");
-        File f2 = File.createTempFile("subSource", ".js");
+        File f1 = File.createTempFile("subSource", ".js").getCanonicalFile();
+        File f2 = File.createTempFile("subSource", ".js").getCanonicalFile();
 
         try (FileWriter w = new FileWriter(f1)) {
             w.write("function test() {\n" + "  return 1;\n" + "}\n");
@@ -386,14 +455,14 @@ public class SourceBuilderTest {
             w.write("function test() {\n" + "  return 1;\n" + "}\n");
         }
 
-        Source s1 = Source.fromFileName(f1.getPath());
-        Source s2 = Source.fromFileName(f2.getPath());
+        Source s1 = Source.newBuilder(f1).build();
+        Source s2 = Source.newBuilder(f2).build();
 
         assertNotEquals("Different sources", s1, s2);
         assertEquals("But same content", s1.getCode(), s2.getCode());
 
-        Source sub1 = Source.subSource(s1, 0, 8);
-        Source sub2 = Source.subSource(s2, 0, 8);
+        Source sub1 = s1.subSource(0, 8);
+        Source sub2 = s2.subSource(0, 8);
 
         assertNotEquals("Different sub sources", sub1, sub2);
         assertEquals("with the same content", sub1.getCode(), sub2.getCode());
@@ -405,14 +474,50 @@ public class SourceBuilderTest {
         assertEquals(s2.getURI(), sub2.getURI());
     }
 
-    private static void assertGC(String msg, WeakReference<?> ref) {
-        for (int i = 0; i < 100; i++) {
-            if (ref.get() == null) {
+    @Test
+    public void throwsErrorNameCannotBeNull() {
+        try {
+            Source.newBuilder("Hi").name(null);
+        } catch (NullPointerException ex) {
+            return;
+        }
+        fail("Expecting NullPointerException");
+    }
+
+    @Test
+    public void throwsErrorIfNameIsNull() {
+        try {
+            Source.newBuilder("Hi").mimeType("content/unknown").build();
+        } catch (MissingNameException ex) {
+            // OK
+            return;
+        }
+        fail("Expecting MissingNameException");
+    }
+
+    @Test
+    public void throwsErrorIfMIMETypeIsNull() {
+        try {
+            Source.newBuilder("Hi").name("unknown.txt").build();
+        } catch (MissingMIMETypeException ex) {
+            // OK
+            return;
+        }
+        fail("Expecting MissingNameException");
+    }
+
+    @Test
+    public void succeedsWithBothNameAndMIME() {
+        Source src = Source.newBuilder("Hi").mimeType("content/unknown").name("unknown.txt").build();
+        assertNotNull(src);
+    }
+
+    private static void assertEither(String mimeType, String... expected) {
+        for (String e : expected) {
+            if (mimeType.equals(e)) {
                 return;
             }
-            System.gc();
-            System.runFinalization();
         }
-        fail(msg + " ref: " + ref.get());
+        fail("Unexpected MIME type: " + mimeType);
     }
 }
