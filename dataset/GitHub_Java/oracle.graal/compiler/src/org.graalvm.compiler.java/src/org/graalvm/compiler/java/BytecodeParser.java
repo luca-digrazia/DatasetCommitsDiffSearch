@@ -265,8 +265,6 @@ import java.util.Comparator;
 import java.util.Formatter;
 import java.util.List;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeDisassembler;
@@ -283,7 +281,6 @@ import org.graalvm.compiler.core.common.PermanentBailoutException;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.calc.FloatConvert;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
-import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
@@ -346,8 +343,8 @@ import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.calc.AndNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
-import org.graalvm.compiler.nodes.calc.FloatConvertNode;
 import org.graalvm.compiler.nodes.calc.FloatDivNode;
+import org.graalvm.compiler.nodes.calc.FloatConvertNode;
 import org.graalvm.compiler.nodes.calc.IntegerBelowNode;
 import org.graalvm.compiler.nodes.calc.IntegerEqualsNode;
 import org.graalvm.compiler.nodes.calc.IntegerLessThanNode;
@@ -411,6 +408,8 @@ import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.util.ValueMergeUtil;
+import org.graalvm.util.EconomicMap;
+import org.graalvm.util.Equivalence;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.code.BailoutException;
@@ -437,6 +436,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Signature;
 import jdk.vm.ci.meta.TriState;
+import org.graalvm.compiler.core.common.type.IntegerStamp;
 
 /**
  * The {@code GraphBuilder} class parses the bytecode of a method and builds the IR graph.
@@ -700,12 +700,6 @@ public class BytecodeParser implements GraphBuilderContext {
         this.parent = parent;
 
         assert code.getCode() != null : "method must contain bytecodes: " + method;
-
-        if (TraceBytecodeParserLevel.getValue(options) != 0) {
-            if (!Assertions.assertionsEnabled()) {
-                throw new IllegalArgumentException("A non-zero " + TraceBytecodeParserLevel.getName() + " value requires assertions to be enabled");
-            }
-        }
 
         if (graphBuilderConfig.insertFullInfopoints() && !parsingIntrinsic()) {
             lnt = code.getLineNumberTable();
@@ -3079,7 +3073,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private boolean traceState() {
-        if (TraceBytecodeParserLevel.getValue(options) >= TRACELEVEL_STATE) {
+        if (debug.isLogEnabled() && TraceBytecodeParserLevel.getValue(options) >= TRACELEVEL_STATE) {
             frameState.traceState();
         }
         return true;
@@ -4592,7 +4586,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected boolean traceInstruction(int bci, int opcode, boolean blockStart) {
-        if (TraceBytecodeParserLevel.getValue(options) >= TRACELEVEL_INSTRUCTIONS) {
+        if (debug.isLogEnabled() && TraceBytecodeParserLevel.getValue(options) >= TRACELEVEL_INSTRUCTIONS) {
             traceInstructionHelper(bci, opcode, blockStart);
         }
         return true;
@@ -4613,7 +4607,7 @@ public class BytecodeParser implements GraphBuilderContext {
         if (!currentBlock.getJsrScope().isEmpty()) {
             sb.append(' ').append(currentBlock.getJsrScope());
         }
-        TTY.println("%s", sb);
+        debug.log("%s", sb);
     }
 
     @Override
