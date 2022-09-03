@@ -66,7 +66,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
     private final int entryBCI;
     private final int id;
     private final int priority;
-    private final AtomicReference<CompilationStatus> status;
+    private final AtomicInteger status;
 
     private StructuredGraph graph;
 
@@ -83,7 +83,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         this.entryBCI = entryBCI;
         this.id = id;
         this.priority = priority;
-        this.status = new AtomicReference<>(CompilationStatus.Queued);
+        this.status = new AtomicInteger();
     }
 
     public ResolvedJavaMethod getMethod() {
@@ -224,7 +224,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
     }
 
     private boolean tryToChangeStatus(CompilationStatus from, CompilationStatus to) {
-        return status.compareAndSet(from, to);
+        return status.compareAndSet(from.ordinal(), to.ordinal());
     }
 
     @Override

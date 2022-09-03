@@ -38,7 +38,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int codeEntryAlignment;
     public boolean verifyOops;
     public boolean ciTime;
-    public int compileThreshold;
     public boolean compileTheWorld;
     public int compileTheWorldStartAt;
     public int compileTheWorldStopAt;
@@ -408,7 +407,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long newInstanceAddress;
     public long newArrayAddress;
     public long newMultiArrayAddress;
-    public long dynamicNewArrayAddress;
     public long registerFinalizerAddress;
     public long threadIsInterruptedAddress;
     public long vmMessageAddress;

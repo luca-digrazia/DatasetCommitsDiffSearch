@@ -64,6 +64,12 @@ public class VMToCompilerImpl implements VMToCompiler {
     @Option(help = "File to which compiler logging is sent")
     private static final OptionValue<String> LogFile = new OptionValue<>(null);
 
+    @Option(help = "Use low priority compilation threads")
+    private static final OptionValue<Boolean> SlowCompileThreads = new OptionValue<>(false);
+
+    @Option(help = "Use priority-based compilation queue")
+    private static final OptionValue<Boolean> PriorityCompileQueue = new OptionValue<>(true);
+
     @Option(help = "Print compilation queue activity periodically")
     private static final OptionValue<Boolean> PrintQueue = new OptionValue<>(false);
 
@@ -102,6 +108,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     public final HotSpotResolvedPrimitiveType typeVoid;
 
     private ThreadPoolExecutor compileQueue;
+    private ThreadPoolExecutor slowCompileQueue;
     private AtomicInteger compileTaskIds = new AtomicInteger();
 
     private volatile boolean bootstrapRunning;
@@ -204,7 +211,13 @@ public class VMToCompilerImpl implements VMToCompiler {
         }
 
         // Create compilation queue.
-        compileQueue = new ThreadPoolExecutor(Threads.getValue(), Threads.getValue(), 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), CompilerThread.FACTORY);
+        BlockingQueue<Runnable> queue = PriorityCompileQueue.getValue() ? new PriorityBlockingQueue<Runnable>() : new LinkedBlockingQueue<Runnable>();
+        compileQueue = new ThreadPoolExecutor(Threads.getValue(), Threads.getValue(), 0L, TimeUnit.MILLISECONDS, queue, CompilerThread.FACTORY);
+
+        if (SlowCompileThreads.getValue()) {
+            BlockingQueue<Runnable> slowQueue = PriorityCompileQueue.getValue() ? new PriorityBlockingQueue<Runnable>() : new LinkedBlockingQueue<Runnable>();
+            slowCompileQueue = new ThreadPoolExecutor(Threads.getValue(), Threads.getValue(), 0L, TimeUnit.MILLISECONDS, slowQueue, CompilerThread.LOW_PRIORITY_FACTORY);
+        }
 
         // Create queue status printing thread.
         if (PrintQueue.getValue()) {
@@ -213,7 +226,11 @@ public class VMToCompilerImpl implements VMToCompiler {
                 @Override
                 public void run() {
                     while (true) {
-                        TTY.println(compileQueue.toString());
+                        if (slowCompileQueue == null) {
+                            TTY.println(compileQueue.toString());
+                        } else {
+                            TTY.println("fast: " + compileQueue.toString() + " slow: " + slowCompileQueue);
+                        }
                         try {
                             Thread.sleep(1000);
                         } catch (InterruptedException e) {
@@ -378,8 +395,14 @@ public class VMToCompilerImpl implements VMToCompiler {
                 try {
                     assert !CompilationTask.withinEnqueue.get();
                     CompilationTask.withinEnqueue.set(Boolean.TRUE);
-                    if (compileQueue.getCompletedTaskCount() >= Math.max(3, compileQueue.getTaskCount())) {
-                        break;
+                    if (slowCompileQueue == null) {
+                        if (compileQueue.getCompletedTaskCount() >= Math.max(3, compileQueue.getTaskCount())) {
+                            break;
+                        }
+                    } else {
+                        if (compileQueue.getCompletedTaskCount() + slowCompileQueue.getCompletedTaskCount() >= Math.max(3, compileQueue.getTaskCount() + slowCompileQueue.getTaskCount())) {
+                            break;
+                        }
                     }
                 } finally {
                     CompilationTask.withinEnqueue.set(Boolean.FALSE);
@@ -417,7 +440,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     private void enqueue(Method m) throws Throwable {
         JavaMethod javaMethod = graalRuntime.getRuntime().lookupJavaMethod(m);
         assert !Modifier.isAbstract(((HotSpotResolvedJavaMethod) javaMethod).getModifiers()) && !Modifier.isNative(((HotSpotResolvedJavaMethod) javaMethod).getModifiers()) : javaMethod;
-        compileMethod((HotSpotResolvedJavaMethod) javaMethod, StructuredGraph.INVOCATION_ENTRY_BCI, false);
+        compileMethod((HotSpotResolvedJavaMethod) javaMethod, StructuredGraph.INVOCATION_ENTRY_BCI, false, 10);
     }
 
     private static void shutdownCompileQueue(ThreadPoolExecutor queue) throws InterruptedException {
@@ -435,6 +458,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             assert !CompilationTask.withinEnqueue.get();
             CompilationTask.withinEnqueue.set(Boolean.TRUE);
             shutdownCompileQueue(compileQueue);
+            shutdownCompileQueue(slowCompileQueue);
         } finally {
             CompilationTask.withinEnqueue.set(Boolean.FALSE);
         }
@@ -552,15 +576,15 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public void compileMethod(long metaspaceMethod, final HotSpotResolvedObjectType holder, final int entryBCI, boolean blocking) throws Throwable {
+    public void compileMethod(long metaspaceMethod, final HotSpotResolvedObjectType holder, final int entryBCI, boolean blocking, int priority) throws Throwable {
         HotSpotResolvedJavaMethod method = holder.createMethod(metaspaceMethod);
-        compileMethod(method, entryBCI, blocking);
+        compileMethod(method, entryBCI, blocking, priority);
     }
 
     /**
-     * Compiles a method to machine code.
+     * Compiled a method to machine code.
      */
-    public void compileMethod(final HotSpotResolvedJavaMethod method, final int entryBCI, boolean blocking) throws Throwable {
+    public void compileMethod(final HotSpotResolvedJavaMethod method, final int entryBCI, boolean blocking, int priority) throws Throwable {
         boolean osrCompilation = entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI;
         if (osrCompilation && bootstrapRunning) {
             // no OSR compilations during bootstrap - the compiler is just too slow at this point,
@@ -576,24 +600,39 @@ public class VMToCompilerImpl implements VMToCompiler {
             return;
         }
 
-        CompilationTask.withinEnqueue.set(Boolean.TRUE);
         try {
-            if (method.tryToQueueForCompilation()) {
-                assert method.isQueuedForCompilation();
+            CompilationTask.withinEnqueue.set(Boolean.TRUE);
+            if (!method.tryToQueueForCompilation()) {
+                // method is already queued
+                CompilationTask current = method.currentTask();
+                if (!PriorityCompileQueue.getValue() || current == null || !current.tryToCancel()) {
+                    // normally compilation tasks will only be re-queued when they get a
+                    // priority boost, so cancel the old task and add a new one
+                    // without a prioritizing compile queue it makes no sense to re-queue the
+                    // compilation task
+                    return;
+                }
+            }
+            assert method.isQueuedForCompilation();
 
-                final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
-                int id = compileTaskIds.incrementAndGet();
-                CompilationTask task = CompilationTask.create(graalRuntime, createPhasePlan(optimisticOpts, osrCompilation), optimisticOpts, method, entryBCI, id);
+            final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
+            int id = compileTaskIds.incrementAndGet();
+            // OSR compilations need to be finished quickly, so they get max priority
+            int queuePriority = osrCompilation ? -1 : priority;
+            CompilationTask task = CompilationTask.create(graalRuntime, createPhasePlan(optimisticOpts, osrCompilation), optimisticOpts, method, entryBCI, id, queuePriority);
 
-                if (blocking) {
-                    task.runCompilation();
-                } else {
-                    try {
-                        method.setCurrentTask(task);
+            if (blocking) {
+                task.runCompilation();
+            } else {
+                try {
+                    method.setCurrentTask(task);
+                    if (SlowCompileThreads.getValue() && priority > SlowQueueCutoff.getValue()) {
+                        slowCompileQueue.execute(task);
+                    } else {
                         compileQueue.execute(task);
-                    } catch (RejectedExecutionException e) {
-                        // The compile queue was already shut down.
                     }
+                } catch (RejectedExecutionException e) {
+                    // The compile queue was already shut down.
                 }
             }
         } finally {
