@@ -962,7 +962,7 @@ public class GraphBuilderPhase extends Phase {
         }
     }
 
-    protected void emitExplicitExceptions(ValueNode receiver, ValueNode outOfBoundsIndex) {
+    private void emitExplicitExceptions(ValueNode receiver, ValueNode outOfBoundsIndex) {
         assert receiver != null;
         if (optimisticOpts.useExceptionProbabilityForOperations() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE) {
             return;
@@ -1568,8 +1568,9 @@ public class GraphBuilderPhase extends Phase {
         ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
         assert frameState.stackSize() == 0;
 
+        // TODO (gdub) remove this when FloatingRead can handle this case
         if (Modifier.isSynchronized(method.getModifiers())) {
-            append(currentGraph.add(new ValueAnchorNode(true, x)));
+            append(currentGraph.add(new ValueAnchorNode(x)));
             assert !frameState.rethrowException();
         }
 
