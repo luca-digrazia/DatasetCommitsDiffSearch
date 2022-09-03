@@ -31,13 +31,13 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static com.oracle.graal.lir.sparc.SPARCMove.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
 import static jdk.internal.jvmci.sparc.SPARC.*;
+import static jdk.internal.jvmci.sparc.SPARC.CPUFeature.*;
 
 import java.util.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
 import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.sparc.*;
 import jdk.internal.jvmci.sparc.SPARC.CPUFeature;
 
 import com.oracle.graal.asm.*;
@@ -50,6 +50,7 @@ import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
 import com.oracle.graal.lir.asm.*;
 
@@ -58,7 +59,7 @@ public class SPARCControlFlow {
     // if does not fit into simm5 of cbcond) instruction and the final branch instruction
     private static final int maximumSelfOffsetInstructions = 2;
 
-    public static final class ReturnOp extends SPARCBlockEndOp {
+    public static final class ReturnOp extends SPARCLIRInstruction implements BlockEndOp {
         public static final LIRInstructionClass<ReturnOp> TYPE = LIRInstructionClass.create(ReturnOp.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(2);
 
@@ -81,7 +82,7 @@ public class SPARCControlFlow {
         }
     }
 
-    public static final class CompareBranchOp extends SPARCBlockEndOp implements SPARCDelayedControlTransfer {
+    public static final class CompareBranchOp extends SPARCLIRInstruction implements BlockEndOp, SPARCDelayedControlTransfer {
         public static final LIRInstructionClass<CompareBranchOp> TYPE = LIRInstructionClass.create(CompareBranchOp.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(3);
         static final EnumSet<Kind> SUPPORTED_KINDS = EnumSet.of(Kind.Long, Kind.Int, Kind.Object, Kind.Float, Kind.Double);
@@ -240,26 +241,26 @@ public class SPARCControlFlow {
                 case Int:
                     if (isConstant(actualY)) {
                         int constantY = asConstant(actualY).asInt();
-                        CBCOND.emit(masm, conditionFlag, false, asIntReg(actualX), constantY, actualTrueTarget);
+                        masm.cbcondw(conditionFlag, asIntReg(actualX), constantY, actualTrueTarget);
                     } else {
-                        CBCOND.emit(masm, conditionFlag, false, asIntReg(actualX), asIntReg(actualY), actualTrueTarget);
+                        masm.cbcondw(conditionFlag, asIntReg(actualX), asIntReg(actualY), actualTrueTarget);
                     }
                     break;
                 case Long:
                     if (isConstant(actualY)) {
                         int constantY = (int) asConstant(actualY).asLong();
-                        CBCOND.emit(masm, conditionFlag, true, asLongReg(actualX), constantY, actualTrueTarget);
+                        masm.cbcondx(conditionFlag, asLongReg(actualX), constantY, actualTrueTarget);
                     } else {
-                        CBCOND.emit(masm, conditionFlag, true, asLongReg(actualX), asLongReg(actualY), actualTrueTarget);
+                        masm.cbcondx(conditionFlag, asLongReg(actualX), asLongReg(actualY), actualTrueTarget);
                     }
                     break;
                 case Object:
                     if (isConstant(actualY)) {
                         // Object constant valid can only be null
                         assert asConstant(actualY).isNull();
-                        CBCOND.emit(masm, conditionFlag, true, asObjectReg(actualX), 0, actualTrueTarget);
+                        masm.cbcondx(conditionFlag, asObjectReg(actualX), 0, actualTrueTarget);
                     } else { // this is already loaded
-                        CBCOND.emit(masm, conditionFlag, true, asObjectReg(actualX), asObjectReg(actualY), actualTrueTarget);
+                        masm.cbcondx(conditionFlag, asObjectReg(actualX), asObjectReg(actualY), actualTrueTarget);
                     }
                     break;
                 default:
@@ -310,15 +311,12 @@ public class SPARCControlFlow {
 
     private static boolean isShortBranch(SPARCAssembler asm, int position, LabelHint hint, Label label) {
         int disp = 0;
-        boolean dispValid = true;
         if (label.isBound()) {
             disp = label.position() - position;
         } else if (hint != null && hint.isValid()) {
             disp = hint.getTarget() - hint.getPosition();
-        } else {
-            dispValid = false;
         }
-        if (dispValid) {
+        if (disp != 0) {
             if (disp < 0) {
                 disp -= maximumSelfOffsetInstructions * asm.target.wordSize;
             } else {
@@ -331,7 +329,7 @@ public class SPARCControlFlow {
         return false;
     }
 
-    public static final class BranchOp extends SPARCBlockEndOp implements StandardOp.BranchOp {
+    public static final class BranchOp extends SPARCLIRInstruction implements StandardOp.BranchOp {
         public static final LIRInstructionClass<BranchOp> TYPE = LIRInstructionClass.create(BranchOp.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(2);
         protected final ConditionFlag conditionFlag;
@@ -396,7 +394,7 @@ public class SPARCControlFlow {
         return true;
     }
 
-    public static final class StrategySwitchOp extends SPARCBlockEndOp {
+    public static final class StrategySwitchOp extends SPARCLIRInstruction implements BlockEndOp {
         public static final LIRInstructionClass<StrategySwitchOp> TYPE = LIRInstructionClass.create(StrategySwitchOp.class);
         @Use({CONST}) protected JavaConstant[] keyConstants;
         private final LabelRef[] keyTargets;
@@ -405,8 +403,7 @@ public class SPARCControlFlow {
         @Alive({REG, ILLEGAL}) protected Value constantTableBase;
         @Temp({REG}) protected Value scratch;
         private final SwitchStrategy strategy;
-        private final Map<Label, LabelHint> labelHints;
-        private final List<Label> conditionalLabels = new ArrayList<>();
+        private final LabelHint[] labelHints;
 
         public StrategySwitchOp(Value constantTableBase, SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch) {
             super(TYPE);
@@ -417,7 +414,7 @@ public class SPARCControlFlow {
             this.constantTableBase = constantTableBase;
             this.key = key;
             this.scratch = scratch;
-            this.labelHints = new HashMap<>();
+            this.labelHints = new LabelHint[keyTargets.length];
             assert keyConstants.length == keyTargets.length;
             assert keyConstants.length == strategy.keyProbabilities.length;
         }
@@ -427,31 +424,9 @@ public class SPARCControlFlow {
             final Register keyRegister = asRegister(key);
             final Register constantBaseRegister = AllocatableValue.ILLEGAL.equals(constantTableBase) ? g0 : asRegister(constantTableBase);
             BaseSwitchClosure closure = new BaseSwitchClosure(crb, masm, keyTargets, defaultTarget) {
-                int conditionalLabelPointer = 0;
-
-                /**
-                 * This method caches the generated labels over two assembly passes to get
-                 * information about branch lengths.
-                 */
-                @Override
-                public Label conditionalJump(int index, Condition condition) {
-                    Label label;
-                    if (conditionalLabelPointer <= conditionalLabels.size()) {
-                        label = new Label();
-                        conditionalLabels.add(label);
-                        conditionalLabelPointer = conditionalLabels.size();
-                    } else {
-                        // TODO: (sa) We rely here on the order how the labels are generated during
-                        // code generation; if the order is not stable ower two assembly passes, the
-                        // result can be wrong
-                        label = conditionalLabels.get(conditionalLabelPointer++);
-                    }
-                    conditionalJump(index, condition, label);
-                    return label;
-                }
-
                 @Override
                 protected void conditionalJump(int index, Condition condition, Label target) {
+                    requestHint(masm, index);
                     JavaConstant constant = keyConstants[index];
                     CC conditionCode;
                     Long bits;
@@ -477,20 +452,23 @@ public class SPARCControlFlow {
                             throw new JVMCIError("switch only supported for int, long and object");
                     }
                     ConditionFlag conditionFlag = fromCondition(conditionCode, condition, false);
-                    LabelHint hint = requestHint(masm, target);
-                    boolean isShortConstant = isSimm5(constant);
-                    int cbCondPosition = masm.position();
-                    if (!isShortConstant) { // Load constant takes one instruction
-                        cbCondPosition += SPARC.INSTRUCTION_SIZE;
-                    }
-                    boolean canUseShortBranch = masm.hasFeature(CPUFeature.CBCOND) && isShortBranch(masm, cbCondPosition, hint, target);
+                    LabelHint hint = labelHints[index];
+                    boolean canUseShortBranch = masm.hasFeature(CBCOND) && hint.isValid() && isShortBranch(masm, masm.position(), hint, target);
                     if (bits != null && canUseShortBranch) {
-                        if (isShortConstant) {
-                            CBCOND.emit(masm, conditionFlag, conditionCode == Icc, keyRegister, (int) (long) bits, target);
+                        if (isSimm5(constant)) {
+                            if (conditionCode == Icc) {
+                                masm.cbcondw(conditionFlag, keyRegister, (int) (long) bits, target);
+                            } else {
+                                masm.cbcondx(conditionFlag, keyRegister, (int) (long) bits, target);
+                            }
                         } else {
                             Register scratchRegister = asRegister(scratch);
                             const2reg(crb, masm, scratch, constantBaseRegister, keyConstants[index], SPARCDelayedControlTransfer.DUMMY);
-                            CBCOND.emit(masm, conditionFlag, conditionCode == Icc, keyRegister, scratchRegister, target);
+                            if (conditionCode == Icc) {
+                                masm.cbcondw(conditionFlag, keyRegister, scratchRegister, target);
+                            } else {
+                                masm.cbcondx(conditionFlag, keyRegister, scratchRegister, target);
+                            }
                         }
                     } else {
                         if (bits != null && isSimm13(constant)) {
@@ -508,13 +486,8 @@ public class SPARCControlFlow {
             strategy.run(closure);
         }
 
-        private LabelHint requestHint(SPARCMacroAssembler masm, Label label) {
-            LabelHint hint = labelHints.get(label);
-            if (hint == null) {
-                hint = masm.requestLabelHint(label);
-                labelHints.put(label, hint);
-            }
-            return hint;
+        private void requestHint(SPARCMacroAssembler masm, int index) {
+            labelHints[index] = masm.requestLabelHint(keyTargets[index].label());
         }
 
         @Override
@@ -529,7 +502,7 @@ public class SPARCControlFlow {
         }
     }
 
-    public static final class TableSwitchOp extends SPARCBlockEndOp {
+    public static final class TableSwitchOp extends SPARCLIRInstruction implements BlockEndOp {
         public static final LIRInstructionClass<TableSwitchOp> TYPE = LIRInstructionClass.create(TableSwitchOp.class);
 
         private final int lowKey;
