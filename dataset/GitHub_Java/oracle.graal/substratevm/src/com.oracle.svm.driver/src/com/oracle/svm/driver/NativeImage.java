@@ -64,7 +64,6 @@ import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.genscavenge.HeapPolicyOptions;
 import com.oracle.svm.core.heap.PhysicalMemory;
 import com.oracle.svm.core.jdk.LocalizationSupport;
-import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.posix.PosixExecutableName;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.driver.MacroOption.EnabledOption;
@@ -128,8 +127,6 @@ class NativeImage {
 
         abstract boolean consume(Queue<String> args);
     }
-
-    final APIOptionHandler apiOptionHandler;
 
     static final String oH = "-H:";
     static final String oR = "-R:";
@@ -257,8 +254,6 @@ class NativeImage {
 
         /* Default handler needs to be fist */
         registerOptionHandler(new DefaultOptionHandler(this));
-        apiOptionHandler = new APIOptionHandler(this);
-        registerOptionHandler(apiOptionHandler);
         registerOptionHandler(new MacroOptionHandler(this));
     }
 
@@ -301,7 +296,7 @@ class NativeImage {
     }
 
     private void prepareImageBuildArgs() {
-        Path svmDir = getRootDir().resolve(Paths.get("lib", "svm"));
+        Path svmDir = getRootDir().resolve("lib/svm");
         getJars(svmDir.resolve("builder")).forEach(this::addImageBuilderClasspath);
         getJars(svmDir).forEach(this::addImageClasspath);
         Path clibrariesDir = svmDir.resolve("clibraries").resolve(platform);
@@ -310,7 +305,7 @@ class NativeImage {
             addImageBuilderArg(oHInspectServerContentPath + svmDir.resolve("inspect"));
         }
 
-        Path jvmciDir = getRootDir().resolve(Paths.get("lib", "jvmci"));
+        Path jvmciDir = getRootDir().resolve("lib/jvmci");
         getJars(jvmciDir).forEach((Consumer<? super Path>) this::addImageBuilderClasspath);
         try {
             addImageBuilderJavaArgs(Files.list(jvmciDir)
@@ -322,7 +317,7 @@ class NativeImage {
             showError("Unable to use jar-files from directory " + jvmciDir, e);
         }
 
-        Path bootDir = getRootDir().resolve(Paths.get("lib", "boot"));
+        Path bootDir = getRootDir().resolve("lib/boot");
         getJars(bootDir).forEach((Consumer<? super Path>) this::addImageBuilderBootClasspath);
     }
 
@@ -357,20 +352,20 @@ class NativeImage {
 
         /* Provide more memory for image building if we have more than one language. */
         if (enabledLanguages.size() > 1) {
-            long baseMemRequirements = SubstrateOptionsParser.parseLong("4g");
-            long memRequirements = baseMemRequirements + enabledLanguages.size() * SubstrateOptionsParser.parseLong("1g");
+            long baseMemRequirements = parseSize("4g");
+            long memRequirements = baseMemRequirements + enabledLanguages.size() * parseSize("1g");
             /* Add mem-requirement for polyglot building - gets further consolidated (use max) */
             addImageBuilderJavaArgs(oXmx + memRequirements);
         }
     }
 
     private void enableTruffle() {
-        Path truffleDir = getRootDir().resolve(Paths.get("lib", "truffle"));
+        Path truffleDir = getRootDir().resolve("lib/truffle");
         addImageBuilderBootClasspath(truffleDir.resolve("truffle-api.jar"));
         addImageBuilderJavaArgs("-Dgraalvm.locatorDisabled=true");
         addImageBuilderJavaArgs("-Dtruffle.TrustAllTruffleRuntimeProviders=true"); // GR-7046
 
-        Path graalvmDir = getRootDir().resolve(Paths.get("lib", "graalvm"));
+        Path graalvmDir = getRootDir().resolve("lib/graalvm");
         getJars(graalvmDir).forEach((Consumer<? super Path>) this::addImageClasspath);
         consolidateListArgs(imageBuilderJavaArgs, "-Dpolyglot.engine.PreinitializeContexts=", ",", Function.identity());
     }
@@ -431,8 +426,8 @@ class NativeImage {
         imageClasspath.addAll(customImageClasspath);
 
         /* Perform JavaArgs consolidation - take the maximum of -Xmx, minimum of -Xms */
-        Long xmxValue = consolidateArgs(imageBuilderJavaArgs, oXmx, SubstrateOptionsParser::parseLong, String::valueOf, () -> 0L, Math::max);
-        Long xmsValue = consolidateArgs(imageBuilderJavaArgs, oXms, SubstrateOptionsParser::parseLong, String::valueOf, () -> SubstrateOptionsParser.parseLong(getXmsValue()), Math::max);
+        Long xmxValue = consolidateArgs(imageBuilderJavaArgs, oXmx, NativeImage::parseSize, String::valueOf, () -> 0L, Math::max);
+        Long xmsValue = consolidateArgs(imageBuilderJavaArgs, oXms, NativeImage::parseSize, String::valueOf, () -> parseSize(getXmsValue()), Math::max);
         if (Word.unsigned(xmsValue).aboveThan(Word.unsigned(xmxValue))) {
             replaceArg(imageBuilderJavaArgs, oXms, Long.toUnsignedString(xmxValue));
         }
@@ -445,8 +440,8 @@ class NativeImage {
         /* Perform option consolidation of imageBuilderArgs */
         Function<String, String> canonicalizedPathStr = s -> canonicalize(Paths.get(s)).toString();
         consolidateArgs(imageBuilderArgs, oHMaxRuntimeCompileMethods, Integer::parseInt, String::valueOf, () -> 0, Integer::sum);
-        consolidateArgs(imageBuilderArgs, oRYoungGenerationSize, SubstrateOptionsParser::parseLong, String::valueOf, () -> 0L, Math::max);
-        consolidateArgs(imageBuilderArgs, oROldGenerationSize, SubstrateOptionsParser::parseLong, String::valueOf, () -> 0L, Math::max);
+        consolidateArgs(imageBuilderArgs, oRYoungGenerationSize, NativeImage::parseSize, String::valueOf, () -> 0L, Math::max);
+        consolidateArgs(imageBuilderArgs, oROldGenerationSize, NativeImage::parseSize, String::valueOf, () -> 0L, Math::max);
         consolidateListArgs(imageBuilderArgs, oHCLibraryPath, ",", canonicalizedPathStr);
         consolidateListArgs(imageBuilderArgs, oHSubstitutionFiles, ",", canonicalizedPathStr);
         consolidateListArgs(imageBuilderArgs, oHSubstitutionResources, ",", Function.identity());
@@ -575,7 +570,7 @@ class NativeImage {
         }
     }
 
-    Path canonicalize(Path path) {
+    private Path canonicalize(Path path) {
         Path absolutePath = path.isAbsolute() ? path : workDir.resolve(path);
         try {
             Path realPath = absolutePath.toRealPath(LinkOption.NOFOLLOW_LINKS);
@@ -590,8 +585,7 @@ class NativeImage {
 
     Path getJavaHome() {
         Path javaHomePath = getRootDir().getParent();
-        Path binJava = Paths.get("bin", "java");
-        if (Files.isExecutable(javaHomePath.resolve(binJava))) {
+        if (Files.isExecutable(javaHomePath.resolve(Paths.get("bin/java")))) {
             return javaHomePath;
         }
 
@@ -600,8 +594,8 @@ class NativeImage {
             throw showError("Environment variable JAVA_HOME is not set");
         }
         javaHomePath = Paths.get(javaHome);
-        if (!Files.isExecutable(javaHomePath.resolve(binJava))) {
-            throw showError("Environment variable JAVA_HOME does not refer to a directory with a " + binJava + " executable");
+        if (!Files.isExecutable(javaHomePath.resolve(Paths.get("bin/java")))) {
+            throw showError("Environment variable JAVA_HOME does not refer to a directory with a bin/java executable");
         }
         return javaHomePath;
     }
@@ -666,10 +660,6 @@ class NativeImage {
 
     void showMessage(String message) {
         show(System.out::println, message);
-    }
-
-    void showNewline() {
-        System.out.println();
     }
 
     void showMessagePart(String message) {
@@ -747,10 +737,32 @@ class NativeImage {
     protected String getXmxValue(int maxInstances) {
         UnsignedWord memMax = PhysicalMemory.size().unsignedDivide(10).multiply(8).unsignedDivide(maxInstances);
         String maxXmx = "14g";
-        if (memMax.aboveOrEqual(Word.unsigned(SubstrateOptionsParser.parseLong(maxXmx)))) {
+        if (memMax.aboveOrEqual(Word.unsigned(parseSize(maxXmx)))) {
             return maxXmx;
         }
         return Long.toUnsignedString(memMax.rawValue());
+    }
+
+    /* Taken from org.graalvm.compiler.options.OptionsParser.parseLong(String) */
+    protected static long parseSize(String v) {
+        String valueString = v.toLowerCase();
+        long scale = 1;
+        if (valueString.endsWith("k")) {
+            scale = 1024L;
+        } else if (valueString.endsWith("m")) {
+            scale = 1024L * 1024L;
+        } else if (valueString.endsWith("g")) {
+            scale = 1024L * 1024L * 1024L;
+        } else if (valueString.endsWith("t")) {
+            scale = 1024L * 1024L * 1024L * 1024L;
+        }
+
+        if (scale != 1) {
+            /* Remove trailing scale character. */
+            valueString = valueString.substring(0, valueString.length() - 1);
+        }
+
+        return Long.parseUnsignedLong(valueString) * scale;
     }
 
     static Map<String, String> loadProperties(Path propertiesPath) {
