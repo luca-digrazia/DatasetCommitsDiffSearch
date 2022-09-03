@@ -53,7 +53,8 @@ public abstract class LLVMToFunctionNode extends LLVMFunctionNode {
 
         @Specialization
         public LLVMFunctionDescriptor executeI64(LLVMAddress from) {
-            return LLVMFunctionDescriptor.create((int) from.getVal());
+            // TODO implement
+            throw new AssertionError(from);
         }
     }
 
