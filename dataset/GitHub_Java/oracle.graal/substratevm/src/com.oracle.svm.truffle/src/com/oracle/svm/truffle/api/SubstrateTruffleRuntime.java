@@ -348,6 +348,9 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
         while (optionValues.advance()) {
             final OptionKey<?> key = optionValues.getKey();
             Object value = optionValues.getValue();
+            if (value == null) {
+                value = key.getDefaultValue();
+            }
             res.put(key.getName(), value);
         }
         return res;
@@ -375,11 +378,5 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     @Override
     public void log(String message) {
         TTY.println(message);
-    }
-
-    @Override
-    public String getName() {
-        String name = super.getName();
-        return name + " polyglot-native";
     }
 }
