@@ -116,7 +116,6 @@ import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.deopt.DeoptimizedFrame;
 import com.oracle.svm.core.deopt.Deoptimizer;
 import com.oracle.svm.core.graal.code.SubstrateBackendFactory;
-import com.oracle.svm.core.graal.code.SubstrateCallingConvention;
 import com.oracle.svm.core.graal.code.SubstrateCompiledCode;
 import com.oracle.svm.core.graal.code.SubstrateDataBuilder;
 import com.oracle.svm.core.graal.code.SubstrateLIRGenerator;
@@ -542,12 +541,7 @@ public class SubstrateAMD64Backend extends Backend {
             AMD64MacroAssembler asm = (AMD64MacroAssembler) tasm.asm;
             int frameSize = tasm.frameMap.frameSize();
 
-            if (((SubstrateAMD64RegisterConfig) tasm.frameMap.getRegisterConfig()).shouldUseBasePointer()) {
-                asm.enter(frameSize);
-            } else {
-                asm.decrementq(rsp, frameSize);
-            }
-
+            asm.decrementq(rsp, frameSize);
             tasm.recordMark(MARK_PROLOGUE_DECD_RSP);
             tasm.recordMark(MARK_PROLOGUE_END);
         }
@@ -558,13 +552,7 @@ public class SubstrateAMD64Backend extends Backend {
             int frameSize = tasm.frameMap.frameSize();
 
             tasm.recordMark(MARK_EPILOGUE_START);
-
-            if (((SubstrateAMD64RegisterConfig) tasm.frameMap.getRegisterConfig()).shouldUseBasePointer()) {
-                asm.leave();
-            } else {
-                asm.incrementq(rsp, frameSize);
-            }
-
+            asm.incrementq(rsp, frameSize);
             if (frameSize != 0) {
                 tasm.recordMark(MARK_EPILOGUE_INCD_RSP);
             }
@@ -631,9 +619,9 @@ public class SubstrateAMD64Backend extends Backend {
 
         private final SharedMethod method;
         private final LIRKindTool lirKindTool;
-        private final SubstrateRegisterConfig registerConfig;
+        private final SubstrateAMD64RegisterConfig registerConfig;
 
-        protected SubstrateAMD64MoveFactory(BackupSlotProvider backupSlotProvider, SharedMethod method, LIRKindTool lirKindTool, SubstrateRegisterConfig registerConfig) {
+        protected SubstrateAMD64MoveFactory(BackupSlotProvider backupSlotProvider, SharedMethod method, LIRKindTool lirKindTool, SubstrateAMD64RegisterConfig registerConfig) {
             super(backupSlotProvider);
             this.method = method;
             this.lirKindTool = lirKindTool;
@@ -739,7 +727,7 @@ public class SubstrateAMD64Backend extends Backend {
 
     @Override
     public FrameMap newFrameMap(RegisterConfig registerConfig) {
-        return new AMD64FrameMap(getProviders().getCodeCache(), registerConfig, new SubstrateReferenceMapBuilderFactory(), ((SubstrateAMD64RegisterConfig) registerConfig).shouldUseBasePointer());
+        return new AMD64FrameMap(getProviders().getCodeCache(), registerConfig, new SubstrateReferenceMapBuilderFactory());
     }
 
     @Override
@@ -803,7 +791,7 @@ public class SubstrateAMD64Backend extends Backend {
     }
 
     private static boolean useLinearPointerCompression() {
-        return SubstrateOptions.SpawnIsolates.getValue();
+        return SubstrateOptions.UseLinearPointerCompression.getValue() && SubstrateOptions.UseHeapBaseRegister.getValue();
     }
 
     @Override

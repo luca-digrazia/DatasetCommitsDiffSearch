@@ -35,7 +35,6 @@ import org.graalvm.compiler.core.gen.NodeMatchRules;
 import org.graalvm.compiler.core.match.MatchRuleRegistry;
 import org.graalvm.compiler.core.match.MatchStatement;
 import org.graalvm.compiler.core.phases.CommunityCompilerConfiguration;
-import org.graalvm.compiler.core.phases.EconomyCompilerConfiguration;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.hotspot.CommunityCompilerConfigurationFactory;
@@ -76,10 +75,6 @@ public class GraalConfiguration {
 
     public Suites createSuites(OptionValues options, @SuppressWarnings("unused") boolean hosted) {
         return Suites.createSuites(new CommunityCompilerConfiguration(), options);
-    }
-
-    public Suites createFirstTierSuites(OptionValues options, @SuppressWarnings("unused") boolean hosted) {
-        return Suites.createSuites(new EconomyCompilerConfiguration(), options);
     }
 
     public String getCompilerConfigurationName() {
