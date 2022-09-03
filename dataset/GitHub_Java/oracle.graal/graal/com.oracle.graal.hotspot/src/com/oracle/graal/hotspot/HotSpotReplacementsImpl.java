@@ -40,8 +40,8 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
 
     private final HotSpotVMConfig config;
 
-    public HotSpotReplacementsImpl(Providers providers, HotSpotVMConfig config, Assumptions assumptions, TargetDescription target) {
-        super(providers, assumptions, target);
+    public HotSpotReplacementsImpl(Providers providers, HotSpotVMConfig config, Assumptions assumptions) {
+        super(providers, assumptions);
         this.config = config;
     }
 
