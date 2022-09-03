@@ -22,7 +22,7 @@
  */
 package org.graalvm.compiler.nodes.test;
 
-import static org.graalvm.compiler.core.test.GraalCompilerTest.getInitialOptions;
+import static org.graalvm.compiler.core.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import jdk.vm.ci.meta.JavaConstant;
@@ -53,7 +53,7 @@ public class IntegerStampTest {
 
     @Before
     public void before() {
-        graph = new StructuredGraph.Builder(getInitialOptions(), AllowAssumptions.YES).build();
+        graph = new StructuredGraph(AllowAssumptions.YES, INVALID_COMPILATION_ID);
     }
 
     @Test
