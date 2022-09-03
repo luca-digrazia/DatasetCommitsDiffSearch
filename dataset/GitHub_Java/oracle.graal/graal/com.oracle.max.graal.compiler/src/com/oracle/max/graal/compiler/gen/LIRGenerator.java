@@ -38,7 +38,6 @@ import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.globalstub.*;
 import com.oracle.max.graal.compiler.graph.*;
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.ir.Deoptimize.DeoptAction;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.value.*;
@@ -208,10 +207,8 @@ public abstract class LIRGenerator extends ValueVisitor {
     public static class DeoptimizationStub {
         public final Label label = new Label();
         public final LIRDebugInfo info;
-        public final DeoptAction action;
 
-        public DeoptimizationStub(DeoptAction action, FrameState state) {
-            this.action = action;
+        public DeoptimizationStub(FrameState state) {
             info = new LIRDebugInfo(state);
         }
     }
@@ -275,7 +272,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     private static boolean jumpsToNextBlock(Node node) {
-        return node instanceof BlockEnd;
+        return node instanceof BlockEnd || node instanceof Anchor;
     }
 
     @Override
@@ -398,8 +395,11 @@ public abstract class LIRGenerator extends ValueVisitor {
             deoptimizationStubs = new ArrayList<DeoptimizationStub>();
         }
 
-        DeoptimizationStub stub = new DeoptimizationStub(DeoptAction.InvalidateReprofile, state);
+        DeoptimizationStub stub = new DeoptimizationStub(state);
         deoptimizationStubs.add(stub);
+
+        emitCompare(x.node());
+        //emitBranch(x.node(), stub.label)
         throw new RuntimeException();
         //lir.branch(x.condition.negate(), stub.label, stub.info);
     }
@@ -435,7 +435,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         // describing the state at the safepoint.
 
         moveToPhi();
-        lir.jump(getLIRBlock(x.defaultSuccessor()));
+        lir.jump(getLIRBlock(x.next()));
     }
 
     @Override
@@ -684,10 +684,14 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
-    public void visitNullCheck(FixedNullCheck x) {
-        CiValue value = load(x.object());
-        LIRDebugInfo info = stateFor(x);
-        lir.nullCheck(value, info);
+    public void visitFixedGuard(FixedGuard fixedGuard) {
+        Node comp = fixedGuard.node();
+        if (comp instanceof IsNonNull) {
+            IsNonNull x = (IsNonNull) comp;
+            CiValue value = load(x.object());
+            LIRDebugInfo info = stateFor(x);
+            lir.nullCheck(value, info);
+        }
     }
 
     @Override
@@ -950,8 +954,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitDeoptimize(Deoptimize deoptimize) {
-        assert lastState != null : "deoptimize always needs a state";
-        DeoptimizationStub stub = new DeoptimizationStub(deoptimize.action(), lastState);
+        DeoptimizationStub stub = new DeoptimizationStub(lastState);
         addDeoptimizationStub(stub);
         lir.branch(Condition.TRUE, stub.label, stub.info);
     }
