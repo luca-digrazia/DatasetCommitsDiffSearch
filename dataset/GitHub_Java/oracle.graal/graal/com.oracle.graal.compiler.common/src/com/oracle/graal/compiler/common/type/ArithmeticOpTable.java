@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,8 +21,6 @@
  * questions.
  */
 package com.oracle.graal.compiler.common.type;
-
-import static com.oracle.graal.api.meta.MetaUtil.*;
 
 import java.util.*;
 import java.util.function.*;
@@ -147,70 +145,70 @@ public final class ArithmeticOpTable {
     /**
      * Describes the unary negation operation.
      */
-    public UnaryOp<Neg> getNeg() {
+    public final UnaryOp<Neg> getNeg() {
         return neg;
     }
 
     /**
      * Describes the addition operation.
      */
-    public BinaryOp<Add> getAdd() {
+    public final BinaryOp<Add> getAdd() {
         return add;
     }
 
     /**
      * Describes the subtraction operation.
      */
-    public BinaryOp<Sub> getSub() {
+    public final BinaryOp<Sub> getSub() {
         return sub;
     }
 
     /**
      * Describes the multiplication operation.
      */
-    public BinaryOp<Mul> getMul() {
+    public final BinaryOp<Mul> getMul() {
         return mul;
     }
 
     /**
      * Describes the division operation.
      */
-    public BinaryOp<Div> getDiv() {
+    public final BinaryOp<Div> getDiv() {
         return div;
     }
 
     /**
      * Describes the remainder operation.
      */
-    public BinaryOp<Rem> getRem() {
+    public final BinaryOp<Rem> getRem() {
         return rem;
     }
 
     /**
      * Describes the bitwise not operation.
      */
-    public UnaryOp<Not> getNot() {
+    public final UnaryOp<Not> getNot() {
         return not;
     }
 
     /**
      * Describes the bitwise and operation.
      */
-    public BinaryOp<And> getAnd() {
+    public final BinaryOp<And> getAnd() {
         return and;
     }
 
     /**
      * Describes the bitwise or operation.
      */
-    public BinaryOp<Or> getOr() {
+    public final BinaryOp<Or> getOr() {
         return or;
     }
 
     /**
      * Describes the bitwise xor operation.
      */
-    public BinaryOp<Xor> getXor() {
+    public final BinaryOp<Xor> getXor() {
         return xor;
     }
 
@@ -242,15 +240,6 @@ public final class ArithmeticOpTable {
         return floatConvert[op.ordinal()];
     }
 
-    public static String toString(Op... ops) {
-        return Arrays.asList(ops).stream().map(o -> o == null ? "null" : o.operator + "{" + getSimpleName(o.getClass(), false) + "}").collect(Collectors.joining(","));
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "[" + toString(neg, add, sub, mul, div, rem, not, and, or, xor, zeroExtend, signExtend, narrow) + ",floatConvert[" + toString(floatConvert) + "]]";
-    }
-
     public abstract static class Op {
 
         private final String operator;
@@ -262,22 +251,6 @@ public final class ArithmeticOpTable {
         @Override
         public String toString() {
             return operator;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj == this) {
-                return true;
-            }
-            if (obj != null && getClass() == obj.getClass()) {
-                return obj.toString().equals(toString());
-            }
-            return false;
-        }
-
-        @Override
-        public int hashCode() {
-            return toString().hashCode();
         }
     }
 
@@ -436,20 +409,6 @@ public final class ArithmeticOpTable {
          */
         public Constant getZero(Stamp stamp) {
             return null;
-        }
-
-        @Override
-        public String toString() {
-            if (associative) {
-                if (commutative) {
-                    return super.toString() + "[AC]";
-                } else {
-                    return super.toString() + "[A]";
-                }
-            } else if (commutative) {
-                return super.toString() + "[C]";
-            }
-            return super.toString();
         }
     }
 

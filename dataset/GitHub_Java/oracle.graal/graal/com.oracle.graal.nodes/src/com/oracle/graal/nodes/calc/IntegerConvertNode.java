@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import java.io.*;
 import java.util.function.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -39,16 +38,14 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements ConvertNode, ArithmeticLIRLowerable {
 
-    protected final SerializableIntegerConvertFunction<OP> getOp;
-    protected final SerializableIntegerConvertFunction<REV> getReverseOp;
+    protected final Function<ArithmeticOpTable, IntegerConvertOp<OP>> getOp;
+    protected final Function<ArithmeticOpTable, IntegerConvertOp<REV>> getReverseOp;
 
     protected final int inputBits;
     protected final int resultBits;
 
-    protected interface SerializableIntegerConvertFunction<T> extends Function<ArithmeticOpTable, IntegerConvertOp<T>>, Serializable {
-    }
-
-    protected IntegerConvertNode(SerializableIntegerConvertFunction<OP> getOp, SerializableIntegerConvertFunction<REV> getReverseOp, int inputBits, int resultBits, ValueNode input) {
+    protected IntegerConvertNode(Function<ArithmeticOpTable, IntegerConvertOp<OP>> getOp, Function<ArithmeticOpTable, IntegerConvertOp<REV>> getReverseOp, int inputBits, int resultBits,
+                    ValueNode input) {
         super(getOp.apply(ArithmeticOpTable.forStamp(input.stamp())).foldStamp(inputBits, resultBits, input.stamp()), input);
         this.getOp = getOp;
         this.getReverseOp = getReverseOp;
@@ -69,12 +66,12 @@ public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements C
     }
 
     @Override
-    public Constant convert(Constant c, ConstantReflectionProvider constantReflection) {
+    public Constant convert(Constant c) {
         return getOp(getValue()).foldConstant(getInputBits(), getResultBits(), c);
     }
 
     @Override
-    public Constant reverse(Constant c, ConstantReflectionProvider constantReflection) {
+    public Constant reverse(Constant c) {
         IntegerConvertOp<REV> reverse = getReverseOp.apply(ArithmeticOpTable.forStamp(stamp()));
         return reverse.foldConstant(getResultBits(), getInputBits(), c);
     }
@@ -89,7 +86,7 @@ public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements C
         if (inputBits == resultBits) {
             return value;
         } else if (value.isConstant()) {
-            return ConstantNode.forPrimitive(stamp(), convert(forValue.asConstant(), tool.getConstantReflection()));
+            return ConstantNode.forPrimitive(stamp(), convert(forValue.asConstant()));
         } else {
             return this;
         }

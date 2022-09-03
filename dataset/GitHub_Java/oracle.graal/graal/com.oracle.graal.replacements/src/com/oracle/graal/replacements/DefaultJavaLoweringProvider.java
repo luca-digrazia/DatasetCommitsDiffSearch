@@ -40,12 +40,10 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.debug.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.util.*;
 
@@ -101,15 +99,9 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             boxingSnippets.lower((BoxNode) n, tool);
         } else if (n instanceof UnboxNode) {
             boxingSnippets.lower((UnboxNode) n, tool);
-        } else if (n instanceof VerifyHeapNode) {
-            lowerVerifyHeap((VerifyHeapNode) n);
         } else {
             throw GraalInternalError.shouldNotReachHere("Node implementing Lowerable not handled: " + n);
         }
-    }
-
-    protected void lowerVerifyHeap(VerifyHeapNode n) {
-        GraphUtil.removeFixedWithUnusedInputs(n);
     }
 
     protected void lowerLoadFieldNode(LoadFieldNode loadField, LoweringTool tool) {
@@ -186,7 +178,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ValueNode value = storeIndexed.value();
         ValueNode array = storeIndexed.array();
         FixedWithNextNode checkCastNode = null;
-        if (elementKind == Kind.Object && !StampTool.isPointerAlwaysNull(value)) {
+        if (elementKind == Kind.Object && !StampTool.isObjectAlwaysNull(value)) {
             /* Array store check. */
             ResolvedJavaType arrayType = StampTool.typeOrNull(array);
             if (arrayType != null && StampTool.isExactType(array)) {
@@ -219,7 +211,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     protected void lowerArrayLengthNode(ArrayLengthNode arrayLengthNode, LoweringTool tool) {
         StructuredGraph graph = arrayLengthNode.graph();
         ValueNode array = arrayLengthNode.array();
-        ConstantLocationNode location = ConstantLocationNode.create(ARRAY_LENGTH_LOCATION, arrayLengthOffset(), graph);
+        ConstantLocationNode location = ConstantLocationNode.create(ARRAY_LENGTH_LOCATION, Kind.Int, arrayLengthOffset(), graph);
 
         ReadNode arrayLengthRead = graph.add(ReadNode.create(array, location, StampFactory.positiveInt(), BarrierType.NONE));
         arrayLengthRead.setGuard(createNullCheck(array, arrayLengthNode, tool));
@@ -251,7 +243,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     protected void lowerAtomicReadAndWriteNode(AtomicReadAndWriteNode n) {
         StructuredGraph graph = n.graph();
         Kind valueKind = n.getValueKind();
-        LocationNode location = IndexedLocationNode.create(n.getLocationIdentity(), 0, n.offset(), graph, 1);
+        LocationNode location = IndexedLocationNode.create(n.getLocationIdentity(), valueKind, 0, n.offset(), graph, 1);
 
         ValueNode newValue = implicitStoreConvert(graph, valueKind, n.newValue());
 
@@ -320,7 +312,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     protected void lowerJavaReadNode(JavaReadNode read) {
         StructuredGraph graph = read.graph();
-        Kind valueKind = read.getReadKind();
+        Kind valueKind = read.location().getValueKind();
         Stamp loadStamp = loadStamp(read.stamp(), valueKind, read.isCompressible());
 
         ReadNode memoryRead = graph.add(ReadNode.create(read.object(), read.location(), loadStamp, read.getBarrierType()));
@@ -332,7 +324,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     protected void lowerJavaWriteNode(JavaWriteNode write) {
         StructuredGraph graph = write.graph();
-        Kind valueKind = write.getWriteKind();
+        Kind valueKind = write.location().getValueKind();
         ValueNode value = implicitStoreConvert(graph, valueKind, write.value(), write.isCompressible());
 
         WriteNode memoryWrite = graph.add(WriteNode.create(write.object(), value, write.location(), write.getBarrierType(), write.isInitialization()));
@@ -374,6 +366,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                         Kind entryKind = virtual.entryKind(i);
 
                         // Truffle requires some leniency in terms of what can be put where:
+                        Kind accessKind = valueKind.getStackKind() == entryKind.getStackKind() ? entryKind : valueKind;
                         assert valueKind.getStackKind() == entryKind.getStackKind() ||
                                         (valueKind == Kind.Long || valueKind == Kind.Double || (valueKind == Kind.Int && virtual instanceof VirtualArrayNode));
                         ConstantLocationNode location = null;
@@ -382,11 +375,11 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                             ResolvedJavaField field = ((VirtualInstanceNode) virtual).field(i);
                             long offset = fieldOffset(field);
                             if (offset >= 0) {
-                                location = ConstantLocationNode.create(initLocationIdentity(), offset, graph);
+                                location = ConstantLocationNode.create(initLocationIdentity(), accessKind, offset, graph);
                                 barrierType = fieldInitializationBarrier(entryKind);
                             }
                         } else {
-                            location = ConstantLocationNode.create(initLocationIdentity(), arrayBaseOffset(entryKind) + i * arrayScalingFactor(entryKind), graph);
+                            location = ConstantLocationNode.create(initLocationIdentity(), accessKind, arrayBaseOffset(entryKind) + i * arrayScalingFactor(entryKind), graph);
                             barrierType = arrayInitializationBarrier(entryKind);
                         }
                         if (location != null) {
@@ -590,7 +583,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         int offset = fieldOffset(field);
         if (offset >= 0) {
             LocationIdentity loc = initialization ? initLocationIdentity() : field;
-            return ConstantLocationNode.create(loc, offset, graph);
+            return ConstantLocationNode.create(loc, field.getKind(), offset, graph);
         } else {
             return null;
         }
@@ -618,8 +611,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     protected LocationNode createLocation(ValueNode offsetNode, LocationIdentity locationIdentity, Kind accessKind, ValueNode[] base) {
         ValueNode offset = offsetNode;
         if (offset.isConstant()) {
-            long offsetValue = offset.asJavaConstant().asLong();
-            return ConstantLocationNode.create(locationIdentity, offsetValue, offset.graph());
+            long offsetValue = offset.asConstant().asLong();
+            return ConstantLocationNode.create(locationIdentity, accessKind, offsetValue, offset.graph());
         }
 
         long displacement = 0;
@@ -635,7 +628,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         if (offset instanceof AddNode) {
             AddNode integerAddNode = (AddNode) offset;
             if (integerAddNode.getY() instanceof ConstantNode) {
-                displacement = integerAddNode.getY().asJavaConstant().asLong();
+                displacement = integerAddNode.getY().asConstant().asLong();
                 offset = integerAddNode.getX();
             }
         }
@@ -655,7 +648,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             if (offset instanceof AddNode) {
                 integerAddNode = (AddNode) offset;
                 if (integerAddNode.getY() instanceof ConstantNode) {
-                    displacement = integerAddNode.getY().asJavaConstant().asLong();
+                    displacement = integerAddNode.getY().asConstant().asLong();
                     offset = integerAddNode.getX();
                 }
             }
@@ -663,7 +656,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         if (offset instanceof LeftShiftNode) {
             LeftShiftNode leftShiftNode = (LeftShiftNode) offset;
             if (leftShiftNode.getY() instanceof ConstantNode) {
-                long shift = leftShiftNode.getY().asJavaConstant().asLong();
+                long shift = leftShiftNode.getY().asConstant().asLong();
                 if (shift >= 1 && shift <= 3) {
                     if (shift == 1) {
                         indexScaling = 2;
@@ -680,12 +673,12 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             // If we were using sign extended values before restore the sign extension.
             offset = offset.graph().addOrUnique(SignExtendNode.create(offset, 64));
         }
-        return IndexedLocationNode.create(locationIdentity, displacement, offset, offset.graph(), indexScaling);
+        return IndexedLocationNode.create(locationIdentity, accessKind, displacement, offset, offset.graph(), indexScaling);
     }
 
     public IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index, boolean initialization) {
         LocationIdentity loc = initialization ? initLocationIdentity() : NamedLocationIdentity.getArrayLocation(elementKind);
-        return IndexedLocationNode.create(loc, arrayBaseOffset(elementKind), index, graph, arrayScalingFactor(elementKind));
+        return IndexedLocationNode.create(loc, elementKind, arrayBaseOffset(elementKind), index, graph, arrayScalingFactor(elementKind));
     }
 
     protected GuardingNode createBoundsCheck(AccessIndexedNode n, LoweringTool tool) {
@@ -694,7 +687,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ValueNode arrayLength = readArrayLength(array, tool.getConstantReflection());
         if (arrayLength == null) {
             Stamp stamp = StampFactory.positiveInt();
-            ReadNode readArrayLength = graph.add(ReadNode.create(array, ConstantLocationNode.create(ARRAY_LENGTH_LOCATION, arrayLengthOffset(), graph), stamp, BarrierType.NONE));
+            ReadNode readArrayLength = graph.add(ReadNode.create(array, ConstantLocationNode.create(ARRAY_LENGTH_LOCATION, Kind.Int, arrayLengthOffset(), graph), stamp, BarrierType.NONE));
             graph.addBeforeFixed(n, readArrayLength);
             readArrayLength.setGuard(createNullCheck(array, readArrayLength, tool));
             arrayLength = readArrayLength;
@@ -703,8 +696,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         }
 
         if (arrayLength.isConstant() && n.index().isConstant()) {
-            int l = arrayLength.asJavaConstant().asInt();
-            int i = n.index().asJavaConstant().asInt();
+            int l = arrayLength.asConstant().asInt();
+            int i = n.index().asConstant().asInt();
             if (i >= 0 && i < l) {
                 // unneeded range check
                 return null;
@@ -715,14 +708,15 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     protected GuardingNode createNullCheck(ValueNode object, FixedNode before, LoweringTool tool) {
-        if (StampTool.isPointerNonNull(object)) {
+        if (StampTool.isObjectNonNull(object)) {
             return null;
         }
         return tool.createGuard(before, before.graph().unique(IsNullNode.create(object)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true);
     }
 
     @Override
-    public ValueNode reconstructArrayIndex(Kind elementKind, LocationNode location) {
+    public ValueNode reconstructArrayIndex(LocationNode location) {
+        Kind elementKind = location.getValueKind();
         assert location.getLocationIdentity().equals(NamedLocationIdentity.getArrayLocation(elementKind));
 
         long base;

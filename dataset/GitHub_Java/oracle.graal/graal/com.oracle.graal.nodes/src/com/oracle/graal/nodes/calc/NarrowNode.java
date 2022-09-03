@@ -37,12 +37,17 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
 
-    public NarrowNode(ValueNode input, int resultBits) {
-        this(input, PrimitiveStamp.getBits(input.stamp()), resultBits);
-        assert 0 < resultBits && resultBits <= PrimitiveStamp.getBits(input.stamp());
+    public static NarrowNode create(ValueNode input, int resultBits) {
+        int inputBits = PrimitiveStamp.getBits(input.stamp());
+        assert 0 < resultBits && resultBits <= inputBits;
+        return create(input, inputBits, resultBits);
     }
 
-    public NarrowNode(ValueNode input, int inputBits, int resultBits) {
+    public static NarrowNode create(ValueNode input, int inputBits, int resultBits) {
+        return new NarrowNode(input, inputBits, resultBits);
+    }
+
+    protected NarrowNode(ValueNode input, int inputBits, int resultBits) {
         super(ArithmeticOpTable::getNarrow, ArithmeticOpTable::getSignExtend, inputBits, resultBits, input);
     }
 
@@ -62,7 +67,7 @@ public class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
             // zzzzzzzz yyyyxxxx -(narrow)-> yyyyxxxx -(narrow)-> xxxx
             // ==> zzzzzzzz yyyyxxxx -(narrow)-> xxxx
             NarrowNode other = (NarrowNode) forValue;
-            return new NarrowNode(other.getValue(), other.getInputBits(), getResultBits());
+            return NarrowNode.create(other.getValue(), other.getInputBits(), getResultBits());
         } else if (forValue instanceof IntegerConvertNode) {
             // SignExtendNode or ZeroExtendNode
             IntegerConvertNode<?, ?> other = (IntegerConvertNode<?, ?>) forValue;
@@ -73,16 +78,16 @@ public class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
             } else if (getResultBits() < other.getInputBits()) {
                 // yyyyxxxx -(extend)-> zzzzzzzz yyyyxxxx -(narrow)-> xxxx
                 // ==> yyyyxxxx -(narrow)-> xxxx
-                return new NarrowNode(other.getValue(), other.getInputBits(), getResultBits());
+                return NarrowNode.create(other.getValue(), other.getInputBits(), getResultBits());
             } else {
                 if (other instanceof SignExtendNode) {
                     // sxxx -(sign-extend)-> ssssssss sssssxxx -(narrow)-> sssssxxx
                     // ==> sxxx -(sign-extend)-> sssssxxx
-                    return new SignExtendNode(other.getValue(), other.getInputBits(), getResultBits());
+                    return SignExtendNode.create(other.getValue(), other.getInputBits(), getResultBits());
                 } else if (other instanceof ZeroExtendNode) {
                     // xxxx -(zero-extend)-> 00000000 00000xxx -(narrow)-> 0000xxxx
                     // ==> xxxx -(zero-extend)-> 0000xxxx
-                    return new ZeroExtendNode(other.getValue(), other.getInputBits(), getResultBits());
+                    return ZeroExtendNode.create(other.getValue(), other.getInputBits(), getResultBits());
                 }
             }
         }
