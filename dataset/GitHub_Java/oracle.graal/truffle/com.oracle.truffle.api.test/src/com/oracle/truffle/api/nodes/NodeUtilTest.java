@@ -22,18 +22,16 @@
  */
 package com.oracle.truffle.api.nodes;
 
-import com.oracle.truffle.api.TestingLanguage;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.api.nodes.RootNode;
-
-import java.util.Iterator;
-
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 
+import java.util.Iterator;
+
+import org.junit.Assert;
 import org.junit.Test;
+
+import com.oracle.truffle.api.TestingLanguage;
+import com.oracle.truffle.api.frame.VirtualFrame;
 
 public class NodeUtilTest {
 
@@ -48,6 +46,27 @@ public class NodeUtilTest {
         assertThat(count, is(2));
         assertThat(root.visited, is(0));
         assertThat(root.child0.visited, is(1));
+    }
+
+    @Test
+    public void testReplaceReplaced() {
+        TestRootNode rootNode = new TestRootNode();
+        TestNode replacedNode = new TestNode();
+        rootNode.child0 = replacedNode;
+        rootNode.adoptChildren();
+        rootNode.child0 = null;
+
+        TestNode test1 = new TestNode();
+        TestNode test11 = new TestNode();
+        TestNode test111 = new TestNode();
+
+        test11.child1 = test111;
+        test1.child1 = test11;
+        replacedNode.replace(test1);
+
+        Assert.assertSame(rootNode, test1.getParent());
+        Assert.assertSame(test1, test11.getParent());
+        Assert.assertSame(test11, test111.getParent());
     }
 
     private static int iterate(Iterator<Node> iterator) {
@@ -76,7 +95,7 @@ public class NodeUtilTest {
 
         private int visited;
 
-        public TestNode() {
+        TestNode() {
         }
 
     }
@@ -87,7 +106,7 @@ public class NodeUtilTest {
 
         private int visited;
 
-        public TestRootNode() {
+        TestRootNode() {
             super(TestingLanguage.class, null, null);
         }
 
