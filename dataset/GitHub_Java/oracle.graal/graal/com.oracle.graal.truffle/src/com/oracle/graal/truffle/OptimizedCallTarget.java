@@ -397,16 +397,9 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             if (TruffleCompilationExceptionsAreThrown.getValue()) {
                 throw new OptimizationFailedException(t, this);
             }
-            /*
-             * Automatically enable TruffleCompilationExceptionsAreFatal when asserts are enabled
-             * but respect TruffleCompilationExceptionsAreFatal if it's been explicitly set.
-             */
-            boolean truffleCompilationExceptionsAreFatal = TruffleCompilationExceptionsAreFatal.getValue();
-            assert TruffleCompilationExceptionsAreFatal.hasBeenSet() || (truffleCompilationExceptionsAreFatal = true) == true;
-
-            if (TruffleCompilationExceptionsArePrinted.getValue() || truffleCompilationExceptionsAreFatal) {
+            if (TruffleCompilationExceptionsArePrinted.getValue() || TruffleCompilationExceptionsAreFatal.getValue()) {
                 printException(t);
-                if (truffleCompilationExceptionsAreFatal) {
+                if (TruffleCompilationExceptionsAreFatal.getValue()) {
                     System.exit(-1);
                 }
             }
