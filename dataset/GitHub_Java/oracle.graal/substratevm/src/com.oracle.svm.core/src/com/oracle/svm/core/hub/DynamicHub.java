@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -65,8 +63,6 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.annotate.UnknownObjectField;
-import com.oracle.svm.core.jdk.JDK8OrEarlier;
-import com.oracle.svm.core.jdk.JDK9OrLater;
 import com.oracle.svm.core.jdk.Resources;
 import com.oracle.svm.core.meta.SharedType;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
@@ -80,7 +76,7 @@ import sun.security.util.SecurityConstants;
 @Substitute
 @TargetClass(java.lang.Class.class)
 @SuppressWarnings({"static-method"})
-public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedElement, HostedIdentityHashCodeProvider, java.lang.reflect.Type, GenericDeclaration {
+public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedElement, HostedIdentityHashCodeProvider, java.lang.reflect.Type, java.lang.reflect.GenericDeclaration {
 
     /* Value copied from java.lang.Class. */
     private static final int SYNTHETIC = 0x00001000;
@@ -110,6 +106,17 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
      * instance is locked.
      */
     private int monitorOffset;
+
+    /**
+     * The offset of the synthetic field which stores whatever is used for {@link Object#wait()} or
+     * {@link Object#notify()} by an instance of this class. If 0, then instances of this class can
+     * not call {@link Object#wait()} or {@link Object#notify()}.
+     * <p>
+     * The current implementation stores a reference to a
+     * {@link java.util.concurrent.locks.Condition}, which will be allocated the first time an
+     * instance needs it.
+     */
+    private int waitNotifyOffset;
 
     /**
      * The offset of the synthetic hash-code field which stores the identity hash-code for an
@@ -246,11 +253,12 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public void setData(int layoutEncoding, int typeID, int monitorOffset, int hashCodeOffset, int[] assignableFromMatches, BitSet instanceOfBits,
+    public void setData(int layoutEncoding, int typeID, int monitorOffset, int waitNotifyOffset, int hashCodeOffset, int[] assignableFromMatches, BitSet instanceOfBits,
                     CFunctionPointer[] vtable, long referenceMapIndex, boolean isInstantiated) {
         this.layoutEncoding = layoutEncoding;
         this.typeID = typeID;
         this.monitorOffset = monitorOffset;
+        this.waitNotifyOffset = waitNotifyOffset;
         this.hashCodeOffset = hashCodeOffset;
         this.assignableFromMatches = assignableFromMatches;
         this.instanceOfBits = instanceOfBits;
@@ -342,6 +350,10 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     public int getMonitorOffset() {
         return monitorOffset;
+    }
+
+    public int getWaitNotifyOffset() {
+        return waitNotifyOffset;
     }
 
     public int getHashCodeOffset() {
@@ -441,10 +453,10 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute
     @TargetElement(name = "isAssignableFrom")
     private boolean isAssignableFromClass(Class<?> cls) {
-        return isAssignableFromHub(KnownIntrinsics.unsafeCast(cls, DynamicHub.class));
+        return isAssignableFrom(KnownIntrinsics.unsafeCast(cls, DynamicHub.class));
     }
 
-    public boolean isAssignableFromHub(DynamicHub hub) {
+    public boolean isAssignableFrom(DynamicHub hub) {
         int checkTypeID = hub.getTypeID();
         for (int i = 0; i < assignableFromMatches.length; i += 2) {
             if (UnsignedMath.belowThan(checkTypeID - assignableFromMatches[i], assignableFromMatches[i + 1])) {
@@ -503,7 +515,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private URL getResource(String resourceName) {
         final String path = resolveName(getName(), resourceName);
         List<byte[]> arr = Resources.get(path);
-        return arr == null ? null : Resources.createURL(path, arr.get(0));
+        return arr == null ? null : Resources.createURL(path, new ByteArrayInputStream(arr.get(0)));
     }
 
     private String resolveName(String baseName, String resourceName) {
@@ -537,7 +549,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     public native String getTypeName();
 
     @KeepOriginal
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
     private static native boolean isAsciiDigit(char c);
 
     @KeepOriginal
@@ -734,7 +745,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         }
     }
 
-    @TargetClass(value = java.lang.Class.class, innerClass = "MethodArray", onlyWith = JDK8OrEarlier.class)
+    @TargetClass(value = java.lang.Class.class, innerClass = "MethodArray")
     static final class Target_java_lang_Class_MethodArray {
     }
 
@@ -806,14 +817,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Substitute
-    @TargetElement(name = "privateGetPublicFields", onlyWith = JDK8OrEarlier.class)
-    private Field[] privateGetPublicFieldsJDK8OrEarlier(@SuppressWarnings("unused") Set<Class<?>> traversedInterfaces) {
-        return rd.publicFields;
-    }
-
-    @Substitute
-    @TargetElement(name = "privateGetPublicFields", onlyWith = JDK9OrLater.class)
-    private Field[] privateGetPublicFieldsJDK9Orlater() {
+    private Field[] privateGetPublicFields(@SuppressWarnings("unused") Set<Class<?>> traversedInterfaces) {
         return rd.publicFields;
     }
 
@@ -823,16 +827,8 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Substitute
-    @TargetElement(name = "checkMemberAccess", onlyWith = JDK8OrEarlier.class)
     @SuppressWarnings("unused")
-    private void checkMemberAccessJDK8OrEarlier(int which, Class<?> caller, boolean checkProxyInterfaces) {
-        /* No runtime access checks. */
-    }
-
-    @Substitute
-    @TargetElement(name = "checkMemberAccess", onlyWith = JDK9OrLater.class)
-    @SuppressWarnings("unused")
-    private void checkMemberAccessJDK9OrLater(SecurityManager sm, int which, Class<?> caller, boolean checkProxyInterfaces) {
+    private void checkMemberAccess(int which, Class<?> caller, boolean checkProxyInterfaces) {
         /* No runtime access checks. */
     }
 
@@ -853,15 +849,9 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private static native Method searchMethods(Method[] methods, String name, Class<?>[] parameterTypes);
 
     @KeepOriginal
-    @TargetElement(name = "getMethod0", onlyWith = JDK8OrEarlier.class)
-    private native Method getMethod0JDK8OrEarlier(@SuppressWarnings("hiding") String name, Class<?>[] parameterTypes, boolean includeStaticMethods);
+    private native Method getMethod0(@SuppressWarnings("hiding") String name, Class<?>[] parameterTypes, boolean includeStaticMethods);
 
     @KeepOriginal
-    @TargetElement(name = "getMethod0", onlyWith = JDK9OrLater.class)
-    private native Method getMethod0JDK9OrLater(@SuppressWarnings("hiding") String name, Class<?>[] parameterTypes);
-
-    @KeepOriginal
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
     private native Method privateGetMethodRecursive(@SuppressWarnings("hiding") String name, Class<?>[] parameterTypes, boolean includeStaticMethods,
                     Target_java_lang_Class_MethodArray allInterfaceCandidates);
 
@@ -881,7 +871,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private static native <U> Constructor<U>[] copyConstructors(Constructor<U>[] arg);
 
     @KeepOriginal
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
     private static native String argumentTypesToString(Class<?>[] argTypes);
 
     @Substitute
