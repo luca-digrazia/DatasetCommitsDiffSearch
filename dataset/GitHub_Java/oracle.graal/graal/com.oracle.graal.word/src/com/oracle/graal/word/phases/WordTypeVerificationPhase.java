@@ -61,9 +61,6 @@ public class WordTypeVerificationPhase extends Phase {
         wordAccess.inferStamps(graph);
 
         for (ValueNode node : graph.getNodes().filter(ValueNode.class)) {
-            if (!node.recordsUsages()) {
-                continue;
-            }
             for (Node usage : node.usages()) {
                 if (usage instanceof AccessMonitorNode) {
                     verify(!isWord(node), node, usage, "word value has no monitor");

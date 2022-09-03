@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
@@ -43,7 +41,7 @@ public final class MonitorCounterNode extends FloatingNode implements LIRGenLowe
     @Override
     public void generate(LIRGenerator gen) {
         assert graph().getNodes().filter(MonitorCounterNode.class).count() == 1 : "monitor counters not canonicalized to single instance";
-        StackSlot counter = gen.getFrameMap().allocateStackSlots(1, new BitSet(0), null);
+        StackSlot counter = gen.frameMap().allocateStackBlock(gen.target().wordSize, false);
         Value result = gen.emitAddress(counter);
         gen.setResult(this, result);
     }

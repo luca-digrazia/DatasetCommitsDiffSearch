@@ -22,10 +22,6 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.asm.NumUtil.*;
-
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
@@ -49,9 +45,7 @@ public final class DimensionsNode extends FixedWithNextNode implements LIRGenLow
     @Override
     public void generate(LIRGenerator gen) {
         int size = rank * 4;
-        int wordSize = gen.target().wordSize;
-        int slots = roundUp(size, wordSize) / wordSize;
-        StackSlot array = gen.getFrameMap().allocateStackSlots(slots, new BitSet(0), null);
+        StackSlot array = gen.frameMap().allocateStackBlock(size, false);
         Value result = gen.emitAddress(array);
         gen.setResult(this, result);
     }

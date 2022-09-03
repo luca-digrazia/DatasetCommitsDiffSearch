@@ -37,6 +37,7 @@ public class StampFactory {
     private static final Stamp objectAlwaysNullStamp = new ObjectStamp(null, false, false, true);
     private static final Stamp dependencyStamp = new GenericStamp(GenericStampType.Dependency);
     private static final Stamp extensionStamp = new GenericStamp(GenericStampType.Extension);
+    private static final Stamp virtualStamp = new GenericStamp(GenericStampType.Virtual);
     private static final Stamp conditionStamp = new GenericStamp(GenericStampType.Condition);
     private static final Stamp voidStamp = new GenericStamp(GenericStampType.Void);
     private static final Stamp nodeIntrinsicStamp = new ObjectStamp(null, false, false, false);
@@ -91,6 +92,10 @@ public class StampFactory {
 
     public static Stamp extension() {
         return extensionStamp;
+    }
+
+    public static Stamp virtual() {
+        return virtualStamp;
     }
 
     public static Stamp condition() {
@@ -158,23 +163,15 @@ public class StampFactory {
                 return forFloat(kind, value.asFloat(), value.asFloat(), !Float.isNaN(value.asFloat()));
             case Double:
                 return forFloat(kind, value.asDouble(), value.asDouble(), !Double.isNaN(value.asDouble()));
-            case Illegal:
-                return illegal(Kind.Illegal);
-            case Object:
-                if (value.isNull()) {
-                    return alwaysNull();
-                } else {
-                    return objectNonNull();
-                }
             default:
                 throw new GraalInternalError("unexpected kind: %s", kind);
         }
     }
 
-    public static Stamp forConstant(Constant value, MetaAccessProvider metaAccess) {
+    public static Stamp forConstant(Constant value, MetaAccessProvider runtime) {
         assert value.getKind() == Kind.Object;
         if (value.getKind() == Kind.Object) {
-            ResolvedJavaType type = value.isNull() ? null : metaAccess.lookupJavaType(value);
+            ResolvedJavaType type = value.isNull() ? null : runtime.lookupJavaType(value);
             return new ObjectStamp(type, value.isNonNull(), value.isNonNull(), value.isNull());
         } else {
             throw new GraalInternalError(Kind.Object + " expected, actual kind: %s", value.getKind());

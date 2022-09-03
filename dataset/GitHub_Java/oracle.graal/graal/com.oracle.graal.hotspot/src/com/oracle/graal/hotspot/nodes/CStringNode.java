@@ -22,17 +22,18 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
+
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
 
 /**
- * Converts a compile-time constant Java string into a C string installed with the generated code.
+ * Converts a compile-time constant Java string into a malloc'ed C string. The malloc'ed string is
+ * never reclaimed so this should only be used for strings in permanent code such as compiled stubs.
  */
-public final class CStringNode extends FloatingNode implements LIRGenLowerable {
+public final class CStringNode extends FloatingNode implements Lowerable {
 
     private final String string;
 
@@ -41,29 +42,16 @@ public final class CStringNode extends FloatingNode implements LIRGenLowerable {
         this.string = string;
     }
 
-    public void generate(NodeLIRBuilder gen) {
-        gen.setResult(this, emitCString(gen, string));
-    }
-
-    public static AllocatableValue emitCString(NodeLIRBuilderTool gen, String value) {
-        AllocatableValue dst = gen.getLIRGeneratorTool().newVariable(gen.getLIRGeneratorTool().target().wordKind);
-        gen.getLIRGeneratorTool().emitData(dst, toCString(value));
-        return dst;
-    }
-
-    /**
-     * Converts a string to a null terminated byte array of ASCII characters.
-     * 
-     * @param s a String that must only contain ASCII characters
-     */
-    public static byte[] toCString(String s) {
-        byte[] bytes = new byte[s.length() + 1];
-        for (int i = 0; i < s.length(); i++) {
-            assert s.charAt(i) < 128 : "non-ascii string: " + s;
-            bytes[i] = (byte) s.charAt(i);
+    @Override
+    public void lower(LoweringTool tool) {
+        byte[] formatBytes = string.getBytes();
+        long cstring = unsafe.allocateMemory(formatBytes.length + 1);
+        for (int i = 0; i < formatBytes.length; i++) {
+            unsafe.putByte(cstring + i, formatBytes[i]);
         }
-        bytes[s.length()] = 0;
-        return bytes;
+        unsafe.putByte(cstring + formatBytes.length, (byte) 0);
+        ConstantNode replacement = ConstantNode.forLong(cstring, graph());
+        graph().replaceFloating(this, replacement);
     }
 
     @NodeIntrinsic(setStampFromReturnType = true)
