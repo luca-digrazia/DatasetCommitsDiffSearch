@@ -84,9 +84,7 @@ class NativeImage {
     static final String oHCLibraryPath = oH + "CLibraryPath=";
     static final String oHOptimize = oH + "Optimize=";
     static final String oHDebug = oH + "Debug=";
-
-    /* Boolean arguments */
-    static final String RuntimeAssertions = "RuntimeAssertions";
+    static final String oHRuntimeAssertions = oH + "RuntimeAssertions=";
 
     /* List arguments */
     static final String oHFeatures = oH + "Features=";
@@ -171,7 +169,7 @@ class NativeImage {
         addImageBuilderArg(oHPath + workDir);
 
         /* Discover supported MacroOptions */
-        optionRegistry = new MacroOption.Registry(canonicalize(getRootDir()));
+        optionRegistry = new MacroOption.Registry(getRootDir());
         truffleOption = optionRegistry.addBuiltin("truffle");
 
         /* Default handler needs to be fist */
@@ -277,6 +275,7 @@ class NativeImage {
 
         Path graalvmDir = getRootDir().resolve("lib/graalvm");
         getJars(graalvmDir).forEach((Consumer<? super Path>) this::addImageClasspath);
+        consolidateListArgs(imageBuilderJavaArgs, "-Dpolyglot.engine.PreinitializeContexts=", ",", Function.identity());
     }
 
     protected static boolean replaceArg(Collection<String> args, String argPrefix, String argSuffix) {
@@ -410,10 +409,7 @@ class NativeImage {
             showError(leftoverArgs.stream().collect(Collectors.joining(", ", "Unhandled leftover args: [", "]")));
         }
 
-        LinkedHashSet<Path> finalImageClasspath = new LinkedHashSet<>(imageBuilderBootClasspath);
-        finalImageClasspath.addAll(imageBuilderClasspath);
-        finalImageClasspath.addAll(imageClasspath);
-        buildImage(imageBuilderJavaArgs, imageBuilderBootClasspath, imageBuilderClasspath, imageBuilderArgs, finalImageClasspath);
+        buildImage(imageBuilderJavaArgs, imageBuilderBootClasspath, imageBuilderClasspath, imageBuilderArgs, imageClasspath);
     }
 
     protected void buildImage(LinkedHashSet<String> javaArgs, LinkedHashSet<Path> bcp, LinkedHashSet<Path> cp, LinkedHashSet<String> imageArgs, LinkedHashSet<Path> imagecp) {
@@ -427,7 +423,9 @@ class NativeImage {
         command.addAll(Arrays.asList("-cp", cp.stream().map(Path::toString).collect(Collectors.joining(":"))));
         command.addAll(javaArgs);
         command.add("com.oracle.svm.hosted.NativeImageGeneratorRunner");
-        command.addAll(Arrays.asList("-imagecp", imagecp.stream().map(Path::toString).collect(Collectors.joining(":"))));
+        LinkedHashSet<Path> fullimagecp = new LinkedHashSet<>(cp);
+        fullimagecp.addAll(imagecp);
+        command.addAll(Arrays.asList("-imagecp", fullimagecp.stream().map(Path::toString).collect(Collectors.joining(":"))));
         command.addAll(imageArgs);
 
         showVerboseMessage(verbose, "Executing [");
@@ -457,12 +455,14 @@ class NativeImage {
             nativeImage.prepareImageBuildArgs();
             nativeImage.completeImageBuildArgs(args);
         } catch (NativeImageError e) {
+            // Checkstyle: stop
             nativeImage.show(System.err::println, "Error: " + e.getMessage());
             Throwable cause = e.getCause();
             while (cause != null) {
                 nativeImage.show(System.err::println, "Caused by: " + cause);
                 cause = cause.getCause();
             }
+            // Checkstyle: resume
             System.exit(1);
         }
     }
@@ -547,24 +547,32 @@ class NativeImage {
     }
 
     void showVerboseMessage(boolean show, String message) {
+        // Checkstyle: stop
         if (show) {
             show(System.out::println, message);
         }
+        // Checkstyle: resume
     }
 
     void showMessage(String message) {
+        // Checkstyle: stop
         show(System.out::println, message);
+        // Checkstyle: resume
     }
 
     void showMessagePart(String message) {
+        // Checkstyle: stop
         show(s -> {
             System.out.print(s);
             System.out.flush();
         }, message);
+        // Checkstyle: resume
     }
 
     void showWarning(String message) {
+        // Checkstyle: stop
         show(System.err::println, "Warning: " + message);
+        // Checkstyle: resume
     }
 
     @SuppressWarnings("serial")
@@ -674,14 +682,11 @@ class NativeImage {
         return Collections.unmodifiableMap(map);
     }
 
-    protected void deleteAllFiles(Path toDelete) {
+    static void deleteAllFiles(Path toDelete) {
         try {
             Files.walk(toDelete).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
         } catch (IOException e) {
-            if (isVerbose()) {
-                showMessage("Could not recursively delete path: " + toDelete);
-                e.printStackTrace();
-            }
+            showError("Could not recursively delete path: " + toDelete, e);
         }
     }
 }
