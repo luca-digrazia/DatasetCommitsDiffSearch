@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -31,7 +30,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code NegateNode} node negates its operand.
  */
-public final class NegateNode extends FloatingNode implements Canonicalizable, ArithmeticLIRLowerable {
+public final class NegateNode extends FloatingNode implements Canonicalizable, LIRLowerable, ArithmeticOperation {
 
     @Input private ValueNode x;
 
@@ -54,26 +53,19 @@ public final class NegateNode extends FloatingNode implements Canonicalizable, A
         this.x = x;
     }
 
-    public Constant evalConst(Constant... inputs) {
-        assert inputs.length == 1;
-        switch (inputs[0].getKind()) {
-            case Int:
-                return Constant.forInt(-inputs[0].asInt());
-            case Long:
-                return Constant.forLong(-inputs[0].asLong());
-            case Float:
-                return Constant.forFloat(-inputs[0].asFloat());
-            case Double:
-                return Constant.forDouble(-inputs[0].asDouble());
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         if (x().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(x.asConstant()), graph());
+            switch (x().kind()) {
+                case Int:
+                    return ConstantNode.forInt(-x().asConstant().asInt(), graph());
+                case Long:
+                    return ConstantNode.forLong(-x().asConstant().asLong(), graph());
+                case Float:
+                    return ConstantNode.forFloat(-x().asConstant().asFloat(), graph());
+                case Double:
+                    return ConstantNode.forDouble(-x().asConstant().asDouble(), graph());
+            }
         }
         if (x() instanceof NegateNode) {
             return ((NegateNode) x()).x();
@@ -86,7 +78,7 @@ public final class NegateNode extends FloatingNode implements Canonicalizable, A
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
+    public void generate(LIRGeneratorTool gen) {
         gen.setResult(this, gen.emitNegate(gen.operand(x())));
     }
 }

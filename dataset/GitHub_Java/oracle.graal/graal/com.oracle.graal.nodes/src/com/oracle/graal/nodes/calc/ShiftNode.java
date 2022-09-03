@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,22 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
 
 /**
  * The {@code ShiftOp} class represents shift operations.
  */
-public abstract class ShiftNode extends BinaryNode implements ArithmeticLIRLowerable {
+public abstract class ShiftNode extends BinaryNode implements ArithmeticOperation {
 
     /**
      * Creates a new shift operation.
-     *
+     * 
      * @param x the first input value
      * @param s the second input value
      */
-    public ShiftNode(ValueNode x, ValueNode s) {
-        super(x.stamp().unrestricted(), x, s);
-        assert s.getKind() == Kind.Int;
-    }
-
-    public int getShiftAmountMask() {
-        int mask;
-        if (getKind() == Kind.Int) {
-            mask = 0x1f;
-        } else {
-            assert getKind() == Kind.Long;
-            mask = 0x3f;
-        }
-        return mask;
+    public ShiftNode(Kind kind, ValueNode x, ValueNode s) {
+        super(kind, x, s);
     }
 }

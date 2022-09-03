@@ -22,14 +22,18 @@
  */
 package com.oracle.graal.replacements.nodes;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, ArithmeticLIRLowerable {
+public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, LIRGenLowerable, ArithmeticOperation {
 
     @Input private ValueNode x;
     private final Operation operation;
@@ -54,30 +58,30 @@ public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, 
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
-        Value input = gen.operand(x());
-        Value result;
+    public void generate(LIRGenerator gen) {
+        Variable input = gen.load(gen.operand(x()));
+        Variable result = gen.newVariable(kind());
         switch (operation()) {
             case ABS:
-                result = gen.emitMathAbs(input);
+                gen.emitMathAbs(result, input);
                 break;
             case SQRT:
-                result = gen.emitMathSqrt(input);
+                gen.emitMathSqrt(result, input);
                 break;
             case LOG:
-                result = gen.emitMathLog(input, false);
+                gen.emitMathLog(result, input, false);
                 break;
             case LOG10:
-                result = gen.emitMathLog(input, true);
+                gen.emitMathLog(result, input, true);
                 break;
             case SIN:
-                result = gen.emitMathSin(input);
+                gen.emitMathSin(result, input);
                 break;
             case COS:
-                result = gen.emitMathCos(input);
+                gen.emitMathCos(result, input);
                 break;
             case TAN:
-                result = gen.emitMathTan(input);
+                gen.emitMathTan(result, input);
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -85,15 +89,28 @@ public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, 
         gen.setResult(this, result);
     }
 
-    public Constant evalConst(Constant... inputs) {
-        assert inputs.length == 1;
-        return Constant.forDouble(compute(inputs[0].asDouble(), operation()));
-    }
-
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         if (x().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(x().asConstant()), graph());
+            double value = x().asConstant().asDouble();
+            switch (operation()) {
+                case ABS:
+                    return ConstantNode.forDouble(Math.abs(value), graph());
+                case SQRT:
+                    return ConstantNode.forDouble(Math.sqrt(value), graph());
+                case LOG:
+                    return ConstantNode.forDouble(Math.log(value), graph());
+                case LOG10:
+                    return ConstantNode.forDouble(Math.log10(value), graph());
+                case SIN:
+                    return ConstantNode.forDouble(Math.sin(value), graph());
+                case COS:
+                    return ConstantNode.forDouble(Math.cos(value), graph());
+                case TAN:
+                    return ConstantNode.forDouble(Math.tan(value), graph());
+                default:
+                    throw GraalInternalError.shouldNotReachHere();
+            }
         }
         return this;
     }

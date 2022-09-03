@@ -22,13 +22,9 @@
  */
 package com.oracle.graal.api.code;
 
-import com.oracle.graal.api.meta.*;
-
 /**
  * An {@code ArithmeticOperation} is an operation that does primitive value arithmetic without side
  * effect.
  */
 public interface ArithmeticOperation {
-
-    Constant evalConst(Constant... inputs);
 }
