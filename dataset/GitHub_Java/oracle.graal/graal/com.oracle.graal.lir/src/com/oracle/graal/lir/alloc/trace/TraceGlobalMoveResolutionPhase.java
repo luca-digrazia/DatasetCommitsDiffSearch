@@ -25,14 +25,12 @@ package com.oracle.graal.lir.alloc.trace;
 import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 import static com.oracle.graal.lir.alloc.trace.TraceUtil.asShadowedRegisterValue;
 import static com.oracle.graal.lir.alloc.trace.TraceUtil.isShadowedRegisterValue;
-import static jdk.vm.ci.code.ValueUtil.asRegisterValue;
 import static jdk.vm.ci.code.ValueUtil.isIllegal;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 
 import java.util.List;
 
 import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Value;
@@ -113,46 +111,40 @@ public final class TraceGlobalMoveResolutionPhase extends TraceAllocationPhase {
 
     public static void addMapping(MoveResolver moveResolver, Value from, Value to) {
         assert !isIllegal(to);
+        // prepare input/output values.
+        final Value src;
+        final Value srcShadow;
+        if (isShadowedRegisterValue(from)) {
+            ShadowedRegisterValue phiOutSh = asShadowedRegisterValue(from);
+            src = phiOutSh.getRegister();
+            srcShadow = phiOutSh.getStackSlot();
+        } else {
+            src = from;
+            srcShadow = null;
+        }
+        assert src != null;
+        assert srcShadow == null || isRegister(src) && isStackSlotValue(srcShadow) : "Unexpected shadowed value: " + from;
+
+        final Value dst;
+        final Value dstShadow;
         if (isShadowedRegisterValue(to)) {
-            ShadowedRegisterValue toSh = asShadowedRegisterValue(to);
-            addMappingToRegister(moveResolver, from, toSh.getRegister());
-            addMappingToStackSlot(moveResolver, from, toSh.getStackSlot());
+            ShadowedRegisterValue phiInSh = asShadowedRegisterValue(to);
+            dst = phiInSh.getRegister();
+            dstShadow = phiInSh.getStackSlot();
         } else {
-            if (isRegister(to)) {
-                addMappingToRegister(moveResolver, from, asRegisterValue(to));
-            } else {
-                assert isStackSlotValue(to) : "Expected stack slot: " + to;
-                addMappingToStackSlot(moveResolver, from, (AllocatableValue) to);
-            }
+            dst = to;
+            dstShadow = null;
         }
-    }
+        assert dst != null;
+        assert dstShadow == null || isRegister(dst) && isStackSlotValue(dstShadow) : "Unexpected shadowed value: " + to;
 
-    private static void addMappingToRegister(MoveResolver moveResolver, Value from, RegisterValue register) {
-        if (isShadowedRegisterValue(from)) {
-            RegisterValue fromReg = asShadowedRegisterValue(from).getRegister();
-            checkAndAddMapping(moveResolver, fromReg, register);
-        } else {
-            checkAndAddMapping(moveResolver, from, register);
+        // set dst
+        if (!dst.equals(src)) {
+            moveResolver.addMapping(src, (AllocatableValue) dst);
         }
-    }
-
-    private static void addMappingToStackSlot(MoveResolver moveResolver, Value from, AllocatableValue stack) {
-        if (isShadowedRegisterValue(from)) {
-            ShadowedRegisterValue shadowedFrom = asShadowedRegisterValue(from);
-            RegisterValue fromReg = shadowedFrom.getRegister();
-            AllocatableValue fromStack = shadowedFrom.getStackSlot();
-            if (!fromStack.equals(stack)) {
-                checkAndAddMapping(moveResolver, fromReg, stack);
-            }
-        } else {
-            checkAndAddMapping(moveResolver, from, stack);
-        }
-
-    }
-
-    private static void checkAndAddMapping(MoveResolver moveResolver, Value from, AllocatableValue to) {
-        if (!from.equals(to)) {
-            moveResolver.addMapping(from, to);
+        // set dst_shadow
+        if (dstShadow != null && !dstShadow.equals(src) && !dstShadow.equals(srcShadow)) {
+            moveResolver.addMapping(src, (AllocatableValue) dstShadow);
         }
     }
 }
