@@ -1375,9 +1375,6 @@ public class BasicNodeFactory implements NodeFactory {
                 case DOUBLE:
                     store = LLVMDoubleStoreNodeGen.create(null, null);
                     break;
-                case X86_FP80:
-                    store = LLVM80BitFloatStoreNodeGen.create(null, null);
-                    break;
                 default:
                     throw new AssertionError(llvmType);
             }
@@ -1674,9 +1671,9 @@ public class BasicNodeFactory implements NodeFactory {
             case "@llvm.eh.sjlj.setjmp":
                 throw new LLVMUnsupportedException(UnsupportedReason.SET_JMP_LONG_JMP);
             case "@llvm.dbg.declare":
-            case "@llvm.dbg.addr":
+                throw new IllegalStateException("@llvm.dbg.declare should be handled in the parser!");
             case "@llvm.dbg.value":
-                throw new IllegalStateException("Unhandled call to intrinsic function " + declaration.getName());
+                throw new IllegalStateException("@llvm.dbg.value should be handled in the parser!");
             case "@llvm.eh.typeid.for":
                 return new LLVMTypeIdForExceptionNode(args[1], sourceSection);
             case "@llvm.expect.i1": {
