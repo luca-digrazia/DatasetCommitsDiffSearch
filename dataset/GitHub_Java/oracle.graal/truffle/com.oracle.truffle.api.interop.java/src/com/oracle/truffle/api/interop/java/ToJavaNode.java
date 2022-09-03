@@ -183,7 +183,7 @@ abstract class ToJavaNode extends Node {
             return primitiveRet;
         }
         if (ret instanceof TruffleObject) {
-            if (ToPrimitiveNode.shared().isNull((TruffleObject) ret)) {
+            if (Boolean.TRUE.equals(binaryMessage(Message.IS_NULL, ret))) {
                 return null;
             }
         }
@@ -206,4 +206,11 @@ abstract class ToJavaNode extends Node {
         return new TemporaryRoot(TruffleLanguage.class, n).call((TruffleObject) receiver, arr, convertTo);
     }
 
+    private static Object binaryMessage(final Message m, Object receiver, Object... arr) {
+        try {
+            return message(null, m, receiver, arr);
+        } catch (InteropException e) {
+            throw new AssertionError(e);
+        }
+    }
 }

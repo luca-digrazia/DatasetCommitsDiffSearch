@@ -344,7 +344,7 @@ public final class JavaInterop {
         if (foreignObject == null) {
             return true;
         }
-        return ToPrimitiveNode.shared().isNull(foreignObject);
+        return boolMessage(Message.IS_NULL, foreignObject);
     }
 
     /**
@@ -365,7 +365,7 @@ public final class JavaInterop {
         if (foreignObject == null) {
             return false;
         }
-        return ToPrimitiveNode.shared().hasSize(foreignObject);
+        return boolMessage(Message.HAS_SIZE, foreignObject);
     }
 
     /**
@@ -382,7 +382,7 @@ public final class JavaInterop {
         if (foreignObject == null) {
             return false;
         }
-        return ToPrimitiveNode.shared().isBoxed(foreignObject);
+        return boolMessage(Message.IS_BOXED, foreignObject);
     }
 
     /**
@@ -402,9 +402,18 @@ public final class JavaInterop {
             return null;
         }
         try {
-            return ToPrimitiveNode.shared().unbox(foreignObject);
+            return ToJavaNode.message(null, Message.UNBOX, foreignObject);
         } catch (InteropException iex) {
             return null;
+        }
+    }
+
+    private static boolean boolMessage(Message message, TruffleObject foreignObject) {
+        try {
+            Object isTrue = ToJavaNode.message(null, message, foreignObject);
+            return Boolean.TRUE.equals(isTrue);
+        } catch (InteropException iex) {
+            return false;
         }
     }
 

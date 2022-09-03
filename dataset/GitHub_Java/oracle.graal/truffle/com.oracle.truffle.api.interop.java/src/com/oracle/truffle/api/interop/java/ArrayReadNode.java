@@ -29,28 +29,36 @@ import java.lang.reflect.Array;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 
 abstract class ArrayReadNode extends Node {
+    @Child private ToPrimitiveNode primitive = ToPrimitiveNode.create();
+
     protected abstract Object executeWithTarget(VirtualFrame frame, JavaObject receiver, Object index);
 
     @SuppressWarnings("unchecked")
     @Specialization(guards = "index.getClass() == clazz")
-    protected static Object doNumber(JavaObject receiver, Number index, @Cached("index.getClass()") Class<?> clazz) {
+    protected Object doNumber(JavaObject receiver, Number index, @Cached("index.getClass()") Class<?> clazz) {
         Class<Number> numberClazz = (Class<Number>) clazz;
         return doArrayAccess(receiver, numberClazz.cast(index).intValue());
     }
 
-    @Specialization(contains = "doNumber")
-    protected static Object doNumberGeneric(JavaObject receiver, Number index) {
+    @Specialization(replaces = "doNumber")
+    protected Object doNumberGeneric(JavaObject receiver, Number index) {
         return doArrayAccess(receiver, index.intValue());
     }
 
-    private static Object doArrayAccess(JavaObject object, int index) {
+    private Object doArrayAccess(JavaObject object, int index) {
         Object obj = object.obj;
-        Object val = Array.get(obj, index);
-
-        if (ToJavaNode.isPrimitive(val)) {
+        Object val = null;
+        try {
+            val = Array.get(obj, index);
+        } catch (IllegalArgumentException notAnArr) {
+            throw UnsupportedMessageException.raise(Message.READ);
+        }
+        if (primitive.isPrimitive(val)) {
             return val;
         }
         return JavaInterop.asTruffleObject(val);

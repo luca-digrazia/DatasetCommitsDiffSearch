@@ -151,8 +151,7 @@ class JavaObjectMessageResolution {
         @Child private ToPrimitiveNode primitive = ToPrimitiveNode.create();
 
         public Object access(JavaObject object) {
-            Object result = primitive.toPrimitive(object.obj, null);
-            return result == null ? JavaObject.NULL : result;
+            return primitive.toPrimitive(object.obj, null);
         }
 
     }
