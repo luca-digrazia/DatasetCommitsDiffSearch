@@ -90,19 +90,15 @@ public class InlineableGraph implements Inlineable {
     }
 
     private static boolean isArgMoreInformativeThanParam(ValueNode arg, ParameterNode param) {
-        return arg.isConstant() || canStampBeImproved(arg, param);
-    }
-
-    private static boolean canStampBeImproved(ValueNode arg, ParameterNode param) {
-        return improvedStamp(arg, param) != null;
-    }
-
-    private static Stamp improvedStamp(ValueNode arg, ParameterNode param) {
-        Stamp joinedStamp = param.stamp().join(arg.stamp());
-        if (joinedStamp == null || joinedStamp.equals(param.stamp())) {
-            return null;
+        if (arg.isConstant()) {
+            return true;
+        } else {
+            Stamp joinedStamp = param.stamp().join(arg.stamp());
+            if (joinedStamp != null && !joinedStamp.equals(param.stamp())) {
+                return true;
+            }
         }
-        return joinedStamp;
+        return false;
     }
 
     /**
@@ -144,9 +140,9 @@ public class InlineableGraph implements Inlineable {
                     graph.replaceFloating(param, ConstantNode.forConstant(constant, context.getMetaAccess(), graph));
                     // param-node gone, leaving a gap in the sequence given by param.index()
                 } else {
-                    Stamp impro = improvedStamp(arg, param);
-                    if (impro != null) {
-                        param.setStamp(impro);
+                    Stamp joinedStamp = param.stamp().join(arg.stamp());
+                    if (joinedStamp != null && !joinedStamp.equals(param.stamp())) {
+                        param.setStamp(joinedStamp);
                         parameterUsages = trackParameterUsages(param, parameterUsages);
                     } else {
                         assert !isArgMoreInformativeThanParam(arg, param);
