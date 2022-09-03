@@ -275,7 +275,8 @@ public abstract class ShapeImpl extends Shape {
      */
     @Override
     @TruffleBoundary
-    public Property getProperty(Object key) {
+    public final Property getProperty(Object key) {
+        // return this.propertyMap.get(propertyName);
         PropertyMap current = this.propertyMap;
         while (current.getLastProperty() != null) {
             if (current.getLastProperty().getKey().equals(key)) {
@@ -283,6 +284,7 @@ public abstract class ShapeImpl extends Shape {
             }
             current = current.getParentMap();
         }
+
         return null;
     }
 
