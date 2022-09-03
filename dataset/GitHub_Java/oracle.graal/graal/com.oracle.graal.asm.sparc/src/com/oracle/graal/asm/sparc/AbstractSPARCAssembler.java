@@ -26,10 +26,9 @@ import com.oracle.graal.api.code.AbstractAddress;
 import com.oracle.graal.api.code.Register;
 import com.oracle.graal.api.code.TargetDescription;
 import com.oracle.graal.asm.AbstractAssembler;
+import com.oracle.graal.asm.Label;
 
 public abstract class AbstractSPARCAssembler extends AbstractAssembler {
-
-    public static final String UNBOUND_TARGET = "L" + Integer.MAX_VALUE;
 
     public AbstractSPARCAssembler(TargetDescription target) {
         super(target);
@@ -38,6 +37,11 @@ public abstract class AbstractSPARCAssembler extends AbstractAssembler {
     @Override
     public void align(int modulus) {
         // SPARC: Implement alignment.
+    }
+
+    @Override
+    public void jmp(Label l) {
+        // SPARC: Implement jump.
     }
 
     @Override
