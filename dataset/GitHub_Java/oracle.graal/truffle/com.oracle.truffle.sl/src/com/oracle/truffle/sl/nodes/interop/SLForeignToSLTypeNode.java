@@ -41,39 +41,58 @@
 package com.oracle.truffle.sl.nodes.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.sl.nodes.SLExpressionNode;
-import com.oracle.truffle.sl.nodes.SLTargetableNode;
+import com.oracle.truffle.sl.nodes.SLTypes;
 import com.oracle.truffle.sl.runtime.SLContext;
+import com.oracle.truffle.sl.runtime.SLNull;
 
-@NodeChild(type = SLExpressionNode.class)
-public abstract class SLForeignToSLTypeNode extends SLTargetableNode {
+/**
+ * The node for converting a foreign primitive or boxed primitive value to an SL value.
+ */
+@TypeSystemReference(SLTypes.class)
+public abstract class SLForeignToSLTypeNode extends Node {
 
-    public SLForeignToSLTypeNode(SourceSection src) {
-        super(src);
+    public abstract Object executeConvert(VirtualFrame frame, Object value);
+
+    @Specialization
+    protected static Object fromObject(Number value) {
+        return SLContext.fromForeignValue(value);
     }
 
+    @Specialization
+    protected static Object fromString(String value) {
+        return value;
+    }
+
+    @Specialization
+    protected static Object fromBoolean(boolean value) {
+        return value;
+    }
+
+    @Specialization
+    protected static Object fromChar(char value) {
+        return String.valueOf(value);
+    }
+
+    /*
+     * In case the foreign object is a boxed primitive we unbox it using the UNBOX message.
+     */
     @Specialization(guards = "isBoxedPrimitive(frame, value)")
     public Object unbox(VirtualFrame frame, TruffleObject value) {
         Object unboxed = doUnbox(frame, value);
         return SLContext.fromForeignValue(unboxed);
     }
 
-    @Specialization
-    public Object fromTruffleObject(TruffleObject value) {
+    @Specialization(guards = "!isBoxedPrimitive(frame, value)")
+    public Object fromTruffleObject(@SuppressWarnings("unused") VirtualFrame frame, TruffleObject value) {
         return value;
-    }
-
-    @Specialization
-    public Object fromObject(Object value) {
-        return SLContext.fromForeignValue(value);
     }
 
     @Child private Node isBoxed;
@@ -83,22 +102,20 @@ public abstract class SLForeignToSLTypeNode extends SLTargetableNode {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             isBoxed = insert(Message.IS_BOXED.createNode());
         }
-        return (boolean) ForeignAccess.execute(isBoxed, frame, object);
-    }
-
-    protected final Object doUnbox(VirtualFrame frame, TruffleObject value) {
-        initializeUnbox();
-        Object object = ForeignAccess.execute(unbox, frame, value);
-        return object;
+        return ForeignAccess.sendIsBoxed(isBoxed, frame, object);
     }
 
     @Child private Node unbox;
 
-    private void initializeUnbox() {
+    protected final Object doUnbox(VirtualFrame frame, TruffleObject value) {
         if (unbox == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             unbox = insert(Message.UNBOX.createNode());
         }
+        try {
+            return ForeignAccess.sendUnbox(unbox, frame, value);
+        } catch (UnsupportedMessageException e) {
+            return SLNull.SINGLETON;
+        }
     }
-
 }
