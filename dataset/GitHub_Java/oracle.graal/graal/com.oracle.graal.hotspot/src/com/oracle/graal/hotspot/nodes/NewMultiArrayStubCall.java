@@ -46,7 +46,11 @@ public class NewMultiArrayStubCall extends ForeignCallNode {
     @Input ValueNode dims;
     protected final int rank;
 
-    public NewMultiArrayStubCall(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode hub, int rank, ValueNode dims) {
+    public static NewMultiArrayStubCall create(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode hub, int rank, ValueNode dims) {
+        return new NewMultiArrayStubCall(foreignCalls, hub, rank, dims);
+    }
+
+    protected NewMultiArrayStubCall(ForeignCallsProvider foreignCalls, ValueNode hub, int rank, ValueNode dims) {
         super(foreignCalls, NEW_MULTI_ARRAY, defaultStamp);
         this.hub = hub;
         this.rank = rank;
