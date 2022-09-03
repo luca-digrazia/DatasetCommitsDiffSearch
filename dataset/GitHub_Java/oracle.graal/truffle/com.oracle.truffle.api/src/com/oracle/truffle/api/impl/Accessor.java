@@ -91,6 +91,8 @@ public abstract class Accessor {
 
         @SuppressWarnings("rawtypes")
         public abstract Object findLanguage(Class<? extends TruffleLanguage> language);
+
+        public abstract Object findOriginalObject(Object truffleObject);
     }
 
     public abstract static class LanguageSupport {
@@ -108,7 +110,7 @@ public abstract class Accessor {
 
         public abstract CallTarget parse(TruffleLanguage<?> truffleLanguage, Source code, Node context, String... argumentNames);
 
-        public abstract String toString(TruffleLanguage<?> language, Env env, Object obj, Source interactiveSource);
+        public abstract String toString(TruffleLanguage<?> language, Env env, Object obj);
 
         public abstract Object findContext(Env env);
 

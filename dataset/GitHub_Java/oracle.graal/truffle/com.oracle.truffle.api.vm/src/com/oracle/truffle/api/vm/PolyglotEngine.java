@@ -62,8 +62,6 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -503,13 +501,6 @@ public class PolyglotEngine {
      * <p>
      * More examples can be found in description of {@link Value#execute(java.lang.Object...)} and
      * {@link Value#as(java.lang.Class)} methods.
-     * <p>
-     * When evaluating an {@link Source#isInteractive() interactive source} the result of the
-     * {@link com.oracle.truffle.api.vm.PolyglotEngine#eval evaluation} is
-     * {@link TruffleLanguage#isVisible(java.lang.Object, java.lang.Object) tested to be visible}
-     * and if the value is visible, it gets
-     * {@link TruffleLanguage#toString(java.lang.Object, java.lang.Object) converted to string} and
-     * printed to {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setOut standard output}.
      *
      * @param source code snippet to execute
      * @return a {@link Value} object that holds result of an execution, never <code>null</code>
@@ -603,20 +594,7 @@ public class PolyglotEngine {
             target = Truffle.getRuntime().createCallTarget(new PolyglotEvalRootNode(this, l, source));
             l.cache.put(source, target);
         }
-        Object value = target.call((Object) langTarget);
-        if (source.isInteractive()) {
-            String stringResult = Access.LANGS.toString(langTarget[0], findEnv(langTarget[0].getClass()), value, source);
-            if (stringResult != null) {
-                try {
-                    PolyglotEngine.this.out.write(stringResult.getBytes(StandardCharsets.UTF_8));
-                    PolyglotEngine.this.out.write(System.getProperty("line.separator").getBytes(StandardCharsets.UTF_8));
-                } catch (IOException ioex) {
-                    // out stream has problems.
-                    throw new IllegalStateException(ioex);
-                }
-            }
-        }
-        return value;
+        return target.call((Object) langTarget);
     }
 
     ContextStore context() {
@@ -644,11 +622,7 @@ public class PolyglotEngine {
         } else {
             res = invokeForeignOnExecutor(foreignNode, frame, receiver);
         }
-        if (res instanceof TruffleObject) {
-            return new EngineTruffleObject(this, (TruffleObject) res);
-        } else {
-            return res;
-        }
+        return EngineTruffleObject.wrap(this, res);
     }
 
     static void assertNoTruffle() {
@@ -1008,8 +982,8 @@ public class PolyglotEngine {
                 if (unwrapJava) {
                     result = JavaInterop.asJavaObject(Object.class, (TruffleObject) result);
                 }
-                if (wrapEngine && executor != null && result instanceof TruffleObject) {
-                    return new EngineTruffleObject(PolyglotEngine.this, (TruffleObject) result);
+                if (wrapEngine && result instanceof TruffleObject) {
+                    return EngineTruffleObject.wrap(PolyglotEngine.this, result);
                 }
             }
             return result;
@@ -1075,7 +1049,7 @@ public class PolyglotEngine {
                 while (unwrapped instanceof EngineTruffleObject) {
                     unwrapped = ((EngineTruffleObject) obj).getDelegate();
                 }
-                return representation.cast(Access.LANGS.toString(language[0], findEnv(clazz), unwrapped, null));
+                return representation.cast(Access.LANGS.toString(language[0], findEnv(clazz), unwrapped));
             }
             if (representation.isInstance(obj)) {
                 return representation.cast(obj);
@@ -1409,10 +1383,17 @@ public class PolyglotEngine {
         }
 
         /**
-         * Test whether the language has a support for interactive evaluation of {@link Source
-         * sources}. Such languages should be displayed in interactive environments and presented to
-         * the user. This value is specified by {@link Registration#interactive() interactive
-         * attribute} when registering the {@link TruffleLanguage language}.
+         * Test whether the language has a support for interactive evaluation of
+         * {@link Source#isInteractive() interactive sources}. When
+         * {@link com.oracle.truffle.api.vm.PolyglotEngine#eval} is called over an
+         * {@link Source#isInteractive() interactive source}, interactive languages print the result
+         * to {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setOut(OutputStream) standard
+         * output} or {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setErr(OutputStream)
+         * error output} and can use
+         * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setIn(InputStream) standard
+         * input}. Non-interactive languages are not expected to use the polyglot engine streams in
+         * an interactive way and whoever supplies an interactive source is expected to implement an
+         * appropriate response.
          *
          * @return <code>true</code> if the language implements an interactive response to
          *         evaluation of interactive sources, <code>false</code> otherwise.
@@ -1425,14 +1406,6 @@ public class PolyglotEngine {
         /**
          * Evaluates provided source. Ignores the particular {@link Source#getMimeType() MIME type}
          * and forces evaluation in the context of <code>this</code> language.
-         * <p>
-         * When evaluating an {@link Source#isInteractive() interactive source} the result of the
-         * {@link com.oracle.truffle.api.vm.PolyglotEngine#eval evaluation} is
-         * {@link TruffleLanguage#isVisible(java.lang.Object, java.lang.Object) tested to be
-         * visible} and if the value is visible, it gets
-         * {@link TruffleLanguage#toString(java.lang.Object, java.lang.Object) converted to string}
-         * and printed to {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setOut standard
-         * output}.
          *
          * @param source code snippet to execute
          * @return a {@link Value} object that holds result of an execution, never <code>null</code>
@@ -1666,6 +1639,14 @@ public class PolyglotEngine {
                 PolyglotEngine engine = (PolyglotEngine) vm;
                 assert engine.debugger()[0] == null || engine.debugger()[0] == debugger;
                 engine.debugger()[0] = debugger;
+            }
+
+            @Override
+            public Object findOriginalObject(Object truffleObject) {
+                if (truffleObject instanceof EngineTruffleObject) {
+                    return ((EngineTruffleObject) truffleObject).getDelegate();
+                }
+                return truffleObject;
             }
         }
 

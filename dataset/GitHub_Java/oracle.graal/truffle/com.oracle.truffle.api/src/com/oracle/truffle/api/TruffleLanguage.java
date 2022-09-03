@@ -126,17 +126,23 @@ public abstract class TruffleLanguage<C> {
         String[] mimeType();
 
         /**
-         * Specifies if the language is suitable for interactive evaluation of {@link Source
-         * sources}. {@link #interactive() Interactive} languages should be displayed in interactive
-         * environments and presented to the user. The default value of this attribute is
-         * <code>true</code> assuming majority of the languages is interactive. Change the value to
-         * <code>false</code> to opt-out and turn your language into non-interactive one.
-         * 
-         * @return <code>true</code> if the language should be presented to end-user in an
-         *         interactive environment
+         * Indicates whether the language implements an interactive response to evaluation of
+         * {@link Source#isInteractive() interactive sources}. When
+         * {@link com.oracle.truffle.api.vm.PolyglotEngine#eval} is called over an
+         * {@link Source#isInteractive() interactive source}, interactive languages print the result
+         * to {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setOut(OutputStream) standard
+         * output} or {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setErr(OutputStream)
+         * error output} and can use
+         * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setIn(InputStream) standard
+         * input}. Non-interactive languages are not expected to use the polyglot engine streams in
+         * an interactive way and whoever supplies an interactive source is expected to implement an
+         * appropriate response.
+         *
+         * @return <code>true</code> if the language implements an interactive response to
+         *         evaluation of interactive sources.
          * @since 0.22
          */
-        boolean interactive() default true;
+        boolean interactive() default false;
     }
 
     /**
@@ -459,43 +465,6 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
-     * Decides whether a given value should be <em>visible</em> for end user. By default this
-     * methods returns <code>true</code> claiming all values are visible.
-     * <p>
-     * This method affects behavior of {@link com.oracle.truffle.api.vm.PolyglotEngine#eval} - when
-     * evaluating an {@link Source#isInteractive() interactive source} the result of the
-     * {@link com.oracle.truffle.api.vm.PolyglotEngine#eval evaluation} is tested for
-     * {@link #isVisible(java.lang.Object, java.lang.Object) visibility} and if the value is found
-     * visible, it gets {@link TruffleLanguage#toString(java.lang.Object, java.lang.Object)
-     * converted to string} and printed to
-     * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setOut standard output}.
-     * <p>
-     * A language can control whether a value is or isn't printed by overriding this method and
-     * returning <code>false</code> for some or all values. In such case it is up to the language
-     * itself to use {@link com.oracle.truffle.api.vm.PolyglotEngine polyglot engine}
-     * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setOut output},
-     * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setErr error} and
-     * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setIn input} streams. When
-     * {@link com.oracle.truffle.api.vm.PolyglotEngine#eval} is called over an
-     * {@link Source#isInteractive() interactive source} of a language that controls its interactive
-     * behavior, it is the reponsibility of the language itself to print the result to
-     * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setOut(OutputStream) standard output}
-     * or {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setErr(OutputStream) error output}
-     * and/or access {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#setIn(InputStream)
-     * standard input} in an appropriate way.
-     *
-     * @param context the execution context for doing the conversion
-     * @param value the value to check. Either primitive type or
-     *            {@link com.oracle.truffle.api.interop.TruffleObject}
-     * @return <code>true</code> if the language implements an interactive response to evaluation of
-     *         interactive sources.
-     * @since 0.22
-     */
-    protected boolean isVisible(C context, Object value) {
-        return true;
-    }
-
-    /**
      * Find a meta-object of a value, if any. The meta-object represents a description of the
      * object, reveals it's kind and it's features. Some information that a meta-object might define
      * includes the base object's type, interface, class, methods, attributes, etc.
@@ -592,19 +561,16 @@ public abstract class TruffleLanguage<C> {
             return lang.toString(ctx, obj);
         }
 
-        boolean isVisible(TruffleLanguage<?> language, Object obj) {
-            assert lang == language;
-            return lang.isVisible(ctx, obj);
-        }
-
         private Object findMetaObject(TruffleLanguage<?> language, Object obj) {
             assert lang == language;
-            return lang.findMetaObject(ctx, obj);
+            final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
+            return lang.findMetaObject(ctx, rawValue);
         }
 
         private SourceSection findSourceLocation(TruffleLanguage<?> language, Object obj) {
             assert lang == language;
-            return lang.findSourceLocation(ctx, obj);
+            final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
+            return lang.findSourceLocation(ctx, rawValue);
         }
 
         void postInit() {
@@ -1039,12 +1005,7 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public String toString(TruffleLanguage<?> language, Env env, Object obj, Source interactiveSource) {
-            if (interactiveSource != null && interactiveSource.isInteractive()) {
-                if (!env.langCtx.isVisible(language, obj)) {
-                    return null;
-                }
-            }
+        public String toString(TruffleLanguage<?> language, Env env, Object obj) {
             return env.langCtx.toString(language, obj);
         }
 
