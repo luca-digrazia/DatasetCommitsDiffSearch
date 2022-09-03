@@ -24,6 +24,7 @@ package com.oracle.graal.nodes.java;
 
 import java.util.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
@@ -31,7 +32,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * The {@code NewArrayNode} is used for all array allocations where the element type is know at
@@ -41,18 +41,14 @@ import com.oracle.jvmci.meta.*;
 @NodeInfo
 public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableAllocation {
 
-    public static final NodeClass<NewArrayNode> TYPE = NodeClass.create(NewArrayNode.class);
+    public static final NodeClass<NewArrayNode> TYPE = NodeClass.get(NewArrayNode.class);
 
     public NewArrayNode(ResolvedJavaType elementType, ValueNode length, boolean fillContents) {
-        this(elementType, length, fillContents, null);
+        super(TYPE, StampFactory.exactNonNull(elementType.getArrayClass()), length, fillContents);
     }
 
-    public NewArrayNode(ResolvedJavaType elementType, ValueNode length, boolean fillContents, FrameState stateBefore) {
-        this(TYPE, elementType, length, fillContents, stateBefore);
-    }
-
-    protected NewArrayNode(NodeClass<? extends NewArrayNode> c, ResolvedJavaType elementType, ValueNode length, boolean fillContents, FrameState stateBefore) {
-        super(c, StampFactory.exactNonNull(elementType.getArrayClass()), length, fillContents, stateBefore);
+    protected NewArrayNode(NodeClass<? extends NewArrayNode> c, ResolvedJavaType elementType, ValueNode length, boolean fillContents) {
+        super(c, StampFactory.exactNonNull(elementType.getArrayClass()), length, fillContents);
     }
 
     @NodeIntrinsic
@@ -73,9 +69,8 @@ public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableA
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode replacedLength = tool.getReplacedValue(length());
-        if (replacedLength.asConstant() != null) {
-            final int constantLength = replacedLength.asJavaConstant().asInt();
+        if (length().asConstant() != null) {
+            final int constantLength = length().asJavaConstant().asInt();
             if (constantLength >= 0 && constantLength < tool.getMaximumEntryCount()) {
                 ValueNode[] state = new ValueNode[constantLength];
                 ConstantNode defaultForKind = constantLength == 0 ? null : defaultElementValue();

@@ -33,11 +33,12 @@ import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Guard, InputType.Anchor})
 public abstract class AbstractBeginNode extends FixedWithNextNode implements LIRLowerable, Simplifiable, GuardingNode, AnchoringNode, IterableNodeType {
 
-    public static final NodeClass<AbstractBeginNode> TYPE = NodeClass.create(AbstractBeginNode.class);
+    public static final NodeClass<AbstractBeginNode> TYPE = NodeClass.get(AbstractBeginNode.class);
 
     protected AbstractBeginNode(NodeClass<? extends AbstractBeginNode> c) {
         this(c, StampFactory.forVoid());
@@ -63,13 +64,8 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
     }
 
     public static AbstractBeginNode prevBegin(FixedNode from) {
-        Node next = from;
-        while (next != null) {
-            if (next instanceof AbstractBeginNode) {
-                AbstractBeginNode begin = (AbstractBeginNode) next;
-                return begin;
-            }
-            next = next.predecessor();
+        for (AbstractBeginNode begin : GraphUtil.predecessorIterable(from).filter(AbstractBeginNode.class)) {
+            return begin;
         }
         return null;
     }
@@ -94,19 +90,10 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
     }
 
     public void removeProxies() {
-        if (this.hasUsages()) {
-            outer: while (true) {
-                for (ProxyNode vpn : proxies().snapshot()) {
-                    ValueNode value = vpn.value();
-                    vpn.replaceAtUsages(value);
-                    vpn.safeDelete();
-                    if (value == this) {
-                        // Guard proxy could have this input as value.
-                        continue outer;
-                    }
-                }
-                break;
-            }
+        for (ProxyNode vpn : proxies().snapshot()) {
+            // can not use graph.replaceFloating because vpn.value may be null during killCFG
+            vpn.replaceAtUsages(vpn.value());
+            vpn.safeDelete();
         }
     }
 

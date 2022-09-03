@@ -38,7 +38,7 @@ import com.oracle.graal.nodes.java.*;
 @NodeInfo
 public abstract class MacroStateSplitNode extends MacroNode implements StateSplit, MemoryCheckpoint.Single {
 
-    public static final NodeClass<MacroStateSplitNode> TYPE = NodeClass.create(MacroStateSplitNode.class);
+    public static final NodeClass<MacroStateSplitNode> TYPE = NodeClass.get(MacroStateSplitNode.class);
     @OptionalInput(InputType.State) protected FrameState stateAfter;
 
     public MacroStateSplitNode(NodeClass<? extends MacroStateSplitNode> c, Invoke invoke) {
@@ -62,7 +62,7 @@ public abstract class MacroStateSplitNode extends MacroNode implements StateSpli
     }
 
     public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
+        return LocationIdentity.ANY_LOCATION;
     }
 
     protected void replaceSnippetInvokes(StructuredGraph snippetGraph) {

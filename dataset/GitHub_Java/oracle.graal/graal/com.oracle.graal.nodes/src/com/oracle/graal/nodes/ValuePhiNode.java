@@ -30,10 +30,10 @@ import com.oracle.graal.nodes.type.*;
 /**
  * Value {@link PhiNode}s merge data flow values at control flow merges.
  */
-@NodeInfo(nameTemplate = "Φ({i#values})")
+@NodeInfo(nameTemplate = "ValuePhi({i#values})")
 public class ValuePhiNode extends PhiNode {
 
-    public static final NodeClass<ValuePhiNode> TYPE = NodeClass.create(ValuePhiNode.class);
+    public static final NodeClass<ValuePhiNode> TYPE = NodeClass.get(ValuePhiNode.class);
     @Input protected NodeInputList<ValueNode> values;
 
     public ValuePhiNode(Stamp stamp, AbstractMergeNode merge) {

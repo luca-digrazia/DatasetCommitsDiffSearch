@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.calc.*;
 @NodeInfo(allowedUsageTypes = {Condition})
 public abstract class LogicNode extends FloatingNode {
 
-    public static final NodeClass<LogicNode> TYPE = NodeClass.create(LogicNode.class);
+    public static final NodeClass<LogicNode> TYPE = NodeClass.get(LogicNode.class);
 
     public LogicNode(NodeClass<? extends LogicNode> c) {
         super(c, StampFactory.forVoid());
@@ -54,23 +54,5 @@ public abstract class LogicNode extends FloatingNode {
 
     public static LogicNode or(LogicNode a, boolean negateA, LogicNode b, boolean negateB, double shortCircuitProbability) {
         return a.graph().unique(new ShortCircuitOrNode(a, negateA, b, negateB, shortCircuitProbability));
-    }
-
-    public final boolean isTautology() {
-        if (this instanceof LogicConstantNode) {
-            LogicConstantNode logicConstantNode = (LogicConstantNode) this;
-            return logicConstantNode.getValue();
-        }
-
-        return false;
-    }
-
-    public final boolean isContradiction() {
-        if (this instanceof LogicConstantNode) {
-            LogicConstantNode logicConstantNode = (LogicConstantNode) this;
-            return !logicConstantNode.getValue();
-        }
-
-        return false;
     }
 }

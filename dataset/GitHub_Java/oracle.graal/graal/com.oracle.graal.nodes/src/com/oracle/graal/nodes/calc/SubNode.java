@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Sub;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
@@ -38,7 +37,7 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo(shortName = "-")
 public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArithmeticNode {
 
-    public static final NodeClass<SubNode> TYPE = NodeClass.create(SubNode.class);
+    public static final NodeClass<SubNode> TYPE = NodeClass.get(SubNode.class);
 
     public SubNode(ValueNode x, ValueNode y) {
         this(TYPE, x, y);
@@ -151,7 +150,7 @@ public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArit
     }
 
     @Override
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
-        nodeValueMap.setResult(this, gen.emitSub(nodeValueMap.operand(getX()), nodeValueMap.operand(getY()), false));
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        builder.setResult(this, gen.emitSub(builder.operand(getX()), builder.operand(getY()), false));
     }
 }

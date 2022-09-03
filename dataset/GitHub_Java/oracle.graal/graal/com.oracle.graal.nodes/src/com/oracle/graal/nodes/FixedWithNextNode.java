@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,35 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodeinfo.*;
 
 /**
- * Base class of all nodes that are fixed within the control flow graph and have an immediate successor.
+ * Base class of all nodes that are fixed within the control flow graph and have an immediate
+ * successor.
  */
+@NodeInfo
 public abstract class FixedWithNextNode extends FixedNode {
+    public static final NodeClass<FixedWithNextNode> TYPE = NodeClass.get(FixedWithNextNode.class);
+
+    @Successor protected FixedNode next;
 
     public FixedNode next() {
-        assert scheduledNext() == null || scheduledNext() instanceof FixedNode : "next() cannot be used while the graph is scheduled";
-        return (FixedNode) scheduledNext();
+        return next;
     }
 
     public void setNext(FixedNode x) {
-        setScheduledNext(x);
+        updatePredecessor(next, x);
+        next = x;
     }
 
-    public FixedWithNextNode(Stamp stamp) {
-        super(stamp);
+    public FixedWithNextNode(NodeClass<? extends FixedWithNextNode> c, Stamp stamp) {
+        super(c, stamp);
     }
 
-    public FixedWithNextNode(Stamp stamp, Node... dependencies) {
-        super(stamp, dependencies);
+    @Override
+    public FixedWithNextNode asNode() {
+        return this;
     }
 }

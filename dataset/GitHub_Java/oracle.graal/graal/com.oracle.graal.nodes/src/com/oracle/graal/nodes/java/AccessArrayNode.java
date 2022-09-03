@@ -33,7 +33,7 @@ import com.oracle.graal.nodes.*;
 @NodeInfo
 public abstract class AccessArrayNode extends FixedWithNextNode {
 
-    public static final NodeClass<AccessArrayNode> TYPE = NodeClass.create(AccessArrayNode.class);
+    public static final NodeClass<AccessArrayNode> TYPE = NodeClass.get(AccessArrayNode.class);
     @Input protected ValueNode array;
 
     public ValueNode array() {
@@ -50,8 +50,4 @@ public abstract class AccessArrayNode extends FixedWithNextNode {
         this.array = array;
     }
 
-    public void setArray(ValueNode array) {
-        updateUsages(this.array, array);
-        this.array = array;
-    }
 }

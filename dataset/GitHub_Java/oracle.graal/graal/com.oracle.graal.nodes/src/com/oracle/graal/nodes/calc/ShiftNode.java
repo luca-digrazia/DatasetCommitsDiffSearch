@@ -22,31 +22,25 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import java.io.Serializable;
-import java.util.function.Function;
+import java.io.*;
+import java.util.function.*;
 
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.ShiftOp;
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * The {@code ShiftOp} class represents shift operations.
  */
 @NodeInfo
-public abstract class ShiftNode<OP> extends BinaryNode implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
+public abstract class ShiftNode<OP> extends BinaryNode implements ArithmeticLIRLowerable {
 
-    @SuppressWarnings("rawtypes") public static final NodeClass<ShiftNode> TYPE = NodeClass.create(ShiftNode.class);
+    @SuppressWarnings("rawtypes") public static final NodeClass<ShiftNode> TYPE = NodeClass.get(ShiftNode.class);
 
     protected interface SerializableShiftFunction<T> extends Function<ArithmeticOpTable, ShiftOp<T>>, Serializable {
     }
@@ -70,15 +64,15 @@ public abstract class ShiftNode<OP> extends BinaryNode implements ArithmeticLIRL
     }
 
     @Override
-    public Stamp foldStamp(Stamp stampX, Stamp stampY) {
-        return getOp(getX()).foldStamp(stampX, (IntegerStamp) stampY);
+    public boolean inferStamp() {
+        return updateStamp(getOp(getX()).foldStamp(getX().stamp(), (IntegerStamp) getY().stamp()));
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         if (forX.isConstant() && forY.isConstant()) {
             JavaConstant amount = forY.asJavaConstant();
-            assert amount.getJavaKind() == JavaKind.Int;
+            assert amount.getKind() == Kind.Int;
             return ConstantNode.forPrimitive(stamp(), getOp(forX).foldConstant(forX.asConstant(), amount.asInt()));
         }
         return this;
@@ -88,18 +82,4 @@ public abstract class ShiftNode<OP> extends BinaryNode implements ArithmeticLIRL
         return getOp(getX()).getShiftAmountMask(stamp());
     }
 
-    public boolean isNarrowable(int resultBits) {
-        assert CodeUtil.isPowerOf2(resultBits);
-        int narrowMask = resultBits - 1;
-        int wideMask = getShiftAmountMask();
-        assert (wideMask & narrowMask) == narrowMask : String.format("wideMask %x should be wider than narrowMask %x", wideMask, narrowMask);
-
-        /*
-         * Shifts are special because narrowing them also changes the implicit mask of the shift
-         * amount. We can narrow only if (y & wideMask) == (y & narrowMask) for all possible values
-         * of y.
-         */
-        IntegerStamp yStamp = (IntegerStamp) getY().stamp();
-        return (yStamp.upMask() & (wideMask & ~narrowMask)) == 0;
-    }
 }

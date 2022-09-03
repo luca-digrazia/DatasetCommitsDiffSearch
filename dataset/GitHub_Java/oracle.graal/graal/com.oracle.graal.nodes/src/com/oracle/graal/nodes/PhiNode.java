@@ -22,20 +22,14 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.Iterator;
+import java.util.*;
 
-import jdk.internal.jvmci.meta.JavaKind;
-
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.graph.spi.Simplifiable;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.calc.*;
 
 /**
  * {@code PhiNode}s represent the merging of edges at a control flow merges (
@@ -47,7 +41,7 @@ import com.oracle.graal.nodes.calc.FloatingNode;
 @NodeInfo
 public abstract class PhiNode extends FloatingNode implements Simplifiable {
 
-    public static final NodeClass<PhiNode> TYPE = NodeClass.create(PhiNode.class);
+    public static final NodeClass<PhiNode> TYPE = NodeClass.get(PhiNode.class);
     @Input(InputType.Association) protected AbstractMergeNode merge;
 
     protected PhiNode(NodeClass<? extends PhiNode> c, Stamp stamp, AbstractMergeNode merge) {
@@ -140,7 +134,7 @@ public abstract class PhiNode extends FloatingNode implements Simplifiable {
 
     public void addInput(ValueNode x) {
         assert !(x instanceof ValuePhiNode) || ((ValuePhiNode) x).merge() instanceof LoopBeginNode || ((ValuePhiNode) x).merge() != this.merge();
-        assert !(this instanceof ValuePhiNode) || x.stamp().isCompatible(stamp()) || (stamp().getStackKind() == JavaKind.Int && x.stamp().getStackKind().getBitCount() >= JavaKind.Int.getBitCount());
+        assert !(this instanceof ValuePhiNode) || x.stamp().isCompatible(stamp()) || (stamp().getStackKind() == Kind.Int && x.stamp().getStackKind().getBitCount() >= Kind.Int.getBitCount());
         values().add(x);
     }
 
@@ -151,7 +145,7 @@ public abstract class PhiNode extends FloatingNode implements Simplifiable {
     @NodeInfo
     static final class MultipleValuesNode extends ValueNode {
 
-        public static final NodeClass<MultipleValuesNode> TYPE = NodeClass.create(MultipleValuesNode.class);
+        public static final NodeClass<MultipleValuesNode> TYPE = NodeClass.get(MultipleValuesNode.class);
 
         public MultipleValuesNode() {
             super(TYPE, null);
@@ -233,12 +227,4 @@ public abstract class PhiNode extends FloatingNode implements Simplifiable {
         return merge() instanceof LoopBeginNode;
     }
 
-    public boolean hasValidInput() {
-        for (ValueNode n : values()) {
-            if (n != null) {
-                return true;
-            }
-        }
-        return false;
-    }
 }

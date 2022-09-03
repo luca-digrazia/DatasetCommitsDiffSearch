@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -35,7 +34,7 @@ import com.oracle.graal.nodes.type.*;
 
 @NodeInfo
 public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Simplifiable {
-    public static final NodeClass<MethodCallTargetNode> TYPE = NodeClass.create(MethodCallTargetNode.class);
+    public static final NodeClass<MethodCallTargetNode> TYPE = NodeClass.get(MethodCallTargetNode.class);
     protected final JavaType returnType;
 
     public MethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType) {
@@ -127,19 +126,19 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
             }
             Assumptions assumptions = receiver.graph().getAssumptions();
             if (assumptions != null) {
-                AssumptionResult<ResolvedJavaType> leafConcreteSubtype = type.findLeafConcreteSubtype();
-                if (leafConcreteSubtype != null) {
-                    ResolvedJavaMethod methodFromUniqueType = leafConcreteSubtype.getResult().resolveConcreteMethod(targetMethod, contextType);
+                ResolvedJavaType uniqueConcreteType = type.findUniqueConcreteSubtype();
+                if (uniqueConcreteType != null) {
+                    ResolvedJavaMethod methodFromUniqueType = uniqueConcreteType.resolveConcreteMethod(targetMethod, contextType);
                     if (methodFromUniqueType != null) {
-                        assumptions.record(leafConcreteSubtype);
+                        assumptions.recordConcreteSubtype(type, uniqueConcreteType);
                         return methodFromUniqueType;
                     }
                 }
 
-                AssumptionResult<ResolvedJavaMethod> uniqueConcreteMethod = type.findUniqueConcreteMethod(targetMethod);
+                ResolvedJavaMethod uniqueConcreteMethod = type.findUniqueConcreteMethod(targetMethod);
                 if (uniqueConcreteMethod != null) {
-                    assumptions.record(uniqueConcreteMethod);
-                    return uniqueConcreteMethod.getResult();
+                    assumptions.recordConcreteMethod(targetMethod, type, uniqueConcreteMethod);
+                    return uniqueConcreteMethod;
                 }
             }
         }
@@ -150,11 +149,6 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
     @Override
     public void simplify(SimplifierTool tool) {
         // attempt to devirtualize the call
-        if (invoke().getContextMethod() == null) {
-            // avoid invokes that have placeholder bcis: they do not have a valid contextType
-            assert (invoke().stateAfter() != null && BytecodeFrame.isPlaceholderBci(invoke().stateAfter().bci)) || BytecodeFrame.isPlaceholderBci(invoke().stateDuring().bci);
-            return;
-        }
         ResolvedJavaType contextType = (invoke().stateAfter() == null && invoke().stateDuring() == null) ? null : invoke().getContextType();
         ResolvedJavaMethod specialCallTarget = findSpecialCallTarget(invokeKind, receiver(), targetMethod, contextType);
         if (specialCallTarget != null) {
@@ -196,6 +190,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
         if (singleImplementor != null && !singleImplementor.equals(declaredReceiverType)) {
             ResolvedJavaMethod singleImplementorMethod = singleImplementor.resolveMethod(targetMethod(), invoke().getContextType(), true);
             if (singleImplementorMethod != null) {
+                assert graph().getGuardsStage().allowsFloatingGuards() : "Graph already fixed!";
                 /**
                  * We have an invoke on an interface with a single implementor. We can replace this
                  * with an invoke virtual.
@@ -208,8 +203,9 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                  * properties by checking of the receiver is an instance of the single implementor.
                  */
                 LogicNode condition = graph().unique(new InstanceOfNode(singleImplementor, receiver, getProfile()));
-                FixedGuardNode guard = graph().add(new FixedGuardNode(condition, DeoptimizationReason.OptimizedTypeCheckViolated, DeoptimizationAction.InvalidateRecompile, false));
-                graph().addBeforeFixed(invoke().asNode(), guard);
+                GuardNode guard = graph().unique(
+                                new GuardNode(condition, AbstractBeginNode.prevBegin(invoke().asNode()), DeoptimizationReason.OptimizedTypeCheckViolated, DeoptimizationAction.InvalidateRecompile,
+                                                false, JavaConstant.NULL_POINTER));
                 PiNode piNode = graph().unique(new PiNode(receiver, StampFactory.declaredNonNull(singleImplementor), guard));
                 arguments().set(0, piNode);
                 setInvokeKind(InvokeKind.Virtual);

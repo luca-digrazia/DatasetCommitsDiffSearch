@@ -22,28 +22,21 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.nodeinfo.InputType.Association;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * This node describes one locking scope; it ties the monitor enter, monitor exit and the frame
  * states together. It is thus referenced from the {@link MonitorEnterNode}, from the
  * {@link MonitorExitNode} and from the {@link FrameState}.
  */
-@NodeInfo(allowedUsageTypes = Association, cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo(allowedUsageTypes = {InputType.Association})
 public class MonitorIdNode extends ValueNode implements IterableNodeType, LIRLowerable {
 
-    public static final NodeClass<MonitorIdNode> TYPE = NodeClass.create(MonitorIdNode.class);
+    public static final NodeClass<MonitorIdNode> TYPE = NodeClass.get(MonitorIdNode.class);
     protected int lockDepth;
 
     public MonitorIdNode(int lockDepth) {
@@ -63,7 +56,6 @@ public class MonitorIdNode extends ValueNode implements IterableNodeType, LIRLow
         this.lockDepth = lockDepth;
     }
 
-    @Override
     public void generate(NodeLIRBuilderTool generator) {
         // nothing to do
     }

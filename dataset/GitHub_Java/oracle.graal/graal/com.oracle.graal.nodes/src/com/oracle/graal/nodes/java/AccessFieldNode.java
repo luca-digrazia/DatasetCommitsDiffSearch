@@ -22,27 +22,20 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_15;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_10;
-
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-
-import jdk.vm.ci.meta.ResolvedJavaField;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * The base class of all instructions that access fields.
  */
-@NodeInfo(cycles = CYCLES_15, size = SIZE_10)
+@NodeInfo
 public abstract class AccessFieldNode extends FixedWithNextNode implements Lowerable {
 
-    public static final NodeClass<AccessFieldNode> TYPE = NodeClass.create(AccessFieldNode.class);
+    public static final NodeClass<AccessFieldNode> TYPE = NodeClass.get(AccessFieldNode.class);
     @OptionalInput ValueNode object;
 
     protected final ResolvedJavaField field;

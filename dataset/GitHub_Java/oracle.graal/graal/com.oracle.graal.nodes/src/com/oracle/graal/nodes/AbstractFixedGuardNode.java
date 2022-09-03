@@ -22,22 +22,21 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.jvmci.meta.*;
 
 @NodeInfo
 public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNode implements Simplifiable, GuardingNode {
 
-    public static final NodeClass<AbstractFixedGuardNode> TYPE = NodeClass.create(AbstractFixedGuardNode.class);
+    public static final NodeClass<AbstractFixedGuardNode> TYPE = NodeClass.get(AbstractFixedGuardNode.class);
     @Input(InputType.Condition) protected LogicNode condition;
     protected final DeoptimizationReason reason;
     protected final DeoptimizationAction action;
-    protected JavaConstant speculation;
     protected boolean negated;
 
     public LogicNode condition() {
@@ -49,11 +48,9 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
         condition = x;
     }
 
-    protected AbstractFixedGuardNode(NodeClass<? extends AbstractFixedGuardNode> c, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, JavaConstant speculation,
-                    boolean negated) {
+    protected AbstractFixedGuardNode(NodeClass<? extends AbstractFixedGuardNode> c, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
         super(c, StampFactory.forVoid());
         this.action = action;
-        this.speculation = speculation;
         this.negated = negated;
         this.condition = condition;
         this.reason = deoptReason;
@@ -65,10 +62,6 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
 
     public DeoptimizationAction getAction() {
         return action;
-    }
-
-    public JavaConstant getSpeculation() {
-        return speculation;
     }
 
     public boolean isNegated() {

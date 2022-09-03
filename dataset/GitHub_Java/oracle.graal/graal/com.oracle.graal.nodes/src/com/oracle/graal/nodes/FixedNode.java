@@ -22,13 +22,13 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 
 @NodeInfo
-public abstract class FixedNode extends ValueNode implements FixedNodeInterface {
-    public static final NodeClass<FixedNode> TYPE = NodeClass.create(FixedNode.class);
+public abstract class FixedNode extends ValueNode {
+    public static final NodeClass<FixedNode> TYPE = NodeClass.get(FixedNode.class);
 
     protected FixedNode(NodeClass<? extends FixedNode> c, Stamp stamp) {
         super(c, stamp);

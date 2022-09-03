@@ -22,57 +22,53 @@
  */
 package com.oracle.graal.nodes.java;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.types.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
- * The {@code AccessIndexedNode} class is the base class of instructions that read or write
- * elements of an array.
+ * The {@code AccessIndexedNode} class is the base class of instructions that read or write elements
+ * of an array.
  */
-public abstract class AccessIndexedNode extends AccessArrayNode implements TypeFeedbackProvider {
+@NodeInfo
+public abstract class AccessIndexedNode extends AccessArrayNode implements Lowerable {
 
-    @Input private ValueNode index;
-    @Input private ValueNode length;
+    public static final NodeClass<AccessIndexedNode> TYPE = NodeClass.get(AccessIndexedNode.class);
+    @Input protected ValueNode index;
+    protected final Kind elementKind;
 
     public ValueNode index() {
         return index;
     }
 
-    public ValueNode length() {
-        return length;
-    }
-
-    private final CiKind elementType;
-
     /**
      * Create an new AccessIndexedNode.
-     * @param kind the result kind of the access
+     *
+     * @param stamp the result kind of the access
      * @param array the instruction producing the array
      * @param index the instruction producing the index
-     * @param length the instruction producing the length
-     * @param elementKind the type of the elements of the array
+     * @param elementKind the kind of the elements of the array
      */
-    protected AccessIndexedNode(Stamp stamp, ValueNode array, ValueNode index, ValueNode length, CiKind elementKind) {
-        super(stamp, array);
+    protected AccessIndexedNode(NodeClass<? extends AccessIndexedNode> c, Stamp stamp, ValueNode array, ValueNode index, Kind elementKind) {
+        super(c, stamp, array);
         this.index = index;
-        this.length = length;
-        this.elementType = elementKind;
+        this.elementKind = elementKind;
     }
 
     /**
      * Gets the element type of the array.
+     *
      * @return the element type
      */
-    public CiKind elementKind() {
-        return elementType;
+    public Kind elementKind() {
+        return elementKind;
     }
 
     @Override
-    public void typeFeedback(TypeFeedbackTool tool) {
-        tool.addScalar(index()).constantBound(Condition.GE, CiConstant.INT_0);
-        tool.addScalar(index()).valueBound(Condition.LT, length, tool.queryScalar(length));
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
     }
 }

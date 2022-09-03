@@ -22,22 +22,17 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Extension})
 public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
-    public static final NodeClass<CallTargetNode> TYPE = NodeClass.create(CallTargetNode.class);
+    public static final NodeClass<CallTargetNode> TYPE = NodeClass.get(CallTargetNode.class);
 
     public enum InvokeKind {
         Interface(false),
@@ -45,7 +40,7 @@ public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
         Static(true),
         Virtual(false);
 
-        InvokeKind(boolean direct) {
+        private InvokeKind(boolean direct) {
             this.direct = direct;
         }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,6 @@ import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -38,7 +37,7 @@ import com.oracle.graal.nodes.spi.*;
  */
 @NodeInfo(nameTemplate = "ForeignCall#{p#descriptor/s}", allowedUsageTypes = {InputType.Memory})
 public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowerable, DeoptimizingNode.DeoptDuring, MemoryCheckpoint.Multi {
-    public static final NodeClass<ForeignCallNode> TYPE = NodeClass.create(ForeignCallNode.class);
+    public static final NodeClass<ForeignCallNode> TYPE = NodeClass.get(ForeignCallNode.class);
 
     @Input protected NodeInputList<ValueNode> arguments;
     @OptionalInput(InputType.State) protected FrameState stateDuring;
@@ -48,7 +47,14 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
     protected int bci = BytecodeFrame.UNKNOWN_BCI;
 
     public ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, ValueNode... arguments) {
-        this(TYPE, foreignCalls, descriptor, arguments);
+        super(TYPE, StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())));
+        this.arguments = new NodeInputList<>(this, arguments);
+        this.descriptor = descriptor;
+        this.foreignCalls = foreignCalls;
+    }
+
+    public ForeignCallNode(ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, List<ValueNode> arguments) {
+        this(foreignCalls, descriptor, StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())), arguments);
     }
 
     public ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp, List<ValueNode> arguments) {
@@ -58,16 +64,16 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
         this.foreignCalls = foreignCalls;
     }
 
-    public ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp) {
-        super(TYPE, stamp);
+    protected ForeignCallNode(NodeClass<? extends ForeignCallNode> c, ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp) {
+        super(c, stamp);
         this.arguments = new NodeInputList<>(this);
         this.descriptor = descriptor;
         this.foreignCalls = foreignCalls;
     }
 
-    protected ForeignCallNode(NodeClass<? extends ForeignCallNode> c, ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, ValueNode... arguments) {
-        super(c, StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())));
-        this.arguments = new NodeInputList<>(this, arguments);
+    public ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp) {
+        super(TYPE, stamp);
+        this.arguments = new NodeInputList<>(this);
         this.descriptor = descriptor;
         this.foreignCalls = foreignCalls;
     }
@@ -105,12 +111,6 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
     }
 
     @Override
-    public void setStateAfter(FrameState x) {
-        assert hasSideEffect() || x == null;
-        super.setStateAfter(x);
-    }
-
-    @Override
     public FrameState stateDuring() {
         return stateDuring;
     }
@@ -135,7 +135,7 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
         if ((currentStateAfter.stackSize() > 0 && currentStateAfter.stackAt(currentStateAfter.stackSize() - 1) == this) ||
                         (currentStateAfter.stackSize() > 1 && currentStateAfter.stackAt(currentStateAfter.stackSize() - 2) == this)) {
             // The result of this call is on the top of stack, so roll back to the previous bci.
-            assert bci != BytecodeFrame.UNKNOWN_BCI : this;
+            assert bci != BytecodeFrame.UNKNOWN_BCI;
             newStateDuring = currentStateAfter.duplicateModifiedDuringCall(bci, this.getKind());
         } else {
             newStateDuring = currentStateAfter;

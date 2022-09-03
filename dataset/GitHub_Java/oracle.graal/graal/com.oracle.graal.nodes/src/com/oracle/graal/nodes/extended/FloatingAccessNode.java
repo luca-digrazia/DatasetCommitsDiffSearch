@@ -22,54 +22,57 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.type.*;
 
-public abstract class FloatingAccessNode extends FloatingNode implements Access {
+@NodeInfo
+public abstract class FloatingAccessNode extends FloatingGuardedNode implements Access, MemoryAccess {
+    public static final NodeClass<FloatingAccessNode> TYPE = NodeClass.get(FloatingAccessNode.class);
 
-    @Input private ValueNode object;
-    @Input private GuardNode guard;
-    @Input private LocationNode location;
-    @Data private boolean nullCheck;
+    @Input ValueNode object;
+    @Input(InputType.Association) LocationNode location;
+    protected BarrierType barrierType;
 
     public ValueNode object() {
         return object;
-    }
-
-    public GuardNode guard() {
-        return guard;
-    }
-
-    public void setGuard(GuardNode x) {
-        updateUsages(guard, x);
-        guard = x;
     }
 
     public LocationNode location() {
         return location;
     }
 
-    public boolean getNullCheck() {
-        return nullCheck;
+    public LocationNode accessLocation() {
+        return location;
     }
 
-    public void setNullCheck(boolean check) {
-        this.nullCheck = check;
+    public LocationIdentity getLocationIdentity() {
+        return location.getLocationIdentity();
     }
 
-    public FloatingAccessNode(ValueNode object, GuardNode guard, LocationNode location, Stamp stamp) {
-        super(stamp);
+    protected FloatingAccessNode(NodeClass<? extends FloatingAccessNode> c, ValueNode object, LocationNode location, Stamp stamp) {
+        super(c, stamp);
         this.object = object;
-        this.guard = guard;
         this.location = location;
     }
 
-    public FloatingAccessNode(ValueNode object, GuardNode guard, LocationNode location, Stamp stamp, Node... dependencies) {
-        super(stamp, dependencies);
+    protected FloatingAccessNode(NodeClass<? extends FloatingAccessNode> c, ValueNode object, LocationNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
+        super(c, stamp, guard);
         this.object = object;
-        this.guard = guard;
         this.location = location;
+        this.barrierType = barrierType;
     }
+
+    @Override
+    public BarrierType getBarrierType() {
+        return barrierType;
+    }
+
+    public boolean canNullCheck() {
+        return true;
+    }
+
+    public abstract FixedAccessNode asFixedNode();
 }

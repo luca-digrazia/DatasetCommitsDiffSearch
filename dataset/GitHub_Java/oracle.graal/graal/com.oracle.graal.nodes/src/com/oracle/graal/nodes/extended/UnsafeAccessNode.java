@@ -33,7 +33,7 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo
 public abstract class UnsafeAccessNode extends FixedWithNextNode implements Canonicalizable {
 
-    public static final NodeClass<UnsafeAccessNode> TYPE = NodeClass.create(UnsafeAccessNode.class);
+    public static final NodeClass<UnsafeAccessNode> TYPE = NodeClass.get(UnsafeAccessNode.class);
     @Input ValueNode object;
     @Input ValueNode offset;
     protected final Kind accessKind;
@@ -66,7 +66,7 @@ public abstract class UnsafeAccessNode extends FixedWithNextNode implements Cano
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (this.getLocationIdentity().isAny() && offset().isConstant()) {
+        if (this.getLocationIdentity().equals(LocationIdentity.ANY_LOCATION) && offset().isConstant()) {
             long constantOffset = offset().asJavaConstant().asLong();
 
             // Try to canonicalize to a field access.
@@ -82,7 +82,7 @@ public abstract class UnsafeAccessNode extends FixedWithNextNode implements Cano
                 }
             }
         }
-        if (this.getLocationIdentity().isAny()) {
+        if (this.getLocationIdentity().equals(LocationIdentity.ANY_LOCATION)) {
             ResolvedJavaType receiverType = StampTool.typeOrNull(object());
             // Try to build a better location identity.
             if (receiverType != null && receiverType.isArray()) {

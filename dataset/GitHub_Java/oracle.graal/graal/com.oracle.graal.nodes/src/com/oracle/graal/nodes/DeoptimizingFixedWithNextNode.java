@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,33 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 
-public abstract class DeoptimizingFixedWithNextNode extends FixedWithNextNode implements DeoptimizingNode {
+@NodeInfo
+public abstract class DeoptimizingFixedWithNextNode extends FixedWithNextNode implements DeoptimizingNode.DeoptBefore {
 
-    @Input private FrameState deoptState;
+    public static final NodeClass<DeoptimizingFixedWithNextNode> TYPE = NodeClass.get(DeoptimizingFixedWithNextNode.class);
+    @OptionalInput(InputType.State) protected FrameState stateBefore;
 
-    public DeoptimizingFixedWithNextNode(Stamp stamp) {
-        super(stamp);
+    protected DeoptimizingFixedWithNextNode(NodeClass<? extends DeoptimizingFixedWithNextNode> c, Stamp stamp) {
+        super(c, stamp);
+    }
+
+    protected DeoptimizingFixedWithNextNode(NodeClass<? extends DeoptimizingFixedWithNextNode> c, Stamp stamp, FrameState stateBefore) {
+        super(c, stamp);
+        this.stateBefore = stateBefore;
     }
 
     @Override
-    public FrameState getDeoptimizationState() {
-        return deoptState;
+    public FrameState stateBefore() {
+        return stateBefore;
     }
 
     @Override
-    public void setDeoptimizationState(FrameState f) {
-        updateUsages(deoptState, f);
-        deoptState = f;
-    }
-
-    @Override
-    public boolean isCallSiteDeoptimization() {
-        return false;
+    public void setStateBefore(FrameState f) {
+        updateUsages(stateBefore, f);
+        stateBefore = f;
     }
 }

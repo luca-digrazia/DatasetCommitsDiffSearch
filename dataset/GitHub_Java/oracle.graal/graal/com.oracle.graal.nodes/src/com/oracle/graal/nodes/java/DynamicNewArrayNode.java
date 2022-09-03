@@ -23,20 +23,23 @@
 //JaCoCo Exclude
 package com.oracle.graal.nodes.java;
 
+import java.lang.reflect.*;
+import java.util.*;
+
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * The {@code DynamicNewArrayNode} is used for allocation of arrays when the type is not a
  * compile-time constant.
  */
 @NodeInfo
-public class DynamicNewArrayNode extends AbstractNewArrayNode implements Canonicalizable {
-    public static final NodeClass<DynamicNewArrayNode> TYPE = NodeClass.create(DynamicNewArrayNode.class);
+public class DynamicNewArrayNode extends AbstractNewArrayNode {
+    public static final NodeClass<DynamicNewArrayNode> TYPE = NodeClass.get(DynamicNewArrayNode.class);
 
     @Input ValueNode elementType;
 
@@ -46,6 +49,10 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode implements Canonic
      */
     protected final Kind knownElementKind;
 
+    public DynamicNewArrayNode(ValueNode elementType, ValueNode length) {
+        this(TYPE, elementType, length, true, null);
+    }
+
     public DynamicNewArrayNode(ValueNode elementType, ValueNode length, boolean fillContents, Kind knownElementKind) {
         this(TYPE, elementType, length, fillContents, knownElementKind);
     }
@@ -54,7 +61,6 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode implements Canonic
         super(c, StampFactory.objectNonNull(), length, fillContents);
         this.elementType = elementType;
         this.knownElementKind = knownElementKind;
-        assert knownElementKind != Kind.Void && knownElementKind != Kind.Illegal;
     }
 
     public ValueNode getElementType() {
@@ -65,32 +71,34 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode implements Canonic
         return knownElementKind;
     }
 
+    protected NewArrayNode forConstantType(ResolvedJavaType type) {
+        ValueNode len = length();
+        NewArrayNode ret = graph().add(new NewArrayNode(type, len.isAlive() ? len : graph().addOrUniqueWithInputs(len), fillContents()));
+        if (stateBefore() != null) {
+            ret.setStateBefore(stateBefore());
+        }
+        return ret;
+    }
+
     @Override
     public void simplify(SimplifierTool tool) {
-        /*
-         * Do not call the super implementation: we must not eliminate unused allocations because
-         * throwing a NullPointerException or IllegalArgumentException is a possible side effect of
-         * an unused allocation.
-         */
-    }
-
-    @Override
-    public Node canonical(CanonicalizerTool tool) {
-        if (elementType.isConstant()) {
-            ResolvedJavaType type = tool.getConstantReflection().asJavaType(elementType.asConstant());
-            if (type != null && !throwsIllegalArgumentException(type)) {
-                return new NewArrayNode(type, length(), fillContents());
+        if (isAlive() && elementType.isConstant()) {
+            ResolvedJavaType javaType = tool.getConstantReflection().asJavaType(elementType.asConstant());
+            if (javaType != null && !javaType.equals(tool.getMetaAccess().lookupJavaType(void.class))) {
+                NewArrayNode newArray = forConstantType(javaType);
+                List<Node> snapshot = inputs().snapshot();
+                graph().replaceFixedWithFixed(this, newArray);
+                for (Node input : snapshot) {
+                    tool.removeIfUnused(input);
+                }
+                tool.addToWorkList(newArray);
             }
         }
-        return this;
     }
 
-    public static boolean throwsIllegalArgumentException(Class<?> elementType) {
-        return elementType == void.class;
-    }
-
-    public static boolean throwsIllegalArgumentException(ResolvedJavaType elementType) {
-        return elementType.getKind() == Kind.Void;
+    @NodeIntrinsic
+    public static Object newArray(Class<?> componentType, int length) {
+        return Array.newInstance(componentType, length);
     }
 
     @NodeIntrinsic

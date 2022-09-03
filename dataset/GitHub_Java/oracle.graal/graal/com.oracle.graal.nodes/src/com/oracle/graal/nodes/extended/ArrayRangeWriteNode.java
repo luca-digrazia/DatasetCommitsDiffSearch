@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.memory.*;
 
 /**
  * Base class for nodes that modify a range of an array.
@@ -34,7 +33,7 @@ import com.oracle.graal.nodes.memory.*;
 @NodeInfo
 public abstract class ArrayRangeWriteNode extends AbstractMemoryCheckpoint {
 
-    public static final NodeClass<ArrayRangeWriteNode> TYPE = NodeClass.create(ArrayRangeWriteNode.class);
+    public static final NodeClass<ArrayRangeWriteNode> TYPE = NodeClass.get(ArrayRangeWriteNode.class);
 
     protected ArrayRangeWriteNode(NodeClass<? extends ArrayRangeWriteNode> c, Stamp stamp) {
         super(c, stamp);

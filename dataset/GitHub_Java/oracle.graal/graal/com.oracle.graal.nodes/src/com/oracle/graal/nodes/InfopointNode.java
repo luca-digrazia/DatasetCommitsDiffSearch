@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,30 +23,21 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.graph.Node.IterableNodeType;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 
-/**
- * Nodes of this type are inserted into the graph to denote points of interest to debugging.
- */
-public class InfopointNode extends AbstractStateSplit implements LIRLowerable, IterableNodeType {
+@NodeInfo
+public abstract class InfopointNode extends FixedWithNextNode {
+    public static final NodeClass<InfopointNode> TYPE = NodeClass.get(InfopointNode.class);
+    protected final InfopointReason reason;
 
-    public final InfopointReason reason;
-
-    public InfopointNode(InfopointReason reason) {
-        super(StampFactory.forVoid());
+    public InfopointNode(NodeClass<? extends InfopointNode> c, InfopointReason reason) {
+        super(c, StampFactory.forVoid());
         this.reason = reason;
     }
 
-    @Override
-    public void generate(LIRGeneratorTool generator) {
-        generator.visitInfopointNode(this);
+    public InfopointReason getReason() {
+        return reason;
     }
-
-    @Override
-    public boolean hasSideEffect() {
-        return false;
-    }
-
 }

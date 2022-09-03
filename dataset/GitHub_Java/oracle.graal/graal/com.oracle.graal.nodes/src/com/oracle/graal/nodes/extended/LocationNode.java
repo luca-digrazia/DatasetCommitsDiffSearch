@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,62 +22,49 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
-public class LocationNode extends FloatingNode implements LIRLowerable, ValueNumberable {
+/**
+ * A location for a memory access in terms of the kind of value accessed and how to access it. All
+ * locations have the form [base + location], where base is a node and location is defined by
+ * subclasses of the {@link LocationNode}.
+ */
+@NodeInfo(allowedUsageTypes = {InputType.Association})
+public abstract class LocationNode extends FloatingNode implements LIRLowerable, ValueNumberable {
 
-    @Data private int displacement;
-    @Data private CiKind valueKind;
-    @Data private Object locationIdentity;
+    public static final NodeClass<LocationNode> TYPE = NodeClass.get(LocationNode.class);
 
-    public static final Object ANY_LOCATION = new Object() {
-        @Override
-        public String toString() {
-            return "ANY_LOCATION";
-        }
-    };
-    public static final Object FINAL_LOCATION = new Object() {
-        @Override
-        public String toString() {
-            return "FINAL_LOCATION";
-        }
-    };
-
-    public static Object getArrayLocation(CiKind elementKind) {
-        return elementKind;
+    /**
+     * Marker interface for locations in snippets.
+     */
+    public interface Location {
     }
 
-    public int displacement() {
-        return displacement;
+    protected LocationNode(NodeClass<? extends LocationNode> c, Stamp stamp) {
+        super(c, stamp);
     }
 
-    public static LocationNode create(Object identity, CiKind kind, int displacement, Graph graph) {
-        return graph.unique(new LocationNode(identity, kind, displacement));
-    }
-
-    protected LocationNode(Object identity, CiKind kind, int displacement) {
-        super(StampFactory.illegal());
-        assert kind != CiKind.Illegal && kind != CiKind.Void;
-        this.displacement = displacement;
-        this.valueKind = kind;
-        this.locationIdentity = identity;
-    }
-
-    public CiKind getValueKind() {
-        return valueKind;
-    }
-
-    public Object locationIdentity() {
-        return locationIdentity;
-    }
+    /**
+     * Returns the identity of the accessed memory location.
+     */
+    public abstract LocationIdentity getLocationIdentity();
 
     @Override
-    public void generate(LIRGeneratorTool generator) {
+    public final void generate(NodeLIRBuilderTool generator) {
         // nothing to do...
     }
+
+    public abstract Value generateAddress(NodeMappableLIRBuilder builder, LIRGeneratorTool gen, Value base);
+
+    /**
+     * @return the range of the displacement as a 64-bit integer stamp
+     */
+    public abstract IntegerStamp getDisplacementStamp();
 }

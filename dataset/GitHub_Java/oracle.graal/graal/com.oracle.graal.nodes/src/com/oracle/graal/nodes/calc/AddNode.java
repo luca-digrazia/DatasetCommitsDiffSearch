@@ -42,7 +42,7 @@ public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArit
         this(TYPE, x, y);
     }
 
-    protected AddNode(NodeClass<?> c, ValueNode x, ValueNode y) {
+    protected AddNode(NodeClass<? extends AddNode> c, ValueNode x, ValueNode y) {
         super(c, ArithmeticOpTable::getAdd, x, y);
     }
 
@@ -53,7 +53,7 @@ public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArit
         if (tryConstantFold != null) {
             return tryConstantFold;
         } else {
-            return new AddNode(x, y).maybeCommuteInputs();
+            return new AddNode(x, y);
         }
     }
 
@@ -103,7 +103,7 @@ public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArit
         } else if (forY instanceof NegateNode) {
             return BinaryArithmeticNode.sub(forX, ((NegateNode) forY).getValue());
         }
-        return this.maybeCommuteInputs();
+        return this;
     }
 
     @Override

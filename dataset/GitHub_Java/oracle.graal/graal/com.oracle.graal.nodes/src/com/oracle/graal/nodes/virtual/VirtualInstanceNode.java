@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,34 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import java.util.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 
-@NodeInfo(nameTemplate = "VirtualInstance {p#type}")
+@NodeInfo(nameTemplate = "VirtualInstance {p#type/s}")
 public class VirtualInstanceNode extends VirtualObjectNode {
 
-    private final ResolvedJavaType type;
-    private final ResolvedJavaField[] fields;
-    private final HashMap<ResolvedJavaField, Integer> fieldMap = new HashMap<>();
+    public static final NodeClass<VirtualInstanceNode> TYPE = NodeClass.get(VirtualInstanceNode.class);
+    protected final ResolvedJavaType type;
+    protected final ResolvedJavaField[] fields;
 
-    public VirtualInstanceNode(int virtualId, ResolvedJavaType type, ResolvedJavaField[] fields) {
-        super(virtualId);
+    public VirtualInstanceNode(ResolvedJavaType type, boolean hasIdentity) {
+        this(type, type.getInstanceFields(true), hasIdentity);
+    }
+
+    public VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields, boolean hasIdentity) {
+        this(TYPE, type, fields, hasIdentity);
+    }
+
+    protected VirtualInstanceNode(NodeClass<? extends VirtualInstanceNode> c, ResolvedJavaType type, boolean hasIdentity) {
+        this(c, type, type.getInstanceFields(true), hasIdentity);
+    }
+
+    protected VirtualInstanceNode(NodeClass<? extends VirtualInstanceNode> c, ResolvedJavaType type, ResolvedJavaField[] fields, boolean hasIdentity) {
+        super(c, type, hasIdentity);
         this.type = type;
         this.fields = fields;
-        for (int i = 0; i < fields.length; i++) {
-            fieldMap.put(fields[i], i);
-        }
     }
 
     @Override
@@ -57,22 +66,52 @@ public class VirtualInstanceNode extends VirtualObjectNode {
         return fields[index];
     }
 
+    public ResolvedJavaField[] getFields() {
+        return fields;
+    }
+
     @Override
     public String toString(Verbosity verbosity) {
         if (verbosity == Verbosity.Name) {
-            return super.toString(Verbosity.Name) + " " + MetaUtil.toJavaName(type, false);
+            return super.toString(Verbosity.Name) + " " + type.toJavaName(false);
         } else {
             return super.toString(verbosity);
         }
     }
 
     @Override
-    public Object fieldName(int index) {
-        return fields[index].name();
+    public String entryName(int index) {
+        return fields[index].getName();
     }
 
     public int fieldIndex(ResolvedJavaField field) {
-        Integer index = fieldMap.get(field);
-        return index == null ? -1 : index;
+        // on average fields.length == ~6, so a linear search is fast enough
+        for (int i = 0; i < fields.length; i++) {
+            if (fields[i].equals(field)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    @Override
+    public int entryIndexForOffset(long constantOffset, Kind expectedEntryKind) {
+        return fieldIndex(type.findInstanceFieldWithOffset(constantOffset, expectedEntryKind));
+    }
+
+    @Override
+    public Kind entryKind(int index) {
+        assert index >= 0 && index < fields.length;
+        return fields[index].getKind();
+    }
+
+    @Override
+    public VirtualInstanceNode duplicate() {
+        return new VirtualInstanceNode(type, fields, super.hasIdentity());
+    }
+
+    @Override
+    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
+        return new AllocatedObjectNode(this);
     }
 }

@@ -23,18 +23,20 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public abstract class AbstractWriteNode extends FixedAccessNode implements StateSplit, MemoryCheckpoint.Single, MemoryAccess, GuardingNode {
 
-    @Input private ValueNode value;
-    @Input(InputType.State) private FrameState stateAfter;
-    @Input(InputType.Memory) private Node lastLocationAccess;
+    public static final NodeClass<AbstractWriteNode> TYPE = NodeClass.get(AbstractWriteNode.class);
+    @Input ValueNode value;
+    @OptionalInput(InputType.State) FrameState stateAfter;
+    @OptionalInput(InputType.Memory) Node lastLocationAccess;
 
-    private final boolean initialization;
+    protected final boolean initialization;
 
     public FrameState stateAfter() {
         return stateAfter;
@@ -63,12 +65,18 @@ public abstract class AbstractWriteNode extends FixedAccessNode implements State
         return initialization;
     }
 
-    public AbstractWriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean compressible) {
-        this(object, value, location, barrierType, compressible, false);
+    protected AbstractWriteNode(NodeClass<? extends AbstractWriteNode> c, ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType) {
+        this(c, object, value, location, barrierType, false);
     }
 
-    public AbstractWriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean compressible, boolean initialization) {
-        super(object, location, StampFactory.forVoid(), barrierType, compressible);
+    protected AbstractWriteNode(NodeClass<? extends AbstractWriteNode> c, ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean initialization) {
+        super(c, object, location, StampFactory.forVoid(), barrierType);
+        this.value = value;
+        this.initialization = initialization;
+    }
+
+    protected AbstractWriteNode(NodeClass<? extends AbstractWriteNode> c, ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
+        super(c, object, location, StampFactory.forVoid(), guard, barrierType, false, null);
         this.value = value;
         this.initialization = initialization;
     }
@@ -91,13 +99,5 @@ public abstract class AbstractWriteNode extends FixedAccessNode implements State
         Node newLla = ValueNodeUtil.asNode(lla);
         updateUsages(lastLocationAccess, newLla);
         lastLocationAccess = newLla;
-    }
-
-    public MemoryCheckpoint asMemoryCheckpoint() {
-        return this;
-    }
-
-    public MemoryPhiNode asMemoryPhi() {
-        return null;
     }
 }

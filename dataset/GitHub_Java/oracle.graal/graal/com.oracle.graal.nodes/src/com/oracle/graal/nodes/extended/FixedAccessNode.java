@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,39 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * Accesses a value at an memory address specified by an {@linkplain #object object} and a
- * {@linkplain #nullCheckLocation() location}. The access does not include a null check on the
- * object.
+ * {@linkplain #accessLocation() location}. The access does not include a null check on the object.
  */
-public abstract class FixedAccessNode extends DeoptimizingFixedWithNextNode implements Access, GuardingNode {
+@NodeInfo
+public abstract class FixedAccessNode extends DeoptimizingFixedWithNextNode implements Access {
+    public static final NodeClass<FixedAccessNode> TYPE = NodeClass.get(FixedAccessNode.class);
 
-    @Input private GuardingNode guard;
-    @Input private ValueNode object;
-    @Input private ValueNode location;
-    private boolean nullCheck;
-    private BarrierType barrierType;
-    private boolean compressible;
+    @OptionalInput(InputType.Guard) protected GuardingNode guard;
+    @Input protected ValueNode object;
+    @Input(InputType.Association) protected ValueNode location;
+    protected boolean nullCheck;
+    protected BarrierType barrierType;
 
     public ValueNode object() {
         return object;
+    }
+
+    protected void setObject(ValueNode x) {
+        updateUsages(object, x);
+        object = x;
     }
 
     public LocationNode location() {
         return (LocationNode) location;
     }
 
-    public LocationNode nullCheckLocation() {
+    public LocationNode accessLocation() {
         return (LocationNode) location;
     }
 
@@ -59,21 +66,22 @@ public abstract class FixedAccessNode extends DeoptimizingFixedWithNextNode impl
         this.nullCheck = check;
     }
 
-    public FixedAccessNode(ValueNode object, ValueNode location, Stamp stamp) {
-        this(object, location, stamp, null, BarrierType.NONE, false);
+    protected FixedAccessNode(NodeClass<? extends FixedAccessNode> c, ValueNode object, ValueNode location, Stamp stamp) {
+        this(c, object, location, stamp, BarrierType.NONE);
     }
 
-    public FixedAccessNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType, boolean compressible) {
-        this(object, location, stamp, null, barrierType, compressible);
+    protected FixedAccessNode(NodeClass<? extends FixedAccessNode> c, ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType) {
+        this(c, object, location, stamp, null, barrierType, false, null);
     }
 
-    public FixedAccessNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean compressible) {
-        super(stamp);
+    protected FixedAccessNode(NodeClass<? extends FixedAccessNode> c, ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck,
+                    FrameState stateBefore) {
+        super(c, stamp, stateBefore);
         this.object = object;
         this.location = location;
         this.guard = guard;
         this.barrierType = barrierType;
-        this.compressible = compressible;
+        this.nullCheck = nullCheck;
     }
 
     @Override
@@ -88,17 +96,12 @@ public abstract class FixedAccessNode extends DeoptimizingFixedWithNextNode impl
 
     @Override
     public void setGuard(GuardingNode guard) {
-        updateUsages(this.guard == null ? null : this.guard.asNode(), guard == null ? null : guard.asNode());
+        updateUsagesInterface(this.guard, guard);
         this.guard = guard;
     }
 
     @Override
     public BarrierType getBarrierType() {
         return barrierType;
-    }
-
-    @Override
-    public boolean isCompressible() {
-        return compressible;
     }
 }

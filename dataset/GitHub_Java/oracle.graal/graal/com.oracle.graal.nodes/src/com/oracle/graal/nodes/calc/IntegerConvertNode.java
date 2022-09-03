@@ -22,30 +22,24 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import java.io.Serializable;
-import java.util.function.Function;
+import java.io.*;
+import java.util.function.*;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp;
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * An {@code IntegerConvert} converts an integer to an integer of different width.
  */
 @NodeInfo
 public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements ConvertNode, ArithmeticLIRLowerable {
-    @SuppressWarnings("rawtypes") public static final NodeClass<IntegerConvertNode> TYPE = NodeClass.create(IntegerConvertNode.class);
+    @SuppressWarnings("rawtypes") public static final NodeClass<IntegerConvertNode> TYPE = NodeClass.get(IntegerConvertNode.class);
 
     protected final SerializableIntegerConvertFunction<OP> getOp;
     protected final SerializableIntegerConvertFunction<REV> getReverseOp;
@@ -89,9 +83,8 @@ public abstract class IntegerConvertNode<OP, REV> extends UnaryNode implements C
     }
 
     @Override
-    public Stamp foldStamp(Stamp newStamp) {
-        assert newStamp.isCompatible(getValue().stamp());
-        return getOp(getValue()).foldStamp(inputBits, resultBits, newStamp);
+    public boolean inferStamp() {
+        return updateStamp(getOp(getValue()).foldStamp(inputBits, resultBits, getValue().stamp()));
     }
 
     @Override

@@ -22,20 +22,12 @@
  */
 package com.oracle.graal.nodes;
 
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.extended.AnchoringNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.extended.*;
 
 /**
  * A guard is a node that deoptimizes based on a conditional expression. Guards are not attached to
@@ -50,9 +42,9 @@ import com.oracle.graal.nodes.extended.GuardingNode;
  * control flow would have reached the guarded node (without taking exceptions into account).
  */
 @NodeInfo(nameTemplate = "Guard(!={p#negated}) {p#reason/s}", allowedUsageTypes = {InputType.Guard})
-public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, GuardingNode, DeoptimizingGuard {
+public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, GuardingNode {
 
-    public static final NodeClass<GuardNode> TYPE = NodeClass.create(GuardNode.class);
+    public static final NodeClass<GuardNode> TYPE = NodeClass.get(GuardNode.class);
     @Input(InputType.Condition) protected LogicNode condition;
     protected final DeoptimizationReason reason;
     protected JavaConstant speculation;
@@ -75,25 +67,19 @@ public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, 
     /**
      * The instruction that produces the tested boolean value.
      */
-    public LogicNode getCondition() {
+    public LogicNode condition() {
         return condition;
-    }
-
-    public void setCondition(LogicNode x, boolean negated) {
-        updateUsages(condition, x);
-        condition = x;
-        this.negated = negated;
     }
 
     public boolean isNegated() {
         return negated;
     }
 
-    public DeoptimizationReason getReason() {
+    public DeoptimizationReason reason() {
         return reason;
     }
 
-    public DeoptimizationAction getAction() {
+    public DeoptimizationAction action() {
         return action;
     }
 
@@ -116,12 +102,12 @@ public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, 
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (getCondition() instanceof LogicNegationNode) {
-            LogicNegationNode negation = (LogicNegationNode) getCondition();
+        if (condition() instanceof LogicNegationNode) {
+            LogicNegationNode negation = (LogicNegationNode) condition();
             return new GuardNode(negation.getValue(), getAnchor(), reason, action, !negated, speculation);
         }
-        if (getCondition() instanceof LogicConstantNode) {
-            LogicConstantNode c = (LogicConstantNode) getCondition();
+        if (condition() instanceof LogicConstantNode) {
+            LogicConstantNode c = (LogicConstantNode) condition();
             if (c.getValue() != negated) {
                 return null;
             }

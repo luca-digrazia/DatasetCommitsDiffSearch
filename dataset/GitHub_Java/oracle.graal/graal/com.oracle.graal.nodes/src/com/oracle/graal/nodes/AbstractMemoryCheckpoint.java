@@ -23,26 +23,23 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 
 /**
  * Provides an implementation of {@link StateSplit}.
  */
+@NodeInfo
 public abstract class AbstractMemoryCheckpoint extends AbstractStateSplit implements MemoryCheckpoint {
 
-    protected AbstractMemoryCheckpoint(Stamp stamp) {
-        super(stamp);
+    public static final NodeClass<AbstractMemoryCheckpoint> TYPE = NodeClass.get(AbstractMemoryCheckpoint.class);
+
+    protected AbstractMemoryCheckpoint(NodeClass<? extends AbstractMemoryCheckpoint> c, Stamp stamp) {
+        this(c, stamp, null);
     }
 
-    protected AbstractMemoryCheckpoint(Stamp stamp, FrameState stateAfter) {
-        super(stamp, stateAfter);
-    }
-
-    public MemoryCheckpoint asMemoryCheckpoint() {
-        return this;
-    }
-
-    public MemoryPhiNode asMemoryPhi() {
-        return null;
+    protected AbstractMemoryCheckpoint(NodeClass<? extends AbstractMemoryCheckpoint> c, Stamp stamp, FrameState stateAfter) {
+        super(c, stamp, stateAfter);
     }
 }

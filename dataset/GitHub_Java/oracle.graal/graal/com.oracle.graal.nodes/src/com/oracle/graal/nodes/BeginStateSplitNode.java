@@ -22,10 +22,40 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+
 /**
- * Base class for {@link BeginNode}s that are associated with a frame state.
+ * Base class for {@link AbstractBeginNode}s that are associated with a frame state.
+ *
+ * TODO (dnsimon) this not needed until {@link AbstractBeginNode} no longer implements
+ * {@link StateSplit} which is not possible until loop peeling works without requiring begin nodes
+ * to have frames states.
  */
-public class BeginStateSplitNode extends BeginNode implements StateSplit {
+@NodeInfo
+public abstract class BeginStateSplitNode extends AbstractBeginNode implements StateSplit {
+
+    public static final NodeClass<BeginStateSplitNode> TYPE = NodeClass.get(BeginStateSplitNode.class);
+    @OptionalInput(InputType.State) protected FrameState stateAfter;
+
+    protected BeginStateSplitNode(NodeClass<? extends BeginStateSplitNode> c) {
+        super(c);
+    }
+
+    protected BeginStateSplitNode(NodeClass<? extends BeginStateSplitNode> c, Stamp stamp) {
+        super(c, stamp);
+    }
+
+    public FrameState stateAfter() {
+        return stateAfter;
+    }
+
+    public void setStateAfter(FrameState x) {
+        assert x == null || x.isAlive() : "frame state must be in a graph";
+        updateUsages(stateAfter, x);
+        stateAfter = x;
+    }
 
     /**
      * A begin node has no side effect.

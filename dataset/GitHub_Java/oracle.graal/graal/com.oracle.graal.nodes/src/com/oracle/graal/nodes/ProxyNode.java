@@ -36,7 +36,7 @@ import com.oracle.graal.nodes.extended.*;
 @NodeInfo
 public abstract class ProxyNode extends FloatingNode implements IterableNodeType, ValueNumberable {
 
-    public static final NodeClass<ProxyNode> TYPE = NodeClass.create(ProxyNode.class);
+    public static final NodeClass<ProxyNode> TYPE = NodeClass.get(ProxyNode.class);
     @Input(InputType.Association) AbstractBeginNode proxyPoint;
 
     protected ProxyNode(NodeClass<? extends ProxyNode> c, Stamp stamp, AbstractBeginNode proxyPoint) {
@@ -53,6 +53,8 @@ public abstract class ProxyNode extends FloatingNode implements IterableNodeType
 
     @Override
     public boolean verify() {
+        assert value() != null;
+        assert proxyPoint != null;
         assert !(value() instanceof ProxyNode) || ((ProxyNode) value()).proxyPoint != proxyPoint;
         return super.verify();
     }

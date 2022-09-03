@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
@@ -34,9 +33,9 @@ import com.oracle.graal.nodeinfo.*;
  * instructions.
  */
 @NodeInfo
-public abstract class ValueNode extends com.oracle.graal.graph.Node {
+public abstract class ValueNode extends com.oracle.graal.graph.Node implements KindProvider {
 
-    public static final NodeClass<ValueNode> TYPE = NodeClass.create(ValueNode.class);
+    public static final NodeClass<ValueNode> TYPE = NodeClass.get(ValueNode.class);
     /**
      * The kind of this value. This is {@link Kind#Void} for instructions that produce no value.
      * This kind is guaranteed to be a {@linkplain Kind#getStackKind() stack kind}.
@@ -89,7 +88,7 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node {
         return false;
     }
 
-    public final Kind getStackKind() {
+    public final Kind getKind() {
         return stamp().getStackKind();
     }
 
@@ -102,11 +101,7 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node {
         return this instanceof ConstantNode;
     }
 
-    private static final NodePredicate IS_CONSTANT = new NodePredicate() {
-        public boolean apply(Node n) {
-            return n instanceof ConstantNode;
-        }
-    };
+    private static final NodePredicate IS_CONSTANT = node -> node instanceof ConstantNode;
 
     public static NodePredicate isConstantPredicate() {
         return IS_CONSTANT;
@@ -151,7 +146,7 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node {
 
     @Override
     public boolean isAllowedUsageType(InputType type) {
-        if (getStackKind() != Kind.Void && type == InputType.Value) {
+        if (getKind() != Kind.Void && type == InputType.Value) {
             return true;
         } else {
             return super.isAllowedUsageType(type);

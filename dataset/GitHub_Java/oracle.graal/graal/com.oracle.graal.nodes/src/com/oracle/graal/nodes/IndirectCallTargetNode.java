@@ -22,28 +22,21 @@
  */
 package com.oracle.graal.nodes;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 
 @NodeInfo
-public class IndirectCallTargetNode extends LoweredCallTargetNode {
-    public static final NodeClass<IndirectCallTargetNode> TYPE = NodeClass.create(IndirectCallTargetNode.class);
+public abstract class IndirectCallTargetNode extends LoweredCallTargetNode {
+    public static final NodeClass<IndirectCallTargetNode> TYPE = NodeClass.get(IndirectCallTargetNode.class);
 
     @Input protected ValueNode computedAddress;
 
-    public IndirectCallTargetNode(ValueNode computedAddress, ValueNode[] arguments, StampPair returnStamp, JavaType[] signature, ResolvedJavaMethod target,
-                    CallingConvention.Type callType,
-                    InvokeKind invokeKind) {
-        this(TYPE, computedAddress, arguments, returnStamp, signature, target, callType, invokeKind);
-    }
-
-    protected IndirectCallTargetNode(NodeClass<? extends IndirectCallTargetNode> c, ValueNode computedAddress, ValueNode[] arguments, StampPair returnStamp,
-                    JavaType[] signature,
+    protected IndirectCallTargetNode(NodeClass<? extends IndirectCallTargetNode> c, ValueNode computedAddress, List<ValueNode> arguments, Stamp returnStamp, JavaType[] signature,
                     ResolvedJavaMethod target, CallingConvention.Type callType, InvokeKind invokeKind) {
         super(c, arguments, returnStamp, signature, target, callType, invokeKind);
         this.computedAddress = computedAddress;

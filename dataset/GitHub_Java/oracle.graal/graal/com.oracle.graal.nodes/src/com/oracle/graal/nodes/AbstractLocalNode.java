@@ -22,19 +22,15 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.calc.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.calc.FloatingNode;
-
-@NodeInfo(cycles = CYCLES_0, size = SIZE_1)
+@NodeInfo
 public abstract class AbstractLocalNode extends FloatingNode {
 
-    public static final NodeClass<AbstractLocalNode> TYPE = NodeClass.create(AbstractLocalNode.class);
+    public static final NodeClass<AbstractLocalNode> TYPE = NodeClass.get(AbstractLocalNode.class);
     protected final int index;
 
     protected AbstractLocalNode(NodeClass<? extends AbstractLocalNode> c, int index, Stamp stamp) {

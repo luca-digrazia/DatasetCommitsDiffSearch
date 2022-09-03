@@ -22,21 +22,17 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
 public abstract class AbstractEndNode extends FixedNode implements IterableNodeType, LIRLowerable {
 
-    public static final NodeClass<AbstractEndNode> TYPE = NodeClass.create(AbstractEndNode.class);
+    public static final NodeClass<AbstractEndNode> TYPE = NodeClass.get(AbstractEndNode.class);
 
     protected AbstractEndNode(NodeClass<? extends AbstractEndNode> c) {
         super(c, StampFactory.forVoid());
@@ -59,10 +55,6 @@ public abstract class AbstractEndNode extends FixedNode implements IterableNodeT
 
     @Override
     public Iterable<? extends Node> cfgSuccessors() {
-        AbstractMergeNode merge = merge();
-        if (merge != null) {
-            return Arrays.asList(merge);
-        }
-        return Collections.emptyList();
+        return Arrays.asList(merge());
     }
 }

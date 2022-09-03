@@ -22,19 +22,11 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
-import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * This node class can be used to create {@link MacroNode}s for simple pure functions like
@@ -43,10 +35,10 @@ import com.oracle.graal.nodes.ValueNode;
 @NodeInfo
 public abstract class PureFunctionMacroNode extends MacroStateSplitNode implements Canonicalizable {
 
-    public static final NodeClass<PureFunctionMacroNode> TYPE = NodeClass.create(PureFunctionMacroNode.class);
+    public static final NodeClass<PureFunctionMacroNode> TYPE = NodeClass.get(PureFunctionMacroNode.class);
 
-    public PureFunctionMacroNode(NodeClass<? extends MacroNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode... arguments) {
-        super(c, invokeKind, targetMethod, bci, returnStamp, arguments);
+    protected PureFunctionMacroNode(NodeClass<? extends PureFunctionMacroNode> c, Invoke invoke) {
+        super(c, invoke);
     }
 
     /**
@@ -57,7 +49,7 @@ public abstract class PureFunctionMacroNode extends MacroStateSplitNode implemen
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (tool.allUsagesAvailable() && hasNoUsages()) {
+        if (hasNoUsages()) {
             return null;
         } else {
             ValueNode param = arguments.get(0);

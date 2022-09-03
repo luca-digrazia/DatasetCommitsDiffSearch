@@ -37,9 +37,9 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
-public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements ArithmeticLIRLowerable, Canonicalizable.BinaryCommutative<ValueNode> {
+public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements ArithmeticLIRLowerable {
 
-    @SuppressWarnings("rawtypes") public static final NodeClass<BinaryArithmeticNode> TYPE = NodeClass.create(BinaryArithmeticNode.class);
+    @SuppressWarnings("rawtypes") public static final NodeClass<BinaryArithmeticNode> TYPE = NodeClass.get(BinaryArithmeticNode.class);
 
     protected interface SerializableBinaryFunction<T> extends Function<ArithmeticOpTable, BinaryOp<T>>, Serializable {
     }
@@ -59,11 +59,6 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
 
     public boolean isAssociative() {
         return getOp(getX(), getY()).isAssociative();
-    }
-
-    @Override
-    public boolean isCommutative() {
-        return getOp(getX(), getY()).isCommutative();
     }
 
     @Override
@@ -256,30 +251,5 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
             }
         }
         return false;
-    }
-
-    /**
-     * Ensure a canonical ordering of inputs for commutative nodes to improve GVN results. Order the
-     * inputs by increasing {@link Node#id} and call {@link Graph#findDuplicate(Node)} on the node
-     * if it's currently in a graph. It's assumed that if there was a constant on the left it's been
-     * moved to the right by other code and that ordering is left alone.
-     *
-     * @return the original node or another node with the same input ordering
-     */
-    @SuppressWarnings("deprecation")
-    public BinaryNode maybeCommuteInputs() {
-        if (!y.isConstant() && x.getId() > y.getId()) {
-            ValueNode tmp = x;
-            x = y;
-            y = tmp;
-            if (graph() != null) {
-                // See if this node already exists
-                BinaryNode duplicate = graph().findDuplicate(this);
-                if (duplicate != null) {
-                    return duplicate;
-                }
-            }
-        }
-        return this;
     }
 }
