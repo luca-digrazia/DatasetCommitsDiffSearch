@@ -39,23 +39,23 @@ import com.oracle.graal.nodes.extended.GuardingNode;
 public abstract class ProxyNode extends FloatingNode implements IterableNodeType, ValueNumberable {
 
     public static final NodeClass<ProxyNode> TYPE = NodeClass.create(ProxyNode.class);
-    @Input(InputType.Association) LoopExitNode loopExit;
+    @Input(InputType.Association) LoopExitNode proxyPoint;
 
     protected ProxyNode(NodeClass<? extends ProxyNode> c, Stamp stamp, LoopExitNode proxyPoint) {
         super(c, stamp);
         assert proxyPoint != null;
-        this.loopExit = proxyPoint;
+        this.proxyPoint = proxyPoint;
     }
 
     public abstract ValueNode value();
 
     public LoopExitNode proxyPoint() {
-        return loopExit;
+        return proxyPoint;
     }
 
     @Override
     public boolean verify() {
-        assert !(value() instanceof ProxyNode) || ((ProxyNode) value()).loopExit != loopExit;
+        assert !(value() instanceof ProxyNode) || ((ProxyNode) value()).proxyPoint != proxyPoint;
         return super.verify();
     }
 
