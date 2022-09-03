@@ -182,7 +182,7 @@ final class NativeImageServer extends NativeImage {
             return alive;
         }
 
-        synchronized void shutdown() {
+        void shutdown() {
             Signal.kill(pid, Signal.SignalEnum.SIGTERM.getCValue());
             /* Release port only after server stops responding to it */
             long timeout = System.currentTimeMillis() + 60_000;
@@ -409,10 +409,6 @@ final class NativeImageServer extends NativeImage {
                 showMessage(server.getServerInfo());
             }
         }
-    }
-
-    void wipeMachineDir() {
-        deleteAllFiles(getMachineDir());
     }
 
     @SuppressWarnings("try")
