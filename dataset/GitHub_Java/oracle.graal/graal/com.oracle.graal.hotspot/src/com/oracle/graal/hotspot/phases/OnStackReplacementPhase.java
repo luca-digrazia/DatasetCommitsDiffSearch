@@ -78,7 +78,10 @@ public class OnStackReplacementPhase extends Phase {
                 ProxyNode proxy = (ProxyNode) usage;
                 proxy.replaceAndDelete(proxy.value());
             }
-            GraphUtil.removeFixedWithUnusedInputs(osr);
+            FixedNode next = osr.next();
+            osr.setNext(null);
+            ((FixedWithNextNode) osr.predecessor()).setNext(next);
+            GraphUtil.killWithUnusedFloatingInputs(osr);
             Debug.dump(graph, "OnStackReplacement loop peeling result");
         } while (true);
 
