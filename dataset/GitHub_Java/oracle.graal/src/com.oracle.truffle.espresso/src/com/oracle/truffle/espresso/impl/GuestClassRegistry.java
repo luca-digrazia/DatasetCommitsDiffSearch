@@ -90,7 +90,7 @@ public class GuestClassRegistry implements ClassRegistry {
 
     @Override
     public Klass defineKlass(TypeDescriptor type, Klass klass) {
-        assert !classes.containsKey(type);
+        assert !classes.contains(type);
         Klass prevKlass = classes.putIfAbsent(type, klass);
         if (prevKlass != null) {
             return prevKlass;
