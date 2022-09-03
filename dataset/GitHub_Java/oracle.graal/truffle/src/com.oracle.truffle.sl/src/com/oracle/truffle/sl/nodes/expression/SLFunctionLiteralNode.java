@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -43,6 +43,7 @@ package com.oracle.truffle.sl.nodes.expression;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.sl.SLLanguage;
@@ -71,8 +72,11 @@ public final class SLFunctionLiteralNode extends SLExpressionNode {
      */
     @CompilationFinal private SLFunction cachedFunction;
 
-    public SLFunctionLiteralNode(String functionName) {
+    private final ContextReference<SLContext> reference;
+
+    public SLFunctionLiteralNode(SLLanguage language, String functionName) {
         this.functionName = functionName;
+        this.reference = language.getContextReference();
     }
 
     @Override
@@ -81,7 +85,7 @@ public final class SLFunctionLiteralNode extends SLExpressionNode {
             /* We are about to change a @CompilationFinal field. */
             CompilerDirectives.transferToInterpreterAndInvalidate();
             /* First execution of the node: lookup the function in the function registry. */
-            cachedFunction = lookupContextReference(SLLanguage.class).get().getFunctionRegistry().lookup(functionName, true);
+            cachedFunction = reference.get().getFunctionRegistry().lookup(functionName, true);
         }
         return cachedFunction;
     }
