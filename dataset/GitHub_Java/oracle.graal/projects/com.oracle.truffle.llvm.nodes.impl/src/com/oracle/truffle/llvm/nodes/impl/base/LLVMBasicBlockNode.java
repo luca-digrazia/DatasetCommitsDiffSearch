@@ -60,7 +60,6 @@ public class LLVMBasicBlockNode extends LLVMNode {
     @CompilationFinal private final long[] successorCount;
     @CompilationFinal private long totalExecutionCount = 0;
     private final int blockId;
-    private final String blockName;
 
     private final BranchProfile controlFlowExceptionProfile = BranchProfile.create();
 
@@ -71,11 +70,10 @@ public class LLVMBasicBlockNode extends LLVMNode {
         executeGetSuccessorIndex(frame);
     }
 
-    public LLVMBasicBlockNode(LLVMNode[] statements, LLVMTerminatorNode termInstruction, int blockId, String blockName) {
+    public LLVMBasicBlockNode(LLVMNode[] statements, LLVMTerminatorNode termInstruction, int blockId) {
         this.statements = statements;
         this.termInstruction = termInstruction;
         this.blockId = blockId;
-        this.blockName = blockName;
         successorCount = new long[termInstruction.getSuccessors().length];
     }
 
@@ -162,7 +160,7 @@ public class LLVMBasicBlockNode extends LLVMNode {
             if (blockId == 0) {
                 identifier = String.format("first basic block in function %s", functionStartNode.getFunctionName());
             } else {
-                identifier = String.format("basic block %s in function %s", blockName, functionStartNode.getFunctionName());
+                identifier = String.format("basic block %d in function %s", blockId, functionStartNode.getFunctionName());
             }
             sourceSection = functionStartNode.getSourceSection().getSource().createSection(identifier, 1);
         }
@@ -176,10 +174,6 @@ public class LLVMBasicBlockNode extends LLVMNode {
 
     public int getBlockId() {
         return blockId;
-    }
-
-    public String getBlockName() {
-        return blockName;
     }
 
 }
