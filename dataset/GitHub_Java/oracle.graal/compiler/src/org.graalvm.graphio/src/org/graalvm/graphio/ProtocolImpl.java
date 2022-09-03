@@ -28,7 +28,7 @@ import java.util.Collection;
 import java.util.Map;
 
 final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition>
-                extends GraphProtocol<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition, StackTraceElement> {
+                extends GraphProtocol<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> {
     private final GraphStructure<Graph, Node, NodeClass, Port> structure;
     private final GraphTypes types;
     private final GraphBlocks<Graph, Block, Node> blocks;
@@ -43,7 +43,7 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
         this.elements = elements;
     }
 
-    ProtocolImpl(GraphProtocol<?, ?, ?, ?, ?, ?, ?, ?, ?, ?> parent, GraphStructure<Graph, Node, NodeClass, Port> structure, GraphTypes enums, GraphBlocks<Graph, Block, Node> blocks,
+    ProtocolImpl(GraphProtocol<?, ?, ?, ?, ?, ?, ?, ?, ?> parent, GraphStructure<Graph, Node, NodeClass, Port> structure, GraphTypes enums, GraphBlocks<Graph, Block, Node> blocks,
                     GraphElements<ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> elements) {
         super(parent);
         this.structure = structure;
@@ -128,11 +128,7 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
 
     @Override
     protected Object findType(Port edges, int i) {
-        Object type = structure.edgeType(edges, i);
-        if (findEnumOrdinal(type) < 0) {
-            throw new IllegalStateException("edgeType method shall return an enum! Was: " + type);
-        }
-        return type;
+        return structure.edgeType(edges, i);
     }
 
     @Override
@@ -142,11 +138,7 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
 
     @Override
     protected Object findJavaClass(NodeClass clazz) {
-        final Object type = structure.nodeClassType(clazz);
-        if (!(type instanceof Class<?>) && findJavaTypeName(type) == null) {
-            throw new IllegalStateException("nodeClassType method shall return a Java class (instance of Class)! Was: " + type);
-        }
-        return type;
+        return structure.nodeClassType(clazz);
     }
 
     @Override
@@ -285,18 +277,8 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
     }
 
     @Override
-    protected StackTraceElement findLocation(ResolvedJavaMethod method, int bci, NodeSourcePosition pos) {
+    protected StackTraceElement findMethodStackTraceElement(ResolvedJavaMethod method, int bci, NodeSourcePosition pos) {
         return elements.methodStackTraceElement(method, bci, pos);
-    }
-
-    @Override
-    protected String findLocationFile(StackTraceElement loc) {
-        return loc.getFileName();
-    }
-
-    @Override
-    protected int findLocationLine(StackTraceElement loc) {
-        return loc.getLineNumber();
     }
 
     @Override

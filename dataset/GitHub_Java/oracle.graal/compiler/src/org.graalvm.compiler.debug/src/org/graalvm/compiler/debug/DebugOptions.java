@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,12 +27,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.util.EconomicMap;
 
 /**
  * Options that configure a {@link DebugContext} and related functionality.
@@ -127,6 +124,8 @@ public class DebugOptions {
     @Option(help = "Enable dumping LIR, register allocation and code generation info to the C1Visualizer.", type = OptionType.Debug)
     public static final OptionKey<Boolean> PrintBackendCFG = new OptionKey<>(true);
 
+    @Option(help = "Output probabilities for fixed nodes during binary graph dumping.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> PrintGraphProbabilities = new OptionKey<>(false);
     @Option(help = "Enable dumping to the IdealGraphVisualizer.", type = OptionType.Debug)
     public static final OptionKey<Boolean> PrintGraph = new OptionKey<>(true);
     @Option(help = "Print graphs to files instead of sending them over the network.", type = OptionType.Debug)
@@ -134,7 +133,9 @@ public class DebugOptions {
 
     @Option(help = "Host part of the address to which graphs are dumped.", type = OptionType.Debug)
     public static final OptionKey<String> PrintGraphHost = new OptionKey<>("127.0.0.1");
-    @Option(help = "Port part of the address to which graphs are dumped in binary format.", type = OptionType.Debug)
+    @Option(help = "Port part of the address to which graphs are dumped in XML format (ignored if PrintBinaryGraphs=true).", type = OptionType.Debug)
+    public static final OptionKey<Integer> PrintXmlGraphPort = new OptionKey<>(4444);
+    @Option(help = "Port part of the address to which graphs are dumped in binary format (ignored if PrintBinaryGraphs=false).", type = OptionType.Debug)
     public static final OptionKey<Integer> PrintBinaryGraphPort = new OptionKey<>(4445);
     @Option(help = "Schedule graphs as they are dumped.", type = OptionType.Debug)
     public static final OptionKey<Boolean> PrintGraphWithSchedule = new OptionKey<>(false);
@@ -163,10 +164,23 @@ public class DebugOptions {
     @Option(help = "Do not compile anything on bootstrap but just initialize the compiler.", type = OptionType.Debug)
     public static final OptionKey<Boolean> BootstrapInitializeOnly = new OptionKey<>(false);
 
+    // These will be removed at some point
+    @Option(help = "Deprecated - use PrintGraphHost instead.", type = OptionType.Debug)
+    static final OptionKey<String> PrintIdealGraphAddress = new DebugOptions.DeprecatedOptionKey<>(PrintGraphHost);
+    @Option(help = "Deprecated - use PrintGraphWithSchedule instead.", type = OptionType.Debug)
+    static final OptionKey<Boolean> PrintIdealGraphSchedule = new DebugOptions.DeprecatedOptionKey<>(PrintGraphWithSchedule);
+    @Option(help = "Deprecated - use PrintGraph instead.", type = OptionType.Debug)
+    static final OptionKey<Boolean> PrintIdealGraph = new DebugOptions.DeprecatedOptionKey<>(PrintGraph);
+    @Option(help = "Deprecated - use PrintGraphFile instead.", type = OptionType.Debug)
+    static final OptionKey<Boolean> PrintIdealGraphFile = new DebugOptions.DeprecatedOptionKey<>(PrintGraphFile);
+    @Option(help = "Deprecated - use PrintXmlGraphPort instead.", type = OptionType.Debug)
+    static final OptionKey<Integer> PrintIdealGraphPort = new DebugOptions.DeprecatedOptionKey<>(PrintXmlGraphPort);
+    // @formatter:on
+
     /**
      * Gets the directory in which {@link DebugDumpHandler}s can generate output. This will be the
      * directory specified by {@link #DumpPath} if it has been set otherwise it will be derived from
-     * the default value of {@link #DumpPath} and {@link GraalServices#getGlobalTimeStamp()}.
+     * the default value of {@link #DumpPath} and {@link PathUtilities#getGlobalTimeStamp()}.
      *
      * This method will ensure the returned directory exists, printing a message to {@link TTY} if
      * it creates it.
@@ -179,16 +193,14 @@ public class DebugOptions {
         if (DumpPath.hasBeenSet(options)) {
             dumpDir = Paths.get(DumpPath.getValue(options));
         } else {
-            dumpDir = Paths.get(DumpPath.getValue(options), String.valueOf(GraalServices.getGlobalTimeStamp()));
+            dumpDir = Paths.get(DumpPath.getValue(options), String.valueOf(PathUtilities.getGlobalTimeStamp()));
         }
         dumpDir = dumpDir.toAbsolutePath();
         if (!Files.exists(dumpDir)) {
             synchronized (DebugConfigImpl.class) {
                 if (!Files.exists(dumpDir)) {
                     Files.createDirectories(dumpDir);
-                    if (ShowDumpFiles.getValue(options)) {
-                        TTY.println("Dumping debug output in %s", dumpDir.toString());
-                    }
+                    TTY.println("Dumping debug output in %s", dumpDir.toString());
                 }
             }
         }
