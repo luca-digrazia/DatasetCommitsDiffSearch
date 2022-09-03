@@ -361,7 +361,6 @@ public class GraalCompiler {
         }
 
         try (Scope s0 = Debug.scope("MidTier")) {
-            LowLevelMidTierPhase.Context<T> c = new LowLevelMidTierPhase.Context<>(codeEmittingOrder, linearScanOrder);
             try (Scope s = Debug.scope("Allocator")) {
                 if (backend.shouldAllocateRegisters()) {
                     LinearScan.allocate(target, lirGenRes);
@@ -382,7 +381,7 @@ public class GraalCompiler {
             try (Scope s1 = Debug.scope("MarkLocations")) {
                 if (backend.shouldAllocateRegisters()) {
                     // currently we mark locations only if we do register allocation
-                    new LocationMarker<T>().apply(target, lirGenRes, c);
+                    LocationMarker.markLocations(lirGenRes);
                 }
             }
         }

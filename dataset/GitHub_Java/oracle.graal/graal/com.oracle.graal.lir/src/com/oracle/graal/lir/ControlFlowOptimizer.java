@@ -35,13 +35,13 @@ import com.oracle.graal.lir.phases.*;
 /**
  * This class performs basic optimizations on the control flow graph after LIR generation.
  */
-public final class ControlFlowOptimizer extends LIRLowTierPhase {
+public final class ControlFlowOptimizer<B extends AbstractBlock<B>> extends LowLevelLowTierPhase<B> {
 
     /**
      * Performs control flow optimizations on the given LIR graph.
      */
     @Override
-    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
         LIR lir = lirGenRes.getLIR();
         new Optimizer<B>(lir).deleteEmptyBlocks(codeEmittingOrder);
     }
