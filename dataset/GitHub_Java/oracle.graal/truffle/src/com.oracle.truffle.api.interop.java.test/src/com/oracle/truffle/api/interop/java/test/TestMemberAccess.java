@@ -45,7 +45,6 @@ import java.util.List;
 import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.Test;
@@ -127,24 +126,11 @@ public class TestMemberAccess {
 
     @Test
     public void testNullParameter() throws ClassNotFoundException, UnsupportedTypeException, InteropException {
-        Object bo = getValueFromMember("isNull__Ljava_lang_String_2Ljava_lang_Boolean_2", JavaInterop.asTruffleObject(null));
-        assertEquals("Boolean parameter method executed", Boolean.class.getName(), bo);
-        Object by = getValueFromMember("isNull__Ljava_lang_String_2Ljava_lang_Byte_2", JavaInterop.asTruffleObject(null));
-        assertEquals("Byte parameter method executed", Byte.class.getName(), by);
-        Object c = getValueFromMember("isNull__Ljava_lang_String_2Ljava_lang_Character_2", JavaInterop.asTruffleObject(null));
-        assertEquals("Character parameter method executed", Character.class.getName(), c);
-        Object f = getValueFromMember("isNull__Ljava_lang_String_2Ljava_lang_Float_2", JavaInterop.asTruffleObject(null));
-        assertEquals("Float parameter method executed", Float.class.getName(), f);
-        Object d = getValueFromMember("isNull__Ljava_lang_String_2Ljava_lang_Double_2", JavaInterop.asTruffleObject(null));
-        assertEquals("Double parameter method executed", Double.class.getName(), d);
-        Object i = getValueFromMember("isNull__Ljava_lang_String_2Ljava_lang_Integer_2", JavaInterop.asTruffleObject(null));
-        assertEquals("Integer parameter method executed", Integer.class.getName(), i);
+        Object s = getValueFromMember("isNull__Ljava_lang_String_2Ljava_lang_String_2", JavaInterop.asTruffleObject(null));
+        assertEquals("String parameter method executed", String.class.getName(), s);
         Object l = getValueFromMember("isNull__Ljava_lang_String_2Ljava_lang_Long_2", JavaInterop.asTruffleObject(null));
         assertEquals("Long parameter method executed", Long.class.getName(), l);
-        Object s = getValueFromMember("isNull__Ljava_lang_String_2Ljava_lang_Short_2", JavaInterop.asTruffleObject(null));
-        assertEquals("Short parameter method executed", Short.class.getName(), s);
-        Object st = getValueFromMember("isNull__Ljava_lang_String_2Ljava_lang_String_2", JavaInterop.asTruffleObject(null));
-        assertEquals("String parameter method executed", String.class.getName(), st);
+
     }
 
     @Test
@@ -157,24 +143,6 @@ public class TestMemberAccess {
     public void testKeysAndInternalKeysOnInstance() throws Exception {
         TruffleObject instance = JavaInterop.asTruffleObject(new TestClass());
         assertKeys(instance);
-    }
-
-    @Test
-    public void testUnderscoreKeys() throws Exception {
-        TruffleObject testClass = JavaInterop.asTruffleObject(Test_Underscore.class);
-        assertKeys(testClass);
-
-        CallUnderscore call = JavaInterop.asJavaObject(CallUnderscore.class, testClass);
-
-        Object obj = call.create__Lcom_oracle_truffle_api_interop_java_test_Test_1Underscore_2();
-        assertNotNull("An object created", obj);
-        assertTrue("Instance of my class", obj instanceof Test_Underscore);
-
-        Object copy = call.copy__Lcom_oracle_truffle_api_interop_java_test_Test_1Underscore_2Lcom_oracle_truffle_api_interop_java_test_Test_1Underscore_2(obj);
-        assertNotNull("An object copied", copy);
-        assertTrue("Instance of my class again", copy instanceof Test_Underscore);
-
-        assertEquals(obj, copy);
     }
 
     private void assertKeys(TruffleObject obj) throws UnsupportedMessageException {
@@ -623,72 +591,12 @@ public class TestMemberAccess {
             return "" + bo + bt + ch + sh + in + lo + db + fl + st;
         }
 
-        public String isNull(Boolean b) {
-            return b == null ? Boolean.class.getName() : null;
-        }
-
-        public String isNull(Byte b) {
-            return b == null ? Byte.class.getName() : null;
-        }
-
-        public String isNull(Character c) {
-            return c == null ? Character.class.getName() : null;
-        }
-
-        public String isNull(Double d) {
-            return d == null ? Double.class.getName() : null;
-        }
-
-        public String isNull(Float f) {
-            return f == null ? Float.class.getName() : null;
-        }
-
-        public String isNull(Integer i) {
-            return i == null ? Integer.class.getName() : null;
-        }
-
-        public String isNull(Long l) {
-            return l == null ? Long.class.getName() : null;
-        }
-
-        public String isNull(Short s) {
-            return s == null ? Short.class.getName() : null;
-        }
-
         public String isNull(String s) {
             return s == null ? String.class.getName() : null;
         }
 
-        public String isNull(boolean b) {
-            throw new IllegalStateException("should not reach here");
-        }
-
-        public String isNull(byte b) {
-            throw new IllegalStateException("should not reach here");
-        }
-
-        public String isNull(char c) {
-            throw new IllegalStateException("should not reach here");
-        }
-
-        public String isNull(double d) {
-            throw new IllegalStateException("should not reach here");
-        }
-
-        public String isNull(float f) {
-            throw new IllegalStateException("should not reach here");
-        }
-
-        public String isNull(int i) {
-            throw new IllegalStateException("should not reach here");
-        }
-
-        public String isNull(long l) {
-            throw new IllegalStateException("should not reach here");
-        }
-
-        public String isNull(short s) {
-            throw new IllegalStateException("should not reach here");
+        public String isNull(Long l) {
+            return l == null ? Long.class.getName() : null;
         }
 
         public String isOverloaded(boolean b) {
@@ -765,11 +673,5 @@ public class TestMemberAccess {
         public String isOverloaded(short c) {
             return "short";
         }
-    }
-
-    public static interface CallUnderscore {
-        public Object create__Lcom_oracle_truffle_api_interop_java_test_Test_1Underscore_2();
-
-        public Object copy__Lcom_oracle_truffle_api_interop_java_test_Test_1Underscore_2Lcom_oracle_truffle_api_interop_java_test_Test_1Underscore_2(Object orig);
     }
 }
