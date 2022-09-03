@@ -30,7 +30,6 @@ import java.util.List;
 
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.LIRGenerationPhase.LIRGenerationContext;
-import com.oracle.graal.compiler.common.GraalOptions;
 import com.oracle.graal.compiler.common.alloc.ComputeBlockOrder;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
@@ -43,8 +42,8 @@ import com.oracle.graal.debug.DebugCounter;
 import com.oracle.graal.debug.DebugTimer;
 import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.internal.method.MethodMetricsRootScopeInfo;
+import com.oracle.graal.lir.BailoutAndRestartBackendException;
 import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.alloc.OutOfRegistersException;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
 import com.oracle.graal.lir.framemap.FrameMap;
@@ -59,7 +58,7 @@ import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
 import com.oracle.graal.nodes.cfg.Block;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.options.OptionValues;
+import com.oracle.graal.options.OptionValue.OverrideScope;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
@@ -198,7 +197,7 @@ public class GraalCompiler {
             } else {
                 Debug.dump(Debug.INFO_LOG_LEVEL, graph, "initial state");
             }
-            if (UseGraalInstrumentation.getValue(graph.getOptions())) {
+            if (UseGraalInstrumentation.getValue()) {
                 new ExtractInstrumentationPhase().apply(graph, highTierContext);
             }
 
@@ -223,7 +222,7 @@ public class GraalCompiler {
                     CompilationResultBuilderFactory factory, RegisterConfig registerConfig, LIRSuites lirSuites) {
         try (Scope s = Debug.scope("BackEnd", graph.getLastSchedule()); DebugCloseable a = BackEnd.start()) {
             // Repeatedly run the LIR code generation pass to improve statistical profiling results.
-            for (int i = 0; i < EmitLIRRepeatCount.getValue(graph.getOptions()); i++) {
+            for (int i = 0; i < EmitLIRRepeatCount.getValue(); i++) {
                 SchedulePhase dummySchedule = new SchedulePhase();
                 dummySchedule.apply(graph);
                 emitLIR(backend, graph, stub, registerConfig, lirSuites, compilationResult);
@@ -246,23 +245,28 @@ public class GraalCompiler {
     @SuppressWarnings("try")
     public static <T extends CompilationResult> LIRGenerationResult emitLIR(Backend backend, StructuredGraph graph, Object stub, RegisterConfig registerConfig, LIRSuites lirSuites,
                     T compilationResult) {
-        String registerPressure = GraalOptions.RegisterPressure.getValue(graph.getOptions());
-        String[] allocationRestrictedTo = registerPressure == null ? null : registerPressure.split(",");
-        try {
-            return emitLIR0(backend, graph, stub, registerConfig, lirSuites, compilationResult, allocationRestrictedTo);
-        } catch (OutOfRegistersException e) {
-            if (allocationRestrictedTo != null) {
-                allocationRestrictedTo = null;
-                return emitLIR0(backend, graph, stub, registerConfig, lirSuites, compilationResult, allocationRestrictedTo);
+        OverrideScope overrideScope = null;
+        LIRSuites lirSuites0 = lirSuites;
+        while (true) {
+            try (OverrideScope scope = overrideScope) {
+                return emitLIR0(backend, graph, stub, registerConfig, lirSuites0, compilationResult);
+            } catch (BailoutAndRestartBackendException e) {
+                if (BailoutAndRestartBackendException.Options.LIRUnlockBackendRestart.getValue() && e.shouldRestart()) {
+                    overrideScope = e.getOverrideScope();
+                    lirSuites0 = e.updateLIRSuites(lirSuites);
+                    if (lirSuites0 != null) {
+                        continue;
+                    }
+                }
+                /* If the restart fails we convert the exception into a "hard" failure */
+                throw new GraalError(e);
             }
-            /* If the re-execution fails we convert the exception into a "hard" failure */
-            throw new GraalError(e);
         }
     }
 
     @SuppressWarnings("try")
     private static <T extends CompilationResult> LIRGenerationResult emitLIR0(Backend backend, StructuredGraph graph, Object stub, RegisterConfig registerConfig, LIRSuites lirSuites,
-                    T compilationResult, String[] allocationRestrictedTo) {
+                    T compilationResult) {
         try (Scope ds = Debug.scope("EmitLIR"); DebugCloseable a = EmitLIR.start()) {
             ScheduleResult schedule = graph.getLastSchedule();
             Block[] blocks = schedule.getCFG().getBlocks();
@@ -277,7 +281,7 @@ public class GraalCompiler {
                 codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock);
                 linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock);
 
-                lir = new LIR(schedule.getCFG(), linearScanOrder, codeEmittingOrder, graph.getOptions());
+                lir = new LIR(schedule.getCFG(), linearScanOrder, codeEmittingOrder);
                 Debug.dump(Debug.INFO_LOG_LEVEL, lir, "After linear scan order");
             } catch (Throwable e) {
                 throw Debug.handle(e);
@@ -294,8 +298,7 @@ public class GraalCompiler {
 
             try (Scope s = Debug.scope("LIRStages", nodeLirGen, lir)) {
                 Debug.dump(Debug.BASIC_LOG_LEVEL, lir, "After LIR generation");
-                LIRGenerationResult result = emitLowLevel(backend.getTarget(), lirGenRes, lirGen, lirSuites, backend.newRegisterAllocationConfig(registerConfig, allocationRestrictedTo),
-                                graph.getOptions());
+                LIRGenerationResult result = emitLowLevel(backend.getTarget(), lirGenRes, lirGen, lirSuites, backend.newRegisterAllocationConfig(registerConfig));
                 Debug.dump(Debug.BASIC_LOG_LEVEL, lir, "Before code generation");
                 return result;
             } catch (Throwable e) {
@@ -318,11 +321,11 @@ public class GraalCompiler {
     }
 
     public static LIRGenerationResult emitLowLevel(TargetDescription target, LIRGenerationResult lirGenRes, LIRGeneratorTool lirGen, LIRSuites lirSuites,
-                    RegisterAllocationConfig registerAllocationConfig, OptionValues options) {
+                    RegisterAllocationConfig registerAllocationConfig) {
         PreAllocationOptimizationContext preAllocOptContext = new PreAllocationOptimizationContext(lirGen);
         lirSuites.getPreAllocationOptimizationStage().apply(target, lirGenRes, preAllocOptContext);
 
-        AllocationContext allocContext = new AllocationContext(lirGen.getSpillMoveFactory(), registerAllocationConfig, options);
+        AllocationContext allocContext = new AllocationContext(lirGen.getSpillMoveFactory(), registerAllocationConfig);
         lirSuites.getAllocationStage().apply(target, lirGenRes, allocContext);
 
         PostAllocationOptimizationContext postAllocOptContext = new PostAllocationOptimizationContext(lirGen);

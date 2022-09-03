@@ -22,20 +22,27 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.debug.Debug.isEnabled;
+import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Required;
 
-import java.util.concurrent.*;
+import java.util.Set;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.common.util.*;
-import com.oracle.graal.phases.graph.*;
-import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.compiler.common.util.CompilationAlarm;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.graph.Graph.NodeEventScope;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.spi.Simplifiable;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
+import com.oracle.graal.nodes.cfg.ControlFlowGraph;
+import com.oracle.graal.phases.BasePhase;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
+import com.oracle.graal.phases.common.util.HashSetNodeEventListener;
+import com.oracle.graal.phases.graph.ReentrantBlockIterator;
+import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends BasePhase<PhaseContextT> {
 
@@ -47,9 +54,17 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
     }
 
     private final int maxIterations;
+    protected final CanonicalizerPhase canonicalizer;
+    private final boolean unscheduled;
 
-    public EffectsPhase(int maxIterations) {
+    protected EffectsPhase(int maxIterations, CanonicalizerPhase canonicalizer) {
+        this(maxIterations, canonicalizer, false);
+    }
+
+    protected EffectsPhase(int maxIterations, CanonicalizerPhase canonicalizer, boolean unscheduled) {
         this.maxIterations = maxIterations;
+        this.canonicalizer = canonicalizer;
+        this.unscheduled = unscheduled;
     }
 
     @Override
@@ -57,51 +72,64 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
         runAnalysis(graph, context);
     }
 
+    @SuppressWarnings("try")
     public boolean runAnalysis(final StructuredGraph graph, final PhaseContextT context) {
         boolean changed = false;
-        for (int iteration = 0; iteration < maxIterations; iteration++) {
-            boolean currentChanged = Debug.scope("iteration " + iteration, new Callable<Boolean>() {
+        boolean stop = false;
+        for (int iteration = 0; !stop && iteration < maxIterations && !CompilationAlarm.hasExpired(); iteration++) {
+            try (Scope s = Debug.scope(isEnabled() ? "iteration " + iteration : null)) {
+                ScheduleResult schedule;
+                ControlFlowGraph cfg;
+                if (unscheduled) {
+                    schedule = null;
+                    cfg = ControlFlowGraph.compute(graph, true, true, false, false);
+                } else {
+                    new SchedulePhase(SchedulePhase.SchedulingStrategy.EARLIEST).apply(graph, false);
+                    schedule = graph.getLastSchedule();
+                    cfg = schedule.getCFG();
+                }
+                try (Scope scheduleScope = Debug.scope("EffectsPhaseWithSchedule", schedule)) {
+                    Closure<?> closure = createEffectsClosure(context, schedule, cfg);
+                    ReentrantBlockIterator.apply(closure, cfg.getStartBlock());
 
-                @Override
-                public Boolean call() {
-                    SchedulePhase schedule = new SchedulePhase();
-                    schedule.apply(graph, false);
-                    Closure<?> closure = createEffectsClosure(context, schedule);
-                    ReentrantBlockIterator.apply(closure, schedule.getCFG().getStartBlock());
-
-                    if (!closure.hasChanged()) {
-                        return false;
+                    if (closure.hasChanged()) {
+                        changed = true;
+                    } else {
+                        stop = true;
                     }
 
                     // apply the effects collected during this iteration
-                    HashSetNodeChangeListener listener = new HashSetNodeChangeListener();
-                    graph.trackInputChange(listener);
-                    graph.trackUsagesDroppedZero(listener);
-                    closure.applyEffects();
-                    graph.stopTrackingInputChange();
-                    graph.stopTrackingUsagesDroppedZero();
+                    HashSetNodeEventListener listener = new HashSetNodeEventListener();
+                    try (NodeEventScope nes = graph.trackNodeEvents(listener)) {
+                        closure.applyEffects();
+                    }
 
-                    Debug.dump(graph, "after " + getName() + " iteration");
+                    if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL)) {
+                        Debug.dump(Debug.INFO_LOG_LEVEL, graph, "%s iteration", getName());
+                    }
 
-                    new DeadCodeEliminationPhase().apply(graph);
+                    new DeadCodeEliminationPhase(Required).apply(graph);
 
+                    Set<Node> changedNodes = listener.getNodes();
                     for (Node node : graph.getNodes()) {
                         if (node instanceof Simplifiable) {
-                            listener.getChangedNodes().add(node);
+                            changedNodes.add(node);
                         }
                     }
-                    new CanonicalizerPhase.Instance(context.getRuntime(), context.getAssumptions(), !AOTCompilation.getValue(), listener.getChangedNodes(), null).apply(graph);
-
-                    return true;
+                    postIteration(graph, context, changedNodes);
+                } catch (Throwable t) {
+                    throw Debug.handle(t);
                 }
-            });
-            if (!currentChanged) {
-                break;
             }
-            changed |= currentChanged;
         }
         return changed;
     }
 
-    protected abstract Closure<?> createEffectsClosure(PhaseContextT context, SchedulePhase schedule);
+    protected void postIteration(final StructuredGraph graph, final PhaseContextT context, Set<Node> changedNodes) {
+        if (canonicalizer != null) {
+            canonicalizer.applyIncremental(graph, context, changedNodes);
+        }
+    }
+
+    protected abstract Closure<?> createEffectsClosure(PhaseContextT context, ScheduleResult schedule, ControlFlowGraph cfg);
 }
