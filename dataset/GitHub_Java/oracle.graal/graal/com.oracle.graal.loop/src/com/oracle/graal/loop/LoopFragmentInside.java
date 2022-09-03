@@ -276,11 +276,11 @@ public class LoopFragmentInside extends LoopFragment {
             }
         }
 
-        boolean progress = true;
-        while (progress) {
-            progress = false;
+        int oldPhisSize;
+        do {
+            oldPhisSize = oldPhis.size();
             int i = 0;
-            outer: while (i < oldPhis.size()) {
+            outer: while (i < oldPhisSize) {
                 PhiNode oldPhi = oldPhis.get(i);
                 for (Node usage : oldPhi.usages()) {
                     if (usage instanceof PhiNode && oldPhis.contains(usage)) {
@@ -288,13 +288,14 @@ public class LoopFragmentInside extends LoopFragment {
                     } else {
                         // Mark alive by removing from delete set.
                         oldPhis.remove(i);
-                        progress = true;
+                        oldPhisSize--;
                         continue outer;
                     }
                 }
                 i++;
             }
-        }
+            // Check for progress.
+        } while (oldPhisSize != oldPhis.size());
 
         for (PhiNode deadPhi : oldPhis) {
             deadPhi.clearInputs();
