@@ -743,12 +743,12 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         Invoke invoke = invokeData.invoke;
 
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
-        if (loopScope.methodScope.encodedGraph.isCallToOriginal(targetMethod)) {
+        InvocationPlugin invocationPlugin = getInvocationPlugin(targetMethod);
+        if (invocationPlugin == null) {
             return false;
         }
 
-        InvocationPlugin invocationPlugin = getInvocationPlugin(targetMethod);
-        if (invocationPlugin == null) {
+        if (loopScope.methodScope.encodedGraph.isCallToOriginal(targetMethod)) {
             return false;
         }
 
