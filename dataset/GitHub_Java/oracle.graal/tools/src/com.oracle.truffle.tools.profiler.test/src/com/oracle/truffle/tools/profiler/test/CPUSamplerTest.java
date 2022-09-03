@@ -24,17 +24,6 @@
  */
 package com.oracle.truffle.tools.profiler.test;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.Map;
-
-import org.graalvm.polyglot.Source;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -51,6 +40,15 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.tools.profiler.CPUSampler;
 import com.oracle.truffle.tools.profiler.ProfilerNode;
+import org.graalvm.polyglot.Source;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Ignore;
+import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
 
 public class CPUSamplerTest extends AbstractProfilerTest {
 
@@ -154,8 +152,8 @@ public class CPUSamplerTest extends AbstractProfilerTest {
     }
 
     final Source defaultRecursiveSourceForSampling = makeSource("ROOT(" +
-                    "DEFINE(rfoo,ROOT(BLOCK(RECURSIVE_CALL(foo, 10),SLEEP(1))))," +
-                    "DEFINE(rbar,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(foo)))))," +
+                    "DEFINE(foo,ROOT(BLOCK(RECURSIVE_CALL(foo, 10),SLEEP(1))))," +
+                    "DEFINE(bar,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(foo)))))," +
                     "CALL(bar)" +
                     ")");
 
@@ -178,13 +176,13 @@ public class CPUSamplerTest extends AbstractProfilerTest {
         children = program.getChildren();
         Assert.assertEquals(1, children.size());
         ProfilerNode<CPUSampler.Payload> bar = children.iterator().next();
-        Assert.assertEquals("rbar", bar.getRootName());
+        Assert.assertEquals("bar", bar.getRootName());
         checkTimeline(bar.getPayload());
 
         children = bar.getChildren();
         Assert.assertEquals(1, children.size());
         ProfilerNode<CPUSampler.Payload> foo = children.iterator().next();
-        Assert.assertEquals("rfoo", foo.getRootName());
+        Assert.assertEquals("foo", foo.getRootName());
         checkTimeline(foo.getPayload());
 
         // RECURSIVE_CALL does recursions to depth 10
@@ -192,7 +190,7 @@ public class CPUSamplerTest extends AbstractProfilerTest {
             children = foo.getChildren();
             Assert.assertEquals(1, children.size());
             foo = children.iterator().next();
-            Assert.assertEquals("rfoo", foo.getRootName());
+            Assert.assertEquals("foo", foo.getRootName());
             checkTimeline(bar.getPayload());
         }
 
@@ -455,114 +453,5 @@ public class CPUSamplerTest extends AbstractProfilerTest {
         current = checkStackState(current, "Root", false);
         current = checkStackState(current, "Root", false);
         checkStackState(current, "Root", true);
-    }
-
-    @Test
-    public void testMultiThreadedRecursive() {
-        sampler.setFilter(NO_INTERNAL_ROOT_TAG_FILTER);
-        sampler.setCollecting(true);
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                for (int i = 0; i < executionCount; i++) {
-                    execute(defaultSourceForSampling);
-                }
-            }
-        };
-        Runnable recursiveRunnable = new Runnable() {
-            @Override
-            public void run() {
-                for (int i = 0; i < executionCount; i++) {
-                    execute(defaultRecursiveSourceForSampling);
-                }
-            }
-        };
-        Thread first = new Thread(runnable);
-        first.start();
-        try {
-            first.join();
-        } catch (InterruptedException e) {
-            Assert.fail("Thread interrupted");
-        }
-
-        Thread second = new Thread(recursiveRunnable);
-        second.start();
-        try {
-            second.join();
-        } catch (InterruptedException e) {
-            Assert.fail("Thread interrupted");
-        }
-        Map<Thread, Collection<ProfilerNode<CPUSampler.Payload>>> threadToNodesMap = sampler.getThreadToNodesMap();
-        Collection<ProfilerNode<CPUSampler.Payload>> rootNodes = sampler.getRootNodes();
-        traverseAndCompareForDifferentSources(rootNodes, threadToNodesMap.get(first));
-        traverseAndCompareForDifferentSources(rootNodes, threadToNodesMap.get(second));
-    }
-
-    private static void traverseAndCompareForDifferentSources(Collection<ProfilerNode<CPUSampler.Payload>> merged, Collection<ProfilerNode<CPUSampler.Payload>> perThread) {
-        for (ProfilerNode<CPUSampler.Payload> node : perThread) {
-            ProfilerNode<CPUSampler.Payload> mergedNode = findNodeBySourceAndRoot(merged, node.getSourceSection(), node.getRootName());
-            Assert.assertTrue("Merged structure does not mach per thread structure", mergedNode != null);
-            CPUSampler.Payload mergedNodePayload = mergedNode.getPayload();
-            CPUSampler.Payload nodePayload = node.getPayload();
-            Assert.assertTrue("Merged structure does not mach per thread structure", nodePayload.getSelfHitCount() == mergedNodePayload.getSelfHitCount());
-            Assert.assertTrue("Merged structure does not mach per thread structure", nodePayload.getHitCount() == mergedNodePayload.getHitCount());
-            traverseAndCompareForDifferentSources(mergedNode.getChildren(), node.getChildren());
-        }
-    }
-
-    private static ProfilerNode<CPUSampler.Payload> findNodeBySourceAndRoot(Collection<ProfilerNode<CPUSampler.Payload>> merged, SourceSection sourceSection, String rootName) {
-        for (ProfilerNode<CPUSampler.Payload> node : merged) {
-            if (node.getSourceSection().equals(sourceSection) && node.getRootName().equals(rootName)) {
-                return node;
-            }
-        }
-        return null;
-    }
-
-    @Test
-    public void testMultiThreaded() {
-        sampler.setFilter(NO_INTERNAL_ROOT_TAG_FILTER);
-        sampler.setCollecting(true);
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                for (int i = 0; i < executionCount; i++) {
-                    execute(defaultSourceForSampling);
-                }
-            }
-        };
-        Thread first = new Thread(runnable);
-        first.start();
-        try {
-            first.join();
-        } catch (InterruptedException e) {
-            Assert.fail("Thread interrupted");
-        }
-
-        Thread second = new Thread(runnable);
-        second.start();
-        try {
-            second.join();
-        } catch (InterruptedException e) {
-            Assert.fail("Thread interrupted");
-        }
-        Map<Thread, Collection<ProfilerNode<CPUSampler.Payload>>> threadToNodesMap = sampler.getThreadToNodesMap();
-        Collection<ProfilerNode<CPUSampler.Payload>> rootNodes = sampler.getRootNodes();
-        traverseAndCompareForSameSource(rootNodes, threadToNodesMap.get(first), threadToNodesMap.get(second));
-    }
-
-    private void traverseAndCompareForSameSource(Collection<ProfilerNode<CPUSampler.Payload>> rootNodes, Collection<ProfilerNode<CPUSampler.Payload>> profilerNodes1, Collection<ProfilerNode<CPUSampler.Payload>> profilerNodes2) {
-        for (ProfilerNode<CPUSampler.Payload> node : rootNodes) {
-            ProfilerNode<CPUSampler.Payload> found1 = findNodeBySourceAndRoot(profilerNodes1, node.getSourceSection(), node.getRootName());
-            ProfilerNode<CPUSampler.Payload> found2 = findNodeBySourceAndRoot(profilerNodes2, node.getSourceSection(), node.getRootName());
-            Assert.assertTrue("Merged structure does not mach per thread structure", found1 != null);
-            Assert.assertTrue("Merged structure does not mach per thread structure", found2 != null);
-            CPUSampler.Payload nodePayload = node.getPayload();
-            CPUSampler.Payload found1Payload = found1.getPayload();
-            CPUSampler.Payload found2Payload = found2.getPayload();
-            Assert.assertTrue("Merged structure does not mach per thread structure",  nodePayload.getSelfHitCount() == found1Payload.getSelfHitCount() + found2Payload.getSelfHitCount());
-            Assert.assertTrue("Merged structure does not mach per thread structure",  nodePayload.getHitCount() == found1Payload.getHitCount() + found2Payload.getHitCount());
-            traverseAndCompareForSameSource(node.getChildren(), found1.getChildren(), found2.getChildren());
-        }
     }
 }
