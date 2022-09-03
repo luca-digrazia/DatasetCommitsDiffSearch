@@ -96,7 +96,7 @@ public final class LLVMAddress {
 
     @Override
     public String toString() {
-        return String.format("0x%x", getVal());
+        return Long.toString(getVal());
     }
 
     public boolean signedLessThan(LLVMAddress val2) {
@@ -113,10 +113,6 @@ public final class LLVMAddress {
 
     public boolean signedGreaterEquals(LLVMAddress val2) {
         return val > val2.getVal();
-    }
-
-    public LLVMAddress copy() {
-        return new LLVMAddress(val);
     }
 
 }
