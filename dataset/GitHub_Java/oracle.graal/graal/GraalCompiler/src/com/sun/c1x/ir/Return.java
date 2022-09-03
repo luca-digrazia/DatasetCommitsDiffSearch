@@ -88,11 +88,4 @@ public final class Return extends BlockEnd {
             out.print(kind.typeChar).print("return ").print(result());
         }
     }
-
-    @Override
-    public Node copy(Graph into) {
-        Return x = new Return(null, into);
-        x.setNonNull(isNonNull());
-        return x;
-    }
 }

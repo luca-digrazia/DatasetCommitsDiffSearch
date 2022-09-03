@@ -31,6 +31,7 @@ import com.sun.c1x.debug.*;
 import com.sun.c1x.ir.*;
 import com.sun.c1x.lir.*;
 import com.sun.c1x.observer.*;
+import com.sun.c1x.value.*;
 
 /**
  * This class implements the overall container for the HIR (high-level IR) graph
@@ -221,12 +222,9 @@ public class IR {
         // create new successor and mark it for special block order treatment
         BlockBegin newSucc = new BlockBegin(bci, nextBlockNumber(), false, compilation.graph);
 
-        List<Integer> removePhiInputs = null;
+        List<Integer> removePhiInputs = new ArrayList<Integer>();
         for (int i = backEdgeIndex + 1; i < target.predecessors().size(); ++i) {
             if (target.predecessors().get(i) == source.end()) {
-                if (removePhiInputs == null) {
-                    removePhiInputs = new ArrayList<Integer>();
-                }
                 removePhiInputs.add(i);
             }
         }
@@ -238,7 +236,7 @@ public class IR {
 
         // link predecessor to new block
         source.end().substituteSuccessor(target, newSucc);
-        if (removePhiInputs != null && removePhiInputs.size() > 0) {
+        if (removePhiInputs.size() > 0) {
 
             for (Node n : target.usages()) {
                 if (n instanceof Phi) {

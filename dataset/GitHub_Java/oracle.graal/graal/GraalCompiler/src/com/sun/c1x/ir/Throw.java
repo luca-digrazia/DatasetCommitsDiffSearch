@@ -76,12 +76,12 @@ public final class Throw extends BlockEnd implements ExceptionEdgeInstruction {
      * TODO ls: this needs more cleanup - throw should either unwind or jump to the exception dispatch chain
      */
     @Override
-    public StateSplit exceptionEdge() {
-        return (StateSplit) successors().get(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE);
+    public BlockBegin exceptionEdge() {
+        return (BlockBegin) successors().get(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE);
     }
 
-    public Instruction setExceptionEdge(Instruction n) {
-        return (Instruction) successors().set(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE, n);
+    public BlockBegin setExceptionEdge(BlockBegin n) {
+        return (BlockBegin) successors().set(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE, n);
     }
 
     /**
