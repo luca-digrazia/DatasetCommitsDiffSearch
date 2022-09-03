@@ -78,11 +78,7 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
 
     @Override
     protected NodeClass findClassForNode(Node obj) {
-        NodeClass clazz = structure.classForNode(obj);
-        if (clazz != null && (findNodeClass(clazz) == null || findNode(clazz) != null)) {
-            throw new IllegalStateException("classForNode method shall return node class representation rather than node: " + clazz);
-        }
-        return clazz;
+        return structure.classForNode(obj);
     }
 
     @Override
