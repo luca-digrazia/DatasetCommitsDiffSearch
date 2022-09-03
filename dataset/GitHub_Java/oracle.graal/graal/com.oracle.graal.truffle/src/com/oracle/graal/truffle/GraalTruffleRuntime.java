@@ -41,6 +41,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.stack.InspectedFrame;
+import jdk.vm.ci.code.stack.InspectedFrameVisitor;
+import jdk.vm.ci.code.stack.StackIntrospection;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.services.Services;
+
 import com.oracle.graal.api.runtime.GraalRuntime;
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.CompilerThreadFactory;
@@ -56,6 +65,7 @@ import com.oracle.graal.truffle.debug.TraceCompilationListener;
 import com.oracle.graal.truffle.debug.TraceCompilationPolymorphismListener;
 import com.oracle.graal.truffle.debug.TraceInliningListener;
 import com.oracle.graal.truffle.debug.TraceSplittingListener;
+import com.oracle.graal.truffle.phases.InstrumentBranchesPhase;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -73,15 +83,6 @@ import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.nodes.RootNode;
-
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.stack.InspectedFrame;
-import jdk.vm.ci.code.stack.InspectedFrameVisitor;
-import jdk.vm.ci.code.stack.StackIntrospection;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.services.Services;
 
 public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
@@ -252,10 +253,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         private final ResolvedJavaMethod callTargetMethod;
         private final ResolvedJavaMethod callNodeMethod;
 
+        private GraalFrameInstance next;
+        private boolean nextAvailable;
         private boolean first = true;
         private int skipFrames;
-
-        private InspectedFrame callNodeFrame;
 
         FrameVisitor(FrameInstanceVisitor<T> visitor, CallMethods methods, int skip) {
             this.visitor = visitor;
@@ -265,25 +266,61 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         }
 
         public T visitFrame(InspectedFrame frame) {
+            if (nextAvailable) {
+                T result = onNext(frame);
+                if (result != null) {
+                    return result;
+                }
+            }
             if (frame.isMethod(callTargetMethod)) {
+                nextAvailable = true;
                 if (skipFrames == 0) {
-                    return visitor.visitFrame(new GraalFrameInstance(first, frame, callNodeFrame));
-                } else {
-                    skipFrames--;
+                    GraalFrameInstance graalFrame = new GraalFrameInstance(first);
+                    graalFrame.setCallTargetFrame(frame);
+                    next = graalFrame;
                 }
                 first = false;
-                callNodeFrame = null;
-            } else if (frame.isMethod(callNodeMethod)) {
-                callNodeFrame = frame;
             }
             return null;
         }
+
+        private T onNext(InspectedFrame frame) {
+            try {
+                if (skipFrames == 0) {
+                    if (frame != null && frame.isMethod(callNodeMethod)) {
+                        next.setCallNodeFrame(frame);
+                    }
+                    return visitor.visitFrame(next);
+                } else {
+                    skipFrames--;
+                    return null;
+                }
+            } finally {
+                next = null;
+                nextAvailable = false;
+            }
+        }
+
+        /* Method to collect the last result. */
+        public T afterVisitation() {
+            if (nextAvailable) {
+                return onNext(null);
+            } else {
+                return null;
+            }
+        }
+
     }
 
     private <T> T iterateImpl(FrameInstanceVisitor<T> visitor, final int skip) {
         CallMethods methods = getCallMethods();
         FrameVisitor<T> jvmciVisitor = new FrameVisitor<>(visitor, methods, skip);
-        return getStackIntrospection().iterateFrames(methods.anyFrameMethod, methods.anyFrameMethod, 0, jvmciVisitor);
+        T result = getStackIntrospection().iterateFrames(methods.anyFrameMethod, methods.anyFrameMethod, 0, jvmciVisitor);
+        if (result != null) {
+            return result;
+        } else {
+            return jvmciVisitor.afterVisitation();
+        }
     }
 
     protected abstract StackIntrospection getStackIntrospection();
@@ -354,6 +391,9 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     private void shutdown() {
         getCompilationNotify().notifyShutdown(this);
+        if (TruffleCompilerOptions.TruffleInstrumentBranches.getValue()) {
+            InstrumentBranchesPhase.instrumentation.dumpAccessTable();
+        }
     }
 
     protected void doCompile(OptimizedCallTarget optimizedCallTarget) {
