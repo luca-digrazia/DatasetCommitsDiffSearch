@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,89 +22,57 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static com.oracle.graal.graph.UnsafeAccess.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.extended.UnsafeStoreNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
 
 /**
  * A special purpose store node that differs from {@link UnsafeStoreNode} in that it is not a
  * {@link StateSplit} and takes a computed address instead of an object.
  */
-public class DirectStoreNode extends FixedWithNextNode implements LIRLowerable {
+@NodeInfo(cycles = CYCLES_3, size = SIZE_1)
+public final class DirectStoreNode extends FixedWithNextNode implements LIRLowerable {
 
-    @Input private ValueNode address;
-    @Input private ValueNode value;
-    private final Kind kind;
+    public static final NodeClass<DirectStoreNode> TYPE = NodeClass.create(DirectStoreNode.class);
+    @Input protected ValueNode address;
+    @Input protected ValueNode value;
+    protected final JavaKind kind;
 
-    public DirectStoreNode(ValueNode address, ValueNode value, Kind kind) {
-        super(StampFactory.forVoid());
+    public DirectStoreNode(ValueNode address, ValueNode value, JavaKind kind) {
+        super(TYPE, StampFactory.forVoid());
         this.address = address;
         this.value = value;
         this.kind = kind;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
+    public void generate(NodeLIRBuilderTool gen) {
         Value v = gen.operand(value);
-        gen.emitStore(kind, gen.operand(address), 0, Value.ILLEGAL, 0, v, false);
+        LIRKind lirKind = LIRKind.fromJavaKind(gen.getLIRGeneratorTool().target().arch, kind);
+        gen.getLIRGeneratorTool().getArithmetic().emitStore(lirKind, gen.operand(address), v, null);
     }
 
-    /*
-     * The kind of the store is provided explicitly in these intrinsics because it is not always
-     * possible to determine the kind from the given value during compilation (because stack kinds
-     * are used).
-     */
+    public ValueNode getAddress() {
+        return address;
+    }
 
-    @SuppressWarnings("unused")
+    public ValueNode getValue() {
+        return value;
+    }
+
     @NodeIntrinsic
-    public static void store(long address, boolean value, @ConstantNodeParameter Kind kind) {
-        int b = value ? 1 : 0;
-        unsafe.putByte(address, (byte) b);
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(long address, byte value, @ConstantNodeParameter Kind kind) {
-        unsafe.putByte(address, value);
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(long address, short value, @ConstantNodeParameter Kind kind) {
-        unsafe.putShort(address, value);
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(long address, char value, @ConstantNodeParameter Kind kind) {
-        unsafe.putChar(address, value);
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(long address, int value, @ConstantNodeParameter Kind kind) {
-        unsafe.putInt(address, value);
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(long address, long value, @ConstantNodeParameter Kind kind) {
-        unsafe.putLong(address, value);
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(long address, float value, @ConstantNodeParameter Kind kind) {
-        unsafe.putFloat(address, value);
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void store(long address, double value, @ConstantNodeParameter Kind kind) {
-        unsafe.putDouble(address, value);
-    }
+    public static native void storeBoolean(long address, boolean value, @ConstantNodeParameter JavaKind kind);
 }
