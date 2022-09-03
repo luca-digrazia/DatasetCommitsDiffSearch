@@ -68,9 +68,6 @@ final class DIScopeBuilder {
     private static final String MIMETYPE_PLAINTEXT = "text/plain";
     private static final String MIMETYPE_UNAVAILABLE = "sulong/unavailable";
 
-    private static final String STDIN_FILENAME = "-";
-    private static final String STDIN_SOURCE_TEXT = "STDIN";
-
     static String getMimeType(String path) {
         if (path == null) {
             return MIMETYPE_PLAINTEXT;
@@ -97,75 +94,8 @@ final class DIScopeBuilder {
         }
     }
 
-    private static Path joinPaths(String prefix, String suffix) {
-        try {
-            return Paths.get(prefix, suffix);
-        } catch (InvalidPathException ipe) {
-            return null;
-        }
-    }
-
-    private static String asNormalizedPath(Path path) {
-        return path != null ? path.normalize().toString() : null;
-    }
-
     private static final String RELPATH_PREFIX = "truffle-relpath://";
     private static final String RELPATH_PROPERTY_SEPARATOR = "//";
-
-    private static String resolveAsRelativePath(String name) {
-        if (!name.startsWith(RELPATH_PREFIX)) {
-            return null;
-        }
-
-        final int propertyEndIndex = name.indexOf(RELPATH_PROPERTY_SEPARATOR, RELPATH_PREFIX.length());
-        if (propertyEndIndex == -1) {
-            throw new LLVMParserException(String.format("Invalid Source Path: \"%s\"", name));
-        }
-
-        final String property = name.substring(RELPATH_PREFIX.length(), propertyEndIndex);
-        if (property.isEmpty()) {
-            throw new LLVMParserException(String.format("Invalid Property: \"%s\" from \"%s\"", property, name));
-        }
-
-        final String pathPrefix = System.getProperty(property);
-        if (pathPrefix == null) {
-            throw new LLVMParserException(String.format("Property not found: \"%s\" from \"%s\"", property, name));
-        }
-
-        final int pathStartIndex = propertyEndIndex + RELPATH_PROPERTY_SEPARATOR.length();
-        if (pathStartIndex >= name.length()) {
-            throw new LLVMParserException(String.format("Invalid Source Path: \"%s\"", name));
-        }
-
-        final String relativePath = name.substring(pathStartIndex);
-        final Path path = joinPaths(pathPrefix, relativePath);
-        return asNormalizedPath(path);
-    }
-
-    private static String resolveAsAbsolutePath(String name, MDBaseNode directoryNode) {
-        if (STDIN_FILENAME.equals(name)) {
-            // stdin must not be resolved against the provided directory
-            return name;
-        }
-
-        Path path;
-        try {
-            path = Paths.get(name);
-        } catch (InvalidPathException ipe) {
-            return null;
-        }
-
-        if (path.isAbsolute()) {
-            return asNormalizedPath(path);
-        }
-
-        final String directory = MDString.getIfInstance(directoryNode);
-        if (directory != null) {
-            path = joinPaths(directory, name);
-        }
-
-        return asNormalizedPath(path);
-    }
 
     private String getPath(MDFile file) {
         if (file == null) {
@@ -179,19 +109,45 @@ final class DIScopeBuilder {
             return null;
         }
 
-        String path = resolveAsRelativePath(name);
+        Path path = null;
+        if (name.startsWith(RELPATH_PREFIX)) {
+            final int propertyEndIndex = name.indexOf(RELPATH_PROPERTY_SEPARATOR, RELPATH_PREFIX.length());
+            if (propertyEndIndex == -1) {
+                throw new LLVMParserException(String.format("Invalid Source Path: \"%s\"", name));
+            }
 
-        if (path == null) {
-            path = resolveAsAbsolutePath(name, file.getDirectory());
+            final String property = name.substring(RELPATH_PREFIX.length(), propertyEndIndex);
+            if (property.isEmpty()) {
+                throw new LLVMParserException(String.format("Invalid Property: \"%s\" from \"%s\"", property, name));
+            }
+
+            final String pathPrefix = System.getProperty(property);
+            if (pathPrefix == null) {
+                throw new LLVMParserException(String.format("Property not found: \"%s\" from \"%s\"", property, name));
+            }
+
+            final int pathStartIndex = propertyEndIndex + RELPATH_PROPERTY_SEPARATOR.length();
+            if (pathStartIndex >= name.length()) {
+                throw new LLVMParserException(String.format("Invalid Source Path: \"%s\"", name));
+            }
+
+            final String relativePath = name.substring(pathStartIndex);
+            path = Paths.get(pathPrefix, relativePath);
         }
 
         if (path == null) {
-            // create a fallback source for invalid names like "-"
-            path = name;
+            path = Paths.get(name);
+            if (!path.isAbsolute()) {
+                String directory = MDString.getIfInstance(file.getDirectory());
+                if (directory != null) {
+                    path = Paths.get(directory, name);
+                }
+            }
         }
 
-        paths.put(file, path);
-        return path;
+        path = path.normalize();
+        paths.put(file, path.toString());
+        return path.toString();
     }
 
     private final HashMap<MDBaseNode, LLVMSourceLocation> globalCache;
@@ -506,10 +462,13 @@ final class DIScopeBuilder {
     }
 
     private static LazySourceSectionImpl extend(LazySourceSectionImpl base) {
-        return base == null ? null : base.extend();
+        return base.extend();
     }
 
     private LazySourceSectionImpl buildSection(MDFile file, long startLine, long startCol, boolean needsRange) {
+        if (file == null) {
+            return null;
+        }
         String path = getPath(file);
         if (path == null) {
             return null;
@@ -520,8 +479,6 @@ final class DIScopeBuilder {
     private static Source asSource(Map<String, Source> sources, String path) {
         if (sources.containsKey(path)) {
             return sources.get(path);
-        } else if (path == null) {
-            return null;
         }
 
         String mimeType = getMimeType(path);
@@ -535,8 +492,7 @@ final class DIScopeBuilder {
         }
 
         if (source == null) {
-            final String sourceText = STDIN_FILENAME.equals(path) ? STDIN_SOURCE_TEXT : path;
-            source = Source.newBuilder(sourceText).mimeType(MIMETYPE_UNAVAILABLE).name(sourceText).build();
+            source = Source.newBuilder(path).mimeType(MIMETYPE_UNAVAILABLE).name(path).build();
         }
 
         sources.put(path, source);
