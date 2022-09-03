@@ -23,14 +23,16 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "==")
-public class ObjectEqualsNode extends PointerEqualsNode implements Virtualizable {
+public class ObjectEqualsNode extends CompareNode implements Virtualizable {
 
     /**
      * Constructs a new object equality comparison node.
@@ -39,19 +41,48 @@ public class ObjectEqualsNode extends PointerEqualsNode implements Virtualizable
      * @param y the instruction that produces the second input to this instruction
      */
     public static ObjectEqualsNode create(ValueNode x, ValueNode y) {
-        return new ObjectEqualsNode(x, y);
+        return USE_GENERATED_NODES ? new ObjectEqualsNodeGen(x, y) : new ObjectEqualsNode(x, y);
     }
 
     protected ObjectEqualsNode(ValueNode x, ValueNode y) {
         super(x, y);
-        assert x.stamp() instanceof AbstractObjectStamp;
-        assert y.stamp() instanceof AbstractObjectStamp;
+        assert x.getKind() == Kind.Object;
+        assert y.getKind() == Kind.Object;
+    }
+
+    @Override
+    public Condition condition() {
+        return Condition.EQ;
+    }
+
+    @Override
+    public boolean unorderedIsTrue() {
+        return false;
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        ValueNode result = super.canonical(tool, forX, forY);
+        if (result != this) {
+            return result;
+        }
+        if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
+            return LogicConstantNode.tautology();
+        } else if (forX.stamp().alwaysDistinct(forY.stamp())) {
+            return LogicConstantNode.contradiction();
+        }
+        if (StampTool.isObjectAlwaysNull(forX)) {
+            return IsNullNode.create(forY);
+        } else if (StampTool.isObjectAlwaysNull(forY)) {
+            return IsNullNode.create(forX);
+        }
+        return this;
     }
 
     private void virtualizeNonVirtualComparison(State state, ValueNode other, VirtualizerTool tool) {
         if (!state.getVirtualObject().hasIdentity() && state.getVirtualObject().entryKind(0) == Kind.Boolean) {
             if (other.isConstant()) {
-                JavaConstant otherUnboxed = tool.getConstantReflectionProvider().unboxPrimitive(other.asJavaConstant());
+                Constant otherUnboxed = tool.getConstantReflectionProvider().unboxPrimitive(other.asConstant());
                 if (otherUnboxed != null && otherUnboxed.getKind() == Kind.Boolean) {
                     int expectedValue = otherUnboxed.asBoolean() ? 1 : 0;
                     IntegerEqualsNode equals = IntegerEqualsNode.create(state.getEntry(0), ConstantNode.forInt(expectedValue, graph()));
@@ -85,7 +116,7 @@ public class ObjectEqualsNode extends PointerEqualsNode implements Virtualizable
                 /*
                  * One of the two objects has identity, the other doesn't. In code, this looks like
                  * "Integer.valueOf(a) == new Integer(b)", which is always false.
-                 *
+                 * 
                  * In other words: an object created via valueOf can never be equal to one created
                  * by new in the same compilation unit.
                  */
@@ -112,11 +143,6 @@ public class ObjectEqualsNode extends PointerEqualsNode implements Virtualizable
 
     @Override
     protected CompareNode duplicateModified(ValueNode newX, ValueNode newY) {
-        if (newX.stamp() instanceof ObjectStamp && newY.stamp() instanceof ObjectStamp) {
-            return ObjectEqualsNode.create(newX, newY);
-        } else if (newX.stamp() instanceof AbstractPointerStamp && newY.stamp() instanceof AbstractPointerStamp) {
-            return PointerEqualsNode.create(newX, newY);
-        }
-        throw GraalInternalError.shouldNotReachHere();
+        return ObjectEqualsNode.create(newX, newY);
     }
 }
