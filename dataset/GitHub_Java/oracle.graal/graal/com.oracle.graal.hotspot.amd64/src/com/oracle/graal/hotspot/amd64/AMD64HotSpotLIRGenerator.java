@@ -38,6 +38,7 @@ import com.oracle.graal.compiler.amd64.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.stubs.*;
@@ -414,7 +415,8 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         Variable result = newVariable(kind);
         assert access == null || access instanceof HeapAccess;
         if (runtime().config.useCompressedOops && isCompressCandidate(access)) {
-            append(new LoadCompressedPointer(kind, result, loadAddress, access != null ? state(access) : null, runtime().config.narrowOopBase, runtime().config.narrowOopShift,
+            Variable scratch = newVariable(Kind.Long);
+            append(new LoadCompressedPointer(kind, result, scratch, loadAddress, access != null ? state(access) : null, runtime().config.narrowOopBase, runtime().config.narrowOopShift,
                             runtime().config.logMinObjAlignment));
         } else {
             append(new LoadOp(kind, result, loadAddress, access != null ? state(access) : null));

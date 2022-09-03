@@ -73,6 +73,9 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native ResolvedJavaType getUniqueImplementor(HotSpotResolvedObjectType interfaceType);
 
     @Override
+    public native int getInvocationCount(long metaspaceMethod);
+
+    @Override
     public native JavaType lookupType(String name, HotSpotResolvedObjectType accessingClass, boolean eagerResolve);
 
     @Override
@@ -171,9 +174,6 @@ public class CompilerToVMImpl implements CompilerToVM {
 
     @Override
     public native Object readUnsafeUncompressedPointer(Object o, long displacement);
-
-    @Override
-    public native long readUnsafeKlassPointer(Object o);
 
     @Override
     public Object executeCompiledMethod(Object arg1, Object arg2, Object arg3, HotSpotInstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException {
