@@ -24,50 +24,52 @@
  */
 package com.oracle.truffle.nfi;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.java.JavaInterop;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.nfi.types.NativeSignature;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 final class LookupAndBind extends RootNode {
-    @Child private RootNode libraryNode;
-    @Child Node lookupSymbol = Message.READ.createNode();
-    @Child Node bind = Message.createInvoke(1).createNode();
-    private final List<String> functions;
 
-    LookupAndBind(RootNode root, List<String> functions) {
-        super(null);
+    private final ContextReference<NFIContext> ctxRef;
+
+    @Child private RootNode libraryNode;
+    @CompilerDirectives.CompilationFinal private LibFFILibrary cached;
+    private final Map<String, NativeSignature> bindings;
+
+    LookupAndBind(NFILanguage language, RootNode root, Map<String, NativeSignature> functions) {
+        super(language);
+        this.ctxRef = language.getContextReference();
         this.libraryNode = root;
-        this.functions = functions;
+        this.bindings = functions;
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-        Map<String, TruffleObject> libraryWrapper = new HashMap<>();
-        LibFFILibrary library = (LibFFILibrary) libraryNode.execute(frame);
-        LibFFISymbol[] symbols = new LibFFISymbol[functions.size()];
-        for (int i = 0; i < symbols.length; i++) {
-            String nameAndSignature = functions.get(i);
-            int at = nameAndSignature.indexOf("(");
-            String symbolName = nameAndSignature.substring(0, at).trim();
-            String signature = nameAndSignature.substring(at);
-            try {
-                TruffleObject symbol = (TruffleObject) ForeignAccess.sendRead(lookupSymbol, library, symbolName);
-                TruffleObject bound = (TruffleObject) ForeignAccess.sendInvoke(bind, symbol, "bind", signature);
-                libraryWrapper.put(symbolName, bound);
-            } catch (InteropException e) {
-                throw UnknownIdentifierException.raise(nameAndSignature);
-            }
+        if (cached != null) {
+            return cached;
         }
-        return JavaInterop.asTruffleObject(libraryWrapper);
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        LibFFILibrary library = (LibFFILibrary) libraryNode.execute(frame);
+        return cached = initializeLib(library);
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private LibFFILibrary initializeLib(LibFFILibrary library) {
+        Map<String, TruffleObject> libraryWrapper = new HashMap<>();
+        NFIContext ctx = ctxRef.get();
+        for (Map.Entry<String, NativeSignature> entry : bindings.entrySet()) {
+            String symbolName = entry.getKey();
+            NativeSignature signature = entry.getValue();
+            BindableNativeObject symbol = ctx.lookupSymbol(library, symbolName);
+            TruffleObject fun = symbol.slowPathBindSignature(ctx, signature);
+            libraryWrapper.put(symbolName, fun);
+        }
+        return library.register(libraryWrapper);
     }
 
 }

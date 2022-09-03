@@ -26,8 +26,9 @@ package com.oracle.truffle.nfi;
 
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.nfi.types.NativeSignature;
 
-class NativePointer implements TruffleObject {
+class NativePointer extends BindableNativeObject {
 
     final long nativePointer;
 
@@ -36,7 +37,22 @@ class NativePointer implements TruffleObject {
     }
 
     @Override
+    protected TruffleObject slowPathBindSignature(NFIContext ctx, NativeSignature signature) {
+        if (nativePointer == 0) {
+            // cannot bind null function
+            return this;
+        } else {
+            return new LibFFIFunction(this, LibFFISignature.create(ctx, signature));
+        }
+    }
+
+    @Override
     public ForeignAccess getForeignAccess() {
         return NativePointerMessageResolutionForeign.ACCESS;
+    }
+
+    @Override
+    public String toString() {
+        return String.valueOf(nativePointer);
     }
 }

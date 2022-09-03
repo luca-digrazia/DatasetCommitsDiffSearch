@@ -46,7 +46,7 @@ class NFIContext {
     final Env env;
 
     private long nativeContext;
-    private final ThreadLocal<NativeEnv> nativeEnv = ThreadLocal.withInitial(new NativeEnvSupplier());
+    private ThreadLocal<NativeEnv> nativeEnv;
 
     @CompilationFinal(dimensions = 1) final LibFFIType[] simpleTypeMap = new LibFFIType[NativeSimpleType.values().length];
     @CompilationFinal(dimensions = 1) final LibFFIType[] arrayTypeMap = new LibFFIType[NativeSimpleType.values().length];
@@ -93,13 +93,13 @@ class NFIContext {
         loadNFILib();
         NativeAllocation.ensureGCThreadRunning();
         nativeContext = initializeNativeContext();
-        nativeEnv.remove();
+        nativeEnv = ThreadLocal.withInitial(new NativeEnvSupplier());
     }
 
     void dispose() {
         disposeNativeContext(nativeContext);
         nativeContext = 0;
-        nativeEnv.set(null);
+        nativeEnv = null;
         nativePointerMap.clear();
     }
 

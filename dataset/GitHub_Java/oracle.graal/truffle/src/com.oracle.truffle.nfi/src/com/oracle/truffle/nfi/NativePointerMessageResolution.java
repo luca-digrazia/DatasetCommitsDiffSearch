@@ -24,51 +24,27 @@
  */
 package com.oracle.truffle.nfi;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.CanResolve;
+import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.nfi.NativePointerMessageResolutionFactory.SignatureCacheNodeGen;
-import com.oracle.truffle.nfi.types.NativeSignature;
-import com.oracle.truffle.nfi.types.Parser;
+import com.oracle.truffle.nfi.BindableNativeObject.BindSignatureNode;
+import com.oracle.truffle.nfi.BindableNativeObjectFactory.PointerBindSignatureNodeGen;
+import com.oracle.truffle.nfi.TypeConversion.AsStringNode;
+import com.oracle.truffle.nfi.TypeConversionFactory.AsStringNodeGen;
 
 @MessageResolution(receiverType = NativePointer.class)
 class NativePointerMessageResolution {
 
-    abstract static class SignatureCacheNode extends Node {
-
-        protected abstract LibFFISignature execute(Object signature);
-
-        @Specialization(guards = "checkSignature(signature, cachedSignature)")
-        @SuppressWarnings("unused")
-        protected LibFFISignature cached(String signature,
-                        @Cached("signature") String cachedSignature,
-                        @Cached("parse(signature)") LibFFISignature ret) {
-            return ret;
-        }
-
-        @Specialization(replaces = "cached")
-        @TruffleBoundary
-        protected LibFFISignature parse(String signature) {
-            NativeSignature parsed = Parser.parseSignature(signature);
-            return LibFFISignature.create(parsed);
-        }
-
-        protected static boolean checkSignature(String signature, String cachedSignature) {
-            return signature.equals(cachedSignature);
-        }
-    }
-
     @Resolve(message = "INVOKE")
     abstract static class BindNode extends Node {
 
-        @Child protected SignatureCacheNode signatureCache = SignatureCacheNodeGen.create();
+        @Child protected BindSignatureNode bind = PointerBindSignatureNodeGen.create();
 
         public TruffleObject access(NativePointer receiver, String method, Object[] args) {
             if (!"bind".equals(method)) {
@@ -78,13 +54,23 @@ class NativePointerMessageResolution {
                 throw ArityException.raise(1, args.length);
             }
 
-            LibFFISignature signature = signatureCache.execute(args[0]);
-            if (receiver.nativePointer == 0) {
-                // cannot bind null function
-                return receiver;
-            } else {
-                return new LibFFIFunction(receiver, signature);
-            }
+            return bind.execute(receiver, args[0]);
+        }
+    }
+
+    @Resolve(message = "IS_POINTER")
+    abstract static class IsNativePointerNode extends Node {
+
+        public boolean access(@SuppressWarnings("unused") NativePointer receiver) {
+            return true;
+        }
+    }
+
+    @Resolve(message = "AS_POINTER")
+    abstract static class AsNativePointerNode extends Node {
+
+        public long access(NativePointer receiver) {
+            return receiver.nativePointer;
         }
     }
 
@@ -110,6 +96,34 @@ class NativePointerMessageResolution {
 
         public boolean access(NativePointer receiver) {
             return receiver.nativePointer == 0;
+        }
+    }
+
+    @Resolve(message = "KEYS")
+    abstract static class NativePointerKeysNode extends Node {
+
+        @SuppressWarnings("unused")
+        public TruffleObject access(NativePointer receiver) {
+            return JavaInterop.asTruffleObject(new String[]{"bind"});
+        }
+    }
+
+    @Resolve(message = "KEY_INFO")
+    abstract static class NativePointerKeyInfoNode extends Node {
+
+        private static final int INVOCABLE = KeyInfo.newBuilder().setInvocable(true).build();
+        private static final int NOT_EXISTING = 0;
+
+        @Child private AsStringNode asString = AsStringNodeGen.create(true);
+
+        @SuppressWarnings("unused")
+        public int access(NativePointer receiver, Object arg) {
+            String identifier = asString.execute(arg);
+            if ("bind".equals(identifier)) {
+                return INVOCABLE;
+            } else {
+                return NOT_EXISTING;
+            }
         }
     }
 

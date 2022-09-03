@@ -24,19 +24,24 @@
  */
 package com.oracle.truffle.nfi;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
+import java.util.Map;
 
 final class LibFFILibrary implements TruffleObject {
 
-    static final LibFFILibrary DEFAULT = new LibFFILibrary(0);
-
     protected final long handle;
+    private Map<String, TruffleObject> symbols;
+
+    static LibFFILibrary createDefault() {
+        return new LibFFILibrary(0);
+    }
 
     static LibFFILibrary create(long handle) {
         assert handle != 0;
         LibFFILibrary ret = new LibFFILibrary(handle);
-        NativeAllocation.registerNativeAllocation(ret, new Destructor(handle));
+        NativeAllocation.getGlobalQueue().registerNativeAllocation(ret, new Destructor(handle));
         return ret;
     }
 
@@ -44,13 +49,20 @@ final class LibFFILibrary implements TruffleObject {
         this.handle = handle;
     }
 
-    public LibFFISymbol lookupSymbol(String name) {
-        return LibFFISymbol.create(this, NativeAccess.lookup(handle, name));
-    }
-
     @Override
     public ForeignAccess getForeignAccess() {
         return LibFFILibraryMessageResolutionForeign.ACCESS;
+    }
+
+    LibFFILibrary register(Map<String, TruffleObject> functions) {
+        assert this.symbols == null;
+        this.symbols = functions;
+        return this;
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    TruffleObject findSymbol(String name) {
+        return symbols == null ? null : symbols.get(name);
     }
 
     private static final class Destructor extends NativeAllocation.Destructor {
@@ -63,7 +75,7 @@ final class LibFFILibrary implements TruffleObject {
 
         @Override
         protected void destroy() {
-            NativeAccess.freeLibrary(handle);
+            NFIContext.freeLibrary(handle);
         }
     }
 }
