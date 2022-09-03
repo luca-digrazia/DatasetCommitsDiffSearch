@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -143,11 +141,11 @@ public final class ComputeBlockOrder {
                 double unscheduledSum = 0.0;
                 for (T pred : mostLikelySuccessor.getPredecessors()) {
                     if (pred.getLinearScanNumber() == -1) {
-                        unscheduledSum += pred.getRelativeFrequency();
+                        unscheduledSum += pred.probability();
                     }
                 }
 
-                if (unscheduledSum > block.getRelativeFrequency() / PENALTY_VERSUS_UNSCHEDULED) {
+                if (unscheduledSum > block.probability() / PENALTY_VERSUS_UNSCHEDULED) {
                     // Add this merge only after at least one additional predecessor gets scheduled.
                     visitedBlocks.clear(mostLikelySuccessor.getId());
                     return null;
@@ -212,8 +210,8 @@ public final class ComputeBlockOrder {
     private static <T extends AbstractBlockBase<T>> T findAndMarkMostLikelySuccessor(T block, BitSet visitedBlocks) {
         T result = null;
         for (T successor : block.getSuccessors()) {
-            assert successor.getRelativeFrequency() >= 0.0 : "Relative frequencies must be positive";
-            if (!visitedBlocks.get(successor.getId()) && successor.getLoopDepth() >= block.getLoopDepth() && (result == null || successor.getRelativeFrequency() >= result.getRelativeFrequency())) {
+            assert successor.probability() >= 0.0 : "Probabilities must be positive";
+            if (!visitedBlocks.get(successor.getId()) && successor.getLoopDepth() >= block.getLoopDepth() && (result == null || successor.probability() >= result.probability())) {
                 result = successor;
             }
         }
@@ -261,7 +259,7 @@ public final class ComputeBlockOrder {
         public int compare(T a, T b) {
             // Loop blocks before any loop exit block. The only exception are blocks that are
             // (almost) impossible to reach.
-            if (a.getRelativeFrequency() > EPSILON && b.getRelativeFrequency() > EPSILON) {
+            if (a.probability() > EPSILON && b.probability() > EPSILON) {
                 int diff = b.getLoopDepth() - a.getLoopDepth();
                 if (diff != 0) {
                     return diff;
@@ -269,7 +267,7 @@ public final class ComputeBlockOrder {
             }
 
             // Blocks with high probability before blocks with low probability.
-            if (a.getRelativeFrequency() > b.getRelativeFrequency()) {
+            if (a.probability() > b.probability()) {
                 return -1;
             } else {
                 return 1;
