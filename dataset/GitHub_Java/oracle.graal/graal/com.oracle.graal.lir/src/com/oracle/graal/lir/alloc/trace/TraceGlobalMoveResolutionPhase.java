@@ -41,7 +41,7 @@ import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
 import com.oracle.graal.lir.ssi.*;
 
-final class TraceGlobalMoveResolutionPhase extends AllocationPhase {
+public class TraceGlobalMoveResolutionPhase extends AllocationPhase {
 
     private final TraceBuilderResult<?> resultTraces;
 
@@ -55,7 +55,6 @@ final class TraceGlobalMoveResolutionPhase extends AllocationPhase {
         resolveGlobalDataFlow(resultTraces, lirGenRes, spillMoveFactory, target.arch);
     }
 
-    @SuppressWarnings("try")
     private static <B extends AbstractBlockBase<B>> void resolveGlobalDataFlow(TraceBuilderResult<B> resultTraces, LIRGenerationResult lirGenRes, SpillMoveFactory spillMoveFactory, Architecture arch) {
         LIR lir = lirGenRes.getLIR();
         /* Resolve trace global data-flow mismatch. */

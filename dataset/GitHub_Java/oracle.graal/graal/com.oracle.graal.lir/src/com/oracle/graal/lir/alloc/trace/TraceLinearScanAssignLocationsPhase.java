@@ -47,7 +47,7 @@ class TraceLinearScanAssignLocationsPhase extends LinearScanAssignLocationsPhase
 
     @Override
     protected Value colorLirOperand(LIRInstruction op, Variable operand, OperandMode mode) {
-        if (!isBlockEndWithEdgeToUnallocatedTrace(op, mode)) {
+        if (!isBlockEndWithEdgeToUnallocatedTrace(op)) {
             return super.colorLirOperand(op, operand, mode);
         }
 
@@ -71,8 +71,8 @@ class TraceLinearScanAssignLocationsPhase extends LinearScanAssignLocationsPhase
         return interval.location();
     }
 
-    private boolean isBlockEndWithEdgeToUnallocatedTrace(LIRInstruction op, OperandMode mode) {
-        if (!(op instanceof BlockEndOp) || !OperandMode.ALIVE.equals(mode)) {
+    private boolean isBlockEndWithEdgeToUnallocatedTrace(LIRInstruction op) {
+        if (!(op instanceof BlockEndOp)) {
             return false;
         }
         AbstractBlockBase<?> block = allocator.blockForId(op.id());

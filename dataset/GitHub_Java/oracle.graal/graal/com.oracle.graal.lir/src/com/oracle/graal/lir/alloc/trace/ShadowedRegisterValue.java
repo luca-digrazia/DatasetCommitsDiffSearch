@@ -27,6 +27,7 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import java.util.*;
 
 import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
@@ -34,8 +35,14 @@ import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
 /**
  * Represents a {@link #register} which has a shadow copy on the {@link #stackslot stack}.
+ * <p>
+ * Note: {@link ShadowedRegisterValue} does not follow the contract of {@link CompositeValue}, for
+ * instance the {@link #forEachComponent} does not visit {@link #register} or {@link #stackslot} but
+ * the {@link CompositeValue} itself. Therefore it should be only used in the context of the
+ * {@link TraceRegisterAllocationPhase}.
  */
 final class ShadowedRegisterValue extends CompositeValue {
+    private static final EnumSet<OperandFlag> flags = EnumSet.of(COMPOSITE);
     private static final EnumSet<OperandFlag> registerFlags = EnumSet.of(REG);
     private static final EnumSet<OperandFlag> stackslotFlags = EnumSet.of(STACK);
 
@@ -58,13 +65,9 @@ final class ShadowedRegisterValue extends CompositeValue {
     }
 
     @Override
-    public CompositeValue forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueProcedure proc) {
-        RegisterValue newRegister = (RegisterValue) proc.doValue(inst, register, mode, registerFlags);
-        StackSlotValue newStackSlot = (StackSlotValue) proc.doValue(inst, stackslot, mode, stackslotFlags);
-        if (register.equals(newRegister) || stackslot.equals(newStackSlot)) {
-            return this;
-        }
-        return new ShadowedRegisterValue(newRegister, newStackSlot);
+    public Value forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueProcedure proc) {
+        /* TODO(jeisl) This is a hack to be able to replace the composite value with the register. */
+        return proc.doValue(inst, this, mode, flags);
     }
 
     @Override
