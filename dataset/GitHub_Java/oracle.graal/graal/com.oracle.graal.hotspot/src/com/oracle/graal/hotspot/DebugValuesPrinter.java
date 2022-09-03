@@ -37,9 +37,13 @@ import com.oracle.graal.debug.internal.*;
  */
 public class DebugValuesPrinter {
 
-    public void printDebugValues() throws GraalInternalError {
+    public void printDebugValues(String phase, boolean reset) throws GraalInternalError {
         TTY.println();
-        TTY.println("<DebugValues>");
+        if (phase != null) {
+            TTY.println("<DebugValues:" + phase + ">");
+        } else {
+            TTY.println("<DebugValues>");
+        }
         List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
         List<DebugValue> debugValues = KeyRegistry.getDebugValues();
         if (debugValues.size() > 0) {
@@ -85,8 +89,10 @@ public class DebugValuesPrinter {
                     default:
                         throw new GraalInternalError("Unknown summary type: %s", summary);
                 }
-                for (DebugValueMap topLevelMap : topLevelMaps) {
-                    topLevelMap.reset();
+                if (reset) {
+                    for (DebugValueMap topLevelMap : topLevelMaps) {
+                        topLevelMap.reset();
+                    }
                 }
             } catch (Throwable e) {
                 // Don't want this to change the exit status of the VM
@@ -95,7 +101,11 @@ public class DebugValuesPrinter {
                 e.printStackTrace();
             }
         }
-        TTY.println("</DebugValues>");
+        if (phase != null) {
+            TTY.println("</DebugValues:" + phase + ">");
+        } else {
+            TTY.println("</DebugValues>");
+        }
     }
 
     private void flattenChildren(DebugValueMap map, DebugValueMap globalMap) {
