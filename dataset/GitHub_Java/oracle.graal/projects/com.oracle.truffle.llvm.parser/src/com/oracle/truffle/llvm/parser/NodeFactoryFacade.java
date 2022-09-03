@@ -322,6 +322,4 @@ public interface NodeFactoryFacade {
      */
     Optional<Boolean> hasStackPointerArgument();
 
-    LLVMStackFrameNuller createFrameNuller(String identifier, ResolvedType type, FrameSlot slot);
-
 }

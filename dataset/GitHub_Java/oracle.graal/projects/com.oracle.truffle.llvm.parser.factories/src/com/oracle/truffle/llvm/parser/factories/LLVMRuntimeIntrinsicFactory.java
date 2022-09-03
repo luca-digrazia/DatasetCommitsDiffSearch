@@ -47,7 +47,6 @@ import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFacto
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMRintFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMSqrtFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMExitFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMSignalFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMTruffleOnlyIntrinsicsFactory.LLVMStrCmpFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMTruffleOnlyIntrinsicsFactory.LLVMStrlenFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMTruffleReadBytesFactory;
@@ -134,7 +133,6 @@ public class LLVMRuntimeIntrinsicFactory {
         if (LLVMBaseOptionFacade.intrinsifyCLibraryFunctions()) {
             intrinsifyMathFunctions();
         }
-        intrinsifyTruffleOnlyIntrinsics();
         intrinsifyInteropIntrinsics();
         return intrinsics;
     }
@@ -232,14 +230,7 @@ public class LLVMRuntimeIntrinsicFactory {
         // C
         intrinsics.put("@abort", LLVMAbortFactory.getInstance());
         intrinsics.put("@exit", LLVMExitFactory.getInstance());
-        intrinsics.put("@signal", LLVMSignalFactory.getInstance());
-    }
 
-    /**
-     * Intrinsifies functions that provide an implementation for <code>TruffleObject</code>s but use
-     * the Graal NFI if the arguments are not <code>TruffleObject</code>s.
-     */
-    protected void intrinsifyTruffleOnlyIntrinsics() {
         intrinsics.put("@strlen", LLVMStrlenFactory.getInstance());
         intrinsics.put("@strcmp", LLVMStrCmpFactory.getInstance());
     }

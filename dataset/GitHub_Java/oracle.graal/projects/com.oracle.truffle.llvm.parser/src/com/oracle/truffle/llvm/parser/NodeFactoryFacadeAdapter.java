@@ -342,9 +342,4 @@ public class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
         return Optional.empty();
     }
 
-    @Override
-    public LLVMStackFrameNuller createFrameNuller(String identifier, ResolvedType type, FrameSlot slot) {
-        return null;
-    }
-
 }

@@ -29,6 +29,7 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
+import com.intel.llvm.ireditor.types.ResolvedType;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
@@ -89,9 +90,6 @@ import com.oracle.truffle.llvm.nodes.impl.memory.load.LLVMI8LoadNodeFactory.LLVM
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMAccessGlobalVariableStorageNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
-import com.oracle.truffle.llvm.parser.base.model.LLVMToBitcodeAdapter;
-import com.oracle.truffle.llvm.parser.base.model.types.Type;
-import com.oracle.truffle.llvm.parser.base.model.types.VectorType;
 import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
 import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 
@@ -100,14 +98,14 @@ public final class LLVMMemoryReadWriteFactory {
     private LLVMMemoryReadWriteFactory() {
     }
 
-    public static LLVMExpressionNode createLoad(Type resolvedResultType, LLVMAddressNode loadTarget) {
-        LLVMBaseType resultType = resolvedResultType.getLLVMBaseType();
+    public static LLVMExpressionNode createLoad(ResolvedType resolvedResultType, LLVMAddressNode loadTarget) {
+        LLVMBaseType resultType = LLVMTypeHelper.getLLVMType(resolvedResultType).getType();
 
-        if (resolvedResultType instanceof VectorType) {
-            return createLoadVector(resultType, loadTarget, ((VectorType) resolvedResultType).getElementCount());
+        if (resolvedResultType.isVector()) {
+            return createLoadVector(resultType, loadTarget, resolvedResultType.asVector().getSize());
         } else {
             int bits = resultType == LLVMBaseType.I_VAR_BITWIDTH
-                            ? resolvedResultType.getBits()
+                            ? resolvedResultType.getBits().intValue()
                             : 0;
 
             return createLoad(resultType, loadTarget, bits);
@@ -194,8 +192,8 @@ public final class LLVMMemoryReadWriteFactory {
         }
     }
 
-    public static LLVMNode createStore(LLVMParserRuntime runtime, LLVMAddressNode pointerNode, LLVMExpressionNode valueNode, Type type) {
-        return createStore(pointerNode, valueNode, type.getLLVMBaseType(), runtime.getTypeHelper().getByteSize(LLVMToBitcodeAdapter.unresolveType(type)));
+    public static LLVMNode createStore(LLVMParserRuntime runtime, LLVMAddressNode pointerNode, LLVMExpressionNode valueNode, ResolvedType type) {
+        return createStore(pointerNode, valueNode, LLVMTypeHelper.getLLVMType(type).getType(), runtime.getTypeHelper().getByteSize(type));
     }
 
     public static LLVMNode createStore(LLVMAddressNode pointerNode, LLVMExpressionNode valueNode, LLVMBaseType type, int size) {
