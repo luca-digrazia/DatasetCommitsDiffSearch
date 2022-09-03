@@ -37,6 +37,7 @@ import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Value;
 
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
@@ -54,13 +55,19 @@ public final class TraceGlobalMoveResolutionPhase extends TraceAllocationPhase {
      * Abstract move resolver interface for testing.
      */
     public abstract static class MoveResolver {
-        public abstract void addMapping(Value src, AllocatableValue dst, Value fromStack);
+        public abstract void addMapping(Value src, AllocatableValue dst);
+    }
+
+    private final TraceBuilderResult<?> resultTraces;
+
+    public TraceGlobalMoveResolutionPhase(TraceBuilderResult<?> resultTraces) {
+        this.resultTraces = resultTraces;
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, TraceAllocationContext context) {
-        MoveFactory spillMoveFactory = context.spillMoveFactory;
-        resolveGlobalDataFlow(context.resultTraces, lirGenRes, spillMoveFactory, target.arch);
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, MoveFactory spillMoveFactory,
+                    RegisterAllocationConfig registerAllocationConfig) {
+        resolveGlobalDataFlow(resultTraces, lirGenRes, spillMoveFactory, target.arch);
     }
 
     @SuppressWarnings("try")
@@ -123,10 +130,9 @@ public final class TraceGlobalMoveResolutionPhase extends TraceAllocationPhase {
     private static void addMappingToRegister(MoveResolver moveResolver, Value from, RegisterValue register) {
         if (isShadowedRegisterValue(from)) {
             RegisterValue fromReg = asShadowedRegisterValue(from).getRegister();
-            AllocatableValue fromStack = asShadowedRegisterValue(from).getStackSlot();
-            checkAndAddMapping(moveResolver, fromReg, register, fromStack);
+            checkAndAddMapping(moveResolver, fromReg, register);
         } else {
-            checkAndAddMapping(moveResolver, from, register, null);
+            checkAndAddMapping(moveResolver, from, register);
         }
     }
 
@@ -136,17 +142,17 @@ public final class TraceGlobalMoveResolutionPhase extends TraceAllocationPhase {
             RegisterValue fromReg = shadowedFrom.getRegister();
             AllocatableValue fromStack = shadowedFrom.getStackSlot();
             if (!fromStack.equals(stack)) {
-                checkAndAddMapping(moveResolver, fromReg, stack, fromStack);
+                checkAndAddMapping(moveResolver, fromReg, stack);
             }
         } else {
-            checkAndAddMapping(moveResolver, from, stack, null);
+            checkAndAddMapping(moveResolver, from, stack);
         }
 
     }
 
-    private static void checkAndAddMapping(MoveResolver moveResolver, Value from, AllocatableValue to, AllocatableValue fromStack) {
-        if (!from.equals(to) && (fromStack == null || !fromStack.equals(to))) {
-            moveResolver.addMapping(from, to, fromStack);
+    private static void checkAndAddMapping(MoveResolver moveResolver, Value from, AllocatableValue to) {
+        if (!from.equals(to)) {
+            moveResolver.addMapping(from, to);
         }
     }
 }
