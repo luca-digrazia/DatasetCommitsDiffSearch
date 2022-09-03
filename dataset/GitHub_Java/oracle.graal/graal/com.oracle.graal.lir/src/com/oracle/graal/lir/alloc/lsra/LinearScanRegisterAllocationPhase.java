@@ -22,16 +22,14 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import java.util.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Indent;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.phases.AllocationPhase;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.*;
-import com.oracle.graal.lir.phases.*;
+import jdk.vm.ci.code.TargetDescription;
 
-final class LinearScanRegisterAllocationPhase extends AllocationPhase {
+public final class LinearScanRegisterAllocationPhase extends AllocationPhase {
 
     private final LinearScan allocator;
 
@@ -40,12 +38,13 @@ final class LinearScanRegisterAllocationPhase extends AllocationPhase {
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory) {
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
         allocator.printIntervals("Before register allocation");
         allocateRegisters();
         allocator.printIntervals("After register allocation");
     }
 
+    @SuppressWarnings("try")
     void allocateRegisters() {
         try (Indent indent = Debug.logAndIndent("allocate registers")) {
             Interval precoloredIntervals;

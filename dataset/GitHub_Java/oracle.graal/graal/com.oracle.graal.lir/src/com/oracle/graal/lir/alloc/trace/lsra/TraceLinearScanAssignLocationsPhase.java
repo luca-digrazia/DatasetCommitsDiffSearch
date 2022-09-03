@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.lir.alloc.trace.lsra;
 
-import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
 import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
 import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 import static com.oracle.graal.lir.LIRValueUtil.isVariable;
@@ -35,15 +34,11 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Value;
-
+import com.oracle.graal.compiler.common.alloc.Trace;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Indent;
+import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.lir.ConstantValue;
 import com.oracle.graal.lir.InstructionValueProcedure;
 import com.oracle.graal.lir.LIRFrameState;
@@ -60,6 +55,12 @@ import com.oracle.graal.lir.alloc.trace.ShadowedRegisterValue;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Value;
+
 /**
  * Specialization of {@link com.oracle.graal.lir.alloc.lsra.LinearScanAssignLocationsPhase} that
  * inserts {@link ShadowedRegisterValue}s to describe {@link RegisterValue}s that are also available
@@ -68,8 +69,7 @@ import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocationPhase {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
-                    TraceLinearScanAllocationContext context) {
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, TraceLinearScanAllocationContext context) {
         TraceLinearScan allocator = context.allocator;
         MoveFactory spillMoveFactory = context.spillMoveFactory;
         new Assigner(allocator, spillMoveFactory).assignLocations();
@@ -98,25 +98,6 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
             assert interval != null : "interval must exist";
 
             if (opId != -1) {
-                if (DetailedAsserts.getValue()) {
-                    AbstractBlockBase<?> block = allocator.blockForId(opId);
-                    if (block.getSuccessorCount() <= 1 && opId == allocator.getLastLirInstructionId(block)) {
-                        /*
-                         * Check if spill moves could have been appended at the end of this block,
-                         * but before the branch instruction. So the split child information for
-                         * this branch would be incorrect.
-                         */
-                        LIRInstruction instr = allocator.getLIR().getLIRforBlock(block).get(allocator.getLIR().getLIRforBlock(block).size() - 1);
-                        if (instr instanceof StandardOp.JumpOp) {
-                            if (allocator.getBlockData(block).liveOut.get(allocator.operandNumber(operand))) {
-                                assert false : String.format(
-                                                "can't get split child for the last branch of a block because the information would be incorrect (moves are inserted before the branch in resolveDataFlow) block=%s, instruction=%s, operand=%s",
-                                                block, instr, operand);
-                            }
-                        }
-                    }
-                }
-
                 /*
                  * Operands are not changed when an interval is split during allocation, so search
                  * the right interval here.
@@ -125,6 +106,13 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
             }
 
             if (isIllegal(interval.location()) && interval.canMaterialize()) {
+                if (op instanceof LabelOp) {
+                    /*
+                     * Spilled materialized value in a LabelOp (i.e. incoming): no need for move
+                     * resolution so we can ignore it.
+                     */
+                    return Value.ILLEGAL;
+                }
                 assert mode != OperandMode.DEF;
                 return new ConstantValue(interval.kind(), interval.getMaterializedValue());
             }
@@ -156,10 +144,7 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
                  */
                 final LIRInstruction instr = allocator.getLIR().getLIRforBlock(block).get(allocator.getLIR().getLIRforBlock(block).size() - 1);
                 if (instr instanceof StandardOp.JumpOp) {
-                    if (allocator.getBlockData(block).liveOut.get(allocator.operandNumber(operand))) {
-                        tempOpId = allocator.getFirstLirInstructionId(block.getSuccessors().iterator().next());
-                        mode = OperandMode.DEF;
-                    }
+                    throw GraalError.unimplemented("DebugInfo on jumps are not supported!");
                 }
             }
 
@@ -199,6 +184,16 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
             }
         }
 
+        private final InstructionValueProcedure assignProc = new InstructionValueProcedure() {
+            @Override
+            public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+                if (isVariable(value)) {
+                    return colorLirOperand(instruction, (Variable) value, mode);
+                }
+                return value;
+            }
+        };
+
         /**
          * Assigns the operand of an {@link LIRInstruction}.
          *
@@ -217,7 +212,6 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
                 }
             }
 
-            InstructionValueProcedure assignProc = (inst, operand, mode, flags) -> isVariable(operand) ? colorLirOperand(inst, (Variable) operand, mode) : operand;
             // remove useless moves
             if (op instanceof MoveOp) {
                 AllocatableValue result = ((MoveOp) op).getResult();
@@ -267,8 +261,9 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
             }
         }
 
-        private InstructionValueProcedure colorOutgoingIncomingValues = new InstructionValueProcedure() {
+        private final InstructionValueProcedure colorOutgoingIncomingValues = new InstructionValueProcedure() {
 
+            @Override
             public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
                 if (isVariable(value)) {
                     TraceInterval interval = allocator.intervalFor(value);
@@ -283,5 +278,4 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
             }
         };
     }
-
 }

@@ -28,7 +28,6 @@ import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugCounter;
 import com.oracle.graal.debug.DebugMemUseTracker;
 import com.oracle.graal.debug.DebugTimer;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
@@ -52,6 +51,8 @@ public abstract class TraceAllocationPhase<C extends TraceAllocationPhase.TraceA
         }
     }
 
+    private CharSequence name;
+
     /**
      * Records time spent within {@link #apply}.
      */
@@ -62,40 +63,17 @@ public abstract class TraceAllocationPhase<C extends TraceAllocationPhase.TraceA
      */
     private final DebugMemUseTracker memUseTracker;
 
-    /**
-     * Records the number of traces allocated with this phase.
-     */
-    private final DebugCounter allocatedTraces;
-
-    private static final class AllocationStatistics {
-        private final DebugCounter allocatedTraces;
-
-        private AllocationStatistics(Class<?> clazz) {
-            allocatedTraces = Debug.counter("TraceRA[%s]", clazz);
-        }
-    }
-
-    private static final ClassValue<AllocationStatistics> counterClassValue = new ClassValue<AllocationStatistics>() {
-        @Override
-        protected AllocationStatistics computeValue(Class<?> c) {
-            return new AllocationStatistics(c);
-        }
-    };
-
     public TraceAllocationPhase() {
         LIRPhaseStatistics statistics = LIRPhase.statisticsClassValue.get(getClass());
         timer = statistics.timer;
         memUseTracker = statistics.memUseTracker;
-        allocatedTraces = counterClassValue.get(getClass()).allocatedTraces;
     }
 
     public final CharSequence getName() {
-        return LIRPhase.createName(getClass());
-    }
-
-    @Override
-    public final String toString() {
-        return getName().toString();
+        if (name == null) {
+            name = LIRPhase.createName(getClass());
+        }
+        return name;
     }
 
     public final void apply(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, C context) {
@@ -103,16 +81,12 @@ public abstract class TraceAllocationPhase<C extends TraceAllocationPhase.TraceA
     }
 
     @SuppressWarnings("try")
-    public final void apply(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, C context, boolean dumpTrace) {
+    public final void apply(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, C context, boolean dumpLIR) {
         try (Scope s = Debug.scope(getName(), this)) {
             try (DebugCloseable a = timer.start(); DebugCloseable c = memUseTracker.start()) {
-                if (dumpTrace && Debug.isDumpEnabled(TraceBuilderPhase.TRACE_DUMP_LEVEL + 1)) {
-                    Debug.dump(TraceBuilderPhase.TRACE_DUMP_LEVEL + 1, trace, "%s before (Trace%s: %s)", getName(), trace.getId(), trace);
-                }
                 run(target, lirGenRes, trace, context);
-                allocatedTraces.increment();
-                if (dumpTrace && Debug.isDumpEnabled(TraceBuilderPhase.TRACE_DUMP_LEVEL)) {
-                    Debug.dump(TraceBuilderPhase.TRACE_DUMP_LEVEL, trace, "%s (Trace%s: %s)", getName(), trace.getId(), trace);
+                if (dumpLIR && Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL)) {
+                    Debug.dump(Debug.BASIC_LOG_LEVEL, lirGenRes.getLIR(), "%s", getName());
                 }
             }
         } catch (Throwable e) {

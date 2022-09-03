@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.microbenchmarks.lir.trace;
 
-import java.util.List;
-
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Param;
@@ -32,9 +30,8 @@ import org.openjdk.jmh.annotations.Setup;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.alloc.Trace;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.lir.alloc.trace.TraceBuilderPhase;
-import com.oracle.graal.lir.alloc.trace.lsra.IntervalData;
+import com.oracle.graal.lir.alloc.trace.lsra.TraceLinearScan;
 import com.oracle.graal.lir.alloc.trace.lsra.TraceLinearScanLifetimeAnalysisPhase;
 import com.oracle.graal.lir.alloc.trace.lsra.TraceLinearScanLifetimeAnalysisPhase.Analyser;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
@@ -56,27 +53,20 @@ import jdk.vm.ci.code.TargetDescription;
 public class TraceLSRAIntervalBuildingBench extends GraalBenchmark {
 
     private static class DummyTraceAllocatorPhase extends AllocationPhase {
-        private IntervalData intervalData = null;
+        private TraceLinearScan allocator;
 
         @Override
         @SuppressWarnings("try")
-        protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
-                        AllocationContext context) {
+        protected void run(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
             MoveFactory spillMoveFactory = context.spillMoveFactory;
             RegisterAllocationConfig registerAllocationConfig = context.registerAllocationConfig;
-            TraceBuilderResult<B> resultTraces = getTraces(context);
+            TraceBuilderResult resultTraces = context.contextLookup(TraceBuilderResult.class);
 
-            for (Trace<B> trace : resultTraces.getTraces()) {
-                intervalData = new IntervalData(target, lirGenRes, registerAllocationConfig, trace);
-                Analyser a = new TraceLinearScanLifetimeAnalysisPhase.Analyser(intervalData, resultTraces, trace.getBlocks(), lirGenRes.getLIR(), true, spillMoveFactory,
-                                registerAllocationConfig.getRegisterConfig().getCallerSaveRegisters());
+            for (Trace trace : resultTraces.getTraces()) {
+                allocator = new TraceLinearScan(target, lirGenRes, spillMoveFactory, registerAllocationConfig, trace, resultTraces, false, null);
+                Analyser a = new TraceLinearScanLifetimeAnalysisPhase.Analyser(allocator, resultTraces);
                 a.analyze();
             }
-        }
-
-        @SuppressWarnings("unchecked")
-        private static <B extends AbstractBlockBase<B>> TraceBuilderResult<B> getTraces(AllocationContext context) {
-            return context.contextLookup(TraceBuilderResult.class);
         }
     }
 
@@ -110,9 +100,9 @@ public class TraceLSRAIntervalBuildingBench extends GraalBenchmark {
             applyLIRPhase(SSI_CONSTRUCTION_PHASE, allocationContext);
         }
 
-        public IntervalData compile() {
+        public TraceLinearScan compile() {
             applyLIRPhase(LTA_PHASE, allocationContext);
-            return LTA_PHASE.intervalData;
+            return LTA_PHASE.allocator;
         }
 
     }
@@ -125,7 +115,7 @@ public class TraceLSRAIntervalBuildingBench extends GraalBenchmark {
     }
 
     @Benchmark
-    public IntervalData buildIntervals(State s) {
+    public TraceLinearScan buildIntervals(State s) {
         return s.compile();
     }
 }

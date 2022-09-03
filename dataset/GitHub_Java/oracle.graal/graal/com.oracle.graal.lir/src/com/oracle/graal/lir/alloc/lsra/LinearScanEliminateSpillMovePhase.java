@@ -22,25 +22,42 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.lir.LIRValueUtil.*;
+import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
+import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
+import static com.oracle.graal.lir.LIRValueUtil.isVariable;
+import static com.oracle.graal.lir.phases.LIRPhase.Options.LIROptimization;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import java.util.*;
+import java.util.List;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.*;
-import com.oracle.graal.lir.alloc.lsra.Interval.*;
-import com.oracle.graal.lir.alloc.lsra.LinearScan.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.*;
-import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Indent;
+import com.oracle.graal.lir.LIRInsertionBuffer;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.StandardOp.LoadConstantOp;
+import com.oracle.graal.lir.StandardOp.MoveOp;
+import com.oracle.graal.lir.StandardOp.ValueMoveOp;
+import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
+import com.oracle.graal.lir.alloc.lsra.LinearScan.IntervalPredicate;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.phases.AllocationPhase;
+import com.oracle.graal.options.NestedBooleanOptionValue;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionType;
+import com.oracle.graal.options.OptionValue;
 
-class LinearScanEliminateSpillMovePhase extends AllocationPhase {
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.AllocatableValue;
+
+public class LinearScanEliminateSpillMovePhase extends AllocationPhase {
+
+    public static class Options {
+        // @formatter:off
+        @Option(help = "Enable spill move elimination.", type = OptionType.Debug)
+        public static final OptionValue<Boolean> LIROptLSRAEliminateSpillMoves = new NestedBooleanOptionValue(LIROptimization, true);
+        // @formatter:on
+    }
 
     private static final IntervalPredicate mustStoreAtDefinition = new LinearScan.IntervalPredicate() {
 
@@ -52,17 +69,13 @@ class LinearScanEliminateSpillMovePhase extends AllocationPhase {
 
     protected final LinearScan allocator;
 
-    LinearScanEliminateSpillMovePhase(LinearScan allocator) {
+    protected LinearScanEliminateSpillMovePhase(LinearScan allocator) {
         this.allocator = allocator;
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory) {
-        beforeSpillMoveElimination();
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
         eliminateSpillMoves();
-    }
-
-    protected void beforeSpillMoveElimination() {
     }
 
     /**
@@ -75,6 +88,7 @@ class LinearScanEliminateSpillMovePhase extends AllocationPhase {
     }
 
     // called once before assignment of register numbers
+    @SuppressWarnings("try")
     void eliminateSpillMoves() {
         try (Indent indent = Debug.logAndIndent("Eliminating unnecessary spill moves")) {
 
@@ -89,9 +103,9 @@ class LinearScanEliminateSpillMovePhase extends AllocationPhase {
             }
 
             LIRInsertionBuffer insertionBuffer = new LIRInsertionBuffer();
-            for (AbstractBlockBase<?> block : allocator.sortedBlocks) {
+            for (AbstractBlockBase<?> block : allocator.sortedBlocks()) {
                 try (Indent indent1 = Debug.logAndIndent("Handle %s", block)) {
-                    List<LIRInstruction> instructions = allocator.ir.getLIRforBlock(block);
+                    List<LIRInstruction> instructions = allocator.getLIR().getLIRforBlock(block);
                     int numInst = instructions.size();
 
                     // iterate all instructions of the block.
@@ -106,14 +120,20 @@ class LinearScanEliminateSpillMovePhase extends AllocationPhase {
                              * be correct. Only moves that have been inserted by LinearScan can be
                              * removed.
                              */
-                            if (canEliminateSpillMove(block, move)) {
+                            if (Options.LIROptLSRAEliminateSpillMoves.getValue() && canEliminateSpillMove(block, move)) {
                                 /*
                                  * Move target is a stack slot that is always correct, so eliminate
                                  * instruction.
                                  */
                                 if (Debug.isLogEnabled()) {
-                                    Debug.log("eliminating move from interval %d (%s) to %d (%s) in block %s", allocator.operandNumber(move.getInput()), move.getInput(),
-                                                    allocator.operandNumber(move.getResult()), move.getResult(), block);
+                                    if (move instanceof ValueMoveOp) {
+                                        ValueMoveOp vmove = (ValueMoveOp) move;
+                                        Debug.log("eliminating move from interval %d (%s) to %d (%s) in block %s", allocator.operandNumber(vmove.getInput()), vmove.getInput(),
+                                                        allocator.operandNumber(vmove.getResult()), vmove.getResult(), block);
+                                    } else {
+                                        LoadConstantOp load = (LoadConstantOp) move;
+                                        Debug.log("eliminating constant load from %s to %d (%s) in block %s", load.getConstant(), allocator.operandNumber(load.getResult()), load.getResult(), block);
+                                    }
                                 }
 
                                 // null-instructions are deleted by assignRegNum

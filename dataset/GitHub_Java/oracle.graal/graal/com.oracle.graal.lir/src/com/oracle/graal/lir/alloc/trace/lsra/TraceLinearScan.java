@@ -31,6 +31,7 @@ import static jdk.vm.ci.code.ValueUtil.isIllegal;
 import static jdk.vm.ci.code.ValueUtil.isLegal;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
@@ -109,7 +110,7 @@ public final class TraceLinearScan implements IntervalDumper {
     /**
      * List of blocks in linear-scan order. This is only correct as long as the CFG does not change.
      */
-    private final AbstractBlockBase<?>[] sortedBlocks;
+    private final ArrayList<? extends AbstractBlockBase<?>> sortedBlocks;
 
     /**
      * Intervals sorted by {@link TraceInterval#from()}.
@@ -283,11 +284,11 @@ public final class TraceLinearScan implements IntervalDumper {
 
     // access to block list (sorted in linear scan order)
     public int blockCount() {
-        return sortedBlocks().length;
+        return sortedBlocks.size();
     }
 
     public AbstractBlockBase<?> blockAt(int index) {
-        return sortedBlocks()[index];
+        return sortedBlocks.get(index);
     }
 
     int numLoops() {
@@ -758,7 +759,7 @@ public final class TraceLinearScan implements IntervalDumper {
             otherIntervals.addRange(Integer.MAX_VALUE - 2, Integer.MAX_VALUE - 1);
             TraceIntervalWalker iw = new TraceIntervalWalker(this, fixedInts, otherIntervals);
 
-            for (AbstractBlockBase<?> block : sortedBlocks()) {
+            for (AbstractBlockBase<?> block : sortedBlocks) {
                 List<LIRInstruction> instructions = getLIR().getLIRforBlock(block);
 
                 for (int j = 0; j < instructions.size(); j++) {
@@ -806,7 +807,7 @@ public final class TraceLinearScan implements IntervalDumper {
         return frameMapBuilder;
     }
 
-    public AbstractBlockBase<?>[] sortedBlocks() {
+    public ArrayList<? extends AbstractBlockBase<?>> sortedBlocks() {
         return sortedBlocks;
     }
 
@@ -1054,7 +1055,8 @@ public final class TraceLinearScan implements IntervalDumper {
                     }
 
                     try (Indent indent2 = Debug.logAndIndent("Basic Blocks")) {
-                        for (AbstractBlockBase<?> block : sortedBlocks) {
+                        for (int i = 0; i < sortedBlocks.size(); i++) {
+                            AbstractBlockBase<?> block = sortedBlocks.get(i);
                             Debug.log("B%d [%d, %d, %s] ", block.getId(), getFirstLirInstructionId(block), getLastLirInstructionId(block), block.getLoop());
                         }
                     }

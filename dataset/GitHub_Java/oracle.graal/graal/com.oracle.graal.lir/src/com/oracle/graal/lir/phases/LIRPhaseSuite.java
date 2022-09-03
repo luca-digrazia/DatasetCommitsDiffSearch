@@ -22,14 +22,18 @@
  */
 package com.oracle.graal.lir.phases;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.ListIterator;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
 
-public abstract class LIRPhaseSuite<C> extends LIRPhase<C> {
-    private final List<LIRPhase<C>> phases;
+import jdk.vm.ci.code.TargetDescription;
+
+public class LIRPhaseSuite<C> extends LIRPhase<C> {
+    private List<LIRPhase<C>> phases;
+    private boolean immutable;
 
     public LIRPhaseSuite() {
         phases = new ArrayList<>();
@@ -58,6 +62,17 @@ public abstract class LIRPhaseSuite<C> extends LIRPhase<C> {
         }
     }
 
+    public final <T extends LIRPhase<C>> T findPhaseInstance(Class<T> phaseClass) {
+        ListIterator<LIRPhase<C>> it = phases.listIterator();
+        while (it.hasNext()) {
+            LIRPhase<C> phase = it.next();
+            if (phaseClass.isInstance(phase)) {
+                return phaseClass.cast(phase);
+            }
+        }
+        return null;
+    }
+
     public static <C> boolean findNextPhase(ListIterator<LIRPhase<C>> it, Class<? extends LIRPhase<C>> phaseClass) {
         while (it.hasNext()) {
             LIRPhase<C> phase = it.next();
@@ -69,10 +84,26 @@ public abstract class LIRPhaseSuite<C> extends LIRPhase<C> {
     }
 
     @Override
-    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, C context) {
+    protected final void run(TargetDescription target, LIRGenerationResult lirGenRes, C context) {
         for (LIRPhase<C> phase : phases) {
-            phase.apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
+            phase.apply(target, lirGenRes, context);
         }
     }
 
+    public LIRPhaseSuite<C> copy() {
+        LIRPhaseSuite<C> suite = new LIRPhaseSuite<>();
+        suite.phases.addAll(phases);
+        return suite;
+    }
+
+    public boolean isImmutable() {
+        return immutable;
+    }
+
+    public synchronized void setImmutable() {
+        if (!immutable) {
+            phases = Collections.unmodifiableList(phases);
+            immutable = true;
+        }
+    }
 }

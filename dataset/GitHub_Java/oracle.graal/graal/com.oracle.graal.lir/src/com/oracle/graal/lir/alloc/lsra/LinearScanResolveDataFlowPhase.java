@@ -53,7 +53,6 @@ public class LinearScanResolveDataFlowPhase extends AllocationPhase {
     @Override
     protected void run(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
         resolveDataFlow();
-        allocator.printIntervals("After resolve data flow");
     }
 
     protected void resolveCollectMappings(AbstractBlockBase<?> fromBlock, AbstractBlockBase<?> toBlock, AbstractBlockBase<?> midBlock, MoveResolver moveResolver) {

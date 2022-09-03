@@ -72,7 +72,7 @@ public final class TraceGlobalMoveResolutionPhase extends LIRPhase<TraceAllocati
         /* Resolve trace global data-flow mismatch. */
         TraceGlobalMoveResolver moveResolver = new TraceGlobalMoveResolver(lirGenRes, spillMoveFactory, arch);
         PhiValueVisitor visitor = (Value phiIn, Value phiOut) -> {
-            if (!isIllegal(phiIn)) {
+            if (!isIllegal(phiIn) && !TraceGlobalMoveResolver.isMoveToSelf(phiOut, phiIn)) {
                 addMapping(moveResolver, phiOut, phiIn);
             }
         };
@@ -82,8 +82,8 @@ public final class TraceGlobalMoveResolutionPhase extends LIRPhase<TraceAllocati
                 for (AbstractBlockBase<?> fromBlock : trace.getBlocks()) {
                     for (AbstractBlockBase<?> toBlock : fromBlock.getSuccessors()) {
                         if (resultTraces.getTraceForBlock(fromBlock) != resultTraces.getTraceForBlock(toBlock)) {
-                            try (Indent indent0 = Debug.logAndIndent("Handle trace edge from %s (Trace%d) to %s (Trace%d)", fromBlock, resultTraces.getTraceForBlock(fromBlock).getId(), toBlock,
-                                            resultTraces.getTraceForBlock(toBlock).getId())) {
+                            try (Indent indent0 = Debug.logAndIndent("Handle trace edge from %s (Trace%d) to %s (Trace%d)", fromBlock, resultTraces.getTraceForBlock(fromBlock), toBlock,
+                                            resultTraces.getTraceForBlock(toBlock))) {
 
                                 final List<LIRInstruction> instructions;
                                 final int insertIdx;

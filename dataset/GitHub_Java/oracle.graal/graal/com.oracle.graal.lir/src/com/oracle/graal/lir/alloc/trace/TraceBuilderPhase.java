@@ -59,8 +59,8 @@ public class TraceBuilderPhase extends AllocationPhase {
 
     @Override
     protected void run(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
-        AbstractBlockBase<?>[] linearScanOrder = lirGenRes.getLIR().linearScanOrder();
-        AbstractBlockBase<?> startBlock = linearScanOrder[0];
+        List<? extends AbstractBlockBase<?>> linearScanOrder = lirGenRes.getLIR().linearScanOrder();
+        AbstractBlockBase<?> startBlock = linearScanOrder.get(0);
         LIR lir = lirGenRes.getLIR();
         assert startBlock.equals(lir.getControlFlowGraph().getStartBlock());
 
@@ -78,13 +78,13 @@ public class TraceBuilderPhase extends AllocationPhase {
         context.contextAdd(traceBuilderResult);
     }
 
-    private static TraceBuilderResult getTraceBuilderResult(LIR lir, AbstractBlockBase<?> startBlock, AbstractBlockBase<?>[] linearScanOrder) {
+    private static TraceBuilderResult getTraceBuilderResult(LIR lir, AbstractBlockBase<?> startBlock, List<? extends AbstractBlockBase<?>> blocks) {
         TraceBuilderResult.TrivialTracePredicate pred = getTrivialTracePredicate(lir);
 
         if (Options.TraceRAbiDirectionalTraceBuilder.getValue()) {
-            return BiDirectionalTraceBuilder.computeTraces(startBlock, linearScanOrder, pred);
+            return BiDirectionalTraceBuilder.computeTraces(startBlock, blocks, pred);
         }
-        return UniDirectionalTraceBuilder.computeTraces(startBlock, linearScanOrder, pred);
+        return UniDirectionalTraceBuilder.computeTraces(startBlock, blocks, pred);
     }
 
     public static TraceBuilderResult.TrivialTracePredicate getTrivialTracePredicate(LIR lir) {

@@ -50,6 +50,8 @@ public abstract class LIRPhase<C> {
         // @formatter:on
     }
 
+    private CharSequence name;
+
     /**
      * Records time spent within {@link #apply}.
      */
@@ -89,12 +91,20 @@ public abstract class LIRPhase<C> {
         static final Pattern NAME_PATTERN = Pattern.compile("[A-Z][A-Za-z0-9]+");
     }
 
-    private static boolean checkName(CharSequence name) {
+    private static boolean checkName(String name) {
         assert name == null || NamePatternHolder.NAME_PATTERN.matcher(name).matches() : "illegal phase name: " + name;
         return true;
     }
 
     public LIRPhase() {
+        LIRPhaseStatistics statistics = statisticsClassValue.get(getClass());
+        timer = statistics.timer;
+        memUseTracker = statistics.memUseTracker;
+    }
+
+    protected LIRPhase(String name) {
+        assert checkName(name);
+        this.name = name;
         LIRPhaseStatistics statistics = statisticsClassValue.get(getClass());
         timer = statistics.timer;
         memUseTracker = statistics.memUseTracker;
@@ -123,11 +133,6 @@ public abstract class LIRPhase<C> {
     public static CharSequence createName(Class<?> clazz) {
         String className = clazz.getName();
         String s = className.substring(className.lastIndexOf(".") + 1); // strip the package name
-        int innerClassPos = s.indexOf('$');
-        if (innerClassPos > 0) {
-            /* Remove inner class name. */
-            s = s.substring(0, innerClassPos);
-        }
         if (s.endsWith("Phase")) {
             s = s.substring(0, s.length() - "Phase".length());
         }
@@ -139,8 +144,9 @@ public abstract class LIRPhase<C> {
     }
 
     public final CharSequence getName() {
-        CharSequence name = createName();
-        assert checkName(name);
+        if (name == null) {
+            name = createName();
+        }
         return name;
     }
 }

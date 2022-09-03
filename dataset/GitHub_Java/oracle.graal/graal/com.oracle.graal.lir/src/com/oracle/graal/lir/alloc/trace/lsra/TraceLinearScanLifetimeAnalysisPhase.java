@@ -95,7 +95,7 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
             this.traceBuilderResult = traceBuilderResult;
         }
 
-        private AbstractBlockBase<?>[] sortedBlocks() {
+        private List<? extends AbstractBlockBase<?>> sortedBlocks() {
             return allocator.sortedBlocks();
         }
 
@@ -480,9 +480,10 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                 int instructionIndex = numInstructions;
 
                 // iterate all blocks in reverse order
-                AbstractBlockBase<?>[] blocks = sortedBlocks();
-                for (int i = blocks.length - 1; i >= 0; i--) {
-                    final AbstractBlockBase<?> block = blocks[i];
+                List<? extends AbstractBlockBase<?>> blocks = sortedBlocks();
+                ListIterator<? extends AbstractBlockBase<?>> blockIt = blocks.listIterator(blocks.size());
+                while (blockIt.hasPrevious()) {
+                    final AbstractBlockBase<?> block = blockIt.previous();
 
                     try (Indent indent2 = Debug.logAndIndent("handle block %d", block.getId())) {
 

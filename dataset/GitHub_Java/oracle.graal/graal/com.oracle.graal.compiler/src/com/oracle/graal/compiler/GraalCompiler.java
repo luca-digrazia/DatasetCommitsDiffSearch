@@ -32,7 +32,6 @@ import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.LIRGenerationPhase.LIRGenerationContext;
 import com.oracle.graal.compiler.common.alloc.ComputeBlockOrder;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.target.Backend;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
@@ -273,8 +272,8 @@ public class GraalCompiler {
             assert startBlock.getPredecessorCount() == 0;
 
             LIR lir = null;
-            AbstractBlockBase<?>[] codeEmittingOrder = null;
-            AbstractBlockBase<?>[] linearScanOrder = null;
+            List<Block> codeEmittingOrder = null;
+            List<Block> linearScanOrder = null;
             try (Scope s = Debug.scope("ComputeLinearScanOrder", lir)) {
                 codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock);
                 linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock);

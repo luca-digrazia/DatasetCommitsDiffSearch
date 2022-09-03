@@ -22,18 +22,27 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import java.util.*;
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+import com.oracle.graal.lir.alloc.lsra.ssa.SSALinearScan;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
+import com.oracle.graal.lir.phases.AllocationPhase;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.phases.*;
+import jdk.vm.ci.code.TargetDescription;
 
-public final class LinearScanPhase extends LowLevelMidTierPhase {
+public final class LinearScanPhase extends AllocationPhase {
 
-    @Override
-    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
-        new LinearScan(target, lirGenRes).allocate();
+    private boolean neverSpillConstants;
+
+    public void setNeverSpillConstants(boolean neverSpillConstants) {
+        this.neverSpillConstants = neverSpillConstants;
     }
 
+    @Override
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
+        MoveFactory spillMoveFactory = context.spillMoveFactory;
+        RegisterAllocationConfig registerAllocationConfig = context.registerAllocationConfig;
+        final LinearScan allocator = new SSALinearScan(target, lirGenRes, spillMoveFactory, registerAllocationConfig, lirGenRes.getLIR().linearScanOrder(), neverSpillConstants);
+        allocator.allocate(target, lirGenRes, spillMoveFactory, registerAllocationConfig);
+    }
 }

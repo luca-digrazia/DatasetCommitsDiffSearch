@@ -22,17 +22,98 @@
  */
 package com.oracle.graal.lir.ssi;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
 
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
-import com.oracle.graal.lir.LIRInstruction.*;
-import com.oracle.graal.lir.StandardOp.*;
-import com.oracle.graal.lir.ssa.SSAUtil.*;
+import com.oracle.graal.lir.StandardOp.LabelOp;
+import com.oracle.graal.lir.ValueConsumer;
+import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
 
+import jdk.vm.ci.meta.Value;
+
+/**
+ * Utilities for working with Static-Single-Information LIR form.
+ *
+ * <h2>Representation of &phi; and &sigma;</h2>
+ *
+ * There are no explicit &phi;/&sigma; {@link LIRInstruction}s. Instead, they are implemented as
+ * parallel copy that spans across a control-flow edge.
+ *
+ * The variables introduced by &phi;/&sigma; of a specific {@linkplain AbstractBlockBase block} are
+ * {@linkplain LabelOp#setIncomingValues attached} to the {@link LabelOp} of the block. The outgoing
+ * values from the predecessor are {@linkplain BlockEndOp#setOutgoingValues input} to the
+ * {@link BlockEndOp} of the predecessor.
+ *
+ * When it does not matter whether we are talking about a &phi; or a &sigma; we call the values that
+ * are defined by a label {@linkplain LabelOp#setIncomingValues incoming} and the values that are
+ * input to the {@link BlockEndOp} of the predecessor {@linkplain BlockEndOp#setOutgoingValues
+ * outgoing}.
+ *
+ * <h2>Implementation Details</h2>
+ *
+ * For our purposes we want a <em>maximal</em> SSI form, which means that all values that are alive
+ * across basic block boundaries are gated with a &phi;/&sigma;. In other words the outgoing and
+ * incoming values of the {@link BlockEndOp} and {@link LabelOp} are equivalent to the live-out and
+ * live-in set of the corresponding block.
+ *
+ * As a side effect variables are local to a block. We reuse the name of the predecessor if they
+ * represent the same value (i.e. not a real &phi; definition).
+ *
+ * <h2>Examples</h2>
+ *
+ * <h3>Merge (&phi;)</h3>
+ *
+ * <pre>
+ * B0 -> B1
+ *   ...
+ *   v0|i = ...
+ *   JUMP ~[v0|i, int[0|0x0]] destination: B0 -> B1
+ * ________________________________________________
+ *
+ * B2 -> B1
+ *   ...
+ *   v1|i = ...
+ *   v2|i = ...
+ *   JUMP ~[v1|i, v2|i] destination: B2 -> B1
+ * ________________________________________________
+ *
+ * B1 <- B0,B2
+ *   [v3|i, v4|i] = LABEL
+ *   ...
+ * </pre>
+ *
+ * Note: the outgoing values of a block can contain constants (see <code>B0</code>).
+ *
+ * <h3>Split (&sigma;)</h3>
+ *
+ * <pre>
+ * B0 -> B1,B2
+ *   ...
+ *   v0|i = ...
+ *   v1|i = ...
+ *   v2|i = ...
+ *   TEST (x: v1|i, y: v1|i)
+ *   BRANCH ~[v2|i, v0|j] condition: <, true: B1 false: B2
+ * ________________________________________________
+ *
+ * B1 <- B0
+ *   [-, v0|j] = LABEL
+ *   ...
+ * ________________________________________________
+ *
+ * B2 <- B0
+ *   [v2|i, v0|j] = LABEL
+ *   ...
+ * </pre>
+ *
+ * Note: If a incoming value is not needed in a branch it is {@link Value#ILLEGAL ignored} (see
+ * <code>B1<code>).
+ */
 public final class SSIUtil {
 
     public static BlockEndOp outgoing(LIR lir, AbstractBlockBase<?> block) {
@@ -67,16 +148,18 @@ public final class SSIUtil {
      * the incoming value to the merge block.
      */
     public static void forEachValuePair(LIR lir, AbstractBlockBase<?> toBlock, AbstractBlockBase<?> fromBlock, PhiValueVisitor visitor) {
-        assert toBlock.getPredecessors().contains(fromBlock) : String.format("%s not in predecessor list: %s", fromBlock, toBlock.getPredecessors());
+        assert Arrays.asList(toBlock.getPredecessors()).contains(fromBlock) : String.format("%s not in predecessor list: %s", fromBlock, Arrays.toString(toBlock.getPredecessors()));
         assert fromBlock.getSuccessorCount() == 1 || toBlock.getPredecessorCount() == 1 : String.format("Critical Edge? %s has %d successors and %s has %d predecessors", fromBlock,
-                        fromBlock.getSuccessors(), toBlock, toBlock.getPredecessorCount());
-        assert fromBlock.getSuccessors().contains(toBlock) : String.format("Predecessor block %s has wrong successor: %s, should contain: %s", fromBlock, fromBlock.getSuccessors(), toBlock);
+                        fromBlock.getSuccessorCount(), toBlock, toBlock.getPredecessorCount());
+        assert Arrays.asList(fromBlock.getSuccessors()).contains(toBlock) : String.format("Predecessor block %s has wrong successor: %s, should contain: %s", fromBlock,
+                        Arrays.toString(fromBlock.getSuccessors()), toBlock);
 
         BlockEndOp blockEnd = outgoing(lir, fromBlock);
         LabelOp label = incoming(lir, toBlock);
 
         assert label.getIncomingSize() == blockEnd.getOutgoingSize() : String.format("In/Out size mismatch: in=%d vs. out=%d, blocks %s vs. %s", label.getIncomingSize(), blockEnd.getOutgoingSize(),
                         toBlock, fromBlock);
+        assert label.getPhiSize() == blockEnd.getPhiSize() : String.format("Phi In/Out size mismatch: in=%d vs. out=%d", label.getPhiSize(), blockEnd.getPhiSize());
 
         for (int i = 0; i < label.getIncomingSize(); i++) {
             visitor.visit(label.getIncomingValue(i), blockEnd.getOutgoingValue(i));
