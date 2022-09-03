@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.core.jdk;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -70,36 +69,30 @@ public abstract class SystemPropertiesSupport {
     /** System properties that are lazily computed at run time on first access. */
     private final Map<String, Supplier<String>> lazyRuntimeValues;
 
-    private Properties properties;
-    private final Map<String, String> savedProperties;
-    private final Map<String, String> readOnlySavedProperties;
+    private final Properties properties;
 
     private volatile boolean fullyInitialized;
 
     @Platforms(Platform.HOSTED_ONLY.class)
     protected SystemPropertiesSupport() {
         properties = new Properties();
-        savedProperties = new HashMap<>();
-        readOnlySavedProperties = Collections.unmodifiableMap(savedProperties);
 
         for (String key : HOSTED_PROPERTIES) {
-            String value = System.getProperty(key);
-            properties.put(key, value);
-            savedProperties.put(key, value);
+            properties.put(key, System.getProperty(key));
         }
 
-        initializeProperty("java.vm.name", "Substrate VM");
-        initializeProperty("java.vm.vendor", "Oracle Corporation");
-        initializeProperty("java.vm.version", "Substrate VM " + System.getProperty("java.vm.version"));
-        initializeProperty("java.vendor", "Oracle Corporation");
-        initializeProperty("java.vendor.url", "https://www.graalvm.org/");
+        properties.put("java.vm.name", "Substrate VM");
+        properties.put("java.vm.vendor", "Oracle Corporation");
+        properties.put("java.vm.version", "Substrate VM " + System.getProperty("java.vm.version"));
+        properties.put("java.vendor", "Oracle Corporation");
+        properties.put("java.vendor.url", "https://www.graalvm.org/");
 
-        initializeProperty("java.class.path", "");
-        initializeProperty("java.endorsed.dirs", "");
-        initializeProperty("java.ext.dirs", "");
-        initializeProperty("java.library.path", "");
+        properties.put("java.class.path", "");
+        properties.put("java.endorsed.dirs", "");
+        properties.put("java.ext.dirs", "");
+        properties.put("java.library.path", "");
 
-        initializeProperty(ImageInfo.PROPERTY_IMAGE_CODE_KEY, ImageInfo.PROPERTY_IMAGE_CODE_VALUE_RUNTIME);
+        properties.put(ImageInfo.PROPERTY_IMAGE_CODE_KEY, ImageInfo.PROPERTY_IMAGE_CODE_VALUE_RUNTIME);
 
         lazyRuntimeValues = new HashMap<>();
         lazyRuntimeValues.put("user.name", this::userNameValue);
@@ -110,55 +103,24 @@ public abstract class SystemPropertiesSupport {
 
     }
 
-    private void ensureFullyInitialized() {
+    public Properties getProperties() {
+        /*
+         * We do not know what the user is going to do with the returned Properties object, so we
+         * need to do a full initialization.
+         */
         if (!fullyInitialized) {
             for (String key : lazyRuntimeValues.keySet()) {
                 initializeLazyValue(key);
             }
             fullyInitialized = true;
         }
-    }
 
-    public Map<String, String> getSavedProperties() {
-        ensureFullyInitialized();
-        return readOnlySavedProperties;
-    }
-
-    public Properties getProperties() {
-        /*
-         * We do not know what the user is going to do with the returned Properties object, so we
-         * need to do a full initialization.
-         */
-        ensureFullyInitialized();
         return properties;
     }
 
     protected String getProperty(String key) {
         initializeLazyValue(key);
         return properties.getProperty(key);
-    }
-
-    public void setProperties(Properties props) {
-        // Flush lazy values into savedProperties
-        ensureFullyInitialized();
-        if (props == null) {
-            Properties newProps = new Properties();
-            for (Map.Entry<String, String> e : savedProperties.entrySet()) {
-                newProps.setProperty(e.getKey(), e.getValue());
-            }
-            properties = newProps;
-        } else {
-            properties = props;
-        }
-    }
-
-    /**
-     * Initializes a property at startup from external input (e.g., command line arguments). This
-     * must only be called while the runtime is single threaded.
-     */
-    public void initializeProperty(String key, String value) {
-        savedProperties.put(key, value);
-        properties.setProperty(key, value);
     }
 
     public String setProperty(String key, String value) {
@@ -178,17 +140,10 @@ public abstract class SystemPropertiesSupport {
     private void initializeLazyValue(String key) {
         if (!fullyInitialized && lazyRuntimeValues.containsKey(key) && properties.get(key) == null) {
             /*
-             * Hashtable.putIfAbsent has the correct synchronization to guard against concurrent
-             * manual updates of the same property key.
+             * putIfAbsent has the correct synchronization to guard against concurrent manual
+             * updates of the same property key.
              */
-            String value = lazyRuntimeValues.get(key).get();
-            if (properties.putIfAbsent(key, value) == null) {
-                // Checkstyle: stop
-                synchronized (savedProperties) {
-                    savedProperties.put(key, value);
-                }
-                // Checkstyle: resume
-            }
+            properties.putIfAbsent(key, lazyRuntimeValues.get(key).get());
         }
     }
 
