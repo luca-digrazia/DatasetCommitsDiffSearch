@@ -213,7 +213,7 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
     }
 
     private void registerCheckcastArraycopyDescriptor(boolean uninit, long routine) {
-        String name = "Object" + (uninit ? "Uninit" : "") + "CheckcastArraycopy";
+        String name = "Object" + (uninit ? "Uninit" : "") + "Checkcast";
         // Input:
         // c_rarg0 - source array address
         // c_rarg1 - destination array address
