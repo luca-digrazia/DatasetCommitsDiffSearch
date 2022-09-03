@@ -39,7 +39,6 @@ import com.oracle.truffle.object.Locations.DeclaredLocation;
 import com.oracle.truffle.object.Locations.DualLocation;
 import com.oracle.truffle.object.Locations.ValueLocation;
 import com.oracle.truffle.object.Transition.AddPropertyTransition;
-import com.oracle.truffle.object.Transition.DirectReplacePropertyTransition;
 import com.oracle.truffle.object.Transition.ObjectTypeTransition;
 import com.oracle.truffle.object.Transition.PropertyTransition;
 import com.oracle.truffle.object.Transition.RemovePropertyTransition;
@@ -312,7 +311,7 @@ public abstract class ShapeImpl extends Shape {
         return propertyMap;
     }
 
-    protected final ShapeImpl queryTransition(Transition transition) {
+    private ShapeImpl queryTransition(Transition transition) {
         ShapeImpl cachedShape = this.getTransitionMapForRead().get(transition);
         if (cachedShape != null) { // Shape already exists?
             shapeCacheHitCount.inc();
@@ -675,8 +674,6 @@ public abstract class ShapeImpl extends Shape {
             return changeType(((ObjectTypeTransition) transition).getObjectType());
         } else if (transition instanceof ReservePrimitiveArrayTransition) {
             return reservePrimitiveExtensionArray();
-        } else if (transition instanceof DirectReplacePropertyTransition) {
-            return replaceProperty(((DirectReplacePropertyTransition) transition).getPropertyBefore(), ((DirectReplacePropertyTransition) transition).getPropertyAfter());
         } else {
             throw new UnsupportedOperationException();
         }
@@ -691,10 +688,8 @@ public abstract class ShapeImpl extends Shape {
      * Duplicate shape exchanging existing property with new property.
      */
     @Override
-    public ShapeImpl replaceProperty(Property oldProperty, Property newProperty) {
-        assert oldProperty.getKey().equals(newProperty.getKey());
-
-        Transition replacePropertyTransition = new Transition.IndirectReplacePropertyTransition(oldProperty, newProperty);
+    public final ShapeImpl replaceProperty(Property oldProperty, Property newProperty) {
+        Transition replacePropertyTransition = new Transition.ReplacePropertyTransition(oldProperty, newProperty);
         ShapeImpl cachedShape = queryTransition(replacePropertyTransition);
         if (cachedShape != null) {
             return cachedShape;
