@@ -299,10 +299,6 @@ public class ElementUtils {
         } else if (isObject(to)) {
             return true;
         }
-        if (from.getKind() == TypeKind.NONE || to.getKind() == TypeKind.NONE) {
-            // workaround for eclipse compiler bug: v4.7.3a throws IllegalArgumentException
-            return false;
-        }
         ProcessorContext context = ProcessorContext.getInstance();
         if (!(from instanceof CodeTypeMirror) && !(to instanceof CodeTypeMirror)) {
             return context.getEnvironment().getTypeUtils().isAssignable(context.reloadType(from), context.reloadType(to));
@@ -681,19 +677,6 @@ public class ElementUtils {
         return null;
     }
 
-    public static boolean isDeprecated(TypeElement baseType) {
-        DeclaredType deprecated = ProcessorContext.getInstance().getDeclaredType(Deprecated.class);
-        List<TypeElement> superTypes = getSuperTypes(baseType);
-        superTypes.add(baseType);
-        for (TypeElement type : superTypes) {
-            PackageElement pack = ElementUtils.findPackageElement(type);
-            if ((pack != null && ElementUtils.findAnnotationMirror(pack.getAnnotationMirrors(), deprecated) != null)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public static List<TypeElement> getSuperTypes(TypeElement element) {
         List<TypeElement> types = new ArrayList<>();
         List<TypeElement> superTypes = null;
@@ -805,7 +788,7 @@ public class ElementUtils {
         return resolveAnnotationValue(expectedType, getAnnotationValue(mirror, name));
     }
 
-    public static <T> T resolveAnnotationValue(Class<T> expectedType, AnnotationValue value) {
+    private static <T> T resolveAnnotationValue(Class<T> expectedType, AnnotationValue value) {
         if (value == null) {
             return null;
         }
@@ -1209,30 +1192,23 @@ public class ElementUtils {
         return true;
     }
 
-    public static boolean signatureEquals(ExecutableElement e1, ExecutableElement e2) {
-        if (!e1.getSimpleName().equals(e2.getSimpleName())) {
+    public static boolean executableEquals(ExecutableElement var1, ExecutableElement var2) {
+        if (!var1.getSimpleName().equals(var2.getSimpleName())) {
             return false;
         }
-        if (e1.getParameters().size() != e2.getParameters().size()) {
+        if (var1.getParameters().size() != var2.getParameters().size()) {
             return false;
         }
-        if (!ElementUtils.typeEquals(e1.asType(), e2.asType())) {
+        if (!ElementUtils.typeEquals(var1.asType(), var2.asType())) {
             return false;
         }
-        for (int i = 0; i < e1.getParameters().size(); i++) {
-            if (!typeEquals(e1.getParameters().get(i).asType(), e2.getParameters().get(i).asType())) {
+        if (!ElementUtils.elementEquals(var1.getEnclosingElement(), var2.getEnclosingElement())) {
+            return false;
+        }
+        for (int i = 0; i < var1.getParameters().size(); i++) {
+            if (!typeEquals(var1.getParameters().get(i).asType(), var2.getParameters().get(i).asType())) {
                 return false;
             }
-        }
-        return true;
-    }
-
-    public static boolean executableEquals(ExecutableElement e1, ExecutableElement e2) {
-        if (!signatureEquals(e1, e2)) {
-            return false;
-        }
-        if (!ElementUtils.elementEquals(e1.getEnclosingElement(), e2.getEnclosingElement())) {
-            return false;
         }
         return true;
     }
