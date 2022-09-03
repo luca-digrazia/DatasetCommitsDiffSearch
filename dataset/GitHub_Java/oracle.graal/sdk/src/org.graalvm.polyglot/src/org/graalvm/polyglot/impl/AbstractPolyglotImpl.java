@@ -232,7 +232,7 @@ public abstract class AbstractPolyglotImpl {
 
         // Runtime
 
-        public abstract void ensureClosed(boolean ignoreCloseFailure);
+        public abstract void ensureClosed();
 
         public abstract Map<String, Instrument> getInstruments();
 

@@ -62,14 +62,13 @@ public class SLSharedCodeSeparatedEnvTest {
     private ByteArrayOutputStream osRuntime;
     private ByteArrayOutputStream os1;
     private ByteArrayOutputStream os2;
-    private Engine engine;
     private Context e1;
     private Context e2;
 
     @Before
     public void initializeEngines() {
         osRuntime = new ByteArrayOutputStream();
-        engine = Engine.newBuilder().setOut(osRuntime).setErr(osRuntime).build();
+        Engine engine = Engine.newBuilder().setOut(osRuntime).setErr(osRuntime).build();
 
         os1 = new ByteArrayOutputStream();
         os2 = new ByteArrayOutputStream();
@@ -85,7 +84,9 @@ public class SLSharedCodeSeparatedEnvTest {
 
     @After
     public void closeEngines() {
-        engine.close();
+        e1.close();
+        e2.close();
+        e2.getEngine().close();
     }
 
     @Test
@@ -125,7 +126,9 @@ public class SLSharedCodeSeparatedEnvTest {
         assertEquals("Ahoj1\n", os1.toString("UTF-8"));
         assertEquals("Ahoj2\n", os2.toString("UTF-8"));
 
-        engine.close();
+        e1.close();
+        e2.close();
+        e1.getEngine().close();
 
         assertEquals("Output of both contexts and instruments is capturable",
                         "initializingOutputCapture\n" +

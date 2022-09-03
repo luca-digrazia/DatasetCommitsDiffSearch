@@ -51,7 +51,6 @@ import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
@@ -102,7 +101,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     final OptionValuesImpl engineOptionValues;
     final OptionValuesImpl compilerOptionValues;
     final ClassLoader contextClassLoader;
-    private final AtomicInteger contextCount = new AtomicInteger(0);
+    private volatile int contextCount = 0;
 
     volatile OptionDescriptors allOptions;
     volatile boolean closed;
@@ -339,11 +338,11 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
 
     void incrementContextCount() {
         assert Thread.holdsLock(this);
-        contextCount.incrementAndGet();
+        contextCount++;
     }
 
     synchronized void decrementContextCount() {
-        contextCount.decrementAndGet();
+        contextCount--;
     }
 
     @Override
@@ -376,11 +375,11 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     }
 
     @Override
-    public void ensureClosed(boolean ignoreContexts) {
+    public void ensureClosed() {
         if (!closed) {
             synchronized (this) {
                 if (!closed) {
-                    if (!ignoreContexts && contextCount.get() > 0) {
+                    if (contextCount > 0) {
                         throw new IllegalStateException(
                                         String.format("There are still %s open contexts in use. All contexts spawned by an engine must be closed before their engine can be closed. ",
                                                         contextCount));
@@ -493,7 +492,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         public void run() {
             for (PolyglotEngineImpl engine : ENGINES.keySet()) {
                 if (engine != null) {
-                    engine.ensureClosed(true);
+                    engine.ensureClosed();
                 }
             }
         }

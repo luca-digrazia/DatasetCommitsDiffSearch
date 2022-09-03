@@ -61,8 +61,6 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractValueImpl;
 // TODO document that the current context class loader is captured when the engine is created.
 public final class Engine implements AutoCloseable {
 
-    public static final String OPTION_COMPILER_TRACE_COMPILATION = "compiler.TraceCompilation";
-
     final AbstractEngineImpl impl;
 
     Engine(AbstractEngineImpl impl) {
@@ -165,17 +163,17 @@ public final class Engine implements AutoCloseable {
     }
 
     /**
-     * Closes this engine and frees up allocated native resources. If there are still open context
-     * instances that were created using this engine and they are currently not beeing executed then
-     * all they will be closed automatically. If an an attempt to close the engine was successful
-     * then consecutive calls to close have no effect.
+     * Closes this engine and frees up allocated native resources. An engine can only be closed if
+     * all its contexts were closed before. If an engine was closed then all its methods will throw
+     * an {@link IllegalStateException} when invoked. Multiple calls to close have no effect.
      *
-     * @throws IllegalStateException if there currently executing open context instances.
+     * @throws IllegalStateException if there are still open context instances. Make sure to
+     *             {@link Context#close() close} them before closing the engine.
      * @since 1.0
      */
     @Override
     public void close() {
-        impl.ensureClosed(false);
+        impl.ensureClosed();
     }
 
     public static Engine create() {
@@ -205,21 +203,18 @@ public final class Engine implements AutoCloseable {
         private Map<String, String> options = new HashMap<>();
         private boolean useSystemProperties = true;
 
-        public Builder setOut(OutputStream out) {
-            Objects.requireNonNull(out);
-            this.out = out;
+        public Builder setOut(OutputStream os) {
+            out = os;
             return this;
         }
 
-        public Builder setErr(OutputStream err) {
-            Objects.requireNonNull(err);
-            this.err = err;
+        public Builder setErr(OutputStream os) {
+            err = os;
             return this;
         }
 
-        public Builder setIn(InputStream in) {
-            Objects.requireNonNull(in);
-            this.in = in;
+        public Builder setIn(InputStream is) {
+            in = is;
             return this;
         }
 
