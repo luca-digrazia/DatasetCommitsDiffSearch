@@ -22,6 +22,8 @@
  */
 package org.graalvm.compiler.replacements;
 
+import static org.graalvm.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
+import static org.graalvm.compiler.nodes.java.ArrayLengthNode.readArrayLength;
 import static jdk.vm.ci.code.MemoryBarriers.JMM_POST_VOLATILE_READ;
 import static jdk.vm.ci.code.MemoryBarriers.JMM_POST_VOLATILE_WRITE;
 import static jdk.vm.ci.code.MemoryBarriers.JMM_PRE_VOLATILE_READ;
@@ -29,9 +31,6 @@ import static jdk.vm.ci.code.MemoryBarriers.JMM_PRE_VOLATILE_WRITE;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.BoundsCheckException;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
-import static org.graalvm.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
-import static org.graalvm.compiler.nodes.java.ArrayLengthNode.readArrayLength;
-import static org.graalvm.compiler.nodes.util.GraphUtil.skipPiWhileNonNull;
 
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -87,13 +86,14 @@ import org.graalvm.compiler.nodes.java.AbstractNewObjectNode;
 import org.graalvm.compiler.nodes.java.AccessIndexedNode;
 import org.graalvm.compiler.nodes.java.ArrayLengthNode;
 import org.graalvm.compiler.nodes.java.AtomicReadAndWriteNode;
+import org.graalvm.compiler.nodes.java.UnsafeCompareAndSwapNode;
 import org.graalvm.compiler.nodes.java.FinalFieldBarrierNode;
 import org.graalvm.compiler.nodes.java.InstanceOfDynamicNode;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
-import org.graalvm.compiler.nodes.java.LogicCompareAndSwapNode;
 import org.graalvm.compiler.nodes.java.LoweredAtomicReadAndWriteNode;
+import org.graalvm.compiler.nodes.java.LogicCompareAndSwapNode;
 import org.graalvm.compiler.nodes.java.MonitorEnterNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
@@ -101,7 +101,6 @@ import org.graalvm.compiler.nodes.java.NewInstanceNode;
 import org.graalvm.compiler.nodes.java.RawMonitorEnterNode;
 import org.graalvm.compiler.nodes.java.StoreFieldNode;
 import org.graalvm.compiler.nodes.java.StoreIndexedNode;
-import org.graalvm.compiler.nodes.java.UnsafeCompareAndSwapNode;
 import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.WriteNode;
@@ -444,24 +443,13 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     protected void lowerArrayLengthNode(ArrayLengthNode arrayLengthNode, LoweringTool tool) {
-        arrayLengthNode.replaceAtUsages(createReadArrayLength(arrayLengthNode.array(), arrayLengthNode, tool));
         StructuredGraph graph = arrayLengthNode.graph();
-        graph.removeFixed(arrayLengthNode);
-    }
+        ValueNode array = arrayLengthNode.array();
 
-    /**
-     * Creates a read node that read the array length and is guarded by a null-check.
-     *
-     * The created node is placed before {@code before} in the CFG.
-     */
-    protected ReadNode createReadArrayLength(ValueNode array, FixedNode before, LoweringTool tool) {
-        StructuredGraph graph = array.graph();
-        ValueNode canonicalArray = skipPiWhileNonNull(array);
-        AddressNode address = createOffsetAddress(graph, canonicalArray, arrayLengthOffset());
-        ReadNode readArrayLength = graph.add(new ReadNode(address, ARRAY_LENGTH_LOCATION, StampFactory.positiveInt(), BarrierType.NONE));
-        readArrayLength.setGuard(createNullCheck(canonicalArray, before, tool));
-        graph.addBeforeFixed(before, readArrayLength);
-        return readArrayLength;
+        AddressNode address = createOffsetAddress(graph, array, arrayLengthOffset());
+        ReadNode arrayLengthRead = graph.add(new ReadNode(address, ARRAY_LENGTH_LOCATION, StampFactory.positiveInt(), BarrierType.NONE));
+        arrayLengthRead.setGuard(createNullCheck(array, arrayLengthNode, tool));
+        graph.replaceFixedWithFixed(arrayLengthNode, arrayLengthRead);
     }
 
     protected void lowerLoadHubNode(LoadHubNode loadHub, LoweringTool tool) {
@@ -943,10 +931,15 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ValueNode array = n.array();
         ValueNode arrayLength = readArrayLength(array, tool.getConstantReflection());
         if (arrayLength == null) {
-            ReadNode readArrayLength = createReadArrayLength(array, n, tool);
+            Stamp stamp = StampFactory.positiveInt();
+            AddressNode address = createOffsetAddress(graph, array, arrayLengthOffset());
+            ReadNode readArrayLength = graph.add(new ReadNode(address, ARRAY_LENGTH_LOCATION, stamp, BarrierType.NONE));
+            graph.addBeforeFixed(n, readArrayLength);
+            GuardingNode nullCheck = createNullCheck(array, readArrayLength, tool);
             if (nullCheckReturn != null) {
-                nullCheckReturn[0] = readArrayLength.getGuard();
+                nullCheckReturn[0] = nullCheck;
             }
+            readArrayLength.setGuard(nullCheck);
             arrayLength = readArrayLength;
         } else {
             arrayLength = arrayLength.isAlive() ? arrayLength : graph.addOrUniqueWithInputs(arrayLength);
