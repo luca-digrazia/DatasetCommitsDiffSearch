@@ -26,10 +26,12 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
+import com.oracle.max.criutils.*;
 
 
 public final class CompilationTask implements Runnable, Comparable<CompilationTask> {
@@ -103,7 +105,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         try {
             final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
             if (printCompilation) {
-                TTY.println(String.format("%-6d Graal %-70s %-45s %-50s ...", id, method.getDeclaringClass().getName(), method.getName(), method.getSignature()));
+                TTY.println(String.format("%-6d Graal %-70s %-45s %-50s ...", id, method.holder().name(), method.name(), method.signature().asString()));
             }
 
             CompilationResult result = null;
@@ -121,7 +123,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
             } finally {
                 filter.remove();
                 if (printCompilation) {
-                    TTY.println(String.format("%-6d Graal %-70s %-45s %-50s | %4dnodes %5dB", id, "", "", "", 0, (result != null ? result.getTargetCodeSize() : -1)));
+                    TTY.println(String.format("%-6d Graal %-70s %-45s %-50s | %4dnodes %5dB", id, "", "", "", 0, (result != null ? result.targetCodeSize() : -1)));
                 }
             }
 
@@ -150,7 +152,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
             @Override
             public void run() {
                 final CodeInfo[] info = Debug.isDumpEnabled() ? new CodeInfo[1] : null;
-                graalRuntime.getRuntime().installMethod(method, -1, tm, info);
+                graalRuntime.getRuntime().installMethod(method, tm, info);
                 if (info != null) {
                     Debug.dump(new Object[] {tm, info[0]}, "After code installation");
                 }

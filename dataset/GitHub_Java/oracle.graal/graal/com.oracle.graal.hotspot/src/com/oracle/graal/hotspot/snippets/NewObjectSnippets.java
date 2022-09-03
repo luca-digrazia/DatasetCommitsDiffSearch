@@ -35,6 +35,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
@@ -45,8 +46,8 @@ import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
 import com.oracle.graal.snippets.Snippet.Fold;
 import com.oracle.graal.snippets.Snippet.Parameter;
-import com.oracle.graal.snippets.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.snippets.SnippetTemplate.Arguments;
+import com.oracle.graal.snippets.SnippetTemplate.Cache;
 import com.oracle.graal.snippets.SnippetTemplate.Key;
 
 /**
@@ -142,7 +143,7 @@ public class NewObjectSnippets implements SnippetsInterface {
             DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.RuntimeConstraint);
         }
         int size = getArraySize(length, alignment, headerSize, log2ElementSize);
-        Word memory = TLABAllocateNode.allocateVariableSize(size, wordKind);
+        Word memory = TLABAllocateNode.allocateVariableSize(wordKind, size);
         return InitializeArrayNode.initialize(memory, length, size, type);
     }
 
@@ -207,25 +208,32 @@ public class NewObjectSnippets implements SnippetsInterface {
         }
     }
 
-    public static class Templates extends AbstractTemplates<NewObjectSnippets> {
+    public static class Templates {
 
+        private final Cache cache;
         private final ResolvedJavaMethod allocate;
         private final ResolvedJavaMethod initializeObject;
         private final ResolvedJavaMethod initializeObjectArray;
         private final ResolvedJavaMethod initializePrimitiveArray;
         private final ResolvedJavaMethod allocateArrayAndInitialize;
         private final TargetDescription target;
+        private final CodeCacheProvider runtime;
         private final boolean useTLAB;
 
         public Templates(CodeCacheProvider runtime, TargetDescription target, boolean useTLAB) {
-            super(runtime, NewObjectSnippets.class);
+            this.runtime = runtime;
             this.target = target;
+            this.cache = new Cache(runtime);
             this.useTLAB = useTLAB;
-            allocate = snippet("allocate", int.class);
-            initializeObject = snippet("initializeObject", Word.class, Object.class, Word.class, int.class);
-            initializeObjectArray = snippet("initializeObjectArray", Word.class, Object.class, int.class, int.class, Word.class, int.class);
-            initializePrimitiveArray = snippet("initializePrimitiveArray", Word.class, Object.class, int.class, int.class, Word.class, int.class);
-            allocateArrayAndInitialize = snippet("allocateArrayAndInitialize", int.class, int.class, int.class, int.class, ResolvedJavaType.class, Kind.class);
+            try {
+                allocate = runtime.getResolvedJavaMethod(NewObjectSnippets.class.getDeclaredMethod("allocate", int.class));
+                initializeObject = runtime.getResolvedJavaMethod(NewObjectSnippets.class.getDeclaredMethod("initializeObject", Word.class, Object.class, Word.class, int.class));
+                initializeObjectArray = runtime.getResolvedJavaMethod(NewObjectSnippets.class.getDeclaredMethod("initializeObjectArray", Word.class, Object.class, int.class, int.class, Word.class, int.class));
+                initializePrimitiveArray = runtime.getResolvedJavaMethod(NewObjectSnippets.class.getDeclaredMethod("initializePrimitiveArray", Word.class, Object.class, int.class, int.class, Word.class, int.class));
+                allocateArrayAndInitialize = runtime.getResolvedJavaMethod(NewObjectSnippets.class.getDeclaredMethod("allocateArrayAndInitialize", int.class, int.class, int.class, int.class, ResolvedJavaType.class, Kind.class));
+            } catch (NoSuchMethodException e) {
+                throw new GraalInternalError(e);
+            }
         }
 
         /**
@@ -244,8 +252,7 @@ public class NewObjectSnippets implements SnippetsInterface {
             if (!useTLAB) {
                 memory = ConstantNode.forConstant(new Constant(target.wordKind, 0L), runtime, graph);
             } else {
-                ConstantNode sizeNode = ConstantNode.forInt(size, graph);
-                TLABAllocateNode tlabAllocateNode = graph.add(new TLABAllocateNode(sizeNode, wordKind()));
+                TLABAllocateNode tlabAllocateNode = graph.add(new TLABAllocateNode(size, wordKind()));
                 graph.addBeforeFixed(newInstanceNode, tlabAllocateNode);
                 memory = tlabAllocateNode;
             }
@@ -279,7 +286,7 @@ public class NewObjectSnippets implements SnippetsInterface {
                 // Calculate aligned size
                 int size = getArraySize(length, alignment, headerSize, log2ElementSize);
                 ConstantNode sizeNode = ConstantNode.forInt(size, graph);
-                tlabAllocateNode = graph.add(new TLABAllocateNode(sizeNode, target.wordKind));
+                tlabAllocateNode = graph.add(new TLABAllocateNode(size, target.wordKind));
                 graph.addBeforeFixed(newArrayNode, tlabAllocateNode);
                 InitializeArrayNode initializeNode = graph.add(new InitializeArrayNode(tlabAllocateNode, lengthNode, sizeNode, arrayType));
                 graph.replaceFixedWithFixed(newArrayNode, initializeNode);
@@ -293,19 +300,24 @@ public class NewObjectSnippets implements SnippetsInterface {
                 Arguments arguments = new Arguments().add("length", lengthNode);
                 SnippetTemplate template = cache.get(key);
                 Debug.log("Lowering allocateArrayAndInitialize in %s: node=%s, template=%s, arguments=%s", graph, newArrayNode, template, arguments);
-                template.instantiate(runtime, newArrayNode, arguments);
+                template.instantiate(runtime, newArrayNode, newArrayNode, arguments);
             }
         }
 
         @SuppressWarnings("unused")
         public void lower(TLABAllocateNode tlabAllocateNode, LoweringTool tool) {
             StructuredGraph graph = (StructuredGraph) tlabAllocateNode.graph();
-            ValueNode size = tlabAllocateNode.size();
+            ValueNode size;
+            if (tlabAllocateNode.isSizeConstant()) {
+                size = ConstantNode.forInt(tlabAllocateNode.constantSize(), graph);
+            } else {
+                size = tlabAllocateNode.variableSize();
+            }
             Key key = new Key(allocate);
             Arguments arguments = arguments("size", size);
             SnippetTemplate template = cache.get(key);
             Debug.log("Lowering fastAllocate in %s: node=%s, template=%s, arguments=%s", graph, tlabAllocateNode, template, arguments);
-            template.instantiate(runtime, tlabAllocateNode, arguments);
+            template.instantiate(runtime, tlabAllocateNode, tlabAllocateNode, arguments);
         }
 
         @SuppressWarnings("unused")
@@ -322,7 +334,7 @@ public class NewObjectSnippets implements SnippetsInterface {
             Arguments arguments = arguments("memory", memory).add("hub", hub).add("initialMarkWord", type.initialMarkWord());
             SnippetTemplate template = cache.get(key);
             Debug.log("Lowering initializeObject in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
-            template.instantiate(runtime, initializeNode, arguments);
+            template.instantiate(runtime, initializeNode, initializeNode, arguments);
         }
 
         @SuppressWarnings("unused")
@@ -339,7 +351,7 @@ public class NewObjectSnippets implements SnippetsInterface {
             Arguments arguments = arguments("memory", memory).add("hub", hub).add("initialMarkWord", type.initialMarkWord()).add("size", initializeNode.size()).add("length", initializeNode.length());
             SnippetTemplate template = cache.get(key);
             Debug.log("Lowering initializeObjectArray in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
-            template.instantiate(runtime, initializeNode, arguments);
+            template.instantiate(runtime, initializeNode, initializeNode, arguments);
         }
     }
 
