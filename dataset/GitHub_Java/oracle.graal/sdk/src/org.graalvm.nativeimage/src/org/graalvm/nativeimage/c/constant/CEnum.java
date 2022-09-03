@@ -53,8 +53,6 @@ import org.graalvm.nativeimage.c.CContext;
  * <p>
  * The annotated class, or an outer class that contains the class, must be annotated with
  * {@link CContext}.
- *
- * @since 1.0
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
@@ -63,15 +61,11 @@ public @interface CEnum {
     /**
      * Specifies the name of the imported C enum type. If no name is provided, <code>int</code> is
      * used instead.
-     *
-     * @since 1.0
      */
     String value() default "";
 
     /**
      * Add the C <code>enum</code> keyword to the name specified in {@link #value()}.
-     *
-     * @since 1.0
      */
     boolean addEnumKeyword() default false;
 }
