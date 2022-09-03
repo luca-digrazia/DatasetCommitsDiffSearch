@@ -334,10 +334,10 @@ public enum AMD64Arithmetic {
             if (isRegister(x)) {
                 switch (opcode) {
                     case IMUL:
-                        masm.imull(asIntReg(result), asIntReg(x), crb.asIntConst(y));
+                        masm.imull(asIntReg(result), asIntReg(x), y.asInt());
                         break;
                     case LMUL:
-                        masm.imulq(asLongReg(result), asLongReg(x), crb.asIntConst(y));
+                        masm.imulq(asLongReg(result), asLongReg(x), y.asInt());
                         break;
                     default:
                         throw GraalInternalError.shouldNotReachHere();
@@ -346,10 +346,10 @@ public enum AMD64Arithmetic {
                 assert isStackSlot(x);
                 switch (opcode) {
                     case IMUL:
-                        masm.imull(asIntReg(result), (AMD64Address) crb.asIntAddr(x), crb.asIntConst(y));
+                        masm.imull(asIntReg(result), (AMD64Address) crb.asIntAddr(x), y.asInt());
                         break;
                     case LMUL:
-                        masm.imulq(asLongReg(result), (AMD64Address) crb.asLongAddr(x), crb.asIntConst(y));
+                        masm.imulq(asLongReg(result), (AMD64Address) crb.asLongAddr(x), y.asInt());
                         break;
                     default:
                         throw GraalInternalError.shouldNotReachHere();
