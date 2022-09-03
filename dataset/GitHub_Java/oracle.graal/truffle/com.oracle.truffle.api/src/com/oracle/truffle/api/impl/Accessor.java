@@ -155,20 +155,11 @@ public abstract class Accessor {
         return API.getDebugSupport(l);
     }
 
-    private static final SymbolInvoker INVOKER;
-
-    static {
-        SymbolInvoker singleton = null;
+    protected Object invoke(TruffleLanguage<?> lang, Object obj, Object[] args) throws IOException {
         for (SymbolInvoker si : ServiceLoader.load(SymbolInvoker.class)) {
-            assert singleton == null : "More than one SymbolInvoker found: " + singleton + ", " + si;
-            singleton = si;
+            return si.invoke(lang, obj, args);
         }
-        assert singleton != null : "No SymbolInvoker found";
-        INVOKER = singleton;
-    }
-
-    protected CallTarget createCallTarget(TruffleLanguage<?> lang, Object obj, Object[] args) throws IOException {
-        return INVOKER.createCallTarget(lang, obj, args);
+        throw new IOException("No symbol invoker found!");
     }
 
     protected Class<? extends TruffleLanguage> findLanguage(RootNode n) {

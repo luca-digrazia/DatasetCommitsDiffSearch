@@ -120,9 +120,7 @@ public abstract class TruffleLanguage<C> {
      *            {@link CallTarget#call(java.lang.Object...)}
      * @return a call target to invoke which also keeps in memory the {@link Node} tree representing
      *         just parsed <code>code</code>
-     * @throws IOException thrown when I/O or parsing goes wrong. Here-in thrown exception is
-     *             propagate to the user who called one of <code>eval</code> methods of
-     *             {@link TruffleVM}
+     * @throws IOException thrown when I/O or parsing goes wrong
      */
     protected abstract CallTarget parse(Source code, Node context, String... argumentNames) throws IOException;
 
