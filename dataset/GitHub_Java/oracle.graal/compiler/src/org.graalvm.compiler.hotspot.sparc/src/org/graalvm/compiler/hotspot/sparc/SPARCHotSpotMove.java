@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,21 +22,20 @@
  */
 package org.graalvm.compiler.hotspot.sparc;
 
-import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static org.graalvm.compiler.asm.sparc.SPARCAssembler.BPR;
 import static org.graalvm.compiler.asm.sparc.SPARCAssembler.Annul.ANNUL;
-import static org.graalvm.compiler.asm.sparc.SPARCAssembler.Annul.NOT_ANNUL;
-import static org.graalvm.compiler.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_NOT_TAKEN;
 import static org.graalvm.compiler.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_TAKEN;
-import static org.graalvm.compiler.asm.sparc.SPARCAssembler.RCondition.Rc_nz;
 import static org.graalvm.compiler.asm.sparc.SPARCAssembler.RCondition.Rc_z;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.ILLEGAL;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.STACK;
 import static org.graalvm.compiler.lir.sparc.SPARCMove.loadFromConstantTable;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.sparc.SPARCAddress;
+import org.graalvm.compiler.asm.sparc.SPARCAssembler.CC;
+import org.graalvm.compiler.asm.sparc.SPARCAssembler.ConditionFlag;
 import org.graalvm.compiler.asm.sparc.SPARCMacroAssembler;
 import org.graalvm.compiler.asm.sparc.SPARCMacroAssembler.ScratchRegister;
 import org.graalvm.compiler.core.common.CompressEncoding;
@@ -54,7 +51,6 @@ import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.hotspot.HotSpotConstant;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.sparc.SPARC;
 
 public class SPARCHotSpotMove {
 
@@ -152,33 +148,17 @@ public class SPARCHotSpotMove {
             if (encoding.hasBase()) {
                 Register baseReg = asRegister(baseRegister);
                 if (!nonNull) {
-                    Label done = new Label();
-                    if (inputRegister.equals(resReg)) {
-                        BPR.emit(masm, Rc_nz, ANNUL, PREDICT_TAKEN, inputRegister, done);
-                        masm.sub(inputRegister, baseReg, resReg);
-                        masm.bind(done);
-                        if (encoding.getShift() != 0) {
-                            masm.srlx(resReg, encoding.getShift(), resReg);
-                        }
-                    } else {
-                        BPR.emit(masm, Rc_z, NOT_ANNUL, PREDICT_NOT_TAKEN, inputRegister, done);
-                        masm.mov(SPARC.g0, resReg);
-                        masm.sub(inputRegister, baseReg, resReg);
-                        if (encoding.getShift() != 0) {
-                            masm.srlx(resReg, encoding.getShift(), resReg);
-                        }
-                        masm.bind(done);
-                    }
+                    masm.cmp(inputRegister, baseReg);
+                    masm.movcc(ConditionFlag.Equal, CC.Xcc, baseReg, resReg);
+                    masm.sub(resReg, baseReg, resReg);
                 } else {
                     masm.sub(inputRegister, baseReg, resReg);
-                    if (encoding.getShift() != 0) {
-                        masm.srlx(resReg, encoding.getShift(), resReg);
-                    }
+                }
+                if (encoding.getShift() != 0) {
+                    masm.srlx(resReg, encoding.getShift(), resReg);
                 }
             } else {
-                if (encoding.getShift() != 0) {
-                    masm.srlx(inputRegister, encoding.getShift(), resReg);
-                }
+                masm.srlx(inputRegister, encoding.getShift(), resReg);
             }
         }
     }
@@ -207,26 +187,21 @@ public class SPARCHotSpotMove {
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             Register inputRegister = asRegister(input);
             Register resReg = asRegister(result);
-            Register baseReg = encoding.hasBase() ? asRegister(baseRegister) : null;
-            emitUncompressCode(masm, inputRegister, resReg, baseReg, encoding.getShift(), nonNull);
-        }
-
-        public static void emitUncompressCode(SPARCMacroAssembler masm, Register inputRegister, Register resReg, Register baseReg, int shift, boolean nonNull) {
             Register secondaryInput;
-            if (shift != 0) {
-                masm.sllx(inputRegister, shift, resReg);
+            if (encoding.getShift() != 0) {
+                masm.sll(inputRegister, encoding.getShift(), resReg);
                 secondaryInput = resReg;
             } else {
                 secondaryInput = inputRegister;
             }
 
-            if (baseReg != null) {
+            if (encoding.hasBase()) {
                 if (nonNull) {
-                    masm.add(secondaryInput, baseReg, resReg);
+                    masm.add(secondaryInput, asRegister(baseRegister), resReg);
                 } else {
                     Label done = new Label();
-                    BPR.emit(masm, Rc_nz, ANNUL, PREDICT_TAKEN, secondaryInput, done);
-                    masm.add(baseReg, secondaryInput, resReg);
+                    BPR.emit(masm, Rc_z, ANNUL, PREDICT_TAKEN, secondaryInput, done);
+                    masm.add(asRegister(baseRegister), secondaryInput, resReg);
                     masm.bind(done);
                 }
             }

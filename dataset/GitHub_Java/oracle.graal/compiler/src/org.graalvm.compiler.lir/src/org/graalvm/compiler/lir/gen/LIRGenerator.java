@@ -34,7 +34,6 @@ import static org.graalvm.compiler.lir.LIRValueUtil.isVirtualStackSlot;
 import java.util.ArrayList;
 import java.util.List;
 
-import jdk.vm.ci.code.RegisterConfig;
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.calc.Condition;
@@ -201,13 +200,9 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         return new Variable(valueKind, ((VariableProvider) res.getLIR()).nextVariable());
     }
 
-    public RegisterConfig getRegisterConfig() {
-        return res.getRegisterConfig();
-    }
-
     @Override
     public RegisterAttributes attributes(Register register) {
-        return getRegisterConfig().getAttributesMap()[register.number];
+        return res.getFrameMapBuilder().getRegisterConfig().getAttributesMap()[register.number];
     }
 
     @Override
@@ -294,7 +289,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
      */
     @Override
     public AllocatableValue resultOperandFor(JavaKind javaKind, ValueKind<?> valueKind) {
-        Register reg = getRegisterConfig().getReturnRegister(javaKind);
+        Register reg = res.getFrameMapBuilder().getRegisterConfig().getReturnRegister(javaKind);
         assert target().arch.canStoreValue(reg.getRegisterCategory(), valueKind.getPlatformKind()) : reg.getRegisterCategory() + " " + valueKind.getPlatformKind();
         return reg.asValue(valueKind);
     }

@@ -28,7 +28,6 @@ import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.spi.Canonicalizable;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 
 /**
@@ -64,7 +63,7 @@ public abstract class UnaryNode extends FloatingNode implements Canonicalizable.
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(foldStamp(value.stamp(NodeView.DEFAULT)));
+        return updateStamp(foldStamp(value.stamp()));
     }
 
     /**
@@ -75,6 +74,6 @@ public abstract class UnaryNode extends FloatingNode implements Canonicalizable.
      * @param newStamp
      */
     public Stamp foldStamp(Stamp newStamp) {
-        return stamp(NodeView.DEFAULT);
+        return stamp();
     }
 }
