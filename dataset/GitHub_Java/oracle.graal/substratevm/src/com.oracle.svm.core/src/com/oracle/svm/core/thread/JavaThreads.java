@@ -35,21 +35,22 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
+import org.graalvm.compiler.options.Option;
+import org.graalvm.compiler.word.BarrieredAccess;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 
-import com.oracle.svm.core.MonitorSupport;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
@@ -61,10 +62,12 @@ import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.heap.FeebleReferenceList;
 import com.oracle.svm.core.heap.Heap;
+import com.oracle.svm.core.heap.ObjectHeader;
+import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.jdk.StackTraceBuilder;
 import com.oracle.svm.core.locks.VMMutex;
 import com.oracle.svm.core.log.Log;
-import com.oracle.svm.core.option.XOptions;
+import com.oracle.svm.core.option.RuntimeOptionKey;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.stack.JavaStackWalker;
 import com.oracle.svm.core.thread.ParkEvent.WaitResult;
@@ -74,6 +77,11 @@ import com.oracle.svm.core.util.TimeUtils;
 import com.oracle.svm.core.util.VMError;
 
 public abstract class JavaThreads {
+
+    public static class Options {
+        @Option(help = "How large should the default thread stack be? (0 implies platform default size).")//
+        static final RuntimeOptionKey<Integer> DefaultThreadStackSize = new RuntimeOptionKey<>(1024 * 1024);
+    }
 
     @Fold
     public static JavaThreads singleton() {
@@ -599,8 +607,8 @@ final class Target_java_lang_Thread {
             /* If the user set a thread stack size at thread creation, then use that. */
             chosenStackSize = stackSize;
         } else {
-            /* If the user set a thread stack size on the command line, then use that. */
-            final int defaultThreadStackSize = (int) XOptions.getXss().getValue();
+            /* If the user set a default thread stack size on the command line, then use that. */
+            final int defaultThreadStackSize = JavaThreads.Options.DefaultThreadStackSize.getValue();
             if (defaultThreadStackSize != 0L) {
                 chosenStackSize = defaultThreadStackSize;
             }
@@ -720,8 +728,35 @@ final class Target_java_lang_Thread {
      */
     @Substitute
     private static boolean holdsLock(Object obj) {
-        Objects.requireNonNull(obj);
-        return ImageSingletons.lookup(MonitorSupport.class).holdsLock(obj);
+        /* Does the object even exist? */
+        if (obj == null) {
+            throw new NullPointerException("Thread.holdsLock(null)");
+        }
+        /*
+         * If I am not multi-threaded, then the current thread has exclusive access to the object.
+         * Cf. MonitorEnter being a noop.
+         */
+        if (!SubstrateOptions.MultiThreaded.getValue()) {
+            return true;
+        }
+        /* Does the object even have a monitor field? */
+        final DynamicHub hub = ObjectHeader.readDynamicHubFromObject(obj);
+        final int monitorOffset = hub.getMonitorOffset();
+        if (monitorOffset == 0) {
+            if (obj.getClass() == Class.class) {
+                throw VMError.unsupportedFeature("Thread.holdsLock() is not supported for java.lang.Class instances");
+            }
+            return false;
+        }
+        /* Does the object have a monitor installed? */
+        final Object monitorOffsetField = BarrieredAccess.readObject(obj, monitorOffset);
+        if (monitorOffsetField == null) {
+            return false;
+        }
+        /* The monitor object is a java.util.concurrent.locks.ReentrantLock. */
+        final ReentrantLock lockObject = KnownIntrinsics.convertUnknownValue(monitorOffsetField, ReentrantLock.class);
+        /* Ask if the current thread owns that lockObject. */
+        return lockObject.isHeldByCurrentThread();
     }
 
     @Substitute
