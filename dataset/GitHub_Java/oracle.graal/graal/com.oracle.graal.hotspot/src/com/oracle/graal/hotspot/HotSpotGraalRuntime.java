@@ -25,11 +25,13 @@ package com.oracle.graal.hotspot;
 import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+//import static com.oracle.graal.hotspot.CompilationQueue.*;
 import static com.oracle.graal.hotspot.CompileTheWorld.Options.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.Options.*;
 import static com.oracle.graal.hotspot.InitTimer.*;
 import static sun.reflect.Reflection.*;
 
+import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 
@@ -122,7 +124,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
 
         this.compilerToVm = toVM;
 
-        TTY.initialize(Options.LogFile.getStream());
+        TTY.initialize(Options.LogFile.log());
 
         if (Log.getValue() == null && Meter.getValue() == null && Time.getValue() == null && Dump.getValue() == null) {
             if (MethodFilter.getValue() != null) {
@@ -131,7 +133,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
         }
 
         if (Debug.isEnabled()) {
-            DebugEnvironment.initialize(LogFile.getStream());
+            DebugEnvironment.initialize(LogFile.log());
 
             String summary = DebugValueSummary.getValue();
             if (summary != null) {
@@ -174,8 +176,36 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
         static final OptionValue<String> GraalRuntime = new OptionValue<>("");
 
         @Option(help = "File to which logging is sent")
-        public static final PrintStreamOption LogFile = new PrintStreamOption();
+        public static final LogFileOption LogFile = new LogFileOption();
         // @formatter:on
+    }
+
+    public static class LogFileOption extends OptionValue<String> {
+        public LogFileOption() {
+            super(null);
+        }
+
+        private volatile PrintStream log;
+
+        public PrintStream log() {
+            if (log == null) {
+                if (getValue() != null) {
+                    synchronized (this) {
+                        if (log == null) {
+                            try {
+                                final boolean enableAutoflush = true;
+                                log = new PrintStream(new FileOutputStream(LogFile.getValue()), enableAutoflush);
+                            } catch (FileNotFoundException e) {
+                                throw new RuntimeException("couldn't open log file: " + LogFile.getValue(), e);
+                            }
+                        }
+                    }
+                } else {
+                    log = System.out;
+                }
+            }
+            return log;
+        }
     }
 
     private static HotSpotBackendFactory findFactory(String architecture) {

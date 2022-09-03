@@ -36,8 +36,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.common.inlining.*;
 
-//JaCoCo Exclude
-
 /**
  * Sets Graal options from the HotSpot command line. Such options are distinguished by a
  * {@code "-G:"} prefix.
@@ -207,7 +205,7 @@ public class HotSpotOptions {
         if (!matches.isEmpty()) {
             System.err.println("Did you mean one of the following?");
             for (OptionDescriptor match : matches) {
-                boolean isBoolean = match.getType() == boolean.class || match.getType() == Boolean.class;
+                boolean isBoolean = match.getType() == boolean.class;
                 System.err.println(String.format("    %s%s%s", isBoolean ? "(+/-)" : "", match.getName(), isBoolean ? "" : "=<value>"));
             }
         }

@@ -1181,8 +1181,7 @@ public abstract class SPARCAssembler extends Assembler {
         Fnsmuld(0x79, "fnsmuld"),
         Fnhadds(0x71, "fnhadds"),
         Fnhaddd(0x72, "fnhaddd"),
-        Movxtod(0x118, "movxtod"),
-        Movwtos(0x119, "movwtos"),
+        Movtos(0x119, "movtos"),
         // end VIS3
 
         // start CAMMELLIA
@@ -1231,15 +1230,7 @@ public abstract class SPARCAssembler extends Assembler {
 
         Fstoi(0xD1, "fstoi"),
         Fdtoi(0xD2, "fdtoi"),
-        Fxtos(0x84, "fxtos"),
-        Fxtod(0x88, "fxtod"),
-        Fxtoq(0x8C, "fxtoq"),
-        Fitos(0xC4, "fitos"),
-        Fdtos(0xC6, "fdtos"),
-        Fitod(0xC8, "fitod"),
-        Fstod(0xC9, "fstod"),
-        Fitoq(0xCC, "fitoq")
-        ;
+        Fitos(0xC4, "fitos");
         // @formatter:on
 
         private final int value;
@@ -1681,21 +1672,7 @@ public abstract class SPARCAssembler extends Assembler {
     public static class Movwtos extends Fmt3p {
         public Movwtos(Register src, Register dst) {
             /* VIS3 only */
-            super(Ops.ArithOp, Op3s.Impdep1, Opfs.Movwtos, g0, src, dst);
-        }
-    }
-
-    public static class Movxtod extends Fmt3p {
-        public Movxtod(Register src, Register dst) {
-            /* VIS3 only */
-            super(Ops.ArithOp, Op3s.Impdep1, Opfs.Movxtod, g0, src, dst);
-        }
-    }
-
-    public static class Fdtos extends Fmt3p {
-        public Fdtos(Register src, Register dst) {
-            /* VIS3 only */
-            super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fdtos, g0, src, dst);
+            super(Ops.ArithOp, Op3s.Impdep1, Opfs.Movtos, g0, src, dst);
         }
     }
 
@@ -2659,13 +2636,6 @@ public abstract class SPARCAssembler extends Assembler {
         }
     }
 
-    public static class Fstod extends Fmt3n {
-
-        public Fstod(SPARCAssembler masm, Register src2, Register dst) {
-            super(masm, Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fstod.getValue(), src2.encoding(), dst.encoding());
-        }
-    }
-
     /**
      * Convert Double to 32-bit Integer
      */
@@ -2680,20 +2650,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fitos(SPARCAssembler masm, Register src2, Register dst) {
             super(masm, Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fitos.getValue(), src2.encoding(), dst.encoding());
-        }
-    }
-
-    public static class Fitod extends Fmt3n {
-
-        public Fitod(SPARCAssembler masm, Register src2, Register dst) {
-            super(masm, Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fitod.getValue(), src2.encoding(), dst.encoding());
-        }
-    }
-
-    public static class Fxtod extends Fmt3n {
-
-        public Fxtod(SPARCAssembler masm, Register src2, Register dst) {
-            super(masm, Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fxtod.getValue(), src2.encoding(), dst.encoding());
         }
     }
 
@@ -2915,10 +2871,6 @@ public abstract class SPARCAssembler extends Assembler {
     public static class Lddf extends Fmt11 {
 
         public Lddf(SPARCAddress src, Register dst) {
-            super(Op3s.Lddf, src, dst);
-        }
-
-        public Lddf(Register src, Register dst) {
             super(Op3s.Lddf, src, dst);
         }
     }
