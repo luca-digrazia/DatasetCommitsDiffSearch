@@ -114,7 +114,7 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
 
         private FixedNode current;
 
-        BlockNodeIterator(FixedNode next) {
+        public BlockNodeIterator(FixedNode next) {
             this.current = next;
         }
 
