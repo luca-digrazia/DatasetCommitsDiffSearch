@@ -75,15 +75,11 @@ public abstract class LLVMNode extends Node {
     public static final int ADDRESS_SIZE_IN_BYTES = 8;
 
     public final ContextReference<LLVMContext> getContextReference() {
-        return getLLVMLanguage().getContextReference();
+        return getRootNode().getLanguage(LLVMLanguage.class).getContextReference();
     }
 
     public final LLVMLanguage getLLVMLanguage() {
-        LLVMLanguage ret = getRootNode().getLanguage(LLVMLanguage.class);
-        if (ret == null) {
-            ret = LLVMLanguage.getLanguage();
-        }
-        return ret;
+        return getRootNode().getLanguage(LLVMLanguage.class);
     }
 
     public final NodeFactory getNodeFactory() {

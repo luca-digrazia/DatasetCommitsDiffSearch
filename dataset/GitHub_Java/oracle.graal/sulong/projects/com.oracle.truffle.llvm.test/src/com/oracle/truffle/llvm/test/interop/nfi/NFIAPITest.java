@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.test.interop.nfi;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -42,9 +41,12 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.test.options.TestOptions;
@@ -54,7 +56,7 @@ public class NFIAPITest {
 
     @ClassRule public static TruffleRunner.RunWithPolyglotRule runWithPolyglot = new TruffleRunner.RunWithPolyglotRule();
 
-    private static final Path TEST_DIR = Paths.get(TestOptions.TEST_SUITE_PATH, "nfi");
+    private static final Path TEST_DIR = new File(TestOptions.TEST_SUITE_PATH, "nfi").toPath();
     private static final String SULONG_FILENAME = "O0_MEM2REG.bc";
 
     public static TruffleObject sulongObject;
@@ -62,7 +64,7 @@ public class NFIAPITest {
 
     @BeforeClass
     public static void initialize() {
-        sulongObject = loadLibrary("basicTest", SULONG_FILENAME);
+        sulongObject = loadLibrary("basicTest", SULONG_FILENAME, "application/x-sulong");
         lookupAndBind = lookupAndBind();
     }
 
@@ -70,18 +72,18 @@ public class NFIAPITest {
         return Truffle.getRuntime().createCallTarget(new LookupAndBindNode());
     }
 
-    private static TruffleObject loadLibrary(String lib, String filename) {
+    private static TruffleObject loadLibrary(String lib, String filename, String mimetype) {
         File file = new File(TEST_DIR.toFile(), lib + "/" + filename);
-        String loadLib = "with llvm load '" + file.getAbsolutePath() + "'";
-        Source source = Source.newBuilder("nfi", loadLib, "loadLibrary").build();
+        String loadLib = "load '" + file.getAbsolutePath() + "'";
+        Source source = Source.newBuilder("llvm", loadLib, "loadLibrary").mimeType(mimetype).build();
         CallTarget target = runWithPolyglot.getTruffleTestEnv().parse(source);
         return (TruffleObject) target.call();
     }
 
     private static final class LookupAndBindNode extends RootNode {
 
-        @Child private InteropLibrary lookupSymbol = InteropLibrary.getFactory().createDispatched(3);
-        @Child private InteropLibrary bind = InteropLibrary.getFactory().createDispatched(3);
+        @Child private Node lookupSymbol = Message.READ.createNode();
+        @Child private Node bind = Message.INVOKE.createNode();
 
         private LookupAndBindNode() {
             super(null);
@@ -89,13 +91,13 @@ public class NFIAPITest {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            Object library = frame.getArguments()[0];
+            TruffleObject library = (TruffleObject) frame.getArguments()[0];
             String symbolName = (String) frame.getArguments()[1];
             String signature = (String) frame.getArguments()[2];
 
             try {
-                Object symbol = lookupSymbol.readMember(library, symbolName);
-                return bind.invokeMember(symbol, "bind", signature);
+                TruffleObject symbol = (TruffleObject) ForeignAccess.sendRead(lookupSymbol, library, symbolName);
+                return ForeignAccess.sendInvoke(bind, symbol, "bind", signature);
             } catch (InteropException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError(e);
@@ -131,7 +133,7 @@ public class NFIAPITest {
 
         private final TruffleObject receiver;
 
-        @Child private InteropLibrary interop;
+        @Child private Node execute;
 
         protected SendExecuteNode(TruffleObject library, String symbol, String signature) {
             this(lookupAndBind(library, symbol, signature));
@@ -139,16 +141,32 @@ public class NFIAPITest {
 
         protected SendExecuteNode(TruffleObject receiver) {
             this.receiver = receiver;
-            this.interop = InteropLibrary.getFactory().create(receiver);
+            this.execute = Message.EXECUTE.createNode();
         }
 
         @Override
         public Object executeTest(VirtualFrame frame) throws InteropException {
-            return interop.execute(receiver, frame.getArguments());
+            return ForeignAccess.sendExecute(execute, receiver, frame.getArguments());
         }
     }
 
     protected static TruffleObject lookupAndBind(TruffleObject lib, String name, String signature) {
         return (TruffleObject) lookupAndBind.call(lib, name, signature);
+    }
+
+    protected static boolean isBoxed(TruffleObject obj) {
+        return ForeignAccess.sendIsBoxed(Message.IS_BOXED.createNode(), obj);
+    }
+
+    protected static Object unbox(TruffleObject obj) {
+        try {
+            return ForeignAccess.sendUnbox(Message.UNBOX.createNode(), obj);
+        } catch (UnsupportedMessageException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    protected static boolean isNull(TruffleObject foreignObject) {
+        return ForeignAccess.sendIsNull(Message.IS_NULL.createNode(), foreignObject);
     }
 }

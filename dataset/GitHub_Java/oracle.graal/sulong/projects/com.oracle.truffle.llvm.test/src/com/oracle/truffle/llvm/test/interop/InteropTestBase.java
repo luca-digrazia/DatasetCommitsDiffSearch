@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,20 +31,16 @@ package com.oracle.truffle.llvm.test.interop;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
-import com.oracle.truffle.llvm.runtime.NFIContextExtension;
-import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
-import org.graalvm.polyglot.Context;
 import org.junit.ClassRule;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.test.options.TestOptions;
@@ -53,18 +49,13 @@ import org.graalvm.polyglot.Value;
 
 public class InteropTestBase {
 
-    @ClassRule public static TruffleRunner.RunWithPolyglotRule runWithPolyglot = new TruffleRunner.RunWithPolyglotRule(getContextBuilder());
+    @ClassRule public static TruffleRunner.RunWithPolyglotRule runWithPolyglot = new TruffleRunner.RunWithPolyglotRule();
 
-    public static Context.Builder getContextBuilder() {
-        String lib = System.getProperty("test.sulongtest.lib.path");
-        return Context.newBuilder().allowAllAccess(true).option(SulongEngineOption.LIBRARY_PATH_NAME, lib);
-    }
-
-    private static final Path testBase = Paths.get(TestOptions.TEST_SUITE_PATH, "interop");
-    public static final String TEST_FILE_NAME = "O0_MEM2REG." + NFIContextExtension.getNativeLibrarySuffix();
+    private static final File testBase = new File(TestOptions.TEST_SUITE_PATH, "interop");
 
     protected static TruffleObject loadTestBitcodeInternal(String name) {
-        File file = Paths.get(testBase.toString(), name, TEST_FILE_NAME).toFile();
+        File dir = new File(testBase, name);
+        File file = new File(dir, "O0_MEM2REG.bc");
         TruffleFile tf = runWithPolyglot.getTruffleTestEnv().getTruffleFile(file.toURI());
         Source source;
         try {
@@ -72,12 +63,13 @@ public class InteropTestBase {
         } catch (IOException ex) {
             throw new AssertionError(ex);
         }
-        CallTarget target = runWithPolyglot.getTruffleTestEnv().parsePublic(source);
+        CallTarget target = runWithPolyglot.getTruffleTestEnv().parse(source);
         return (TruffleObject) target.call();
     }
 
     protected static Value loadTestBitcodeValue(String name) {
-        File file = Paths.get(testBase.toString(), name, TEST_FILE_NAME).toFile();
+        File dir = new File(testBase, name);
+        File file = new File(dir, "O0_MEM2REG.bc");
         org.graalvm.polyglot.Source source;
         try {
             source = org.graalvm.polyglot.Source.newBuilder("llvm", file).build();
@@ -89,23 +81,23 @@ public class InteropTestBase {
 
     public static class SulongTestNode extends RootNode {
 
-        private final Object function;
-        @Child InteropLibrary interop;
+        private final TruffleObject function;
+        @Child private Node execute;
 
         protected SulongTestNode(TruffleObject testLibrary, String fnName) {
             super(null);
             try {
-                function = InteropLibrary.getFactory().getUncached().readMember(testLibrary, fnName);
+                function = (TruffleObject) ForeignAccess.sendRead(Message.READ.createNode(), testLibrary, fnName);
             } catch (InteropException ex) {
                 throw new AssertionError(ex);
             }
-            this.interop = InteropLibrary.getFactory().create(function);
+            this.execute = Message.EXECUTE.createNode();
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
             try {
-                return interop.execute(function, frame.getArguments());
+                return ForeignAccess.sendExecute(execute, function, frame.getArguments());
             } catch (InteropException ex) {
                 throw new AssertionError(ex);
             }
