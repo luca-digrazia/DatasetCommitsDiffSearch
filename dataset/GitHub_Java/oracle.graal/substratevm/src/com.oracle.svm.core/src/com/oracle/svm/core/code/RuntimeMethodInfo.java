@@ -51,10 +51,6 @@ public final class RuntimeMethodInfo extends AbstractCodeInfo {
         return name;
     }
 
-    public int getTier() {
-        return tier;
-    }
-
     /**
      * The {@link InstalledCode#getName() name of the InstalledCode}. Stored in a separate field so
      * that it is available even after the code is no longer available.
@@ -63,11 +59,6 @@ public final class RuntimeMethodInfo extends AbstractCodeInfo {
      * accessed during garbage collection.
      */
     protected String name;
-
-    /**
-     * The index of the compilation tier that was used to compile the respective code.
-     */
-    protected int tier;
 
     /**
      * The handle to the compiled code for the outside world. We only have a weak reference to it,
@@ -99,12 +90,11 @@ public final class RuntimeMethodInfo extends AbstractCodeInfo {
         throw shouldNotReachHere("Must be allocated with PinnedAllocator");
     }
 
-    public void setData(CodePointer codeStart, UnsignedWord codeSize, SubstrateInstalledCode installedCode, int tier, ObjectReferenceWalker constantsWalker, PinnedAllocator allocator,
+    public void setData(CodePointer codeStart, UnsignedWord codeSize, SubstrateInstalledCode installedCode, ObjectReferenceWalker constantsWalker, PinnedAllocator allocator,
                     InstalledCodeObserver.InstalledCodeObserverHandle[] codeObserverHandles) {
         super.setData(codeStart, codeSize);
         this.name = installedCode.getName();
         this.installedCode = createInstalledCodeReference(installedCode);
-        this.tier = tier;
         this.constantsWalker = constantsWalker;
         this.allocator = allocator;
         assert codeObserverHandles != null;

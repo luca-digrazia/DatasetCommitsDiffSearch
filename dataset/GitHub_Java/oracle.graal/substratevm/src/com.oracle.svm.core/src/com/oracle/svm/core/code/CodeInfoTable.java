@@ -230,8 +230,9 @@ class CodeInfoFeature implements Feature {
         config.registerAsImmutable(imageInfo.referenceMapEncoding);
         config.registerAsImmutable(imageInfo.frameInfoEncodings);
         config.registerAsImmutable(imageInfo.frameInfoObjectConstants);
-        config.registerAsImmutable(imageInfo.frameInfoSourceClasses);
+        config.registerAsImmutable(imageInfo.frameInfoSourceClassNames);
         config.registerAsImmutable(imageInfo.frameInfoSourceMethodNames);
+        config.registerAsImmutable(imageInfo.frameInfoSourceFileNames);
         config.registerAsImmutable(imageInfo.frameInfoNames);
     }
 }

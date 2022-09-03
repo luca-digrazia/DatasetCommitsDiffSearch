@@ -30,9 +30,9 @@ import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.MemoryWalker;
 import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.amd64.FrameAccess;
 import com.oracle.svm.core.annotate.AlwaysInline;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.genscavenge.AlignedHeapChunk.AlignedHeader;
@@ -95,11 +95,28 @@ class HeapChunkProvider {
         return Log.noopLog();
     }
 
-    /** An OutOFMemoryError for being unable to allocate memory for an aligned heap chunk. */
-    private static final OutOfMemoryError ALIGNED_OUT_OF_MEMORY_ERROR = new OutOfMemoryError("Could not allocate an aligned heap chunk");
+    /** Throw the pre-allocated singleton instance to indicate failure from an Allocator method. */
+    static final class AllocatorOutOfMemoryError extends OutOfMemoryError {
 
-    /** An OutOFMemoryError for being unable to allocate memory for an unaligned heap chunk. */
-    private static final OutOfMemoryError UNALIGNED_OUT_OF_MEMORY_ERROR = new OutOfMemoryError("Could not allocate an unaligned heap chunk");
+        /** Every Error should have one of these. */
+        private static final long serialVersionUID = -6391446900635004964L;
+
+        /** A pre-allocated singleton instance. */
+        private static final AllocatorOutOfMemoryError SINGLETON = new AllocatorOutOfMemoryError();
+
+        /** Private constructor because there is just the singleton instance. */
+        private AllocatorOutOfMemoryError() {
+            super();
+        }
+
+        /** Throw the singleton error, maybe with a runtime (but allocation-free!) message. */
+        static Error throwError(String message) {
+            /* Maybe log the message and throw the error. */
+            Log.noopLog().string("[Allocator.OutOfMemoryError.throwError:  message: ").string(message).string("]").newline();
+            throw SINGLETON;
+        }
+
+    }
 
     /**
      * Produce a new AlignedHeapChunk, either from the free list or from the operating system.
@@ -116,7 +133,7 @@ class HeapChunkProvider {
             noteFirstAllocationTime();
             result = (AlignedHeader) CommittedMemoryProvider.get().allocate(chunkSize, HeapPolicy.getAlignedHeapChunkAlignment(), false);
             if (result.isNull()) {
-                throw ALIGNED_OUT_OF_MEMORY_ERROR;
+                throw AllocatorOutOfMemoryError.throwError("No virtual memory for aligned chunk");
             }
             log().string("  new chunk: ").hex(result).newline();
 
@@ -261,7 +278,7 @@ class HeapChunkProvider {
         noteFirstAllocationTime();
         UnalignedHeader result = (UnalignedHeader) CommittedMemoryProvider.get().allocate(chunkSize, CommittedMemoryProvider.UNALIGNED, false);
         if (result.isNull()) {
-            throw UNALIGNED_OUT_OF_MEMORY_ERROR;
+            throw AllocatorOutOfMemoryError.throwError("No virtual memory for unaligned chunk");
         }
 
         initializeChunk(result, chunkSize);
