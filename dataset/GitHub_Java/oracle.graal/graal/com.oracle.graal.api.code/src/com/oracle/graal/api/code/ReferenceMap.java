@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,17 +25,17 @@ package com.oracle.graal.api.code;
 import com.oracle.graal.api.code.CodeUtil.RefMapFormatter;
 import com.oracle.graal.api.meta.*;
 
-public interface ReferenceMap {
+public abstract class ReferenceMap implements Cloneable {
 
-    void setRegister(int idx, PlatformKind kind);
+    public abstract void setRegister(int idx, LIRKind kind);
 
-    void setStackSlot(int offset, PlatformKind kind);
+    public abstract void setStackSlot(int offset, LIRKind kind);
 
-    boolean hasRegisterRefMap();
+    public abstract boolean hasRegisterRefMap();
 
-    boolean hasFrameRefMap();
+    public abstract boolean hasFrameRefMap();
 
-    void appendRegisterMap(StringBuilder sb, RefMapFormatter formatterArg);
+    public abstract void appendRegisterMap(StringBuilder sb, RefMapFormatter formatterArg);
 
-    void appendFrameMap(StringBuilder sb, RefMapFormatter formatterArg);
+    public abstract void appendFrameMap(StringBuilder sb, RefMapFormatter formatterArg);
 }

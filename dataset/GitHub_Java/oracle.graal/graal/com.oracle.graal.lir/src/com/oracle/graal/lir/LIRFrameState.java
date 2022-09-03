@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.lir;
 
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.framemap.*;
@@ -169,7 +168,7 @@ public class LIRFrameState {
      * @param canHaveRegisters True if there can be any register map entries.
      */
     public void initDebugInfo(FrameMap frameMap, boolean canHaveRegisters) {
-        debugInfo = new DebugInfo(topFrame, virtualObjects);
+        debugInfo = new DebugInfo(topFrame, frameMap.initReferenceMap(canHaveRegisters), virtualObjects);
     }
 
     @Override

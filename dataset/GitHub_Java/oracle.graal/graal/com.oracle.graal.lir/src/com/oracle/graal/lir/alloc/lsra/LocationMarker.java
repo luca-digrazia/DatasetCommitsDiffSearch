@@ -22,12 +22,15 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
@@ -35,10 +38,7 @@ import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.meta.*;
-import com.oracle.jvmci.options.*;
+import com.oracle.graal.options.*;
 
 /**
  * Mark all live references for a frame state. The frame state use this information to build the OOP
@@ -54,8 +54,7 @@ public final class LocationMarker extends AllocationPhase {
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory) {
         new Marker<B>(lirGenRes.getLIR(), lirGenRes.getFrameMap()).build();
     }
 
@@ -293,13 +292,18 @@ public final class LocationMarker extends AllocationPhase {
                 info.initDebugInfo(frameMap, !op.destroysCallerSavedRegisters() || !frameMap.getRegisterConfig().areAllAllocatableRegistersCallerSaved());
             }
 
-            ReferenceMap refMap = info.debugInfo().getReferenceMap();
-            refMap.reset();
-            frameMap.addLiveValues(refMap);
-            for (Value v : values) {
-                refMap.addLiveValue(v);
+            try (Scope s = Debug.scope("markLocation", op)) {
+                ReferenceMap refMap = info.debugInfo().getReferenceMap();
+                for (Value v : values) {
+                    try (Scope x = Debug.scope("loop", v)) {
+                        frameMap.setReference(v, refMap);
+                    } catch (Throwable e) {
+                        throw Debug.handle(e);
+                    }
+                }
+            } catch (Throwable e) {
+                throw Debug.handle(e);
             }
-            refMap.finish();
         }
 
         /**

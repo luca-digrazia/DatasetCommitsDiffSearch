@@ -22,13 +22,15 @@
  */
 package com.oracle.graal.hotspot;
 
+import java.io.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.CodeUtil.RefMapFormatter;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 
-public final class HotSpotReferenceMap extends ReferenceMap {
+public final class HotSpotReferenceMap extends ReferenceMap implements Serializable {
 
     static final int OOP64 = 0b1010;
     static final int OOP32 = 0b01;
@@ -102,7 +104,9 @@ public final class HotSpotReferenceMap extends ReferenceMap {
      * map consists of 4 bit entries that represent 8 bytes of memory.
      *
      */
-    class HotSpotOopMap implements Cloneable {
+    class HotSpotOopMap implements Cloneable, Serializable {
+
+        private static final long serialVersionUID = -4997600265320131213L;
 
         /**
          * Each entry is 4 bits long and covers 8 bytes of memory.
@@ -278,6 +282,8 @@ public final class HotSpotReferenceMap extends ReferenceMap {
         }
     }
 
+    private static final long serialVersionUID = -1052183095979496819L;
+
     /**
      * Contains 3 bits per scalar register, and n*3 bits per n-word vector register (e.g., on a
      * 64-bit system, a 256-bit vector register requires 12 reference map bits).
@@ -346,7 +352,7 @@ public final class HotSpotReferenceMap extends ReferenceMap {
 
     private void set(HotSpotOopMap refMap, int index, LIRKind kind) {
         if (kind.isDerivedReference()) {
-            throw new InternalError("derived reference cannot be inserted in ReferenceMap");
+            throw GraalInternalError.shouldNotReachHere("derived reference cannot be inserted in ReferenceMap");
         }
 
         int bytesPerElement = bytesPerElement(kind);
