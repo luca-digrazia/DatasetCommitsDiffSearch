@@ -242,8 +242,7 @@ public class SnippetTemplate {
                 VarargsParameter vp = MetaUtil.getParameterAnnotation(VarargsParameter.class, i, method);
                 if (vp != null) {
                     String name = vp.value();
-                    Varargs varargs = (Varargs) key.get(name);
-                    Object array = varargs.getArray();
+                    Object array = ((Varargs) key.get(name)).array;
                     ConstantNode placeholder = ConstantNode.forObject(array, runtime, snippetCopy);
                     replacements.put(snippetGraph.getLocal(i), placeholder);
                     placeholders[i] = placeholder;
@@ -269,11 +268,10 @@ public class SnippetTemplate {
             VarargsParameter vp = varargsParameterAnnotations[i];
             if (vp != null) {
                 assert snippetCopy.getLocal(i) == null;
-                Varargs varargs = (Varargs) key.get(vp.value());
-                Object array = varargs.getArray();
+                Object array = ((Varargs) key.get(vp.value())).array;
                 int length = Array.getLength(array);
                 LocalNode[] locals = new LocalNode[length];
-                Stamp stamp = varargs.getArgStamp();
+                Stamp stamp = StampFactory.forKind(runtime.lookupJavaType(array.getClass().getComponentType()).getKind());
                 for (int j = 0; j < length; j++) {
                     assert (parameterCount & 0xFFFF) == parameterCount;
                     int idx = i << 16 | j;
@@ -385,8 +383,8 @@ public class SnippetTemplate {
 
     private static boolean checkConstantArgument(final ResolvedJavaMethod method, Signature signature, int i, String name, Object arg, Kind kind) {
         if (kind.isObject()) {
-            ResolvedJavaType type = signature.getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass());
-            assert arg == null || type.isInstance(Constant.forObject(arg)) :
+            Class<?> type = signature.getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass()).toJava();
+            assert arg == null || type.isInstance(arg) :
                 method + ": wrong value type for " + name + ": expected " + type.getName() + ", got " + arg.getClass().getName();
         } else {
             assert arg != null && kind.toBoxedJavaClass() == arg.getClass() :
@@ -396,10 +394,11 @@ public class SnippetTemplate {
     }
 
     private static boolean checkVarargs(final ResolvedJavaMethod method, Signature signature, int i, String name, Varargs varargs) {
-        Object arg = varargs.getArray();
+        Object arg = varargs.array;
         ResolvedJavaType type = (ResolvedJavaType) signature.getParameterType(i, method.getDeclaringClass());
-        assert type.isArrayClass() : "varargs parameter must be an array type";
-        assert type.isInstance(Constant.forObject(arg)) : "value for " + name + " is not a " + MetaUtil.toJavaName(type) + " instance: " + arg;
+        Class< ? > javaType = type.toJava();
+        assert javaType.isArray() : "varargs parameter must be an array type";
+        assert javaType.isInstance(arg) : "value for " + name + " is not a " + javaType.getName() + " instance: " + arg;
         return true;
     }
 
