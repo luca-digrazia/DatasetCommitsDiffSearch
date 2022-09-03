@@ -22,22 +22,29 @@
  */
 package com.oracle.graal.phases.common.cfs;
 
-import static com.oracle.graal.graph.util.CollectionsAccess.*;
-
-import java.util.*;
-
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.api.meta.ResolvedJavaType;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugMetric;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeBitMap;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.calc.IsNullNode;
+import com.oracle.graal.nodes.calc.ObjectEqualsNode;
+import com.oracle.graal.nodes.extended.GuardedNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.java.CheckCastNode;
+import com.oracle.graal.nodes.java.InstanceOfNode;
+import com.oracle.graal.nodes.spi.ValueProxy;
+import com.oracle.graal.compiler.common.type.IllegalStamp;
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.nodes.util.GraphUtil;
+
+import java.util.IdentityHashMap;
+import java.util.Set;
 
 /**
  * <p>
@@ -81,7 +88,7 @@ public final class EquationalReasoner {
      * {@link com.oracle.graal.graph.NodeBitMap NodeBitMap} but in this set instead (those nodes are
      * added after the {@link com.oracle.graal.graph.NodeBitMap} was obtained).
      */
-    final Set<ValueNode> added = newNodeIdentitySet();
+    final Set<ValueNode> added = java.util.Collections.newSetFromMap(new IdentityHashMap<ValueNode, Boolean>());
 
     /**
      * The reduction of a FloatingNode performed by {@link EquationalReasoner EquationalReasoner}
@@ -91,7 +98,7 @@ public final class EquationalReasoner {
      * The substitutions tracked in this field become invalid as described in
      * {@link #updateState(com.oracle.graal.phases.common.cfs.State) updateState(State)}
      */
-    private final Map<ValueNode, ValueNode> substs = newNodeIdentityMap();
+    private final IdentityHashMap<ValueNode, ValueNode> substs = new IdentityHashMap<>();
 
     public EquationalReasoner(StructuredGraph graph, CanonicalizerTool tool, LogicConstantNode trueConstant, LogicConstantNode falseConstant, ConstantNode nullConstant) {
         this.graph = graph;
@@ -629,7 +636,7 @@ public final class EquationalReasoner {
         }
         TypeProfileProxyNode profile = (TypeProfileProxyNode) object;
         ObjectStamp outgoinStamp = (ObjectStamp) profile.stamp();
-        ObjectStamp payloadStamp = (ObjectStamp) profile.getValue().stamp();
+        ObjectStamp payloadStamp = (ObjectStamp) profile.getObject().stamp();
         if (payloadStamp.nonNull() && !outgoinStamp.nonNull()) {
             profile.setStamp(FlowUtil.asNonNullStamp(outgoinStamp));
         }
