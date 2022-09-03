@@ -29,7 +29,7 @@ import static com.oracle.graal.lir.ptx.PTXArithmetic.*;
 import static com.oracle.graal.lir.ptx.PTXBitManipulationOp.IntrinsicOpcode.*;
 import static com.oracle.graal.lir.ptx.PTXCompare.*;
 
-import java.lang.reflect.*;
+import java.lang.annotation.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
@@ -154,13 +154,17 @@ public class PTXLIRGenerator extends LIRGenerator {
         }
 
         for (ParameterNode param : graph.getNodes(ParameterNode.class)) {
-            int localIndex = param.index();
             Value paramValue = params[param.index()];
-            int parameterIndex = localIndex;
-            if (!Modifier.isStatic(graph.method().getModifiers())) {
-                parameterIndex--;
+            Annotation[] annos = graph.method().getParameterAnnotations()[param.index()];
+            Warp warpAnnotation = null;
+
+            if (annos != null) {
+                for (int a = 0; a < annos.length; a++) {
+                    if (annos[a].annotationType().equals(Warp.class)) {
+                        warpAnnotation = (Warp) annos[a];
+                    }
+                }
             }
-            Warp warpAnnotation = parameterIndex >= 0 ? MetaUtil.getParameterAnnotation(Warp.class, parameterIndex, graph.method()) : null;
             if (warpAnnotation != null) {
                 setResult(param, emitWarpParam(paramValue.getKind(), warpAnnotation));
             } else {

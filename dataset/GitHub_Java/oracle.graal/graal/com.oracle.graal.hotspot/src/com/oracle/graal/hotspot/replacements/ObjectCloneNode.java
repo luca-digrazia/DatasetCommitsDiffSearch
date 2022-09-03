@@ -29,7 +29,6 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
@@ -60,7 +59,7 @@ public class ObjectCloneNode extends MacroNode implements VirtualizableAllocatio
             return null;
         }
 
-        ResolvedJavaType type = StampTool.typeOrNull(getObject());
+        ResolvedJavaType type = ObjectStamp.typeOrNull(getObject());
         if (type != null) {
             if (type.isArray()) {
                 Method method = ObjectCloneSnippets.arrayCloneMethods.get(type.getComponentType().getKind());
@@ -77,7 +76,6 @@ public class ObjectCloneNode extends MacroNode implements VirtualizableAllocatio
                     assert snippetGraph != null : "ObjectCloneSnippets should be installed";
                     return lowerReplacement(snippetGraph.copy(), tool);
                 }
-                assert false : "unhandled array type " + type.getComponentType().getKind();
             } else {
                 type = getConcreteType(getObject().stamp(), tool.assumptions(), tool.getMetaAccess());
                 if (type != null) {

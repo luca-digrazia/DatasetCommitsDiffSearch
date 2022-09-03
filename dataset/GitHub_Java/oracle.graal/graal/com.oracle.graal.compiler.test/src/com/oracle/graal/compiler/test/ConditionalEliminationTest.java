@@ -154,18 +154,14 @@ public class ConditionalEliminationTest extends GraalCompilerTest {
 
     @SuppressWarnings("unused")
     public static int testDisjunctionSnippet(Object a) {
-        try {
-            if (a instanceof Integer) {
-                if (a == null) {
-                    return -1;
-                } else {
-                    return 2;
-                }
+        if (a instanceof Integer) {
+            if (a == null) {
+                return -1;
             } else {
-                return 3;
+                return 2;
             }
-        } finally {
-            field = null;
+        } else {
+            return 3;
         }
     }
 

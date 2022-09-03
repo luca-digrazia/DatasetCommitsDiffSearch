@@ -26,7 +26,6 @@ import org.junit.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
@@ -72,7 +71,7 @@ public class PushNodesThroughPiTest extends GraalCompilerTest {
             for (ReadNode rn : graph.getNodes().filter(ReadNode.class)) {
                 if (rn.location() instanceof ConstantLocationNode && rn.object().stamp() instanceof ObjectStamp) {
                     long disp = ((ConstantLocationNode) rn.location()).getDisplacement();
-                    ResolvedJavaType receiverType = StampTool.typeOrNull(rn.object());
+                    ResolvedJavaType receiverType = ObjectStamp.typeOrNull(rn.object());
                     ResolvedJavaField field = receiverType.findInstanceFieldWithOffset(disp);
 
                     assert field != null : "Node " + rn + " tries to access a field which doesn't exists for this type";
@@ -91,7 +90,7 @@ public class PushNodesThroughPiTest extends GraalCompilerTest {
     }
 
     private StructuredGraph compileTestSnippet(final String snippet) {
-        StructuredGraph graph = parseEager(snippet);
+        StructuredGraph graph = parse(snippet);
         PhaseContext context = new PhaseContext(getProviders(), new Assumptions(false));
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
         new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);

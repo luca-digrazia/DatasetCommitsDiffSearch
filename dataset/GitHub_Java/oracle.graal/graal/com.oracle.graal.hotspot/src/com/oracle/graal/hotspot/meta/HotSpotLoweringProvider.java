@@ -106,7 +106,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
             ValueNode array = arrayLengthNode.array();
             ReadNode arrayLengthRead = graph.add(new ReadNode(array, ConstantLocationNode.create(FINAL_LOCATION, Kind.Int, config.arrayLengthOffset, graph), StampFactory.positiveInt(),
                             BarrierType.NONE, false));
-            arrayLengthRead.setGuard(createNullCheck(array, arrayLengthNode, tool));
+            tool.createNullCheckGuard(arrayLengthNode, arrayLengthRead, array);
             graph.replaceFixedWithFixed(arrayLengthNode, arrayLengthRead);
         } else if (n instanceof Invoke) {
             Invoke invoke = (Invoke) n;
@@ -117,8 +117,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
                 ValueNode receiver = parameters.size() <= 0 ? null : parameters.get(0);
                 GuardingNode receiverNullCheck = null;
                 if (!callTarget.isStatic() && receiver.stamp() instanceof ObjectStamp && !ObjectStamp.isObjectNonNull(receiver)) {
-                    receiverNullCheck = createNullCheck(receiver, invoke.asNode(), tool);
-                    invoke.setGuard(receiverNullCheck);
+                    receiverNullCheck = tool.createNullCheckGuard(invoke.asNode(), invoke, receiver);
                 }
                 JavaType[] signature = MetaUtil.signatureToTypes(callTarget.targetMethod().getSignature(), callTarget.isStatic() ? null : callTarget.targetMethod().getDeclaringClass());
 
@@ -162,7 +161,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
             BarrierType barrierType = getFieldLoadBarrierType(field);
             ReadNode memoryRead = graph.add(new ReadNode(object, createFieldLocation(graph, field, false), loadField.stamp(), barrierType, (loadField.kind() == Kind.Object)));
             graph.replaceFixedWithFixed(loadField, memoryRead);
-            memoryRead.setGuard(createNullCheck(object, memoryRead, tool));
+            tool.createNullCheckGuard(memoryRead, memoryRead, object);
 
             if (loadField.isVolatile()) {
                 MembarNode preMembar = graph.add(new MembarNode(JMM_PRE_VOLATILE_READ));
@@ -178,7 +177,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
             WriteNode memoryWrite = graph.add(new WriteNode(object, storeField.value(), createFieldLocation(graph, field, false), barrierType, storeField.field().getKind() == Kind.Object));
             memoryWrite.setStateAfter(storeField.stateAfter());
             graph.replaceFixedWithFixed(storeField, memoryWrite);
-            memoryWrite.setGuard(createNullCheck(object, memoryWrite, tool));
+            tool.createNullCheckGuard(memoryWrite, memoryWrite, object);
             FixedWithNextNode last = memoryWrite;
             FixedWithNextNode first = memoryWrite;
 
@@ -697,15 +696,11 @@ public class HotSpotLoweringProvider implements LoweringProvider {
             Stamp stamp = StampFactory.positiveInt();
             ReadNode readArrayLength = g.add(new ReadNode(array, ConstantLocationNode.create(FINAL_LOCATION, Kind.Int, runtime.getConfig().arrayLengthOffset, g), stamp, BarrierType.NONE, false));
             g.addBeforeFixed(n, readArrayLength);
-            readArrayLength.setGuard(createNullCheck(array, readArrayLength, tool));
+            tool.createNullCheckGuard(readArrayLength, readArrayLength, array);
             arrayLength = readArrayLength;
         }
 
         return tool.createGuard(n, g.unique(new IntegerBelowThanNode(n.index(), arrayLength)), BoundsCheckException, InvalidateReprofile);
-    }
-
-    private static GuardingNode createNullCheck(ValueNode object, FixedNode before, LoweringTool tool) {
-        return tool.createGuard(before, before.graph().unique(new IsNullNode(object)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true);
     }
 
 }

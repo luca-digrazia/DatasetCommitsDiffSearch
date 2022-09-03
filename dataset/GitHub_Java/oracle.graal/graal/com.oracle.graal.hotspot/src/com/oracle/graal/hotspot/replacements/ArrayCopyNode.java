@@ -23,10 +23,8 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.compiler.GraalCompiler.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.loop.phases.*;
@@ -34,11 +32,12 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.nodes.*;
 
-public class ArrayCopyNode extends MacroStateSplitNode implements Virtualizable, Lowerable {
+public class ArrayCopyNode extends MacroNode implements Virtualizable, Lowerable {
 
     public ArrayCopyNode(Invoke invoke) {
         super(invoke);
@@ -64,25 +63,18 @@ public class ArrayCopyNode extends MacroStateSplitNode implements Virtualizable,
         return arguments.get(4);
     }
 
-    static boolean isHeapWordAligned(Constant value, Kind kind) {
-        return (arrayBaseOffset(kind) + (long) value.asInt() * arrayIndexScale(kind)) % heapWordSize() == 0;
-    }
-
     private StructuredGraph selectSnippet(LoweringTool tool, final Replacements replacements) {
-        ResolvedJavaType srcType = StampTool.typeOrNull(getSource().stamp());
-        ResolvedJavaType destType = StampTool.typeOrNull(getDestination().stamp());
+        ResolvedJavaType srcType = ObjectStamp.typeOrNull(getSource().stamp());
+        ResolvedJavaType destType = ObjectStamp.typeOrNull(getDestination().stamp());
 
         if (srcType == null || !srcType.isArray() || destType == null || !destType.isArray()) {
             return null;
         }
-        if (!destType.getComponentType().isAssignableFrom(srcType.getComponentType())) {
-            return null;
-        }
-        if (!isExact()) {
+        if (!destType.getComponentType().isAssignableFrom(srcType.getComponentType()) || !ObjectStamp.isExactType(getDestination().stamp())) {
             return null;
         }
         Kind componentKind = srcType.getComponentType().getKind();
-        final ResolvedJavaMethod snippetMethod = tool.getMetaAccess().lookupJavaMethod(ArrayCopySnippets.getSnippetForKind(componentKind, shouldUnroll(), isExact()));
+        final ResolvedJavaMethod snippetMethod = tool.getMetaAccess().lookupJavaMethod(ArrayCopySnippets.getSnippetForKind(componentKind));
         try (Scope s = Debug.scope("ArrayCopySnippet", snippetMethod)) {
             return replacements.getSnippet(snippetMethod);
         } catch (Throwable e) {
@@ -115,7 +107,7 @@ public class ArrayCopyNode extends MacroStateSplitNode implements Virtualizable,
             final ResolvedJavaMethod snippetMethod = tool.getMetaAccess().lookupJavaMethod(ArrayCopySnippets.genericArraycopySnippet);
             snippetGraph = null;
             try (Scope s = Debug.scope("ArrayCopySnippet", snippetMethod)) {
-                snippetGraph = replacements.getSnippet(snippetMethod, getTargetMethod()).copy();
+                snippetGraph = replacements.getSnippet(snippetMethod).copy();
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
@@ -123,7 +115,7 @@ public class ArrayCopyNode extends MacroStateSplitNode implements Virtualizable,
         } else {
             assert snippetGraph != null : "ArrayCopySnippets should be installed";
             snippetGraph = snippetGraph.copy();
-            if (shouldUnroll()) {
+            if (getLength().isConstant() && getLength().asConstant().asInt() <= GraalOptions.MaximumEscapeAnalysisArrayLength.getValue()) {
                 final StructuredGraph copy = snippetGraph;
                 try (Scope s = Debug.scope("ArrayCopySnippetSpecialization", snippetGraph.method())) {
                     unrollFixedLengthLoop(copy, getLength().asConstant().asInt(), tool);
@@ -133,28 +125,6 @@ public class ArrayCopyNode extends MacroStateSplitNode implements Virtualizable,
             }
         }
         return lowerReplacement(snippetGraph, tool);
-    }
-
-    private boolean shouldUnroll() {
-        return getLength().isConstant() && getLength().asConstant().asInt() <= GraalOptions.MaximumEscapeAnalysisArrayLength.getValue();
-    }
-
-    /*
-     * Returns true if this copy doesn't require store checks. Trivially true for primitive arrays.
-     */
-    private boolean isExact() {
-        ResolvedJavaType srcType = StampTool.typeOrNull(getSource().stamp());
-        if (srcType.getComponentType().getKind().isPrimitive() || getSource() == getDestination()) {
-            return true;
-        }
-
-        ResolvedJavaType destType = StampTool.typeOrNull(getDestination().stamp());
-        if (StampTool.isExactType(getDestination().stamp())) {
-            if (destType != null && destType.isAssignableFrom(srcType)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static boolean checkBounds(int position, int length, VirtualObjectNode virtualObject) {
@@ -171,10 +141,10 @@ public class ArrayCopyNode extends MacroStateSplitNode implements Virtualizable,
                     if (state.getState() == EscapeState.Virtual) {
                         type = state.getVirtualObject().type();
                     } else {
-                        type = StampTool.typeOrNull(state.getMaterializedValue());
+                        type = ObjectStamp.typeOrNull(state.getMaterializedValue());
                     }
                 } else {
-                    type = StampTool.typeOrNull(entry);
+                    type = ObjectStamp.typeOrNull(entry);
                 }
                 if (type == null || !destComponentType.isAssignableFrom(type)) {
                     return false;
@@ -218,5 +188,4 @@ public class ArrayCopyNode extends MacroStateSplitNode implements Virtualizable,
             }
         }
     }
-
 }

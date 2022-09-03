@@ -36,7 +36,7 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.ReplacementsImpl.FrameStateProcessing;
+import com.oracle.graal.replacements.ReplacementsImpl.*;
 import com.oracle.graal.replacements.Snippet.SnippetInliningPolicy;
 import com.oracle.graal.word.*;
 import com.oracle.graal.word.nodes.*;
@@ -109,12 +109,12 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     private void assertRead(StructuredGraph graph, Kind kind, boolean indexConvert, LocationIdentity locationIdentity) {
         WordCastNode cast = (WordCastNode) graph.start().next();
 
-        JavaReadNode read = (JavaReadNode) cast.next();
-        Assert.assertEquals(kind.getStackKind(), read.stamp().getStackKind());
+        ReadNode read = (ReadNode) cast.next();
+        Assert.assertEquals(kind.getStackKind(), read.kind());
 
         Assert.assertEquals(cast, read.object());
         Assert.assertEquals(graph.getParameter(0), cast.getInput());
-        Assert.assertEquals(target.wordKind, cast.stamp().getStackKind());
+        Assert.assertEquals(target.wordKind, cast.kind());
 
         IndexedLocationNode location = (IndexedLocationNode) read.location();
         Assert.assertEquals(kind, location.getValueKind());
@@ -122,10 +122,10 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
         Assert.assertEquals(1, location.getIndexScaling());
 
         if (indexConvert) {
-            SignExtendNode convert = (SignExtendNode) location.getIndex();
-            Assert.assertEquals(convert.getInputBits(), 32);
-            Assert.assertEquals(convert.getResultBits(), 64);
-            Assert.assertEquals(graph.getParameter(1), convert.getInput());
+            ConvertNode convert = (ConvertNode) location.getIndex();
+            Assert.assertEquals(Kind.Int, convert.getFromKind());
+            Assert.assertEquals(Kind.Long, convert.getToKind());
+            Assert.assertEquals(graph.getParameter(1), convert.value());
         } else {
             Assert.assertEquals(graph.getParameter(1), location.getIndex());
         }
@@ -137,13 +137,14 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     private void assertWrite(StructuredGraph graph, Kind kind, boolean indexConvert, LocationIdentity locationIdentity) {
         WordCastNode cast = (WordCastNode) graph.start().next();
 
-        JavaWriteNode write = (JavaWriteNode) cast.next();
+        WriteNode write = (WriteNode) cast.next();
         Assert.assertEquals(graph.getParameter(2), write.value());
+        Assert.assertEquals(Kind.Void, write.kind());
         Assert.assertEquals(FrameState.AFTER_BCI, write.stateAfter().bci);
 
         Assert.assertEquals(cast, write.object());
         Assert.assertEquals(graph.getParameter(0), cast.getInput());
-        Assert.assertEquals(target.wordKind, cast.stamp().getStackKind());
+        Assert.assertEquals(target.wordKind, cast.kind());
 
         IndexedLocationNode location = (IndexedLocationNode) write.location();
         Assert.assertEquals(kind, location.getValueKind());
@@ -151,10 +152,10 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
         Assert.assertEquals(1, location.getIndexScaling());
 
         if (indexConvert) {
-            SignExtendNode convert = (SignExtendNode) location.getIndex();
-            Assert.assertEquals(convert.getInputBits(), 32);
-            Assert.assertEquals(convert.getResultBits(), 64);
-            Assert.assertEquals(graph.getParameter(1), convert.getInput());
+            ConvertNode convert = (ConvertNode) location.getIndex();
+            Assert.assertEquals(Kind.Int, convert.getFromKind());
+            Assert.assertEquals(Kind.Long, convert.getToKind());
+            Assert.assertEquals(graph.getParameter(1), convert.value());
         } else {
             Assert.assertEquals(graph.getParameter(1), location.getIndex());
         }

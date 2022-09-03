@@ -74,13 +74,13 @@ public class IterativeInliningTest extends GraalCompilerTest {
     public void testSimple() {
         ValueNode result = getReturn("testSimpleSnippet").result();
         assertTrue(graph.getNodes().filter(LoadFieldNode.class).isEmpty());
-        assertDeepEquals(graph.getParameter(0), result);
+        assertEquals(graph.getParameter(0), result);
     }
 
     final ReturnNode getReturn(String snippet) {
         processMethod(snippet);
-        assertDeepEquals(1, graph.getNodes(ReturnNode.class).count());
-        return graph.getNodes(ReturnNode.class).first();
+        assertEquals(1, graph.getNodes().filter(ReturnNode.class).count());
+        return graph.getNodes().filter(ReturnNode.class).first();
     }
 
     private void processMethod(final String snippet) {

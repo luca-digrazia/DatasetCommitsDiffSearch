@@ -24,8 +24,6 @@ package com.oracle.graal.compiler.test.ea;
 
 import static org.junit.Assert.*;
 
-import java.util.*;
-
 import org.junit.*;
 
 import com.oracle.graal.api.code.*;
@@ -196,14 +194,14 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     @Test
     public void testPhi() {
-        processMethod("testPhiSnippet");
+        ValueNode result = getReturn("testPhiSnippet").result();
         assertTrue(graph.getNodes().filter(LoadFieldNode.class).isEmpty());
-        List<ReturnNode> returnNodes = graph.getNodes(ReturnNode.class).snapshot();
-        assertEquals(2, returnNodes.size());
-        assertTrue(returnNodes.get(0).predecessor() instanceof StoreFieldNode);
-        assertTrue(returnNodes.get(1).predecessor() instanceof StoreFieldNode);
-        assertTrue(returnNodes.get(0).result().isConstant());
-        assertTrue(returnNodes.get(1).result().isConstant());
+        assertTrue(result instanceof PhiNode);
+        PhiNode phi = (PhiNode) result;
+        assertTrue(phi.valueAt(0).isConstant());
+        assertTrue(phi.valueAt(1).isConstant());
+        assertEquals(1, phi.valueAt(0).asConstant().asInt());
+        assertEquals(2, phi.valueAt(1).asConstant().asInt());
     }
 
     @SuppressWarnings("all")
@@ -238,8 +236,8 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     final ReturnNode getReturn(String snippet) {
         processMethod(snippet);
-        assertEquals(1, graph.getNodes(ReturnNode.class).count());
-        return graph.getNodes(ReturnNode.class).first();
+        assertEquals(1, graph.getNodes().filter(ReturnNode.class).count());
+        return graph.getNodes().filter(ReturnNode.class).first();
     }
 
     protected void processMethod(final String snippet) {
