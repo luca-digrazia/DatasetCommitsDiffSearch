@@ -23,7 +23,6 @@
 package org.graalvm.compiler.nodes.java;
 
 import jdk.vm.ci.meta.JavaKind;
-import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.NodeView;
@@ -56,18 +55,14 @@ public final class UnsafeCompareAndExchangeNode extends AbstractMemoryCheckpoint
     private final LocationIdentity locationIdentity;
 
     public UnsafeCompareAndExchangeNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, JavaKind valueKind, LocationIdentity locationIdentity) {
-        super(TYPE, meetInputs(expected.stamp(NodeView.DEFAULT), newValue.stamp(NodeView.DEFAULT)));
+        super(TYPE, expected.stamp(NodeView.DEFAULT).meet(newValue.stamp(NodeView.DEFAULT)));
+        assert expected.stamp(NodeView.DEFAULT).isCompatible(newValue.stamp(NodeView.DEFAULT));
         this.object = object;
         this.offset = offset;
         this.expected = expected;
         this.newValue = newValue;
         this.valueKind = valueKind;
         this.locationIdentity = locationIdentity;
-    }
-
-    private static Stamp meetInputs(Stamp expected, Stamp newValue) {
-        assert expected.isCompatible(newValue);
-        return expected.meet(newValue).unrestricted();
     }
 
     public ValueNode object() {
