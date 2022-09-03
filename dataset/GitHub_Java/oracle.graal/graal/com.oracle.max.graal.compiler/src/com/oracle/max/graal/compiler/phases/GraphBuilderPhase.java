@@ -86,7 +86,7 @@ public final class GraphBuilderPhase extends Phase {
     private Value methodSynchronizedObject;
     private CiExceptionHandler unwindHandler;
 
-    private ExceptionBlock unwindBlock;
+    private Block unwindBlock;
     private Block returnBlock;
 
     private boolean storeResultGraph;
@@ -126,7 +126,7 @@ public final class GraphBuilderPhase extends Phase {
 
         this.constantPool = runtime.getConstantPool(method);
         this.createUnwind = createUnwind;
-        this.storeResultGraph = GraalOptions.CacheGraphs;
+        this.storeResultGraph = GraalOptions.StoreResultGraph;
     }
 
     @Override
@@ -236,12 +236,11 @@ public final class GraphBuilderPhase extends Phase {
         return block;
     }
 
-    private Block unwindBlock(int bci) {
+    private Block unwindBlock() {
         if (unwindBlock == null) {
-            unwindBlock = new ExceptionBlock();
-            unwindBlock.startBci = -1;
-            unwindBlock.endBci = -1;
-            unwindBlock.deoptBci = bci;
+            unwindBlock = new Block();
+            unwindBlock.startBci = Instruction.SYNCHRONIZATION_ENTRY_BCI;
+            unwindBlock.endBci = Instruction.SYNCHRONIZATION_ENTRY_BCI;
             unwindBlock.blockID = nextBlockNumber();
             addToWorkList(unwindBlock);
         }
@@ -418,7 +417,7 @@ public final class GraphBuilderPhase extends Phase {
                 assert isCatchAll(firstHandler);
                 int handlerBCI = firstHandler.handlerBCI();
                 if (handlerBCI == Instruction.SYNCHRONIZATION_ENTRY_BCI) {
-                    dispatchBlock = unwindBlock(bci);
+                    dispatchBlock = unwindBlock();
                 } else {
                     dispatchBlock = blockFromBci[handlerBCI];
                 }
@@ -719,7 +718,7 @@ public final class GraphBuilderPhase extends Phase {
         } else {
             frameState.clearStack();
             frameState.apush(exception);
-            appendGoto(createTarget(unwindBlock(bci), frameState));
+            appendGoto(createTarget(unwindBlock(), frameState));
         }
     }
 
@@ -1288,15 +1287,17 @@ public final class GraphBuilderPhase extends Phase {
         } else {
             assert frameState.stackSize() == 1 : frameState;
 
-            Block nextBlock = block.next == null ? unwindBlock(block.deoptBci) : block.next;
+            Block nextBlock = block.next == null ? unwindBlock() : block.next;
             if (block.handler.catchType().isResolved()) {
                 FixedNode catchSuccessor = createTarget(blockFromBci[block.handler.handlerBCI()], frameState);
                 FixedNode nextDispatch = createTarget(nextBlock, frameState);
                 append(new ExceptionDispatch(frameState.stackAt(0), catchSuccessor, nextDispatch, block.handler.catchType(), graph));
             } else {
-                Deoptimize deopt = new Deoptimize(DeoptAction.InvalidateRecompile, graph);
+                Deoptimize deopt = new Deoptimize(DeoptAction.RethrowExceptionInInterpreter, graph);
                 deopt.setMessage("unresolved " + block.handler.catchType().name());
                 append(deopt);
+//                FixedNode nextDispatch = createTarget(nextBlock, frameState);
+//                appendGoto(nextDispatch);
             }
         }
     }
