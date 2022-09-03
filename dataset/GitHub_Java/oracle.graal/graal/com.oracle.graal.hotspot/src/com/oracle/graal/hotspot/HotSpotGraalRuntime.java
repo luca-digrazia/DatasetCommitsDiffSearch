@@ -194,7 +194,9 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         compilerToVm = toVM;
         compilerToGpu = toGPU;
         vmToCompiler = toCompiler;
-        config = new HotSpotVMConfig(compilerToVm);
+        config = new HotSpotVMConfig();
+        compilerToVm.initializeConfiguration(config);
+        config.check();
 
         // Set some global options:
         if (config.compileTheWorld) {
