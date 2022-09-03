@@ -144,9 +144,12 @@ public class AnalysisConstantReflectionProvider extends SharedConstantReflection
                  */
                 return JavaConstant.TRUE;
             }
-            /* For the user-provided filter, match substitution target names to avoid confusion. */
-            String className = field.getDeclaringClass().toJavaName();
-            return JavaConstant.forBoolean(!SubstrateOptions.getRuntimeAssertionsForClass(className));
+            if (SubstrateOptions.RuntimeAssertions.getValue()) {
+                // For the user-provided filter, match substitution target names to avoid confusion
+                String className = field.getDeclaringClass().toJavaName();
+                return JavaConstant.forBoolean(!SubstrateOptions.getRuntimeAssertionsFilter().test(className));
+            }
+            return JavaConstant.TRUE;
         }
         return value;
     }
