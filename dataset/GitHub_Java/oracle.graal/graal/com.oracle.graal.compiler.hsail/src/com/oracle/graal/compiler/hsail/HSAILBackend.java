@@ -23,6 +23,7 @@
 package com.oracle.graal.compiler.hsail;
 
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
+
 import static com.oracle.graal.api.code.ValueUtil.*;
 
 import com.oracle.graal.api.code.*;
@@ -34,7 +35,6 @@ import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.hsail.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.hsail.*;
 
@@ -57,11 +57,6 @@ public class HSAILBackend extends Backend {
         paramTypeMap.put("HotSpotResolvedPrimitiveType<float>", "f32");
         paramTypeMap.put("HotSpotResolvedPrimitiveType<double>", "f64");
         paramTypeMap.put("HotSpotResolvedPrimitiveType<long>", "s64");
-    }
-
-    @Override
-    public FrameMap newFrameMap() {
-        return new HSAILFrameMap(runtime(), target, runtime().lookupRegisterConfig());
     }
 
     @Override

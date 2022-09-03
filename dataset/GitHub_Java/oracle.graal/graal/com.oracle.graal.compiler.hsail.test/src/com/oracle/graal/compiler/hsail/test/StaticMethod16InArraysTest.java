@@ -23,10 +23,7 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import org.junit.*;
-
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.internal.*;
+import org.junit.Test;
 
 /**
  * Tests the addition of elements from sixteen input arrays.
@@ -63,17 +60,7 @@ public class StaticMethod16InArraysTest extends StaticMethodTwoIntArrays {
      */
     @Test(expected = java.lang.ClassCastException.class)
     public void test() {
-        DebugConfig debugConfig = DebugScope.getConfig();
-        DebugConfig noInterceptConfig = new DelegatingDebugConfig(debugConfig) {
-            @Override
-            public RuntimeException interceptException(Throwable e) {
-                return null;
-            }
-        };
-
-        try (DebugConfigScope s = Debug.setConfig(noInterceptConfig)) {
-            testGeneratedHsail();
-        }
+        testGeneratedHsail();
     }
 
 }

@@ -150,12 +150,6 @@ public abstract class KernelTester {
     }
 
     private boolean compareObjects(Object first, Object second) {
-        if (first == null) {
-            return (second == null);
-        }
-        if (second == null) {
-            return (first == null);
-        }
         Class<?> clazz = first.getClass();
         if (clazz != second.getClass()) {
             return false;
@@ -270,11 +264,6 @@ public abstract class KernelTester {
         @Override
         Object getElement(Object ary, int index) {
             return Array.get(ary, index);
-        }
-
-        @Override
-        boolean isEquals(Object firstElement, Object secondElement) {
-            return compareObjects(firstElement, secondElement);
         }
     }
 
@@ -507,7 +496,7 @@ public abstract class KernelTester {
         String hsailSource = getHSAILSource(testMethod);
         if (!okraLibExists) {
             if (!gaveNoOkraWarning) {
-                logger.severe("No Okra library detected, skipping all KernelTester tests in " + this.getClass().getPackage().getName());
+                logger.fine("No Okra library detected, skipping all KernelTester tests in " + this.getClass().getPackage().getName());
                 gaveNoOkraWarning = true;
             }
         }

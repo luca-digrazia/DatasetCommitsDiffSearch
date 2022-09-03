@@ -25,8 +25,7 @@ package com.oracle.graal.compiler.hsail.test;
 import java.util.*;
 
 import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
-
-import org.junit.*;
+import org.junit.Test;
 
 /**
  * Tests the spilling of double variables into memory.
@@ -119,7 +118,6 @@ public class StaticDoubleSpillTest extends GraalKernelTester {
     }
 
     // Marked to only run on hardware until simulator spill bug is fixed.
-    @Ignore
     @Test
     public void test() {
         testGeneratedHsail();

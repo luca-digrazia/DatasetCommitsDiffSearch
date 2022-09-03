@@ -47,6 +47,10 @@ public class FloatDivPrecisionTest extends GraalKernelTester {
 
     }
 
+    /**
+     * Allows subclass to override what FP equality means for this particular unit test.
+     * 
+     */
     @Override
     public boolean isEqualsFP(double first, double second) {
         return Math.abs(first - second) == 0;

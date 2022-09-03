@@ -337,11 +337,17 @@ public class HSAIL extends Architecture {
         q22, q23, q24, q25, q26, q27, q28, q29, q30, q31
     };
 
-    // @formatter:on
-
     public HSAIL() {
-        super("HSAIL", 8, ByteOrder.LITTLE_ENDIAN, false, allRegisters, LOAD_STORE | STORE_STORE, 1, q31.encoding + 1, 8);
+        super("HSAIL",
+                        8,
+                        ByteOrder.LITTLE_ENDIAN,
+                        allRegisters,
+                        LOAD_STORE | STORE_STORE,
+                        1,
+                        q31.encoding + 1,
+                        8);
     }
+
 
     public static int getStackOffset(Value reg) {
         return -(((StackSlot) reg).getRawOffset());
@@ -353,6 +359,7 @@ public class HSAIL extends Architecture {
         return "[%spillseg]" + "[" + offset + "]";
     }
 
+    // @formatter:on
     public static String mapRegister(Value arg) {
         Register reg;
         int encoding = 0;

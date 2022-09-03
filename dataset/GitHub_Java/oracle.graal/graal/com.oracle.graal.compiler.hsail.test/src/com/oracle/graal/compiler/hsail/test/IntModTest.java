@@ -23,7 +23,7 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import org.junit.*;
+import org.junit.Test;
 
 /**
  * Tests modulo operation.

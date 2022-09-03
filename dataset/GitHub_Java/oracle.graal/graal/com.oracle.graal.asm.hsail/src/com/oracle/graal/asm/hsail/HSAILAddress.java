@@ -23,6 +23,7 @@
 package com.oracle.graal.asm.hsail;
 
 import com.oracle.graal.api.code.*;
+
 import com.oracle.graal.api.meta.*;
 
 /**

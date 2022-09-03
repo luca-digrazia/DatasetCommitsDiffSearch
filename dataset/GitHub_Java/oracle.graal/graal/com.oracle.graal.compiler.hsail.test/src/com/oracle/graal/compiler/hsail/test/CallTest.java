@@ -24,7 +24,7 @@ package com.oracle.graal.compiler.hsail.test;
 
 import org.junit.*;
 
-import com.oracle.graal.compiler.hsail.test.infra.*;
+import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
 
 /**
  * Tests direct method calls.
