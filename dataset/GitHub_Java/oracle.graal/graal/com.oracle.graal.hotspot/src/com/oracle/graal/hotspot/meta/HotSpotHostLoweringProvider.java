@@ -317,19 +317,10 @@ public class HotSpotHostLoweringProvider implements LoweringProvider {
                             if (value == null) {
                                 omittedValues.set(valuePos);
                             } else if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
-                                // Constant.illegal is always the defaultForKind, so it is skipped
                                 VirtualInstanceNode virtualInstance = (VirtualInstanceNode) virtual;
-                                Kind accessKind;
-                                HotSpotResolvedJavaField field = (HotSpotResolvedJavaField) virtualInstance.field(i);
-                                if (value.kind().getStackKind() != field.getKind().getStackKind()) {
-                                    assert value.kind() == Kind.Long || value.kind() == Kind.Double;
-                                    accessKind = value.kind();
-                                } else {
-                                    accessKind = field.getKind();
-                                }
-                                ConstantLocationNode location = ConstantLocationNode.create(INIT_LOCATION, accessKind, field.offset(), graph);
-                                BarrierType barrierType = (virtualInstance.field(i).getKind() == Kind.Object && !useDeferredInitBarriers()) ? BarrierType.IMPRECISE : BarrierType.NONE;
-                                WriteNode write = new WriteNode(newObject, value, location, barrierType, virtualInstance.field(i).getKind() == Kind.Object);
+                                WriteNode write = new WriteNode(newObject, value, createFieldLocation(graph, (HotSpotResolvedJavaField) virtualInstance.field(i), true),
+                                                (virtualInstance.field(i).getKind() == Kind.Object && !useDeferredInitBarriers()) ? BarrierType.IMPRECISE : BarrierType.NONE,
+                                                virtualInstance.field(i).getKind() == Kind.Object);
                                 graph.addAfterFixed(newObject, graph.add(write));
                             }
                             valuePos++;
@@ -347,23 +338,8 @@ public class HotSpotHostLoweringProvider implements LoweringProvider {
                             if (value == null) {
                                 omittedValues.set(valuePos);
                             } else if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
-                                // Constant.illegal is always the defaultForKind, so it is skipped
-                                Kind componentKind = element.getKind();
-                                Kind accessKind;
-                                Kind valueKind = value.kind();
-                                if (valueKind.getStackKind() != componentKind.getStackKind()) {
-                                    // Given how Truffle uses unsafe, it can happen that
-                                    // valueKind is Kind.Int
-                                    // assert valueKind == Kind.Long || valueKind == Kind.Double;
-                                    accessKind = valueKind;
-                                } else {
-                                    accessKind = componentKind;
-                                }
-
-                                int scale = getScalingFactor(componentKind);
-                                ConstantLocationNode location = ConstantLocationNode.create(INIT_LOCATION, accessKind, getArrayBaseOffset(componentKind) + i * scale, graph);
-                                BarrierType barrierType = (componentKind == Kind.Object && !useDeferredInitBarriers()) ? BarrierType.IMPRECISE : BarrierType.NONE;
-                                WriteNode write = new WriteNode(newObject, value, location, barrierType, componentKind == Kind.Object);
+                                WriteNode write = new WriteNode(newObject, value, createArrayLocation(graph, element.getKind(), ConstantNode.forInt(i, graph), true),
+                                                (value.kind() == Kind.Object && !useDeferredInitBarriers()) ? BarrierType.PRECISE : BarrierType.NONE, value.kind() == Kind.Object);
                                 graph.addAfterFixed(newObject, graph.add(write));
                             }
                             valuePos++;
@@ -695,14 +671,13 @@ public class HotSpotHostLoweringProvider implements LoweringProvider {
         base /= scale;
         assert NumUtil.isInt(base);
 
-        StructuredGraph graph = location.graph();
         if (index == null) {
-            return ConstantNode.forInt((int) base, graph);
+            return ConstantNode.forInt((int) base, location.graph());
         } else {
             if (base == 0) {
                 return index;
             } else {
-                return IntegerArithmeticNode.add(graph, ConstantNode.forInt((int) base, graph), index);
+                return IntegerArithmeticNode.add(ConstantNode.forInt((int) base, location.graph()), index);
             }
         }
     }
@@ -710,7 +685,7 @@ public class HotSpotHostLoweringProvider implements LoweringProvider {
     private GuardingNode createBoundsCheck(AccessIndexedNode n, LoweringTool tool) {
         StructuredGraph g = n.graph();
         ValueNode array = n.array();
-        ValueNode arrayLength = readArrayLength(n.graph(), array, tool.getConstantReflection());
+        ValueNode arrayLength = readArrayLength(array, tool.getConstantReflection());
         if (arrayLength == null) {
             Stamp stamp = StampFactory.positiveInt();
             ReadNode readArrayLength = g.add(new ReadNode(array, ConstantLocationNode.create(FINAL_LOCATION, Kind.Int, runtime.getConfig().arrayLengthOffset, g), stamp, BarrierType.NONE, false));
