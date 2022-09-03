@@ -22,15 +22,12 @@
  */
 package com.oracle.truffle.object.basic;
 
-import com.oracle.truffle.api.object.DynamicObject;
-import com.oracle.truffle.api.object.Shape;
-import com.oracle.truffle.object.DynamicObjectImpl;
-import com.oracle.truffle.object.ObjectStorageOptions;
-import com.oracle.truffle.object.ShapeImpl;
+import java.lang.annotation.*;
+
+import com.oracle.truffle.api.object.*;
+import com.oracle.truffle.object.*;
 import com.oracle.truffle.object.basic.BasicLocations.SimpleLongFieldLocation;
 import com.oracle.truffle.object.basic.BasicLocations.SimpleObjectFieldLocation;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
 
 public class DynamicObjectBasic extends DynamicObjectImpl {
     @Retention(RetentionPolicy.RUNTIME)
