@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -110,7 +108,7 @@ public class ELFSymtab extends ELFObjectFile.ELFSection implements SymbolTable {
 
         @Override
         public Section getDefinedSection() {
-            return referencedSection;
+            return getReferencedSection();
         }
 
         @Override
@@ -152,26 +150,21 @@ public class ELFSymtab extends ELFObjectFile.ELFSection implements SymbolTable {
             // represents the null entry
             this("", 0, 0, null, null, null, null);
         }
+
+        ELFSection getReferencedSection() {
+            return referencedSection;
+        }
     }
 
     public enum SymBinding {
-        LOCAL {
-            @Override
-            byte createVisibilityByte() {
-                return 2; /* set ELF Symbol Table Entry st_other to STV_HIDDEN */
-            }
-        },
+        LOCAL,
         GLOBAL,
         WEAK,
         LOPROC,
         HIPROC;
 
-        byte createInfoByte(SymType type) {
-            return type.createInfoByte(this);
-        }
-
-        byte createVisibilityByte() {
-            return 0; /* set ELF Symbol Table Entry st_other to STV_DEFAULT */
+        static byte createInfoByte(SymType type, SymBinding binding) {
+            return SymType.createInfoByte(type, binding);
         }
     }
 
@@ -184,8 +177,15 @@ public class ELFSymtab extends ELFObjectFile.ELFSection implements SymbolTable {
         LOPROC,
         HIPROC;
 
-        byte createInfoByte(SymBinding b) {
-            return (byte) (this.ordinal() | (b.ordinal() << 4));
+        static byte createInfoByte(SymType type, SymBinding b) {
+            if (type == null || b == null) {
+                // they must both be null
+                assert type == null;
+                assert b == null;
+                // the byte is zero -- it's for the null symtab entry
+                return (byte) 0;
+            }
+            return (byte) (type.ordinal() | (b.ordinal() << 4)); // FIXME: handle non-ordinal values
         }
 
     }
@@ -351,32 +351,36 @@ public class ELFSymtab extends ELFObjectFile.ELFSection implements SymbolTable {
 
         for (Entry e : entries) {
             EntryStruct s = new EntryStruct();
+            // even the null entry has a non-null name ("")
+            assert e.name != null;
             s.name = table.indexFor(e.name);
-
-            if (e.name.isEmpty()) {
-                /* If this is the NullEntry we are done */
-                assert e.isNull();
-                s.write(out);
-                continue;
-            }
-
-            if (e.pseudoSection != null) {
-                if (e.pseudoSection == PseudoSection.ABS) {
-                    s.value = e.value;
-                } else {
-                    assert e.pseudoSection == PseudoSection.UNDEF;
-                }
-            } else {
+            // careful: our symbol might not be defined,
+            // or might be absolute
+            ELFSection referencedSection = e.getReferencedSection();
+            if (e.pseudoSection == PseudoSection.ABS) {
+                // just emit the value
                 s.value = e.value;
-                if (isDynamic()) {
-                    s.value += (int) alreadyDecided.get(e.referencedSection).getDecidedValue(LayoutDecision.Kind.VADDR);
-                }
+            } else if (e.pseudoSection == PseudoSection.UNDEF) {
+                // it's undefined
+                s.value = 0;
+            } else if (e.pseudoSection != null) {
+                // it's a pseudosection we don't support yet
+                assert false : "symbol " + e.name + " references unsupported pseudosection " + e.pseudoSection.name();
+                s.value = 0;
+            } else if (e.referencedSection == null) {
+                assert e.isNull();
+                s.value = 0;
+            } else {
+                assert referencedSection != null;
+                // "value" is emitted as a vaddr in dynsym sections,
+                // but as a section offset in normal symtabs
+                s.value = isDynamic() ? ((int) alreadyDecided.get(e.getReferencedSection()).getDecidedValue(LayoutDecision.Kind.VADDR) + e.value) : e.value;
             }
-
             s.size = e.size;
-            s.info = e.binding.createInfoByte(e.symType);
-            s.other = e.binding.createVisibilityByte();
-            s.shndx = (short) getOwner().getIndexForSection(e.referencedSection);
+            s.info = SymBinding.createInfoByte(e.symType, e.binding);
+            assert !e.isNull() || s.info == 0;
+            s.other = (byte) 0;
+            s.shndx = (short) getOwner().getIndexForSection(e.getReferencedSection());
             s.write(out);
         }
         return out.getBlob();
@@ -409,7 +413,7 @@ public class ELFSymtab extends ELFObjectFile.ELFSection implements SymbolTable {
         if (isDynamic()) {
             Set<ELFSection> referencedSections = new HashSet<>();
             for (Entry ent : entries) {
-                ELFSection es = ent.referencedSection;
+                ELFSection es = ent.getReferencedSection();
                 if (es != null) {
                     referencedSections.add(es);
                 }
