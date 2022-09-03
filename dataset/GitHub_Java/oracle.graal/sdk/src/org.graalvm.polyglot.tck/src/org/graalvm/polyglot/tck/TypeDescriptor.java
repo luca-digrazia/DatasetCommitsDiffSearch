@@ -1,42 +1,26 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package org.graalvm.polyglot.tck;
 
@@ -158,42 +142,15 @@ public final class TypeDescriptor {
     public static final TypeDescriptor EXECUTABLE_ANY = new TypeDescriptor(new ExecutableImpl(ExecutableImpl.Kind.TOP, null, true, Collections.emptyList()));
 
     /**
-     * Represents an instantiable type accepting any number of parameters of any type. To create an
-     * instantiable type with concrete parameter types use
-     * {@link TypeDescriptor#instantiable(org.graalvm.polyglot.tck.TypeDescriptor, boolean, org.graalvm.polyglot.tck.TypeDescriptor...)}
-     * . This type can be used for creating value constructors but should not be used for specifying
-     * expressions or statements parameter types as no other instantiable is assignable to it.
-     *
-     *
-     * @see Value#canInstantiate().
-     * @since 1.0
-     */
-    public static final TypeDescriptor INSTANTIABLE = new TypeDescriptor(new InstantiableImpl(ExecutableImpl.Kind.BOTTOM, null, true, Collections.emptyList()));
-
-    /**
-     * Represents a raw instantiable type. Any instantiable can be assigned into this raw
-     * instantiable type, but the raw instantiable type cannot be assigned to any other
-     * instantiable. To create an instantiable type with concrete types use
-     * {@link TypeDescriptor#instantiable(org.graalvm.polyglot.tck.TypeDescriptor, boolean, org.graalvm.polyglot.tck.TypeDescriptor...)}
-     * . This type can be used for specifying expressions or statements parameter types when the
-     * passed instantiable is actually not invoked.
-     *
-     *
-     * @see TypeDescriptor#INSTANTIABLE
-     * @since 1.0
-     */
-    public static final TypeDescriptor INSTANTIABLE_ANY = new TypeDescriptor(new InstantiableImpl(ExecutableImpl.Kind.TOP, null, true, Collections.emptyList()));
-
-    /**
      * Represents all types. It's an intersection of no type.
      *
      * @since 0.30
      */
     public static final TypeDescriptor ANY = new TypeDescriptor(new UnionImpl(new HashSet<>(Arrays.asList(
-                    NOTYPE.impl, NULL.impl, BOOLEAN.impl, NUMBER.impl, STRING.impl, HOST_OBJECT.impl, NATIVE_POINTER.impl, OBJECT.impl, ARRAY.impl, EXECUTABLE_ANY.impl, INSTANTIABLE_ANY.impl))));
+                    NOTYPE.impl, NULL.impl, BOOLEAN.impl, NUMBER.impl, STRING.impl, HOST_OBJECT.impl, NATIVE_POINTER.impl, OBJECT.impl, ARRAY.impl, EXECUTABLE_ANY.impl))));
 
     private static final TypeDescriptor[] PREDEFINED_TYPES = new TypeDescriptor[]{
-                    NOTYPE, NULL, BOOLEAN, NUMBER, STRING, HOST_OBJECT, NATIVE_POINTER, OBJECT, ARRAY, EXECUTABLE, EXECUTABLE_ANY, INSTANTIABLE, INSTANTIABLE_ANY, ANY
+                    NOTYPE, NULL, BOOLEAN, NUMBER, STRING, HOST_OBJECT, NATIVE_POINTER, OBJECT, ARRAY, EXECUTABLE, EXECUTABLE_ANY, ANY
     };
 
     private final TypeDescriptorImpl impl;
@@ -411,9 +368,8 @@ public final class TypeDescriptor {
 
     /**
      * Collects all disjunctive normal form components. Computes cartesian product of unions
-     * appended by tail types. The components have also reduced arrays, executables and
-     * instantiables. If there is a generic ARRAY (EXECUTABLE, INSTANTIABLE) the other arrays
-     * (executables, instantiables) are removed.
+     * appended by tail types. The components have also reduced arrays and executables. If there is
+     * a generic ARRAY (EXECUTABLE) the other arrays (executables) are removed.
      *
      * @param unions the union types
      * @param tail the non union types
@@ -429,7 +385,6 @@ public final class TypeDescriptor {
             final Set<TypeDescriptorImpl> currentComponent = new HashSet<>();
             boolean wca = false;
             boolean wce = false;
-            boolean wci = false;
             for (int i = 0; i < unionTypes.length; i++) {
                 TypeDescriptorImpl component = unionTypes[i][indexes[i]];
                 if (component.equals(ARRAY.impl)) {
@@ -437,9 +392,6 @@ public final class TypeDescriptor {
                 }
                 if (component.equals(EXECUTABLE.impl)) {
                     wce = true;
-                }
-                if (component.equals(INSTANTIABLE.impl)) {
-                    wci = true;
                 }
                 currentComponent.add(component);
             }
@@ -450,9 +402,6 @@ public final class TypeDescriptor {
                 if (component.equals(EXECUTABLE.impl)) {
                     wce = true;
                 }
-                if (component.equals(INSTANTIABLE.impl)) {
-                    wci = true;
-                }
                 currentComponent.add(component);
             }
             if (wca || wce) {
@@ -461,8 +410,6 @@ public final class TypeDescriptor {
                     if (wca && td.getClass() == ArrayImpl.class && td != ARRAY.impl) {
                         it.remove();
                     } else if (wce && td.getClass() == ExecutableImpl.class && td != EXECUTABLE.impl) {
-                        it.remove();
-                    } else if (wci && td.getClass() == InstantiableImpl.class && td != INSTANTIABLE.impl) {
                         it.remove();
                     }
                 }
@@ -534,33 +481,6 @@ public final class TypeDescriptor {
     }
 
     /**
-     * Creates a new instantiable type with a given parameter types.
-     *
-     * @param instanceType the type of an instance, use ANY as any type
-     * @param vararg the instantiable has variable length arguments or ignores additional
-     *            parameters. For instantiables created by the
-     *            {@link LanguageProvider#createValueConstructors(org.graalvm.polyglot.Context)} set
-     *            to {@code false} if the language neither ignores extra parameters nor the
-     *            instantiable has variable arguments length.
-     * @param parameterTypes the required parameter types
-     * @return an instantiable type
-     * @since 1.0
-     */
-    public static TypeDescriptor instantiable(TypeDescriptor instanceType, boolean vararg, TypeDescriptor... parameterTypes) {
-        Objects.requireNonNull(instanceType, "Instance type cannot be null");
-        Objects.requireNonNull(parameterTypes, "Parameter types cannot be null");
-        if (isAny(instanceType.impl) && parameterTypes.length == 0 && vararg) {
-            return INSTANTIABLE;
-        }
-        final List<TypeDescriptorImpl> paramTypeImpls = new ArrayList<>(parameterTypes.length);
-        for (TypeDescriptor td : parameterTypes) {
-            Objects.requireNonNull(td, "Parameter types cannot contain null");
-            paramTypeImpls.add(td.impl);
-        }
-        return new TypeDescriptor(new InstantiableImpl(ExecutableImpl.Kind.UNIT, isAny(instanceType.impl) ? null : instanceType.impl, vararg, paramTypeImpls));
-    }
-
-    /**
      * Creates a type for given {@link Value}.
      *
      * @param value the value to create {@link TypeDescriptor} for
@@ -594,7 +514,7 @@ public final class TypeDescriptor {
             }
             switch (contentTypes.size()) {
                 case 0:
-                    descs.add(array(intersection(NOTYPE, NULL, BOOLEAN, NUMBER, STRING, HOST_OBJECT, NATIVE_POINTER, OBJECT, ARRAY, EXECUTABLE, INSTANTIABLE)));
+                    descs.add(intersection(NOTYPE, NULL, BOOLEAN, NUMBER, STRING, HOST_OBJECT, NATIVE_POINTER, OBJECT, ARRAY, EXECUTABLE));
                     break;
                 case 1:
                     descs.add(array(contentTypes.iterator().next()));
@@ -612,9 +532,6 @@ public final class TypeDescriptor {
         }
         if (value.canExecute()) {
             descs.add(EXECUTABLE);
-        }
-        if (value.canInstantiate()) {
-            descs.add(INSTANTIABLE);
         }
         switch (descs.size()) {
             case 1:
@@ -708,7 +625,7 @@ public final class TypeDescriptor {
         }
     }
 
-    private static class ExecutableImpl extends TypeDescriptorImpl {
+    private static final class ExecutableImpl extends TypeDescriptorImpl {
         enum Kind {
             TOP,
             BOTTOM,
@@ -741,7 +658,7 @@ public final class TypeDescriptor {
             if (otherClz == PrimitiveImpl.class) {
                 return false;
             }
-            if (otherClz == getClass()) {
+            if (otherClz == ExecutableImpl.class) {
                 final ExecutableImpl origExec = (ExecutableImpl) origType;
                 final ExecutableImpl byExec = (ExecutableImpl) byType;
                 if (origExec.kind == Kind.TOP) {
@@ -789,7 +706,7 @@ public final class TypeDescriptor {
             if (obj == this) {
                 return true;
             }
-            if (obj == null || obj.getClass() != getClass()) {
+            if (obj == null || obj.getClass() != ExecutableImpl.class) {
                 return false;
             }
             final ExecutableImpl other = (ExecutableImpl) obj;
@@ -798,7 +715,7 @@ public final class TypeDescriptor {
 
         @Override
         public String toString() {
-            final StringBuilder sb = new StringBuilder(getName()).append("(");
+            final StringBuilder sb = new StringBuilder("Executable(");
             switch (kind) {
                 case TOP:
                     sb.append("? extends");
@@ -828,37 +745,8 @@ public final class TypeDescriptor {
             return sb.toString();
         }
 
-        String getName() {
-            return "Executable";
-        }
-
         private TypeDescriptorImpl resolveRetType() {
             return retType != null ? retType : ANY.impl;
-        }
-    }
-
-    private static final class InstantiableImpl extends ExecutableImpl {
-
-        InstantiableImpl(final Kind kind,
-                        final TypeDescriptorImpl instanceType,
-                        final boolean vararg,
-                        final List<? extends TypeDescriptorImpl> paramTypes) {
-            super(kind, instanceType, vararg, paramTypes);
-        }
-
-        @Override
-        boolean isAssignable(TypeDescriptorImpl origType, TypeDescriptorImpl byType) {
-            TypeDescriptorImpl other = other(origType, byType);
-            Class<? extends TypeDescriptorImpl> otherClz = other.getClass();
-            if (otherClz == PrimitiveImpl.class || otherClz == ExecutableImpl.class) {
-                return false;
-            }
-            return super.isAssignable(origType, byType);
-        }
-
-        @Override
-        String getName() {
-            return "Instantiable";
         }
     }
 
@@ -873,7 +761,7 @@ public final class TypeDescriptor {
         boolean isAssignable(final TypeDescriptorImpl origType, final TypeDescriptorImpl byType) {
             final TypeDescriptorImpl other = other(origType, byType);
             final Class<? extends TypeDescriptorImpl> otherClz = other.getClass();
-            if (otherClz == PrimitiveImpl.class || other instanceof ExecutableImpl) {
+            if (otherClz == PrimitiveImpl.class || otherClz == ExecutableImpl.class) {
                 return false;
             } else if (otherClz == ArrayImpl.class) {
                 final ArrayImpl origArray = (ArrayImpl) origType;
@@ -928,7 +816,7 @@ public final class TypeDescriptor {
         boolean isAssignable(TypeDescriptorImpl origType, TypeDescriptorImpl byType) {
             final TypeDescriptorImpl other = other(origType, byType);
             final Class<? extends TypeDescriptorImpl> otherClz = other.getClass();
-            if (otherClz == PrimitiveImpl.class || otherClz == ArrayImpl.class || other instanceof ExecutableImpl) {
+            if (otherClz == PrimitiveImpl.class || otherClz == ArrayImpl.class || otherClz == ExecutableImpl.class) {
                 if (other == origType) {
                     for (TypeDescriptorImpl type : types) {
                         if (other.isAssignable(other, type)) {
@@ -969,10 +857,10 @@ public final class TypeDescriptor {
                         if (!included) {
                             return false;
                         }
-                    } else if (subType instanceof ExecutableImpl) {
+                    } else if (subType.getClass() == ExecutableImpl.class) {
                         boolean included = false;
                         for (TypeDescriptorImpl bySubType : byIntersection.types) {
-                            if (bySubType instanceof ExecutableImpl) {
+                            if (bySubType.getClass() == ExecutableImpl.class) {
                                 if (subType.isAssignable(subType, bySubType)) {
                                     included = true;
                                     break;
@@ -1025,7 +913,7 @@ public final class TypeDescriptor {
         boolean isAssignable(final TypeDescriptorImpl origType, TypeDescriptorImpl byType) {
             final TypeDescriptorImpl other = other(origType, byType);
             final Class<? extends TypeDescriptorImpl> otherClz = other.getClass();
-            if (otherClz == PrimitiveImpl.class || otherClz == ArrayImpl.class || other instanceof ExecutableImpl) {
+            if (otherClz == PrimitiveImpl.class || otherClz == ArrayImpl.class || otherClz == ExecutableImpl.class) {
                 if (other == byType) {
                     for (TypeDescriptorImpl type : types) {
                         if (type.isAssignable(type, other)) {
@@ -1059,7 +947,7 @@ public final class TypeDescriptor {
                 for (TypeDescriptorImpl type : byUnion.types) {
                     if (origUnion.types.contains(type)) {
                         copy.add(type);
-                    } else if (type.getClass() == ArrayImpl.class || type instanceof ExecutableImpl || type.getClass() == IntersectionImpl.class) {
+                    } else if (type.getClass() == ArrayImpl.class || type.getClass() == ExecutableImpl.class || type.getClass() == IntersectionImpl.class) {
                         for (TypeDescriptorImpl filteredType : origUnion.types) {
                             if (filteredType.isAssignable(filteredType, type)) {
                                 copy.add(type);
