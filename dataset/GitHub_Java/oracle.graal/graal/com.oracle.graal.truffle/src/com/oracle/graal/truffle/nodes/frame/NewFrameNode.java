@@ -52,7 +52,7 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
     @Input ValueNode arguments;
 
     public static NewFrameNode create(Stamp stamp, ValueNode descriptor, ValueNode arguments) {
-        return new NewFrameNode(stamp, descriptor, arguments);
+        return USE_GENERATED_NODES ? new NewFrameNodeGen(stamp, descriptor, arguments) : new NewFrameNode(stamp, descriptor, arguments);
     }
 
     protected NewFrameNode(Stamp stamp, ValueNode descriptor, ValueNode arguments) {
@@ -62,7 +62,7 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
     }
 
     public static NewFrameNode create(ResolvedJavaType frameType, ValueNode descriptor, ValueNode arguments) {
-        return new NewFrameNode(frameType, descriptor, arguments);
+        return USE_GENERATED_NODES ? new NewFrameNodeGen(frameType, descriptor, arguments) : new NewFrameNode(frameType, descriptor, arguments);
     }
 
     protected NewFrameNode(ResolvedJavaType frameType, ValueNode descriptor, ValueNode arguments) {
@@ -109,7 +109,7 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
         protected boolean allowMaterialization;
 
         public static VirtualOnlyInstanceNode create(ResolvedJavaType type, ResolvedJavaField[] fields) {
-            return new VirtualOnlyInstanceNode(type, fields);
+            return USE_GENERATED_NODES ? new NewFrameNode_VirtualOnlyInstanceNodeGen(type, fields) : new VirtualOnlyInstanceNode(type, fields);
         }
 
         protected VirtualOnlyInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields) {
@@ -168,21 +168,23 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
 
         VirtualObjectNode virtualFrame = VirtualOnlyInstanceNode.create(frameType, frameFields);
         VirtualObjectNode virtualFrameObjectArray = VirtualArrayNode.create((ResolvedJavaType) localsField.getType().getComponentType(), frameSize);
-        VirtualObjectNode virtualFramePrimitiveArray = VirtualArrayNode.create((ResolvedJavaType) primitiveLocalsField.getType().getComponentType(), frameSize * 2);
+        VirtualObjectNode virtualFramePrimitiveArray = VirtualArrayNode.create((ResolvedJavaType) primitiveLocalsField.getType().getComponentType(), frameSize);
         VirtualObjectNode virtualFrameTagArray = VirtualArrayNode.create((ResolvedJavaType) tagsField.getType().getComponentType(), frameSize);
 
         ValueNode[] objectArrayEntryState = new ValueNode[frameSize];
-        ValueNode[] primitiveArrayEntryState = new ValueNode[frameSize * 2];
+        ValueNode[] primitiveArrayEntryState = new ValueNode[frameSize];
         ValueNode[] tagArrayEntryState = new ValueNode[frameSize];
 
         if (frameSize > 0) {
             FrameDescriptor frameDescriptor = getConstantFrameDescriptor();
             ConstantNode objectDefault = ConstantNode.forConstant(getSnippetReflection().forObject(frameDescriptor.getTypeConversion().getDefaultValue()), tool.getMetaAccessProvider(), graph());
-            ConstantNode primitiveDefault = ConstantNode.forInt(0, graph());
+            ConstantNode primitiveDefault = ConstantNode.forLong(0, graph());
             ConstantNode tagDefault = ConstantNode.forByte((byte) 0, graph());
-            Arrays.fill(objectArrayEntryState, objectDefault);
-            Arrays.fill(primitiveArrayEntryState, primitiveDefault);
-            Arrays.fill(tagArrayEntryState, tagDefault);
+            for (int i = 0; i < frameSize; i++) {
+                objectArrayEntryState[i] = objectDefault;
+                primitiveArrayEntryState[i] = primitiveDefault;
+                tagArrayEntryState[i] = tagDefault;
+            }
             tool.getAssumptions().record(new AssumptionValidAssumption((OptimizedAssumption) frameDescriptor.getVersion()));
         }
 
