@@ -46,7 +46,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
 import org.graalvm.util.EconomicMap;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.MapCursor;
-import org.graalvm.util.UnmodifiableEconomicMap;
 import org.graalvm.util.UnmodifiableMapCursor;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -532,17 +531,10 @@ public class InvocationPlugins {
     private final MetaAccessProvider metaAccess;
 
     /**
-     * Plugin registrations for already resolved methods. If non-null, then {@link #registrations}
-     * is null and no further registrations can be made.
-     */
-    private final UnmodifiableEconomicMap<ResolvedJavaMethod, InvocationPlugin> resolvedRegistrations;
-
-    /**
      * Map from class names in {@linkplain MetaUtil#toInternalName(String) internal} form to the
-     * invocation plugin bindings for the class. Tf non-null, then {@link #resolvedRegistrations}
-     * will be null.
+     * invocation plugin bindings for the class.
      */
-    private final EconomicMap<String, ClassPlugins> registrations;
+    private final EconomicMap<String, ClassPlugins> registrations = EconomicMap.create(Equivalence.DEFAULT);
 
     /**
      * Deferred registrations as well as the guard for delimiting the initial registration phase.
@@ -582,11 +574,8 @@ public class InvocationPlugins {
         public InvocationPlugin get(ResolvedJavaMethod method) {
             Binding binding = bindings.get(method.getName());
             while (binding != null) {
-                if (method.isStatic() == binding.isStatic) {
-                    String md = method.getSignature().toMethodDescriptor();
-                    if (md.startsWith(binding.argumentsDescriptor)) {
-                        return binding.plugin;
-                    }
+                if (method.isStatic() == binding.isStatic && method.getSignature().toMethodDescriptor().startsWith(binding.argumentsDescriptor)) {
+                    return binding.plugin;
                 }
                 binding = binding.next;
             }
@@ -651,7 +640,6 @@ public class InvocationPlugins {
      * @return an object representing the method
      */
     Binding put(InvocationPlugin plugin, boolean isStatic, boolean allowOverwrite, Type declaringClass, String name, Type... argumentTypes) {
-        assert resolvedRegistrations == null : "registration is closed";
         String internalName = MetaUtil.toInternalName(declaringClass.getTypeName());
         assert isStatic || argumentTypes[0] == declaringClass;
         assert deferredRegistrations != null : "initial registration is closed - use " + LateRegistration.class.getName() + " for late registrations";
@@ -676,20 +664,17 @@ public class InvocationPlugins {
     }
 
     InvocationPlugin get(ResolvedJavaMethod method) {
-        if (resolvedRegistrations != null) {
-            return resolvedRegistrations.get(method);
-        } else {
-            flushDeferrables();
-            String internalName = method.getDeclaringClass().getName();
-            ClassPlugins classPlugins = registrations.get(internalName);
-            if (classPlugins != null) {
-                return classPlugins.get(method);
-            }
-            LateClassPlugins lcp = findLateClassPlugins(internalName);
-            if (lcp != null) {
-                return lcp.get(method);
-            }
+        flushDeferrables();
+        String internalName = method.getDeclaringClass().getName();
+        ClassPlugins classPlugins = registrations.get(internalName);
+        if (classPlugins != null) {
+            return classPlugins.get(method);
         }
+        LateClassPlugins lcp = findLateClassPlugins(internalName);
+        if (lcp != null) {
+            return lcp.get(method);
+        }
+
         return null;
     }
 
@@ -741,9 +726,6 @@ public class InvocationPlugins {
     }
 
     public boolean isEmpty() {
-        if (resolvedRegistrations != null) {
-            return resolvedRegistrations.isEmpty();
-        }
         return registrations.size() == 0 && lateRegistrations == null;
     }
 
@@ -757,8 +739,6 @@ public class InvocationPlugins {
         this.metaAccess = metaAccess;
         InvocationPlugins p = parent;
         this.parent = p;
-        this.registrations = EconomicMap.create();
-        this.resolvedRegistrations = null;
     }
 
     /**
@@ -768,22 +748,24 @@ public class InvocationPlugins {
         this(parent, parent.getMetaAccess());
     }
 
-    /**
-     * Creates a closed set of invocation plugins for a set of resolved methods. Such an object
-     * cannot have further plugins registered.
-     */
     public InvocationPlugins(Map<ResolvedJavaMethod, InvocationPlugin> plugins, InvocationPlugins parent, MetaAccessProvider metaAccess) {
         this.metaAccess = metaAccess;
         this.parent = parent;
 
-        this.registrations = null;
         this.deferredRegistrations = null;
-        EconomicMap<ResolvedJavaMethod, InvocationPlugin> map = EconomicMap.create(plugins.size());
 
         for (Map.Entry<ResolvedJavaMethod, InvocationPlugin> entry : plugins.entrySet()) {
-            map.put(entry.getKey(), entry.getValue());
+            ResolvedJavaMethod method = entry.getKey();
+            InvocationPlugin plugin = entry.getValue();
+
+            String internalName = method.getDeclaringClass().getName();
+            ClassPlugins classPlugins = registrations.get(internalName);
+            if (classPlugins == null) {
+                classPlugins = new ClassPlugins();
+                registrations.put(internalName, classPlugins);
+            }
+            classPlugins.register(new Binding(method, plugin));
         }
-        this.resolvedRegistrations = map;
     }
 
     public MetaAccessProvider getMetaAccess() {
@@ -861,36 +843,21 @@ public class InvocationPlugins {
         if (parent != null && includeParents) {
             res.putAll(parent.getBindings(true));
         }
-        if (resolvedRegistrations != null) {
-            UnmodifiableMapCursor<ResolvedJavaMethod, InvocationPlugin> cursor = resolvedRegistrations.getEntries();
-            while (cursor.advance()) {
-                ResolvedJavaMethod method = cursor.getKey();
-                InvocationPlugin plugin = cursor.getValue();
-                String type = method.getDeclaringClass().getName();
-                List<Binding> bindings = res.get(type);
-                if (bindings == null) {
-                    bindings = new ArrayList<>();
-                    res.put(type, bindings);
-                }
-                bindings.add(new Binding(method, plugin));
-            }
-        } else {
-            flushDeferrables();
-            MapCursor<String, ClassPlugins> classes = registrations.getEntries();
-            while (classes.advance()) {
-                String type = classes.getKey();
-                ClassPlugins cp = classes.getValue();
-                collectBindingsTo(res, type, cp);
-            }
-            for (LateClassPlugins lcp = lateRegistrations; lcp != null; lcp = lcp.next) {
-                String type = lcp.className;
-                collectBindingsTo(res, type, lcp);
-            }
+        flushDeferrables();
+        MapCursor<String, ClassPlugins> classes = registrations.getEntries();
+        while (classes.advance()) {
+            String type = classes.getKey();
+            ClassPlugins cp = classes.getValue();
+            addBindings(res, type, cp);
+        }
+        for (LateClassPlugins lcp = lateRegistrations; lcp != null; lcp = lcp.next) {
+            String type = lcp.className;
+            addBindings(res, type, lcp);
         }
         return res;
     }
 
-    private static void collectBindingsTo(EconomicMap<String, List<Binding>> res, String type, ClassPlugins cp) {
+    private static void addBindings(EconomicMap<String, List<Binding>> res, String type, ClassPlugins cp) {
         MapCursor<String, Binding> methods = cp.bindings.getEntries();
         while (methods.advance()) {
             List<Binding> bindings = res.get(type);
