@@ -506,7 +506,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long vmErrorAddress;
     public long writeBarrierPreAddress;
     public long writeBarrierPostAddress;
-    public long validateObject;
     public long javaTimeMillisAddress;
     public long javaTimeNanosAddress;
     public long arithmeticSinAddress;
