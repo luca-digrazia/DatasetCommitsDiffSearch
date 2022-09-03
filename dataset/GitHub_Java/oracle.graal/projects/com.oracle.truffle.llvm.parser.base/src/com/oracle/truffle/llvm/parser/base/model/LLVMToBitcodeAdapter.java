@@ -324,7 +324,7 @@ public final class LLVMToBitcodeAdapter {
         return funcDef;
     }
 
-    public static FunctionType resolveFunctionHeader(LLVMParserRuntime runtime, FunctionHeader header) {
+    public static FunctionDeclaration resolveFunctionHeader(LLVMParserRuntime runtime, FunctionHeader header) {
         Type returnType = resolveType(runtime.resolve(header.getRettype()));
         List<Type> args = new ArrayList<>();
         boolean hasVararg = false;
@@ -337,8 +337,9 @@ public final class LLVMToBitcodeAdapter {
             }
         }
         FunctionType funcType = new FunctionType(returnType, args.toArray(new Type[args.size()]), hasVararg);
-        funcType.setName(header.getName().substring(1));
-        return funcType;
+        FunctionDeclaration funcDecl = new FunctionDeclaration(funcType);
+        funcDecl.setName(header.getName().substring(1));
+        return funcDecl;
     }
 
     private static Linkage resolveLinkage(String linkage) {
