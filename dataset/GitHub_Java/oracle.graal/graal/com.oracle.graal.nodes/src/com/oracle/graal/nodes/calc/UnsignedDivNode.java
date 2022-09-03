@@ -22,18 +22,14 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.code.CodeUtil;
+import jdk.internal.jvmci.code.*;
 
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "|/|")
 public class UnsignedDivNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
@@ -56,7 +52,7 @@ public class UnsignedDivNode extends FixedBinaryNode implements Lowerable, LIRLo
             if (yConst == 0) {
                 return this; // this will trap, cannot canonicalize
             }
-            return ConstantNode.forIntegerStamp(stamp(), Long.divideUnsigned(CodeUtil.zeroExtend(forX.asJavaConstant().asLong(), bits), yConst));
+            return ConstantNode.forIntegerStamp(stamp(), UnsignedMath.divide(CodeUtil.zeroExtend(forX.asJavaConstant().asLong(), bits), yConst));
         } else if (forY.isConstant()) {
             long c = CodeUtil.zeroExtend(forY.asJavaConstant().asLong(), bits);
             if (c == 1) {
