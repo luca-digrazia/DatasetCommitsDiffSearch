@@ -39,10 +39,14 @@ public class BitCountNode extends UnaryNode implements LIRLowerable, Canonicaliz
 
     @Override
     public boolean inferStamp() {
+        int min = 0;
+        int max = 0;
         IntegerStamp valueStamp = (IntegerStamp) getValue().stamp();
-        assert (valueStamp.downMask() & IntegerStamp.defaultMask(valueStamp.getBits())) == valueStamp.downMask();
-        assert (valueStamp.upMask() & IntegerStamp.defaultMask(valueStamp.getBits())) == valueStamp.upMask();
-        return updateStamp(StampFactory.forInteger(Kind.Int, bitCount(valueStamp.downMask()), bitCount(valueStamp.upMask())));
+        for (int i = 0; i < valueStamp.getBits(); i++) {
+            min += (valueStamp.downMask() & (1L << i)) == 0 ? 0 : 1;
+            max += (valueStamp.upMask() & (1L << i)) == 0 ? 0 : 1;
+        }
+        return updateStamp(StampFactory.forInteger(Kind.Int, min, max));
     }
 
     @Override
