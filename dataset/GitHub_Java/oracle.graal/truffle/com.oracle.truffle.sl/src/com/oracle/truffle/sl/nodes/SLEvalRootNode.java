@@ -49,6 +49,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.runtime.SLContext;
+import com.oracle.truffle.sl.runtime.SLNull;
 
 /**
  * In addition to {@link SLRootNode}, this class performs two additional tasks:
@@ -78,13 +79,13 @@ public final class SLEvalRootNode extends SLRootNode {
             /* Function registration is a slow-path operation that must not be compiled. */
             CompilerDirectives.transferToInterpreterAndInvalidate();
 
-            context = SLLanguage.INSTANCE.findContext0(SLLanguage.INSTANCE.createFindContextNode0());
+            context = SLLanguage.INSTANCE.findContext();
             context.getFunctionRegistry().register(functions);
         }
 
         if (getBodyNode() == null) {
             /* The source code did not have a "main" function, so nothing to execute. */
-            return null;
+            return SLNull.SINGLETON;
         }
 
         /* Conversion of arguments to types understood by SL. */
