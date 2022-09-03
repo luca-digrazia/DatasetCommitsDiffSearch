@@ -130,7 +130,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
         Node last;
 
         // assign proxies of a loop exit to this block
-        if (cur instanceof AbstractBeginNode) {
+        if (cur instanceof BeginNode) {
             for (Node usage : cur.usages()) {
                 if (usage instanceof ProxyNode) {
                     nodeToBlock.set(usage, block);
@@ -143,15 +143,15 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
 
             assert nodeToBlock.get(cur) == null;
             nodeToBlock.set(cur, block);
-            if (cur instanceof AbstractMergeNode) {
-                for (PhiNode phi : ((AbstractMergeNode) cur).phis()) {
+            if (cur instanceof MergeNode) {
+                for (PhiNode phi : ((MergeNode) cur).phis()) {
                     nodeToBlock.set(phi, block);
                 }
             }
 
             last = cur;
             cur = cur.successors().first();
-        } while (cur != null && !(cur instanceof AbstractBeginNode));
+        } while (cur != null && !(cur instanceof BeginNode));
 
         block.endNode = (FixedNode) last;
     }
@@ -159,7 +159,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
     private void identifyBlocks() {
         // Find all block headers
         int numBlocks = 0;
-        for (AbstractBeginNode begin : graph.getNodes(AbstractBeginNode.class)) {
+        for (BeginNode begin : graph.getNodes(BeginNode.class)) {
             Block block = new Block(begin);
             numBlocks++;
             identifyBlock(block);
@@ -252,7 +252,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
     private void computeLoopInformation() {
         loops = new ArrayList<>();
         for (Block block : reversePostOrder) {
-            AbstractBeginNode beginNode = block.getBeginNode();
+            Node beginNode = block.getBeginNode();
             if (beginNode instanceof LoopBeginNode) {
                 Loop<Block> loop = new HIRLoop(block.getLoop(), loops.size(), block);
                 loops.add(loop);
@@ -273,7 +273,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                 for (Block b : loop.getBlocks()) {
                     for (Block sux : b.getSuccessors()) {
                         if (sux.loop != loop) {
-                            AbstractBeginNode begin = sux.getBeginNode();
+                            BeginNode begin = sux.getBeginNode();
                             if (!(begin instanceof LoopExitNode && ((LoopExitNode) begin).loopBegin() == loopBegin)) {
                                 Debug.log("Unexpected loop exit with %s, including whole branch in the loop", sux);
                                 unexpected.add(sux);
