@@ -22,7 +22,10 @@
  */
 package com.oracle.graal.api.replacements;
 
-import java.lang.annotation.*;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
  * Denotes a class that substitutes methods of another specified class. The substitute methods are
@@ -41,7 +44,8 @@ public @interface ClassSubstitution {
     Class<?> value() default ClassSubstitution.class;
 
     /**
-     * Specifies the original class.
+     * Specifies the original class or classes if a single class is being used for multiple
+     * substitutions.
      * <p>
      * This method is provided for cases where the original class is not accessible (according to
      * Java language access control rules).
@@ -49,17 +53,11 @@ public @interface ClassSubstitution {
      * If the default value is specified for this element, then a non-default value must be given
      * for the {@link #value()} element.
      */
-    String className() default "";
+    String[] className() default {};
 
     /**
      * Determines if the substitutions are for classes that may not be part of the runtime.
      * Substitutions for such classes are omitted if the original classes cannot be found.
      */
     boolean optional() default false;
-
-    /**
-     * Determines if the substitutions in a class are globally enabled. Individual
-     * MethodSubstitutions can also have guards and those override this guard.
-     */
-    Class<? extends SubstitutionGuard> defaultGuard() default SubstitutionGuard.class;
 }
