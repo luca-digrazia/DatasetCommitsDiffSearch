@@ -111,6 +111,9 @@ public abstract class Node implements Cloneable, Formattable {
     public interface ValueNumberable {
     }
 
+    public interface IterableNodeType {
+    }
+
     private Graph graph;
     int id;
 
