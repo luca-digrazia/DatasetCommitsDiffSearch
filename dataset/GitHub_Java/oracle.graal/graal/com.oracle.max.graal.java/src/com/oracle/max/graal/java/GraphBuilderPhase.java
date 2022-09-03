@@ -322,12 +322,9 @@ public final class GraphBuilderPhase extends Phase {
     private BeginNode handleException(ValueNode exceptionObject, int bci) {
         assert bci == FrameState.BEFORE_BCI || bci == bci() : "invalid bci";
 
-        if (GraalOptions.UseExceptionProbability) {
-            // be conservative if information was not recorded (could result in endless recompiles otherwise)
-            if (bci != FrameState.BEFORE_BCI && exceptionObject == null && profilingInfo.getExceptionSeen(bci) != RiExceptionSeen.TRUE) {
+        if (GraalOptions.UseExceptionProbability && method.invocationCount() > GraalOptions.MatureInvocationCount) {
+            if (bci != FrameState.BEFORE_BCI && exceptionObject == null && !profilingInfo.getExceptionSeen(bci)) {
                 return null;
-            } else {
-                Debug.log("Creating exception edges at %d, exception object=%s, exception seen=%s", bci, exceptionObject, profilingInfo.getExceptionSeen(bci));
             }
         }
 
@@ -502,7 +499,7 @@ public final class GraphBuilderPhase extends Phase {
                 break;
             }
             default:
-                throw GraalInternalError.shouldNotReachHere();
+                throw Util.shouldNotReachHere();
         }
 
     }
@@ -694,7 +691,7 @@ public final class GraphBuilderPhase extends Phase {
     private static final RiResolvedType[] EMPTY_TYPE_ARRAY = new RiResolvedType[0];
 
     private RiResolvedType[] getTypeCheckHints(RiResolvedType type, int maxHints) {
-        if (!GraalOptions.UseTypeCheckHints || Util.isFinalClass(type)) {
+        if (!GraalOptions.UseInstanceOfHints || Util.isFinalClass(type)) {
             return new RiResolvedType[] {type};
         } else {
             RiResolvedType uniqueSubtype = type.uniqueConcreteSubtype();

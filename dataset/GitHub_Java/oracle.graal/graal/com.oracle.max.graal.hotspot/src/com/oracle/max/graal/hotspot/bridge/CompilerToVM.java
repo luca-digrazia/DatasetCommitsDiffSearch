@@ -51,6 +51,8 @@ public interface CompilerToVM {
 
     HotSpotMethodData RiMethod_methodData(HotSpotMethodResolved method);
 
+    boolean HotSpotMethodData_isMature(HotSpotMethodData methodData);
+
     RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass, boolean eagerResolve);
 
     Object RiConstantPool_lookupConstant(HotSpotTypeResolved pool, int cpi);
@@ -72,8 +74,6 @@ public interface CompilerToVM {
     RiMethod RiType_resolveMethodImpl(HotSpotTypeResolved klass, String name, String signature);
 
     boolean RiType_isSubtypeOf(HotSpotTypeResolved klass, RiType other);
-
-    RiType RiType_leastCommonAncestor(HotSpotTypeResolved thisType, HotSpotTypeResolved otherType);
 
     RiType getPrimitiveArrayType(CiKind kind);
 
@@ -98,8 +98,6 @@ public interface CompilerToVM {
     RiResolvedField[] RiType_fields(HotSpotTypeResolved klass);
 
     boolean RiMethod_hasCompiledCode(HotSpotMethodResolved method);
-
-    int RiMethod_getCompiledCodeSize(HotSpotMethodResolved method);
 
     RiMethod getRiMethod(Method reflectionMethod);
 

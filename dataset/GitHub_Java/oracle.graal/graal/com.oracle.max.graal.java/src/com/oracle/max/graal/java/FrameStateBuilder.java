@@ -108,11 +108,11 @@ public class FrameStateBuilder implements FrameStateAccess {
     }
 
     public FrameState create(int bci) {
-        return graph.add(new FrameState(method, bci, locals, stack, stackIndex, rethrowException, false));
+        return graph.add(new FrameState(method, bci, locals, stack, stackIndex, rethrowException));
     }
 
     public FrameState duplicateWithException(int bci, ValueNode exceptionObject) {
-        FrameState frameState = graph.add(new FrameState(method, bci, locals, new ValueNode[]{exceptionObject}, 1, true, false));
+        FrameState frameState = graph.add(new FrameState(method, bci, locals, new ValueNode[]{exceptionObject}, 1, true));
         frameState.setOuterFrameState(outerFrameState());
         return frameState;
     }
@@ -464,7 +464,7 @@ public class FrameStateBuilder implements FrameStateAccess {
     }
 
     public FrameState duplicateWithoutStack(int bci) {
-        FrameState frameState = graph.add(new FrameState(method, bci, locals, new ValueNode[0], 0, false, false));
+        FrameState frameState = graph.add(new FrameState(method, bci, locals, new ValueNode[0], 0, false));
         frameState.setOuterFrameState(outerFrameState());
         return frameState;
     }
