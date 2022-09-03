@@ -26,12 +26,13 @@ import java.util.*;
 
 import org.junit.*;
 
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.PhasePlan.PhasePosition;
+import com.oracle.graal.phases.common.*;
 
 public class IfBoxingEliminationTest extends GraalCompilerTest {
 
@@ -72,6 +73,7 @@ public class IfBoxingEliminationTest extends GraalCompilerTest {
 
     private void test(final String snippet) {
         Debug.scope("IfBoxingEliminationTest", new DebugDumpScope(snippet), new Runnable() {
+
             @Override
             public void run() {
                 StructuredGraph graph = parse(snippet);
@@ -81,22 +83,25 @@ public class IfBoxingEliminationTest extends GraalCompilerTest {
                 phasePlan.addPhase(PhasePosition.AFTER_PARSING, identifyBoxingPhase);
                 phasePlan.addPhase(PhasePosition.AFTER_PARSING, new PhiStampPhase());
                 identifyBoxingPhase.apply(graph);
-                Collection<Invoke> hints = new ArrayList<>();
+                Map<Invoke, Double> hints = new HashMap<>();
                 for (Invoke invoke : graph.getInvokes()) {
-                    hints.add(invoke);
+                    hints.put(invoke, 1000d);
                 }
-                new InliningPhase(null, runtime(), hints, null, null, phasePlan, OptimisticOptimizations.ALL).apply(graph);
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
+
+                Assumptions assumptions = new Assumptions(false);
+                new InliningPhase(runtime(), hints, assumptions, null, phasePlan, OptimisticOptimizations.ALL).apply(graph);
+                new CanonicalizerPhase(runtime(), assumptions).apply(graph);
                 new PhiStampPhase().apply(graph);
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
+                new CanonicalizerPhase(runtime(), assumptions).apply(graph);
                 Debug.dump(graph, "Graph");
-                new BoxingEliminationPhase().apply(graph);
+                new BoxingEliminationPhase(runtime()).apply(graph);
                 Debug.dump(graph, "Graph");
                 new ExpandBoxingNodesPhase(pool).apply(graph);
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
+                new CanonicalizerPhase(runtime(), assumptions).apply(graph);
+                new CanonicalizerPhase(runtime(), assumptions).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
                 StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
-                new CanonicalizerPhase(null, runtime(), null).apply(referenceGraph);
+                new CanonicalizerPhase(runtime(), assumptions).apply(referenceGraph);
                 new DeadCodeEliminationPhase().apply(referenceGraph);
 
                 assertEquals(referenceGraph, graph);

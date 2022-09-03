@@ -30,7 +30,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 
 public class InvokeHintsTest extends GraalCompilerTest {
 
@@ -77,9 +76,8 @@ public class InvokeHintsTest extends GraalCompilerTest {
         }
 
         Assumptions assumptions = new Assumptions(false);
-        HighTierContext context = new HighTierContext(runtime(), assumptions, replacements, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
-        new InliningPhase(hints).apply(graph, context);
-        new CanonicalizerPhase(true).apply(graph, context);
+        new InliningPhase(runtime(), hints, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
+        new CanonicalizerPhase(runtime(), assumptions).apply(graph);
         new DeadCodeEliminationPhase().apply(graph);
         StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
         assertEquals(referenceGraph, graph);
