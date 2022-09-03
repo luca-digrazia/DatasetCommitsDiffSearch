@@ -42,7 +42,7 @@ import jdk.vm.ci.code.TargetDescription;
 public final class SSIConstructionPhase extends AllocationPhase {
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
                     AllocationContext context) {
         assert SSAUtil.verifySSAForm(lirGenRes.getLIR());
         new SSIBuilder(lirGenRes.getLIR()).build();
