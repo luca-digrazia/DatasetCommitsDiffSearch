@@ -38,7 +38,6 @@ import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.c.function.CEntryPointContext;
 import org.graalvm.word.LocationIdentity;
 
 import com.oracle.svm.core.SubstrateOptions;
@@ -50,6 +49,7 @@ import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.nodes.SafepointCheckNode;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.RuntimeOptionKey;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.core.snippets.SnippetRuntime.SubstrateForeignCallDescriptor;
 import com.oracle.svm.core.snippets.SubstrateForeignCallTarget;
@@ -180,7 +180,7 @@ public final class Safepoint {
     /** Stop at a safepoint. */
     @Uninterruptible(reason = "Must not contain safepoint checks.")
     private static void slowPathSafepointCheck() {
-        final IsolateThread myself = CEntryPointContext.getCurrentIsolateThread();
+        final IsolateThread myself = KnownIntrinsics.currentVMThread();
         if (VMThreads.StatusSupport.isStatusIgnoreSafepoints(myself) || VMThreads.StatusSupport.isStatusExited(myself)) {
             return;
         }
@@ -406,7 +406,7 @@ public final class Safepoint {
              */
             getMutex().assertIsLocked("Should hold mutex when freezing for a safepoint.");
 
-            requestingThread = CEntryPointContext.getCurrentIsolateThread();
+            requestingThread = KnownIntrinsics.currentVMThread();
 
             Statistics.reset();
             Statistics.setStartNanos();
@@ -428,7 +428,7 @@ public final class Safepoint {
         }
 
         private static boolean isMyself(IsolateThread vmThread) {
-            return vmThread == CEntryPointContext.getCurrentIsolateThread();
+            return vmThread == KnownIntrinsics.currentVMThread();
         }
 
         /** Send each of the threads (except myself) a request to come to a safepoint. */
