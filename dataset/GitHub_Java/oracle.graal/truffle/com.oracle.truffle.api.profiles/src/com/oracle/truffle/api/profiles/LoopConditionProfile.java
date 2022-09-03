@@ -26,7 +26,6 @@ package com.oracle.truffle.api.profiles;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.Truffle;
 
 /**
  * <p>
@@ -85,12 +84,14 @@ import com.oracle.truffle.api.Truffle;
  * @see #createBinaryProfile()
  * @see #createCountingProfile()
  * @see LoopConditionProfile
+ * @since 0.10
  */
 public abstract class LoopConditionProfile extends ConditionProfile {
 
     LoopConditionProfile() {
     }
 
+    /** @since 0.10 */
     @Override
     public abstract boolean profile(boolean value);
 
@@ -99,6 +100,7 @@ public abstract class LoopConditionProfile extends ConditionProfile {
      * see {@link LoopConditionProfile} for an usage example.
      *
      * @see #inject(boolean)
+     * @since 0.10
      */
     public abstract void profileCounted(long length);
 
@@ -107,6 +109,7 @@ public abstract class LoopConditionProfile extends ConditionProfile {
      * see {@link LoopConditionProfile} for an usage example.
      *
      * @see #inject(boolean)
+     * @since 0.10
      */
     public abstract boolean inject(boolean condition);
 
@@ -116,9 +119,10 @@ public abstract class LoopConditionProfile extends ConditionProfile {
      * profiles are intended to be used for loop conditions.
      *
      * @see LoopConditionProfile
+     * @since 0.10
      */
     public static LoopConditionProfile createCountingProfile() {
-        if (Truffle.getRuntime().isProfilingEnabled()) {
+        if (Profile.isProfilingEnabled()) {
             return Enabled.create();
         } else {
             return Disabled.INSTANCE;
@@ -208,7 +212,7 @@ public abstract class LoopConditionProfile extends ConditionProfile {
         @Override
         public String toString() {
             return toString(LoopConditionProfile.class, falseCount == 0, false, //
-                            String.format("trueProbability=%s (trueCount=%s, falseCount=%s)", calculateProbability(trueCount, falseCount), falseCount, trueCount));
+                            String.format("trueProbability=%s (trueCount=%s, falseCount=%s)", calculateProbability(trueCount, falseCount), trueCount, falseCount));
         }
 
         /* Needed for lazy class loading. */
