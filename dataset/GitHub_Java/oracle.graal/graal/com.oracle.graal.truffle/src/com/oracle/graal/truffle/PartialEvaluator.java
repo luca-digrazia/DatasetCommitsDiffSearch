@@ -32,7 +32,6 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.Mark;
@@ -106,76 +105,78 @@ public class PartialEvaluator {
 
         final StructuredGraph graph = new StructuredGraph(executeHelperMethod);
 
-        try (Scope s = Debug.scope("createGraph", graph)) {
-            new GraphBuilderPhase(providers.getMetaAccess(), providers.getForeignCalls(), config, TruffleCompilerImpl.Optimizations).apply(graph);
+        Debug.scope("createGraph", graph, new Runnable() {
 
-            // Replace thisNode with constant.
-            LocalNode thisNode = graph.getLocal(0);
-            thisNode.replaceAndDelete(ConstantNode.forObject(node, providers.getMetaAccess(), graph));
+            @Override
+            public void run() {
+                new GraphBuilderPhase(providers.getMetaAccess(), providers.getForeignCalls(), config, TruffleCompilerImpl.Optimizations).apply(graph);
 
-            // Canonicalize / constant propagate.
-            PhaseContext baseContext = new PhaseContext(providers, assumptions);
-            canonicalizer.apply(graph, baseContext);
+                // Replace thisNode with constant.
+                LocalNode thisNode = graph.getLocal(0);
+                thisNode.replaceAndDelete(ConstantNode.forObject(node, providers.getMetaAccess(), graph));
 
-            // Intrinsify methods.
-            new ReplaceIntrinsicsPhase(providers.getReplacements()).apply(graph);
+                // Canonicalize / constant propagate.
+                PhaseContext baseContext = new PhaseContext(providers, assumptions);
+                canonicalizer.apply(graph, baseContext);
 
-            NewFrameNode newFrameNode = graph.getNodes(NewFrameNode.class).first();
-            if (newFrameNode == null) {
-                throw GraalInternalError.shouldNotReachHere("frame not found");
-            }
+                // Intrinsify methods.
+                new ReplaceIntrinsicsPhase(providers.getReplacements()).apply(graph);
 
-            Debug.dump(graph, "Before inlining");
-
-            // Make sure frame does not escape.
-            expandTree(graph, assumptions);
-
-            if (Thread.interrupted()) {
-                return graph;
-            }
-
-            new VerifyFrameDoesNotEscapePhase().apply(graph, false);
-
-            if (TraceTruffleCompilationDetails.getValue() && constantReceivers != null) {
-                DebugHistogram histogram = Debug.createHistogram("Expanded Truffle Nodes");
-                for (Constant c : constantReceivers) {
-                    histogram.add(c.asObject().getClass().getSimpleName());
+                NewFrameNode newFrameNode = graph.getNodes(NewFrameNode.class).first();
+                if (newFrameNode == null) {
+                    throw GraalInternalError.shouldNotReachHere("frame not found");
                 }
-                new DebugHistogramAsciiPrinter(TTY.out().out()).print(histogram);
-            }
 
-            // Additional inlining.
-            final PhasePlan plan = new PhasePlan();
-            canonicalizer.apply(graph, baseContext);
-            HighTierContext tierContext = new HighTierContext(providers, assumptions, cache, plan, OptimisticOptimizations.NONE);
+                Debug.dump(graph, "Before inlining");
 
-            for (NeverPartOfCompilationNode neverPartOfCompilationNode : graph.getNodes(NeverPartOfCompilationNode.class)) {
-                Throwable exception = new VerificationError(neverPartOfCompilationNode.getMessage());
-                throw GraphUtil.approxSourceException(neverPartOfCompilationNode, exception);
-            }
+                // Make sure frame does not escape.
+                expandTree(graph, assumptions);
 
-            // EA frame and clean up.
-            new PartialEscapePhase(true, canonicalizer).apply(graph, tierContext);
-            new VerifyNoIntrinsicsLeftPhase().apply(graph, false);
-            for (MaterializeFrameNode materializeNode : graph.getNodes(MaterializeFrameNode.class).snapshot()) {
-                materializeNode.replaceAtUsages(materializeNode.getFrame());
-                graph.removeFixed(materializeNode);
-            }
-            for (VirtualObjectNode virtualObjectNode : graph.getNodes(VirtualObjectNode.class)) {
-                if (virtualObjectNode instanceof VirtualOnlyInstanceNode) {
-                    VirtualOnlyInstanceNode virtualOnlyInstanceNode = (VirtualOnlyInstanceNode) virtualObjectNode;
-                    virtualOnlyInstanceNode.setAllowMaterialization(true);
-                } else if (virtualObjectNode instanceof VirtualInstanceNode) {
-                    VirtualInstanceNode virtualInstanceNode = (VirtualInstanceNode) virtualObjectNode;
-                    ResolvedJavaType type = virtualInstanceNode.type();
-                    if (type.getAnnotation(CompilerDirectives.ValueType.class) != null) {
-                        virtualInstanceNode.setIdentity(false);
+                if (Thread.interrupted()) {
+                    return;
+                }
+
+                new VerifyFrameDoesNotEscapePhase().apply(graph, false);
+
+                if (TraceTruffleCompilationDetails.getValue() && constantReceivers != null) {
+                    DebugHistogram histogram = Debug.createHistogram("Expanded Truffle Nodes");
+                    for (Constant c : constantReceivers) {
+                        histogram.add(c.asObject().getClass().getSimpleName());
+                    }
+                    new DebugHistogramAsciiPrinter(TTY.out().out()).print(histogram);
+                }
+
+                // Additional inlining.
+                final PhasePlan plan = new PhasePlan();
+                canonicalizer.apply(graph, baseContext);
+                HighTierContext tierContext = new HighTierContext(providers, assumptions, cache, plan, OptimisticOptimizations.NONE);
+
+                for (NeverPartOfCompilationNode neverPartOfCompilationNode : graph.getNodes(NeverPartOfCompilationNode.class)) {
+                    Throwable exception = new VerificationError(neverPartOfCompilationNode.getMessage());
+                    throw GraphUtil.approxSourceException(neverPartOfCompilationNode, exception);
+                }
+
+                // EA frame and clean up.
+                new PartialEscapePhase(true, canonicalizer).apply(graph, tierContext);
+                new VerifyNoIntrinsicsLeftPhase().apply(graph, false);
+                for (MaterializeFrameNode materializeNode : graph.getNodes(MaterializeFrameNode.class).snapshot()) {
+                    materializeNode.replaceAtUsages(materializeNode.getFrame());
+                    graph.removeFixed(materializeNode);
+                }
+                for (VirtualObjectNode virtualObjectNode : graph.getNodes(VirtualObjectNode.class)) {
+                    if (virtualObjectNode instanceof VirtualOnlyInstanceNode) {
+                        VirtualOnlyInstanceNode virtualOnlyInstanceNode = (VirtualOnlyInstanceNode) virtualObjectNode;
+                        virtualOnlyInstanceNode.setAllowMaterialization(true);
+                    } else if (virtualObjectNode instanceof VirtualInstanceNode) {
+                        VirtualInstanceNode virtualInstanceNode = (VirtualInstanceNode) virtualObjectNode;
+                        ResolvedJavaType type = virtualInstanceNode.type();
+                        if (type.getAnnotation(CompilerDirectives.ValueType.class) != null) {
+                            virtualInstanceNode.setIdentity(false);
+                        }
                     }
                 }
             }
-        } catch (Throwable e) {
-            throw Debug.handle(e);
-        }
+        });
 
         return graph;
     }
@@ -253,44 +254,44 @@ public class PartialEvaluator {
                     local.replaceAndDelete(ConstantNode.forConstant(constant, phaseContext.getMetaAccess(), graphCopy));
                 }
             }
-            try (Scope s = Debug.scope("TruffleUnrollLoop", targetMethod)) {
+            Debug.scope("TruffleUnrollLoop", targetMethod, new Runnable() {
 
-                canonicalizer.applyIncremental(graphCopy, phaseContext, modifiedNodes);
-                boolean unrolled;
-                do {
-                    unrolled = false;
-                    LoopsData loopsData = new LoopsData(graphCopy);
-                    loopsData.detectedCountedLoops();
-                    for (LoopEx ex : innerLoopsFirst(loopsData.countedLoops())) {
-                        if (ex.counted().isConstantMaxTripCount()) {
-                            long constant = ex.counted().constantMaxTripCount();
-                            LoopTransformations.fullUnroll(ex, phaseContext, canonicalizer);
-                            Debug.dump(graphCopy, "After loop unrolling %d times", constant);
-                            unrolled = true;
-                            break;
+                @Override
+                public void run() {
+
+                    canonicalizer.applyIncremental(graphCopy, phaseContext, modifiedNodes);
+                    boolean unrolled;
+                    do {
+                        unrolled = false;
+                        LoopsData loopsData = new LoopsData(graphCopy);
+                        loopsData.detectedCountedLoops();
+                        for (LoopEx ex : innerLoopsFirst(loopsData.countedLoops())) {
+                            if (ex.counted().isConstantMaxTripCount()) {
+                                long constant = ex.counted().constantMaxTripCount();
+                                LoopTransformations.fullUnroll(ex, phaseContext, canonicalizer);
+                                Debug.dump(graphCopy, "After loop unrolling %d times", constant);
+                                unrolled = true;
+                                break;
+                            }
                         }
-                    }
-                } while (unrolled);
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
+                    } while (unrolled);
+                }
 
+                private List<LoopEx> innerLoopsFirst(Collection<LoopEx> loops) {
+                    ArrayList<LoopEx> sortedLoops = new ArrayList<>(loops);
+                    Collections.sort(sortedLoops, new Comparator<LoopEx>() {
+
+                        @Override
+                        public int compare(LoopEx o1, LoopEx o2) {
+                            return o2.lirLoop().depth - o1.lirLoop().depth;
+                        }
+                    });
+                    return sortedLoops;
+                }
+            });
             return graphCopy;
         } else {
             return graph;
         }
     }
-
-    private static List<LoopEx> innerLoopsFirst(Collection<LoopEx> loops) {
-        ArrayList<LoopEx> sortedLoops = new ArrayList<>(loops);
-        Collections.sort(sortedLoops, new Comparator<LoopEx>() {
-
-            @Override
-            public int compare(LoopEx o1, LoopEx o2) {
-                return o2.lirLoop().depth - o1.lirLoop().depth;
-            }
-        });
-        return sortedLoops;
-    }
-
 }

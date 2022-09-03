@@ -50,8 +50,8 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
     final class LoweringToolImpl implements LoweringTool {
 
         private final PhaseContext context;
+        private final GuardingNode guardAnchor;
         private final NodeBitMap activeGuards;
-        private GuardingNode guardAnchor;
         private FixedWithNextNode lastFixedNode;
         private ControlFlowGraph cfg;
 
@@ -237,7 +237,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             if (anchor == null) {
                 anchor = block.getBeginNode();
             }
-            anchor = process(block, activeGuards, anchor);
+            process(block, activeGuards, anchor);
 
             // Process always reached block first.
             Block alwaysReachedBlock = block.getPostdominator();
@@ -262,9 +262,9 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             }
         }
 
-        private GuardingNode process(final Block b, final NodeBitMap activeGuards, final GuardingNode startAnchor) {
+        private void process(final Block b, final NodeBitMap activeGuards, final GuardingNode anchor) {
 
-            final LoweringToolImpl loweringTool = new LoweringToolImpl(context, startAnchor, activeGuards, b.getBeginNode(), schedule.getCFG());
+            final LoweringToolImpl loweringTool = new LoweringToolImpl(context, anchor, activeGuards, b.getBeginNode(), schedule.getCFG());
 
             // Lower the instructions of this block.
             List<ScheduledNode> nodes = schedule.nodesFor(b);
@@ -288,9 +288,6 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                     assert checkUsagesAreScheduled(node);
                     Mark preLoweringMark = node.graph().getMark();
                     ((Lowerable) node).lower(loweringTool);
-                    if (node == startAnchor && node.isDeleted()) {
-                        loweringTool.guardAnchor = BeginNode.prevBegin(nextNode);
-                    }
                     assert checkPostNodeLowering(node, loweringTool, preLoweringMark);
                 }
 
@@ -314,7 +311,6 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                     loweringTool.setLastFixedNode((FixedWithNextNode) nextLastFixed);
                 }
             }
-            return loweringTool.getCurrentGuardAnchor();
         }
 
         /**

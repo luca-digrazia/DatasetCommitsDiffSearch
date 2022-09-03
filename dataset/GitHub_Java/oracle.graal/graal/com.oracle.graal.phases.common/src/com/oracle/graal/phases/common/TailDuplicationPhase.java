@@ -365,7 +365,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
                         // stop iterating: fixed nodes within the given set are traversal roots
                         // anyway, and all other
                         // fixed nodes are known to be outside.
-                    } else if (!aboveBound.isMarked(node)) {
+                    } else if (!node.isExternal() && !aboveBound.isMarked(node)) {
                         worklist.add(node);
                         aboveBound.mark(node);
                     }
@@ -378,7 +378,9 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
             while (!worklist.isEmpty()) {
                 Node current = worklist.remove();
                 for (Node input : current.inputs()) {
-                    aboveClosure.apply(current, input);
+                    if (!input.isExternal()) {
+                        aboveClosure.apply(current, input);
+                    }
                 }
             }
 
