@@ -783,7 +783,7 @@ public class FlatNodeGenFactory {
 
         builder.tree(execution);
 
-        if (group.hasFallthrough()) {
+        if (hasFallthrough(group, genericType, originalFrameState)) {
             builder.tree(createTransferToInterpreterAndInvalidate());
             builder.tree(createThrowUnsupported(builder, originalFrameState));
         }
@@ -1454,6 +1454,41 @@ public class FlatNodeGenFactory {
         return SpecializationGroup.createFlat(reachableSpecializations);
     }
 
+    private boolean hasFallthrough(SpecializationGroup group, TypeMirror forType, FrameState frameState) {
+        for (TypeGuard guard : group.getTypeGuards()) {
+            if (frameState.getValue(guard.getSignatureIndex()) == null) {
+                // not evaluated
+                return true;
+            }
+            LocalVariable value = frameState.getValue(guard.getSignatureIndex());
+            if (needsCastTo(value.getTypeMirror(), guard.getType())) {
+                return true;
+            }
+        }
+
+        List<GuardExpression> guards = new ArrayList<>(group.getGuards());
+        SpecializationData specialization = group.getSpecialization();
+
+        if (!guards.isEmpty()) {
+            return true;
+        }
+
+        if (specialization != null && !specialization.getAssumptionExpressions().isEmpty()) {
+            return true;
+        }
+
+        if (specialization != null && mayBeExcluded(specialization)) {
+            return true;
+        }
+
+        List<SpecializationGroup> groupChildren = group.getChildren();
+        if (!groupChildren.isEmpty()) {
+            return hasFallthrough(groupChildren.get(groupChildren.size() - 1), forType, frameState);
+        }
+
+        return false;
+    }
+
     private CodeTree expectOrCast(TypeMirror sourceType, ExecutableTypeData targetType, CodeTree content) {
         if (needsUnexpectedResultException(targetType)) {
             return expect(sourceType, targetType.getReturnType(), content);
@@ -1793,7 +1828,7 @@ public class FlatNodeGenFactory {
             }
 
             builder.end(ifCount);
-            hasFallthrough |= ifCount > 0;
+            hasFallthrough = ifCount > 0;
 
         } else if (execution.isSlowPath()) {
 
@@ -1844,6 +1879,8 @@ public class FlatNodeGenFactory {
                 if (!guards.isEmpty()) {
                     builder.end();
                 }
+
+                builder.end(ifCount);
 
             } else {
 
@@ -1972,7 +2009,6 @@ public class FlatNodeGenFactory {
                 if (!guards.isEmpty()) {
                     builder.startIf().tree(guards).end();
                     builder.startBlock();
-                    hasFallthrough = true;
                 }
 
                 if (!guardAssertions.isEmpty()) {
@@ -2093,7 +2129,6 @@ public class FlatNodeGenFactory {
                 builder.tree(state.createSet(frameState, new SpecializationData[]{specialization}, true, true));
 
                 if (needsDuplicationCheck) {
-                    hasFallthrough = true;
                     if (!useSpecializationClass) {
                         builder.startStatement().string(duplicateFoundName, " = true").end();
                     }
@@ -2120,7 +2155,7 @@ public class FlatNodeGenFactory {
             }
 
             builder.end(ifCount);
-            hasFallthrough |= ifCount > 0;
+            hasFallthrough = ifCount > 0;
 
         } else if (execution.isGuardFallback()) {
 
@@ -2197,7 +2232,7 @@ public class FlatNodeGenFactory {
 
             builder.end(ifCount);
 
-            hasFallthrough |= ifCount > 0;
+            hasFallthrough = ifCount > 0;
 
         } else {
             throw new AssertionError("unexpected path");
