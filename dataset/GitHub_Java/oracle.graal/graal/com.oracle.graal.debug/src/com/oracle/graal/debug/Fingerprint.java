@@ -30,7 +30,7 @@ import java.util.stream.*;
  */
 public class Fingerprint implements AutoCloseable {
 
-    public static final String ENABLED_PROPERTY_NAME = "graal.fingerprint";
+    private static final String ENABLED_PROPERTY_NAME = "graal.fingerprint";
 
     /**
      * Determines whether fingerprinting is enabled. This is set by the
@@ -54,24 +54,11 @@ public class Fingerprint implements AutoCloseable {
     /**
      * Creates an object to verify execution matches a given fingerprint.
      *
-     * @param toVerifyAgainst the fingerprint events to verify against
-     */
-    public Fingerprint(List<String> toVerifyAgainst) {
-        this.events = toVerifyAgainst;
-        index = 0;
-    }
-
-    /**
-     * Creates an object to verify execution matches a given fingerprint.
-     *
      * @param toVerifyAgainst the fingerprint to verify against
      */
     public Fingerprint(Fingerprint toVerifyAgainst) {
-        this(toVerifyAgainst.events);
-    }
-
-    public Collection<String> getEvents() {
-        return Collections.unmodifiableCollection(events);
+        this.events = toVerifyAgainst.events;
+        index = 0;
     }
 
     /**
