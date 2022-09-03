@@ -47,7 +47,7 @@ public final class TLABAllocateNode extends FixedWithNextNode implements Lowerab
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(CiLoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 

@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot.snippets;
 
-import static com.oracle.graal.hotspot.nodes.CastFromHub.*;
 import static com.oracle.graal.hotspot.nodes.RegisterNode.*;
 import static com.oracle.graal.hotspot.snippets.DirectObjectStoreNode.*;
 import static com.oracle.graal.nodes.extended.UnsafeLoadNode.*;
@@ -32,6 +31,7 @@ import static com.oracle.max.asm.target.amd64.AMD64.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -75,9 +75,9 @@ public class NewInstanceSnippets implements SnippetsInterface {
         if (memory == Word.zero()) {
             return NewInstanceStubCall.call(hub);
         }
-        formatObject(hub, size, memory);
         Object instance = memory.toObject();
-        return castFromHub(verifyOop(instance), hub);
+        formatInstance(hub, size, instance);
+        return verifyOop(instance);
     }
 
     private static Object verifyOop(Object object) {
@@ -102,15 +102,15 @@ public class NewInstanceSnippets implements SnippetsInterface {
     }
 
     /**
-     * Formats some allocated memory with an object header zeroes out the rest.
+     * Formats the header of a created instance and zeroes out its body.
      */
-    private static void formatObject(Object hub, int size, Word memory) {
+    private static void formatInstance(Object hub, int size, Object instance) {
         Word headerPrototype = loadWord(hub, instanceHeaderPrototypeOffset());
-        store(memory, 0, 0, headerPrototype);
-        store(memory, 0, hubOffset(), hub);
+        store(instance, 0, 0, headerPrototype);
+        store(instance, 0, hubOffset(), hub);
         explodeLoop();
         for (int offset = 2 * wordSize(); offset < size; offset += wordSize()) {
-            store(memory, 0, offset, 0);
+            store(instance, 0, offset, 0);
         }
     }
 
@@ -204,6 +204,7 @@ public class NewInstanceSnippets implements SnippetsInterface {
             SnippetTemplate template = cache.get(key);
             Debug.log("Lowering fastAllocate in %s: node=%s, template=%s, arguments=%s", graph, tlabAllocateNode, template, arguments);
             template.instantiate(runtime, tlabAllocateNode, tlabAllocateNode, arguments);
+            new DeadCodeEliminationPhase().apply(graph);
         }
 
         @SuppressWarnings("unused")
@@ -221,6 +222,7 @@ public class NewInstanceSnippets implements SnippetsInterface {
             SnippetTemplate template = cache.get(key);
             Debug.log("Lowering initialize in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
             template.instantiate(runtime, initializeNode, initializeNode, arguments);
+            new DeadCodeEliminationPhase().apply(graph);
         }
     }
 }

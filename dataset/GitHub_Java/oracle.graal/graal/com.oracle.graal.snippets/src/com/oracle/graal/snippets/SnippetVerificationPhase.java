@@ -27,13 +27,12 @@ import static com.oracle.graal.snippets.WordTypeRewriterPhase.*;
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.phases.*;
 import com.oracle.graal.snippets.Word.*;
 
 /**
@@ -54,7 +53,7 @@ public class SnippetVerificationPhase extends Phase {
                     verify(!isWord(node) || ((StoreFieldNode) usage).object() != node, node, usage, "cannot store to word value");
                 } else if (usage instanceof CheckCastNode) {
                     verify(!isWord(node), node, usage, "word value cannot be cast");
-                    verify(!isWord(((CheckCastNode) usage).type()), node, usage, "cannot cast to word value");
+                    verify(!isWord(((CheckCastNode) usage).targetClass()), node, usage, "cannot cast to word value");
                 } else if (usage instanceof LoadIndexedNode) {
                     verify(!isWord(node) || ((LoadIndexedNode) usage).array() != node, node, usage, "cannot load from word value");
                     verify(!isWord(node) || ((LoadIndexedNode) usage).index() != node, node, usage, "cannot use word value as index");
@@ -68,7 +67,7 @@ public class SnippetVerificationPhase extends Phase {
                     if (method.getAnnotation(NodeIntrinsic.class) == null) {
                         Invoke invoke = (Invoke) callTarget.usages().first();
                         NodeInputList<ValueNode> arguments = callTarget.arguments();
-                        boolean isStatic = Modifier.isStatic(method.getModifiers());
+                        boolean isStatic = Modifier.isStatic(method.accessFlags());
                         int argc = 0;
                         if (!isStatic) {
                             ValueNode receiver = arguments.get(argc);
@@ -78,20 +77,15 @@ public class SnippetVerificationPhase extends Phase {
                             }
                             argc++;
                         }
-                        Signature signature = method.getSignature();
-                        for (int i = 0; i < signature.getParameterCount(false); i++) {
+                        Signature signature = method.signature();
+                        for (int i = 0; i < signature.argumentCount(false); i++) {
                             ValueNode argument = arguments.get(argc);
                             if (argument == node) {
-                                ResolvedJavaType type = (ResolvedJavaType) signature.getParameterType(i, method.getDeclaringClass());
-                                verify((type.isClass(Word.class)) == isWord(argument), node, invoke.node(), "cannot pass word value to non-word parameter " + i + " or vice-versa");
+                                ResolvedJavaType type = (ResolvedJavaType) signature.argumentTypeAt(i, method.holder());
+                                verify((type.toJava() == Word.class) == isWord(argument), node, invoke.node(), "cannot pass word value to non-word parameter " + i + " or vice-versa");
                             }
                             argc++;
                         }
-                    }
-                } else if (usage instanceof ObjectEqualsNode) {
-                    ObjectEqualsNode compare = (ObjectEqualsNode) usage;
-                    if (compare.x() == node || compare.y() == node) {
-                        verify(isWord(compare.x()) == isWord(compare.y()), node, compare.usages().first(), "cannot mixed word and non-word type in use of '==' or '!='");
                     }
                 } else if (usage instanceof ArrayLengthNode) {
                     verify(!isWord(node) || ((ArrayLengthNode) usage).array() != node, node, usage, "cannot get array length from word value");
