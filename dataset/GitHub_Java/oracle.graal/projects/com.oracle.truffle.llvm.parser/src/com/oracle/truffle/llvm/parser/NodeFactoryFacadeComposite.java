@@ -32,8 +32,6 @@ package com.oracle.truffle.llvm.parser;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.security.cert.PKIXRevocationChecker.Option;
-import java.util.Optional;
 
 /**
  * This class implements a chain of responsibility pattern by delegating node creation to another
@@ -50,7 +48,7 @@ public abstract class NodeFactoryFacadeComposite implements NodeFactoryFacade {
      * This method implements this pattern for every call:
      *
      * <pre>
-     * &#064;Override
+     * &#64;Override
      * public LLVMExpressionNode createInsertElement(LLVMBaseType resultType, LLVMExpressionNode vector, Type vectorType, LLVMExpressionNode element, LLVMExpressionNode index) {
      *     LLVMExpressionNode firstNode = first.createInsertElement(resultType, vector, vectorType, element, index);
      *     if (firstNode == null) {
@@ -87,16 +85,12 @@ public abstract class NodeFactoryFacadeComposite implements NodeFactoryFacade {
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            Object factoryResult = method.invoke(first, args);
-            if (factoryResult == null || isEmptyOptional(factoryResult)) {
+            Object firstNode = method.invoke(first, args);
+            if (firstNode == null) {
                 return method.invoke(second, args);
             } else {
-                return factoryResult;
+                return firstNode;
             }
-        }
-
-        private static boolean isEmptyOptional(Object factoryResult) {
-            return factoryResult instanceof Optional<?> && !((Optional<?>) factoryResult).isPresent();
         }
     }
 
