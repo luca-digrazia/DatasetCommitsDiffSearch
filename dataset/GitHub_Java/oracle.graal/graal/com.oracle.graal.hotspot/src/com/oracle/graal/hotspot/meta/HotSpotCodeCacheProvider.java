@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.hotspot.meta.HotSpotCompressedNullConstant.*;
-
 import java.lang.reflect.*;
 import java.util.*;
 
@@ -266,8 +264,7 @@ public class HotSpotCodeCacheProvider implements CodeCacheProvider {
             boolean compressed;
             long raw;
             if (constant instanceof HotSpotObjectConstant) {
-                HotSpotObjectConstant c = (HotSpotObjectConstant) vmConstant;
-                compressed = c.isCompressed();
+                compressed = HotSpotObjectConstantImpl.isCompressed(constant);
                 raw = 0xDEADDEADDEADDEADL;
             } else if (constant instanceof HotSpotMetaspaceConstant) {
                 HotSpotMetaspaceConstantImpl meta = (HotSpotMetaspaceConstantImpl) constant;
@@ -291,7 +288,7 @@ public class HotSpotCodeCacheProvider implements CodeCacheProvider {
                 };
             }
         } else if (JavaConstant.isNull(constant)) {
-            boolean compressed = COMPRESSED_NULL.equals(constant);
+            boolean compressed = HotSpotObjectConstantImpl.isCompressed(constant);
             size = target.getSizeInBytes(compressed ? Kind.Int : target.wordKind);
             builder = DataBuilder.zero(size);
         } else if (constant instanceof PrimitiveConstant) {

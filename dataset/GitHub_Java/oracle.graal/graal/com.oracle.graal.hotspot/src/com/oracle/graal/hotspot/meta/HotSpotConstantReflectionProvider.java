@@ -53,7 +53,7 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
             return null;
         }
 
-        Object arrayObject = ((HotSpotObjectConstantImpl) array).object();
+        Object arrayObject = HotSpotObjectConstantImpl.asObject(array);
         if (!arrayObject.getClass().isArray()) {
             return null;
         }
@@ -65,7 +65,7 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
         Object base;
         long displacement;
         if (baseConstant.getKind() == Kind.Object) {
-            base = ((HotSpotObjectConstantImpl) baseConstant).object();
+            base = HotSpotObjectConstantImpl.asObject(baseConstant);
             displacement = initialDisplacement;
             if (base == null) {
                 return null;
@@ -132,7 +132,7 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
         Object base;
         long displacement;
         if (baseConstant.getKind() == Kind.Object) {
-            base = ((HotSpotObjectConstantImpl) baseConstant).object();
+            base = HotSpotObjectConstantImpl.asObject(baseConstant);
             displacement = initialDisplacement;
             if (base == null) {
                 return null;
@@ -197,7 +197,7 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
         if (array.getKind() != Kind.Object || array.isNull()) {
             return null;
         }
-        Object a = ((HotSpotObjectConstantImpl) array).object();
+        Object a = HotSpotObjectConstantImpl.asObject(array);
 
         if (index < 0 || index >= Array.getLength(a)) {
             return null;
@@ -223,13 +223,13 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
         if (!source.getKind().isObject()) {
             return null;
         }
-        return JavaConstant.forBoxedPrimitive(((HotSpotObjectConstantImpl) source).object());
+        return JavaConstant.forBoxedPrimitive(HotSpotObjectConstantImpl.asObject(source));
     }
 
     @Override
     public ResolvedJavaType asJavaType(JavaConstant constant) {
         if (constant instanceof HotSpotObjectConstant) {
-            Object obj = ((HotSpotObjectConstantImpl) constant).object();
+            Object obj = HotSpotObjectConstantImpl.asObject(constant);
             if (obj instanceof Class) {
                 return runtime.getHostProviders().getMetaAccess().lookupJavaType((Class<?>) obj);
             }
