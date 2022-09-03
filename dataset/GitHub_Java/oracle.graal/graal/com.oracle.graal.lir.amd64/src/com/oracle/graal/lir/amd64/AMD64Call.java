@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,148 +22,218 @@
  */
 package com.oracle.graal.lir.amd64;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
+import static com.oracle.graal.lir.LIRValueUtil.differentRegisters;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import java.util.*;
+import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.gen.DiagnosticLIRGeneratorTool.ZapRegistersAfterInstruction;
 
-import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.xir.CiXirAssembler.XirMark;
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CompilationResult.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
+import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.amd64.AMD64Kind;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.InvokeTarget;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
 
 public class AMD64Call {
 
-    public static class DirectCallOp extends AMD64LIRInstruction implements StandardOp.CallOp {
-        private final Object targetMethod;
-        private final Map<XirMark, Mark> marks;
+    public abstract static class CallOp extends AMD64LIRInstruction {
+        public static final LIRInstructionClass<CallOp> TYPE = LIRInstructionClass.create(CallOp.class);
 
-        public DirectCallOp(Object targetMethod, Value result, Value[] parameters, LIRDebugInfo info, Map<XirMark, Mark> marks) {
-            super("CALL_DIRECT", new Value[] {result}, info, parameters, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
-            this.targetMethod = targetMethod;
-            this.marks = marks;
+        @Def({REG, ILLEGAL}) protected Value result;
+        @Use({REG, STACK}) protected Value[] parameters;
+        @Temp protected Value[] temps;
+        @State protected LIRFrameState state;
+
+        protected CallOp(LIRInstructionClass<? extends CallOp> c, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
+            super(c);
+            this.result = result;
+            this.parameters = parameters;
+            this.state = state;
+            this.temps = temps;
+            assert temps != null;
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            callAlignment(tasm, masm);
-            if (marks != null) {
-                marks.put(XirMark.CALLSITE, tasm.recordMark(null, new Mark[0]));
-            }
-            directCall(tasm, masm, targetMethod, info);
-        }
-
-        @Override
-        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-            if (mode == OperandMode.Input) {
-                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack);
-            } else if (mode == OperandMode.Output) {
-                return EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
-            }
-            throw GraalInternalError.shouldNotReachHere();
+        public boolean destroysCallerSavedRegisters() {
+            return true;
         }
     }
 
-    public static class IndirectCallOp extends AMD64LIRInstruction implements StandardOp.CallOp {
-        private final Object targetMethod;
-        private final Map<XirMark, Mark> marks;
+    public abstract static class MethodCallOp extends CallOp {
+        public static final LIRInstructionClass<MethodCallOp> TYPE = LIRInstructionClass.create(MethodCallOp.class);
 
-        private static Value[] concat(Value[] parameters, Value targetAddress) {
-            Value[] result = Arrays.copyOf(parameters, parameters.length + 1);
-            result[result.length - 1] = targetAddress;
-            return result;
+        protected final ResolvedJavaMethod callTarget;
+
+        protected MethodCallOp(LIRInstructionClass<? extends MethodCallOp> c, ResolvedJavaMethod callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
+            super(c, result, parameters, temps, state);
+            this.callTarget = callTarget;
         }
 
-        public IndirectCallOp(Object targetMethod, Value result, Value[] parameters, Value targetAddress, LIRDebugInfo info, Map<XirMark, Mark> marks) {
-            super("CALL_INDIRECT", new Value[] {result}, info, concat(parameters, targetAddress), LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
-            this.targetMethod = targetMethod;
-            this.marks = marks;
+    }
+
+    @Opcode("CALL_DIRECT")
+    public static class DirectCallOp extends MethodCallOp {
+        public static final LIRInstructionClass<DirectCallOp> TYPE = LIRInstructionClass.create(DirectCallOp.class);
+
+        public DirectCallOp(ResolvedJavaMethod callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
+            this(TYPE, callTarget, result, parameters, temps, state);
         }
 
-        private Value targetAddress() {
-            return input(inputs.length - 1);
+        protected DirectCallOp(LIRInstructionClass<? extends DirectCallOp> c, ResolvedJavaMethod callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
+            super(c, callTarget, result, parameters, temps, state);
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            callAlignment(tasm, masm);
-            if (marks != null) {
-                marks.put(XirMark.CALLSITE, tasm.recordMark(null, new Mark[0]));
-            }
-            indirectCall(tasm, masm, asRegister(targetAddress()), targetMethod, info);
+        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+            directCall(crb, masm, callTarget, null, true, state);
+        }
+    }
+
+    @Opcode("CALL_INDIRECT")
+    public static class IndirectCallOp extends MethodCallOp {
+        public static final LIRInstructionClass<IndirectCallOp> TYPE = LIRInstructionClass.create(IndirectCallOp.class);
+
+        @Use({REG}) protected Value targetAddress;
+
+        public IndirectCallOp(ResolvedJavaMethod callTarget, Value result, Value[] parameters, Value[] temps, Value targetAddress, LIRFrameState state) {
+            this(TYPE, callTarget, result, parameters, temps, targetAddress, state);
+        }
+
+        protected IndirectCallOp(LIRInstructionClass<? extends IndirectCallOp> c, ResolvedJavaMethod callTarget, Value result, Value[] parameters, Value[] temps, Value targetAddress,
+                        LIRFrameState state) {
+            super(c, callTarget, result, parameters, temps, state);
+            this.targetAddress = targetAddress;
         }
 
         @Override
-        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-            if (mode == OperandMode.Input) {
-                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack);
-            } else if (mode == OperandMode.Output) {
-                return EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
-            }
-            throw GraalInternalError.shouldNotReachHere();
+        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+            indirectCall(crb, masm, asRegister(targetAddress), callTarget, state);
+        }
+
+        @Override
+        public void verify() {
+            super.verify();
+            assert isRegister(targetAddress) : "The current register allocator cannot handle variables to be used at call sites, it must be in a fixed register for now";
         }
     }
 
+    public abstract static class ForeignCallOp extends CallOp implements ZapRegistersAfterInstruction {
+        public static final LIRInstructionClass<ForeignCallOp> TYPE = LIRInstructionClass.create(ForeignCallOp.class);
 
-    public static void callAlignment(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        // make sure that the displacement word of the call ends up word aligned
-        int offset = masm.codeBuffer.position();
-        offset += tasm.target.arch.machineCodeCallDisplacementOffset;
-        while (offset++ % tasm.target.wordSize != 0) {
-            masm.nop();
+        protected final ForeignCallLinkage callTarget;
+
+        public ForeignCallOp(LIRInstructionClass<? extends ForeignCallOp> c, ForeignCallLinkage callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
+            super(c, result, parameters, temps, state);
+            this.callTarget = callTarget;
+        }
+
+        @Override
+        public boolean destroysCallerSavedRegisters() {
+            return callTarget.destroysRegisters();
         }
     }
 
-    public static void directCall(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Object target, LIRDebugInfo info) {
-        int before = masm.codeBuffer.position();
-        if (target instanceof RuntimeCall) {
-            long maxOffset = tasm.runtime.getMaxCallTargetOffset((RuntimeCall) target);
-            if (maxOffset != (int) maxOffset) {
-                // offset might not fit a 32-bit immediate, generate an
-                // indirect call with a 64-bit immediate
-                Register scratch = tasm.frameMap.registerConfig.getScratchRegister();
-                // TODO (cwimmer): we want to get rid of a generally reserved scratch register.
-                masm.movq(scratch, 0L);
-                masm.call(scratch);
-            } else {
-                masm.call();
-            }
+    @Opcode("NEAR_FOREIGN_CALL")
+    public static final class DirectNearForeignCallOp extends ForeignCallOp {
+        public static final LIRInstructionClass<DirectNearForeignCallOp> TYPE = LIRInstructionClass.create(DirectNearForeignCallOp.class);
+
+        public DirectNearForeignCallOp(ForeignCallLinkage linkage, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
+            super(TYPE, linkage, result, parameters, temps, state);
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+            directCall(crb, masm, callTarget, null, false, state);
+        }
+    }
+
+    @Opcode("FAR_FOREIGN_CALL")
+    public static final class DirectFarForeignCallOp extends ForeignCallOp {
+        public static final LIRInstructionClass<DirectFarForeignCallOp> TYPE = LIRInstructionClass.create(DirectFarForeignCallOp.class);
+
+        @Temp({REG}) protected AllocatableValue callTemp;
+
+        public DirectFarForeignCallOp(ForeignCallLinkage callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
+            super(TYPE, callTarget, result, parameters, temps, state);
+            /*
+             * The register allocator does not support virtual registers that are used at the call
+             * site, so use a fixed register.
+             */
+            callTemp = AMD64.rax.asValue(LIRKind.value(AMD64Kind.QWORD));
+            assert differentRegisters(parameters, callTemp);
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+            directCall(crb, masm, callTarget, ((RegisterValue) callTemp).getRegister(), false, state);
+        }
+    }
+
+    public static void directCall(CompilationResultBuilder crb, AMD64MacroAssembler masm, InvokeTarget callTarget, Register scratch, boolean align, LIRFrameState info) {
+        if (align) {
+            emitAlignmentForDirectCall(crb, masm);
+        }
+        int before = masm.position();
+        if (scratch != null) {
+            // offset might not fit a 32-bit immediate, generate an
+            // indirect call with a 64-bit immediate
+            masm.movq(scratch, 0L);
+            masm.call(scratch);
         } else {
             masm.call();
         }
-        int after = masm.codeBuffer.position();
-        tasm.recordDirectCall(before, after, tasm.runtime.asCallTarget(target), info);
-        tasm.recordExceptionHandlers(after, info);
+        int after = masm.position();
+        crb.recordDirectCall(before, after, callTarget, info);
+        crb.recordExceptionHandlers(after, info);
         masm.ensureUniquePC();
     }
 
-    public static void directJmp(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Object target) {
-        int before = masm.codeBuffer.position();
-        masm.jmp(0, true);
-        int after = masm.codeBuffer.position();
-        tasm.recordDirectCall(before, after, tasm.runtime.asCallTarget(target), null);
-        masm.ensureUniquePC();
-    }
-
-    public static void indirectCall(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Register dst, Object target, LIRDebugInfo info) {
-        int before = masm.codeBuffer.position();
-        masm.call(dst);
-        int after = masm.codeBuffer.position();
-        tasm.recordIndirectCall(before, after, tasm.runtime.asCallTarget(target), info);
-        tasm.recordExceptionHandlers(after, info);
-        masm.ensureUniquePC();
-    }
-
-    public static void shouldNotReachHere(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        boolean assertions = false;
-        assert (assertions = true) == true;
-
-        if (assertions) {
-            directCall(tasm, masm, RuntimeCall.Debug, null);
-            masm.hlt();
+    protected static void emitAlignmentForDirectCall(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        // make sure that the displacement word of the call ends up word aligned
+        int offset = masm.position();
+        offset += crb.target.arch.getMachineCodeCallDisplacementOffset();
+        int modulus = crb.target.wordSize;
+        if (offset % modulus != 0) {
+            masm.nop(modulus - offset % modulus);
         }
+    }
+
+    public static void directJmp(CompilationResultBuilder crb, AMD64MacroAssembler masm, InvokeTarget target) {
+        int before = masm.position();
+        masm.jmp(0, true);
+        int after = masm.position();
+        crb.recordDirectCall(before, after, target, null);
+        masm.ensureUniquePC();
+    }
+
+    public static void directConditionalJmp(CompilationResultBuilder crb, AMD64MacroAssembler masm, InvokeTarget target, ConditionFlag cond) {
+        int before = masm.position();
+        masm.jcc(cond, 0, true);
+        int after = masm.position();
+        crb.recordDirectCall(before, after, target, null);
+        masm.ensureUniquePC();
+    }
+
+    public static void indirectCall(CompilationResultBuilder crb, AMD64MacroAssembler masm, Register dst, InvokeTarget callTarget, LIRFrameState info) {
+        int before = masm.position();
+        masm.call(dst);
+        int after = masm.position();
+        crb.recordIndirectCall(before, after, callTarget, info);
+        crb.recordExceptionHandlers(after, info);
+        masm.ensureUniquePC();
     }
 }
