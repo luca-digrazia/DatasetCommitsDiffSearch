@@ -55,8 +55,6 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 
 public class GraalConfiguration {
 
-    private static final String COMPILER_CONFIGURATION_NAME = CommunityCompilerConfigurationFactory.NAME;
-
     public static GraalConfiguration instance() {
         return ImageSingletons.lookup(GraalConfiguration.class);
     }
@@ -76,7 +74,7 @@ public class GraalConfiguration {
     }
 
     public String getCompilerConfigurationName() {
-        return COMPILER_CONFIGURATION_NAME;
+        return new CommunityCompilerConfigurationFactory().getName();
     }
 
     public void populateMatchRuleRegistry(HashMap<Class<? extends NodeMatchRules>, EconomicMap<Class<? extends Node>, List<MatchStatement>>> matchRuleRegistry) {

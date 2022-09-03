@@ -102,7 +102,7 @@ public abstract class CompilerConfigurationFactory implements Comparable<Compile
     }
 
     /**
-     * Returns a name that should uniquely identify this compiler configuration.
+     * Returns a unique compiler configuration name.
      */
     public final String getName() {
         return name;

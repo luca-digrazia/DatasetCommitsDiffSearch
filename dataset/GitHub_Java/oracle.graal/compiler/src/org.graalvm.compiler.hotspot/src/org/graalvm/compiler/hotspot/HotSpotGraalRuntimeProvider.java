@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -93,8 +91,7 @@ public interface HotSpotGraalRuntimeProvider extends GraalRuntime, RuntimeProvid
     DiagnosticsOutputDirectory getOutputDirectory();
 
     /**
-     * Gets the map used to count compilation problems at each {@link ExceptionAction} level. All
-     * updates and queries to the map should be synchronized.
+     * Gets the map used to count compilation problems at each {@link ExceptionAction} level.
      */
     Map<ExceptionAction, Integer> getCompilationProblemsPerAction();
 

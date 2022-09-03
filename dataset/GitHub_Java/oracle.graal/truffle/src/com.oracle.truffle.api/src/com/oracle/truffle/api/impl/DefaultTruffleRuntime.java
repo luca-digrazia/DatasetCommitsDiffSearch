@@ -82,7 +82,7 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
 
     @Override
     public String getName() {
-        return "Interpreted";
+        return "Default";
     }
 
     @SuppressWarnings("deprecation")

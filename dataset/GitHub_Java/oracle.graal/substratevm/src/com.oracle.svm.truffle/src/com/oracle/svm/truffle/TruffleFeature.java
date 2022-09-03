@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -75,6 +73,7 @@ import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.compiler.nodes.asserts.NeverPartOfCompilationNode;
+import org.graalvm.compiler.truffle.compiler.phases.InstrumentPhase;
 import org.graalvm.compiler.truffle.compiler.substitutions.KnownTruffleTypes;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.TruffleCallBoundary;
@@ -161,8 +160,9 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             return new SubstrateOptimizedCallTarget(sourceCallTarget, rootNode);
         }
 
-        public SubstratePartialEvaluator createPartialEvaluator(Providers providers, GraphBuilderConfiguration configForRoot, SnippetReflectionProvider snippetReflection, Architecture architecture) {
-            return new SubstratePartialEvaluator(providers, configForRoot, snippetReflection, architecture);
+        public SubstratePartialEvaluator createPartialEvaluator(Providers providers, GraphBuilderConfiguration configForRoot, SnippetReflectionProvider snippetReflection, Architecture architecture,
+                        InstrumentPhase.Instrumentation instrumentation) {
+            return new SubstratePartialEvaluator(providers, configForRoot, snippetReflection, architecture, instrumentation);
         }
 
         @SuppressWarnings("unused")
