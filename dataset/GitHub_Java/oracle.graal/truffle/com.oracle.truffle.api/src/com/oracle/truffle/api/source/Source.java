@@ -148,10 +148,7 @@ public abstract class Source {
      * @param name the {@link #getName() name} of a source to seek for
      * @return found source or <code>null</code> if no source with name is known
      * @since 0.8 or earlier
-     * @deprecated centralized caching will be removed, if needed cache your {@link Source} objects
-     *             yourself
      */
-    @Deprecated
     public static Source find(String name) {
         return SourceImpl.findSource(name);
     }
@@ -363,28 +360,10 @@ public abstract class Source {
      * @return a new instance representing a sub-range of another Source
      * @throws IllegalArgumentException if the specified sub-range is not contained in the base
      * @since 0.8 or earlier
-     * @deprecated use {@link #subSource(int, int)}
      */
-    @Deprecated
     public static Source subSource(Source base, int baseCharIndex, int length) {
         CompilerAsserts.neverPartOfCompilation(NO_FASTPATH_SUBSOURCE_CREATION_MESSAGE);
         final SubSourceImpl subSource = SubSourceImpl.create(base, baseCharIndex, length);
-        return new SourceImpl(subSource);
-    }
-
-    /**
-     * Creates a {@linkplain Source Source instance} that represents the contents of a sub-range of
-     * an <code>this</code> {@link Source}.
-     *
-     * @param baseCharIndex 0-based index of the first character of the sub-range
-     * @param length the number of characters in the sub-range
-     * @return a new instance representing a sub-range of another Source
-     * @throws IllegalArgumentException if the specified sub-range is not contained in the base
-     * @since 0.15
-     */
-    public Source subSource(int baseCharIndex, int length) {
-        CompilerAsserts.neverPartOfCompilation(NO_FASTPATH_SUBSOURCE_CREATION_MESSAGE);
-        final SubSourceImpl subSource = SubSourceImpl.create(this, baseCharIndex, length);
         return new SourceImpl(subSource);
     }
 
@@ -397,10 +376,7 @@ public abstract class Source {
      * @return a new instance representing a sub-range at the end of another Source
      * @throws IllegalArgumentException if the index is out of range
      * @since 0.8 or earlier
-     * @deprecated use {@link #subSource(int, int) base.subSource(baseCharIndex, base.getLength() -
-     *             baseCharIndex)}
      */
-    @Deprecated
     public static Source subSource(Source base, int baseCharIndex) {
         CompilerAsserts.neverPartOfCompilation(NO_FASTPATH_SUBSOURCE_CREATION_MESSAGE);
 

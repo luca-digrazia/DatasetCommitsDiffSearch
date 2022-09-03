@@ -229,7 +229,6 @@ import static com.oracle.graal.compiler.common.GraalOptions.DeoptALot;
 import static com.oracle.graal.compiler.common.GraalOptions.PrintProfilingInformation;
 import static com.oracle.graal.compiler.common.GraalOptions.ResolveClassBeforeStaticInvoke;
 import static com.oracle.graal.compiler.common.GraalOptions.StressInvokeWithExceptionNode;
-import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
 import static com.oracle.graal.compiler.common.type.StampFactory.objectNonNull;
 import static com.oracle.graal.debug.GraalError.guarantee;
 import static com.oracle.graal.debug.GraalError.shouldNotReachHere;
@@ -255,7 +254,6 @@ import java.util.Formatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 import com.oracle.graal.bytecode.BytecodeDisassembler;
 import com.oracle.graal.bytecode.BytecodeLookupSwitch;
@@ -284,14 +282,12 @@ import com.oracle.graal.debug.Indent;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeFlood;
 import com.oracle.graal.graph.NodeSourcePosition;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.ExceptionDispatchBlock;
 import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractEndNode;
 import com.oracle.graal.nodes.AbstractMergeNode;
 import com.oracle.graal.nodes.BeginNode;
 import com.oracle.graal.nodes.BeginStateSplitNode;
@@ -334,10 +330,8 @@ import com.oracle.graal.nodes.calc.ConditionalNode;
 import com.oracle.graal.nodes.calc.DivNode;
 import com.oracle.graal.nodes.calc.FloatConvertNode;
 import com.oracle.graal.nodes.calc.IntegerBelowNode;
-import com.oracle.graal.nodes.calc.IntegerDivNode;
 import com.oracle.graal.nodes.calc.IntegerEqualsNode;
 import com.oracle.graal.nodes.calc.IntegerLessThanNode;
-import com.oracle.graal.nodes.calc.IntegerRemNode;
 import com.oracle.graal.nodes.calc.IsNullNode;
 import com.oracle.graal.nodes.calc.LeftShiftNode;
 import com.oracle.graal.nodes.calc.MulNode;
@@ -349,12 +343,12 @@ import com.oracle.graal.nodes.calc.OrNode;
 import com.oracle.graal.nodes.calc.RemNode;
 import com.oracle.graal.nodes.calc.RightShiftNode;
 import com.oracle.graal.nodes.calc.SignExtendNode;
+import com.oracle.graal.nodes.calc.SignedDivNode;
+import com.oracle.graal.nodes.calc.SignedRemNode;
 import com.oracle.graal.nodes.calc.SubNode;
 import com.oracle.graal.nodes.calc.UnsignedRightShiftNode;
 import com.oracle.graal.nodes.calc.XorNode;
 import com.oracle.graal.nodes.calc.ZeroExtendNode;
-import com.oracle.graal.nodes.debug.instrumentation.InstrumentationBeginNode;
-import com.oracle.graal.nodes.debug.instrumentation.InstrumentationEndNode;
 import com.oracle.graal.nodes.extended.AnchoringNode;
 import com.oracle.graal.nodes.extended.BranchProbabilityNode;
 import com.oracle.graal.nodes.extended.BytecodeExceptionNode;
@@ -549,71 +543,6 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    /**
-     * This class maintains a mapping from BCI to a natural number sequence. This sequence is for
-     * indexing generated value nodes corresponding to the bytecodes indicated by the BCI.
-     */
-    private static class BCINodeMap {
-        int[] bci2Idx;
-        ValueNode[] idxToNode;
-
-        BCINodeMap(ResolvedJavaMethod method) {
-            bci2Idx = new int[method.getCodeSize()];
-            // we use -1 to indicate an invalid slot
-            for (int i = 0; i < bci2Idx.length; i++) {
-                bci2Idx[i] = -1;
-            }
-            // construct a sparse array from BCI to a natural number sequence
-            BytecodeStream stream = new BytecodeStream(method.getCode());
-            int idx = 0;
-            for (; stream.currentBC() != Bytecodes.END; stream.next()) {
-                bci2Idx[stream.currentBCI()] = idx++;
-            }
-            idxToNode = new ValueNode[idx];
-        }
-
-        /**
-         * Update generated value {@code node} corresponding to the bytecode indicated by
-         * {@code bci}.
-         */
-        void update(int bci, ValueNode node) {
-            int idx = bci2Idx[bci];
-            if (idx >= 0) {
-                idxToNode[idx] = node;
-            }
-        }
-
-        int indexOf(ValueNode node) {
-            for (int i = 0; i < idxToNode.length; i++) {
-                if (idxToNode[i] == node) {
-                    return i;
-                }
-            }
-            return -1;
-        }
-
-        ValueNode get(int idx) {
-            if (idx >= 0 && idx < idxToNode.length) {
-                return idxToNode[idx];
-            } else {
-                return null;
-            }
-        }
-
-        /**
-         * Performs the given action on each non-null value node.
-         */
-        void forEach(Consumer<ValueNode> action) {
-            for (int i = 0; i < idxToNode.length; i++) {
-                ValueNode node = idxToNode[i];
-                if (node != null) {
-                    action.accept(node);
-                }
-            }
-        }
-
-    }
-
     @SuppressWarnings("serial")
     public static class BytecodeParserError extends GraalError {
 
@@ -652,8 +581,6 @@ public class BytecodeParser implements GraphBuilderContext {
     private FixedWithNextNode[] firstInstructionArray;
     private FrameStateBuilder[] entryStateArray;
 
-    private BCINodeMap bciNodeMap;
-
     protected BytecodeParser(GraphBuilderPhase.Instance graphBuilderInstance, StructuredGraph graph, BytecodeParser parent, ResolvedJavaMethod method, int entryBCI,
                     IntrinsicContext intrinsicContext) {
         this.graphBuilderInstance = graphBuilderInstance;
@@ -671,10 +598,6 @@ public class BytecodeParser implements GraphBuilderContext {
         this.intrinsicContext = intrinsicContext;
         this.entryBCI = entryBCI;
         this.parent = parent;
-
-        if (UseGraalInstrumentation.getValue()) {
-            this.bciNodeMap = new BCINodeMap(method);
-        }
 
         assert method.getCode() != null : "method must contain bytecodes: " + method;
 
@@ -715,10 +638,6 @@ public class BytecodeParser implements GraphBuilderContext {
 
         cleanupFinalGraph();
         ComputeLoopFrequenciesClosure.compute(graph);
-
-        if (UseGraalInstrumentation.getValue()) {
-            resolveInstrumentationTarget();
-        }
     }
 
     @SuppressWarnings("try")
@@ -809,48 +728,6 @@ public class BytecodeParser implements GraphBuilderContext {
                 Debug.dump(Debug.INFO_LOG_LEVEL, graph, "Bytecodes parsed: %s.%s", method.getDeclaringClass().getUnqualifiedName(), method.getName());
             }
         }
-    }
-
-    private void resolveInstrumentationTarget() {
-        bciNodeMap.forEach(node -> {
-            if (node instanceof InstrumentationBeginNode) {
-                InstrumentationBeginNode begin = (InstrumentationBeginNode) node;
-                if (begin.offset() == 0) {
-                    // no further action for 0 offset
-                    return;
-                }
-                int targetIdx = -1;
-                int offset = begin.offset();
-                if (offset < 0) {
-                    // for a negative offset, we substrate the target index by 1 due to the input to
-                    // instrumentationBegin(int)
-                    targetIdx = bciNodeMap.indexOf(begin) + offset - 1;
-                } else {
-                    // for a positive offset, we start from the paired InstrumentationEndNode.
-                    InstrumentationEndNode end = null;
-                    NodeFlood cfgFlood = graph.createNodeFlood();
-                    cfgFlood.add(begin.next());
-                    for (Node current : cfgFlood) {
-                        if (current instanceof InstrumentationEndNode) {
-                            end = (InstrumentationEndNode) current;
-                            break;
-                        } else if (current instanceof LoopEndNode) {
-                            // do nothing
-                        } else if (current instanceof AbstractEndNode) {
-                            cfgFlood.add(((AbstractEndNode) current).merge());
-                        } else {
-                            cfgFlood.addAll(current.successors());
-                        }
-                    }
-                    if (end != null) {
-                        targetIdx = bciNodeMap.indexOf(end) + offset;
-                    }
-                }
-                if (targetIdx != -1) {
-                    begin.setTarget(bciNodeMap.get(targetIdx));
-                }
-            }
-        });
     }
 
     private boolean computeKindVerification(FrameStateBuilder startFrameState) {
@@ -1160,11 +1037,11 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected ValueNode genIntegerDiv(ValueNode x, ValueNode y) {
-        return new IntegerDivNode(x, y);
+        return new SignedDivNode(x, y);
     }
 
     protected ValueNode genIntegerRem(ValueNode x, ValueNode y) {
-        return new IntegerRemNode(x, y);
+        return new SignedRemNode(x, y);
     }
 
     protected ValueNode genNegateOp(ValueNode x) {
@@ -2039,9 +1916,6 @@ public class BytecodeParser implements GraphBuilderContext {
             } else {
                 lastInstr = null;
             }
-        }
-        if (UseGraalInstrumentation.getValue()) {
-            bciNodeMap.update(stream.currentBCI(), v);
         }
     }
 
