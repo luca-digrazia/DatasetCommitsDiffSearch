@@ -117,14 +117,6 @@ public final class Function implements ParserListener {
         this.paramAttributes = paramAttributes;
     }
 
-    public void setupScope() {
-        scope.startLocalScope(function);
-        final FunctionType functionType = function.getType();
-        for (Type argType : functionType.getArgumentTypes()) {
-            scope.addSymbol(function.createParameter(argType), argType);
-        }
-    }
-
     @Override
     public ParserListener enter(Block block) {
         switch (block) {
@@ -1075,13 +1067,5 @@ public final class Function implements ParserListener {
             actualIndex--;
         }
         return (int) actualIndex;
-    }
-
-    public FunctionDefinition getFunction() {
-        return function;
-    }
-
-    public IRScope getScope() {
-        return scope;
     }
 }
