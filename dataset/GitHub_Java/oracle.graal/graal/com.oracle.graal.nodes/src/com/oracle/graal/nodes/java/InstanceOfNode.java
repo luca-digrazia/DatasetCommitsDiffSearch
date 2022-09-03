@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,107 +22,186 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.spi.types.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Anchor;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_15;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_15;
+
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.LogicConstantNode;
+import com.oracle.graal.nodes.LogicNegationNode;
+import com.oracle.graal.nodes.LogicNode;
+import com.oracle.graal.nodes.UnaryOpLogicNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.IsNullNode;
+import com.oracle.graal.nodes.extended.AnchoringNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.type.StampTool;
+
+import jdk.vm.ci.meta.JavaTypeProfile;
+import jdk.vm.ci.meta.TriState;
 
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
  */
-public final class InstanceOfNode extends TypeCheckNode implements Canonicalizable, LIRLowerable, ConditionalTypeFeedbackProvider, TypeCanonicalizable {
+@NodeInfo(cycles = CYCLES_15, size = SIZE_15)
+public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtualizable {
+    public static final NodeClass<InstanceOfNode> TYPE = NodeClass.create(InstanceOfNode.class);
 
-    @Data private final boolean negated;
+    protected final ObjectStamp checkedStamp;
 
-    public boolean negated() {
-        return negated;
+    private JavaTypeProfile profile;
+    @OptionalInput(Anchor) protected AnchoringNode anchor;
+
+    private InstanceOfNode(ObjectStamp checkedStamp, ValueNode object, JavaTypeProfile profile, AnchoringNode anchor) {
+        this(TYPE, checkedStamp, object, profile, anchor);
     }
 
-    /**
-     * Constructs a new InstanceOfNode.
-     *
-     * @param targetClassInstruction the instruction which produces the target class of the instanceof check
-     * @param targetClass the class which is the target of the instanceof check
-     * @param object the instruction producing the object input to this instruction
-     */
-    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, boolean negated) {
-        this(targetClassInstruction, targetClass, object, EMPTY_HINTS, false, negated);
+    protected InstanceOfNode(NodeClass<? extends InstanceOfNode> c, ObjectStamp checkedStamp, ValueNode object, JavaTypeProfile profile, AnchoringNode anchor) {
+        super(c, object);
+        this.checkedStamp = checkedStamp;
+        this.profile = profile;
+        this.anchor = anchor;
+        assert (profile == null) || (anchor != null) : "profiles must be anchored";
+        assert checkedStamp != null;
     }
 
-    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact, boolean negated) {
-        super(targetClassInstruction, targetClass, object, hints, hintsExact, StampFactory.illegal());
-        this.negated = negated;
-        assert targetClass != null;
-    }
-
-    @Override
-    public void generate(LIRGeneratorTool gen) {
-    }
-
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        assert object() != null : this;
-        RiResolvedType exact = object().exactType();
-        if (exact != null) {
-            boolean result = exact.isSubtypeOf(targetClass());
-            if (result != negated) {
-                // The instanceof check reduces to a null check.
-                return graph().unique(new NullCheckNode(object(), false));
-            } else {
-                // The instanceof check can never succeed.
-                return ConstantNode.forBoolean(false, graph());
-            }
+    public static LogicNode createAllowNull(TypeReference type, ValueNode object, JavaTypeProfile profile, AnchoringNode anchor) {
+        if (StampTool.isPointerNonNull(object)) {
+            return create(type, object, profile, anchor);
         }
-        CiConstant constant = object().asConstant();
-        if (constant != null) {
-            assert constant.kind == CiKind.Object;
-            if (constant.isNull()) {
-                return ConstantNode.forBoolean(negated, graph());
-            } else {
-                assert false : "non-null constants are always expected to provide an exactType";
-            }
-        }
-        if (tool.assumptions() != null && hints() != null && targetClass() != null) {
-            if (!hintsExact() && hints().length == 1 && hints()[0] == targetClass().uniqueConcreteSubtype()) {
-                tool.assumptions().recordConcreteSubtype(targetClass(), hints()[0]);
-                return graph().unique(new InstanceOfNode(targetClassInstruction(), targetClass(), object(), hints(), true, negated));
-            }
-        }
-        return this;
+        return createHelper(StampFactory.object(type), object, profile, anchor);
     }
 
-    @Override
-    public BooleanNode negate() {
-        return graph().unique(new InstanceOfNode(targetClassInstruction(), targetClass(), object(), hints(), hintsExact(), !negated));
+    public static LogicNode create(TypeReference type, ValueNode object) {
+        return create(type, object, null, null);
     }
 
-    @Override
-    public void typeFeedback(TypeFeedbackTool tool) {
-        if (negated) {
-            tool.addObject(object()).notDeclaredType(targetClass(), true);
+    public static LogicNode create(TypeReference type, ValueNode object, JavaTypeProfile profile, AnchoringNode anchor) {
+        return createHelper(StampFactory.objectNonNull(type), object, profile, anchor);
+    }
+
+    public static LogicNode createHelper(ObjectStamp checkedStamp, ValueNode object, JavaTypeProfile profile, AnchoringNode anchor) {
+        LogicNode synonym = findSynonym(checkedStamp, object);
+        if (synonym != null) {
+            return synonym;
         } else {
-            tool.addObject(object()).declaredType(targetClass(), true);
+            return new InstanceOfNode(checkedStamp, object, profile, anchor);
         }
     }
 
     @Override
-    public Result canonical(TypeFeedbackTool tool) {
-        ObjectTypeQuery query = tool.queryObject(object());
-        if (query.constantBound(Condition.EQ, CiConstant.NULL_OBJECT)) {
-            return new Result(ConstantNode.forBoolean(negated, graph()), query);
-        } else if (targetClass() != null) {
-            if (query.notDeclaredType(targetClass())) {
-                return new Result(ConstantNode.forBoolean(negated, graph()), query);
-            }
-            if (query.constantBound(Condition.NE, CiConstant.NULL_OBJECT)) {
-                if (query.declaredType(targetClass())) {
-                    return new Result(ConstantNode.forBoolean(!negated, graph()), query);
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        LogicNode synonym = findSynonym(checkedStamp, forValue);
+        if (synonym != null) {
+            return synonym;
+        } else {
+            return this;
+        }
+    }
+
+    public static LogicNode findSynonym(ObjectStamp checkedStamp, ValueNode object) {
+        ObjectStamp inputStamp = (ObjectStamp) object.stamp();
+        ObjectStamp joinedStamp = (ObjectStamp) checkedStamp.join(inputStamp);
+
+        if (joinedStamp.isEmpty()) {
+            // The check can never succeed, the intersection of the two stamps is empty.
+            return LogicConstantNode.contradiction();
+        } else {
+            ObjectStamp meetStamp = (ObjectStamp) checkedStamp.meet(inputStamp);
+            if (checkedStamp.equals(meetStamp)) {
+                // The check will always succeed, the union of the two stamps is equal to the
+                // checked stamp.
+                return LogicConstantNode.tautology();
+            } else if (checkedStamp.type().equals(meetStamp.type()) && checkedStamp.isExactType() == meetStamp.isExactType() && checkedStamp.alwaysNull() == meetStamp.alwaysNull()) {
+                assert checkedStamp.nonNull() != inputStamp.nonNull();
+                // The only difference makes the null-ness of the value => simplify the check.
+                if (checkedStamp.nonNull()) {
+                    return LogicNegationNode.create(IsNullNode.create(object));
+                } else {
+                    return IsNullNode.create(object);
                 }
             }
         }
+
         return null;
+    }
+
+    /**
+     * Gets the type being tested.
+     */
+    public TypeReference type() {
+        return StampTool.typeReferenceOrNull(checkedStamp);
+    }
+
+    public JavaTypeProfile profile() {
+        return profile;
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(getValue());
+        TriState fold = tryFold(alias.stamp());
+        if (fold != TriState.UNKNOWN) {
+            tool.replaceWithValue(LogicConstantNode.forBoolean(fold.isTrue(), graph()));
+        }
+    }
+
+    @Override
+    public Stamp getSucceedingStampForValue(boolean negated) {
+        if (negated) {
+            return null;
+        } else {
+            return checkedStamp;
+        }
+    }
+
+    @Override
+    public TriState tryFold(Stamp valueStamp) {
+        if (valueStamp instanceof ObjectStamp) {
+            ObjectStamp inputStamp = (ObjectStamp) valueStamp;
+            ObjectStamp joinedStamp = (ObjectStamp) checkedStamp.join(inputStamp);
+
+            if (joinedStamp.isEmpty()) {
+                // The check can never succeed, the intersection of the two stamps is empty.
+                return TriState.FALSE;
+            } else {
+                ObjectStamp meetStamp = (ObjectStamp) checkedStamp.meet(inputStamp);
+                if (checkedStamp.equals(meetStamp)) {
+                    // The check will always succeed, the union of the two stamps is equal to the
+                    // checked stamp.
+                    return TriState.TRUE;
+                }
+            }
+        }
+        return TriState.UNKNOWN;
+    }
+
+    public boolean allowsNull() {
+        return !checkedStamp.nonNull();
+    }
+
+    public void setProfile(JavaTypeProfile typeProfile, AnchoringNode anchor) {
+        this.profile = typeProfile;
+        updateUsagesInterface(this.anchor, anchor);
+        this.anchor = anchor;
+        assert (profile == null) || (anchor != null) : "profiles must be anchored";
+    }
+
+    public AnchoringNode getAnchor() {
+        return anchor;
     }
 }
