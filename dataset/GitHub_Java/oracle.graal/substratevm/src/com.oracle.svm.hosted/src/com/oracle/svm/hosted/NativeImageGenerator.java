@@ -48,6 +48,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -179,7 +180,6 @@ import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.jdk.LocalizationFeature;
 import com.oracle.svm.core.option.HostedOptionValues;
-import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.RuntimeOptionValues;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.snippets.SnippetRuntime;
@@ -508,9 +508,9 @@ public class NativeImageGenerator {
                         analysisPolicy = new SVMDefaultAnalysisPolicy(options);
                     }
 
-                    featureHandler.registerFeatures(loader, debug);
+                    featureHandler.registerFeatures(loader);
 
-                    AfterRegistrationAccessImpl access = new AfterRegistrationAccessImpl(featureHandler, loader, originalMetaAccess, debug);
+                    AfterRegistrationAccessImpl access = new AfterRegistrationAccessImpl(featureHandler, loader, originalMetaAccess);
                     featureHandler.forEachFeature(feature -> feature.afterRegistration(access));
 
                     svmHost = new SVMHost(options, platform, analysisPolicy, loader.getClassLoader());
@@ -580,7 +580,7 @@ public class NativeImageGenerator {
                     annotationSubstitutions.processComputedValueFields(bigbang);
 
                     try (Indent indent2 = debug.logAndIndent("process startup initializers")) {
-                        DuringSetupAccessImpl config = new DuringSetupAccessImpl(featureHandler, loader, bigbang, svmHost, debug);
+                        DuringSetupAccessImpl config = new DuringSetupAccessImpl(featureHandler, loader, bigbang, svmHost);
                         featureHandler.forEachFeature(feature -> feature.duringSetup(config));
                     }
 
@@ -669,7 +669,7 @@ public class NativeImageGenerator {
                     }
 
                     try (Indent indent2 = debug.logAndIndent("process analysis initializers")) {
-                        BeforeAnalysisAccessImpl config = new BeforeAnalysisAccessImpl(featureHandler, loader, bigbang, svmHost, nativeLibs, debug);
+                        BeforeAnalysisAccessImpl config = new BeforeAnalysisAccessImpl(featureHandler, loader, bigbang, svmHost, nativeLibs);
                         featureHandler.forEachFeature(feature -> feature.beforeAnalysis(config));
                     }
                 }
@@ -681,7 +681,7 @@ public class NativeImageGenerator {
                     /*
                      * Iterate until analysis reaches a fixpoint
                      */
-                    DuringAnalysisAccessImpl config = new DuringAnalysisAccessImpl(featureHandler, loader, bigbang, svmHost, nativeLibs, debug);
+                    DuringAnalysisAccessImpl config = new DuringAnalysisAccessImpl(featureHandler, loader, bigbang, svmHost, nativeLibs);
                     int numIterations = 0;
                     while (true) {
                         try (Indent indent2 = debug.logAndIndent("new analysis iteration")) {
@@ -723,7 +723,7 @@ public class NativeImageGenerator {
                         }
                     }
 
-                    AfterAnalysisAccessImpl postConfig = new AfterAnalysisAccessImpl(featureHandler, loader, bigbang, debug);
+                    AfterAnalysisAccessImpl postConfig = new AfterAnalysisAccessImpl(featureHandler, loader, bigbang);
                     featureHandler.forEachFeature(feature -> feature.afterAnalysis(postConfig));
 
                     checkUniverse();
@@ -750,7 +750,7 @@ public class NativeImageGenerator {
                 error = e;
                 throw e;
             } finally {
-                OnAnalysisExitAccess onExitConfig = new OnAnalysisExitAccessImpl(featureHandler, loader, bigbang, debug);
+                OnAnalysisExitAccess onExitConfig = new OnAnalysisExitAccessImpl(featureHandler, loader, bigbang);
                 featureHandler.forEachFeature(feature -> {
                     try {
                         feature.onAnalysisExit(onExitConfig);
@@ -838,7 +838,7 @@ public class NativeImageGenerator {
 
                 heap = new NativeImageHeap(aUniverse, hUniverse, hMetaAccess);
 
-                BeforeCompilationAccessImpl config = new BeforeCompilationAccessImpl(featureHandler, loader, aUniverse, hUniverse, hMetaAccess, heap, debug);
+                BeforeCompilationAccessImpl config = new BeforeCompilationAccessImpl(featureHandler, loader, aUniverse, hUniverse, hMetaAccess, heap);
                 featureHandler.forEachFeature(feature -> feature.beforeCompilation(config));
 
                 bigbang.getUnsupportedFeatures().report(bigbang);
@@ -872,7 +872,7 @@ public class NativeImageGenerator {
                 codeCache.layoutMethods(debug);
                 codeCache.layoutConstants();
 
-                AfterCompilationAccessImpl config = new AfterCompilationAccessImpl(featureHandler, loader, aUniverse, hUniverse, hMetaAccess, heap, debug);
+                AfterCompilationAccessImpl config = new AfterCompilationAccessImpl(featureHandler, loader, aUniverse, hUniverse, hMetaAccess, heap);
                 featureHandler.forEachFeature(feature -> feature.afterCompilation(config));
             }
 
@@ -888,7 +888,7 @@ public class NativeImageGenerator {
                         // Finish building the model of the native image heap.
                         heap.addTrailingObjects();
 
-                        AfterHeapLayoutAccessImpl config = new AfterHeapLayoutAccessImpl(featureHandler, loader, hMetaAccess, debug);
+                        AfterHeapLayoutAccessImpl config = new AfterHeapLayoutAccessImpl(featureHandler, loader, hMetaAccess);
                         featureHandler.forEachFeature(feature -> feature.afterHeapLayout(config));
 
                         this.image = AbstractBootImage.create(k, hUniverse, hMetaAccess, nativeLibs, heap, codeCache, hostedEntryPoints, mainEntryPointHostedStub, loader.getClassLoader());
@@ -906,7 +906,7 @@ public class NativeImageGenerator {
             }
 
             BeforeImageWriteAccessImpl beforeConfig = new BeforeImageWriteAccessImpl(featureHandler, loader, imageName, image,
-                            runtime.getRuntimeConfig(), aUniverse, hUniverse, optionProvider, hMetaAccess, debug);
+                            runtime.getRuntimeConfig(), aUniverse, hUniverse, optionProvider, hMetaAccess);
             featureHandler.forEachFeature(feature -> feature.beforeImageWrite(beforeConfig));
 
             try (StopTimer t = new Timer(imageName, "write").start()) {
@@ -919,7 +919,7 @@ public class NativeImageGenerator {
                 Path tmpDir = tempDirectory();
                 Path imagePath = image.write(debug, generatedFiles(HostedOptionValues.singleton()), tmpDir, imageName, beforeConfig);
 
-                AfterImageWriteAccessImpl afterConfig = new AfterImageWriteAccessImpl(featureHandler, loader, hUniverse, imagePath, tmpDir, image.getBootImageKind(), debug);
+                AfterImageWriteAccessImpl afterConfig = new AfterImageWriteAccessImpl(featureHandler, loader, hUniverse, imagePath, tmpDir, image.getBootImageKind());
                 featureHandler.forEachFeature(feature -> feature.afterImageWrite(afterConfig));
             }
         }
@@ -1528,14 +1528,12 @@ public class NativeImageGenerator {
     }
 
     private static <T extends Enum<T>> Set<T> parseCSVtoEnum(Class<T> enumType, String[] csvEnumValues) {
-        EnumSet<T> result = EnumSet.noneOf(enumType);
-        for (String enumValue : OptionUtils.flatten(",", csvEnumValues)) {
+        return Arrays.stream(csvEnumValues).map(String::trim).filter(v -> !Objects.equals(v, "")).map(enumValue -> {
             try {
-                result.add(Enum.valueOf(enumType, enumValue));
+                return Enum.valueOf(enumType, enumValue);
             } catch (IllegalArgumentException iae) {
                 throw VMError.shouldNotReachHere("Value '" + enumValue + "' does not exist. Available values are:\n" + Arrays.toString(AMD64.CPUFeature.values()));
             }
-        }
-        return result;
+        }).collect(Collectors.toSet());
     }
 }
