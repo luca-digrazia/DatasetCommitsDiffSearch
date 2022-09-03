@@ -24,26 +24,19 @@
  */
 package com.oracle.truffle.tools.chromeinspector.test;
 
-import java.io.IOException;
-import java.net.URI;
-import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
-import org.graalvm.polyglot.io.MessageEndpoint;
 
-import com.oracle.truffle.tools.chromeinspector.InspectorExecutionContext;
+import com.oracle.truffle.tools.chromeinspector.TruffleExecutionContext;
 import com.oracle.truffle.tools.chromeinspector.server.ConnectionWatcher;
 import com.oracle.truffle.tools.chromeinspector.server.InspectServerSession;
 import com.oracle.truffle.tools.chromeinspector.types.ExceptionDetails;
@@ -62,14 +55,10 @@ public final class InspectorTester {
     }
 
     public static InspectorTester start(boolean suspend, final boolean inspectInternal, final boolean inspectInitialization) throws InterruptedException {
-        return start(suspend, inspectInternal, inspectInitialization, Collections.emptyList());
-    }
-
-    public static InspectorTester start(boolean suspend, final boolean inspectInternal, final boolean inspectInitialization, List<URI> sourcePath) throws InterruptedException {
         RemoteObject.resetIDs();
         ExceptionDetails.resetIDs();
-        InspectorExecutionContext.resetIDs();
-        InspectExecThread exec = new InspectExecThread(suspend, inspectInternal, inspectInitialization, sourcePath);
+        TruffleExecutionContext.resetIDs();
+        InspectExecThread exec = new InspectExecThread(suspend, inspectInternal, inspectInitialization);
         exec.start();
         exec.initialized.acquire();
         return new InspectorTester(exec);
@@ -92,7 +81,7 @@ public final class InspectorTester {
         exec.join();
         RemoteObject.resetIDs();
         ExceptionDetails.resetIDs();
-        InspectorExecutionContext.resetIDs();
+        TruffleExecutionContext.resetIDs();
         return exec.error;
     }
 
@@ -109,7 +98,7 @@ public final class InspectorTester {
     }
 
     public void sendMessage(String message) {
-        exec.inspect.sendText(message);
+        exec.inspect.onMessage(message);
     }
 
     public String getMessages(boolean waitForSome) throws InterruptedException {
@@ -204,12 +193,11 @@ public final class InspectorTester {
         return allMessages.toString();
     }
 
-    private static class InspectExecThread extends Thread implements MessageEndpoint {
+    private static class InspectExecThread extends Thread implements InspectServerSession.MessageListener {
 
         private final boolean suspend;
-        private final boolean inspectInternal;
-        private final boolean inspectInitialization;
-        private final List<URI> sourcePath;
+        private boolean inspectInternal = false;
+        private boolean inspectInitialization = false;
         private Context context;
         private InspectServerSession inspect;
         private ConnectionWatcher connectionWatcher;
@@ -223,12 +211,11 @@ public final class InspectorTester {
         private Throwable error;
         final Object lock = new Object();
 
-        InspectExecThread(boolean suspend, final boolean inspectInternal, final boolean inspectInitialization, List<URI> sourcePath) {
+        InspectExecThread(boolean suspend, final boolean inspectInternal, final boolean inspectInitialization) {
             super("Inspector Executor");
             this.suspend = suspend;
             this.inspectInternal = inspectInternal;
             this.inspectInitialization = inspectInitialization;
-            this.sourcePath = sourcePath;
         }
 
         @Override
@@ -236,7 +223,7 @@ public final class InspectorTester {
             Engine engine = Engine.create();
             Instrument testInstrument = engine.getInstruments().get(InspectorTestInstrument.ID);
             InspectSessionInfoProvider sessionInfoProvider = testInstrument.lookup(InspectSessionInfoProvider.class);
-            InspectSessionInfo sessionInfo = sessionInfoProvider.getSessionInfo(suspend, inspectInternal, inspectInitialization, sourcePath);
+            InspectSessionInfo sessionInfo = sessionInfoProvider.getSessionInfo(suspend, inspectInternal, inspectInitialization);
             inspect = sessionInfo.getInspectServerSession();
             try {
                 connectionWatcher = sessionInfo.getConnectionWatcher();
@@ -278,7 +265,7 @@ public final class InspectorTester {
                     throw t;
                 }
             } finally {
-                inspect.sendClose();
+                inspect.dispose();
             }
         }
 
@@ -293,29 +280,12 @@ public final class InspectorTester {
         }
 
         @Override
-        public void sendText(String message) {
+        public void sendMessage(String message) {
             synchronized (receivedMessages) {
                 receivedMessages.append(message);
                 receivedMessages.append('\n');
                 receivedMessages.notifyAll();
             }
-        }
-
-        @Override
-        public void sendBinary(ByteBuffer data) throws IOException {
-            fail("Unexpected binary message");
-        }
-
-        @Override
-        public void sendPing(ByteBuffer data) throws IOException {
-        }
-
-        @Override
-        public void sendPong(ByteBuffer data) throws IOException {
-        }
-
-        @Override
-        public void sendClose() throws IOException {
         }
 
     }
