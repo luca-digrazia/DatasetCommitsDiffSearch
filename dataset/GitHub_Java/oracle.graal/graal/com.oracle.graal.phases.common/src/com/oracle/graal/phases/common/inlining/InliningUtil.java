@@ -212,7 +212,7 @@ public class InliningUtil {
         if (callTarget.targetMethod() == null) {
             return "target method is null";
         }
-        assert invoke.stateAfter() != null : invoke;
+        assert invoke.stateAfter() != null;
         if (!invoke.useForInlining()) {
             return "the invoke is marked to be not used for inlining";
         }
@@ -258,7 +258,7 @@ public class InliningUtil {
             throw new IllegalStateException("Inlined graph is in invalid state: " + inlineGraph);
         }
         for (Node node : inlineGraph.getNodes()) {
-            if (node == entryPointNode || (node == entryPointNode.stateAfter() && node.usages().count() == 1) || node instanceof ParameterNode) {
+            if (node == entryPointNode || node == entryPointNode.stateAfter() || node instanceof ParameterNode) {
                 // Do nothing.
             } else {
                 nodes.add(node);
@@ -574,11 +574,15 @@ public class InliningUtil {
     }
 
     public static boolean canIntrinsify(Replacements replacements, ResolvedJavaMethod target) {
-        return replacements.getMethodSubstitutionMethod(target) != null;
+        return replacements.getMethodSubstitutionMethod(target) != null || getMacroNodeClass(replacements, target) != null;
     }
 
     public static StructuredGraph getIntrinsicGraph(Replacements replacements, ResolvedJavaMethod target) {
         return replacements.getMethodSubstitution(target);
+    }
+
+    public static Class<? extends FixedWithNextNode> getMacroNodeClass(Replacements replacements, ResolvedJavaMethod target) {
+        return replacements.getMacroSubstitution(target);
     }
 
     public static FixedWithNextNode inlineMacroNode(Invoke invoke, ResolvedJavaMethod concrete, Class<? extends FixedWithNextNode> macroNodeClass) throws GraalInternalError {

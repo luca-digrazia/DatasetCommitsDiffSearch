@@ -22,17 +22,15 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.*;
-
 import java.lang.reflect.*;
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.java.AbstractBytecodeParser.IntrinsicContext;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
@@ -92,7 +90,7 @@ public class GraphKit {
     }
 
     public <T extends ValueNode> T changeToWord(T node) {
-        if (wordTypes != null && wordTypes.isWord(node)) {
+        if (wordTypes.isWord(node)) {
             node.setStamp(wordTypes.getWordStamp(StampTool.typeOrNull(node)));
         }
         return node;
@@ -126,13 +124,8 @@ public class GraphKit {
      * @param name the name of the invoked method
      * @param args the arguments to the invocation
      */
-    public InvokeNode createInvoke(Class<?> declaringClass, String name, InvokeKind invokeKind, FrameStateBuilder frameStateBuilder, int bci, ValueNode... args) {
+    public InvokeNode createInvoke(Class<?> declaringClass, String name, InvokeKind invokeKind, HIRFrameStateBuilder frameStateBuilder, int bci, ValueNode... args) {
         boolean isStatic = invokeKind == InvokeKind.Static;
-        ResolvedJavaMethod method = findMethod(declaringClass, name, isStatic);
-        return createInvoke(method, invokeKind, frameStateBuilder, bci, args);
-    }
-
-    public ResolvedJavaMethod findMethod(Class<?> declaringClass, String name, boolean isStatic) {
         ResolvedJavaMethod method = null;
         for (Method m : declaringClass.getDeclaredMethods()) {
             if (Modifier.isStatic(m.getModifiers()) == isStatic && m.getName().equals(name)) {
@@ -141,14 +134,14 @@ public class GraphKit {
             }
         }
         assert method != null : "did not find method in " + declaringClass + " named " + name;
-        return method;
+        return createInvoke(method, invokeKind, frameStateBuilder, bci, args);
     }
 
     /**
      * Creates and appends an {@link InvokeNode} for a call to a given method with a given set of
      * arguments.
      */
-    public InvokeNode createInvoke(ResolvedJavaMethod method, InvokeKind invokeKind, FrameStateBuilder frameStateBuilder, int bci, ValueNode... args) {
+    public InvokeNode createInvoke(ResolvedJavaMethod method, InvokeKind invokeKind, HIRFrameStateBuilder frameStateBuilder, int bci, ValueNode... args) {
         assert method.isStatic() == (invokeKind == InvokeKind.Static);
         Signature signature = method.getSignature();
         JavaType returnType = signature.getReturnType(null);
@@ -157,11 +150,11 @@ public class GraphKit {
         InvokeNode invoke = append(new InvokeNode(callTarget, bci));
 
         if (frameStateBuilder != null) {
-            if (invoke.getStackKind() != Kind.Void) {
+            if (invoke.getKind() != Kind.Void) {
                 frameStateBuilder.push(returnType.getKind(), invoke);
             }
-            invoke.setStateAfter(frameStateBuilder.create(bci, invoke));
-            if (invoke.getStackKind() != Kind.Void) {
+            invoke.setStateAfter(frameStateBuilder.create(bci));
+            if (invoke.getKind() != Kind.Void) {
                 frameStateBuilder.pop(returnType.getKind());
             }
         }
@@ -169,7 +162,7 @@ public class GraphKit {
     }
 
     protected MethodCallTargetNode createMethodCallTarget(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, JavaType returnType, @SuppressWarnings("unused") int bci) {
-        return new MethodCallTargetNode(invokeKind, targetMethod, args, returnType, null);
+        return new MethodCallTargetNode(invokeKind, targetMethod, args, returnType);
     }
 
     /**
@@ -187,14 +180,12 @@ public class GraphKit {
         }
         int argIndex = 0;
         if (!isStatic) {
-            ResolvedJavaType expectedType = method.getDeclaringClass();
-            Kind expected = wordTypes == null ? expectedType.getKind() : wordTypes.asKind(expectedType);
+            Kind expected = wordTypes.asKind(method.getDeclaringClass());
             Kind actual = args[argIndex++].stamp().getStackKind();
             assert expected == actual : graph + ": wrong kind of value for receiver argument of call to " + method + " [" + actual + " != " + expected + "]";
         }
         for (int i = 0; i != signature.getParameterCount(false); i++) {
-            JavaType expectedType = signature.getParameterType(i, method.getDeclaringClass());
-            Kind expected = wordTypes == null ? expectedType.getKind().getStackKind() : wordTypes.asKind(expectedType).getStackKind();
+            Kind expected = wordTypes.asKind(signature.getParameterType(i, method.getDeclaringClass())).getStackKind();
             Kind actual = args[argIndex++].stamp().getStackKind();
             if (expected != actual) {
                 throw new AssertionError(graph + ": wrong kind of value for argument " + i + " of call to " + method + " [" + actual + " != " + expected + "]");
@@ -229,7 +220,7 @@ public class GraphKit {
         GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
 
         StructuredGraph calleeGraph = new StructuredGraph(method, AllowAssumptions.NO);
-        IntrinsicContext initialReplacementContext = new IntrinsicContext(method, method, INLINE_AFTER_PARSING);
+        IntrinsicContext initialReplacementContext = new IntrinsicContext(method, method, null, IntrinsicContext.POST_PARSE_INLINE_BCI);
         new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), config, OptimisticOptimizations.NONE, initialReplacementContext).apply(calleeGraph);
 
         // Remove all frame states from inlinee

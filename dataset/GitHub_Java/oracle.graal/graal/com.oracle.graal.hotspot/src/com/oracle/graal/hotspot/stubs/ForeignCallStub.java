@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
-import static jdk.internal.jvmci.code.CallingConvention.Type.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition;
 import com.oracle.graal.hotspot.meta.*;
@@ -111,40 +110,33 @@ public class ForeignCallStub extends Stub {
         return null;
     }
 
-    private class DebugScopeContext implements JavaMethod, JavaMethodContex {
-        public JavaMethod asJavaMethod() {
-            return this;
-        }
-
-        public Signature getSignature() {
-            ForeignCallDescriptor d = linkage.getDescriptor();
-            MetaAccessProvider metaAccess = providers.getMetaAccess();
-            Class<?>[] arguments = d.getArgumentTypes();
-            ResolvedJavaType[] parameters = new ResolvedJavaType[arguments.length];
-            for (int i = 0; i < arguments.length; i++) {
-                parameters[i] = metaAccess.lookupJavaType(arguments[i]);
-            }
-            return new HotSpotSignature(runtime.getJVMCIRuntime(), metaAccess.lookupJavaType(d.getResultType()), parameters);
-        }
-
-        public String getName() {
-            return linkage.getDescriptor().getName();
-        }
-
-        public JavaType getDeclaringClass() {
-            return providers.getMetaAccess().lookupJavaType(ForeignCallStub.class);
-        }
-
-        @Override
-        public String toString() {
-            return format("ForeignCallStub<%n(%p)>");
-        }
-    }
-
     @Override
     protected Object debugScopeContext() {
-        return new DebugScopeContext() {
+        return new JavaMethod() {
 
+            public Signature getSignature() {
+                ForeignCallDescriptor d = linkage.getDescriptor();
+                MetaAccessProvider metaAccess = providers.getMetaAccess();
+                Class<?>[] arguments = d.getArgumentTypes();
+                ResolvedJavaType[] parameters = new ResolvedJavaType[arguments.length];
+                for (int i = 0; i < arguments.length; i++) {
+                    parameters[i] = metaAccess.lookupJavaType(arguments[i]);
+                }
+                return new HotSpotSignature(runtime, metaAccess.lookupJavaType(d.getResultType()), parameters);
+            }
+
+            public String getName() {
+                return linkage.getDescriptor().getName();
+            }
+
+            public JavaType getDeclaringClass() {
+                return providers.getMetaAccess().lookupJavaType(ForeignCallStub.class);
+            }
+
+            @Override
+            public String toString() {
+                return format("ForeignCallStub<%n(%p)>");
+            }
         };
     }
 
@@ -199,7 +191,6 @@ public class ForeignCallStub extends Stub {
 
         StructuredGraph graph = new StructuredGraph(toString(), null, AllowAssumptions.NO);
         graph.disableInlinedMethodRecording();
-        graph.disableUnsafeAccessTracking();
 
         GraphKit kit = new GraphKit(graph, providers, wordTypes, providers.getGraphBuilderPlugins());
         ParameterNode[] params = createParameters(kit, args);

@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.jtt.lang;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
+
+import com.oracle.graal.jtt.*;
 
 /*
  */
@@ -34,7 +35,7 @@ public class Math_sin extends JTTTest {
     }
 
     public static double test(double arg) throws NaN {
-        double v = Math.sin(arg);
+        double v = Math.sin(arg) * Math.sin(arg * 5);
         if (Double.isNaN(v)) {
             // NaN can't be tested against itself
             throw new NaN();
@@ -59,12 +60,12 @@ public class Math_sin extends JTTTest {
 
     @Test
     public void run3() throws Throwable {
-        runTestWithDelta(0, "test", -0.0d);
+        runTest("test", -0.0d);
     }
 
     @Test
     public void run4() throws Throwable {
-        runTestWithDelta(0, "test", 0.0d);
+        runTest("test", 0.0d);
     }
 
 }

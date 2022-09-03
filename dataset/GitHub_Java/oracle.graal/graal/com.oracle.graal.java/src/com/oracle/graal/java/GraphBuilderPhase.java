@@ -823,7 +823,9 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected void genStoreIndexed(ValueNode array, ValueNode index, Kind kind, ValueNode value) {
-                add(new StoreIndexedNode(array, index, kind, value));
+                StoreIndexedNode storeIndexed = new StoreIndexedNode(array, index, kind, value);
+                append(storeIndexed);
+                storeIndexed.setStateAfter(this.createStateAfter());
             }
 
             @Override

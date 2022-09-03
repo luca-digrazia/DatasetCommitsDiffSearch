@@ -35,6 +35,7 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.ReplacementsImpl.FrameStateProcessing;
 import com.oracle.graal.word.*;
 import com.oracle.graal.word.nodes.*;
 
@@ -55,7 +56,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
 
     @Override
     protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
-        return installer.makeGraph(m, null, null);
+        return installer.makeGraph(m, null, null, FrameStateProcessing.CollapseFrameForSingleSideEffect);
     }
 
     @Test
@@ -396,7 +397,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     }
 
     private void assertNumWordCasts(String snippetName, int expectedWordCasts) {
-        HighTierContext context = new HighTierContext(getProviders(), null, OptimisticOptimizations.ALL);
+        HighTierContext context = new HighTierContext(getProviders(), null, null, OptimisticOptimizations.ALL);
 
         StructuredGraph graph = parseEager(snippetName, AllowAssumptions.YES);
         new CanonicalizerPhase().apply(graph, context);

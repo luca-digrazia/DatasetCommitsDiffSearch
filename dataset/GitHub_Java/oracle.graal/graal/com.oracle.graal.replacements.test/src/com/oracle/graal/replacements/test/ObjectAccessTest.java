@@ -32,6 +32,7 @@ import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.ReplacementsImpl.FrameStateProcessing;
 import com.oracle.graal.word.*;
 
 /**
@@ -49,7 +50,7 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
 
     @Override
     protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
-        return installer.makeGraph(m, null, null);
+        return installer.makeGraph(m, null, null, FrameStateProcessing.CollapseFrameForSingleSideEffect);
     }
 
     @Test

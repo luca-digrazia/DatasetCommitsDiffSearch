@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,19 @@
  */
 package com.oracle.graal.replacements.test;
 
-import java.util.function.Function;
+import org.junit.*;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
-import org.junit.Test;
-
-import com.oracle.graal.api.replacements.ClassSubstitution;
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.api.test.Graal;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.spi.Replacements;
-import com.oracle.graal.runtime.RuntimeProvider;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.runtime.*;
 
-/**
- * Tests for expected behavior when parsing snippets and intrinsics.
- */
 public class ReplacementsParseTest extends GraalCompilerTest {
-
-    @Override
-    protected Plugins getDefaultGraphBuilderPlugins() {
-        Plugins ret = super.getDefaultGraphBuilderPlugins();
-        // manually register generated factory, jvmci service providers don't work from unit tests
-        new PluginFactory_ReplacementsParseTest().registerPlugins(ret.getInvocationPlugins(), null);
-        return ret;
-    }
 
     private static final Object THROW_EXCEPTION_MARKER = new Object() {
         @Override
@@ -80,10 +64,6 @@ public class ReplacementsParseTest extends GraalCompilerTest {
             }
             return res;
         }
-
-        static String identity(String s) {
-            return s;
-        }
     }
 
     @ClassSubstitution(TestMethods.class)
@@ -95,17 +75,11 @@ public class ReplacementsParseTest extends GraalCompilerTest {
             return Math.nextAfter(xx, d);
         }
 
-        /**
-         * Tests partial intrinsification.
-         */
         @MethodSubstitution
         static String stringize(Object obj) {
             if (obj != null && obj.getClass() == String.class) {
                 return asNonNullString(obj);
             } else {
-                // A recursive call denotes exiting/deoptimizing
-                // out of the partial intrinsification to the
-                // slow/uncommon case.
                 return stringize(obj);
             }
         }
@@ -117,17 +91,6 @@ public class ReplacementsParseTest extends GraalCompilerTest {
         @NodeIntrinsic(PiNode.class)
         private static native String asNonNullStringIntrinsic(Object object, @ConstantNodeParameter Class<?> toType, @ConstantNodeParameter boolean exactType, @ConstantNodeParameter boolean nonNull);
 
-        /**
-         * Tests that non-capturing lambdas are folded away.
-         */
-        @MethodSubstitution
-        static String identity(String value) {
-            return apply(s -> s, value);
-        }
-
-        private static String apply(Function<String, String> f, String value) {
-            return f.apply(value);
-        }
     }
 
     private static boolean substitutionsInstalled;
@@ -193,7 +156,7 @@ public class ReplacementsParseTest extends GraalCompilerTest {
         test("callStringize", Boolean.TRUE);
     }
 
-    public static Object callStringize(Object obj) {
+    public Object callStringize(Object obj) {
         return TestMethods.stringize(obj);
     }
 
@@ -203,15 +166,5 @@ public class ReplacementsParseTest extends GraalCompilerTest {
         test(method, null, "a string");
         test(method, null, Boolean.TRUE);
         test(method, null, THROW_EXCEPTION_MARKER);
-    }
-
-    @Test
-    public void testLambda() {
-        test("callLambda", (String) null);
-        test("callLambda", "a string");
-    }
-
-    public static String callLambda(String value) {
-        return TestMethods.identity(value);
     }
 }

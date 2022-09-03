@@ -22,18 +22,17 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import com.oracle.jvmci.meta.MetaAccessProvider;
-import com.oracle.jvmci.meta.LocalVariableTable;
-import com.oracle.jvmci.meta.Local;
-import com.oracle.jvmci.meta.ResolvedJavaMethod;
-import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.*;
-
 import java.lang.reflect.*;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.java.AbstractBytecodeParser.ReplacementContext;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
@@ -44,9 +43,6 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
 
 /**
  * Base class for a stub defined by a snippet.
@@ -81,21 +77,14 @@ public abstract class SnippetStub extends Stub implements Snippets {
         this.method = providers.getMetaAccess().lookupJavaMethod(javaMethod);
     }
 
-    @SuppressWarnings("all")
-    private static boolean assertionsEnabled() {
-        boolean enabled = false;
-        assert enabled = true;
-        return enabled;
-    }
-
-    public static final ThreadLocal<StructuredGraph> SnippetGraphUnderConstruction = assertionsEnabled() ? new ThreadLocal<>() : null;
+    public static final ThreadLocal<StructuredGraph> SnippetGraphUnderConstruction = new ThreadLocal<>();
 
     @Override
     protected StructuredGraph getGraph() {
         Plugins defaultPlugins = providers.getGraphBuilderPlugins();
         MetaAccessProvider metaAccess = providers.getMetaAccess();
         Plugins plugins = new Plugins(defaultPlugins);
-        plugins.prependParameterPlugin(new ConstantBindingParameterPlugin(makeConstArgs(), metaAccess, providers.getSnippetReflection()));
+        plugins.setParameterPlugin(new ConstantBindingParameterPlugin(makeConstArgs(), plugins.getParameterPlugin(), metaAccess, providers.getSnippetReflection()));
         GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
 
         // Stubs cannot have optimistic assumptions since they have
@@ -104,20 +93,11 @@ public abstract class SnippetStub extends Stub implements Snippets {
         final StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO);
         graph.disableInlinedMethodRecording();
 
-        if (SnippetGraphUnderConstruction != null) {
-            assert SnippetGraphUnderConstruction.get() == null : SnippetGraphUnderConstruction.get().toString() + " " + graph;
-            SnippetGraphUnderConstruction.set(graph);
-        }
-
-        try {
-            IntrinsicContext initialIntrinsicContext = new IntrinsicContext(method, method, INLINE_AFTER_PARSING);
-            new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), config, OptimisticOptimizations.NONE, initialIntrinsicContext).apply(graph);
-
-        } finally {
-            if (SnippetGraphUnderConstruction != null) {
-                SnippetGraphUnderConstruction.set(null);
-            }
-        }
+        assert SnippetGraphUnderConstruction.get() == null;
+        SnippetGraphUnderConstruction.set(graph);
+        ReplacementContext initialReplacementContext = new ReplacementContext(method, method);
+        new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), config, OptimisticOptimizations.NONE, initialReplacementContext).apply(graph);
+        SnippetGraphUnderConstruction.set(null);
 
         graph.setGuardsStage(GuardsStage.FLOATING_GUARDS);
         try (Scope s = Debug.scope("LoweringStub", graph)) {
@@ -153,7 +133,7 @@ public abstract class SnippetStub extends Stub implements Snippets {
     }
 
     protected Object getConstantParameterValue(int index, String name) {
-        throw new JVMCIError("%s must override getConstantParameterValue() to provide a value for parameter %d%s", getClass().getName(), index, name == null ? "" : " (" + name + ")");
+        throw new GraalInternalError("%s must override getConstantParameterValue() to provide a value for parameter %d%s", getClass().getName(), index, name == null ? "" : " (" + name + ")");
     }
 
     @Override
