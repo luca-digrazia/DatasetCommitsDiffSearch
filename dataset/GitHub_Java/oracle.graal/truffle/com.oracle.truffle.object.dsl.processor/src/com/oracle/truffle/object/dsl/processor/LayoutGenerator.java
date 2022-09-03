@@ -524,10 +524,6 @@ public class LayoutGenerator {
             stream.print("    private");
         }
 
-        if (!layout.hasObjectTypeGuard()) {
-            stream.printf(" static");
-        }
-
         stream.printf(" boolean is%s(DynamicObject object) {%n", layout.getName());
         stream.printf("        return is%s(object.getShape().getObjectType());%n", layout.getName());
         stream.println("    }");
