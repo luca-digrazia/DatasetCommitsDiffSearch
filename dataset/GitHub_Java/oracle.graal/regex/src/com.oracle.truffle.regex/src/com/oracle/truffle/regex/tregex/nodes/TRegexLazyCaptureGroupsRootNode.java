@@ -34,33 +34,30 @@ import com.oracle.truffle.regex.result.LazyCaptureGroupsResult;
 
 public class TRegexLazyCaptureGroupsRootNode extends RegexBodyNode {
 
-    @Child private TRegexDFAExecutorNode executorNode;
+    @Child private TRegexDFAExecutorEntryNode entryNode;
+    private final RegexProfile.TracksRegexProfile profiler;
 
-    public TRegexLazyCaptureGroupsRootNode(RegexLanguage language, RegexSource source, TRegexDFAExecutorNode captureGroupNode) {
+    public TRegexLazyCaptureGroupsRootNode(RegexLanguage language, RegexSource source, TRegexDFAExecutorNode captureGroupNode, RegexProfile.TracksRegexProfile profiler) {
         super(language, source);
-        this.executorNode = captureGroupNode;
+        this.entryNode = TRegexDFAExecutorEntryNode.create(captureGroupNode);
+        this.profiler = profiler;
     }
 
     @Override
-    public final int[] execute(VirtualFrame frame) {
+    public final Void execute(VirtualFrame frame) {
         final Object[] args = frame.getArguments();
         assert args.length == 3;
         final LazyCaptureGroupsResult receiver = (LazyCaptureGroupsResult) args[0];
         final int startIndex = (int) args[1];
         final int max = (int) args[2];
-        executorNode.setInput(frame, receiver.getInput());
-        executorNode.setFromIndex(frame, receiver.getFromIndex());
-        executorNode.setIndex(frame, startIndex);
-        executorNode.setMaxIndex(frame, max);
-        executorNode.execute(frame);
-        final int[] result = executorNode.getResultCaptureGroups(frame);
+        entryNode.execute(frame, receiver.getInput(), receiver.getFromIndex(), startIndex, max);
+        final int[] result = entryNode.getExecutor().getResultCaptureGroups(frame);
         if (CompilerDirectives.inInterpreter()) {
-            RegexProfile profile = receiver.getCompiledRegex().getRegexProfile();
-            profile.incCaptureGroupAccesses();
-            profile.addMatchedPortionOfSearchSpace((double) (result[1] - result[0]) / (result[1] - (receiver.getFromIndex() + 1)));
+            RegexProfile profile = profiler.getRegexProfile();
+            profile.profileCaptureGroupAccess(result[1] - result[0], result[1] - (receiver.getFromIndex() + 1));
         }
         receiver.setResult(result);
-        return result;
+        return null;
     }
 
     @Override
