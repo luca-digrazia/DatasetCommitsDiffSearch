@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_15;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_30;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.TriState;
 
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.graph.Node;
@@ -37,16 +38,12 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.spi.Lowerable;
 import com.oracle.graal.nodes.spi.LoweringTool;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.TriState;
-
 /**
  * The {@code ClassIsAssignableFromNode} represents a type check against {@link Class} instead of
  * against instances. This is used, for instance, to intrinsify
  * {@link Class#isAssignableFrom(Class)} .
  */
-@NodeInfo(cycles = CYCLES_15, size = SIZE_30)
+@NodeInfo
 public final class ClassIsAssignableFromNode extends BinaryOpLogicNode implements Canonicalizable.Binary<ValueNode>, Lowerable {
 
     public static final NodeClass<ClassIsAssignableFromNode> TYPE = NodeClass.create(ClassIsAssignableFromNode.class);
