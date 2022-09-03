@@ -23,7 +23,6 @@
 package com.oracle.graal.compiler.gen;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.lir.LIR.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
 
@@ -36,7 +35,6 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.match.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
@@ -65,13 +63,10 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
     private ValueNode currentInstruction;
     private ValueNode lastInstructionPrinted; // Debugging only
 
-    private Map<Class<? extends ValueNode>, List<MatchStatement>> matchRules;
-
     public NodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool gen) {
         this.gen = gen;
         this.nodeOperands = graph.createNodeMap();
         this.debugInfoBuilder = createDebugInfoBuilder(nodeOperands);
-        matchRules = MatchRuleRegistry.lookup(getClass());
     }
 
     @SuppressWarnings("hiding")
@@ -158,23 +153,11 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
     @Override
     public Value setResult(ValueNode x, Value operand) {
         assert (!isRegister(operand) || !gen.attributes(asRegister(operand)).isAllocatable());
-        assert nodeOperands != null && (nodeOperands.get(x) == null || nodeOperands.get(x) instanceof ComplexMatchValue) : "operand cannot be set twice";
+        assert nodeOperands == null || nodeOperands.get(x) == null : "operand cannot be set twice";
         assert operand != null && isLegal(operand) : "operand must be legal";
         assert !(x instanceof VirtualObjectNode);
         nodeOperands.set(x, operand);
         return operand;
-    }
-
-    /**
-     * Used by the {@link MatchStatement} machinery to override the generation LIR for some
-     * ValueNodes.
-     */
-    public void setMatchResult(ValueNode x, Value operand) {
-        assert operand.equals(ComplexMatchValue.INTERIOR_MATCH) || operand instanceof ComplexMatchValue;
-        assert operand instanceof ComplexMatchValue || x.usages().count() == 1 : "interior matches must be single user";
-        assert nodeOperands != null && nodeOperands.get(x) == null : "operand cannot be set twice";
-        assert !(x instanceof VirtualObjectNode);
-        nodeOperands.set(x, operand);
     }
 
     public LabelRef getLIRBlock(FixedNode b) {
@@ -209,43 +192,33 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
         }
 
         List<ScheduledNode> nodes = blockMap.get(block);
-
-        if (MatchExpressions.getValue()) {
-            // Allow NodeLIRBuilder subclass to specialize code generation of any interesting groups
-            // of instructions
-            matchComplexExpressions(nodes);
-        }
-
+        int instructionsFolded = 0;
         for (int i = 0; i < nodes.size(); i++) {
             Node instr = nodes.get(i);
             if (Options.TraceLIRGeneratorLevel.getValue() >= 3) {
                 TTY.println("LIRGen for " + instr);
+            }
+            if (instructionsFolded > 0) {
+                instructionsFolded--;
+                continue;
             }
             if (!ConstantNodeRecordsUsages && instr instanceof ConstantNode) {
                 // Loading of constants is done lazily by operand()
 
             } else if (instr instanceof ValueNode) {
                 ValueNode valueNode = (ValueNode) instr;
-                Value operand = getOperand(valueNode);
-                if (operand == null) {
+                if (!hasOperand(valueNode)) {
                     if (!peephole(valueNode)) {
-                        try {
-                            doRoot((ValueNode) instr);
-                        } catch (GraalInternalError e) {
-                            throw GraalGraphInternalError.transformAndAddContext(e, instr);
-                        } catch (Throwable e) {
-                            throw new GraalGraphInternalError(e).addContext(instr);
+                        instructionsFolded = maybeFoldMemory(nodes, i, valueNode);
+                        if (instructionsFolded == 0) {
+                            try {
+                                doRoot((ValueNode) instr);
+                            } catch (GraalInternalError e) {
+                                throw GraalGraphInternalError.transformAndAddContext(e, instr);
+                            } catch (Throwable e) {
+                                throw new GraalGraphInternalError(e).addContext(instr);
+                            }
                         }
-                    }
-                } else if (ComplexMatchValue.INTERIOR_MATCH.equals(operand)) {
-                    // Doesn't need to be evaluated
-                    Debug.log("interior match for %s", valueNode);
-                } else if (operand instanceof ComplexMatchValue) {
-                    Debug.log("complex match for %s", valueNode);
-                    ComplexMatchValue match = (ComplexMatchValue) operand;
-                    operand = match.evaluate(this);
-                    if (operand != null) {
-                        setResult(valueNode, operand);
                     }
                 } else {
                     // There can be cases in which the result of an instruction is already set
@@ -271,29 +244,150 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
         gen.doBlockEnd(block);
     }
 
-    protected void matchComplexExpressions(List<ScheduledNode> nodes) {
-        if (matchRules != null) {
-            try (Scope s = Debug.scope("MatchComplexExpressions")) {
-                // Match the nodes in backwards order to encourage longer matches.
-                for (int index = nodes.size() - 1; index >= 0; index--) {
-                    ScheduledNode snode = nodes.get(index);
-                    if (!(snode instanceof ValueNode)) {
-                        continue;
+    private static final DebugMetric MemoryFoldSuccess = Debug.metric("MemoryFoldSuccess");
+    private static final DebugMetric MemoryFoldFailed = Debug.metric("MemoryFoldFailed");
+    private static final DebugMetric MemoryFoldFailedNonAdjacent = Debug.metric("MemoryFoldedFailedNonAdjacent");
+    private static final DebugMetric MemoryFoldFailedDifferentBlock = Debug.metric("MemoryFoldedFailedDifferentBlock");
+
+    /**
+     * Subclass can provide helper to fold memory operations into other operations.
+     */
+    public MemoryArithmeticLIRLowerer getMemoryLowerer() {
+        return null;
+    }
+
+    private static final Object LOG_OUTPUT_LOCK = new Object();
+
+    /**
+     * Try to find a sequence of Nodes which can be passed to the backend to look for optimized
+     * instruction sequences using memory. Currently this basically is a read with a single
+     * arithmetic user followed by an possible if use. This should generalized to more generic
+     * pattern matching so that it can be more flexibly used.
+     */
+    private int maybeFoldMemory(List<ScheduledNode> nodes, int i, ValueNode access) {
+        MemoryArithmeticLIRLowerer lowerer = getMemoryLowerer();
+        if (lowerer != null && GraalOptions.OptFoldMemory.getValue() && (access instanceof ReadNode || access instanceof FloatingReadNode) && access.usages().count() == 1 && i + 1 < nodes.size()) {
+            try (Scope s = Debug.scope("MaybeFoldMemory", access)) {
+                // This is all bit hacky since it's happening on the linearized schedule. This needs
+                // to be revisited at some point.
+
+                // Uncast the memory operation.
+                Node use = access.usages().first();
+                if (use instanceof UnsafeCastNode && use.usages().count() == 1) {
+                    use = use.usages().first();
+                }
+
+                // Find a memory lowerable usage of this operation
+                if (use instanceof MemoryArithmeticLIRLowerable) {
+                    ValueNode operation = (ValueNode) use;
+                    if (!nodes.contains(operation)) {
+                        Debug.log("node %1s in different block from %1s", access, operation);
+                        MemoryFoldFailedDifferentBlock.increment();
+                        return 0;
                     }
-                    ValueNode node = (ValueNode) snode;
-                    // See if this node is the root of any MatchStatements
-                    List<MatchStatement> statements = matchRules.get(node.getClass());
-                    if (statements != null) {
-                        for (MatchStatement statement : statements) {
-                            if (statement.generate(this, index, node, nodes)) {
-                                // Found a match so skip to the next
-                                break;
+                    ValueNode firstOperation = operation;
+                    if (operation instanceof LogicNode) {
+                        if (operation.usages().count() == 1 && operation.usages().first() instanceof IfNode) {
+                            ValueNode ifNode = (ValueNode) operation.usages().first();
+                            if (!nodes.contains(ifNode)) {
+                                MemoryFoldFailedDifferentBlock.increment();
+                                Debug.log("if node %1s in different block from %1s", ifNode, operation);
+                                try (Indent indent = Debug.logAndIndent("checking operations")) {
+                                    int start = nodes.indexOf(access);
+                                    int end = nodes.indexOf(operation);
+                                    for (int i1 = Math.min(start, end); i1 <= Math.max(start, end); i1++) {
+                                        Debug.log("%d: (%d) %1s", i1, nodes.get(i1).usages().count(), nodes.get(i1));
+                                    }
+                                }
+                                return 0;
+                            } else {
+                                operation = ifNode;
                             }
                         }
                     }
+                    if (Debug.isLogEnabled()) {
+                        synchronized (LOG_OUTPUT_LOCK) {  // Hack to ensure the output is grouped.
+                            try (Indent indent = Debug.logAndIndent("checking operations")) {
+                                int start = nodes.indexOf(access);
+                                int end = nodes.indexOf(operation);
+                                for (int i1 = Math.min(start, end); i1 <= Math.max(start, end); i1++) {
+                                    Debug.log("%d: (%d) %1s", i1, nodes.get(i1).usages().count(), nodes.get(i1));
+                                }
+                            }
+                        }
+                    }
+                    // Possible lowerable operation in the same block. Check out the dependencies.
+                    int opIndex = nodes.indexOf(operation);
+                    int current = i + 1;
+                    ArrayList<ValueNode> deferred = null;
+                    for (; current < opIndex; current++) {
+                        ScheduledNode node = nodes.get(current);
+                        if (node != firstOperation) {
+                            if (node instanceof LocationNode || node instanceof VirtualObjectNode) {
+                                // nothing to do
+                                continue;
+                            } else if (node instanceof ConstantNode) {
+                                if (deferred == null) {
+                                    deferred = new ArrayList<>(2);
+                                }
+                                // These nodes are collected and the backend is expended to
+                                // evaluate them before generating the lowered form. This
+                                // basically works around unfriendly scheduling of values which
+                                // are defined in a block but not used there.
+                                deferred.add((ValueNode) node);
+                                continue;
+                            } else if (node instanceof UnsafeCastNode) {
+                                UnsafeCastNode cast = (UnsafeCastNode) node;
+                                if (cast.getOriginalNode() == access) {
+                                    continue;
+                                }
+                            }
+
+                            // Unexpected inline node
+                            // Debug.log("unexpected node %1s", node);
+                            break;
+                        }
+                    }
+
+                    if (current == opIndex) {
+                        if (lowerer.memoryPeephole((Access) access, (MemoryArithmeticLIRLowerable) operation, deferred)) {
+                            MemoryFoldSuccess.increment();
+                            // if this operation had multiple access inputs, then previous attempts
+                            // would be marked as failures which is wrong. Try to adjust the
+                            // counters to account for this.
+                            for (Node input : operation.inputs()) {
+                                if (input == access) {
+                                    continue;
+                                }
+                                if (input instanceof Access && nodes.contains(input)) {
+                                    MemoryFoldFailedNonAdjacent.add(-1);
+                                }
+                            }
+                            if (deferred != null) {
+                                // Ensure deferred nodes were evaluated
+                                for (ValueNode node : deferred) {
+                                    assert hasOperand(node);
+                                }
+                            }
+                            return opIndex - i;
+                        } else {
+                            // This isn't true failure, it just means there wasn't match for the
+                            // pattern. Usually that means it's just not supported by the backend.
+                            MemoryFoldFailed.increment();
+                            return 0;
+                        }
+                    } else {
+                        MemoryFoldFailedNonAdjacent.increment();
+                    }
+                } else if (!(use instanceof Access) && !(use instanceof PhiNode) && use.usages().count() == 1) {
+                    // memory usage which isn't considered lowerable. Mostly these are
+                    // uninteresting but it might be worth looking at to ensure that interesting
+                    // nodes are being properly handled.
+                    // Debug.log("usage isn't lowerable %1s", access.usages().first());
                 }
             }
         }
+        return 0;
     }
 
     protected abstract boolean peephole(ValueNode valueNode);
