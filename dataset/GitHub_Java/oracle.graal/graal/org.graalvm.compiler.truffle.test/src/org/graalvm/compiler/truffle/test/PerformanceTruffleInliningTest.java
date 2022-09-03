@@ -1,6 +1,3 @@
-
-
-
 /*
  * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -52,7 +49,7 @@ public class PerformanceTruffleInliningTest extends TruffleInliningTest {
                     calls("three").
                 buildTarget();
         // @formatter:on
-        assertDecidingTakesLessThan(target, 500);
+        assertDecidingTakesLessThan(target, 1000);
     }
 
     @Test
@@ -80,7 +77,7 @@ public class PerformanceTruffleInliningTest extends TruffleInliningTest {
                     calls("four").
                 buildTarget();
         // @formatter:on
-        assertDecidingTakesLessThan(target, 500);
+        assertDecidingTakesLessThan(target, 1000);
     }
 
     @Test
@@ -93,7 +90,7 @@ public class PerformanceTruffleInliningTest extends TruffleInliningTest {
             }
         }
         OptimizedCallTarget target = builder.target("main").calls("0").buildTarget();
-        assertDecidingTakesLessThan(target, 500);
+        assertDecidingTakesLessThan(target, 1000);
 
     }
 
@@ -117,15 +114,12 @@ public class PerformanceTruffleInliningTest extends TruffleInliningTest {
     public void testHugeGraph() {
         hugeGraphBuilderHelper(10, 4, "1");
         OptimizedCallTarget target = builder.target("main").calls("1").buildTarget();
-        assertDecidingTakesLessThan(target, 500);
+        assertDecidingTakesLessThan(target, 1000);
 
     }
 
     protected void assertDecidingTakesLessThan(OptimizedCallTarget target, long maxDuration) {
-        long duration = Long.MAX_VALUE;
-        for(int  i=0; i< 10; i++) {
-            duration = Math.min(executionTime(target), duration);
-        }
+        long duration = executionTime(target);
         Assert.assertTrue("Took too long: " + TimeUnit.NANOSECONDS.toMillis(duration) + "ms", duration < TimeUnit.MILLISECONDS.toNanos(maxDuration));
     }
 
