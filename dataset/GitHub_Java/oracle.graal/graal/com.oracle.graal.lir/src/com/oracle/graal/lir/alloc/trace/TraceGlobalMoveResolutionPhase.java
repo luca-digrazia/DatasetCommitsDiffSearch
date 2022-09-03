@@ -31,27 +31,24 @@ import static jdk.vm.ci.code.ValueUtil.isRegister;
 
 import java.util.List;
 
-import com.oracle.graal.compiler.common.alloc.Trace;
-import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.alloc.trace.TraceAllocationPhase.TraceAllocationContext;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
-import com.oracle.graal.lir.phases.LIRPhase;
-import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
-import com.oracle.graal.lir.ssi.SSIUtil;
-
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Value;
 
-public final class TraceGlobalMoveResolutionPhase extends LIRPhase<TraceAllocationPhase.TraceAllocationContext> {
+import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Indent;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
+import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
+import com.oracle.graal.lir.ssi.SSIUtil;
+
+public final class TraceGlobalMoveResolutionPhase extends TraceAllocationPhase {
 
     /**
      * Abstract move resolver interface for testing.
@@ -78,8 +75,8 @@ public final class TraceGlobalMoveResolutionPhase extends LIRPhase<TraceAllocati
         };
 
         try (Indent indent = Debug.logAndIndent("Trace global move resolution")) {
-            for (Trace<B> trace : resultTraces.getTraces()) {
-                for (AbstractBlockBase<?> fromBlock : trace.getBlocks()) {
+            for (List<B> trace : resultTraces.getTraces()) {
+                for (AbstractBlockBase<?> fromBlock : trace) {
                     for (AbstractBlockBase<?> toBlock : fromBlock.getSuccessors()) {
                         if (resultTraces.getTraceForBlock(fromBlock) != resultTraces.getTraceForBlock(toBlock)) {
                             try (Indent indent0 = Debug.logAndIndent("Handle trace edge from %s (Trace%d) to %s (Trace%d)", fromBlock, resultTraces.getTraceForBlock(fromBlock), toBlock,

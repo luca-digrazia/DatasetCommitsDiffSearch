@@ -24,16 +24,21 @@ package com.oracle.graal.lir.alloc.trace.lsra;
 
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
-import com.oracle.graal.lir.alloc.trace.TraceAllocationPhase;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
+import com.oracle.graal.lir.phases.LIRPhase;
 
-abstract class TraceLinearScanAllocationPhase extends TraceAllocationPhase<TraceLinearScanAllocationPhase.TraceLinearScanAllocationContext> {
+abstract class TraceLinearScanAllocationPhase extends LIRPhase<TraceLinearScanAllocationPhase.TraceLinearScanAllocationContext> {
 
-    static final class TraceLinearScanAllocationContext extends TraceAllocationPhase.TraceAllocationContext {
+    static final class TraceLinearScanAllocationContext {
+        public final MoveFactory spillMoveFactory;
+        public final RegisterAllocationConfig registerAllocationConfig;
+        public final TraceBuilderResult<?> traceBuilderResult;
         public final TraceLinearScan allocator;
 
         TraceLinearScanAllocationContext(MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig, TraceBuilderResult<?> traceBuilderResult, TraceLinearScan allocator) {
-            super(spillMoveFactory, registerAllocationConfig, traceBuilderResult);
+            this.spillMoveFactory = spillMoveFactory;
+            this.registerAllocationConfig = registerAllocationConfig;
+            this.traceBuilderResult = traceBuilderResult;
             this.allocator = allocator;
         }
     }

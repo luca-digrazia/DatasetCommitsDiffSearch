@@ -24,11 +24,13 @@ package com.oracle.graal.lir.alloc.trace;
 
 import static com.oracle.graal.lir.LIRValueUtil.asVariable;
 import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static com.oracle.graal.lir.alloc.trace.TraceUtil.isTrivialTrace;
+import static com.oracle.graal.lir.alloc.trace.TraceRegisterAllocationPhase.isTrivialTrace;
 
 import java.util.List;
 
-import com.oracle.graal.compiler.common.alloc.Trace;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.lir.LIR;
@@ -42,9 +44,6 @@ import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.ssi.SSIUtil;
 import com.oracle.graal.lir.util.VariableVirtualStackValueMap;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.Value;
-
 /**
  * Allocates a trivial trace i.e. a trace consisting of a single block with no instructions other
  * than the {@link LabelOp} and the {@link JumpOp}.
@@ -52,11 +51,11 @@ import jdk.vm.ci.meta.Value;
 final class TraceTrivialAllocator extends TraceAllocationPhase {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, Trace<B> trace, TraceAllocationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> trace, TraceAllocationContext context) {
         LIR lir = lirGenRes.getLIR();
         TraceBuilderResult<?> resultTraces = context.resultTraces;
         assert isTrivialTrace(lir, trace) : "Not a trivial trace! " + trace;
-        B block = trace.getBlocks().iterator().next();
+        B block = trace.iterator().next();
 
         AbstractBlockBase<?> pred = TraceUtil.getBestTraceInterPredecessor(resultTraces, block);
 

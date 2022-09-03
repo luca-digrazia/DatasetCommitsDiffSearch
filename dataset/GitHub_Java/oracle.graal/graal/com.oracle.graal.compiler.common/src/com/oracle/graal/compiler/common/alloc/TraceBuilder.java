@@ -22,37 +22,35 @@
  */
 package com.oracle.graal.compiler.common.alloc;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.List;
+import java.util.PriorityQueue;
 
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugCloseable;
+import com.oracle.graal.debug.DebugMemUseTracker;
+import com.oracle.graal.debug.DebugTimer;
+import com.oracle.graal.debug.Indent;
 
 public final class TraceBuilder<T extends AbstractBlockBase<T>> {
 
-    public static final class TraceBuilderResult<T extends AbstractBlockBase<T>> {
-        private final List<List<T>> traces;
-        private final int[] blockToTrace;
-
-        private TraceBuilderResult(List<List<T>> traces, int[] blockToTrace) {
-            this.traces = traces;
-            this.blockToTrace = blockToTrace;
-        }
-
-        public int getTraceForBlock(AbstractBlockBase<?> block) {
-            return blockToTrace[block.getId()];
-        }
-
-        public List<List<T>> getTraces() {
-            return traces;
-        }
-    }
+    private static final String PHASE_NAME = "LIRPhaseTime_TraceBuilderPhase";
+    private static final DebugTimer timer = Debug.timer(PHASE_NAME);
+    private static final DebugMemUseTracker memUseTracker = Debug.memUseTracker(PHASE_NAME);
 
     /**
-     * Build traces of sequentially executed blocks
+     * Build traces of sequentially executed blocks.
      */
+    @SuppressWarnings("try")
     public static <T extends AbstractBlockBase<T>> TraceBuilderResult<T> computeTraces(T startBlock, List<T> blocks) {
-        return new TraceBuilder<>(blocks).build(startBlock);
+        try (Scope s = Debug.scope("TraceBuilder")) {
+            try (DebugCloseable a = timer.start(); DebugCloseable c = memUseTracker.start()) {
+                return new TraceBuilder<>(blocks).build(startBlock);
+            }
+        }
     }
 
     private final PriorityQueue<T> worklist;
@@ -66,7 +64,9 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
 
     private TraceBuilder(List<T> blocks) {
         processed = new BitSet(blocks.size());
-        worklist = new PriorityQueue<T>(TraceBuilder::compare);
+        worklist = createQueue();
+        assert (worklist != null);
+
         blocked = new int[blocks.size()];
         blockToTrace = new int[blocks.size()];
         for (T block : blocks) {
@@ -74,7 +74,12 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
         }
     }
 
-    private static <T extends AbstractBlockBase<T>> int compare(T a, T b) {
+    @SuppressWarnings("unchecked")
+    private PriorityQueue<T> createQueue() {
+        return (PriorityQueue<T>) new PriorityQueue<AbstractBlockBase<?>>(TraceBuilder::compare);
+    }
+
+    private static int compare(AbstractBlockBase<?> a, AbstractBlockBase<?> b) {
         return Double.compare(b.probability(), a.probability());
     }
 
@@ -82,17 +87,26 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
         return processed.get(b.getId());
     }
 
+    private static final int RESULT_LOG_LEVEL = 1;
+
+    @SuppressWarnings("try")
     private TraceBuilderResult<T> build(T startBlock) {
-        try (Scope s = Debug.scope("TraceBuilder"); Indent i = Debug.logAndIndent("start trace building: " + startBlock)) {
+        try (Indent indent = Debug.logAndIndent("start trace building: " + startBlock)) {
             ArrayList<List<T>> traces = buildTraces(startBlock);
 
             assert verify(traces);
+            if (Debug.isLogEnabled(RESULT_LOG_LEVEL)) {
+                for (int i = 0; i < traces.size(); i++) {
+                    List<T> trace = traces.get(i);
+                    Debug.log(RESULT_LOG_LEVEL, "Trace %5d: %s", i, trace);
+                }
+            }
             return new TraceBuilderResult<>(traces, blockToTrace);
         }
     }
 
     private boolean verify(ArrayList<List<T>> traces) {
-        assert traces.stream().flatMap(l -> l.stream()).distinct().count() == blocked.length : "Not all blocks assigned to traces!";
+        assert verifyAllBlocksScheduled(traces, blocked.length) : "Not all blocks assigned to traces!";
         for (List<T> trace : traces) {
             T last = null;
             for (T current : trace) {
@@ -103,6 +117,16 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
         return true;
     }
 
+    private static <T extends AbstractBlockBase<T>> boolean verifyAllBlocksScheduled(ArrayList<List<T>> traces, int expectedLength) {
+        BitSet handled = new BitSet(expectedLength);
+        for (List<T> trace : traces) {
+            for (T block : trace) {
+                handled.set(block.getId());
+            }
+        }
+        return handled.cardinality() == expectedLength;
+    }
+
     protected ArrayList<List<T>> buildTraces(T startBlock) {
         ArrayList<List<T>> traces = new ArrayList<>();
         // add start block
@@ -111,7 +135,9 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
         while (!worklist.isEmpty()) {
             T block = worklist.poll();
             assert block != null;
-            traces.add(startTrace(block, traces.size()));
+            if (!processed(block)) {
+                traces.add(startTrace(block, traces.size()));
+            }
         }
         return traces;
     }
@@ -119,15 +145,15 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
     /**
      * Build a new trace starting at {@code block}.
      */
+    @SuppressWarnings("try")
     private List<T> startTrace(T block, int traceNumber) {
-        assert block.getPredecessors().stream().allMatch(this::processed) : "Predecessor unscheduled: " + block.getPredecessors().stream().filter(this::processed).findFirst().get();
+        assert checkPredecessorsProcessed(block);
         ArrayList<T> trace = new ArrayList<>();
         int blockNumber = 0;
         try (Indent i = Debug.logAndIndent("StartTrace: " + block)) {
             for (T currentBlock = block; currentBlock != null; currentBlock = selectNext(currentBlock)) {
                 Debug.log("add %s (prob: %f)", currentBlock, currentBlock.probability());
                 processed.set(currentBlock.getId());
-                worklist.remove(currentBlock);
                 trace.add(currentBlock);
                 unblock(currentBlock);
                 currentBlock.setLinearScanNumber(blockNumber++);
@@ -135,6 +161,18 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
             }
         }
         return trace;
+    }
+
+    private boolean checkPredecessorsProcessed(T block) {
+        List<T> predecessors = block.getPredecessors();
+        for (T pred : predecessors) {
+            if (!processed(pred)) {
+                assert false : "Predecessor unscheduled: " + pred;
+                return false;
+            }
+
+        }
+        return true;
     }
 
     /**
