@@ -24,25 +24,24 @@
  */
 package com.oracle.svm.core.windows;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.FileDescriptor;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
-
-import org.graalvm.nativeimage.Feature;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.RuntimeClassInitialization;
-import org.graalvm.nativeimage.c.function.CLibrary;
-
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.jni.JNIRuntimeAccess;
+import org.graalvm.nativeimage.RuntimeClassInitialization;
+import org.graalvm.nativeimage.c.function.CLibrary;
+import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileDescriptor;
+import java.io.PrintStream;
 
 @Platforms(Platform.WINDOWS.class)
 @AutomaticFeature
@@ -71,32 +70,19 @@ class WindowsJavaIOSubstituteFeature implements Feature {
     public void beforeAnalysis(BeforeAnalysisAccess access) {
         try {
             JNIRuntimeAccess.register(java.lang.String.class);
-            JNIRuntimeAccess.register(access.findClassByName("java.io.WinNTFileSystem"));
-
-            JNIRuntimeAccess.register(java.io.IOException.class.getDeclaredConstructor(String.class));
-
+            JNIRuntimeAccess.register(java.io.File.class);
             JNIRuntimeAccess.register(java.io.File.class.getDeclaredField("path"));
+            JNIRuntimeAccess.register(java.io.FileOutputStream.class);
             JNIRuntimeAccess.register(java.io.FileOutputStream.class.getDeclaredField("fd"));
+            JNIRuntimeAccess.register(java.io.FileInputStream.class);
             JNIRuntimeAccess.register(java.io.FileInputStream.class.getDeclaredField("fd"));
+            JNIRuntimeAccess.register(java.io.FileDescriptor.class);
             JNIRuntimeAccess.register(java.io.FileDescriptor.class.getDeclaredField("fd"));
             JNIRuntimeAccess.register(java.io.FileDescriptor.class.getDeclaredField("handle"));
+            JNIRuntimeAccess.register(java.io.RandomAccessFile.class);
             JNIRuntimeAccess.register(java.io.RandomAccessFile.class.getDeclaredField("fd"));
-
-            JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("needDict"));
-            JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("finished"));
-            JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("buf"));
-            JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("off"));
-            JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("len"));
-
-            JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("level"));
-            JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("strategy"));
-            JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("setParams"));
-            JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("finish"));
-            JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("finished"));
-            JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("buf"));
-            JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("off"));
-            JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("len"));
-        } catch (NoSuchFieldException | NoSuchMethodException e) {
+            JNIRuntimeAccess.register(access.findClassByName("java.io.WinNTFileSystem"));
+        } catch (NoSuchFieldException e) {
             VMError.shouldNotReachHere("WindowsJavaIOSubstitutionFeature: Error registering class or method: ", e);
         }
     }
@@ -175,8 +161,6 @@ public final class WindowsJavaIOSubstitutions {
             System.setErr(new PrintStream(new BufferedOutputStream(new FileOutputStream(FileDescriptor.err), 128), true));
 
             System.loadLibrary("zip");
-            Target_java_util_zip_Inflater.initIDs();
-            Target_java_util_zip_Deflater.initIDs();
             return true;
         } catch (UnsatisfiedLinkError e) {
             Log.log().string("System.loadLibrary failed, " + e).newline();
