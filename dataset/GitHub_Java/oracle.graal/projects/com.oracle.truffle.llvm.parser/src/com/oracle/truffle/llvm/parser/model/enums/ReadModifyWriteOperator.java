@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,24 +31,37 @@ package com.oracle.truffle.llvm.parser.model.enums;
 
 public enum ReadModifyWriteOperator {
 
-    XCHG,
-    ADD,
-    SUB,
-    AND,
-    NAND,
-    OR,
-    XOR,
-    MAX,
-    MIN,
-    UMAX,
-    UMIN;
+    XCHG("xchg"),
+    ADD("add"),
+    SUB("sub"),
+    AND("and"),
+    NAND("nand"),
+    OR("or"),
+    XOR("xor"),
+    MAX("max"),
+    MIN("min"),
+    UMAX("umax"),
+    UMIN("umin");
+
+    private static final ReadModifyWriteOperator[] VALUES = values();
 
     public static ReadModifyWriteOperator decode(int opcode) {
-        ReadModifyWriteOperator[] ops = values();
-        if (opcode >= 0 && opcode < ops.length) {
-            return ops[opcode];
+        if (opcode >= 0 && opcode < VALUES.length) {
+            return VALUES[opcode];
         }
         return null;
     }
 
+    private final String irString;
+
+    ReadModifyWriteOperator(String irString) {
+        this.irString = irString;
+    }
+
+    /**
+     * Useful to get the llvm ir equivalent string of the enum.
+     */
+    public String getIrString() {
+        return irString;
+    }
 }
