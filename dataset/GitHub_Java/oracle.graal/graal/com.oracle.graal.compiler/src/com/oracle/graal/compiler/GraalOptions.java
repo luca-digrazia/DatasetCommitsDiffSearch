@@ -69,8 +69,9 @@ public final class GraalOptions {
     public static float   ProbabilityCapForInlining          = 1f;
 
     // escape analysis settings
-    public static boolean EscapeAnalysis                     = ____;
-    public static boolean PartialEscapeAnalysis              = true;
+    public static boolean EscapeAnalysis                     = true;
+    public static int     ForcedInlineEscapeWeight           = 10;
+    public static boolean PrintEscapeAnalysis                = ____;
 
     public static double TailDuplicationProbability          = 0.5;
     public static int    TailDuplicationTrivialSize          = 1;
@@ -116,6 +117,7 @@ public final class GraalOptions {
     // debugging settings
     public static int     MethodEndBreakpointGuards          = 0;
     public static boolean ZapStackOnMethodEntry              = ____;
+    public static boolean StressLinearScan                   = ____;
     public static boolean DeoptALot                          = ____;
     public static boolean VerifyPhases                       = true;
     public static boolean CreateDeoptInfo                    = ____;
@@ -226,6 +228,11 @@ public final class GraalOptions {
      * Number of caller program counters to distinguish when counting methods.
      */
     public static int     MethodEntryCountersCallers        = 20;
+
+    /**
+     * Flag to turn on SSA-based register allocation, which is currently under development.
+     */
+    public static boolean AllocSSA                           = false;
 
     /**
      * Prints all the available GraalOptions.
