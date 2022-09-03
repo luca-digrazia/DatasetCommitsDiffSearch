@@ -23,7 +23,7 @@
 package com.oracle.truffle.api.dsl.test;
 
 import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
+import com.oracle.truffle.api.dsl.test.TypeSystemTest.*;
 
 public class TypeSystemErrorsTest {
 
