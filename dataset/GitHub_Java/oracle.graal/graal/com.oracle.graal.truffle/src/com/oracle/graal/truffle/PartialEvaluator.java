@@ -30,7 +30,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -88,10 +87,10 @@ import com.oracle.graal.truffle.substitutions.TruffleInvocationPluginProvider;
 import com.oracle.graal.virtual.phases.ea.PartialEscapePhase;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 
 import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -286,7 +285,7 @@ public class PartialEvaluator {
         public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments) {
             if (invocationPlugins.lookupInvocation(original) != null) {
                 return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
-            } else if (loopExplosionPlugin.loopExplosionKind(original) != LoopExplosionPlugin.LoopExplosionKind.NONE) {
+            } else if (loopExplosionPlugin.shouldExplodeLoops(original)) {
                 return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
             }
             TruffleBoundary truffleBoundary = original.getAnnotation(TruffleBoundary.class);
@@ -311,41 +310,22 @@ public class PartialEvaluator {
         }
     }
 
-    /**
-     * Both Truffle and Graal define an enum with the same elements (the Graal one being strictly
-     * larger than the Truffle one), because the two projects do not depend on each other. We
-     * convert between the two enums, and ensure they stay in sync.
-     */
-    static final EnumMap<ExplodeLoop.LoopExplosionKind, LoopExplosionPlugin.LoopExplosionKind> LOOP_EXPLOSION_KIND_MAP;
-    static {
-        LOOP_EXPLOSION_KIND_MAP = new EnumMap<>(ExplodeLoop.LoopExplosionKind.class);
-        for (ExplodeLoop.LoopExplosionKind truffleKind : ExplodeLoop.LoopExplosionKind.values()) {
-            LoopExplosionPlugin.LoopExplosionKind graalKind = LoopExplosionPlugin.LoopExplosionKind.valueOf(truffleKind.name());
-            JVMCIError.guarantee(graalKind != null, "No match found for Truffle LoopExplosionKind %s", truffleKind.name());
-            LOOP_EXPLOSION_KIND_MAP.put(truffleKind, graalKind);
-        }
-    }
-
     private class PELoopExplosionPlugin implements LoopExplosionPlugin {
 
-        @SuppressWarnings("deprecation")
         @Override
-        public LoopExplosionKind loopExplosionKind(ResolvedJavaMethod method) {
-            ExplodeLoop explodeLoop = method.getAnnotation(ExplodeLoop.class);
-            if (explodeLoop == null) {
-                return LoopExplosionKind.NONE;
-            }
-
-            /*
-             * Support for the deprecated Truffle property until it is removed in a future Truffle
-             * release.
-             */
-            if (explodeLoop.merge()) {
-                return LoopExplosionKind.MERGE_EXPLODE;
-            }
-
-            return LOOP_EXPLOSION_KIND_MAP.get(explodeLoop.kind());
+        public boolean shouldExplodeLoops(ResolvedJavaMethod method) {
+            return method.getAnnotation(ExplodeLoop.class) != null;
         }
+
+        @Override
+        public boolean shouldMergeExplosions(ResolvedJavaMethod method) {
+            ExplodeLoop explodeLoop = method.getAnnotation(ExplodeLoop.class);
+            if (explodeLoop != null) {
+                return explodeLoop.merge();
+            }
+            return false;
+        }
+
     }
 
     @SuppressWarnings("unused")
@@ -428,7 +408,7 @@ public class PartialEvaluator {
     @SuppressWarnings({"try", "unused"})
     private void fastPartialEvaluation(OptimizedCallTarget callTarget, TruffleInlining inliningDecision, StructuredGraph graph, PhaseContext baseContext, HighTierContext tierContext) {
         doGraphPE(callTarget, graph, tierContext, inliningDecision);
-        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "After Partial Evaluation");
+        Debug.dump(Debug.INFO_LOG_LEVEL, graph, "After FastPE");
 
         graph.maybeCompress();
 
@@ -457,7 +437,11 @@ public class PartialEvaluator {
         // recompute loop frequencies now that BranchProbabilities have had time to canonicalize
         ComputeLoopFrequenciesClosure.compute(graph);
 
-        new InstrumentBranchesPhase().apply(graph, tierContext);
+        if (TruffleOptions.AOT) {
+            assert !TruffleCompilerOptions.TruffleInstrumentBranches.getValue() : "TruffleCompilerOptions.TruffleInstrumentBranches cannot be used in AOT mode";
+        } else if (TruffleCompilerOptions.TruffleInstrumentBranches.getValue()) {
+            new InstrumentBranchesPhase().apply(graph, tierContext);
+        }
 
         graph.maybeCompress();
 
