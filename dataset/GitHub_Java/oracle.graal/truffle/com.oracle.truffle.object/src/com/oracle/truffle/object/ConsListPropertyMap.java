@@ -22,9 +22,17 @@
  */
 package com.oracle.truffle.object;
 
-import java.util.*;
-
-import com.oracle.truffle.api.object.*;
+import com.oracle.truffle.api.object.Property;
+import java.util.AbstractSet;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Implementation of {@link PropertyMap} as a reverse-order cons (snoc) list.
@@ -79,10 +87,13 @@ final class ConsListPropertyMap extends PropertyMap {
     }
 
     public Property get(Object key) {
-        for (Map.Entry<Object, Property> entry : reverseOrderEntrySet()) {
-            if (entry.getKey().equals(key)) {
-                return entry.getValue();
+        ConsListPropertyMap current = this;
+        while (!current.isEmpty()) {
+            Property p = current.getLastProperty();
+            if (p.getKey().equals(key)) {
+                return p;
             }
+            current = current.getParentMap();
         }
         return null;
     }
@@ -276,7 +287,7 @@ final class ConsListPropertyMap extends PropertyMap {
     private static final class MapEntryImpl implements Map.Entry<Object, Property> {
         private final Property backingProperty;
 
-        public MapEntryImpl(Property backingProperty) {
+        MapEntryImpl(Property backingProperty) {
             this.backingProperty = backingProperty;
         }
 
