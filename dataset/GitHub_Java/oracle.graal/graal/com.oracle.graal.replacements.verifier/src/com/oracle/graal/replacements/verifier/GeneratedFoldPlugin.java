@@ -25,15 +25,18 @@ package com.oracle.graal.replacements.verifier;
 import java.io.PrintWriter;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 
 import com.oracle.graal.api.replacements.Fold;
+import com.oracle.graal.api.replacements.Fold.InjectedParameter;
 import com.oracle.graal.replacements.verifier.InjectedDependencies.WellKnownDependency;
 
 /**
@@ -74,14 +77,38 @@ public class GeneratedFoldPlugin extends GeneratedPlugin {
 
         int firstArg = argCount;
         for (VariableElement param : params) {
-            constantArgument(env, out, deps, argCount, param.asType(), argCount);
+            if (param.getAnnotation(InjectedParameter.class) == null) {
+                constantArgument(env, out, deps, argCount, param.asType(), argCount);
+            } else {
+                out.printf("            assert checkInjectedArgument(b, args[%d], targetMethod);\n", argCount);
+                out.printf("            %s arg%d = %s;\n", param.asType(), argCount, deps.use(env, (DeclaredType) param.asType()));
+            }
             argCount++;
         }
 
+        Set<String> suppressWarnings = new TreeSet<>();
         if (intrinsicMethod.getAnnotation(Deprecated.class) != null) {
-            out.printf("            @SuppressWarnings(\"deprecation\")\n");
+            suppressWarnings.add("deprecation");
         }
-        out.printf("            %s result = %s.%s(", intrinsicMethod.getReturnType(), receiver, intrinsicMethod.getSimpleName());
+        if (hasRawtypeWarning(intrinsicMethod.getReturnType())) {
+            suppressWarnings.add("rawtypes");
+        }
+        for (VariableElement param : params) {
+            if (hasUncheckedWarning(param.asType())) {
+                suppressWarnings.add("unchecked");
+            }
+        }
+        if (suppressWarnings.size() > 0) {
+            out.printf("            @SuppressWarnings({");
+            String sep = "";
+            for (String suppressWarning : suppressWarnings) {
+                out.printf("%s\"%s\"", sep, suppressWarning);
+                sep = ", ";
+            }
+            out.printf("})\n");
+        }
+
+        out.printf("            %s result = %s.%s(", getErasedType(intrinsicMethod.getReturnType()), receiver, intrinsicMethod.getSimpleName());
         if (argCount > firstArg) {
             out.printf("arg%d", firstArg);
             for (int i = firstArg + 1; i < argCount; i++) {
@@ -124,7 +151,7 @@ public class GeneratedFoldPlugin extends GeneratedPlugin {
         }
 
         out.printf("            ConstantNode node = ConstantNode.forConstant(constant, %s, %s);\n", deps.use(WellKnownDependency.META_ACCESS), deps.use(WellKnownDependency.STRUCTURED_GRAPH));
-        out.printf("            b.push(JavaKind.%s, node);\n", getReturnKind(intrinsicMethod).name());
+        out.printf("            b.push(JavaKind.%s, node);\n", getReturnKind(intrinsicMethod));
         out.printf("            return true;\n");
 
         return deps;

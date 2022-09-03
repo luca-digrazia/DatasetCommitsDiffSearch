@@ -24,11 +24,18 @@ package com.oracle.graal.replacements.verifier;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.function.Function;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
@@ -40,108 +47,131 @@ import javax.lang.model.type.WildcardType;
 import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 
-import jdk.vm.ci.meta.JavaKind;
+public class PluginGenerator {
 
-import com.oracle.graal.replacements.verifier.InjectedDependencies.Dependency;
-import com.oracle.graal.replacements.verifier.InjectedDependencies.WellKnownDependency;
+    private final Map<Element, List<GeneratedPlugin>> plugins;
 
-public abstract class PluginGenerator {
-
-    protected final ProcessingEnvironment env;
-
-    public PluginGenerator(ProcessingEnvironment env) {
-        this.env = env;
+    public PluginGenerator() {
+        this.plugins = new HashMap<>();
     }
 
-    private TypeMirror resolvedJavaTypeType() {
-        return env.getElementUtils().getTypeElement("jdk.vm.ci.meta.ResolvedJavaType").asType();
+    public void addPlugin(GeneratedPlugin plugin) {
+        Element topLevel = getTopLevelClass(plugin.intrinsicMethod);
+        List<GeneratedPlugin> list = plugins.get(topLevel);
+        if (list == null) {
+            list = new ArrayList<>();
+            plugins.put(topLevel, list);
+        }
+        list.add(plugin);
     }
 
-    private static PackageElement getPackage(Element element) {
-        Element enclosing = element;
+    public void generateAll(ProcessingEnvironment env) {
+        for (Entry<Element, List<GeneratedPlugin>> entry : plugins.entrySet()) {
+            disambiguateNames(entry.getValue());
+            createPluginFactory(env, entry.getKey(), entry.getValue());
+        }
+    }
+
+    private static Element getTopLevelClass(Element element) {
+        Element prev = element;
+        Element enclosing = element.getEnclosingElement();
         while (enclosing != null && enclosing.getKind() != ElementKind.PACKAGE) {
+            prev = enclosing;
             enclosing = enclosing.getEnclosingElement();
         }
-        return (PackageElement) enclosing;
+        return prev;
     }
 
-    private static void mkClassName(StringBuilder ret, Element cls) {
-        Element enclosingClass = cls.getEnclosingElement();
-        if (enclosingClass.getKind() == ElementKind.CLASS || enclosingClass.getKind() == ElementKind.INTERFACE) {
-            mkClassName(ret, enclosingClass);
-            ret.append('_');
+    private static void disambiguateWith(List<GeneratedPlugin> plugins, Function<GeneratedPlugin, String> genName) {
+        plugins.sort(Comparator.comparing(GeneratedPlugin::getPluginName));
+
+        GeneratedPlugin current = plugins.get(0);
+        String currentName = current.getPluginName();
+
+        for (int i = 1; i < plugins.size(); i++) {
+            GeneratedPlugin next = plugins.get(i);
+            if (currentName.equals(next.getPluginName())) {
+                if (current != null) {
+                    current.setPluginName(genName.apply(current));
+                    current = null;
+                }
+                next.setPluginName(genName.apply(next));
+            } else {
+                current = next;
+                currentName = current.getPluginName();
+            }
         }
-        ret.append(cls.getSimpleName());
     }
 
-    static String getErasedType(TypeMirror type) {
+    private static void appendSimpleTypeName(StringBuilder ret, TypeMirror type) {
         switch (type.getKind()) {
             case DECLARED:
                 DeclaredType declared = (DeclaredType) type;
                 TypeElement element = (TypeElement) declared.asElement();
-                return element.getQualifiedName().toString();
+                ret.append(element.getSimpleName());
+                break;
             case TYPEVAR:
-                return getErasedType(((TypeVariable) type).getUpperBound());
+                appendSimpleTypeName(ret, ((TypeVariable) type).getUpperBound());
+                break;
             case WILDCARD:
-                return getErasedType(((WildcardType) type).getExtendsBound());
+                appendSimpleTypeName(ret, ((WildcardType) type).getExtendsBound());
+                break;
             case ARRAY:
-                return getErasedType(((ArrayType) type).getComponentType()) + "[]";
+                appendSimpleTypeName(ret, ((ArrayType) type).getComponentType());
+                ret.append("Array");
+                break;
             default:
-                return type.toString();
+                ret.append(type);
         }
     }
 
-    protected abstract String getBaseName();
+    private static void disambiguateNames(List<GeneratedPlugin> plugins) {
+        // if we have more than one method with the same name, disambiguate with the argument types
+        disambiguateWith(plugins, plugin -> {
+            StringBuilder ret = new StringBuilder(plugin.getPluginName());
+            for (VariableElement param : plugin.intrinsicMethod.getParameters()) {
+                ret.append('_');
+                appendSimpleTypeName(ret, param.asType());
+            }
+            return ret.toString();
+        });
 
-    private String mkFactoryClassName(ExecutableElement intrinsicMethod) {
-        StringBuilder ret = new StringBuilder();
-        ret.append(getBaseName());
-        ret.append('_');
-        mkClassName(ret, intrinsicMethod.getEnclosingElement());
-        ret.append('_');
-        ret.append(intrinsicMethod.getSimpleName());
-        if (!intrinsicMethod.getParameters().isEmpty()) {
-            ret.append('_');
-            ret.append(Integer.toHexString(APHotSpotSignature.toSignature(intrinsicMethod).hashCode()));
-        }
-        return ret.toString();
+        // since we're using simple names for argument types, we could still have a collision
+        disambiguateWith(plugins, new Function<GeneratedPlugin, String>() {
+
+            private int idx = 0;
+
+            @Override
+            public String apply(GeneratedPlugin plugin) {
+                return plugin.getPluginName() + "_" + (idx++);
+            }
+        });
     }
 
-    void createPluginFactory(ExecutableElement intrinsicMethod, ExecutableElement targetMethod, TypeMirror[] constructorSignature) {
-        Element declaringClass = intrinsicMethod.getEnclosingElement();
-        PackageElement pkg = getPackage(declaringClass);
+    private static void createPluginFactory(ProcessingEnvironment env, Element topLevelClass, List<GeneratedPlugin> plugins) {
+        PackageElement pkg = (PackageElement) topLevelClass.getEnclosingElement();
 
-        String genClassName = mkFactoryClassName(intrinsicMethod);
+        String genClassName = "PluginFactory_" + topLevelClass.getSimpleName();
 
         try {
-            JavaFileObject factory = env.getFiler().createSourceFile(pkg.getQualifiedName() + "." + genClassName, intrinsicMethod);
+            JavaFileObject factory = env.getFiler().createSourceFile(pkg.getQualifiedName() + "." + genClassName, topLevelClass);
             try (PrintWriter out = new PrintWriter(factory.openWriter())) {
                 out.printf("// CheckStyle: stop header check\n");
                 out.printf("// CheckStyle: stop line length check\n");
                 out.printf("// GENERATED CONTENT - DO NOT EDIT\n");
+                out.printf("// GENERATORS: %s, %s\n", VerifierAnnotationProcessor.class.getName(), PluginGenerator.class.getName());
                 out.printf("package %s;\n", pkg.getQualifiedName());
                 out.printf("\n");
-                createImports(out, intrinsicMethod, targetMethod);
+                createImports(out, plugins);
                 out.printf("\n");
                 out.printf("@ServiceProvider(NodeIntrinsicPluginFactory.class)\n");
                 out.printf("public class %s implements NodeIntrinsicPluginFactory {\n", genClassName);
+                for (GeneratedPlugin plugin : plugins) {
+                    out.printf("\n");
+                    plugin.generate(env, out);
+                }
                 out.printf("\n");
-                out.printf("    private static final class Plugin extends GeneratedInvocationPlugin {\n");
-                out.printf("\n");
-
-                out.printf("        @Override\n");
-                out.printf("        public boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode[] args) {\n");
-                out.printf("            if (!b.parsingIntrinsic()) {\n");
-                out.printf("                return false;\n");
-                out.printf("            }\n");
-                InjectedDependencies deps = createExecute(out, intrinsicMethod, targetMethod, constructorSignature);
-                out.printf("        }\n");
-
-                createPrivateMembers(out, intrinsicMethod, deps);
-
-                out.printf("    }\n");
-                out.printf("\n");
-                createPluginFactoryMethod(out, intrinsicMethod, deps);
+                createPluginFactoryMethod(out, plugins);
                 out.printf("}\n");
             }
         } catch (IOException e) {
@@ -149,11 +179,9 @@ public abstract class PluginGenerator {
         }
     }
 
-    protected abstract InjectedDependencies createExecute(PrintWriter out, ExecutableElement intrinsicMethod, ExecutableElement constructor, TypeMirror[] signature);
-
-    protected void createImports(PrintWriter out, @SuppressWarnings("unused") ExecutableElement intrinsicMethod, @SuppressWarnings("unused") ExecutableElement targetMethod) {
+    protected static void createImports(PrintWriter out, List<GeneratedPlugin> plugins) {
         out.printf("import jdk.vm.ci.meta.ResolvedJavaMethod;\n");
-        out.printf("import jdk.vm.ci.service.ServiceProvider;\n");
+        out.printf("import com.oracle.graal.serviceprovider.ServiceProvider;\n");
         out.printf("\n");
         out.printf("import com.oracle.graal.nodes.ValueNode;\n");
         out.printf("import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;\n");
@@ -161,100 +189,25 @@ public abstract class PluginGenerator {
         out.printf("import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;\n");
         out.printf("import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;\n");
         out.printf("import com.oracle.graal.nodes.graphbuilderconf.NodeIntrinsicPluginFactory;\n");
-    }
 
-    private static void createPrivateMembers(PrintWriter out, ExecutableElement intrinsicMethod, InjectedDependencies deps) {
-        if (!deps.isEmpty()) {
+        HashSet<String> extra = new HashSet<>();
+        for (GeneratedPlugin plugin : plugins) {
+            plugin.extraImports(extra);
+        }
+        if (!extra.isEmpty()) {
             out.printf("\n");
-            for (Dependency dep : deps) {
-                out.printf("        private final %s %s;\n", dep.type, dep.name);
+            for (String i : extra) {
+                out.printf("import %s;\n", i);
             }
-
-            out.printf("\n");
-            out.printf("        private Plugin(InjectionProvider injection) {\n");
-            for (Dependency dep : deps) {
-                out.printf("            this.%s = %s;\n", dep.name, dep.inject(intrinsicMethod));
-            }
-            out.printf("        }\n");
         }
     }
 
-    private static void createPluginFactoryMethod(PrintWriter out, ExecutableElement intrinsicMethod, InjectedDependencies deps) {
-        out.printf("    public void registerPlugin(InvocationPlugins plugins, InjectionProvider injection) {\n");
-        out.printf("        Plugin plugin = new Plugin(%s);\n", deps.isEmpty() ? "" : "injection");
-        out.printf("        plugins.register(plugin, %s.class, \"%s\"", intrinsicMethod.getEnclosingElement(), intrinsicMethod.getSimpleName());
-        for (VariableElement arg : intrinsicMethod.getParameters()) {
-            out.printf(", %s.class", getErasedType(arg.asType()));
+    private static void createPluginFactoryMethod(PrintWriter out, List<GeneratedPlugin> plugins) {
+        out.printf("    @Override\n");
+        out.printf("    public void registerPlugins(InvocationPlugins plugins, InjectionProvider injection) {\n");
+        for (GeneratedPlugin plugin : plugins) {
+            plugin.register(out);
         }
-        out.printf(");\n");
         out.printf("    }\n");
-    }
-
-    protected static JavaKind getReturnKind(ExecutableElement method) {
-        switch (method.getReturnType().getKind()) {
-            case BOOLEAN:
-            case BYTE:
-            case SHORT:
-            case CHAR:
-            case INT:
-                return JavaKind.Int;
-            case LONG:
-                return JavaKind.Long;
-            case FLOAT:
-                return JavaKind.Float;
-            case DOUBLE:
-                return JavaKind.Double;
-            case VOID:
-                return JavaKind.Void;
-            case ARRAY:
-            case TYPEVAR:
-            case DECLARED:
-                return JavaKind.Object;
-            default:
-                throw new IllegalArgumentException(method.getReturnType().toString());
-        }
-    }
-
-    protected void constantArgument(PrintWriter out, InjectedDependencies deps, int argIdx, TypeMirror type, int nodeIdx) {
-        out.printf("            %s _arg%d;\n", type, argIdx);
-        out.printf("            if (args[%d].isConstant()) {\n", nodeIdx);
-        if (type.equals(resolvedJavaTypeType())) {
-            out.printf("                _arg%d = %s.asJavaType(args[%d].asConstant());\n", argIdx, deps.use(WellKnownDependency.CONSTANT_REFLECTION), nodeIdx);
-        } else {
-            switch (type.getKind()) {
-                case BOOLEAN:
-                    out.printf("                _arg%d = args[%d].asJavaConstant().asInt() != 0;\n", argIdx, nodeIdx);
-                    break;
-                case BYTE:
-                    out.printf("                _arg%d = (byte) args[%d].asJavaConstant().asInt();\n", argIdx, nodeIdx);
-                    break;
-                case CHAR:
-                    out.printf("                _arg%d = (char) args[%d].asJavaConstant().asInt();\n", argIdx, nodeIdx);
-                    break;
-                case SHORT:
-                    out.printf("                _arg%d = (short) args[%d].asJavaConstant().asInt();\n", argIdx, nodeIdx);
-                    break;
-                case INT:
-                    out.printf("                _arg%d = args[%d].asJavaConstant().asInt();\n", argIdx, nodeIdx);
-                    break;
-                case LONG:
-                    out.printf("                _arg%d = args[%d].asJavaConstant().asLong();\n", argIdx, nodeIdx);
-                    break;
-                case FLOAT:
-                    out.printf("                _arg%d = args[%d].asJavaConstant().asFloat();\n", argIdx, nodeIdx);
-                    break;
-                case DOUBLE:
-                    out.printf("                _arg%d = args[%d].asJavaConstant().asDouble();\n", argIdx, nodeIdx);
-                    break;
-                case DECLARED:
-                    out.printf("                _arg%d = %s.asObject(%s.class, args[%d].asJavaConstant());\n", argIdx, deps.use(WellKnownDependency.SNIPPET_REFLECTION), type, nodeIdx);
-                    break;
-                default:
-                    throw new IllegalArgumentException();
-            }
-        }
-        out.printf("            } else {\n");
-        out.printf("                return false;\n");
-        out.printf("            }\n");
     }
 }
