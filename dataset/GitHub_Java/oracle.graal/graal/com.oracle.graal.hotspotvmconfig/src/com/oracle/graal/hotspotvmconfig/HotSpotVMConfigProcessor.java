@@ -52,22 +52,20 @@ public class HotSpotVMConfigProcessor extends AbstractProcessor {
      * channel for any debug messages and debugging annotation processors requires some special
      * setup.
      */
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = true;
 
-    private PrintWriter log;
+    private static final String LOGFILE = new File(System.getProperty("java.io.tmpdir"), "hotspotvmconfigprocessor.log").getPath();
+
+    private static PrintWriter log;
 
     /**
-     * Logging facility for debugging the annotation processor.
+     * Logging facility for the debugging the annotation processor.
      */
 
-    private PrintWriter getLog() {
+    private static synchronized PrintWriter getLog() {
         if (log == null) {
             try {
-                // Create the log file within the generated source directory so it's easy to find.
-                // /tmp isn't platform independent and java.io.tmpdir can map anywhere, particularly
-                // on the mac.
-                FileObject file = processingEnv.getFiler().createResource(StandardLocation.SOURCE_OUTPUT, "", getClass().getSimpleName() + "log");
-                log = new PrintWriter(new FileWriter(file.toUri().getPath(), true));
+                log = new PrintWriter(new FileWriter(LOGFILE, true));
             } catch (IOException e) {
                 // Do nothing
             }
@@ -75,7 +73,7 @@ public class HotSpotVMConfigProcessor extends AbstractProcessor {
         return log;
     }
 
-    private void logMessage(String format, Object... args) {
+    private static synchronized void logMessage(String format, Object... args) {
         if (!DEBUG) {
             return;
         }
@@ -86,7 +84,7 @@ public class HotSpotVMConfigProcessor extends AbstractProcessor {
         }
     }
 
-    private void logException(Throwable t) {
+    private static synchronized void logException(Throwable t) {
         if (!DEBUG) {
             return;
         }
@@ -106,7 +104,7 @@ public class HotSpotVMConfigProcessor extends AbstractProcessor {
             logMessage("throw for %s:\n", element);
         }
         logException(t);
-        errorMessage(element, "Exception throw during processing: %s %s", t, Arrays.toString(Arrays.copyOf(t.getStackTrace(), 4)));
+        processingEnv.getMessager().printMessage(Kind.ERROR, "Exception throw during processing: " + t.toString() + " " + Arrays.toString(Arrays.copyOf(t.getStackTrace(), 8)), element);
     }
 
     //@formatter:off
@@ -129,8 +127,6 @@ public class HotSpotVMConfigProcessor extends AbstractProcessor {
         "}",
         "",
         "#define set_boolean(name, value) vmconfig_oop->bool_field_put(fs.offset(), value)",
-        "#define set_byte(name, value) vmconfig_oop->byte_field_put(fs.offset(), (jbyte)value)",
-        "#define set_short(name, value) vmconfig_oop->short_field_put(fs.offset(), (jshort)value)",
         "#define set_int(name, value) vmconfig_oop->int_field_put(fs.offset(), (int)value)",
         "#define set_long(name, value) vmconfig_oop->long_field_put(fs.offset(), value)",
         "#define set_address(name, value) do { set_long(name, (jlong) value); } while (0)",
