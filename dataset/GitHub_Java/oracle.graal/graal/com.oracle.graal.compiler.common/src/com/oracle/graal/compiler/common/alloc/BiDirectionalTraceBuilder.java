@@ -40,9 +40,7 @@ import com.oracle.graal.debug.Indent;
 public final class BiDirectionalTraceBuilder<T extends AbstractBlockBase<T>> {
 
     public static <T extends AbstractBlockBase<T>> TraceBuilderResult<T> computeTraces(T startBlock, List<T> blocks) {
-        TraceBuilderResult<T> traceBuilderResult = new BiDirectionalTraceBuilder<>(blocks).build(startBlock);
-        traceBuilderResult.numberTraces();
-        return traceBuilderResult;
+        return new BiDirectionalTraceBuilder<>(blocks).build(startBlock);
     }
 
     private final Deque<T> worklist;
