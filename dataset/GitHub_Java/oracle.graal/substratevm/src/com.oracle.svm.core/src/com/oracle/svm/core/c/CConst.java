@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,15 +27,13 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import org.graalvm.word.PointerBase;
-
 /**
- * Qualifies a C type as const in an entry-point method signature.
+ * Qualifies a C method parameter as const.
  *
- * Can be placed only on {@link PointerBase} types in function arguments as it applies only to the
- * function declaration where const primitive types have no effect.
+ * Can be placed only on pointer types in function arguments as it applies only to the function
+ * declaration where const primitive types have no effect.
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.TYPE_USE})
+@Target({ElementType.PARAMETER})
 public @interface CConst {
 }

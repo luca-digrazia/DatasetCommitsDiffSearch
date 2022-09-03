@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -64,7 +62,6 @@ import com.oracle.objectfile.ObjectFile.RelocationKind;
 import com.oracle.objectfile.ObjectFile.Section;
 import com.oracle.objectfile.SectionName;
 import com.oracle.objectfile.macho.MachOObjectFile;
-import com.oracle.svm.core.Isolates;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.c.CConst;
 import com.oracle.svm.core.c.CGlobalDataImpl;
@@ -76,13 +73,14 @@ import com.oracle.svm.core.c.function.GraalIsolateHeader;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.graal.code.CGlobalDataInfo;
 import com.oracle.svm.core.graal.code.CGlobalDataReference;
+import com.oracle.svm.core.graal.posix.PosixIsolates;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.NativeImageOptions;
+import com.oracle.svm.hosted.NativeImageOptions.CStandards;
 import com.oracle.svm.hosted.c.CGlobalDataFeature;
 import com.oracle.svm.hosted.c.NativeLibraries;
 import com.oracle.svm.hosted.c.codegen.CSourceCodeWriter;
-import com.oracle.svm.hosted.c.codegen.QueryCodeWriter;
 import com.oracle.svm.hosted.code.CEntryPointCallStubMethod;
 import com.oracle.svm.hosted.code.CEntryPointCallStubSupport;
 import com.oracle.svm.hosted.code.CEntryPointData;
@@ -150,9 +148,12 @@ public abstract class NativeBootImage extends AbstractBootImage {
         writer.appendln("#define " + imageHeaderGuard);
 
         writer.appendln();
-
-        QueryCodeWriter.writeCStandardHeaders(writer);
-
+        if (NativeImageOptions.getCStandard().compatibleWith(CStandards.C89)) {
+            writer.appendln("#include <stdbool.h>");
+        }
+        if (NativeImageOptions.getCStandard().compatibleWith(CStandards.C11)) {
+            writer.appendln("#include <stdint.h>");
+        }
         List<String> dependencies = header.dependsOn().stream()
                         .map(NativeBootImage::instantiateCHeader)
                         .map(depHeader -> "<" + depHeader.name() + dynamicSuffix + ">").collect(Collectors.toList());
@@ -248,10 +249,9 @@ public abstract class NativeBootImage extends AbstractBootImage {
         int fileComparison = rm1.getDeclaringClass().getSourceFileName().compareTo(rm2.getDeclaringClass().getSourceFileName());
         if (fileComparison != 0) {
             return fileComparison;
-        } else if (rm1.getLineNumberTable() != null && rm2.getLineNumberTable() != null) {
+        } else {
             return rm1.getLineNumberTable().getLineNumber(0) - rm2.getLineNumberTable().getLineNumber(0);
         }
-        return 0;
     }
 
     private void writeMethodHeader(HostedMethod m, CSourceCodeWriter writer, boolean dynamic) {
@@ -374,17 +374,14 @@ public abstract class NativeBootImage extends AbstractBootImage {
                 heapSection = objectFile.newProgbitsSection(heapSectionName, objectFile.getPageSize(), writable, false, heapSectionImpl);
 
                 heap.setReadOnlySection(heapSection.getName(), 0);
-                long writableSectionOffset = heap.getReadOnlySectionSize();
-                heap.setWritableSection(heapSection.getName(), writableSectionOffset);
-                defineDataSymbol(Isolates.IMAGE_HEAP_BEGIN_SYMBOL_NAME, heapSection, 0);
-                defineDataSymbol(Isolates.IMAGE_HEAP_END_SYMBOL_NAME, heapSection, heapSize);
-                defineDataSymbol(Isolates.IMAGE_HEAP_WRITABLE_BEGIN_SYMBOL_NAME, heapSection, writableSectionOffset);
-                defineDataSymbol(Isolates.IMAGE_HEAP_WRITABLE_END_SYMBOL_NAME, heapSection, writableSectionOffset + heap.getWritableSectionSize());
+                heap.setWritableSection(heapSection.getName(), heap.getReadOnlySectionSize());
+                defineDataSymbol(PosixIsolates.IMAGE_HEAP_BEGIN_SYMBOL_NAME, heapSection, 0);
+                defineDataSymbol(PosixIsolates.IMAGE_HEAP_END_SYMBOL_NAME, heapSection, heapSize);
 
                 final long relocatableOffset = heap.getReadOnlyRelocatablePartitionOffset();
                 final long relocatableSize = heap.getReadOnlyRelocatablePartitionSize();
-                defineDataSymbol(Isolates.IMAGE_HEAP_RELOCATABLE_BEGIN_SYMBOL_NAME, heapSection, relocatableOffset);
-                defineDataSymbol(Isolates.IMAGE_HEAP_RELOCATABLE_END_SYMBOL_NAME, heapSection, relocatableOffset + relocatableSize);
+                defineDataSymbol(PosixIsolates.IMAGE_HEAP_RELOCATABLE_BEGIN_SYMBOL_NAME, heapSection, relocatableOffset);
+                defineDataSymbol(PosixIsolates.IMAGE_HEAP_RELOCATABLE_END_SYMBOL_NAME, heapSection, relocatableOffset + relocatableSize);
             } else {
                 heapSectionBuffer = null;
                 heapSectionImpl = null;
@@ -402,14 +399,9 @@ public abstract class NativeBootImage extends AbstractBootImage {
             defineDataSymbol(CGlobalDataInfo.CGLOBALDATA_BASE_SYMBOL_NAME, rwDataSection, RWDATA_CGLOBALS_PARTITION_OFFSET);
 
             // - Write the heap, either to its own section, or to the ro and rw data sections.
-            if (SubstrateOptions.UseHeapBaseRegister.getValue()) {
+            if (heapSectionBuffer != null) {
                 heap.writeHeap(debug, heapSectionBuffer, heapSectionBuffer);
-
-                long firstRelocOffset = heap.getFirstRelocatablePointerOffsetInSection();
-                defineDataSymbol(Isolates.IMAGE_HEAP_RELOCATABLE_FIRST_RELOC_POINTER_NAME, heapSection, firstRelocOffset);
-                assert ((ByteBuffer) heapSectionBuffer.getBuffer().asReadOnlyBuffer().position(0)).getLong((int) firstRelocOffset) == 0;
             } else {
-                assert heapSectionBuffer == null;
                 heap.writeHeap(debug, roDataBuffer, rwDataBuffer);
             }
 
