@@ -24,7 +24,6 @@ package com.oracle.graal.hotspot.replacements;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.*;
@@ -33,7 +32,7 @@ import com.oracle.graal.replacements.*;
 public class HotSpotSubstitutions implements ReplacementsProvider {
 
     @Override
-    public void registerReplacements(MetaAccessProvider metaAccess, LoweringProvider loweringProvider, SnippetReflectionProvider snippetReflection, Replacements replacements, TargetDescription target) {
+    public void registerReplacements(MetaAccessProvider metaAccess, LoweringProvider loweringProvider, Replacements replacements, TargetDescription target) {
         replacements.registerSubstitutions(ObjectSubstitutions.class);
         replacements.registerSubstitutions(SystemSubstitutions.class);
         replacements.registerSubstitutions(ThreadSubstitutions.class);
@@ -43,7 +42,5 @@ public class HotSpotSubstitutions implements ReplacementsProvider {
         replacements.registerSubstitutions(CipherBlockChainingSubstitutions.class);
         replacements.registerSubstitutions(CRC32Substitutions.class);
         replacements.registerSubstitutions(ReflectionSubstitutions.class);
-        replacements.registerSubstitutions(NodeClassSubstitutions.class);
-        replacements.registerSubstitutions(CompositeValueClassSubstitutions.class);
     }
 }
