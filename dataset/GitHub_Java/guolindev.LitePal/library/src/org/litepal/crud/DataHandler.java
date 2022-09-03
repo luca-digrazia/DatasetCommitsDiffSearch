@@ -1,3 +1,19 @@
+/*
+ * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.litepal.crud;
 
 import static org.litepal.util.BaseUtility.changeCase;
@@ -8,6 +24,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 
 import org.litepal.LitePalBase;
@@ -21,6 +38,7 @@ import org.litepal.util.DBUtility;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.util.SparseArray;
 
 /**
  * This is the base class for CRUD component. All the common actions which can
@@ -42,6 +60,16 @@ abstract class DataHandler extends LitePalBase {
 	 * field is with default value or not.
 	 */
 	private DataSupport tempEmptyModel;
+
+	/**
+	 * Holds the AssociationsInfo which foreign keys in the current model.
+	 */
+	private List<AssociationsInfo> fkInCurrentModel;
+
+	/**
+	 * Holds the AssociationsInfo which foreign keys in other models.
+	 */
+	private List<AssociationsInfo> fkInOtherModel;
 
 	/**
 	 * Query the table of the given model, returning a model list over the
@@ -97,16 +125,56 @@ abstract class DataHandler extends LitePalBase {
 					groupBy, having, orderBy, limit);
 			if (cursor.moveToFirst()) {
 				do {
-					Constructor<?> constructor = findBestSuitConstructor(modelClass);
-					T modelInstance = (T) constructor
-							.newInstance(getConstructorParams(constructor));
+					T modelInstance = (T) createInstanceFromClass(modelClass);
 					giveBaseObjIdValue((DataSupport) modelInstance,
 							cursor.getLong(cursor.getColumnIndexOrThrow("id")));
 					setValueToModel(modelInstance, supportedFields, foreignKeyAssociations, cursor);
+					if (foreignKeyAssociations != null) {
+						setAssociatedModel((DataSupport) modelInstance);
+					}
 					dataList.add(modelInstance);
 				} while (cursor.moveToNext());
 			}
 			return dataList;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new DataSupportException(e.getMessage());
+		} finally {
+			if (cursor != null) {
+				cursor.close();
+			}
+		}
+	}
+
+	/**
+	 * Handles the math query of the given table.
+	 * 
+	 * @param tableName
+	 *            Which table to query from.
+	 * @param columns
+	 *            A list of which columns to return. Passing null will return
+	 *            all columns, which is discouraged to prevent reading data from
+	 *            storage that isn't going to be used.
+	 * @param conditions
+	 *            A filter declaring which rows to return, formatted as an SQL
+	 *            WHERE clause. Passing null will return all rows.
+	 * @param type
+	 *            The type of the based on column.
+	 * @return The result calculating by SQL.
+	 */
+	@SuppressWarnings("unchecked")
+	protected <T> T mathQuery(String tableName, String[] columns, String[] conditions, Class<T> type) {
+		BaseUtility.checkConditionsCorrect(conditions);
+		Cursor cursor = null;
+		T result = null;
+		try {
+			cursor = mDatabase.query(tableName, columns, getWhereClause(conditions),
+					getWhereArgs(conditions), null, null, null);
+			if (cursor.moveToFirst()) {
+				Class<?> cursorClass = cursor.getClass();
+				Method method = cursorClass.getMethod(genGetColumnMethod(type), int.class);
+				result = (T) method.invoke(cursor, 0);
+			}
 		} catch (Exception e) {
 			throw new DataSupportException(e.getMessage());
 		} finally {
@@ -114,6 +182,7 @@ abstract class DataHandler extends LitePalBase {
 				cursor.close();
 			}
 		}
+		return result;
 	}
 
 	/**
@@ -143,17 +212,18 @@ abstract class DataHandler extends LitePalBase {
 	 *            List of all supported fields.
 	 * @param values
 	 *            To store data of current model for persisting or updating.
+	 * @throws InvocationTargetException 
+	 * @throws IllegalAccessException 
+	 * @throws NoSuchMethodException 
+	 * @throws IllegalArgumentException 
+	 * @throws SecurityException 
 	 */
 	protected void putFieldsValue(DataSupport baseObj, List<Field> supportedFields,
-			ContentValues values) {
-		try {
-			for (Field field : supportedFields) {
-				if (!isIdColumn(field.getName())) {
-					putFieldsValueDependsOnSaveOrUpdate(baseObj, field, values);
-				}
+			ContentValues values) throws SecurityException, IllegalArgumentException, NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+		for (Field field : supportedFields) {
+			if (!isIdColumn(field.getName())) {
+				putFieldsValueDependsOnSaveOrUpdate(baseObj, field, values);
 			}
-		} catch (Exception e) {
-			throw new DataSupportException(e.getMessage());
 		}
 	}
 
@@ -180,6 +250,10 @@ abstract class DataHandler extends LitePalBase {
 			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
 			IllegalAccessException, InvocationTargetException {
 		Object fieldValue = takeGetMethodValueByField(baseObj, field);
+		if ("java.util.Date".equals(field.getType().getName()) && fieldValue != null) {
+			Date date = (Date) fieldValue;
+			fieldValue = date.getTime();
+		}
 		Object[] parameters = new Object[] { changeCase(field.getName()), fieldValue };
 		Class<?>[] parameterTypes = getParameterTypes(field, fieldValue, parameters);
 		DynamicExecutor.send(values, "put", parameters, values.getClass(), parameterTypes);
@@ -263,6 +337,52 @@ abstract class DataHandler extends LitePalBase {
 		} catch (Exception e) {
 			throw new DataSupportException(e.getMessage());
 		}
+	}
+	
+	/**
+	 * Get the associated model.
+	 * 
+	 * @param baseObj
+	 *            The instance of self model.
+	 * @param associationInfo
+	 *            To get the associated model.
+	 * @return The associated model of self model by analyzing associationInfo.
+	 * 
+	 * @throws SecurityException
+	 * @throws IllegalArgumentException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalAccessException
+	 * @throws InvocationTargetException
+	 */
+	protected DataSupport getAssociatedModel(DataSupport baseObj, AssociationsInfo associationInfo)
+			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
+			IllegalAccessException, InvocationTargetException {
+		return (DataSupport) takeGetMethodValueByField(baseObj,
+				associationInfo.getAssociateOtherModelFromSelf());
+	}
+
+	/**
+	 * Get the associated models collection. When it comes to many2one or
+	 * many2many association. A model may have lots of associated models.
+	 * 
+	 * @param baseObj
+	 *            The instance of self model.
+	 * @param associationInfo
+	 *            To get the associated models collection.
+	 * @return The associated models collection of self model by analyzing
+	 *         associationInfo.
+	 * @throws SecurityException
+	 * @throws IllegalArgumentException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalAccessException
+	 * @throws InvocationTargetException
+	 */
+	@SuppressWarnings("unchecked")
+	protected Collection<DataSupport> getAssociatedModels(DataSupport baseObj,
+			AssociationsInfo associationInfo) throws SecurityException, IllegalArgumentException,
+			NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+		return (Collection<DataSupport>) takeGetMethodValueByField(baseObj,
+				associationInfo.getAssociateOtherModelFromSelf());
 	}
 
 	/**
@@ -463,53 +583,82 @@ abstract class DataHandler extends LitePalBase {
 	protected String getTableName(Class<?> modelClass) {
 		return BaseUtility.changeCase(modelClass.getSimpleName());
 	}
+	
+	/**
+	 * Creates an instance from the passed in class. It will always create an
+	 * instance no matter how the constructor defines in the class file. A best
+	 * suit constructor will be find by calling
+	 * {@link #findBestSuitConstructor(Class)} method.
+	 * 
+	 * @param modelClass
+	 *            The class to create instance.
+	 * @return An instance by the passed in class.
+	 */
+	protected Object createInstanceFromClass(Class<?> modelClass) {
+		try {
+			Constructor<?> constructor = findBestSuitConstructor(modelClass);
+			return constructor.newInstance(getConstructorParams(modelClass, constructor));
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new DataSupportException(e.getMessage());
+		}
+	}
 
 	/**
 	 * Finds the best suit constructor for creating an instance of a class. The
-	 * principle is that constructor with least parameters will be the best suit
-	 * one to create instance. So this method will find the constructor with
-	 * least parameters of the class passed in.
+	 * principle is that the constructor with least parameters and has no self
+	 * type parameter will be the best suit one to create instance.
 	 * 
 	 * @param modelClass
 	 *            To get constructors from.
-	 * @return The best suit constructor with least parameters.
+	 * @return The best suit constructor.
 	 */
 	protected Constructor<?> findBestSuitConstructor(Class<?> modelClass) {
-		Constructor<?> finalConstructor = null;
-		Constructor<?>[] constructors = modelClass.getConstructors();
+		Constructor<?>[] constructors = modelClass.getDeclaredConstructors();
+		SparseArray<Constructor<?>> map = new SparseArray<Constructor<?>>();
+		int minKey = Integer.MAX_VALUE;
 		for (Constructor<?> constructor : constructors) {
-			if (finalConstructor == null) {
-				finalConstructor = constructor;
-			} else {
-				int finalParamLength = finalConstructor.getParameterTypes().length;
-				int newParamLength = constructor.getParameterTypes().length;
-				if (newParamLength < finalParamLength) {
-					finalConstructor = constructor;
+			int key = constructor.getParameterTypes().length;
+			Class<?>[] types = constructor.getParameterTypes();
+			for (Class<?> parameterType : types) {
+				if (parameterType == modelClass) {
+					key = key + 10000;
 				}
 			}
+			if (map.get(key) == null) {
+				map.put(key, constructor);
+			}
+			if (key < minKey) {
+				minKey = key;
+			}
 		}
-		finalConstructor.setAccessible(true);
-		return finalConstructor;
+		Constructor<?> bestSuitConstructor = map.get(minKey);
+		if (bestSuitConstructor != null) {
+			bestSuitConstructor.setAccessible(true);
+		}
+		return bestSuitConstructor;
 	}
 
 	/**
 	 * Depends on the passed in constructor, creating a parameters array with
 	 * initialized values for the constructor.
 	 * 
+	 * @param modelClass
+	 *            The original class the this constructor belongs to.
 	 * @param constructor
 	 *            The constructor to get parameters for it.
 	 * 
 	 * @return A parameters array with initialized values.
 	 */
-	protected Object[] getConstructorParams(Constructor<?> constructor) {
+	protected Object[] getConstructorParams(Class<?> modelClass, Constructor<?> constructor) {
 		Class<?>[] paramTypes = constructor.getParameterTypes();
 		Object[] params = new Object[paramTypes.length];
 		for (int i = 0; i < paramTypes.length; i++) {
-			params[i] = getInitParamValue(paramTypes[i]);
+			params[i] = getInitParamValue(modelClass, paramTypes[i]);
 		}
 		return params;
 	}
-	
+
 	/**
 	 * Get value from database by cursor, then set the value into modelInstance.
 	 * 
@@ -552,6 +701,13 @@ abstract class DataHandler extends LitePalBase {
 						}
 					} else if (field.getType() == char.class || field.getType() == Character.class) {
 						value = ((String) value).charAt(0);
+					} else if (field.getType() == Date.class) {
+						long date = (Long) value;
+						if (date <= 0) {
+							value = null;
+						} else {
+							value = new Date(date);
+						}
 					}
 					putSetMethodValueByField((DataSupport) modelInstance, field, value);
 				}
@@ -581,6 +737,23 @@ abstract class DataHandler extends LitePalBase {
 	}
 
 	/**
+	 * Get the foreign key associations of the specified class.
+	 * 
+	 * @param className
+	 *            The full class name.
+	 * @param isEager
+	 *            True to load the associated models, false not.
+	 * @return The foreign key associations of the specified class
+	 */
+	protected List<AssociationsInfo> getForeignKeyAssociations(String className, boolean isEager) {
+		if (isEager) {
+			analyzeAssociations(className);
+			return fkInCurrentModel;
+		}
+		return null;
+	}
+
+	/**
 	 * Get the types of parameters for {@link ContentValues#put}. Need two
 	 * parameters. First is String type for key. Second is depend on field for
 	 * value.
@@ -602,6 +775,8 @@ abstract class DataHandler extends LitePalBase {
 		} else {
 			if (field.getType().isPrimitive()) {
 				parameterTypes = new Class[] { String.class, getObjectType(field.getType()) };
+			} else if ("java.util.Date".equals(field.getType().getName())) {
+				parameterTypes = new Class[] { String.class, Long.class };
 			} else {
 				parameterTypes = new Class[] { String.class, field.getType() };
 			}
@@ -648,11 +823,13 @@ abstract class DataHandler extends LitePalBase {
 	 * basic data type or the corresponding object data type, return the default
 	 * data. Or return null.
 	 * 
+	 * @param modelClass
+	 *            The original class the this constructor belongs to.
 	 * @param paramType
 	 *            Parameter to get initialized value.
 	 * @return Default data of basic data type or null.
 	 */
-	private Object getInitParamValue(Class<?> paramType) {
+	private Object getInitParamValue(Class<?> modelClass, Class<?> paramType) {
 		String paramTypeName = paramType.getName();
 		if ("boolean".equals(paramTypeName) || "java.lang.Boolean".equals(paramTypeName)) {
 			return false;
@@ -678,7 +855,10 @@ abstract class DataHandler extends LitePalBase {
 		if ("java.lang.String".equals(paramTypeName)) {
 			return "";
 		}
-		return null;
+		if (modelClass == paramType) {
+			return null;
+		}
+		return createInstanceFromClass(paramType);
 	}
 
 	/**
@@ -694,9 +874,10 @@ abstract class DataHandler extends LitePalBase {
 	}
 
 	/**
-	 * Judge a field is a primitive boolean type or not. Cause there's something
-	 * special when use eclipse to generate getter method. The primitive boolean
-	 * type won't be like <b>getXxx</b>, it's something like <b>isXxx</b>.
+	 * Judge a field is a primitive boolean type or not. Cause it's a little
+	 * special when use IDE to generate getter and setter method. The primitive
+	 * boolean type won't be like <b>getXxx</b>, it's something like
+	 * <b>isXxx</b>.
 	 * 
 	 * @param field
 	 *            Use field to get field type.
@@ -812,7 +993,11 @@ abstract class DataHandler extends LitePalBase {
 		} else {
 			getterMethodPrefix = "get";
 		}
-		return getterMethodPrefix + BaseUtility.capitalize(fieldName);
+		if (fieldName.matches("^[a-z]{1}[A-Z]{1}.*")) {
+			return getterMethodPrefix + fieldName;
+		} else {
+			return getterMethodPrefix + BaseUtility.capitalize(fieldName);
+		}
 	}
 
 	/**
@@ -827,6 +1012,8 @@ abstract class DataHandler extends LitePalBase {
 		String setterMethodPrefix = "set";
 		if (isPrimitiveBooleanType(field) && field.getName().matches("^is[A-Z]{1}.*$")) {
 			setterMethodName = setterMethodPrefix + field.getName().substring(2);
+		} else if (field.getName().matches("^[a-z]{1}[A-Z]{1}.*")) {
+			setterMethodName = setterMethodPrefix + field.getName();
 		} else {
 			setterMethodName = setterMethodPrefix + BaseUtility.capitalize(field.getName());
 		}
@@ -843,8 +1030,20 @@ abstract class DataHandler extends LitePalBase {
 	 * @return The getType method for cursor.
 	 */
 	private String genGetColumnMethod(Field field) {
+		return genGetColumnMethod(field.getType());
+	}
+
+	/**
+	 * Generates the getType method for cursor based on field. There're two
+	 * unusual conditions. If field type is boolean, generate getInt method. If
+	 * field type is char, generate getString method.
+	 * 
+	 * @param fieldType
+	 *            To generate getType method for cursor.
+	 * @return The getType method for cursor.
+	 */
+	private String genGetColumnMethod(Class<?> fieldType) {
 		String typeName;
-		Class<?> fieldType = field.getType();
 		if (fieldType.isPrimitive()) {
 			typeName = BaseUtility.capitalize(fieldType.getName());
 		} else {
@@ -855,6 +1054,10 @@ abstract class DataHandler extends LitePalBase {
 			methodName = "getInt";
 		} else if ("getChar".equals(methodName)) {
 			methodName = "getString";
+		} else if ("getDate".equals(methodName)) {
+			methodName = "getLong";
+		} else if ("getInteger".equals(methodName)) {
+			methodName = "getInt";
 		}
 		return methodName;
 	}
@@ -900,6 +1103,104 @@ abstract class DataHandler extends LitePalBase {
 			return customizedColumns;
 		}
 		return null;
+	}
+
+	/**
+	 * Analyze the associations for the specified class.
+	 * 
+	 * @param className
+	 *            The full class name.
+	 */
+	private void analyzeAssociations(String className) {
+		Collection<AssociationsInfo> associationInfos = getAssociationInfo(className);
+		if (fkInCurrentModel == null) {
+			fkInCurrentModel = new ArrayList<AssociationsInfo>();
+		} else {
+			fkInCurrentModel.clear();
+		}
+		if (fkInOtherModel == null) {
+			fkInOtherModel = new ArrayList<AssociationsInfo>();
+		} else {
+			fkInOtherModel.clear();
+		}
+		for (AssociationsInfo associationInfo : associationInfos) {
+			if (associationInfo.getAssociationType() == Const.Model.MANY_TO_ONE
+					|| associationInfo.getAssociationType() == Const.Model.ONE_TO_ONE) {
+				if (associationInfo.getClassHoldsForeignKey().equals(className)) {
+					fkInCurrentModel.add(associationInfo);
+				} else {
+					fkInOtherModel.add(associationInfo);
+				}
+			} else if (associationInfo.getAssociationType() == Const.Model.MANY_TO_MANY) {
+				fkInOtherModel.add(associationInfo);
+			}
+		}
+	}
+
+	/**
+	 * Finds the associated models of baseObj, then set them into baseObj.
+	 * 
+	 * @param baseObj
+	 *            The class of base object.
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	private void setAssociatedModel(DataSupport baseObj) {
+		if (fkInOtherModel == null) {
+			return;
+		}
+		for (AssociationsInfo info : fkInOtherModel) {
+			Cursor cursor = null;
+			String associatedClassName = info.getAssociatedClassName();
+			boolean isM2M = info.getAssociationType() == Const.Model.MANY_TO_MANY ? true : false;
+			try {
+				List<Field> supportedFields = getSupportedFields(associatedClassName);
+				if (isM2M) {
+					String tableName = baseObj.getTableName();
+					String associatedTableName = DBUtility
+							.getTableNameByClassName(associatedClassName);
+					String intermediateTableName = DBUtility.getIntermediateTableName(tableName,
+							associatedTableName);
+					StringBuilder sql = new StringBuilder();
+					sql.append("select * from ").append(associatedTableName)
+							.append(" a inner join ").append(intermediateTableName)
+							.append(" b on a.id = b.").append(associatedTableName + "_id")
+							.append(" where b.").append(tableName).append("_id = ?");
+					cursor = DataSupport.findBySQL(BaseUtility.changeCase(sql.toString()),
+							String.valueOf(baseObj.getBaseObjId()));
+				} else {
+					String foreignKeyColumn = getForeignKeyColumnName(DBUtility
+							.getTableNameByClassName(info.getSelfClassName()));
+					String associatedTableName = DBUtility
+							.getTableNameByClassName(associatedClassName);
+					cursor = mDatabase.query(BaseUtility.changeCase(associatedTableName), null,
+							foreignKeyColumn + "=?",
+							new String[] { String.valueOf(baseObj.getBaseObjId()) }, null, null,
+							null, null);
+				}
+				if (cursor.moveToFirst()) {
+					do {
+						DataSupport modelInstance = (DataSupport)  createInstanceFromClass(Class.forName(associatedClassName));
+						giveBaseObjIdValue(modelInstance,
+								cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+						setValueToModel(modelInstance, supportedFields, null, cursor);
+						if (info.getAssociationType() == Const.Model.MANY_TO_ONE || isM2M) {
+							Collection collection = (Collection) takeGetMethodValueByField(baseObj,
+									info.getAssociateOtherModelFromSelf());
+							collection.add(modelInstance);
+						} else if (info.getAssociationType() == Const.Model.ONE_TO_ONE) {
+							putSetMethodValueByField(baseObj,
+									info.getAssociateOtherModelFromSelf(), modelInstance);
+						}
+					} while (cursor.moveToNext());
+				}
+			} catch (Exception e) {
+				throw new DataSupportException(e.getMessage());
+			} finally {
+				if (cursor != null) {
+					cursor.close();
+				}
+			}
+		}
 	}
 
 }
