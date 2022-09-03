@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -77,49 +77,49 @@ public class BoxingSnippets implements Snippets {
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
-    public static Object booleanValueOf(boolean value) {
+    public static Boolean booleanValueOf(boolean value) {
         valueOfCounter.inc();
         return PiNode.piCast(Boolean.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
-    public static Object byteValueOf(byte value) {
+    public static Byte byteValueOf(byte value) {
         valueOfCounter.inc();
         return PiNode.piCast(Byte.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
-    public static Object charValueOf(char value) {
+    public static Character charValueOf(char value) {
         valueOfCounter.inc();
         return PiNode.piCast(Character.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
-    public static Object doubleValueOf(double value) {
+    public static Double doubleValueOf(double value) {
         valueOfCounter.inc();
         return PiNode.piCast(Double.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
-    public static Object floatValueOf(float value) {
+    public static Float floatValueOf(float value) {
         valueOfCounter.inc();
         return PiNode.piCast(Float.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
-    public static Object intValueOf(int value) {
+    public static Integer intValueOf(int value) {
         valueOfCounter.inc();
         return PiNode.piCast(Integer.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
-    public static Object longValueOf(long value) {
+    public static Long longValueOf(long value) {
         valueOfCounter.inc();
         return PiNode.piCast(Long.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
     @Snippet(inlining = BoxingSnippetInliningPolicy.class)
-    public static Object shortValueOf(short value) {
+    public static Short shortValueOf(short value) {
         valueOfCounter.inc();
         return PiNode.piCast(Short.valueOf(value), StampFactory.forNodeIntrinsic());
     }
@@ -176,22 +176,6 @@ public class BoxingSnippets implements Snippets {
         ValueNode value = box.getValue();
         if (value.isConstant()) {
             JavaConstant sourceConstant = value.asJavaConstant();
-            if (sourceConstant.getKind() != box.getBoxingKind() && sourceConstant.getKind().isNumericInteger()) {
-                switch (box.getBoxingKind()) {
-                    case Boolean:
-                        sourceConstant = JavaConstant.forBoolean(sourceConstant.asLong() != 0L);
-                        break;
-                    case Byte:
-                        sourceConstant = JavaConstant.forByte((byte) sourceConstant.asLong());
-                        break;
-                    case Char:
-                        sourceConstant = JavaConstant.forChar((char) sourceConstant.asLong());
-                        break;
-                    case Short:
-                        sourceConstant = JavaConstant.forShort((short) sourceConstant.asLong());
-                        break;
-                }
-            }
             JavaConstant boxedConstant = constantReflection.boxPrimitive(sourceConstant);
             if (boxedConstant != null && sourceConstant.getKind() == box.getBoxingKind()) {
                 return ConstantNode.forConstant(boxedConstant, metaAccess, box.graph());
@@ -235,7 +219,8 @@ public class BoxingSnippets implements Snippets {
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering integerValueOf in %s: node=%s, template=%s, arguments=%s", unbox.graph(), unbox, template, args);
-            template.instantiate(providers.getMetaAccess(), unbox, DEFAULT_REPLACER, args);
+            template.instantiate(providers.getMetaAccess(), unbox, DEFAULT_REPLACER, tool, args);
+            GraphUtil.killWithUnusedFloatingInputs(unbox);
         }
     }
 
