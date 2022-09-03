@@ -63,17 +63,6 @@ public class SLJavaInteropExceptionTest {
         public int validateException() {
             throw new NoSuchElementException();
         }
-
-        public void validateNested() throws Exception {
-            String sourceText = "function test(validator) {\n" +
-                            "  return validator.validateException();\n" +
-                            "}";
-            try (Context context = Context.newBuilder(SLLanguage.ID).build()) {
-                context.eval(Source.newBuilder(SLLanguage.ID, sourceText, "Test").build());
-                Value test = context.lookup(SLLanguage.ID, "test");
-                test.execute(Validator.this);
-            }
-        }
     }
 
     @Test
@@ -90,32 +79,10 @@ public class SLJavaInteropExceptionTest {
             } catch (PolyglotException ex) {
                 assertTrue("expected HostException", ex.isHostException());
                 assertThat(ex.asHostException(), instanceOf(NoSuchElementException.class));
-                assertNoJavaInteropStackFrames(ex);
+
+                String javaInteropPackageName = JavaInterop.class.getName().substring(0, JavaInterop.class.getName().lastIndexOf('.') + 1);
+                assertFalse("expected no java interop stack trace elements", Arrays.stream(ex.getStackTrace()).anyMatch(ste -> ste.getClassName().startsWith(javaInteropPackageName)));
             }
         }
-    }
-
-    @Test
-    public void testGR7284GuestHostGuestHost() throws Exception {
-        String sourceText = "function test(validator) {\n" +
-                        "  return validator.validateNested();\n" +
-                        "}";
-        try (Context context = Context.newBuilder(SLLanguage.ID).build()) {
-            context.eval(Source.newBuilder(SLLanguage.ID, sourceText, "Test").build());
-            Value test = context.lookup(SLLanguage.ID, "test");
-            try {
-                test.execute(new Validator());
-                fail("expected a PolyglotException but did not throw");
-            } catch (PolyglotException ex) {
-                assertTrue("expected HostException", ex.isHostException());
-                assertThat(ex.asHostException(), instanceOf(NoSuchElementException.class));
-                assertNoJavaInteropStackFrames(ex);
-            }
-        }
-    }
-
-    private static void assertNoJavaInteropStackFrames(PolyglotException ex) {
-        String javaInteropPackageName = JavaInterop.class.getName().substring(0, JavaInterop.class.getName().lastIndexOf('.') + 1);
-        assertFalse("expected no java interop stack trace elements", Arrays.stream(ex.getStackTrace()).anyMatch(ste -> ste.getClassName().startsWith(javaInteropPackageName)));
     }
 }
