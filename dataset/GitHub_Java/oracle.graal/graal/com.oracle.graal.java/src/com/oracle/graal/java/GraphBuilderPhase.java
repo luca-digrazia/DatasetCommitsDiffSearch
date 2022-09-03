@@ -296,9 +296,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     processBlock(this, returnBlock);
                     processBlock(this, unwindBlock);
 
-                    if (Debug.isDumpEnabled()) {
-                        Debug.dump(currentGraph, "Bytecodes parsed: " + method.getDeclaringClass().getUnqualifiedName() + "." + method.getName());
-                    }
+                    Debug.dump(currentGraph, "After bytecode parsing");
+
                 }
             }
 
@@ -523,7 +522,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected ValueNode genIntegerSub(Kind kind, ValueNode x, ValueNode y) {
-                return SubNode.create(x, y);
+                return new SubNode(x, y);
             }
 
             @Override
@@ -533,12 +532,12 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected ValueNode genFloatAdd(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
-                return AddNode.create(x, y);
+                return new AddNode(x, y);
             }
 
             @Override
             protected ValueNode genFloatSub(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
-                return SubNode.create(x, y);
+                return new SubNode(x, y);
             }
 
             @Override
@@ -665,12 +664,12 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected ValueNode createCheckCast(ResolvedJavaType type, ValueNode object, JavaTypeProfile profileForTypeCheck, boolean forStoreCheck) {
-                return CheckCastNode.create(type, object, profileForTypeCheck, forStoreCheck);
+                return new CheckCastNode(type, object, profileForTypeCheck, forStoreCheck);
             }
 
             @Override
             protected ValueNode createInstanceOf(ResolvedJavaType type, ValueNode object, JavaTypeProfile profileForTypeCheck) {
-                return InstanceOfNode.create(type, object, profileForTypeCheck);
+                return new InstanceOfNode(type, object, profileForTypeCheck);
             }
 
             @Override
@@ -861,12 +860,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
                 if (graphBuilderPlugins != null) {
                     if (tryUsingInvocationPlugin(args, targetMethod, resultType)) {
-                        if (GraalOptions.TraceInlineDuringParsing.getValue()) {
-                            for (int i = 0; i < this.currentDepth; ++i) {
-                                TTY.print(' ');
-                            }
-                            TTY.println("Used invocation plugin for " + targetMethod);
-                        }
                         return;
                     }
                 }
@@ -874,20 +867,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 InlineInvokePlugin inlineInvokePlugin = graphBuilderConfig.getInlineInvokePlugin();
                 if (inlineInvokePlugin != null && invokeKind.isDirect() && targetMethod.canBeInlined() && targetMethod.hasBytecodes() &&
                                 inlineInvokePlugin.shouldInlineInvoke(targetMethod, currentDepth)) {
-                    if (GraalOptions.TraceInlineDuringParsing.getValue()) {
-                        int bci = this.bci();
-                        for (int i = 0; i < this.currentDepth; ++i) {
-                            TTY.print(' ');
-                        }
-                        StackTraceElement stackTraceElement = this.method.asStackTraceElement(bci);
-                        String s = String.format("%s (%s:%d)", method.getName(), stackTraceElement.getFileName(), stackTraceElement.getLineNumber());
-                        TTY.print(s);
-                        TTY.println(" inlining call " + targetMethod.getName());
-                    }
                     parseAndInlineCallee(targetMethod, args);
                     return;
-                } else {
-                    // System.out.println("Could not inline invoke " + targetMethod);
                 }
 
                 MethodCallTargetNode callTarget = currentGraph.add(createMethodCallTarget(invokeKind, targetMethod, args, returnType));
@@ -959,15 +940,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 if (calleeBeforeUnwindNode != null) {
                     ValueNode calleeUnwindValue = parser.getUnwindValue();
                     assert calleeUnwindValue != null;
-                    if (calleeBeforeUnwindNode instanceof AbstractMergeNode) {
-                        AbstractMergeNode mergeNode = (AbstractMergeNode) calleeBeforeUnwindNode;
-                        HIRFrameStateBuilder dispatchState = frameState.copy();
-                        dispatchState.clearStack();
-                        dispatchState.apush(calleeUnwindValue);
-                        dispatchState.setRethrowException(true);
-                        mergeNode.setStateAfter(dispatchState.create(bci()));
-
-                    }
                     calleeBeforeUnwindNode.setNext(handleException(calleeUnwindValue, bci()));
                 }
             }
@@ -1093,10 +1065,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected ValueNode append(ValueNode v) {
-                if (v.graph() != null) {
-                    // This node was already appended to the graph.
-                    return v;
-                }
                 if (v instanceof ControlSinkNode) {
                     return append((ControlSinkNode) v);
                 }

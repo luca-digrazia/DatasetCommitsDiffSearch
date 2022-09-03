@@ -31,6 +31,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.nodes.*;
@@ -74,17 +75,20 @@ import com.oracle.graal.nodes.*;
  */
 public final class BciBlockMapping {
 
-    public static class BciBlock implements Cloneable {
+    public static class BciBlock extends AbstractBlockBase<BciBlock> implements Cloneable {
 
-        protected int id;
         public int startBci;
         public int endBci;
         public boolean isExceptionEntry;
         public boolean isLoopHeader;
         public int loopId;
         public int loopEnd;
-        protected List<BciBlock> successors;
-        private int predecessorCount;
+
+        /**
+         * XXX to be removed - currently only used by baseline compiler.
+         */
+        public Loop<BciBlock> loop;
+        public boolean isLoopEnd;
 
         private FixedWithNextNode firstInstruction;
         private AbstractFrameStateBuilder<?, ?> entryState;
@@ -124,14 +128,6 @@ public final class BciBlockMapping {
             return null;
         }
 
-        public int getId() {
-            return id;
-        }
-
-        public int getPredecessorCount() {
-            return this.predecessorCount;
-        }
-
         public int numNormalSuccessors() {
             if (exceptionDispatchBlock() != null) {
                 return successors.size() - 1;
@@ -169,12 +165,24 @@ public final class BciBlockMapping {
             return sb.toString();
         }
 
+        public Loop<BciBlock> getLoop() {
+            return loop;
+        }
+
+        public void setLoop(Loop<BciBlock> loop) {
+            this.loop = loop;
+        }
+
         public int getLoopDepth() {
             return Long.bitCount(loops);
         }
 
         public boolean isLoopHeader() {
             return isLoopHeader;
+        }
+
+        public boolean isLoopEnd() {
+            return isLoopEnd;
         }
 
         public boolean isExceptionEntry() {
@@ -384,30 +392,6 @@ public final class BciBlockMapping {
                 entryStateArray[dimension - 1] = entryState;
             }
         }
-
-        public int getSuccessorCount() {
-            return successors.size();
-        }
-
-        public List<BciBlock> getSuccessors() {
-            return successors;
-        }
-
-        public void setId(int i) {
-            this.id = i;
-        }
-
-        public void addSuccessor(BciBlock sux) {
-            successors.add(sux);
-            sux.predecessorCount++;
-        }
-
-        public void clearSucccessors() {
-            for (BciBlock sux : successors) {
-                sux.predecessorCount--;
-            }
-            successors.clear();
-        }
     }
 
     public static class ExceptionDispatchBlock extends BciBlock {
@@ -438,7 +422,6 @@ public final class BciBlockMapping {
     public LocalLiveness liveness;
     private int blocksNotYetAssignedId;
     private final boolean consecutiveLoopBlocks;
-    public int returnCount;
 
     /**
      * Creates a new BlockMap instance from bytecode of the given method .
@@ -457,10 +440,6 @@ public final class BciBlockMapping {
 
     public BciBlock[] getBlocks() {
         return this.blocks;
-    }
-
-    public int getReturnCount() {
-        return this.returnCount;
     }
 
     /**
@@ -549,7 +528,6 @@ public final class BciBlockMapping {
                 case DRETURN: // fall through
                 case ARETURN: // fall through
                 case RETURN: {
-                    returnCount++;
                     current = null;
                     break;
                 }
@@ -676,13 +654,11 @@ public final class BciBlockMapping {
             blocksNotYetAssignedId++;
             newBlock.startBci = startBci;
             newBlock.endBci = oldBlock.endBci;
-            for (BciBlock oldSuccessor : oldBlock.getSuccessors()) {
-                newBlock.addSuccessor(oldSuccessor);
-            }
+            newBlock.getSuccessors().addAll(oldBlock.getSuccessors());
 
             oldBlock.endBci = startBci - 1;
-            oldBlock.clearSucccessors();
-            oldBlock.addSuccessor(newBlock);
+            oldBlock.getSuccessors().clear();
+            oldBlock.getSuccessors().add(newBlock);
 
             for (int i = startBci; i <= newBlock.endBci; i++) {
                 blockMap[i] = newBlock;
@@ -711,7 +687,7 @@ public final class BciBlockMapping {
         if (sux.isExceptionEntry) {
             throw new BailoutException("Exception handler can be reached by both normal and exceptional control flow");
         }
-        predecessor.addSuccessor(sux);
+        predecessor.getSuccessors().add(sux);
     }
 
     private final ArrayList<BciBlock> jsrVisited = new ArrayList<>();
@@ -722,7 +698,7 @@ public final class BciBlockMapping {
 
         if (block.endsWithRet()) {
             block.setRetSuccessor(blockMap[scope.nextReturnAddress()]);
-            block.addSuccessor(block.getRetSuccessor());
+            block.getSuccessors().add(block.getRetSuccessor());
             assert block.getRetSuccessor() != block.getJsrSuccessor();
         }
         Debug.log("JSR alternatives block %s  sux %s  jsrSux %s  retSux %s  jsrScope %s", block, block.getSuccessors(), block.getJsrSuccessor(), block.getRetSuccessor(), block.getJsrScope());
@@ -791,9 +767,9 @@ public final class BciBlockMapping {
                     curHandler.endBci = -1;
                     curHandler.deoptBci = bci;
                     curHandler.handler = h;
-                    curHandler.addSuccessor(blockMap[h.getHandlerBCI()]);
+                    curHandler.getSuccessors().add(blockMap[h.getHandlerBCI()]);
                     if (lastHandler != null) {
-                        curHandler.addSuccessor(lastHandler);
+                        curHandler.getSuccessors().add(lastHandler);
                     }
                     exceptionDispatch.put(h, curHandler);
                 }
@@ -1000,6 +976,7 @@ public final class BciBlockMapping {
             loops |= computeBlockOrder(successor);
             if (successor.active) {
                 // Reached block via backward branch.
+                block.isLoopEnd = true;
                 loops |= (1L << successor.loopId);
             }
         }
