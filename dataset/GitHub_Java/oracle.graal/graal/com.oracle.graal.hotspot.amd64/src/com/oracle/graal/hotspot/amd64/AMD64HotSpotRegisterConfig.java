@@ -52,7 +52,7 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
 
     private final boolean allAllocatableAreCallerSaved;
 
-    private final Map<PlatformKind.Key, Register[]> categorized = new ConcurrentHashMap<>();
+    private final Map<PlatformKind, Register[]> categorized = new ConcurrentHashMap<>();
 
     private final RegisterAttributes[] attributesMap;
 
@@ -66,10 +66,8 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
     }
 
     public Register[] getAllocatableRegisters(PlatformKind kind) {
-        PlatformKind.Key key = kind.getKey();
-        if (categorized.containsKey(key)) {
-            Register[] val = categorized.get(key);
-            return val;
+        if (categorized.containsKey(kind)) {
+            return categorized.get(kind);
         }
 
         ArrayList<Register> list = new ArrayList<>();
@@ -80,7 +78,7 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
         }
 
         Register[] ret = list.toArray(new Register[list.size()]);
-        categorized.put(key, ret);
+        categorized.put(kind, ret);
         return ret;
     }
 
@@ -92,12 +90,6 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
     private final Register[] javaGeneralParameterRegisters;
     private final Register[] nativeGeneralParameterRegisters;
     private final Register[] xmmParameterRegisters = {xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7};
-
-    /*
-     * Some ABIs (e.g. Windows) require a so-called "home space", that is a save area on the stack
-     * to store the argument registers
-     */
-    private final boolean needsNativeStackHomeSpace;
 
     private final CalleeSaveLayout csl;
 
@@ -152,11 +144,9 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
         if (config.windowsOs) {
             javaGeneralParameterRegisters = new Register[]{rdx, r8, r9, rdi, rsi, rcx};
             nativeGeneralParameterRegisters = new Register[]{rcx, rdx, r8, r9};
-            this.needsNativeStackHomeSpace = true;
         } else {
             javaGeneralParameterRegisters = new Register[]{rsi, rdx, rcx, r8, r9, rdi};
             nativeGeneralParameterRegisters = new Register[]{rdi, rsi, rdx, rcx, r8, r9};
-            this.needsNativeStackHomeSpace = false;
         }
 
         csl = null;
@@ -210,7 +200,7 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
 
         int currentGeneral = 0;
         int currentXMM = 0;
-        int currentStackOffset = type == Type.NativeCall && needsNativeStackHomeSpace ? generalParameterRegisters.length * target.wordSize : 0;
+        int currentStackOffset = 0;
 
         for (int i = 0; i < parameterTypes.length; i++) {
             final Kind kind = parameterTypes[i].getKind();
