@@ -52,8 +52,7 @@ public class LLVMContext extends ExecutionContext {
     private final List<RootCallTarget> constructorFunctions = new ArrayList<>();
     private final List<RootCallTarget> destructorFunctions = new ArrayList<>();
 
-    private final LLVMFunctionRegistry functionRegistry;
-    private final LLVMGlobalVariableRegistry globalVariableRegistry = new LLVMGlobalVariableRegistry();
+    private final LLVMFunctionRegistry registry;
 
     private final NativeLookup nativeLookup;
 
@@ -64,19 +63,20 @@ public class LLVMContext extends ExecutionContext {
     private Source mainSourceFile;
 
     private boolean parseOnly;
+    private List<String> resolvedVariables;
 
     public LLVMContext(NodeFactoryFacade facade, LLVMOptimizationConfiguration optimizationConfig) {
         nativeLookup = new NativeLookup(facade);
-        this.functionRegistry = new LLVMFunctionRegistry(optimizationConfig, facade);
+        this.registry = new LLVMFunctionRegistry(optimizationConfig, facade);
     }
 
     public RootCallTarget getFunction(LLVMFunctionDescriptor function) {
-        return functionRegistry.lookup(function);
+        return registry.lookup(function);
     }
 
     public LLVMFunctionRegistry getFunctionRegistry() {
         CompilerAsserts.neverPartOfCompilation();
-        return functionRegistry;
+        return registry;
     }
 
     public NativeFunctionHandle getNativeHandle(LLVMFunctionDescriptor function, LLVMExpressionNode[] args) {
@@ -95,12 +95,8 @@ public class LLVMContext extends ExecutionContext {
      */
     private LLVMFunctionDescriptor getFunctionDescriptor(LLVMFunctionDescriptor incompleteFunctionDescriptor) {
         int validFunctionIndex = incompleteFunctionDescriptor.getFunctionIndex();
-        LLVMFunctionDescriptor[] completeFunctionDescriptors = functionRegistry.getFunctionDescriptors();
+        LLVMFunctionDescriptor[] completeFunctionDescriptors = registry.getFunctionDescriptors();
         return completeFunctionDescriptors[validFunctionIndex];
-    }
-
-    public LLVMGlobalVariableRegistry getGlobalVaraibleRegistry() {
-        return globalVariableRegistry;
     }
 
     public void addLibraryToNativeLookup(String library) {
@@ -177,6 +173,14 @@ public class LLVMContext extends ExecutionContext {
 
     public NativeLookup getNativeLookup() {
         return nativeLookup;
+    }
+
+    public List<String> getResolvedVariableNames() {
+        return resolvedVariables;
+    }
+
+    public void setResolvedVariableNames(List<String> resolvedVariables) {
+        this.resolvedVariables = resolvedVariables;
     }
 
 }
