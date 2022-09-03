@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -50,7 +48,7 @@ final class DebugConfigImpl implements DebugConfig {
     private final DebugFilter timerFilter;
     private final DebugFilter dumpFilter;
     private final DebugFilter verifyFilter;
-    private final MethodFilter methodFilter;
+    private final MethodFilter[] methodFilter;
     private final List<DebugDumpHandler> dumpHandlers;
     private final List<DebugVerifyHandler> verifyHandlers;
     private final PrintStream output;
@@ -193,7 +191,7 @@ final class DebugConfigImpl implements DebugConfig {
                     JavaMethod method = DebugConfig.asJavaMethod(o);
                     if (method != null) {
                         if (!DebugOptions.MethodFilterRootOnly.getValue(options)) {
-                            if (methodFilter.matches(method)) {
+                            if (org.graalvm.compiler.debug.MethodFilter.matches(methodFilter, method)) {
                                 return true;
                             }
                         } else {
@@ -207,7 +205,7 @@ final class DebugConfigImpl implements DebugConfig {
                     }
                 }
             }
-            if (lastMethod != null && methodFilter.matches(lastMethod)) {
+            if (lastMethod != null && org.graalvm.compiler.debug.MethodFilter.matches(methodFilter, lastMethod)) {
                 return true;
             }
             return false;
@@ -268,7 +266,7 @@ final class DebugConfigImpl implements DebugConfig {
                 if (!firstSeen.containsKey(o)) {
                     firstSeen.put(o, o);
                     if (DebugOptions.DumpOnError.getValue(options) || DebugOptions.Dump.getValue(options) != null) {
-                        debug.forceDump(o, "Exception: %s", e);
+                        debug.dump(DebugContext.BASIC_LEVEL, o, "Exception: %s", e);
                     }
                     debug.log("Context obj %s", o);
                 }
