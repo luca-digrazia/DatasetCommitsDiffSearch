@@ -22,27 +22,26 @@
  */
 package com.oracle.graal.nodes.java;
 
+import static com.oracle.graal.api.meta.DeoptimizationAction.*;
+import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
-import static com.oracle.jvmci.meta.DeoptimizationAction.*;
-import static com.oracle.jvmci.meta.DeoptimizationReason.*;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.jvmci.meta.*;
-import com.oracle.jvmci.meta.Assumptions.AssumptionResult;
 
 /**
  * Implements a type check against a compile-time known type.
  */
 @NodeInfo
-public class CheckCastNode extends FixedWithNextNode implements Canonicalizable, Simplifiable, Lowerable, Virtualizable, ValueProxy {
+public final class CheckCastNode extends FixedWithNextNode implements Canonicalizable, Simplifiable, Lowerable, Virtualizable, ValueProxy {
 
     public static final NodeClass<CheckCastNode> TYPE = NodeClass.create(CheckCastNode.class);
     @Input protected ValueNode object;
@@ -56,12 +55,8 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
     protected final boolean forStoreCheck;
 
     public CheckCastNode(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck) {
-        this(TYPE, type, object, profile, forStoreCheck);
-    }
-
-    protected CheckCastNode(NodeClass<? extends CheckCastNode> c, ResolvedJavaType type, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck) {
-        super(c, StampFactory.declaredTrusted(type).improveWith(object.stamp()));
-        assert object.stamp() instanceof ObjectStamp : object;
+        super(TYPE, StampFactory.declaredTrusted(type));
+        assert object.stamp() instanceof ObjectStamp : object + ":" + object.stamp();
         assert type != null;
         this.type = type;
         this.object = object;
@@ -75,7 +70,7 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
         if (synonym != null) {
             return synonym;
         }
-        assert object.stamp() instanceof ObjectStamp : object;
+        assert object.stamp() instanceof ObjectStamp : object + ":" + object.stamp();
         if (assumptions != null) {
             AssumptionResult<ResolvedJavaType> leafConcreteSubtype = type.findLeafConcreteSubtype();
             if (leafConcreteSubtype != null && !leafConcreteSubtype.getResult().equals(type)) {
@@ -91,7 +86,7 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
     }
 
     /**
-     * Lowers a {@link CheckCastNode}. That is:
+     * Lowers a {@link CheckCastNode} to a {@link GuardingPiNode}. That is:
      *
      * <pre>
      * 1: A a = ...
@@ -119,7 +114,7 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
     @Override
     public void lower(LoweringTool tool) {
         Stamp newStamp = StampFactory.declaredTrusted(type).improveWith(object().stamp());
-        LogicNode condition;
+        ValueNode condition;
         ValueNode theValue = object;
         if (newStamp.isEmpty()) {
             // This is a check cast that will always fail
@@ -149,11 +144,9 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
                 condition = LogicNode.or(graph().unique(new IsNullNode(object)), typeTest, shortCircuitProbability);
             }
         }
-        GuardingNode guard = tool.createGuard(next(), condition, forStoreCheck ? ArrayStoreException : ClassCastException, InvalidateReprofile, false);
-        ValueAnchorNode valueAnchor = graph().add(new ValueAnchorNode((ValueNode) guard));
-        PiNode piNode = graph().unique(new PiNode(theValue, newStamp, valueAnchor));
-        this.replaceAtUsages(piNode);
-        graph().replaceFixedWithFixed(this, valueAnchor);
+        GuardingPiNode checkedObject = graph().add(new GuardingPiNode(theValue, condition, false, forStoreCheck ? ArrayStoreException : ClassCastException, InvalidateReprofile, newStamp));
+        graph().replaceFixedWithFixed(this, checkedObject);
+        checkedObject.lower(tool);
     }
 
     @Override
@@ -185,7 +178,7 @@ public class CheckCastNode extends FixedWithNextNode implements Canonicalizable,
         return this;
     }
 
-    protected static ValueNode findSynonym(ResolvedJavaType type, ValueNode object) {
+    private static ValueNode findSynonym(ResolvedJavaType type, ValueNode object) {
         ResolvedJavaType objectType = StampTool.typeOrNull(object);
         if (objectType != null && type.isAssignableFrom(objectType)) {
             // we don't have to check for null types here because they will also pass the

@@ -22,15 +22,9 @@
  */
 package com.oracle.graal.compiler.common.type;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.MemoryAccessProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-import com.oracle.graal.compiler.common.spi.LIRKindTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.spi.*;
 
 /**
  * Singleton stamp representing the value of type {@code void}.
@@ -46,8 +40,8 @@ public final class VoidStamp extends Stamp {
     }
 
     @Override
-    public JavaKind getStackKind() {
-        return JavaKind.Void;
+    public Kind getStackKind() {
+        return Kind.Void;
     }
 
     @Override
@@ -58,7 +52,7 @@ public final class VoidStamp extends Stamp {
 
     @Override
     public LIRKind getLIRKind(LIRKindTool tool) {
-        throw JVMCIError.shouldNotReachHere("void stamp has no value");
+        throw GraalInternalError.shouldNotReachHere("void stamp has no value");
     }
 
     @Override
@@ -94,11 +88,6 @@ public final class VoidStamp extends Stamp {
     }
 
     @Override
-    public boolean isCompatible(Constant constant) {
-        return false;
-    }
-
-    @Override
     public Stamp empty() {
         // the void stamp is always empty
         return this;
@@ -111,12 +100,12 @@ public final class VoidStamp extends Stamp {
 
     @Override
     public Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement) {
-        throw JVMCIError.shouldNotReachHere("can't read values of void stamp");
+        throw GraalInternalError.shouldNotReachHere("can't read values of void stamp");
     }
 
     @Override
     public Stamp constant(Constant c, MetaAccessProvider meta) {
-        throw JVMCIError.shouldNotReachHere("void stamp has no value");
+        throw GraalInternalError.shouldNotReachHere("void stamp has no value");
     }
 
     private static final VoidStamp instance = new VoidStamp();

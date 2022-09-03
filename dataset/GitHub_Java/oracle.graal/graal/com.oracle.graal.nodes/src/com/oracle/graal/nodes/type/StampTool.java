@@ -24,9 +24,9 @@ package com.oracle.graal.nodes.type;
 
 import java.util.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * Helper class that is used to keep all stamp-related operations in one place.
@@ -129,7 +129,7 @@ public class StampTool {
      *         always null
      */
     public static boolean isPointerNonNull(Stamp stamp) {
-        if (stamp instanceof AbstractPointerStamp) {
+        if (stamp instanceof AbstractPointerStamp && stamp.hasValues()) {
             return ((AbstractPointerStamp) stamp).nonNull();
         }
         return false;

@@ -22,16 +22,8 @@
  */
 package com.oracle.graal.compiler.common.type;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.MemoryAccessProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-import com.oracle.graal.compiler.common.spi.LIRKindTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.spi.*;
 
 /**
  * A stamp is the basis for a type system.
@@ -52,11 +44,11 @@ public abstract class Stamp {
     }
 
     /**
-     * Gets a Java {@link JavaKind} that can be used to store a value of this stamp on the Java
-     * bytecode stack. Returns {@link JavaKind#Illegal} if a value of this stamp can not be stored
-     * on the bytecode stack.
+     * Gets a Java {@link Kind} that can be used to store a value of this stamp on the Java bytecode
+     * stack. Returns {@link Kind#Illegal} if a value of this stamp can not be stored on the
+     * bytecode stack.
      */
-    public abstract JavaKind getStackKind();
+    public abstract Kind getStackKind();
 
     /**
      * Gets a platform dependent {@link LIRKind} that can be used to store a value of this stamp.
@@ -109,13 +101,6 @@ public abstract class Stamp {
     public abstract boolean isCompatible(Stamp other);
 
     /**
-     * Check that the constant {@code other} is compatible with this stamp.
-     *
-     * @param constant
-     */
-    public abstract boolean isCompatible(Constant constant);
-
-    /**
      * Test whether this stamp has legal values.
      */
     public abstract boolean hasValues();
@@ -142,13 +127,6 @@ public abstract class Stamp {
      * Read a value of this stamp from memory.
      */
     public abstract Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement);
-
-    /**
-     * Read a value of this stamp from memory.
-     */
-    public Constant readConstantArrayElementForOffset(ConstantReflectionProvider constantReflection, JavaConstant constant, long displacement) {
-        return constantReflection.readConstantArrayElementForOffset(constant, displacement);
-    }
 
     /**
      * Tries to improve this stamp with the stamp given as parameter. If successful, returns the new

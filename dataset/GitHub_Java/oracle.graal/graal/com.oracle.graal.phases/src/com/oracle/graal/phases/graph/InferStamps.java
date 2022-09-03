@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,9 @@
  */
 package com.oracle.graal.phases.graph;
 
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 public class InferStamps {
 
@@ -47,16 +46,18 @@ public class InferStamps {
          * when the phi function performs the "meet" operator on its input stamps.
          */
         for (Node n : graph.getNodes()) {
-            if (n instanceof ValuePhiNode || n instanceof ValueAndStampProxy) {
+            if (n instanceof ValuePhiNode) {
                 ValueNode node = (ValueNode) n;
                 if (node.stamp() instanceof ObjectStamp) {
-                    assert node.stamp().isLegal() : "We assume all Phi and Proxy stamps are legal before the analysis";
-                    node.setStamp(node.stamp().illegal());
+                    assert node.stamp().hasValues() : "We assume all Phi and Proxy stamps are legal before the analysis";
+                    node.setStamp(node.stamp().empty());
                 }
             }
         }
 
         boolean stampChanged;
+        // The algorithm is not guaranteed to reach a stable state.
+        int z = 0;
         do {
             stampChanged = false;
             /*
@@ -73,23 +74,23 @@ public class InferStamps {
                     }
                 }
             }
-        } while (stampChanged);
+            ++z;
+        } while (stampChanged && z < 10000);
 
         /*
          * Check that all the illegal stamps we introduced above are correctly replaced with real
          * stamps again.
          */
-        assert checkNoIllegalStamp(graph);
+        assert checkNoEmptyStamp(graph);
     }
 
-    private static boolean checkNoIllegalStamp(StructuredGraph graph) {
+    private static boolean checkNoEmptyStamp(StructuredGraph graph) {
         for (Node n : graph.getNodes()) {
-            if (n instanceof ValuePhiNode || n instanceof ValueAndStampProxy) {
+            if (n instanceof ValuePhiNode) {
                 ValueNode node = (ValueNode) n;
-                assert !(node.stamp() instanceof IllegalStamp) : "Stamp is illegal after analysis. This is not necessarily an error, but a condition that we want to investigate (and then maybe relax or remove the assertion).";
+                assert node.stamp().hasValues() : "Stamp is empty after analysis. This is not necessarily an error, but a condition that we want to investigate (and then maybe relax or remove the assertion).";
             }
         }
         return true;
     }
-
 }
