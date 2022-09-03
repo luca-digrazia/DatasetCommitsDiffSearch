@@ -29,7 +29,6 @@ import static org.junit.Assume.assumeTrue;
 
 import java.io.UnsupportedEncodingException;
 
-import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.replacements.amd64.AMD64StringLatin1InflateNode;
 import org.graalvm.compiler.replacements.amd64.AMD64StringLatin1Substitutions;
@@ -65,7 +64,7 @@ public final class StringCompressInflateTest extends MethodSubstitutionTest {
         Class<?> javaclass = Class.forName("java.lang.StringLatin1");
         Class<?> testclass = AMD64StringLatin1InflateNode.class;
 
-        TestMethods tms = new TestMethods("testInflate", javaclass, AMD64StringLatin1InflateNode.class, "inflate",
+        TestMethods tms = new TestMethods("testInflate", javaclass, "inflate",
                         byte[].class, int.class, char[].class, int.class, int.class);
 
         tms.testSubstitution(testclass);
@@ -110,76 +109,29 @@ public final class StringCompressInflateTest extends MethodSubstitutionTest {
     }
 
     @Test
-    public void testStringLatin1InflateByteByte() throws ClassNotFoundException {
+    public void testStringLatin1InflateToByteArray() throws ClassNotFoundException {
         Class<?> javaclass = Class.forName("java.lang.StringLatin1");
 
-        ResolvedJavaMethod caller = getResolvedJavaMethod(javaclass, "inflate", byte[].class, int.class, byte[].class, int.class, int.class);
-        StructuredGraph graph = getReplacements().getIntrinsicGraph(caller, CompilationIdentifier.INVALID_COMPILATION_ID, getDebugContext());
-        assertInGraph(graph, AMD64StringLatin1InflateNode.class);
+        ResolvedJavaMethod caller = getResolvedJavaMethod(javaclass, "inflate", byte[].class, int.class, int.class);
+        testGraph(caller, "inflate");
 
-        InstalledCode code = getCode(caller, graph);
+        InstalledCode code = getCode(caller);
 
-        for (int dstOffset = 0; dstOffset < 2; dstOffset++) {
-            for (int srcOffset = 0; srcOffset < 2; srcOffset++) {
-                for (int i = 0; i < N; i++) {
-                    int length = i2sz(i);
-                    byte[] src = fillLatinBytes(new byte[length]);
-                    int resultLength = length * 2;
-                    byte[] dst = new byte[resultLength];
-                    int copiedLength = Math.max(0, length - Math.max(dstOffset, srcOffset));
-                    int dstDelta = Math.min(dstOffset, copiedLength);
-                    int srcDelta = Math.min(srcOffset, copiedLength);
-                    invokeSafe(caller, null, src, srcDelta, dst, dstDelta, copiedLength);
+        for (int i = 0; i < N; i++) {
+            int length = i2sz(i);
+            byte[] src = fillLatinBytes(new byte[length]);
+            byte[] dst = (byte[]) invokeSafe(caller, null, src, 0, length);
 
-                    // Perform a sanity check:
-                    for (int j = 0; j < copiedLength; j++) {
-                        assert (dst[j * 2 + 1 + dstDelta * 2]) == 0;
-                        int c = dst[j * 2 + dstDelta * 2] & 0xFF;
-                        assert (32 <= c && c <= 126) || (160 <= c && c <= 255);
-                        assert (c == (src[j + srcDelta] & 0xFF));
-                    }
-
-                    byte[] dst2 = new byte[resultLength];
-                    executeVarargsSafe(code, src, srcDelta, dst2, dstDelta, copiedLength);
-                    assertDeepEquals(dst, dst2);
-                }
+            // Perform a sanity check:
+            for (int j = 0; j < length; j++) {
+                assert (dst[j * 2 + 1]) == 0;
+                int c = dst[j * 2] & 0xFF;
+                assert (32 <= c && c <= 126) || (160 <= c && c <= 255);
+                assert (c == (src[j] & 0xFF));
             }
-        }
-    }
 
-    @Test
-    public void testStringLatin1InflateByteChar() throws ClassNotFoundException {
-        Class<?> javaclass = Class.forName("java.lang.StringLatin1");
-
-        ResolvedJavaMethod caller = getResolvedJavaMethod(javaclass, "inflate", byte[].class, int.class, char[].class, int.class, int.class);
-        StructuredGraph graph = getReplacements().getIntrinsicGraph(caller, CompilationIdentifier.INVALID_COMPILATION_ID, getDebugContext());
-        assertInGraph(graph, AMD64StringLatin1InflateNode.class);
-
-        InstalledCode code = getCode(caller, graph);
-
-        for (int dstOffset = 0; dstOffset < 2; dstOffset++) {
-            for (int srcOffset = 0; srcOffset < 2; srcOffset++) {
-                for (int i = 0; i < N; i++) {
-                    int length = i2sz(i);
-                    byte[] src = fillLatinBytes(new byte[length]);
-                    char[] dst = new char[length];
-                    int copiedLength = Math.max(0, length - Math.max(dstOffset, srcOffset));
-                    int dstDelta = Math.min(dstOffset, copiedLength);
-                    int srcDelta = Math.min(srcOffset, copiedLength);
-                    invokeSafe(caller, null, src, srcDelta, dst, dstDelta, copiedLength);
-
-                    // Perform a sanity check:
-                    for (int j = 0; j < copiedLength; j++) {
-                        int c = dst[j + dstDelta] & 0xFF;
-                        assert (32 <= c && c <= 126) || (160 <= c && c <= 255);
-                        assert (c == (src[j + srcDelta] & 0xFF));
-                    }
-
-                    char[] dst2 = new char[length];
-                    executeVarargsSafe(code, src, srcDelta, dst2, dstDelta, copiedLength);
-                    assertDeepEquals(dst, dst2);
-                }
-            }
+            Object result = executeVarargsSafe(code, src, 0, length);
+            assertDeepEquals(dst, result);
         }
     }
 
@@ -187,7 +139,7 @@ public final class StringCompressInflateTest extends MethodSubstitutionTest {
     public void testStringUTF16Compress() throws ClassNotFoundException, UnsupportedEncodingException {
         Class<?> javaclass = Class.forName("java.lang.StringUTF16");
         Class<?> testclass = AMD64StringUTF16CompressNode.class;
-        TestMethods tms = new TestMethods("testCompress", javaclass, AMD64StringUTF16CompressNode.class, "compress",
+        TestMethods tms = new TestMethods("testCompress", javaclass, "compress",
                         char[].class, int.class, byte[].class, int.class, int.class);
         tms.testSubstitution(testclass);
 
@@ -213,74 +165,28 @@ public final class StringCompressInflateTest extends MethodSubstitutionTest {
     }
 
     @Test
-    public void testStringUTF16CompressByteByte() throws ClassNotFoundException {
+    public void testStringUTF16CompressFromByteArray() throws ClassNotFoundException {
         Class<?> javaclass = Class.forName("java.lang.StringUTF16");
 
-        ResolvedJavaMethod caller = getResolvedJavaMethod(javaclass, "compress", byte[].class, int.class, byte[].class, int.class, int.class);
-        StructuredGraph graph = getReplacements().getIntrinsicGraph(caller, CompilationIdentifier.INVALID_COMPILATION_ID, getDebugContext());
-        assertInGraph(graph, AMD64StringUTF16CompressNode.class);
+        ResolvedJavaMethod caller = getResolvedJavaMethod(javaclass, "compress", byte[].class, int.class, int.class);
+        testGraph(caller, "compress");
 
-        InstalledCode code = getCode(caller, graph);
+        InstalledCode code = getCode(caller);
 
-        for (int dstOffset = 0; dstOffset < 2; dstOffset++) {
-            for (int srcOffset = 0; srcOffset < 2; srcOffset++) {
-                for (int i = 0; i < N; i++) {
-                    int length = i2sz(i);
-                    byte[] src = fillLatinChars(new byte[length * 2]);
-                    byte[] dst = new byte[length];
-                    int copiedLength = Math.max(0, length - Math.max(dstOffset, srcOffset));
-                    int dstDelta = Math.min(dstOffset, copiedLength);
-                    int srcDelta = Math.min(srcOffset, copiedLength);
-                    invokeSafe(caller, null, src, srcDelta, dst, dstDelta, copiedLength);
+        for (int i = 0; i < N; i++) {
+            int length = i2sz(i);
+            byte[] src = fillLatinChars(new byte[length * 2]);
+            byte[] dst = (byte[]) invokeSafe(caller, null, src, 0, length);
 
-                    // Perform a sanity check:
-                    for (int j = 0; j < copiedLength; j++) {
-                        int c = dst[j + dstDelta] & 0xFF;
-                        assert (32 <= c && c <= 126) || (160 <= c && c <= 255);
-                        assert (c == (src[(j + srcDelta) * 2] & 0xFF));
-                    }
-
-                    byte[] dst2 = new byte[length];
-                    executeVarargsSafe(code, src, srcDelta, dst2, dstDelta, copiedLength);
-                    assertDeepEquals(dst, dst2);
-                }
+            // Perform a sanity check:
+            for (int j = 0; j < length; j++) {
+                int c = dst[j] & 0xFF;
+                assert (32 <= c && c <= 126) || (160 <= c && c <= 255);
+                assert (c == (src[j * 2] & 0xFF));
             }
-        }
-    }
 
-    @Test
-    public void testStringUTF16CompressCharByte() throws ClassNotFoundException {
-        Class<?> javaclass = Class.forName("java.lang.StringUTF16");
-
-        ResolvedJavaMethod caller = getResolvedJavaMethod(javaclass, "compress", char[].class, int.class, byte[].class, int.class, int.class);
-        StructuredGraph graph = getReplacements().getIntrinsicGraph(caller, CompilationIdentifier.INVALID_COMPILATION_ID, getDebugContext());
-        assertInGraph(graph, AMD64StringUTF16CompressNode.class);
-
-        InstalledCode code = getCode(caller, graph);
-
-        for (int dstOffset = 0; dstOffset < 2; dstOffset++) {
-            for (int srcOffset = 0; srcOffset < 2; srcOffset++) {
-                for (int i = 0; i < N; i++) {
-                    int length = i2sz(i);
-                    char[] src = fillLatinChars(new char[length]);
-                    byte[] dst = new byte[length];
-                    int copiedLength = Math.max(0, length - Math.max(dstOffset, srcOffset));
-                    int dstDelta = Math.min(dstOffset, copiedLength);
-                    int srcDelta = Math.min(srcOffset, copiedLength);
-                    invokeSafe(caller, null, src, srcDelta, dst, dstDelta, copiedLength);
-
-                    // Perform a sanity check:
-                    for (int j = 0; j < copiedLength; j++) {
-                        int c = dst[j + dstDelta] & 0xFF;
-                        assert (32 <= c && c <= 126) || (160 <= c && c <= 255);
-                        assert (c == (src[j + srcDelta] & 0xFF));
-                    }
-
-                    byte[] dst2 = new byte[length];
-                    executeVarargsSafe(code, src, srcDelta, dst2, dstDelta, copiedLength);
-                    assertDeepEquals(dst, dst2);
-                }
-            }
+            Object result = executeVarargsSafe(code, src, 0, length);
+            assertDeepEquals(dst, result);
         }
     }
 
@@ -296,11 +202,10 @@ public final class StringCompressInflateTest extends MethodSubstitutionTest {
 
     private class TestMethods {
 
-        TestMethods(String testmname, Class<?> javaclass, Class<?> intrinsicClass, String javamname, Class<?>... params) {
+        TestMethods(String testmname, Class<?> javaclass, String javamname, Class<?>... params) {
             javamethod = getResolvedJavaMethod(javaclass, javamname, params);
             testmethod = getResolvedJavaMethod(testmname);
             testgraph = testGraph(testmname, javamname);
-            assertInGraph(testgraph, intrinsicClass);
 
             assert javamethod != null;
             assert testmethod != null;
