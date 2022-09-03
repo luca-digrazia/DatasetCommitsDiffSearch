@@ -92,19 +92,14 @@ public class ValueAssert {
 
     public static void assertValue(Context context, Value value, Trait... expectedTypes) {
         try {
-            assertValueImpl(context, value, 0, expectedTypes);
+            assertValueImpl(context, value, expectedTypes);
         } catch (AssertionError e) {
             throw new AssertionError(String.format("assertValue: %s traits: %s", value, Arrays.asList(expectedTypes)), e);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private static void assertValueImpl(Context context, Value value, int depth, Trait... expectedTypes) {
-        if (depth > 10) {
-            // stop at a certain recursion depth for recursive data structures
-            return;
-        }
-
+    private static void assertValueImpl(Context context, Value value, Trait... expectedTypes) {
         assertNotNull(value.toString());
         assertNotNull(value.getMetaObject());
 
@@ -136,7 +131,7 @@ public class ValueAssert {
                     break;
                 case ARRAY_ELEMENTS:
                     assertTrue(msg, value.hasArrayElements());
-                    assertValueArrayElements(context, value, depth);
+                    assertValueArrayElements(context, value);
                     break;
                 case EXECUTABLE:
                     assertTrue(msg, value.canExecute());
@@ -177,8 +172,7 @@ public class ValueAssert {
 
                     Map<Object, Object> expectedValues = new HashMap<>();
                     for (String key : value.getMemberKeys()) {
-                        Value child = value.getMember(key);
-                        assertValueImpl(context, child, depth + 1, detectSupportedTypes(child));
+                        assertValue(context, value.getMember(key));
                         expectedValues.put(key, value.getMember(key).as(Object.class));
                     }
 
@@ -419,7 +413,7 @@ public class ValueAssert {
     }
 
     @SuppressWarnings("unchecked")
-    private static void assertValueArrayElements(Context context, Value value, int depth) {
+    private static void assertValueArrayElements(Context context, Value value) {
         assertTrue(value.hasArrayElements());
 
         List<Object> receivedObjects = new ArrayList<>();
@@ -430,7 +424,7 @@ public class ValueAssert {
             receivedObjects.add(arrayElement.as(Object.class));
             receivedObjectsLongMap.put(i, arrayElement.as(Object.class));
             receivedObjectsIntMap.put((int) i, arrayElement.as(Object.class));
-            assertValueImpl(context, arrayElement, depth + 1, detectSupportedTypes(arrayElement));
+            assertValue(context, arrayElement);
         }
 
         List<Object> objectList1 = value.as(OBJECT_LIST);
