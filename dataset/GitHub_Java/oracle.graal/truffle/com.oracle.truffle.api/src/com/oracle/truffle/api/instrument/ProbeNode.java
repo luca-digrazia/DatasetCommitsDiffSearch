@@ -74,43 +74,43 @@ final class ProbeNode extends EventHandlerNode {
     }
 
     @Override
-    public void enter(Node node, VirtualFrame frame) {
+    public void enter(Node node, VirtualFrame vFrame) {
         this.probe.checkProbeUnchanged();
         final BeforeTagInstrument beforeTagInstrument = probe.getBeforeTagInstrument();
         if (beforeTagInstrument != null) {
-            beforeTagInstrument.getListener().onEnter(probe, ((WrapperNode) this.getParent()).getChild(), frame);
+            beforeTagInstrument.getListener().onEnter(probe, ((WrapperNode) this.getParent()).getChild(), vFrame);
         }
         if (firstInstrumentNode != null) {
-            firstInstrumentNode.enter(node, frame);
+            firstInstrumentNode.enter(node, vFrame);
         }
     }
 
     @Override
-    public void returnVoid(Node node, VirtualFrame frame) {
+    public void returnVoid(Node node, VirtualFrame vFrame) {
         this.probe.checkProbeUnchanged();
         if (firstInstrumentNode != null) {
-            firstInstrumentNode.returnVoid(node, frame);
+            firstInstrumentNode.returnVoid(node, vFrame);
         }
         final AfterTagInstrument afterTagInstrument = probe.getAfterTagInstrument();
         if (afterTagInstrument != null) {
-            afterTagInstrument.getListener().onReturnVoid(probe, ((WrapperNode) this.getParent()).getChild(), frame);
+            afterTagInstrument.getListener().onReturnVoid(probe, ((WrapperNode) this.getParent()).getChild(), vFrame);
         }
     }
 
     @Override
-    public void returnValue(Node node, VirtualFrame frame, Object result) {
+    public void returnValue(Node node, VirtualFrame vFrame, Object result) {
         this.probe.checkProbeUnchanged();
         if (firstInstrumentNode != null) {
-            firstInstrumentNode.returnValue(node, frame, result);
+            firstInstrumentNode.returnValue(node, vFrame, result);
         }
         final AfterTagInstrument afterTagInstrument = probe.getAfterTagInstrument();
         if (afterTagInstrument != null) {
-            afterTagInstrument.getListener().onReturnValue(probe, ((WrapperNode) this.getParent()).getChild(), frame, result);
+            afterTagInstrument.getListener().onReturnValue(probe, ((WrapperNode) this.getParent()).getChild(), vFrame, result);
         }
     }
 
     @Override
-    public void returnExceptional(Node node, VirtualFrame frame, Throwable exception) {
+    public void returnExceptional(Node node, VirtualFrame vFrame, Throwable exception) {
         if (exception instanceof KillException) {
             throw (KillException) exception;
         }
@@ -119,11 +119,11 @@ final class ProbeNode extends EventHandlerNode {
         }
         this.probe.checkProbeUnchanged();
         if (firstInstrumentNode != null) {
-            firstInstrumentNode.returnExceptional(node, frame, exception);
+            firstInstrumentNode.returnExceptional(node, vFrame, exception);
         }
         final AfterTagInstrument afterTagInstrument = probe.getAfterTagInstrument();
         if (afterTagInstrument != null) {
-            afterTagInstrument.getListener().onReturnExceptional(probe, ((WrapperNode) this.getParent()).getChild(), frame, exception);
+            afterTagInstrument.getListener().onReturnExceptional(probe, ((WrapperNode) this.getParent()).getChild(), vFrame, exception);
         }
     }
 

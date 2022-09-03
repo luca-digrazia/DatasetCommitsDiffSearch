@@ -98,41 +98,41 @@ public final class SLExpressionWrapperNode extends SLExpressionNode implements W
     }
 
     @Override
-    public Object executeGeneric(VirtualFrame frame) {
+    public Object executeGeneric(VirtualFrame vFrame) {
 
-        eventHandlerNode.enter(child, frame);
+        eventHandlerNode.enter(child, vFrame);
         Object result;
 
         try {
-            result = child.executeGeneric(frame);
-            eventHandlerNode.returnValue(child, frame, result);
+            result = child.executeGeneric(vFrame);
+            eventHandlerNode.returnValue(child, vFrame, result);
         } catch (Exception e) {
-            eventHandlerNode.returnExceptional(child, frame, e);
+            eventHandlerNode.returnExceptional(child, vFrame, e);
             throw (e);
         }
         return result;
     }
 
     @Override
-    public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.expectLong(executeGeneric(frame));
+    public long executeLong(VirtualFrame vFrame) throws UnexpectedResultException {
+        return SLTypesGen.expectLong(executeGeneric(vFrame));
     }
 
     @Override
-    public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.expectBoolean(executeGeneric(frame));
+    public boolean executeBoolean(VirtualFrame vFrame) throws UnexpectedResultException {
+        return SLTypesGen.expectBoolean(executeGeneric(vFrame));
     }
 
     @Override
-    public SLFunction executeFunction(VirtualFrame frame) throws UnexpectedResultException {
-        eventHandlerNode.enter(child, frame);
+    public SLFunction executeFunction(VirtualFrame vFrame) throws UnexpectedResultException {
+        eventHandlerNode.enter(child, vFrame);
         SLFunction result;
 
         try {
-            result = child.executeFunction(frame);
-            eventHandlerNode.returnValue(child, frame, result);
+            result = child.executeFunction(vFrame);
+            eventHandlerNode.returnValue(child, vFrame, result);
         } catch (Exception e) {
-            eventHandlerNode.returnExceptional(child, frame, e);
+            eventHandlerNode.returnExceptional(child, vFrame, e);
             throw (e);
         }
         return result;
