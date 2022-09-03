@@ -23,6 +23,8 @@
 
 package com.oracle.graal.hotspot.bridge;
 
+import java.lang.reflect.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
@@ -210,14 +212,15 @@ public interface CompilerToVM {
     int getCompiledCodeSize(long metaspaceMethod);
 
     /**
-     * Gets the metaspace Method object corresponding to a given {@link Class} object and slot
-     * number.
+     * Gets the metaspace Method object corresponding to a given reflection {@link Method} object.
      * 
-     * @param holder method holder
-     * @param slot slot number of the method
-     * @return the metaspace Method
+     * @param reflectionMethod
+     * @param resultHolder the holder of the result is put in element 0 of this array
+     * @return the metaspace Method result for {@code reflectionMethod}
      */
-    long getMetaspaceMethod(Class<?> holder, int slot);
+    long getMetaspaceMethod(Method reflectionMethod, HotSpotResolvedObjectType[] resultHolder);
+
+    long getMetaspaceConstructor(Constructor reflectionConstructor, HotSpotResolvedObjectType[] resultHolder);
 
     long getMaxCallTargetOffset(long address);
 
