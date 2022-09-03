@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
@@ -43,9 +42,8 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 public abstract class LLVMTruffleFreeCString extends LLVMIntrinsic {
 
     @Specialization
-    protected Object doIntrinsic(LLVMAddress value,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
-        memory.free(value);
+    public Object executeIntrinsic(LLVMAddress value) {
+        LLVMMemory.free(value);
         return null;
     }
 

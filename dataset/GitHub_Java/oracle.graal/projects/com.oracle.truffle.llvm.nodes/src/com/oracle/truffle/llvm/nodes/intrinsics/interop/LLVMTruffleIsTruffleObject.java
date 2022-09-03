@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,8 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
-import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
@@ -44,13 +42,13 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 public abstract class LLVMTruffleIsTruffleObject extends LLVMIntrinsic {
 
     @Specialization
-    boolean isLLVMTruffleObject(LLVMTruffleObject object,
-                    @Cached("createOptional()") LLVMAsForeignNode asForeign) {
-        return asForeign.execute(object) != null;
+    public boolean isLLVMTruffleObject(LLVMTruffleObject object) {
+        return object.getOffset() == 0;
     }
 
     @Fallback
     public boolean fallback(Object object) {
         return false;
     }
+
 }

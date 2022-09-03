@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
@@ -98,16 +97,16 @@ public final class LLVMTruffleWrite {
         @SuppressWarnings("unused")
         @Specialization(limit = "2", guards = "constantPointer(id, cachedPtr)")
         public Object executeIntrinsicCached(LLVMTruffleObject value, LLVMAddress id, Object v, @Cached("pointerOf(id)") long cachedPtr,
-                        @Cached("readString(id)") String cachedId, @Cached("getContextReference()") ContextReference<LLVMContext> context) {
+                        @Cached("readString(id)") String cachedId, @Cached("getContext()") LLVMContext context) {
             checkLLVMTruffleObject(value);
-            doWrite(foreignWrite, value.getObject(), cachedId, prepareValueForEscape.executeWithTarget(v, context.get()));
+            doWrite(foreignWrite, value.getObject(), cachedId, prepareValueForEscape.executeWithTarget(v, context));
             return null;
         }
 
         @Specialization
-        public Object executeIntrinsic(LLVMTruffleObject value, LLVMAddress id, Object v, @Cached("getContextReference()") ContextReference<LLVMContext> context) {
+        public Object executeIntrinsic(LLVMTruffleObject value, LLVMAddress id, Object v, @Cached("getContext()") LLVMContext context) {
             checkLLVMTruffleObject(value);
-            doWrite(foreignWrite, value.getObject(), id, prepareValueForEscape.executeWithTarget(v, context.get()));
+            doWrite(foreignWrite, value.getObject(), id, prepareValueForEscape.executeWithTarget(v, context));
             return null;
         }
 
@@ -132,9 +131,9 @@ public final class LLVMTruffleWrite {
         }
 
         @Specialization
-        public Object executeIntrinsic(LLVMTruffleObject value, int id, Object v, @Cached("getContextReference()") ContextReference<LLVMContext> context) {
+        public Object executeIntrinsic(LLVMTruffleObject value, int id, Object v, @Cached("getContext()") LLVMContext context) {
             checkLLVMTruffleObject(value);
-            doWriteIdx(foreignWrite, value.getObject(), id, prepareValueForEscape.executeWithTarget(v, context.get()));
+            doWriteIdx(foreignWrite, value.getObject(), id, prepareValueForEscape.executeWithTarget(v, context));
             return null;
         }
 

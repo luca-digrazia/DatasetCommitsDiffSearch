@@ -29,35 +29,53 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateStringNode;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
 public abstract class LLVMTruffleStringAsCString extends LLVMIntrinsic {
 
-    @Child private LLVMAllocateStringNode allocString;
-
-    public LLVMTruffleStringAsCString(LLVMAllocateStringNode allocString) {
-        this.allocString = allocString;
+    @Specialization
+    public Object executeIntrinsic(String value) {
+        return buildNativeBytes(value);
     }
 
     @SuppressWarnings("unused")
-    @Specialization(limit = "2", guards = "cachedId.equals(readStr.executeWithTarget(frame, id))")
-    public Object cached(VirtualFrame frame, Object id,
-                    @Cached("createReadString()") LLVMReadStringNode readStr,
-                    @Cached("readStr.executeWithTarget(frame, id)") String cachedId) {
-        return allocString.executeWithTarget(frame, cachedId);
+    @Specialization(limit = "2", guards = "constantPointer(id, cachedPtr)")
+    public Object executeIntrinsicCached(LLVMAddress id, @Cached("pointerOf(id)") long cachedPtr,
+                    @Cached("readString(id)") String cachedId) {
+        return buildNativeBytes(cachedId);
     }
 
-    @Specialization(replaces = "cached")
-    public Object uncached(VirtualFrame frame, Object id,
-                    @Cached("createReadString()") LLVMReadStringNode readStr) {
-        return allocString.executeWithTarget(frame, readStr.executeWithTarget(frame, id));
+    @Specialization
+    public Object executeIntrinsic(LLVMAddress value) {
+        return buildNativeBytes(LLVMTruffleIntrinsicUtil.readString(value));
+    }
+
+    @Fallback
+    @TruffleBoundary
+    @SuppressWarnings("unused")
+    public Object fallback(Object value) {
+        System.err.println("Invalid arguments to asCString-builtin.");
+        throw new IllegalArgumentException();
+    }
+
+    private static LLVMAddress buildNativeBytes(String str) {
+        LLVMAddress allocatedMemory = LLVMMemory.allocateMemory(str.length() + 1);
+        long currentPtr = allocatedMemory.getVal();
+        for (byte b : str.getBytes()) {
+            LLVMMemory.putI8(currentPtr, b);
+            currentPtr += 1;
+        }
+        LLVMMemory.putI8(currentPtr, (byte) 0);
+        return allocatedMemory;
     }
 }
