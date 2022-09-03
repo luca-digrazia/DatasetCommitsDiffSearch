@@ -30,18 +30,16 @@
 package com.oracle.truffle.llvm.nodes.impl.control;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMTerminatorNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMStatementNode;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
 
 // TODO remove code duplication
-public abstract class LLVMSwitchNode extends LLVMTerminatorNode {
+public abstract class LLVMSwitchNode extends LLVMStatementNode {
 
     private static final int DEFAULT_LABEL_INDEX = 0;
     private static final int CASE_LABEL_START_INDEX = 1;
@@ -67,21 +65,12 @@ public abstract class LLVMSwitchNode extends LLVMTerminatorNode {
         }
     }
 
-    @ExplodeLoop
-    protected ConditionProfile[] createProfiles(int length) {
-        ConditionProfile[] profiles = new ConditionProfile[length];
-        for (int i = 0; i < profiles.length; i++) {
-            profiles[i] = ConditionProfile.createCountingProfile();
-        }
-        return profiles;
-    }
-
-    public abstract static class LLVMI8SwitchBaseNode extends LLVMSwitchNode {
+    public static class LLVMI8SwitchNode extends LLVMSwitchNode {
 
         @Child private LLVMI8Node cond;
         @Children private final LLVMI8Node[] cases;
 
-        public LLVMI8SwitchBaseNode(LLVMI8Node cond, LLVMI8Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
+        public LLVMI8SwitchNode(LLVMI8Node cond, LLVMI8Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
             super(defaultLabel, successors, phiWriteNodes);
             this.cond = cond;
             this.cases = cases;
@@ -93,7 +82,7 @@ public abstract class LLVMSwitchNode extends LLVMTerminatorNode {
             int val = cond.executeI8(frame);
             for (int i = 0; i < cases.length; i++) {
                 int caseValue = cases[i].executeI8(frame);
-                if (profile(i, val == caseValue)) {
+                if (val == caseValue) {
                     executePhiWrites(frame);
                     return i + CASE_LABEL_START_INDEX;
                 }
@@ -102,46 +91,14 @@ public abstract class LLVMSwitchNode extends LLVMTerminatorNode {
             return DEFAULT_LABEL_INDEX;
         }
 
-        @ExplodeLoop
-        abstract boolean profile(int i, boolean value);
-
     }
 
-    public static class LLVMI8SwitchNode extends LLVMI8SwitchBaseNode {
-
-        public LLVMI8SwitchNode(LLVMI8Node cond, LLVMI8Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
-            super(cond, cases, successors, defaultLabel, phiWriteNodes);
-        }
-
-        @Override
-        boolean profile(int i, boolean value) {
-            return value;
-        }
-
-    }
-
-    public static class LLVMI8ProfilingSwitchNode extends LLVMI8SwitchBaseNode {
-
-        @CompilationFinal private final ConditionProfile[] profiles;
-
-        public LLVMI8ProfilingSwitchNode(LLVMI8Node cond, LLVMI8Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
-            super(cond, cases, successors, defaultLabel, phiWriteNodes);
-            profiles = createProfiles(cases.length);
-        }
-
-        @Override
-        boolean profile(int i, boolean value) {
-            return profiles[i].profile(value);
-        }
-
-    }
-
-    public abstract static class LLVMI32SwitchBaseNode extends LLVMSwitchNode {
+    public static class LLVMI32SwitchNode extends LLVMSwitchNode {
 
         @Child private LLVMI32Node cond;
         @Children private final LLVMI32Node[] cases;
 
-        public LLVMI32SwitchBaseNode(LLVMI32Node cond, LLVMI32Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
+        public LLVMI32SwitchNode(LLVMI32Node cond, LLVMI32Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
             super(defaultLabel, successors, phiWriteNodes);
             this.cond = cond;
             this.cases = cases;
@@ -153,7 +110,7 @@ public abstract class LLVMSwitchNode extends LLVMTerminatorNode {
             int val = cond.executeI32(frame);
             for (int i = 0; i < cases.length; i++) {
                 int caseValue = cases[i].executeI32(frame);
-                if (profile(i, val == caseValue)) {
+                if (val == caseValue) {
                     executePhiWrites(frame);
                     return i + CASE_LABEL_START_INDEX;
                 }
@@ -162,49 +119,14 @@ public abstract class LLVMSwitchNode extends LLVMTerminatorNode {
             return DEFAULT_LABEL_INDEX;
         }
 
-        @ExplodeLoop
-        abstract boolean profile(int i, boolean value);
-
     }
 
-    public static class LLVMI32ProfilingSwitchNode extends LLVMI32SwitchBaseNode {
-
-        @CompilationFinal private final ConditionProfile[] profiles;
-
-        public LLVMI32ProfilingSwitchNode(LLVMI32Node cond, LLVMI32Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
-            super(cond, cases, successors, defaultLabel, phiWriteNodes);
-            profiles = createProfiles(cases.length);
-        }
-
-        @Override
-        boolean profile(int i, boolean value) {
-            return profiles[i].profile(value);
-        }
-
-    }
-
-    public static class LLVMI32SwitchNode extends LLVMI32SwitchBaseNode {
-
-        @CompilationFinal private ConditionProfile[] profiles;
-
-        public LLVMI32SwitchNode(LLVMI32Node cond, LLVMI32Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
-            super(cond, cases, successors, defaultLabel, phiWriteNodes);
-            profiles = createProfiles(cases.length);
-        }
-
-        @Override
-        boolean profile(int i, boolean value) {
-            return value;
-        }
-
-    }
-
-    public abstract static class LLVMI64SwitchBaseNode extends LLVMSwitchNode {
+    public static class LLVMI64SwitchNode extends LLVMSwitchNode {
 
         @Child private LLVMI64Node cond;
         @Children private final LLVMI64Node[] cases;
 
-        public LLVMI64SwitchBaseNode(LLVMI64Node cond, LLVMI64Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
+        public LLVMI64SwitchNode(LLVMI64Node cond, LLVMI64Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
             super(defaultLabel, successors, phiWriteNodes);
             this.cond = cond;
             this.cases = cases;
@@ -216,45 +138,13 @@ public abstract class LLVMSwitchNode extends LLVMTerminatorNode {
             long val = cond.executeI64(frame);
             for (int i = 0; i < cases.length; i++) {
                 long caseValue = cases[i].executeI64(frame);
-                if (profile(i, val == caseValue)) {
+                if (val == caseValue) {
                     executePhiWrites(frame);
                     return i + CASE_LABEL_START_INDEX;
                 }
             }
             executePhiWrites(frame);
             return DEFAULT_LABEL_INDEX;
-        }
-
-        @ExplodeLoop
-        abstract boolean profile(int i, boolean value);
-
-    }
-
-    public static class LLVMI64ProfilingSwitchNode extends LLVMI64SwitchBaseNode {
-
-        @CompilationFinal private final ConditionProfile[] profiles;
-
-        public LLVMI64ProfilingSwitchNode(LLVMI64Node cond, LLVMI64Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
-            super(cond, cases, successors, defaultLabel, phiWriteNodes);
-            profiles = createProfiles(cases.length);
-        }
-
-        @Override
-        boolean profile(int i, boolean value) {
-            return profiles[i].profile(value);
-        }
-
-    }
-
-    public static class LLVMI64SwitchNode extends LLVMI64SwitchBaseNode {
-
-        public LLVMI64SwitchNode(LLVMI64Node cond, LLVMI64Node[] cases, int[] successors, int defaultLabel, LLVMNode[] phiWriteNodes) {
-            super(cond, cases, successors, defaultLabel, phiWriteNodes);
-        }
-
-        @Override
-        boolean profile(int i, boolean value) {
-            return value;
         }
 
     }

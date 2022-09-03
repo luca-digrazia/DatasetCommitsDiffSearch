@@ -132,6 +132,7 @@ import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMMetadataNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMStatementNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMStructWriteNode;
@@ -171,7 +172,6 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
 import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.LLVMParserException;
@@ -200,7 +200,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
     private static final TypeResolver typeResolver = new TypeResolver();
     private FrameDescriptor frameDescriptor;
     private LLVMContext currentContext;
-    private FrameDescriptor globalFrameDescriptor;
     private List<LLVMNode> functionEpilogue;
     private Map<FunctionHeader, Map<String, Integer>> functionToLabelMapping;
     private final Map<LLVMFunction, RootCallTarget> functionCallTargets = new HashMap<>();
@@ -246,8 +245,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
                     globalFunction = factoryFacade.createGlobalRootNode(staticInits, mainCallTarget, deallocations, argsCount, allocatedArgsStartAddress);
                 } else if (argParamCount == 3) {
                     LLVMAddress posixEnvPointer = LLVMAddress.NULL_POINTER;
-                    globalFunction = factoryFacade.createGlobalRootNode(staticInits, mainCallTarget, deallocations, argsCount, allocatedArgsStartAddress,
-                                    posixEnvPointer);
+                    globalFunction = factoryFacade.createGlobalRootNode(staticInits, mainCallTarget, deallocations, argsCount, allocatedArgsStartAddress, posixEnvPointer);
                 } else {
                     throw new AssertionError(argParamCount);
                 }
@@ -309,7 +307,9 @@ public class LLVMVisitor implements LLVMParserRuntime {
             } else if (object instanceof TargetInfo) {
                 // already parsed
             } else if (object instanceof NamedMetadata) {
-                LLVMLogger.info(object + " not supported!");
+                if (LLVMOptions.debugEnabled()) {
+                    System.err.println(object + " not supported!");
+                }
             } else if (object instanceof FunctionDecl) {
                 // not needed for the moment
             } else if (object instanceof AttributeGroup) {
@@ -323,7 +323,9 @@ public class LLVMVisitor implements LLVMParserRuntime {
             } else if (object instanceof Alias) {
                 // do nothing, visit later when alias is referenced
             } else if (object instanceof InlineAsm) {
-                LLVMLogger.info("ignoring module level inline assembler!");
+                if (LLVMOptions.debugEnabled()) {
+                    System.err.println("ignoring module level inline assembler!");
+                }
             } else {
                 throw new AssertionError(object);
             }
@@ -374,16 +376,13 @@ public class LLVMVisitor implements LLVMParserRuntime {
                     LLVMExpressionNode oneLiteralNode = factoryFacade.createLiteral(1, LLVMBaseType.I32);
                     LLVMAddressNode functionLoadTarget = (LLVMAddressNode) factoryFacade.createGetElementPtr(LLVMBaseType.I32, loadedStruct, oneLiteralNode, indexedTypeLength);
                     LLVMFunctionNode loadedFunction = (LLVMFunctionNode) factoryFacade.createLoad(functionType, functionLoadTarget);
-                    LLVMExpressionNode[] argNodes = new LLVMExpressionNode[]{factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, getStackPointerSlot())};
-                    assert argNodes.length == LLVMCallNode.ARG_START_INDEX;
-                    LLVMNode functionCall = factoryFacade.createFunctionCall(loadedFunction, argNodes, LLVMBaseType.VOID);
+                    LLVMNode functionCall = factoryFacade.createFunctionCall(loadedFunction, new LLVMExpressionNode[0], LLVMBaseType.VOID);
                     globalVarNodes.add(functionCall);
                 }
             } else if (globalVar.getName().equals("llvm.global_dtors")) {
                 throw new AssertionError("destructors not yet supported!");
             }
         }
-        globalFrameDescriptor = frameDescriptor;
         return globalVarNodes;
     }
 
@@ -490,7 +489,8 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMFunctionBodyNode functionBodyNode = new LLVMFunctionBodyNode(block, retSlot);
         LLVMNode[] beforeFunction = formalParameters.toArray(new LLVMNode[formalParameters.size()]);
         LLVMNode[] afterFunction = functionEpilogue.toArray(new LLVMNode[functionEpilogue.size()]);
-        LLVMFunctionStartNode rootNode = new LLVMFunctionStartNode(functionBodyNode, beforeFunction, afterFunction, frameDescriptor, functionName);
+        LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
+        LLVMFunctionStartNode rootNode = new LLVMFunctionStartNode(functionBodyNode, stackPointerSlot, beforeFunction, afterFunction, frameDescriptor, functionName, context);
         if (LLVMOptions.printFunctionASTs()) {
             NodeUtil.printTree(System.out, rootNode);
         }
@@ -589,8 +589,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
         List<LLVMNode> formalParamInits = new ArrayList<>();
         FunctionHeader functionHeader = def.getHeader();
         EList<Parameter> pars = functionHeader.getParameters().getParameters();
-        LLVMExpressionNode stackPointerNode = factoryFacade.createFunctionArgNode(0, LLVMBaseType.ADDRESS);
-        formalParamInits.add(factoryFacade.createFrameWrite(LLVMBaseType.ADDRESS, stackPointerNode, getStackPointerSlot()));
         int argIndex = LLVMCallNode.ARG_START_INDEX;
         if (resolve(functionHeader.getRettype()).isStruct()) {
             LLVMExpressionNode functionRetParNode = factoryFacade.createFunctionArgNode(argIndex++, LLVMBaseType.STRUCT);
@@ -682,8 +680,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
             throw new LLVMUnsupportedException(UnsupportedReason.INLINE_ASSEMBLER);
         }
         List<LLVMExpressionNode> argNodes = new ArrayList<>(args.size());
-        LLVMExpressionNode stackPointerRead = factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, getStackPointerSlot());
-        argNodes.add(stackPointerRead);
         if (retType.isStruct()) {
             argNodes.add(allocateFunctionLifetime(retType));
         }
@@ -1557,9 +1553,5 @@ public class LLVMVisitor implements LLVMParserRuntime {
 
     public int getBitAlignment(LLVMBaseType type) {
         return layoutConverter.getBitAlignment(type);
-    }
-
-    public FrameDescriptor getGlobalFrameDescriptor() {
-        return globalFrameDescriptor;
     }
 }
