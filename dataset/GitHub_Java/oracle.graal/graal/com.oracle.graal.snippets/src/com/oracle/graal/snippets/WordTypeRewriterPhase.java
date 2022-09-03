@@ -23,6 +23,7 @@
 package com.oracle.graal.snippets;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
@@ -32,7 +33,6 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.phases.*;
 import com.oracle.graal.snippets.Word.Opcode;
 import com.oracle.graal.snippets.Word.Operation;
 
@@ -43,16 +43,12 @@ import com.oracle.graal.snippets.Word.Operation;
  */
 public class WordTypeRewriterPhase extends Phase {
 
-    private static final String WordClassName = MetaUtil.toInternalName(Word.class.getName());
-
     private final Kind wordKind;
-    private final Stamp wordStamp;
     private final ResolvedJavaType wordType;
 
-    public WordTypeRewriterPhase(Kind wordKind, Stamp wordStamp, ResolvedJavaType wordType) {
+    public WordTypeRewriterPhase(Kind wordKind, ResolvedJavaType wordType) {
         this.wordKind = wordKind;
         this.wordType = wordType;
-        this.wordStamp = wordStamp;
     }
 
     @Override
@@ -81,13 +77,6 @@ public class WordTypeRewriterPhase extends Phase {
                 assert x.kind() == wordKind;
                 assert y.kind() == wordKind;
                 graph.replaceFloating(objectEqualsNode, graph.unique(new IntegerEqualsNode(x, y)));
-            }
-        }
-
-        // Replace ObjectEqualsNodes with IntegerEqualsNodes where the values being compared are words
-        for (LoadIndexedNode load : graph.getNodes().filter(LoadIndexedNode.class).snapshot()) {
-            if (isWord(load)) {
-                load.setStamp(wordStamp);
             }
         }
 
@@ -169,8 +158,7 @@ public class WordTypeRewriterPhase extends Phase {
                     case W2A: {
                         assert arguments.size() == 1;
                         ValueNode value = arguments.first();
-                        ResolvedJavaType declaringClass = targetMethod.getDeclaringClass();
-                        ResolvedJavaType targetType = targetMethod.getSignature().getReturnType(declaringClass).resolve(declaringClass);
+                        ResolvedJavaType targetType = (ResolvedJavaType) targetMethod.signature().returnType(targetMethod.holder());
                         UnsafeCastNode cast = graph.unique(new UnsafeCastNode(value, targetType));
                         replace(invoke, cast);
                         break;
@@ -296,8 +284,8 @@ public class WordTypeRewriterPhase extends Phase {
     }
 
     public static boolean isWord(ValueNode node) {
-        if (node instanceof LoadIndexedNode) {
-            return isWord(((LoadIndexedNode) node).array().objectStamp().type().getComponentType());
+        if (node.stamp() instanceof WordStamp) {
+            return true;
         }
         if (node.kind().isObject()) {
             return isWord(node.objectStamp().type());
@@ -306,7 +294,7 @@ public class WordTypeRewriterPhase extends Phase {
     }
 
     public static boolean isWord(ResolvedJavaType type) {
-        if (type != null && type.getName().equals(WordClassName)) {
+        if (type != null && type.toJava() == Word.class) {
             return true;
         }
         return false;
@@ -314,7 +302,7 @@ public class WordTypeRewriterPhase extends Phase {
 
     private void changeToWord(ValueNode valueNode) {
         assert !(valueNode instanceof ConstantNode);
-        valueNode.setStamp(wordStamp);
+        valueNode.setStamp(StampFactory.forKind(wordKind));
 
         // Propagate word kind.
         for (Node n : valueNode.usages()) {

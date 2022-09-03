@@ -26,8 +26,6 @@ import static com.oracle.graal.snippets.Word.Opcode.*;
 
 import java.lang.annotation.*;
 
-//JaCoCo Exclude
-
 /**
  * Special type for use in snippets to represent machine word sized data.
  */
@@ -58,10 +56,6 @@ public final class Word {
         OR,
         AND,
         XOR,
-        READ_INT,
-        READ_WORD,
-        READ_OBJECT,
-        READ_FINAL_OBJECT,
         BELOW,
         BELOW_EQUAL,
         ABOVE,
@@ -241,20 +235,4 @@ public final class Word {
         return new Word(value | other.value, null);
     }
 
-    @Operation(READ_INT)
-    public native int readInt(int offset);
-
-    @Operation(READ_WORD)
-    public native Word readWord(int offset);
-
-    @Operation(READ_OBJECT)
-    public native Object readObject(int offset);
-
-    /**
-     * Reads an object value from a location that is guaranteed not be to modified after this read.
-     *
-     * @param offset the offset from this base address of the location to be read
-     */
-    @Operation(READ_FINAL_OBJECT)
-    public native Object readFinalObject(int offset);
 }
