@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,13 +24,20 @@
  */
 package com.oracle.truffle.api.instrument;
 
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.nodes.*;
 
 /**
- * Visualization services for guest language and Truffle information.
+ * Visualization services for the benefit of instrumentation-based tools, possibly specialized for
+ * each guest language and possibly specialized for relevant information from the underlying Truffle
+ * implementation.
+ * <p>
+ * <strong>Disclaimer:</strong> experimental interface under development.
  */
 public interface Visualizer {
 
+    // TODO (mlvdv) "Visualizer" is misleading: rename.
     /**
      * Gets a printer for Truffle ASTs, possibly specialized to be helpful for a specific guest
      * language implementation.
@@ -38,9 +45,27 @@ public interface Visualizer {
     ASTPrinter getASTPrinter();
 
     /**
-     * Converts a value in the guest language to a display string.
+     * A short description of a source location in terms of source + line number.
      */
-    String displayValue(Object value);
+    String displaySourceLocation(Node node);
+
+    /**
+     * Describes the name of the method containing a node.
+     */
+    String displayMethodName(Node node);
+
+    /**
+     * The name of the method.
+     */
+    String displayCallTargetName(CallTarget callTarget);
+
+    /**
+     * Converts a value in the guest language to a display string. If
+     * 
+     * @param trim if {@code > 0}, them limit size of String to either the value of trim or the
+     *            number of characters in the first line, whichever is lower.
+     */
+    String displayValue(Object value, int trim);
 
     /**
      * Converts a slot identifier in the guest language to a display string.

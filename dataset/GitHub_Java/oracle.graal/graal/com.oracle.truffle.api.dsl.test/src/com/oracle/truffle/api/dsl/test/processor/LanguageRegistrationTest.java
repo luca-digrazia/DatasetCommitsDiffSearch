@@ -22,30 +22,33 @@
  */
 package com.oracle.truffle.api.dsl.test.processor;
 
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.dsl.ExpectError;
-import com.oracle.truffle.api.source.Source;
-import java.io.IOException;
+import java.io.*;
+
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.debug.*;
+import com.oracle.truffle.api.dsl.test.*;
+import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.source.*;
 
 public class LanguageRegistrationTest {
 
     @ExpectError("Registered language class must be public")
-    @TruffleLanguage.Registration(name = "myLang", mimeType = "text/x-my")
+    @TruffleLanguage.Registration(name = "myLang", version = "0", mimeType = "text/x-my")
     private static final class MyLang {
     }
 
     @ExpectError("Registered language inner-class must be static")
-    @TruffleLanguage.Registration(name = "myLangNonStatic", mimeType = "text/x-my")
+    @TruffleLanguage.Registration(name = "myLangNonStatic", version = "0", mimeType = "text/x-my")
     public final class MyLangNonStatic {
     }
 
     @ExpectError("Registered language class must subclass TruffleLanguage")
-    @TruffleLanguage.Registration(name = "myLang", mimeType = "text/x-my")
+    @TruffleLanguage.Registration(name = "myLang", version = "0", mimeType = "text/x-my")
     public static final class MyLangNoSubclass {
     }
 
     @ExpectError("Language must have a public constructor accepting TruffleLanguage.Env as parameter")
-    @TruffleLanguage.Registration(name = "myLangNoCnstr", mimeType = "text/x-my")
+    @TruffleLanguage.Registration(name = "myLangNoCnstr", version = "0", mimeType = "text/x-my")
     public static final class MyLangWrongConstr extends TruffleLanguage {
         private MyLangWrongConstr() {
             super(null);
@@ -57,7 +60,7 @@ public class LanguageRegistrationTest {
         }
 
         @Override
-        protected Object findExportedSymbol(String globalName) {
+        protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
             return null;
         }
 
@@ -70,10 +73,21 @@ public class LanguageRegistrationTest {
         protected boolean isObjectOfLanguage(Object object) {
             return false;
         }
+
+        @Override
+        protected ToolSupportProvider getToolSupport() {
+            return null;
+        }
+
+        @Override
+        protected DebugSupportProvider getDebugSupport() {
+            return null;
+        }
+
     }
 
     @ExpectError("Language must have a public constructor accepting TruffleLanguage.Env as parameter")
-    @TruffleLanguage.Registration(name = "myLangNoCnstr", mimeType = "text/x-my")
+    @TruffleLanguage.Registration(name = "myLangNoCnstr", version = "0", mimeType = "text/x-my")
     public static final class MyLangNoConstr extends TruffleLanguage {
         public MyLangNoConstr() {
             super(null);
@@ -85,7 +99,7 @@ public class LanguageRegistrationTest {
         }
 
         @Override
-        protected Object findExportedSymbol(String globalName) {
+        protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
             return null;
         }
 
@@ -98,9 +112,20 @@ public class LanguageRegistrationTest {
         protected boolean isObjectOfLanguage(Object object) {
             return false;
         }
+
+        @Override
+        protected ToolSupportProvider getToolSupport() {
+            return null;
+        }
+
+        @Override
+        protected DebugSupportProvider getDebugSupport() {
+            return null;
+        }
+
     }
 
-    @TruffleLanguage.Registration(name = "myLangGood", mimeType = "text/x-my")
+    @TruffleLanguage.Registration(name = "myLangGood", version = "0", mimeType = "text/x-my")
     public static final class MyLangGood extends TruffleLanguage {
         public MyLangGood(TruffleLanguage.Env env) {
             super(env);
@@ -112,7 +137,7 @@ public class LanguageRegistrationTest {
         }
 
         @Override
-        protected Object findExportedSymbol(String globalName) {
+        protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
             return null;
         }
 
@@ -125,5 +150,16 @@ public class LanguageRegistrationTest {
         protected boolean isObjectOfLanguage(Object object) {
             return false;
         }
+
+        @Override
+        protected ToolSupportProvider getToolSupport() {
+            return null;
+        }
+
+        @Override
+        protected DebugSupportProvider getDebugSupport() {
+            return null;
+        }
+
     }
 }

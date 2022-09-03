@@ -32,7 +32,6 @@ import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.api.vm.*;
 import com.oracle.truffle.api.vm.TruffleVM.Language;
-import com.oracle.truffle.sl.*;
 import com.oracle.truffle.tools.debug.engine.*;
 import com.oracle.truffle.tools.debug.shell.*;
 import com.oracle.truffle.tools.debug.shell.client.*;
@@ -48,9 +47,6 @@ import com.oracle.truffle.tools.debug.shell.server.*;
  * @see SimpleREPLClient
  */
 public final class SLREPLServer implements REPLServer {
-
-    // TODO (mlvdv) remove when there's a better way to express this dependency
-    @SuppressWarnings("unused") private static final Class<SLLanguage> DYNAMIC_DEPENDENCY = com.oracle.truffle.sl.SLLanguage.class;
 
     public static void main(String[] args) {
         // Cheating for the prototype: start from SL, rather than from the client.
