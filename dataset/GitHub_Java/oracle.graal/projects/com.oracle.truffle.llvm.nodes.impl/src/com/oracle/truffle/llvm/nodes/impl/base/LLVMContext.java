@@ -48,7 +48,6 @@ import com.oracle.truffle.llvm.types.memory.LLVMStack;
 
 public class LLVMContext extends ExecutionContext {
 
-    private final List<RootCallTarget> staticInitializers = new ArrayList<>();
     private final List<RootCallTarget> staticDestructors = new ArrayList<>();
 
     private final LLVMFunctionRegistry registry;
@@ -122,19 +121,11 @@ public class LLVMContext extends ExecutionContext {
     }
 
     public void registerStaticDestructor(RootCallTarget staticDestructor) {
-        staticDestructors.add(staticDestructor);
-    }
-
-    public void registerStaticInitializer(RootCallTarget staticInitializer) {
-        staticInitializers.add(staticInitializer);
+        getStaticDestructors().add(staticDestructor);
     }
 
     public List<RootCallTarget> getStaticDestructors() {
         return staticDestructors;
-    }
-
-    public List<RootCallTarget> getStaticInitializers() {
-        return staticInitializers;
     }
 
 }

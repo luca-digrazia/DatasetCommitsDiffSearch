@@ -86,7 +86,6 @@ public class LLVM {
                     ParserResult parserResult = parseFile(code.getPath(), llvmContext);
                     mainFunction = parserResult.getMainFunction();
                     llvmContext.getFunctionRegistry().register(parserResult.getParsedFunctions());
-                    llvmContext.registerStaticInitializer(parserResult.getStaticInits());
                     llvmContext.registerStaticDestructor(parserResult.getStaticDestructors());
                     parserResult.getStaticInits().call();
                 } else if (code.getMimeType() == LLVMLanguage.SULONG_LIBRARY_MIME_TYPE) {
@@ -107,7 +106,6 @@ public class LLVM {
                             parserResult.getStaticInits().call();
                             llvmContext.getFunctionRegistry().register(parserResult.getParsedFunctions());
                             mainFunctions.add(parserResult.getMainFunction());
-                            llvmContext.registerStaticInitializer(parserResult.getStaticInits());
                             llvmContext.registerStaticDestructor(parserResult.getStaticDestructors());
                         });
                     } catch (IOException e) {
