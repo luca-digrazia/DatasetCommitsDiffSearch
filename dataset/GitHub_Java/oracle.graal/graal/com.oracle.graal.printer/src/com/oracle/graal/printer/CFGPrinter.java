@@ -24,7 +24,6 @@ package com.oracle.graal.printer;
 
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Iterator;
 import java.util.List;
@@ -46,6 +45,7 @@ import com.oracle.graal.compiler.gen.NodeLIRBuilder;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeBitMap;
 import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.graph.NodePosIterator;
 import com.oracle.graal.graph.Position;
 import com.oracle.graal.java.BciBlockMapping;
 import com.oracle.graal.java.BytecodeDisassembler;
@@ -360,9 +360,9 @@ class CFGPrinter extends CompilationPrinter {
             out.print(entry.getKey().toString()).print(": ").print(entry.getValue() == null ? "[null]" : entry.getValue().toString()).println();
         }
         out.println("=== Inputs ===");
-        printNamedNodes(node, node.inputPositions().iterator(), "", "\n", null);
+        printNamedNodes(node, node.inputs().iterator(), "", "\n", null);
         out.println("=== Succesors ===");
-        printNamedNodes(node, node.successorPositions().iterator(), "", "\n", null);
+        printNamedNodes(node, node.successors().iterator(), "", "\n", null);
         out.println("=== Usages ===");
         if (!node.hasNoUsages()) {
             for (Node usage : node.usages()) {
@@ -376,8 +376,8 @@ class CFGPrinter extends CompilationPrinter {
 
         out.print("instruction ");
         out.print(HOVER_START).print(node.getNodeClass().shortName()).print(HOVER_SEP).print(node.getClass().getName()).print(HOVER_END).print(" ");
-        printNamedNodes(node, node.inputPositions().iterator(), "", "", "#NDF");
-        printNamedNodes(node, node.successorPositions().iterator(), "#", "", "#NDF");
+        printNamedNodes(node, node.inputs().iterator(), "", "", "#NDF");
+        printNamedNodes(node, node.successors().iterator(), "#", "", "#NDF");
         for (Map.Entry<Object, Object> entry : props.entrySet()) {
             String key = entry.getKey().toString();
             if (key.startsWith("data.") && !key.equals("data.stamp")) {
@@ -387,10 +387,10 @@ class CFGPrinter extends CompilationPrinter {
         out.print(COLUMN_END).print(' ').println(COLUMN_END);
     }
 
-    private void printNamedNodes(Node node, Iterator<Position> iter, String prefix, String suffix, String hideSuffix) {
+    private void printNamedNodes(Node node, NodePosIterator iter, String prefix, String suffix, String hideSuffix) {
         int lastIndex = -1;
         while (iter.hasNext()) {
-            Position pos = iter.next();
+            Position pos = iter.nextPosition();
             if (hideSuffix != null && pos.getName().endsWith(hideSuffix)) {
                 continue;
             }
@@ -689,12 +689,12 @@ class CFGPrinter extends CompilationPrinter {
 
         if (block.getPredecessorCount() > 0) {
             out.print("<- ");
-            printBlockListWithTrace(Arrays.asList(block.getPredecessors()), traceBuilderResult);
+            printBlockListWithTrace(block.getPredecessors(), traceBuilderResult);
             out.print(" ");
         }
         if (block.getSuccessorCount() > 0) {
             out.print("-> ");
-            printBlockListWithTrace(Arrays.asList(block.getSuccessors()), traceBuilderResult);
+            printBlockListWithTrace(block.getSuccessors(), traceBuilderResult);
         }
 
         out.print(COLUMN_END);
