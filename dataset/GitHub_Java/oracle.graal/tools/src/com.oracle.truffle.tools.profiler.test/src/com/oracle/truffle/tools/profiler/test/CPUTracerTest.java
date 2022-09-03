@@ -209,12 +209,4 @@ public class CPUTracerTest extends AbstractProfilerTest {
         }
 
     }
-
-    @Test
-    public void testClosedConfig() {
-        expectProfilerException(() -> {
-            tracer.close();
-            tracer.setFilter(null);
-        }, () -> tracer.setCollecting(true));
-    }
 }

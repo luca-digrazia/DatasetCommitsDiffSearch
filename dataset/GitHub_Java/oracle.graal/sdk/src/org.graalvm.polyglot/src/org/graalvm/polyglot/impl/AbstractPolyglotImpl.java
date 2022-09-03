@@ -2,41 +2,25 @@
  * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package org.graalvm.polyglot.impl;
 
@@ -75,7 +59,6 @@ import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.ByteSequence;
 import org.graalvm.polyglot.io.FileSystem;
-import org.graalvm.polyglot.io.MessageTransport;
 import org.graalvm.polyglot.management.ExecutionEvent;
 import org.graalvm.polyglot.management.ExecutionListener;
 
@@ -162,7 +145,7 @@ public abstract class AbstractPolyglotImpl {
     }
 
     public abstract Engine buildEngine(OutputStream out, OutputStream err, InputStream in, Map<String, String> arguments, long timeout, TimeUnit timeoutUnit, boolean sandbox,
-                    long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean boundEngine, MessageTransport messageInterceptor, Object logHandlerOrStream);
+                    long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean boundEngine, Handler logHandler);
 
     public abstract void preInitializeEngine();
 
@@ -361,7 +344,7 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract Context createContext(OutputStream out, OutputStream err, InputStream in, boolean allowHostAccess, boolean allowNativeAccess,
                         boolean allowCreateThread, boolean allowHostIO, boolean allowHostClassLoading, Predicate<String> classFilter, Map<String, String> options, Map<String, String[]> arguments,
-                        String[] onlyLanguages, FileSystem fileSystem, Object logHandlerOrStream);
+                        String[] onlyLanguages, FileSystem fileSystem, Handler logHandler);
 
         public abstract String getImplementationName();
 
@@ -466,6 +449,7 @@ public abstract class AbstractPolyglotImpl {
         public abstract Set<String> getMimeTypes();
 
         public abstract String getDefaultMimeType();
+
     }
 
     public abstract static class AbstractValueImpl {
@@ -478,19 +462,49 @@ public abstract class AbstractPolyglotImpl {
             return false;
         }
 
-        public abstract Value getArrayElement(Object receiver, long index);
+        public Value getArrayElement(Object receiver, long index) {
+            return getArrayElementUnsupported(receiver);
+        }
 
-        public abstract void setArrayElement(Object receiver, long index, Object value);
+        public final Value getArrayElementUnsupported(Object receiver) {
+            throw unsupported(receiver, "getArrayElement(long)", "hasArrayElements()");
+        }
 
-        public abstract boolean removeArrayElement(Object receiver, long index);
+        public void setArrayElement(Object receiver, long index, Object value) {
+            setArrayElementUnsupported(receiver);
+        }
 
-        public abstract long getArraySize(Object receiver);
+        public final void setArrayElementUnsupported(Object receiver) {
+            throw unsupported(receiver, "setArrayElement(long, Object)", "hasArrayElements()");
+        }
+
+        public boolean removeArrayElement(Object receiver, long index) {
+            return removeArrayElementUnsupported(receiver);
+        }
+
+        public final boolean removeArrayElementUnsupported(Object receiver) {
+            throw unsupported(receiver, "removeArrayElement(long, Object)", null);
+        }
+
+        public long getArraySize(Object receiver) {
+            return getArraySizeUnsupported(receiver);
+        }
+
+        public final long getArraySizeUnsupported(Object receiver) {
+            throw unsupported(receiver, "getArraySize()", "hasArrayElements()");
+        }
 
         public boolean hasMembers(Object receiver) {
             return false;
         }
 
-        public abstract Value getMember(Object receiver, String key);
+        public Value getMember(Object receiver, String key) {
+            return getMemberUnsupported(receiver, key);
+        }
+
+        public final Value getMemberUnsupported(Object receiver, String key) {
+            throw unsupported(receiver, "getMember(String)", "hasMembers()");
+        }
 
         public boolean hasMember(Object receiver, String key) {
             return false;
@@ -500,71 +514,133 @@ public abstract class AbstractPolyglotImpl {
             return Collections.emptySet();
         }
 
-        public abstract void putMember(Object receiver, String key, Object member);
+        public void putMember(Object receiver, String key, Object member) {
+            putMemberUnsupported(receiver);
+        }
 
-        public abstract boolean removeMember(Object receiver, String key);
+        public final void putMemberUnsupported(Object receiver) {
+            throw unsupported(receiver, "putMember(String, Object)", "hasMembers()");
+        }
+
+        public boolean removeMember(Object receiver, String key) {
+            return removeMemberUnsupported(receiver);
+        }
+
+        public final boolean removeMemberUnsupported(Object receiver) {
+            throw unsupported(receiver, "removeMember(String, Object)", null);
+        }
 
         public boolean canExecute(Object receiver) {
             return false;
         }
 
-        public abstract Value execute(Object receiver, Object[] arguments);
+        public Value execute(Object receiver, Object[] arguments) {
+            return executeUnsupported(receiver);
+        }
 
-        public abstract Value execute(Object receiver);
+        public Value execute(Object receiver) {
+            return executeUnsupported(receiver);
+        }
+
+        public final Value executeUnsupported(Object receiver) {
+            throw unsupported(receiver, "execute(Object...)", "canExecute()");
+        }
 
         public boolean canInstantiate(Object receiver) {
             return false;
         }
 
-        public abstract Value newInstance(Object receiver, Object[] arguments);
-
-        public abstract void executeVoid(Object receiver, Object[] arguments);
-
-        public abstract void executeVoid(Object receiver);
-
-        public boolean canInvoke(String identifier, Object receiver) {
-            return false;
+        public Value newInstance(Object receiver, Object[] arguments) {
+            return newInstanceUnsupported(receiver);
         }
 
-        public abstract Value invoke(Object receiver, String identifier, Object[] arguments);
+        public final Value newInstanceUnsupported(Object receiver) {
+            throw unsupported(receiver, "newInstance(Object...)", "canInstantiate()");
+        }
 
-        public abstract Value invoke(Object receiver, String identifier);
+        public void executeVoid(Object receiver, Object[] arguments) {
+            executeVoidUnsupported(receiver);
+        }
+
+        public void executeVoid(Object receiver) {
+            executeVoidUnsupported(receiver);
+        }
+
+        public final void executeVoidUnsupported(Object receiver) {
+            throw unsupported(receiver, "executeVoid(Object...)", "canExecute()");
+        }
 
         public boolean isString(Object receiver) {
             return false;
         }
 
-        public abstract String asString(Object receiver);
+        public String asString(Object receiver) {
+            if (isNull(receiver)) {
+                throw nullCoercion(receiver, String.class, "asString()", "isString()");
+            } else {
+                throw cannotConvert(receiver, String.class, "asString()", "isString()", "Invalid coercion.");
+            }
+        }
 
         public boolean isBoolean(Object receiver) {
             return false;
         }
 
-        public abstract boolean asBoolean(Object receiver);
+        public boolean asBoolean(Object receiver) {
+            if (isNull(receiver)) {
+                throw nullCoercion(receiver, boolean.class, "asBoolean()", "isBoolean()");
+            } else {
+                throw cannotConvert(receiver, boolean.class, "asBoolean()", "isBoolean()", "Invalid or lossy primitive coercion.");
+            }
+        }
 
         public boolean fitsInInt(Object receiver) {
             return false;
         }
 
-        public abstract int asInt(Object receiver);
+        public int asInt(Object receiver) {
+            if (isNull(receiver)) {
+                throw nullCoercion(receiver, int.class, "asInt()", "fitsInInt()");
+            } else {
+                throw cannotConvert(receiver, int.class, "asInt()", "fitsInInt()", "Invalid or lossy primitive coercion.");
+            }
+        }
 
         public boolean fitsInLong(Object receiver) {
             return false;
         }
 
-        public abstract long asLong(Object receiver);
+        public long asLong(Object receiver) {
+            if (isNull(receiver)) {
+                throw nullCoercion(receiver, long.class, "asLong()", "fitsInLong()");
+            } else {
+                throw cannotConvert(receiver, long.class, "asLong()", "fitsInLong()", "Invalid or lossy primitive coercion.");
+            }
+        }
 
         public boolean fitsInDouble(Object receiver) {
             return false;
         }
 
-        public abstract double asDouble(Object receiver);
+        public double asDouble(Object receiver) {
+            if (isNull(receiver)) {
+                throw nullCoercion(receiver, double.class, "asDouble()", "fitsInDouble()");
+            } else {
+                throw cannotConvert(receiver, double.class, "asDouble()", "fitsInDouble()", "Invalid or lossy primitive coercion.");
+            }
+        }
 
         public boolean fitsInFloat(Object receiver) {
             return false;
         }
 
-        public abstract float asFloat(Object receiver);
+        public float asFloat(Object receiver) {
+            if (isNull(receiver)) {
+                throw nullCoercion(receiver, float.class, "asFloat()", "fitsInFloat()");
+            } else {
+                throw cannotConvert(receiver, float.class, "asFloat()", "fitsInFloat()", "Invalid or lossy primitive coercion.");
+            }
+        }
 
         public boolean isNull(Object receiver) {
             return false;
@@ -578,15 +654,33 @@ public abstract class AbstractPolyglotImpl {
             return false;
         }
 
-        public abstract byte asByte(Object receiver);
+        public byte asByte(Object receiver) {
+            if (isNull(receiver)) {
+                throw nullCoercion(receiver, byte.class, "asByte()", "fitsInByte()");
+            } else {
+                throw cannotConvert(receiver, byte.class, "asByte()", "fitsInByte()", "Invalid or lossy primitive coercion.");
+            }
+        }
 
         public boolean fitsInShort(Object receiver) {
             return false;
         }
 
-        public abstract short asShort(Object receiver);
+        public short asShort(Object receiver) {
+            if (isNull(receiver)) {
+                throw nullCoercion(receiver, short.class, "asShort()", "fitsInShort()");
+            } else {
+                throw cannotConvert(receiver, short.class, "asShort()", "fitsInShort()", "Invalid or lossy primitive coercion.");
+            }
+        }
 
-        public abstract long asNativePointer(Object receiver);
+        public long asNativePointer(Object receiver) {
+            return asNativePointerUnsupported(receiver);
+        }
+
+        public final long asNativePointerUnsupported(Object receiver) {
+            throw cannotConvert(receiver, long.class, "asNativePointer()", "isNativeObject()", "Value cannot be converted to a native pointer.");
+        }
 
         public boolean isHostObject(Object receiver) {
             return false;
@@ -596,9 +690,19 @@ public abstract class AbstractPolyglotImpl {
             return false;
         }
 
-        public abstract Object asHostObject(Object receiver);
+        public Object asHostObject(Object receiver) {
+            throw cannotConvert(receiver, null, "asHostObject()", "isHostObject()", "Value is not a host object.");
+        }
 
-        public abstract Object asProxyObject(Object receiver);
+        public Object asProxyObject(Object receiver) {
+            throw cannotConvert(receiver, null, "asProxyObject()", "isProxyObject()", "Value is not a proxy object.");
+        }
+
+        protected abstract RuntimeException unsupported(Object receiver, String message, String useToCheck);
+
+        protected abstract RuntimeException cannotConvert(Object receiver, Class<?> targetType, String message, String useToCheck, String reason);
+
+        protected abstract RuntimeException nullCoercion(Object receiver, Class<?> targetType, String message, String useToCheck);
 
         public abstract String toString(Object receiver);
 
