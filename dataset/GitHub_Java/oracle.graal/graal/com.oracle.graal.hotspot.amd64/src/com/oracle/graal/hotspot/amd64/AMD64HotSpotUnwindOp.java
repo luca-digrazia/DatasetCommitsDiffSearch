@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,7 +31,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -39,21 +38,19 @@ import com.oracle.graal.lir.asm.*;
  * Removes the current frame and jumps to the {@link UnwindExceptionToCallerStub}.
  */
 @Opcode("UNWIND")
-final class AMD64HotSpotUnwindOp extends AMD64HotSpotEpilogueOp implements BlockEndOp {
-    public static final LIRInstructionClass<AMD64HotSpotUnwindOp> TYPE = LIRInstructionClass.create(AMD64HotSpotUnwindOp.class);
+final class AMD64HotSpotUnwindOp extends AMD64HotSpotEpilogueOp {
 
     @Use({REG}) protected RegisterValue exception;
 
     AMD64HotSpotUnwindOp(RegisterValue exception) {
-        super(TYPE);
         this.exception = exception;
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-        leaveFrameAndRestoreRbp(crb, masm);
+    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+        leaveFrameAndRestoreRbp(tasm, masm);
 
-        ForeignCallLinkage linkage = crb.foreignCalls.lookupForeignCall(UNWIND_EXCEPTION_TO_CALLER);
+        ForeignCallLinkage linkage = tasm.runtime.lookupForeignCall(UNWIND_EXCEPTION_TO_CALLER);
         CallingConvention cc = linkage.getOutgoingCallingConvention();
         assert cc.getArgumentCount() == 2;
         assert exception.equals(cc.getArgument(0));
@@ -62,6 +59,6 @@ final class AMD64HotSpotUnwindOp extends AMD64HotSpotEpilogueOp implements Block
         Register returnAddress = asRegister(cc.getArgument(1));
         masm.movq(returnAddress, new AMD64Address(rsp, 0));
 
-        AMD64Call.directJmp(crb, masm, linkage);
+        AMD64Call.directJmp(tasm, masm, linkage);
     }
 }

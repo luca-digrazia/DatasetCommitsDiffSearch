@@ -34,7 +34,6 @@ import java.util.Map.Entry;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
@@ -47,7 +46,6 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.util.*;
 
@@ -367,18 +365,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     }
 
     protected void emitNode(ValueNode node) {
-        if (Debug.isLogEnabled() && node.stamp() instanceof IllegalStamp) {
-            Debug.log("This node has invalid type, we are emitting dead code(?): %s", node);
-        }
-        if (node instanceof LIRGenLowerable) {
-            ((LIRGenLowerable) node).generate(this);
-        } else if (node instanceof LIRLowerable) {
-            ((LIRLowerable) node).generate(this);
-        } else if (node instanceof ArithmeticLIRLowerable) {
-            ((ArithmeticLIRLowerable) node).generate(this);
-        } else {
-            throw GraalInternalError.shouldNotReachHere("node is not LIRLowerable: " + node);
-        }
+        ((LIRLowerable) node).generate(this);
     }
 
     protected void emitPrologue() {
@@ -800,6 +787,18 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     public abstract void emitBitScanForward(Variable result, Value operand);
 
     public abstract void emitBitScanReverse(Variable result, Value operand);
+
+    public abstract void emitMathAbs(Variable result, Variable input);
+
+    public abstract void emitMathSqrt(Variable result, Variable input);
+
+    public abstract void emitMathLog(Variable result, Variable input, boolean base10);
+
+    public abstract void emitMathCos(Variable result, Variable input);
+
+    public abstract void emitMathSin(Variable result, Variable input);
+
+    public abstract void emitMathTan(Variable result, Variable input);
 
     public abstract void emitByteSwap(Variable result, Value operand);
 }

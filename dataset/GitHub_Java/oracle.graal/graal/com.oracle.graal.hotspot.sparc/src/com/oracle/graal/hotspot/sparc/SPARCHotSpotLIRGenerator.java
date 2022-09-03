@@ -86,22 +86,6 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     }
 
     @Override
-    public Variable emitForeignCall(ForeignCallLinkage linkage, DeoptimizingNode info, Value... args) {
-        Variable result;
-
-        if (linkage.canDeoptimize()) {
-            assert info != null;
-            append(new SPARCHotSpotCRuntimeCallPrologueOp());
-            result = super.emitForeignCall(linkage, info, args);
-            append(new SPARCHotSpotCRuntimeCallEpilogueOp());
-        } else {
-            result = super.emitForeignCall(linkage, null, args);
-        }
-
-        return result;
-    }
-
-    @Override
     public void visitSafepointNode(SafepointNode i) {
         LIRFrameState info = state(i);
         append(new SPARCSafepointOp(info, runtime().config, this));
@@ -175,11 +159,13 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         RegisterValue exceptionParameter = (RegisterValue) linkageCc.getArgument(0);
         emitMove(exceptionParameter, exception);
         append(new SPARCHotSpotUnwindOp(exceptionParameter));
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
     public void emitDeoptimize(DeoptimizationAction action, DeoptimizingNode deopting) {
-        append(new SPARCDeoptimizeOp(action, deopting.getDeoptimizationReason(), state(deopting)));
+// append(new AMD64DeoptimizeOp(action, deopting.getDeoptimizationReason(), state(deopting)));
+        throw GraalInternalError.unimplemented();
     }
 
     @Override

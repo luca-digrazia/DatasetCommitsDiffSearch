@@ -22,18 +22,18 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
+import static com.oracle.graal.sparc.SPARC.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.graal.sparc.SPARC.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Mov;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * Removes the current frame and jumps to the {@link UnwindExceptionToCallerStub}.
@@ -48,10 +48,10 @@ final class SPARCHotSpotUnwindOp extends SPARCHotSpotEpilogueOp {
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-        leaveFrame(crb);
+    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+        leaveFrame(tasm);
 
-        ForeignCallLinkage linkage = crb.foreignCalls.lookupForeignCall(UNWIND_EXCEPTION_TO_CALLER);
+        ForeignCallLinkage linkage = tasm.runtime.lookupForeignCall(UNWIND_EXCEPTION_TO_CALLER);
         CallingConvention cc = linkage.getOutgoingCallingConvention();
         assert cc.getArgumentCount() == 2;
         assert exception.equals(cc.getArgument(0));
@@ -61,6 +61,6 @@ final class SPARCHotSpotUnwindOp extends SPARCHotSpotEpilogueOp {
         new Mov(o7, returnAddress).emit(masm);
 
         Register scratch = g5;
-        SPARCCall.indirectJmp(crb, masm, scratch, linkage);
+        SPARCCall.indirectJmp(tasm, masm, scratch, linkage);
     }
 }

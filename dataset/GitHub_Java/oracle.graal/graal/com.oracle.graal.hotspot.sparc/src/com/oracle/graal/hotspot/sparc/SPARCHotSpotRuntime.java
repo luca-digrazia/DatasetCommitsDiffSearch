@@ -83,11 +83,6 @@ public class SPARCHotSpotRuntime extends HotSpotRuntime {
     }
 
     @Override
-    public Register heapBaseRegister() {
-        return r12;
-    }
-
-    @Override
     protected RegisterConfig createRegisterConfig() {
         return new SPARCHotSpotRegisterConfig(graalRuntime.getTarget().arch, config);
     }
