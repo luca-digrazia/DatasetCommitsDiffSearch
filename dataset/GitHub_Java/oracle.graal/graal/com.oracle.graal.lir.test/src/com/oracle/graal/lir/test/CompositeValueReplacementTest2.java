@@ -25,14 +25,12 @@ package com.oracle.graal.lir.test;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static org.junit.Assert.*;
 
-import java.util.*;
-
 import org.junit.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.InstructionValueProcedure;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.asm.*;
 
 /**
@@ -132,7 +130,7 @@ public class CompositeValueReplacementTest2 {
 
         op1.forEachInput(new InstructionValueProcedure() {
             @Override
-            public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+            public Value doValue(LIRInstruction instruction, Value value) {
                 assertEquals(dummyValue1, value);
                 return dummyValue2;
             }
@@ -140,23 +138,25 @@ public class CompositeValueReplacementTest2 {
 
         op2.forEachInput(new InstructionValueProcedure() {
             @Override
-            public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+            public Value doValue(LIRInstruction instruction, Value value) {
                 assertEquals(dummyValue1, value);
                 return dummyValue3;
             }
         });
 
-        op1.visitEachInput(new InstructionValueConsumer() {
+        op1.forEachInput(new InstructionValueProcedure() {
             @Override
-            public void visitValue(LIRInstruction instruction, Value value) {
+            public Value doValue(LIRInstruction instruction, Value value) {
                 assertEquals(dummyValue2, value);
+                return value;
             }
         });
 
-        op2.visitEachInput(new InstructionValueConsumer() {
+        op2.forEachInput(new InstructionValueProcedure() {
             @Override
-            public void visitValue(LIRInstruction instruction, Value value) {
+            public Value doValue(LIRInstruction instruction, Value value) {
                 assertEquals(dummyValue3, value);
+                return value;
             }
         });
     }
@@ -172,7 +172,7 @@ public class CompositeValueReplacementTest2 {
 
         op1.forEachInput(new InstructionValueProcedure() {
             @Override
-            public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+            public Value doValue(LIRInstruction instruction, Value value) {
                 assertEquals(dummyValue1, value);
                 return dummyValue2;
             }
@@ -180,23 +180,25 @@ public class CompositeValueReplacementTest2 {
 
         op2.forEachInput(new InstructionValueProcedure() {
             @Override
-            public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+            public Value doValue(LIRInstruction instruction, Value value) {
                 assertEquals(dummyValue1, value);
                 return dummyValue3;
             }
         });
 
-        op1.visitEachInput(new InstructionValueConsumer() {
+        op1.forEachInput(new InstructionValueProcedure() {
             @Override
-            public void visitValue(LIRInstruction instruction, Value value) {
+            public Value doValue(LIRInstruction instruction, Value value) {
                 assertEquals(dummyValue2, value);
+                return value;
             }
         });
 
-        op2.visitEachInput(new InstructionValueConsumer() {
+        op2.forEachInput(new InstructionValueProcedure() {
             @Override
-            public void visitValue(LIRInstruction instruction, Value value) {
+            public Value doValue(LIRInstruction instruction, Value value) {
                 assertEquals(dummyValue3, value);
+                return value;
             }
         });
     }
