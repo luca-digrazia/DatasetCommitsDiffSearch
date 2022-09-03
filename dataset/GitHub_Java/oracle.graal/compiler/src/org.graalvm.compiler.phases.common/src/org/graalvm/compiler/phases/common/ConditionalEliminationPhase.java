@@ -250,7 +250,6 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
     public static final class Marks {
         final int infoElementOperations;
         final int conditions;
-
         public Marks(int infoElementOperations, int conditions) {
             this.infoElementOperations = infoElementOperations;
             this.conditions = conditions;
