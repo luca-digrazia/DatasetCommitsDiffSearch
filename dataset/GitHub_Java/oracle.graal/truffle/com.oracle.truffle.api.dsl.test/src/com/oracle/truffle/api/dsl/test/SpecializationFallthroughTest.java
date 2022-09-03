@@ -66,7 +66,7 @@ public class SpecializationFallthroughTest {
 
         static int fallthroughCount = 0;
 
-        FallthroughTest0() {
+        public FallthroughTest0() {
             fallthroughCount = 0;
         }
 
@@ -111,7 +111,7 @@ public class SpecializationFallthroughTest {
 
         static int fallthroughCount;
 
-        FallthroughTest1() {
+        public FallthroughTest1() {
             fallthroughCount = 0;
         }
 

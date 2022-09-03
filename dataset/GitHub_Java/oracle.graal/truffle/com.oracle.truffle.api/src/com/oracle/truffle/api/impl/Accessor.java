@@ -33,6 +33,7 @@ import java.lang.ref.WeakReference;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
@@ -267,6 +268,7 @@ public abstract class Accessor {
     private static Reference<Object> previousVM = new WeakReference<>(null);
     private static Assumption oneVM = Truffle.getRuntime().createAssumption();
 
+    @TruffleBoundary
     @SuppressWarnings("unused")
     protected Closeable executionStart(Object vm, int currentDepth, Debugger debugger, Source s) {
         vm.getClass();
@@ -280,6 +282,7 @@ public abstract class Accessor {
         }
         CURRENT_VM.set(vm);
         class ContextCloseable implements Closeable {
+            @TruffleBoundary
             @Override
             public void close() throws IOException {
                 CURRENT_VM.set(prev);
@@ -316,6 +319,10 @@ public abstract class Accessor {
         return API.findContext(env);
     }
 
+    protected TruffleLanguage<?> findLanguage(Env env) {
+        return API.findLanguage(env);
+    }
+
     /** Applies all registered {@linkplain ASTProber probers} to the AST. */
     protected void probeAST(RootNode rootNode) {
         INSTRUMENT.probeAST(rootNode);
@@ -329,10 +336,6 @@ public abstract class Accessor {
     protected CallTarget parse(Class<? extends TruffleLanguage> languageClass, Source code, Node context, String... argumentNames) throws IOException {
         final TruffleLanguage<?> truffleLanguage = findLanguageImpl(null, languageClass);
         return parse(truffleLanguage, code, context, argumentNames);
-    }
-
-    protected TruffleLanguage<?> findLanguage(Env env) {
-        return API.findLanguage(env);
     }
 
     protected CallTarget parse(TruffleLanguage<?> truffleLanguage, Source code, Node context, String... argumentNames) throws IOException {
