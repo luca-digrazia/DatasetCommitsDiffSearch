@@ -41,7 +41,6 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
@@ -111,7 +110,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         LLVMMetadata.generate(model);
 
-        LLVMBitcodeVisitor module = new LLVMBitcodeVisitor(source, context, lifetimes, labels, phis, ((ModelModule) model.createModule()).getTargetDataLayout());
+        LLVMBitcodeVisitor module = new LLVMBitcodeVisitor(context, lifetimes, labels, phis, ((ModelModule) model.createModule()).getTargetDataLayout());
 
         model.accept(module);
 
@@ -161,11 +160,8 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
     private final LLVMBitcodeTypeHelper typeHelper;
 
-    private final Source source;
-
-    public LLVMBitcodeVisitor(Source source, LLVMContext context, LLVMFrameDescriptors frames, LLVMLabelList labels, LLVMPhiManager phis,
+    public LLVMBitcodeVisitor(LLVMContext context, LLVMFrameDescriptors frames, LLVMLabelList labels, LLVMPhiManager phis,
                     TargetDataLayout layout) {
-        this.source = source;
         this.context = context;
         this.frames = frames;
         this.labels = labels;
@@ -396,8 +392,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         LLVMNode[] beforeFunction = parameters.toArray(new LLVMNode[parameters.size()]);
         LLVMNode[] afterFunction = new LLVMNode[0];
 
-        final SourceSection sourceSection = null;
-        LLVMFunctionStartNode rootNode = new LLVMFunctionStartNode(body, beforeFunction, afterFunction, sourceSection, frame, method.getName());
+        LLVMFunctionStartNode rootNode = new LLVMFunctionStartNode(body, beforeFunction, afterFunction, null, frame, method.getName());
         if (LLVMBaseOptionFacade.printFunctionASTs()) {
             NodeUtil.printTree(System.out, rootNode);
             System.out.flush();
