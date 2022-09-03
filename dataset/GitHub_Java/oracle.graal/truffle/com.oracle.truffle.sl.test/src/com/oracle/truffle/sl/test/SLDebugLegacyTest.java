@@ -65,7 +65,7 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.ForeignAccess.Factory;
-import com.oracle.truffle.api.interop.ForeignAccess.Factory18;
+import com.oracle.truffle.api.interop.ForeignAccess.Factory10;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -377,12 +377,13 @@ public class SLDebugLegacyTest {
     }
 
     private static Source createNull() {
-        return Source.newBuilder("function nullTest() {\n" +
+        return Source.fromText("function nullTest() {\n" +
                         "  res = doNull();\n" +
                         "  return res;\n" +
                         "}\n" +
                         "function doNull() {\n" +
-                        "}\n").name("nullTest.sl").mimeType(SLLanguage.MIME_TYPE).build();
+                        "}\n",
+                        "nullTest.sl").withMimeType(SLLanguage.MIME_TYPE);
     }
 
     @Test
@@ -543,7 +544,7 @@ public class SLDebugLegacyTest {
 
     }
 
-    private static class ExecNotifyHandlerForeign implements Factory18, Factory {
+    private static class ExecNotifyHandlerForeign implements Factory10, Factory {
 
         private final ExecNotifyHandler nh;
 
@@ -614,11 +615,6 @@ public class SLDebugLegacyTest {
         @Override
         public boolean canHandle(TruffleObject to) {
             return (to instanceof ExecNotifyHandler);
-        }
-
-        @Override
-        public CallTarget accessKeys() {
-            return null;
         }
 
     }
