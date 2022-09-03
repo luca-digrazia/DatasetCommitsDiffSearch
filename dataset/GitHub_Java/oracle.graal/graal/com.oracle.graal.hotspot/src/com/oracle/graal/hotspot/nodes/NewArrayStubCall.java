@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,33 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.hotspot.target.amd64.AMD64NewArrayStubCallOp.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.target.amd64.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
- * Node implementing a call to HotSpot's {@code new_[object|type]_array} stub.
- *
- * @see AMD64NewArrayStubCallOp
+ * A call to the {@link NewArrayStub}.
  */
-public class NewArrayStubCall extends FixedWithNextNode implements LIRGenLowerable {
+@NodeInfo
+public final class NewArrayStubCall extends DeoptimizingStubCall implements LIRLowerable {
 
+    public static final NodeClass<NewArrayStubCall> TYPE = NodeClass.create(NewArrayStubCall.class);
     private static final Stamp defaultStamp = StampFactory.objectNonNull();
 
-    @Input private final ValueNode hub;
-    @Input private final ValueNode length;
-    private final boolean isObjectArray;
+    @Input ValueNode hub;
+    @Input ValueNode length;
 
-    public NewArrayStubCall(boolean isObjectArray, ValueNode hub, ValueNode length) {
-        super(defaultStamp);
-        this.isObjectArray = isObjectArray;
+    public NewArrayStubCall(ValueNode hub, ValueNode length) {
+        super(TYPE, defaultStamp);
         this.hub = hub;
         this.length = length;
     }
@@ -57,29 +56,19 @@ public class NewArrayStubCall extends FixedWithNextNode implements LIRGenLowerab
     @Override
     public boolean inferStamp() {
         if (stamp() == defaultStamp && hub.isConstant()) {
-            HotSpotKlassOop klassOop = (HotSpotKlassOop) this.hub.asConstant().asObject();
-            updateStamp(StampFactory.exactNonNull(klassOop.type));
+            updateStamp(StampFactory.exactNonNull(((HotSpotMetaspaceConstant) hub.asJavaConstant()).asResolvedJavaType()));
             return true;
         }
         return false;
     }
 
     @Override
-    public void generate(LIRGenerator gen) {
-        RegisterValue hubFixed = HUB.asValue(Kind.Object);
-        RegisterValue lengthFixed = LENGTH.asValue(Kind.Int);
-        RegisterValue resultFixed = RESULT.asValue(Kind.Object);
-        gen.emitMove(gen.operand(length), lengthFixed);
-        gen.emitMove(gen.operand(hub), hubFixed);
-        LIRFrameState info = gen.state();
-        gen.append(new AMD64NewArrayStubCallOp(isObjectArray, resultFixed, hubFixed, lengthFixed, info));
-        Variable result = gen.emitMove(resultFixed);
+    public void generate(NodeLIRBuilderTool gen) {
+        ForeignCallLinkage linkage = gen.getLIRGeneratorTool().getForeignCalls().lookupForeignCall(NEW_ARRAY);
+        Variable result = gen.getLIRGeneratorTool().emitForeignCall(linkage, gen.state(this), gen.operand(hub), gen.operand(length));
         gen.setResult(this, result);
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static Object call(@ConstantNodeParameter boolean isObjectArray, Object hub, int length) {
-        throw new UnsupportedOperationException();
-    }
+    public static native Object call(KlassPointer hub, int length);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,7 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.lir.LIRInstruction.Opcode;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -37,16 +37,18 @@ import com.oracle.graal.lir.asm.*;
  */
 @Opcode("PATCH_RETURN")
 final class AMD64HotSpotPatchReturnAddressOp extends AMD64LIRInstruction {
+    public static final LIRInstructionClass<AMD64HotSpotPatchReturnAddressOp> TYPE = LIRInstructionClass.create(AMD64HotSpotPatchReturnAddressOp.class);
 
     @Use(REG) AllocatableValue address;
 
     AMD64HotSpotPatchReturnAddressOp(AllocatableValue address) {
+        super(TYPE);
         this.address = address;
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        int frameSize = tasm.frameMap.frameSize();
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        int frameSize = crb.frameMap.frameSize();
         masm.movq(new AMD64Address(rsp, frameSize), asRegister(address));
     }
 }

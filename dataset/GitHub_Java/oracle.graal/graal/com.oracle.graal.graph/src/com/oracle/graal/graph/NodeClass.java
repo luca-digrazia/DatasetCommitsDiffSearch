@@ -569,36 +569,28 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
 
     static void updateEdgesInPlace(Node node, InplaceUpdateClosure duplicationReplacement, Edges edges) {
         int index = 0;
-        Type curType = edges.type();
-        int directCount = edges.getDirectCount();
-        final long[] curOffsets = edges.getOffsets();
-        while (index < directCount) {
-            Node edge = Edges.getNode(node, curOffsets, index);
+        while (index < edges.getDirectCount()) {
+            Node edge = edges.getNode(node, index);
             if (edge != null) {
-                Node newEdge = duplicationReplacement.replacement(edge, curType);
-                if (curType == Edges.Type.Inputs) {
+                Node newEdge = duplicationReplacement.replacement(edge, edges.type());
+                if (edges.type() == Edges.Type.Inputs) {
                     node.updateUsages(null, newEdge);
                 } else {
                     node.updatePredecessor(null, newEdge);
                 }
-                assert assertUpdateValid(node, edges, index, newEdge);
-                Edges.initializeNode(node, curOffsets, index, newEdge);
+                assert newEdge == null || edges.getType(index).isAssignableFrom(newEdge.getClass()) : "Can not assign " + newEdge.getClass() + " to " + edges.getType(index) + " in " + node;
+                edges.initializeNode(node, index, newEdge);
             }
             index++;
         }
 
         while (index < edges.getCount()) {
-            NodeList<Node> list = Edges.getNodeList(node, curOffsets, index);
+            NodeList<Node> list = edges.getNodeList(node, index);
             if (list != null) {
-                Edges.initializeList(node, curOffsets, index, updateEdgeListCopy(node, list, duplicationReplacement, curType));
+                edges.initializeList(node, index, updateEdgeListCopy(node, list, duplicationReplacement, edges.type()));
             }
             index++;
         }
-    }
-
-    private static boolean assertUpdateValid(Node node, Edges edges, int index, Node newEdge) {
-        assert newEdge == null || edges.getType(index).isAssignableFrom(newEdge.getClass()) : "Can not assign " + newEdge.getClass() + " to " + edges.getType(index) + " in " + node;
-        return true;
     }
 
     void updateInputSuccInPlace(Node node, InplaceUpdateClosure duplicationReplacement) {
@@ -626,14 +618,6 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         return type == Edges.Type.Inputs ? inputs : successors;
     }
 
-    public Edges getInputEdges() {
-        return inputs;
-    }
-
-    public Edges getSuccessorEdges() {
-        return successors;
-    }
-
     /**
      * Initializes a fresh allocated node for which no constructor is called yet. Needed to
      * implement node factories in svm.
@@ -646,10 +630,9 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
 
     private void initNullEdgeLists(Node node, Edges.Type type) {
         Edges edges = getEdges(type);
-        final long[] curOffsets = edges.getOffsets();
         for (int inputPos = edges.getDirectCount(); inputPos < edges.getCount(); inputPos++) {
-            if (Edges.getNodeList(node, curOffsets, inputPos) == null) {
-                Edges.initializeList(node, curOffsets, inputPos, type == Edges.Type.Inputs ? new NodeInputList<>(node) : new NodeSuccessorList<>(node));
+            if (edges.getNodeList(node, inputPos) == null) {
+                edges.initializeList(node, inputPos, type == Edges.Type.Inputs ? new NodeInputList<>(node) : new NodeSuccessorList<>(node));
             }
         }
     }

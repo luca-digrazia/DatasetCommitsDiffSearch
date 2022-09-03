@@ -26,7 +26,6 @@ import static com.oracle.graal.hotspot.HotSpotHostBackend.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
@@ -53,7 +52,7 @@ final class SPARCHotSpotDeoptimizeCallerOp extends SPARCHotSpotEpilogueOp {
         // HotSpotFrameContext frameContext = backend.new HotSpotFrameContext(isStub);
         // frameContext.enter(crb);
 
-        try (ScratchRegister sc = masm.getScratchRegister()) {
+        try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
             Register scratch = sc.getRegister();
             SPARCCall.indirectJmp(crb, masm, scratch, crb.foreignCalls.lookupForeignCall(UNCOMMON_TRAP_HANDLER));
         }

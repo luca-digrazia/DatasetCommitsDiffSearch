@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,39 +23,27 @@
 
 package com.oracle.graal.hotspot.amd64.test;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.config;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import org.junit.Assume;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.asm.amd64.AMD64Address;
-import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.hotspot.nodes.CompressionNode;
-import com.oracle.graal.hotspot.nodes.type.NarrowOopStamp;
-import com.oracle.graal.hotspot.test.HotSpotGraalCompilerTest;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.amd64.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.nodes.CompressionNode.CompressionOp;
+import com.oracle.graal.hotspot.nodes.type.*;
+import com.oracle.graal.hotspot.test.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 public class DataPatchInConstantsTest extends HotSpotGraalCompilerTest {
 
@@ -113,7 +101,7 @@ public class DataPatchInConstantsTest extends HotSpotGraalCompilerTest {
 
     @Test
     public void narrowOopTest() {
-        Assume.assumeTrue("skipping narrow oop data patch test", config().useCompressedOops);
+        Assume.assumeTrue("skipping narrow oop data patch test", config.useCompressedOops);
         test("narrowOopSnippet");
     }
 
@@ -134,32 +122,35 @@ public class DataPatchInConstantsTest extends HotSpotGraalCompilerTest {
 
     @Test
     public void compareTest() {
-        Assume.assumeTrue("skipping narrow oop data patch test", config().useCompressedOops);
+        Assume.assumeTrue("skipping narrow oop data patch test", config.useCompressedOops);
         test("compareSnippet");
     }
 
-    @Override
-    protected Plugins getDefaultGraphBuilderPlugins() {
-        Plugins plugins = super.getDefaultGraphBuilderPlugins();
-        Registration r = new Registration(plugins.getInvocationPlugins(), DataPatchInConstantsTest.class);
+    private static final HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
+    private static boolean initReplacements = false;
 
-        r.register1("loadThroughPatch", Object.class, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg) {
-                b.addPush(JavaKind.Object, new LoadThroughPatchNode(arg));
-                return true;
-            }
-        });
+    @Before
+    public void initReplacements() {
+        if (!initReplacements) {
+            getReplacements().registerSubstitutions(DataPatchInConstantsTest.class, DataPatchInConstantsTestSubstitutions.class);
+            initReplacements = true;
+        }
+    }
 
-        r.register1("loadThroughCompressedPatch", Object.class, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg) {
-                ValueNode compressed = b.add(CompressionNode.compress(arg, config().getOopEncoding()));
-                ValueNode patch = b.add(new LoadThroughPatchNode(compressed));
-                b.addPush(JavaKind.Object, CompressionNode.uncompress(patch, config().getOopEncoding()));
-                return true;
-            }
-        });
+    @ClassSubstitution(DataPatchInConstantsTest.class)
+    private static class DataPatchInConstantsTestSubstitutions {
 
-        return plugins;
+        @MethodSubstitution
+        public static Object loadThroughPatch(Object obj) {
+            return LoadThroughPatchNode.load(obj);
+        }
+
+        @MethodSubstitution
+        public static Object loadThroughCompressedPatch(Object obj) {
+            Object compressed = CompressionNode.compression(CompressionOp.Compress, obj, config.getOopEncoding());
+            Object patch = LoadThroughPatchNode.load(compressed);
+            return CompressionNode.compression(CompressionOp.Uncompress, patch, config.getOopEncoding());
+        }
     }
 
     @NodeInfo
@@ -182,6 +173,9 @@ public class DataPatchInConstantsTest extends HotSpotGraalCompilerTest {
             gen.append(new LoadThroughPatchOp(input.asConstant(), stamp() instanceof NarrowOopStamp, ret));
             generator.setResult(this, ret);
         }
+
+        @NodeIntrinsic
+        public static native Object load(Object obj);
     }
 
     private static final class LoadThroughPatchOp extends LIRInstruction {

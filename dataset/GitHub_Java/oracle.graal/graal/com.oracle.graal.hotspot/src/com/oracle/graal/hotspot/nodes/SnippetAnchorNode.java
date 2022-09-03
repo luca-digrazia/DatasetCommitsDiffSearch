@@ -22,22 +22,14 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.InputType.Anchor;
-import static com.oracle.graal.nodeinfo.InputType.Guard;
-import static com.oracle.graal.nodeinfo.InputType.Value;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Simplifiable;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-
-@NodeInfo(allowedUsageTypes = {Value, Anchor, Guard}, cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo(allowedUsageTypes = {InputType.Value, InputType.Anchor, InputType.Guard})
 public final class SnippetAnchorNode extends FixedWithNextNode implements Simplifiable, GuardingNode {
     public static final NodeClass<SnippetAnchorNode> TYPE = NodeClass.create(SnippetAnchorNode.class);
 
@@ -48,9 +40,9 @@ public final class SnippetAnchorNode extends FixedWithNextNode implements Simpli
     @Override
     public void simplify(SimplifierTool tool) {
         AbstractBeginNode prevBegin = AbstractBeginNode.prevBegin(this);
-        replaceAtUsages(Anchor, prevBegin);
-        replaceAtUsages(Guard, prevBegin);
-        if (tool.allUsagesAvailable() && hasNoUsages()) {
+        replaceAtUsages(InputType.Anchor, prevBegin);
+        replaceAtUsages(InputType.Guard, prevBegin);
+        if (hasNoUsages()) {
             graph().removeFixed(this);
         }
     }

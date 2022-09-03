@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,9 @@ package com.oracle.graal.hotspot.meta;
 import java.lang.invoke.*;
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.lir.*;
 
 /**
  * Represents a constant non-{@code null} object reference, within the compiler and across the
@@ -36,6 +38,8 @@ public interface HotSpotObjectConstant extends JavaConstant, HotSpotConstant, VM
     JavaConstant compress();
 
     JavaConstant uncompress();
+
+    boolean isCompressed();
 
     /**
      * Gets the resolved Java type of the object represented by this constant.
@@ -81,6 +85,14 @@ public interface HotSpotObjectConstant extends JavaConstant, HotSpotConstant, VM
      * @return {@code null} if this constant does not represent a {@link CallSite} object
      */
     JavaConstant getCallSiteTarget(Assumptions assumptions);
+
+    /**
+     * Gets the result of {@link CompositeValueClass#create(Class)} for the {@link Class} object
+     * represented by this constant.
+     *
+     * @return {@code null} if this constant does not represent a {@link Class} object
+     */
+    JavaConstant getCompositeValueClass();
 
     /**
      * Determines if this constant represents an {@linkplain String#intern() interned} string.

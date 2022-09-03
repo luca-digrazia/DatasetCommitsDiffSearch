@@ -28,6 +28,7 @@ import java.util.*;
 
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.options.*;
@@ -37,11 +38,9 @@ import com.oracle.graal.options.*;
  */
 public class Graph {
 
-    public static class Options {
+    static class Options {
         @Option(help = "Verify graphs often during compilation when assertions are turned on", type = OptionType.Debug)//
         public static final OptionValue<Boolean> VerifyGraalGraphs = new OptionValue<>(true);
-        @Option(help = "Perform expensive verification of graph inputs, usages, successors and predecessors", type = OptionType.Debug)//
-        public static final OptionValue<Boolean> VerifyGraalGraphEdges = new OptionValue<>(false);
     }
 
     public final String name;
@@ -297,20 +296,7 @@ public class Graph {
         return add(node);
     }
 
-    public <T extends Node> void addWithoutUniqueWithInputs(T node) {
-        addInputs(node);
-        addHelper(node);
-    }
-
     public <T extends Node> T addOrUniqueWithInputs(T node) {
-        addInputs(node);
-        if (node.getNodeClass().valueNumberable()) {
-            return uniqueHelper(node, true);
-        }
-        return add(node);
-    }
-
-    private <T extends Node> void addInputs(T node) {
         NodePosIterator iterator = node.inputs().iterator();
         while (iterator.hasNext()) {
             Position pos = iterator.nextPosition();
@@ -320,6 +306,10 @@ public class Graph {
                 pos.initialize(node, addOrUniqueWithInputs(input));
             }
         }
+        if (node.getNodeClass().valueNumberable()) {
+            return uniqueHelper(node, true);
+        }
+        return add(node);
     }
 
     private <T extends Node> T addHelper(T node) {
@@ -462,17 +452,18 @@ public class Graph {
         return uniqueHelper(node, true);
     }
 
+    @SuppressWarnings("unchecked")
     <T extends Node> T uniqueHelper(T node, boolean addIfMissing) {
         assert node.getNodeClass().valueNumberable();
-        T other = this.findDuplicate(node);
+        Node other = this.findDuplicate(node);
         if (other != null) {
-            return other;
+            return (T) other;
         } else {
-            T result = addIfMissing ? addHelper(node) : node;
+            Node result = addIfMissing ? addHelper(node) : node;
             if (node.getNodeClass().isLeafNode()) {
                 putNodeIntoCache(result);
             }
-            return result;
+            return (T) result;
         }
     }
 
@@ -493,45 +484,41 @@ public class Graph {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
-    public <T extends Node> T findDuplicate(T node) {
+    public Node findDuplicate(Node node) {
         NodeClass<?> nodeClass = node.getNodeClass();
         assert nodeClass.valueNumberable();
         if (nodeClass.isLeafNode()) {
             // Leaf node: look up in cache
             Node cachedNode = findNodeInCache(node);
             if (cachedNode != null) {
-                return (T) cachedNode;
+                return cachedNode;
             } else {
                 return null;
             }
         } else {
-            /*
-             * Non-leaf node: look for another usage of the node's inputs that has the same data,
-             * inputs and successors as the node. To reduce the cost of this computation, only the
-             * input with lowest usage count is considered. If this node is the only user of any
-             * input then the search can terminate early. The usage count is only incremented once
-             * the Node is in the Graph, so account for that in the test.
-             */
-            final int earlyExitUsageCount = node.graph() != null ? 1 : 0;
+            // Non-leaf node: look for another usage of the node's inputs that
+            // has the same data, inputs and successors as the node. To reduce
+            // the cost of this computation, only the input with estimated highest
+            // usage count is considered.
+
             int minCount = Integer.MAX_VALUE;
             Node minCountNode = null;
             for (Node input : node.inputs()) {
                 if (input != null) {
-                    int usageCount = input.getUsageCount();
-                    if (usageCount == earlyExitUsageCount) {
+                    int estimate = input.getUsageCount();
+                    if (estimate == 0) {
                         return null;
-                    } else if (usageCount < minCount) {
-                        minCount = usageCount;
+                    } else if (estimate < minCount) {
+                        minCount = estimate;
                         minCountNode = input;
                     }
                 }
             }
             if (minCountNode != null) {
                 for (Node usage : minCountNode.usages()) {
-                    if (usage != node && nodeClass == usage.getNodeClass() && node.valueEquals(usage) && nodeClass.getInputEdges().areEqualIn(node, usage) &&
+                    if (usage != node && nodeClass == usage.getNodeClass() && node.valueEquals(usage) && nodeClass.getEdges(Inputs).areEqualIn(node, usage) &&
                                     nodeClass.getEdges(Successors).areEqualIn(node, usage)) {
-                        return (T) usage;
+                        return usage;
                     }
                 }
                 return null;
@@ -725,66 +712,9 @@ public class Graph {
         return getNodes(type).iterator().hasNext();
     }
 
-    /**
-     * @param iterableId
-     * @return the first live Node with a matching iterableId
-     */
-    Node getIterableNodeStart(int iterableId) {
-        if (iterableNodesFirst.size() <= iterableId) {
-            return null;
-        }
-        Node start = iterableNodesFirst.get(iterableId);
-        if (start == null || !start.isDeleted()) {
-            return start;
-        }
-        return findFirstLiveIterable(iterableId, start);
-    }
-
-    private Node findFirstLiveIterable(int iterableId, Node node) {
-        assert iterableNodesFirst.get(iterableId) == node;
-        Node start = node;
-        while (start != null && start.isDeleted()) {
-            start = start.typeCacheNext;
-        }
-        iterableNodesFirst.set(iterableId, start);
-        if (start == null) {
-            iterableNodesLast.set(iterableId, start);
-        }
+    Node getStartNode(int iterableId) {
+        Node start = iterableNodesFirst.size() <= iterableId ? null : iterableNodesFirst.get(iterableId);
         return start;
-    }
-
-    /**
-     * @param node
-     * @return return the first live Node with a matching iterableId starting from {@code node}
-     */
-    Node getIterableNodeNext(Node node) {
-        if (node == null) {
-            return null;
-        }
-        Node n = node;
-        if (n == null || !n.isDeleted()) {
-            return n;
-        }
-
-        return findNextLiveiterable(node);
-    }
-
-    private Node findNextLiveiterable(Node start) {
-        Node n = start;
-        while (n != null && n.isDeleted()) {
-            n = n.typeCacheNext;
-        }
-        if (n == null) {
-            // Only dead nodes after this one
-            start.typeCacheNext = null;
-            int nodeClassId = start.getNodeClass().iterableId();
-            assert nodeClassId != Node.NOT_ITERABLE;
-            iterableNodesLast.set(nodeClassId, start);
-        } else {
-            // Everything in between is dead
-            start.typeCacheNext = n;
-        }
-        return n;
     }
 
     public NodeBitMap createNodeBitMap() {
@@ -895,8 +825,8 @@ public class Graph {
         return true;
     }
 
-    public Node getNode(int id) {
-        return nodes[id];
+    Node getNode(int i) {
+        return nodes[i];
     }
 
     /**
@@ -954,18 +884,8 @@ public class Graph {
 
     @SuppressWarnings("all")
     public Map<Node, Node> addDuplicates(Iterable<? extends Node> newNodes, final Graph oldGraph, int estimatedNodeCount, DuplicationReplacement replacements) {
-        try (DebugCloseable s = DuplicateGraph.start()) {
+        try (TimerCloseable s = DuplicateGraph.start()) {
             return NodeClass.addGraphDuplicate(this, oldGraph, estimatedNodeCount, newNodes, replacements);
-        }
-    }
-
-    /**
-     * Reverses the usage orders of all nodes. This is used for debugging to make sure an unorthodox
-     * usage order does not trigger bugs in the compiler.
-     */
-    public void reverseUsageOrder() {
-        for (Node n : getNodes()) {
-            n.reverseUsageOrder();
         }
     }
 

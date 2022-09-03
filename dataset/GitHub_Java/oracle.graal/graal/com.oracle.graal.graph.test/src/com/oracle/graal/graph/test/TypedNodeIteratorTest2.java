@@ -22,17 +22,12 @@
  */
 package com.oracle.graal.graph.test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.*;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.graph.Graph;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 
 public class TypedNodeIteratorTest2 {
 
@@ -42,7 +37,7 @@ public class TypedNodeIteratorTest2 {
         public static final NodeClass<NodeA> TYPE = NodeClass.create(NodeA.class);
         protected final String name;
 
-        protected NodeA(String name) {
+        public NodeA(String name) {
             this(TYPE, name);
         }
 
@@ -60,7 +55,7 @@ public class TypedNodeIteratorTest2 {
     static class NodeB extends NodeA implements IterableNodeType {
         public static final NodeClass<NodeB> TYPE = NodeClass.create(NodeB.class);
 
-        protected NodeB(String name) {
+        public NodeB(String name) {
             this(TYPE, name);
         }
 
@@ -74,7 +69,7 @@ public class TypedNodeIteratorTest2 {
     static class NodeC extends NodeB {
         public static final NodeClass<NodeC> TYPE = NodeClass.create(NodeC.class);
 
-        protected NodeC(String name) {
+        public NodeC(String name) {
             this(TYPE, name);
         }
 
@@ -88,7 +83,7 @@ public class TypedNodeIteratorTest2 {
     static final class NodeD extends NodeC {
         public static final NodeClass<NodeD> TYPE = NodeClass.create(NodeD.class);
 
-        protected NodeD(String name) {
+        public NodeD(String name) {
             super(TYPE, name);
         }
 

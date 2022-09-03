@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,19 +24,18 @@ package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 
 @NodeInfo
-public class LoadIndexedPointerNode extends LoadIndexedNode {
+public final class LoadIndexedPointerNode extends LoadIndexedNode {
 
-    public static LoadIndexedPointerNode create(Stamp stamp, ValueNode array, ValueNode index) {
-        return new LoadIndexedPointerNode(stamp, array, index);
-    }
+    public static final NodeClass<LoadIndexedPointerNode> TYPE = NodeClass.create(LoadIndexedPointerNode.class);
 
-    protected LoadIndexedPointerNode(Stamp stamp, ValueNode array, ValueNode index) {
-        super(stamp, array, index, Kind.Illegal);
+    public LoadIndexedPointerNode(Stamp stamp, ValueNode array, ValueNode index) {
+        super(TYPE, stamp, array, index, Kind.Illegal);
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,7 @@ import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
 
@@ -40,7 +40,7 @@ import com.oracle.graal.word.*;
  * A call to the runtime code implementing the uncommon trap logic.
  */
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
-public final class UncommonTrapCallNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
+public final class UncommonTrapCallNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Multi {
 
     public static final NodeClass<UncommonTrapCallNode> TYPE = NodeClass.create(UncommonTrapCallNode.class);
     @Input ValueNode trapRequest;
@@ -55,8 +55,8 @@ public final class UncommonTrapCallNode extends FixedWithNextNode implements LIR
     }
 
     @Override
-    public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
+    public LocationIdentity[] getLocationIdentities() {
+        return foreignCalls.getKilledLocations(UNCOMMON_TRAP);
     }
 
     public SaveRegistersOp getSaveRegistersOp() {

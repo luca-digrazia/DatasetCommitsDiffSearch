@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,19 +23,18 @@
 
 package com.oracle.graal.hotspot.test;
 
-import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import org.junit.*;
 
-import org.junit.Assume;
-import org.junit.Before;
-import org.junit.Test;
-
-import com.oracle.graal.api.directives.GraalDirectives;
-import com.oracle.graal.api.replacements.ClassSubstitution;
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.hotspot.nodes.CompressionNode;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.nodes.CompressionNode.CompressionOp;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
 
 public class DataPatchTest extends GraalCompilerTest {
 
@@ -71,7 +70,7 @@ public class DataPatchTest extends GraalCompilerTest {
         test("narrowOopSnippet");
     }
 
-    private static final HotSpotVMConfig config = config();
+    private static final HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
     private static boolean initReplacements = false;
 
     @Before
@@ -88,8 +87,27 @@ public class DataPatchTest extends GraalCompilerTest {
         @MethodSubstitution
         public static Object compressUncompress(Object obj) {
             Object compressed = CompressionNode.compression(CompressionOp.Compress, obj, config.getOopEncoding());
-            Object proxy = GraalDirectives.opaque(compressed);
+            Object proxy = ConstantFoldBarrier.wrap(compressed);
             return CompressionNode.compression(CompressionOp.Uncompress, proxy, config.getOopEncoding());
         }
+    }
+
+    @NodeInfo
+    private static final class ConstantFoldBarrier extends FloatingNode implements LIRLowerable {
+
+        public static final NodeClass<ConstantFoldBarrier> TYPE = NodeClass.create(ConstantFoldBarrier.class);
+        @Input protected ValueNode input;
+
+        public ConstantFoldBarrier(ValueNode input) {
+            super(TYPE, input.stamp());
+            this.input = input;
+        }
+
+        public void generate(NodeLIRBuilderTool generator) {
+            generator.setResult(this, generator.operand(input));
+        }
+
+        @NodeIntrinsic
+        public static native Object wrap(Object object);
     }
 }

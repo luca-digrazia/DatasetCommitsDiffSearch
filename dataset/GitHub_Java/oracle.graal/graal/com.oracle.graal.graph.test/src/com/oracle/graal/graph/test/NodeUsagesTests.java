@@ -22,18 +22,14 @@
  */
 package com.oracle.graal.graph.test;
 
-import static com.oracle.graal.graph.test.matchers.NodeIterableContains.contains;
-import static com.oracle.graal.graph.test.matchers.NodeIterableIsEmpty.isEmpty;
-import static com.oracle.graal.graph.test.matchers.NodeIterableIsEmpty.isNotEmpty;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
+import static com.oracle.graal.graph.test.matchers.NodeIterableContains.*;
+import static com.oracle.graal.graph.test.matchers.NodeIterableIsEmpty.*;
+import static org.junit.Assert.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.graph.Graph;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 
 public class NodeUsagesTests {
 
@@ -53,7 +49,7 @@ public class NodeUsagesTests {
         @Input Def in1;
         @Input Def in2;
 
-        protected Use(Def in0, Def in1, Def in2) {
+        public Use(Def in0, Def in1, Def in2) {
             super(TYPE);
             this.in0 = in0;
             this.in1 = in1;

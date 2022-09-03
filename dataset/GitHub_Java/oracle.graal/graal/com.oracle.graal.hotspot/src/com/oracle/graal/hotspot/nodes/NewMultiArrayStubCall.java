@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,34 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.hotspot.target.amd64.AMD64NewMultiArrayStubCallOp.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.target.amd64.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.snippets.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.word.*;
 
 /**
- * Node implementing a call to HotSpot's {@code new_multi_array} stub.
+ * Node implementing a call to {@code GraalRuntime::new_multi_array}.
  */
-public class NewMultiArrayStubCall extends FixedWithNextNode implements LIRGenLowerable {
+@NodeInfo
+public final class NewMultiArrayStubCall extends ForeignCallNode {
 
+    public static final NodeClass<NewMultiArrayStubCall> TYPE = NodeClass.create(NewMultiArrayStubCall.class);
     private static final Stamp defaultStamp = StampFactory.objectNonNull();
 
-    @Input private final ValueNode hub;
-    @Input private final ValueNode dims;
-    private final int rank;
+    @Input ValueNode hub;
+    @Input ValueNode dims;
+    protected final int rank;
 
-    public NewMultiArrayStubCall(ValueNode hub, int rank, ValueNode dims) {
-        super(defaultStamp);
+    public NewMultiArrayStubCall(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode hub, int rank, ValueNode dims) {
+        super(TYPE, foreignCalls, NEW_MULTI_ARRAY, defaultStamp);
         this.hub = hub;
         this.rank = rank;
         this.dims = dims;
@@ -56,31 +58,17 @@ public class NewMultiArrayStubCall extends FixedWithNextNode implements LIRGenLo
     @Override
     public boolean inferStamp() {
         if (stamp() == defaultStamp && hub.isConstant()) {
-            HotSpotKlassOop klassOop = (HotSpotKlassOop) this.hub.asConstant().asObject();
-            updateStamp(StampFactory.exactNonNull(klassOop.type));
+            updateStamp(StampFactory.exactNonNull(((HotSpotMetaspaceConstant) hub.asJavaConstant()).asResolvedJavaType()));
             return true;
         }
         return false;
     }
 
     @Override
-    public void generate(LIRGenerator gen) {
-        RegisterValue hubFixed = HUB.asValue(Kind.Object);
-        RegisterValue resultFixed = RESULT.asValue(Kind.Object);
-        RegisterValue rankFixed = RANK.asValue(Kind.Int);
-        RegisterValue dimsFixed = DIMS.asValue(gen.target().wordKind);
-        gen.emitMove(gen.operand(hub), hubFixed);
-        gen.emitMove(gen.operand(dims), dimsFixed);
-        gen.emitMove(Constant.forInt(rank), rankFixed);
-        LIRFrameState state = gen.state();
-        gen.append(new AMD64NewMultiArrayStubCallOp(resultFixed, hubFixed, rankFixed, dimsFixed, state));
-        Variable result = gen.emitMove(resultFixed);
-        gen.setResult(this, result);
+    protected Value[] operands(NodeLIRBuilderTool gen) {
+        return new Value[]{gen.operand(hub), JavaConstant.forInt(rank), gen.operand(dims)};
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static Object call(Object hub, @ConstantNodeParameter int rank, Word dims) {
-        throw new UnsupportedOperationException();
-    }
+    public static native Object call(Word hub, @ConstantNodeParameter int rank, Word dims);
 }

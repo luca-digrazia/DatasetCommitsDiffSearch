@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,24 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
+import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import static com.oracle.graal.sparc.SPARC.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.graal.sparc.SPARC.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * Pushes an interpreter frame to the stack.
  */
 @Opcode("PUSH_INTERPRETER_FRAME")
 final class SPARCHotSpotPushInterpreterFrameOp extends SPARCLIRInstruction {
+    public static final LIRInstructionClass<SPARCHotSpotPushInterpreterFrameOp> TYPE = LIRInstructionClass.create(SPARCHotSpotPushInterpreterFrameOp.class);
 
     @Alive(REG) AllocatableValue frameSize;
     @Alive(REG) AllocatableValue framePc;
@@ -45,6 +47,7 @@ final class SPARCHotSpotPushInterpreterFrameOp extends SPARCLIRInstruction {
     @Alive(REG) AllocatableValue initialInfo;
 
     SPARCHotSpotPushInterpreterFrameOp(AllocatableValue frameSize, AllocatableValue framePc, AllocatableValue senderSp, AllocatableValue initialInfo) {
+        super(TYPE);
         this.frameSize = frameSize;
         this.framePc = framePc;
         this.senderSp = senderSp;
@@ -58,21 +61,21 @@ final class SPARCHotSpotPushInterpreterFrameOp extends SPARCLIRInstruction {
         final Register senderSpRegister = asRegister(senderSp);
 
         // Save sender SP to O5_savedSP.
-        masm.mov(senderSpRegister, o5);
+        new Mov(senderSpRegister, o5).emit(masm);
 
-        masm.neg(frameSizeRegister);
-        masm.save(sp, frameSizeRegister, sp);
+        new Neg(frameSizeRegister).emit(masm);
+        new Save(sp, frameSizeRegister, sp).emit(masm);
 
-        masm.mov(i0, o0);
-        masm.mov(i1, o1);
-        masm.mov(i2, o2);
-        masm.mov(i3, o3);
-        masm.mov(i4, o4);
+        new Mov(i0, o0).emit(masm);
+        new Mov(i1, o1).emit(masm);
+        new Mov(i2, o2).emit(masm);
+        new Mov(i3, o3).emit(masm);
+        new Mov(i4, o4).emit(masm);
 
         // NOTE: Don't touch I5 as it contains valuable saved SP!
 
         // Move frame's new PC into i7
-        masm.mov(framePcRegister, i7);
+        new Mov(framePcRegister, i7).emit(masm);
     }
 
     @Override

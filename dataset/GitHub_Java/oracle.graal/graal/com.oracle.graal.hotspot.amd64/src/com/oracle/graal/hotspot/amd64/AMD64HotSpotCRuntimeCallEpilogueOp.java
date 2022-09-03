@@ -22,14 +22,11 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import jdk.vm.ci.code.Register;
-
-import com.oracle.graal.asm.amd64.AMD64Address;
-import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.amd64.AMD64LIRInstruction;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.amd64.*;
+import com.oracle.graal.lir.asm.*;
 
 @Opcode("CRUNTIME_CALL_EPILOGUE")
 final class AMD64HotSpotCRuntimeCallEpilogueOp extends AMD64LIRInstruction {
@@ -39,7 +36,7 @@ final class AMD64HotSpotCRuntimeCallEpilogueOp extends AMD64LIRInstruction {
     private final int threadLastJavaFpOffset;
     private final Register thread;
 
-    AMD64HotSpotCRuntimeCallEpilogueOp(int threadLastJavaSpOffset, int threadLastJavaFpOffset, Register thread) {
+    public AMD64HotSpotCRuntimeCallEpilogueOp(int threadLastJavaSpOffset, int threadLastJavaFpOffset, Register thread) {
         super(TYPE);
         this.threadLastJavaSpOffset = threadLastJavaSpOffset;
         this.threadLastJavaFpOffset = threadLastJavaFpOffset;

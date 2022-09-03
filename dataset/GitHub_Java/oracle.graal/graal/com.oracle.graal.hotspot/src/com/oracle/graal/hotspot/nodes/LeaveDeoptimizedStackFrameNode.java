@@ -22,27 +22,21 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.hotspot.HotSpotLIRGenerator;
-import com.oracle.graal.hotspot.stubs.DeoptimizationStub;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.word.Word;
-
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.word.*;
 
 /**
  * Emits code to leave (pop) the current low-level stack frame which is being deoptimized. This node
  * is only used in {@link DeoptimizationStub}.
  */
-@NodeInfo(cycles = CYCLES_3, size = SIZE_2)
+@NodeInfo
 public final class LeaveDeoptimizedStackFrameNode extends FixedWithNextNode implements LIRLowerable {
 
     public static final NodeClass<LeaveDeoptimizedStackFrameNode> TYPE = NodeClass.create(LeaveDeoptimizedStackFrameNode.class);

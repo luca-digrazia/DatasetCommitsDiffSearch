@@ -22,136 +22,27 @@
  */
 package com.oracle.graal.compiler.common;
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.util.concurrent.*;
+public abstract class FieldIntrospection<T> extends UnsafeAccess {
 
-public abstract class FieldIntrospection extends UnsafeAccess {
+    private final Class<T> clazz;
 
     /**
-     * Interface used by {@link #rescanAllFieldOffsets(CalcOffset)} to determine the offset (in
-     * bytes) of a field.
+     * The set of fields in {@link #clazz} that do long belong to a more specific category.
      */
-    public interface CalcOffset {
+    protected Fields data;
 
-        long getOffset(Field field);
-    }
-
-    public static class DefaultCalcOffset implements CalcOffset {
-
-        @Override
-        public long getOffset(Field field) {
-            return unsafe.objectFieldOffset(field);
-        }
-    }
-
-    protected static final ConcurrentHashMap<Class<?>, FieldIntrospection> allClasses = new ConcurrentHashMap<>();
-
-    private final Class<?> clazz;
-    protected long[] dataOffsets;
-    protected Map<Long, String> fieldNames;
-    protected Map<Long, Class<?>> fieldTypes;
-
-    public FieldIntrospection(Class<?> clazz) {
+    public FieldIntrospection(Class<T> clazz) {
         this.clazz = clazz;
     }
 
-    public Class<?> getClazz() {
+    public Class<T> getClazz() {
         return clazz;
     }
 
-    public static void rescanAllFieldOffsets(CalcOffset calc) {
-        for (FieldIntrospection nodeClass : allClasses.values()) {
-            nodeClass.rescanFieldOffsets(calc);
-        }
-    }
-
-    protected abstract void rescanFieldOffsets(CalcOffset calc);
-
-    public abstract static class BaseFieldScanner {
-
-        private final CalcOffset calc;
-
-        /** The offsets of fields that are not specially handled by subclasses. */
-        public final ArrayList<Long> dataOffsets = new ArrayList<>();
-
-        public final Map<Long, String> fieldNames = new HashMap<>();
-        public final Map<Long, Class<?>> fieldTypes = new HashMap<>();
-
-        protected BaseFieldScanner(CalcOffset calc) {
-            this.calc = calc;
-        }
-
-        public void scan(Class<?> clazz) {
-            Class<?> currentClazz = clazz;
-            do {
-                for (Field field : currentClazz.getDeclaredFields()) {
-                    if (Modifier.isStatic(field.getModifiers())) {
-                        continue;
-                    }
-                    Class<?> type = field.getType();
-                    long offset = calc.getOffset(field);
-
-                    // scanField() may overwrite the name with a customized name.
-                    fieldNames.put(offset, field.getName());
-                    fieldTypes.put(offset, type);
-
-                    scanField(field, type, offset);
-                }
-                currentClazz = currentClazz.getSuperclass();
-            } while (currentClazz.getSuperclass() != Object.class);
-        }
-
-        protected abstract void scanField(Field field, Class<?> type, long offset);
-    }
-
-    protected static void copyInto(long[] dest, long[] src) {
-        assert dest.length == src.length;
-        for (int i = 0; i < dest.length; i++) {
-            dest[i] = src[i];
-        }
-    }
-
-    protected static <T> void copyInto(T[] dest, T[] src) {
-        assert dest.length == src.length;
-        for (int i = 0; i < dest.length; i++) {
-            dest[i] = src[i];
-        }
-    }
-
-    protected static <T> void copyInto(T[] dest, List<T> src) {
-        assert dest.length == src.size();
-        for (int i = 0; i < dest.length; i++) {
-            dest[i] = src.get(i);
-        }
-    }
-
-    protected static <T> T[] arrayUsingSortedOffsets(Map<Long, T> map, long[] sortedOffsets, T[] result) {
-        for (int i = 0; i < sortedOffsets.length; i++) {
-            result[i] = map.get(sortedOffsets[i]);
-        }
-        return result;
-    }
-
-    protected static long[] sortedLongCopy(ArrayList<Long> list1) {
-        Collections.sort(list1);
-        long[] result = new long[list1.size()];
-        for (int i = 0; i < list1.size(); i++) {
-            result[i] = list1.get(i);
-        }
-        return result;
-    }
-
-    protected static long[] sortedLongCopy(ArrayList<Long> list1, ArrayList<Long> list2) {
-        Collections.sort(list1);
-        Collections.sort(list2);
-        long[] result = new long[list1.size() + list2.size()];
-        for (int i = 0; i < list1.size(); i++) {
-            result[i] = list1.get(i);
-        }
-        for (int i = 0; i < list2.size(); i++) {
-            result[list1.size() + i] = list2.get(i);
-        }
-        return result;
+    /**
+     * Gets the fields in {@link #getClazz()} that do long belong to specific category.
+     */
+    public Fields getData() {
+        return data;
     }
 }

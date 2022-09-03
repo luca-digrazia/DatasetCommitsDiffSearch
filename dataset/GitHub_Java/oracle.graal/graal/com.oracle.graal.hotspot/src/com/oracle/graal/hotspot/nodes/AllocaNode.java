@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,21 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import java.util.*;
 
-import java.util.BitSet;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.lir.VirtualStackSlot;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.word.Word;
-import com.oracle.graal.word.WordTypes;
-
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Reserves a block of memory in the stack frame of a method. The block is reserved in the frame for
  * the entire execution of the associated method.
  */
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+@NodeInfo
 public final class AllocaNode extends FixedWithNextNode implements LIRLowerable {
 
     public static final NodeClass<AllocaNode> TYPE = NodeClass.create(AllocaNode.class);
@@ -60,11 +52,7 @@ public final class AllocaNode extends FixedWithNextNode implements LIRLowerable 
      */
     protected final BitSet objects;
 
-    public AllocaNode(@InjectedNodeParameter WordTypes wordTypes, int slots) {
-        this(slots, wordTypes.getWordKind(), new BitSet());
-    }
-
-    public AllocaNode(int slots, JavaKind wordKind, BitSet objects) {
+    public AllocaNode(int slots, Kind wordKind, BitSet objects) {
         super(TYPE, StampFactory.forKind(wordKind));
         this.slots = slots;
         this.objects = objects;
@@ -76,7 +64,4 @@ public final class AllocaNode extends FixedWithNextNode implements LIRLowerable 
         Value result = gen.getLIRGeneratorTool().emitAddress(array);
         gen.setResult(this, result);
     }
-
-    @NodeIntrinsic
-    public static native Word alloca(@ConstantNodeParameter int slots);
 }

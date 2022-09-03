@@ -47,7 +47,7 @@ import com.oracle.graal.sparc.*;
 @Opcode("JUMP_TO_EXCEPTION_HANDLER_IN_CALLER")
 final class SPARCHotSpotJumpToExceptionHandlerInCallerOp extends SPARCHotSpotEpilogueOp {
 
-    public static final LIRInstructionClass<SPARCHotSpotJumpToExceptionHandlerInCallerOp> TYPE = LIRInstructionClass.create(SPARCHotSpotJumpToExceptionHandlerInCallerOp.class);
+    public static final LIRInstructionClass<SPARCHotSpotDeoptimizeCallerOp> TYPE = LIRInstructionClass.create(SPARCHotSpotDeoptimizeCallerOp.class);
 
     @Use(REG) AllocatableValue handlerInCallerPc;
     @Use(REG) AllocatableValue exception;

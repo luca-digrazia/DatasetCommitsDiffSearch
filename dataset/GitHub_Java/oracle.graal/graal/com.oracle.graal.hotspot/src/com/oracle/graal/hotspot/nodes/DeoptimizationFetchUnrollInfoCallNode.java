@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,7 @@ import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
 
@@ -40,7 +40,7 @@ import com.oracle.graal.word.*;
  * A call to the runtime code {@code Deoptimization::fetch_unroll_info}.
  */
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
-public final class DeoptimizationFetchUnrollInfoCallNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
+public final class DeoptimizationFetchUnrollInfoCallNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Multi {
 
     public static final NodeClass<DeoptimizationFetchUnrollInfoCallNode> TYPE = NodeClass.create(DeoptimizationFetchUnrollInfoCallNode.class);
     @Input SaveAllRegistersNode registerSaver;
@@ -53,8 +53,8 @@ public final class DeoptimizationFetchUnrollInfoCallNode extends FixedWithNextNo
     }
 
     @Override
-    public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
+    public LocationIdentity[] getLocationIdentities() {
+        return foreignCalls.getKilledLocations(FETCH_UNROLL_INFO);
     }
 
     public SaveRegistersOp getSaveRegistersOp() {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,44 +22,51 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
+
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.target.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.max.asm.target.amd64.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
- * Node implementing a call to HotSpot's {@code new_instance} stub.
- *
- * @see AMD64NewInstanceStubCallOp
+ * A call to the {@link NewInstanceStub}.
  */
-public class NewInstanceStubCall extends FixedWithNextNode implements LIRGenLowerable {
+@NodeInfo
+public final class NewInstanceStubCall extends DeoptimizingStubCall implements LIRLowerable {
 
-    @Input private final ValueNode hub;
+    public static final NodeClass<NewInstanceStubCall> TYPE = NodeClass.create(NewInstanceStubCall.class);
+    private static final Stamp defaultStamp = StampFactory.objectNonNull();
+
+    @Input ValueNode hub;
 
     public NewInstanceStubCall(ValueNode hub) {
-        super(StampFactory.objectNonNull());
+        super(TYPE, defaultStamp);
         this.hub = hub;
     }
 
     @Override
-    public void generate(LIRGenerator gen) {
-        Variable result = gen.newVariable(Kind.Object);
-        gen.emitMove(gen.operand(hub), AMD64.rdx.asValue());
-        LIRDebugInfo info = gen.state();
-        AMD64NewInstanceStubCallOp op = new AMD64NewInstanceStubCallOp(result, AMD64.rdx.asValue(), info);
-        gen.append(op);
+    public boolean inferStamp() {
+        if (stamp() == defaultStamp && hub.isConstant()) {
+            updateStamp(StampFactory.exactNonNull(((HotSpotMetaspaceConstant) hub.asJavaConstant()).asResolvedJavaType()));
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void generate(NodeLIRBuilderTool gen) {
+        ForeignCallLinkage linkage = gen.getLIRGeneratorTool().getForeignCalls().lookupForeignCall(NEW_INSTANCE);
+        Value result = gen.getLIRGeneratorTool().emitForeignCall(linkage, gen.state(this), gen.operand(hub));
         gen.setResult(this, result);
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static Object call(Object hub) {
-        throw new UnsupportedOperationException();
-    }
-
-
+    public static native Object call(KlassPointer hub);
 }

@@ -22,24 +22,17 @@
  */
 package com.oracle.graal.graph.test;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.api.test.Graal;
-import com.oracle.graal.graph.Graph;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 
 public class NodeMapTest {
 
-    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    @NodeInfo
     static final class TestNode extends Node {
         public static final NodeClass<TestNode> TYPE = NodeClass.create(TestNode.class);
 

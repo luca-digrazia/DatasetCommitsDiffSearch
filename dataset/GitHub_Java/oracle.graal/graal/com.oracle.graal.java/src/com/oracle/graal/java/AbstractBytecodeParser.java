@@ -42,7 +42,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 
-public abstract class AbstractBytecodeParser {
+public abstract class AbstractBytecodeParser<T extends KindProvider, F extends AbstractFrameStateBuilder<T, F>> {
 
     static class Options {
         // @formatter:off
@@ -63,7 +63,7 @@ public abstract class AbstractBytecodeParser {
      */
     public static final int TRACELEVEL_STATE = 2;
 
-    protected HIRFrameStateBuilder frameState;
+    protected F frameState;
     protected BciBlock currentBlock;
 
     protected final BytecodeStream stream;
@@ -97,7 +97,7 @@ public abstract class AbstractBytecodeParser {
         assert metaAccess != null;
     }
 
-    public void setCurrentFrameState(HIRFrameStateBuilder frameState) {
+    public void setCurrentFrameState(F frameState) {
         this.frameState = frameState;
     }
 
@@ -114,7 +114,7 @@ public abstract class AbstractBytecodeParser {
     }
 
     public void storeLocal(Kind kind, int index) {
-        ValueNode value;
+        T value;
         if (kind == Kind.Object) {
             value = frameState.xpop();
             // astore and astore_<n> may be used to store a returnAddress (jsr)
@@ -134,13 +134,13 @@ public abstract class AbstractBytecodeParser {
      * @param type the unresolved type of the type check
      * @param object the object value whose type is being checked against {@code type}
      */
-    protected abstract void handleUnresolvedCheckCast(JavaType type, ValueNode object);
+    protected abstract void handleUnresolvedCheckCast(JavaType type, T object);
 
     /**
      * @param type the unresolved type of the type check
      * @param object the object value whose type is being checked against {@code type}
      */
-    protected abstract void handleUnresolvedInstanceOf(JavaType type, ValueNode object);
+    protected abstract void handleUnresolvedInstanceOf(JavaType type, T object);
 
     /**
      * @param type the type being instantiated
@@ -151,26 +151,26 @@ public abstract class AbstractBytecodeParser {
      * @param type the type of the array being instantiated
      * @param length the length of the array
      */
-    protected abstract void handleUnresolvedNewObjectArray(JavaType type, ValueNode length);
+    protected abstract void handleUnresolvedNewObjectArray(JavaType type, T length);
 
     /**
      * @param type the type being instantiated
      * @param dims the dimensions for the multi-array
      */
-    protected abstract void handleUnresolvedNewMultiArray(JavaType type, List<ValueNode> dims);
+    protected abstract void handleUnresolvedNewMultiArray(JavaType type, List<T> dims);
 
     /**
      * @param field the unresolved field
      * @param receiver the object containing the field or {@code null} if {@code field} is static
      */
-    protected abstract void handleUnresolvedLoadField(JavaField field, ValueNode receiver);
+    protected abstract void handleUnresolvedLoadField(JavaField field, T receiver);
 
     /**
      * @param field the unresolved field
      * @param value the value being stored to the field
      * @param receiver the object containing the field or {@code null} if {@code field} is static
      */
-    protected abstract void handleUnresolvedStoreField(JavaField field, ValueNode value, ValueNode receiver);
+    protected abstract void handleUnresolvedStoreField(JavaField field, T value, T receiver);
 
     /**
      * @param type
@@ -179,7 +179,7 @@ public abstract class AbstractBytecodeParser {
 
     // protected abstract void handleUnresolvedInvoke(JavaMethod javaMethod, InvokeKind invokeKind);
 
-    // protected abstract DispatchBeginNode handleException(ValueNode exceptionObject, int bci);
+    // protected abstract DispatchBeginNode handleException(T exceptionObject, int bci);
 
     private void genLoadConstant(int cpi, int opcode) {
         Object con = lookupConstant(cpi, opcode);
@@ -200,24 +200,24 @@ public abstract class AbstractBytecodeParser {
         }
     }
 
-    protected abstract ValueNode genLoadIndexed(ValueNode index, ValueNode array, Kind kind);
+    protected abstract T genLoadIndexed(T index, T array, Kind kind);
 
     private void genLoadIndexed(Kind kind) {
         emitExplicitExceptions(frameState.peek(1), frameState.peek(0));
 
-        ValueNode index = frameState.ipop();
-        ValueNode array = frameState.apop();
+        T index = frameState.ipop();
+        T array = frameState.apop();
         frameState.push(kind.getStackKind(), append(genLoadIndexed(array, index, kind)));
     }
 
-    protected abstract ValueNode genStoreIndexed(ValueNode array, ValueNode index, Kind kind, ValueNode value);
+    protected abstract T genStoreIndexed(T array, T index, Kind kind, T value);
 
     private void genStoreIndexed(Kind kind) {
         emitExplicitExceptions(frameState.peek(2), frameState.peek(1));
 
-        ValueNode value = frameState.pop(kind.getStackKind());
-        ValueNode index = frameState.ipop();
-        ValueNode array = frameState.apop();
+        T value = frameState.pop(kind.getStackKind());
+        T index = frameState.ipop();
+        T array = frameState.apop();
         append(genStoreIndexed(array, index, kind, value));
     }
 
@@ -233,23 +233,23 @@ public abstract class AbstractBytecodeParser {
                 break;
             }
             case DUP: {
-                ValueNode w = frameState.xpop();
+                T w = frameState.xpop();
                 frameState.xpush(w);
                 frameState.xpush(w);
                 break;
             }
             case DUP_X1: {
-                ValueNode w1 = frameState.xpop();
-                ValueNode w2 = frameState.xpop();
+                T w1 = frameState.xpop();
+                T w2 = frameState.xpop();
                 frameState.xpush(w1);
                 frameState.xpush(w2);
                 frameState.xpush(w1);
                 break;
             }
             case DUP_X2: {
-                ValueNode w1 = frameState.xpop();
-                ValueNode w2 = frameState.xpop();
-                ValueNode w3 = frameState.xpop();
+                T w1 = frameState.xpop();
+                T w2 = frameState.xpop();
+                T w3 = frameState.xpop();
                 frameState.xpush(w1);
                 frameState.xpush(w3);
                 frameState.xpush(w2);
@@ -257,8 +257,8 @@ public abstract class AbstractBytecodeParser {
                 break;
             }
             case DUP2: {
-                ValueNode w1 = frameState.xpop();
-                ValueNode w2 = frameState.xpop();
+                T w1 = frameState.xpop();
+                T w2 = frameState.xpop();
                 frameState.xpush(w2);
                 frameState.xpush(w1);
                 frameState.xpush(w2);
@@ -266,9 +266,9 @@ public abstract class AbstractBytecodeParser {
                 break;
             }
             case DUP2_X1: {
-                ValueNode w1 = frameState.xpop();
-                ValueNode w2 = frameState.xpop();
-                ValueNode w3 = frameState.xpop();
+                T w1 = frameState.xpop();
+                T w2 = frameState.xpop();
+                T w3 = frameState.xpop();
                 frameState.xpush(w2);
                 frameState.xpush(w1);
                 frameState.xpush(w3);
@@ -277,10 +277,10 @@ public abstract class AbstractBytecodeParser {
                 break;
             }
             case DUP2_X2: {
-                ValueNode w1 = frameState.xpop();
-                ValueNode w2 = frameState.xpop();
-                ValueNode w3 = frameState.xpop();
-                ValueNode w4 = frameState.xpop();
+                T w1 = frameState.xpop();
+                T w2 = frameState.xpop();
+                T w3 = frameState.xpop();
+                T w4 = frameState.xpop();
                 frameState.xpush(w2);
                 frameState.xpush(w1);
                 frameState.xpush(w4);
@@ -290,8 +290,8 @@ public abstract class AbstractBytecodeParser {
                 break;
             }
             case SWAP: {
-                ValueNode w1 = frameState.xpop();
-                ValueNode w2 = frameState.xpop();
+                T w1 = frameState.xpop();
+                T w2 = frameState.xpop();
                 frameState.xpush(w1);
                 frameState.xpush(w2);
                 break;
@@ -301,27 +301,27 @@ public abstract class AbstractBytecodeParser {
         }
     }
 
-    protected abstract ValueNode genIntegerAdd(Kind kind, ValueNode x, ValueNode y);
+    protected abstract T genIntegerAdd(Kind kind, T x, T y);
 
-    protected abstract ValueNode genIntegerSub(Kind kind, ValueNode x, ValueNode y);
+    protected abstract T genIntegerSub(Kind kind, T x, T y);
 
-    protected abstract ValueNode genIntegerMul(Kind kind, ValueNode x, ValueNode y);
+    protected abstract T genIntegerMul(Kind kind, T x, T y);
 
-    protected abstract ValueNode genFloatAdd(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP);
+    protected abstract T genFloatAdd(Kind kind, T x, T y, boolean isStrictFP);
 
-    protected abstract ValueNode genFloatSub(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP);
+    protected abstract T genFloatSub(Kind kind, T x, T y, boolean isStrictFP);
 
-    protected abstract ValueNode genFloatMul(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP);
+    protected abstract T genFloatMul(Kind kind, T x, T y, boolean isStrictFP);
 
-    protected abstract ValueNode genFloatDiv(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP);
+    protected abstract T genFloatDiv(Kind kind, T x, T y, boolean isStrictFP);
 
-    protected abstract ValueNode genFloatRem(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP);
+    protected abstract T genFloatRem(Kind kind, T x, T y, boolean isStrictFP);
 
     private void genArithmeticOp(Kind result, int opcode) {
-        ValueNode y = frameState.pop(result);
-        ValueNode x = frameState.pop(result);
+        T y = frameState.pop(result);
+        T x = frameState.pop(result);
         boolean isStrictFP = method.isStrict();
-        ValueNode v;
+        T v;
         switch (opcode) {
             case IADD:
             case LADD:
@@ -361,14 +361,14 @@ public abstract class AbstractBytecodeParser {
         frameState.push(result, append(v));
     }
 
-    protected abstract ValueNode genIntegerDiv(Kind kind, ValueNode x, ValueNode y);
+    protected abstract T genIntegerDiv(Kind kind, T x, T y);
 
-    protected abstract ValueNode genIntegerRem(Kind kind, ValueNode x, ValueNode y);
+    protected abstract T genIntegerRem(Kind kind, T x, T y);
 
     private void genIntegerDivOp(Kind result, int opcode) {
-        ValueNode y = frameState.pop(result);
-        ValueNode x = frameState.pop(result);
-        ValueNode v;
+        T y = frameState.pop(result);
+        T x = frameState.pop(result);
+        T v;
         switch (opcode) {
             case IDIV:
             case LDIV:
@@ -384,22 +384,22 @@ public abstract class AbstractBytecodeParser {
         frameState.push(result, append(v));
     }
 
-    protected abstract ValueNode genNegateOp(ValueNode x);
+    protected abstract T genNegateOp(T x);
 
     private void genNegateOp(Kind kind) {
         frameState.push(kind, append(genNegateOp(frameState.pop(kind))));
     }
 
-    protected abstract ValueNode genLeftShift(Kind kind, ValueNode x, ValueNode y);
+    protected abstract T genLeftShift(Kind kind, T x, T y);
 
-    protected abstract ValueNode genRightShift(Kind kind, ValueNode x, ValueNode y);
+    protected abstract T genRightShift(Kind kind, T x, T y);
 
-    protected abstract ValueNode genUnsignedRightShift(Kind kind, ValueNode x, ValueNode y);
+    protected abstract T genUnsignedRightShift(Kind kind, T x, T y);
 
     private void genShiftOp(Kind kind, int opcode) {
-        ValueNode s = frameState.ipop();
-        ValueNode x = frameState.pop(kind);
-        ValueNode v;
+        T s = frameState.ipop();
+        T x = frameState.pop(kind);
+        T v;
         switch (opcode) {
             case ISHL:
             case LSHL:
@@ -419,16 +419,16 @@ public abstract class AbstractBytecodeParser {
         frameState.push(kind, append(v));
     }
 
-    protected abstract ValueNode genAnd(Kind kind, ValueNode x, ValueNode y);
+    protected abstract T genAnd(Kind kind, T x, T y);
 
-    protected abstract ValueNode genOr(Kind kind, ValueNode x, ValueNode y);
+    protected abstract T genOr(Kind kind, T x, T y);
 
-    protected abstract ValueNode genXor(Kind kind, ValueNode x, ValueNode y);
+    protected abstract T genXor(Kind kind, T x, T y);
 
     private void genLogicOp(Kind kind, int opcode) {
-        ValueNode y = frameState.pop(kind);
-        ValueNode x = frameState.pop(kind);
-        ValueNode v;
+        T y = frameState.pop(kind);
+        T x = frameState.pop(kind);
+        T v;
         switch (opcode) {
             case IAND:
             case LAND:
@@ -448,29 +448,29 @@ public abstract class AbstractBytecodeParser {
         frameState.push(kind, append(v));
     }
 
-    protected abstract ValueNode genNormalizeCompare(ValueNode x, ValueNode y, boolean isUnorderedLess);
+    protected abstract T genNormalizeCompare(T x, T y, boolean isUnorderedLess);
 
     private void genCompareOp(Kind kind, boolean isUnorderedLess) {
-        ValueNode y = frameState.pop(kind);
-        ValueNode x = frameState.pop(kind);
+        T y = frameState.pop(kind);
+        T x = frameState.pop(kind);
         frameState.ipush(append(genNormalizeCompare(x, y, isUnorderedLess)));
     }
 
-    protected abstract ValueNode genFloatConvert(FloatConvert op, ValueNode input);
+    protected abstract T genFloatConvert(FloatConvert op, T input);
 
     private void genFloatConvert(FloatConvert op, Kind from, Kind to) {
-        ValueNode input = frameState.pop(from.getStackKind());
+        T input = frameState.pop(from.getStackKind());
         frameState.push(to.getStackKind(), append(genFloatConvert(op, input)));
     }
 
-    protected abstract ValueNode genNarrow(ValueNode input, int bitCount);
+    protected abstract T genNarrow(T input, int bitCount);
 
-    protected abstract ValueNode genSignExtend(ValueNode input, int bitCount);
+    protected abstract T genSignExtend(T input, int bitCount);
 
-    protected abstract ValueNode genZeroExtend(ValueNode input, int bitCount);
+    protected abstract T genZeroExtend(T input, int bitCount);
 
     private void genSignExtend(Kind from, Kind to) {
-        ValueNode input = frameState.pop(from.getStackKind());
+        T input = frameState.pop(from.getStackKind());
         if (from != from.getStackKind()) {
             input = append(genNarrow(input, from.getBitCount()));
         }
@@ -478,7 +478,7 @@ public abstract class AbstractBytecodeParser {
     }
 
     private void genZeroExtend(Kind from, Kind to) {
-        ValueNode input = frameState.pop(from.getStackKind());
+        T input = frameState.pop(from.getStackKind());
         if (from != from.getStackKind()) {
             input = append(genNarrow(input, from.getBitCount()));
         }
@@ -486,45 +486,45 @@ public abstract class AbstractBytecodeParser {
     }
 
     private void genNarrow(Kind from, Kind to) {
-        ValueNode input = frameState.pop(from.getStackKind());
+        T input = frameState.pop(from.getStackKind());
         frameState.push(to.getStackKind(), append(genNarrow(input, to.getBitCount())));
     }
 
     private void genIncrement() {
         int index = getStream().readLocalIndex();
         int delta = getStream().readIncrement();
-        ValueNode x = frameState.loadLocal(index);
-        ValueNode y = appendConstant(JavaConstant.forInt(delta));
+        T x = frameState.loadLocal(index);
+        T y = appendConstant(JavaConstant.forInt(delta));
         frameState.storeLocal(index, append(genIntegerAdd(Kind.Int, x, y)));
     }
 
     protected abstract void genGoto();
 
-    protected abstract ValueNode genObjectEquals(ValueNode x, ValueNode y);
+    protected abstract T genObjectEquals(T x, T y);
 
-    protected abstract ValueNode genIntegerEquals(ValueNode x, ValueNode y);
+    protected abstract T genIntegerEquals(T x, T y);
 
-    protected abstract ValueNode genIntegerLessThan(ValueNode x, ValueNode y);
+    protected abstract T genIntegerLessThan(T x, T y);
 
-    protected abstract ValueNode genUnique(ValueNode x);
+    protected abstract T genUnique(T x);
 
-    protected abstract void genIf(ValueNode x, Condition cond, ValueNode y);
+    protected abstract void genIf(T x, Condition cond, T y);
 
     private void genIfZero(Condition cond) {
-        ValueNode y = appendConstant(JavaConstant.INT_0);
-        ValueNode x = frameState.ipop();
+        T y = appendConstant(JavaConstant.INT_0);
+        T x = frameState.ipop();
         genIf(x, cond, y);
     }
 
     private void genIfNull(Condition cond) {
-        ValueNode y = appendConstant(JavaConstant.NULL_POINTER);
-        ValueNode x = frameState.apop();
+        T y = appendConstant(JavaConstant.NULL_POINTER);
+        T x = frameState.apop();
         genIf(x, cond, y);
     }
 
     private void genIfSame(Kind kind, Condition cond) {
-        ValueNode y = frameState.pop(kind);
-        ValueNode x = frameState.pop(kind);
+        T y = frameState.pop(kind);
+        T x = frameState.pop(kind);
         // assert !x.isDeleted() && !y.isDeleted();
         genIf(x, cond, y);
     }
@@ -579,40 +579,41 @@ public abstract class AbstractBytecodeParser {
         }
     }
 
-    protected abstract ValueNode createCheckCast(ResolvedJavaType type, ValueNode object, JavaTypeProfile profileForTypeCheck, boolean forStoreCheck);
+    protected abstract T createCheckCast(ResolvedJavaType type, T object, JavaTypeProfile profileForTypeCheck, boolean forStoreCheck);
 
     private void genCheckCast() {
         int cpi = getStream().readCPI();
         JavaType type = lookupType(cpi, CHECKCAST);
-        ValueNode object = frameState.apop();
+        T object = frameState.apop();
         if (type instanceof ResolvedJavaType) {
             JavaTypeProfile profileForTypeCheck = getProfileForTypeCheck((ResolvedJavaType) type);
-            ValueNode checkCastNode = append(createCheckCast((ResolvedJavaType) type, object, profileForTypeCheck, false));
+            T checkCastNode = append(createCheckCast((ResolvedJavaType) type, object, profileForTypeCheck, false));
             frameState.apush(checkCastNode);
         } else {
             handleUnresolvedCheckCast(type, object);
         }
     }
 
-    protected abstract ValueNode createInstanceOf(ResolvedJavaType type, ValueNode object, JavaTypeProfile profileForTypeCheck);
+    protected abstract T createInstanceOf(ResolvedJavaType type, T object, JavaTypeProfile profileForTypeCheck);
 
-    protected abstract ValueNode genConditional(ValueNode x);
+    protected abstract T genConditional(T x);
 
     private void genInstanceOf() {
         int cpi = getStream().readCPI();
         JavaType type = lookupType(cpi, INSTANCEOF);
-        ValueNode object = frameState.apop();
+        T object = frameState.apop();
         if (type instanceof ResolvedJavaType) {
             ResolvedJavaType resolvedType = (ResolvedJavaType) type;
-            ValueNode instanceOfNode = createInstanceOf((ResolvedJavaType) type, object, getProfileForTypeCheck(resolvedType));
+            T instanceOfNode = createInstanceOf((ResolvedJavaType) type, object, getProfileForTypeCheck(resolvedType));
             frameState.ipush(append(genConditional(genUnique(instanceOfNode))));
         } else {
             handleUnresolvedInstanceOf(type, object);
         }
     }
 
-    protected abstract ValueNode createNewInstance(ResolvedJavaType type, boolean fillContents);
+    protected abstract T createNewInstance(ResolvedJavaType type, boolean fillContents);
 
+    @SuppressWarnings("unchecked")
     void genNewInstance(int cpi) {
         JavaType type = lookupType(cpi, NEW);
         if (type instanceof ResolvedJavaType && ((ResolvedJavaType) type).isInitialized()) {
@@ -620,7 +621,7 @@ public abstract class AbstractBytecodeParser {
             if (skippedExceptionTypes != null) {
                 for (ResolvedJavaType exceptionType : skippedExceptionTypes) {
                     if (exceptionType.isAssignableFrom((ResolvedJavaType) type)) {
-                        append(new DeoptimizeNode(DeoptimizationAction.None, TransferToInterpreter));
+                        append((T) new DeoptimizeNode(DeoptimizationAction.None, TransferToInterpreter));
                         return;
                     }
                 }
@@ -671,7 +672,7 @@ public abstract class AbstractBytecodeParser {
 
     private void genNewObjectArray(int cpi) {
         JavaType type = lookupType(cpi, ANEWARRAY);
-        ValueNode length = frameState.ipop();
+        T length = frameState.ipop();
         if (type instanceof ResolvedJavaType) {
             frameState.apush(append(createNewArray((ResolvedJavaType) type, length, true)));
         } else {
@@ -680,12 +681,12 @@ public abstract class AbstractBytecodeParser {
 
     }
 
-    protected abstract ValueNode createNewArray(ResolvedJavaType elementType, ValueNode length, boolean fillContents);
+    protected abstract T createNewArray(ResolvedJavaType elementType, T length, boolean fillContents);
 
     private void genNewMultiArray(int cpi) {
         JavaType type = lookupType(cpi, MULTIANEWARRAY);
         int rank = getStream().readUByte(bci() + 3);
-        List<ValueNode> dims = new ArrayList<>(Collections.nCopies(rank, null));
+        List<T> dims = new ArrayList<>(Collections.nCopies(rank, null));
         for (int i = rank - 1; i >= 0; i--) {
             dims.set(i, frameState.ipop());
         }
@@ -696,18 +697,18 @@ public abstract class AbstractBytecodeParser {
         }
     }
 
-    protected abstract ValueNode createNewMultiArray(ResolvedJavaType type, List<ValueNode> dims);
+    protected abstract T createNewMultiArray(ResolvedJavaType type, List<T> dims);
 
-    protected abstract ValueNode genLoadField(ValueNode receiver, ResolvedJavaField field);
+    protected abstract T genLoadField(T receiver, ResolvedJavaField field);
 
     private void genGetField(JavaField field) {
         emitExplicitExceptions(frameState.peek(0), null);
 
         Kind kind = field.getKind();
-        ValueNode receiver = frameState.apop();
+        T receiver = frameState.apop();
         if ((field instanceof ResolvedJavaField) && ((ResolvedJavaField) field).getDeclaringClass().isInitialized()) {
             LoadFieldPlugin loadFieldPlugin = this.graphBuilderConfig.getLoadFieldPlugin();
-            if (loadFieldPlugin == null || !loadFieldPlugin.apply((GraphBuilderContext) this, receiver, (ResolvedJavaField) field)) {
+            if (loadFieldPlugin == null || !loadFieldPlugin.apply((GraphBuilderContext) this, (ValueNode) receiver, (ResolvedJavaField) field)) {
                 appendOptimizedLoadField(kind, genLoadField(receiver, (ResolvedJavaField) field));
             }
         } else {
@@ -715,15 +716,15 @@ public abstract class AbstractBytecodeParser {
         }
     }
 
-    protected abstract void emitNullCheck(ValueNode receiver);
+    protected abstract void emitNullCheck(T receiver);
 
-    protected abstract void emitBoundsCheck(ValueNode index, ValueNode length);
+    protected abstract void emitBoundsCheck(T index, T length);
 
     private static final DebugMetric EXPLICIT_EXCEPTIONS = Debug.metric("ExplicitExceptions");
 
-    protected abstract ValueNode genArrayLength(ValueNode x);
+    protected abstract T genArrayLength(T x);
 
-    protected void emitExplicitExceptions(ValueNode receiver, ValueNode outOfBoundsIndex) {
+    protected void emitExplicitExceptions(T receiver, T outOfBoundsIndex) {
         assert receiver != null;
         if (graphBuilderConfig.omitAllExceptionEdges() || profilingInfo == null ||
                         (optimisticOpts.useExceptionProbabilityForOperations() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE && !GraalOptions.StressExplicitExceptionCode.getValue())) {
@@ -732,19 +733,19 @@ public abstract class AbstractBytecodeParser {
 
         emitNullCheck(receiver);
         if (outOfBoundsIndex != null) {
-            ValueNode length = append(genArrayLength(receiver));
+            T length = append(genArrayLength(receiver));
             emitBoundsCheck(outOfBoundsIndex, length);
         }
         EXPLICIT_EXCEPTIONS.increment();
     }
 
-    protected abstract ValueNode genStoreField(ValueNode receiver, ResolvedJavaField field, ValueNode value);
+    protected abstract T genStoreField(T receiver, ResolvedJavaField field, T value);
 
     private void genPutField(JavaField field) {
         emitExplicitExceptions(frameState.peek(1), null);
 
-        ValueNode value = frameState.pop(field.getKind().getStackKind());
-        ValueNode receiver = frameState.apop();
+        T value = frameState.pop(field.getKind().getStackKind());
+        T receiver = frameState.apop();
         if (field instanceof ResolvedJavaField && ((ResolvedJavaField) field).getDeclaringClass().isInitialized()) {
             appendOptimizedStoreField(genStoreField(receiver, (ResolvedJavaField) field, value));
         } else {
@@ -765,7 +766,7 @@ public abstract class AbstractBytecodeParser {
     }
 
     private void genPutStatic(JavaField field) {
-        ValueNode value = frameState.pop(field.getKind().getStackKind());
+        T value = frameState.pop(field.getKind().getStackKind());
         if (field instanceof ResolvedJavaField && ((ResolvedJavaType) field.getDeclaringClass()).isInitialized()) {
             appendOptimizedStoreField(genStoreField(null, (ResolvedJavaField) field, value));
         } else {
@@ -773,13 +774,13 @@ public abstract class AbstractBytecodeParser {
         }
     }
 
-    protected void appendOptimizedStoreField(ValueNode store) {
+    protected void appendOptimizedStoreField(T store) {
         append(store);
     }
 
-    protected void appendOptimizedLoadField(Kind kind, ValueNode load) {
+    protected void appendOptimizedLoadField(Kind kind, T load) {
         // append the load to the instruction
-        ValueNode optimized = append(load);
+        T optimized = append(load);
         frameState.push(kind.getStackKind(), optimized);
     }
 
@@ -793,11 +794,11 @@ public abstract class AbstractBytecodeParser {
 
     protected abstract void genInvokeSpecial(JavaMethod target);
 
-    protected abstract void genReturn(ValueNode x);
+    protected abstract void genReturn(T x);
 
-    protected abstract ValueNode genMonitorEnter(ValueNode x);
+    protected abstract T genMonitorEnter(T x);
 
-    protected abstract ValueNode genMonitorExit(ValueNode x, ValueNode returnValue);
+    protected abstract T genMonitorExit(T x, T returnValue);
 
     protected abstract void genJsr(int dest);
 
@@ -842,7 +843,7 @@ public abstract class AbstractBytecodeParser {
 
     private void genSwitch(BytecodeSwitch bs) {
         int bci = bci();
-        ValueNode value = frameState.ipop();
+        T value = frameState.ipop();
 
         int nofCases = bs.numberOfCases();
         double[] keyProbabilities = switchProbability(nofCases + 1, bci);
@@ -860,7 +861,7 @@ public abstract class AbstractBytecodeParser {
         int[] keySuccessors = new int[nofCases + 1];
         int deoptSuccessorIndex = -1;
         int nextSuccessorIndex = 0;
-        boolean constantValue = value.isConstant();
+        boolean constantValue = ((ValueNode) value).isConstant();
         for (int i = 0; i < nofCases + 1; i++) {
             if (i < nofCases) {
                 keys[i] = bs.keyAt(i);
@@ -887,7 +888,7 @@ public abstract class AbstractBytecodeParser {
 
     }
 
-    protected abstract void genIntegerSwitch(ValueNode value, ArrayList<BciBlock> actualSuccessors, int[] keys, double[] keyProbabilities, int[] keySuccessors);
+    protected abstract void genIntegerSwitch(T value, ArrayList<BciBlock> actualSuccessors, int[] keys, double[] keyProbabilities, int[] keySuccessors);
 
     private static class SuccessorInfo {
 
@@ -900,9 +901,9 @@ public abstract class AbstractBytecodeParser {
         }
     }
 
-    protected abstract ValueNode appendConstant(JavaConstant constant);
+    protected abstract T appendConstant(JavaConstant constant);
 
-    protected abstract ValueNode append(ValueNode v);
+    protected abstract T append(T v);
 
     protected boolean isNeverExecutedCode(double probability) {
         return probability == 0 && optimisticOpts.removeNeverExecutedCode();
@@ -1181,7 +1182,7 @@ public abstract class AbstractBytecodeParser {
         return method;
     }
 
-    public HIRFrameStateBuilder getFrameState() {
+    public F getFrameState() {
         return frameState;
     }
 

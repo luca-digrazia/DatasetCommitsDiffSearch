@@ -22,20 +22,12 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeClassIterable;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.graph.NodePosIterator;
-import com.oracle.graal.graph.NodeSuccessorList;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 
 public class NodePosIteratorTest extends GraalCompilerTest {
 
@@ -50,7 +42,7 @@ public class NodePosIteratorTest extends GraalCompilerTest {
         @Input ConstantNode i1;
         @Input FloatingNode i2;
 
-        protected TestNode() {
+        public TestNode() {
             super(TYPE);
         }
 

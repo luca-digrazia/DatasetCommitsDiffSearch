@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,6 +41,7 @@ import com.oracle.graal.lir.asm.*;
  */
 @Opcode("ENTER_UNPACK_FRAMES_STACK_FRAME")
 final class SPARCHotSpotEnterUnpackFramesStackFrameOp extends SPARCLIRInstruction {
+    public static final LIRInstructionClass<SPARCHotSpotEnterUnpackFramesStackFrameOp> TYPE = LIRInstructionClass.create(SPARCHotSpotEnterUnpackFramesStackFrameOp.class);
 
     private final Register thread;
     private final int threadLastJavaSpOffset;
@@ -50,6 +51,7 @@ final class SPARCHotSpotEnterUnpackFramesStackFrameOp extends SPARCLIRInstructio
     @Temp(REG) AllocatableValue scratch;
 
     SPARCHotSpotEnterUnpackFramesStackFrameOp(Register thread, int threadLastJavaSpOffset, int threadLastJavaPcOffset, AllocatableValue framePc, AllocatableValue senderSp, AllocatableValue scratch) {
+        super(TYPE);
         this.thread = thread;
         this.threadLastJavaSpOffset = threadLastJavaSpOffset;
         this.threadLastJavaPcOffset = threadLastJavaPcOffset;
@@ -66,22 +68,22 @@ final class SPARCHotSpotEnterUnpackFramesStackFrameOp extends SPARCLIRInstructio
         Register scratchRegister = asRegister(scratch);
 
         // Save final sender SP to O5_savedSP.
-        masm.mov(senderSpRegister, o5);
+        new Mov(senderSpRegister, o5).emit(masm);
 
         // Load final frame PC.
-        masm.mov(framePcRegister, o7);
+        new Mov(framePcRegister, o7).emit(masm);
 
         // Allocate a full sized frame.
-        masm.save(sp, -totalFrameSize, sp);
+        new Save(sp, -totalFrameSize, sp).emit(masm);
 
-        masm.mov(i0, o0);
-        masm.mov(i1, o1);
-        masm.mov(i2, o2);
-        masm.mov(i3, o3);
-        masm.mov(i4, o4);
+        new Mov(i0, o0).emit(masm);
+        new Mov(i1, o1).emit(masm);
+        new Mov(i2, o2).emit(masm);
+        new Mov(i3, o3).emit(masm);
+        new Mov(i4, o4).emit(masm);
 
         // Set up last Java values.
-        masm.add(sp, STACK_BIAS, scratchRegister);
+        new Add(sp, STACK_BIAS, scratchRegister).emit(masm);
         new Stx(scratchRegister, new SPARCAddress(thread, threadLastJavaSpOffset)).emit(masm);
 
         // Clear last Java PC.
@@ -91,7 +93,7 @@ final class SPARCHotSpotEnterUnpackFramesStackFrameOp extends SPARCLIRInstructio
          * Safe thread register manually since we are not using LEAF_SP for {@link
          * DeoptimizationStub#UNPACK_FRAMES}.
          */
-        masm.mov(thread, l7);
+        new Mov(thread, l7).emit(masm);
     }
 
     @Override

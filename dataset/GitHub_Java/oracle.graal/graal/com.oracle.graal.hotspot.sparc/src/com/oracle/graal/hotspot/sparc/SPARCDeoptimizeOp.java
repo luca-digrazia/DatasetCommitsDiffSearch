@@ -33,12 +33,11 @@ import com.oracle.graal.lir.sparc.*;
 @Opcode("DEOPT")
 final class SPARCDeoptimizeOp extends SPARCLIRInstruction implements BlockEndOp {
     public static final LIRInstructionClass<SPARCDeoptimizeOp> TYPE = LIRInstructionClass.create(SPARCDeoptimizeOp.class);
-    public static final SizeEstimate SIZE = SizeEstimate.create(1);
 
     @State private LIRFrameState info;
 
     SPARCDeoptimizeOp(LIRFrameState info) {
-        super(TYPE, SIZE);
+        super(TYPE);
         this.info = info;
     }
 

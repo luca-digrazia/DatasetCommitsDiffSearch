@@ -22,28 +22,21 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_20;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_10;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.hotspot.HotSpotBackend;
-import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.word.Word;
-
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.word.*;
 
 /**
  * Emits code to enter a low-level stack frame specifically to call out to the C++ method
  * {@link HotSpotBackend#UNPACK_FRAMES Deoptimization::unpack_frames}.
  */
-@NodeInfo(cycles = CYCLES_20, size = SIZE_10)
+@NodeInfo
 public final class EnterUnpackFramesStackFrameNode extends FixedWithNextNode implements LIRLowerable {
     public static final NodeClass<EnterUnpackFramesStackFrameNode> TYPE = NodeClass.create(EnterUnpackFramesStackFrameNode.class);
 

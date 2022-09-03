@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import com.oracle.jvmci.code.Register;
-import com.oracle.jvmci.meta.AllocatableValue;
 import static com.oracle.graal.amd64.AMD64.*;
-import static com.oracle.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.lir.*;
@@ -49,9 +49,8 @@ final class AMD64HotSpotJumpToExceptionHandlerInCallerOp extends AMD64HotSpotEpi
     private final Register thread;
     private final int isMethodHandleReturnOffset;
 
-    AMD64HotSpotJumpToExceptionHandlerInCallerOp(AllocatableValue handlerInCallerPc, AllocatableValue exception, AllocatableValue exceptionPc, int isMethodHandleReturnOffset, Register thread,
-                    AllocatableValue savedRbp) {
-        super(TYPE, savedRbp);
+    AMD64HotSpotJumpToExceptionHandlerInCallerOp(AllocatableValue handlerInCallerPc, AllocatableValue exception, AllocatableValue exceptionPc, int isMethodHandleReturnOffset, Register thread) {
+        super(TYPE);
         this.handlerInCallerPc = handlerInCallerPc;
         this.exception = exception;
         this.exceptionPc = exceptionPc;

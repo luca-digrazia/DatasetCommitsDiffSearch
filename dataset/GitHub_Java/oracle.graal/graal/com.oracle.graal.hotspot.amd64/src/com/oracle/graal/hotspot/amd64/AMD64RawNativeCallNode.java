@@ -22,10 +22,9 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.CallingConvention.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CallingConvention.Type;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.amd64.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -59,7 +58,7 @@ public final class AMD64RawNativeCallNode extends FixedWithNextNode implements L
         CallingConvention cc = generator.getLIRGeneratorTool().getCodeCache().getRegisterConfig().getCallingConvention(Type.NativeCall, returnType, parameterTypes,
                         generator.getLIRGeneratorTool().target(), false);
         gen.getLIRGeneratorTool().emitCCall(functionPointer.asLong(), cc, parameter, countFloatingTypeArguments(args));
-        if (this.getStackKind() != Kind.Void) {
+        if (this.getKind() != Kind.Void) {
             generator.setResult(this, gen.getLIRGeneratorTool().emitMove(cc.getReturn()));
         }
     }
@@ -67,7 +66,7 @@ public final class AMD64RawNativeCallNode extends FixedWithNextNode implements L
     private static int countFloatingTypeArguments(NodeInputList<ValueNode> args) {
         int count = 0;
         for (ValueNode n : args) {
-            if (n.getStackKind() == Kind.Double || n.getStackKind() == Kind.Float) {
+            if (n.getKind() == Kind.Double || n.getKind() == Kind.Float) {
                 count++;
             }
         }

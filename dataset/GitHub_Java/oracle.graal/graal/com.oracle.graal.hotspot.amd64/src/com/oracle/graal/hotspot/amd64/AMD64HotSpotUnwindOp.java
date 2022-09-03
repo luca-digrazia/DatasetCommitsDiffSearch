@@ -23,18 +23,17 @@
 package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.amd64.AMD64.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.jvmci.code.ValueUtil.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * Removes the current frame and jumps to the {@link UnwindExceptionToCallerStub}.
@@ -45,8 +44,8 @@ final class AMD64HotSpotUnwindOp extends AMD64HotSpotEpilogueOp implements Block
 
     @Use({REG}) protected RegisterValue exception;
 
-    AMD64HotSpotUnwindOp(RegisterValue exception, AllocatableValue savedRbp) {
-        super(TYPE, savedRbp);
+    AMD64HotSpotUnwindOp(RegisterValue exception) {
+        super(TYPE);
         this.exception = exception;
     }
 

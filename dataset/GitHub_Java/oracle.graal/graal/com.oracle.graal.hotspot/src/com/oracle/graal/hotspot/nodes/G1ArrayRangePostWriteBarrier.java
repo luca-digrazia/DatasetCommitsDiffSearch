@@ -22,14 +22,11 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_100;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_100;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ValueNode;
-
-@NodeInfo(cycles = CYCLES_100, size = SIZE_100)
+@NodeInfo
 public class G1ArrayRangePostWriteBarrier extends ArrayRangeWriteBarrier {
     public static final NodeClass<G1ArrayRangePostWriteBarrier> TYPE = NodeClass.create(G1ArrayRangePostWriteBarrier.class);
 

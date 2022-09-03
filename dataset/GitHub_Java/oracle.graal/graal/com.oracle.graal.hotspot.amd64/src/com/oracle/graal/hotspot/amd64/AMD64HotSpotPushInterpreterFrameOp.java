@@ -22,20 +22,17 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static jdk.vm.ci.amd64.AMD64.rsp;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static com.oracle.graal.amd64.AMD64.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import com.oracle.graal.asm.amd64.AMD64Address;
-import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.amd64.AMD64LIRInstruction;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.AllocatableValue;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.amd64.*;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * Pushes an interpreter frame to the stack.
@@ -48,9 +45,9 @@ final class AMD64HotSpotPushInterpreterFrameOp extends AMD64LIRInstruction {
     @Alive(REG) AllocatableValue framePc;
     @Alive(REG) AllocatableValue senderSp;
     @Alive(REG) AllocatableValue initialInfo;
-    private final GraalHotSpotVMConfig config;
+    private final HotSpotVMConfig config;
 
-    AMD64HotSpotPushInterpreterFrameOp(AllocatableValue frameSize, AllocatableValue framePc, AllocatableValue senderSp, AllocatableValue initialInfo, GraalHotSpotVMConfig config) {
+    AMD64HotSpotPushInterpreterFrameOp(AllocatableValue frameSize, AllocatableValue framePc, AllocatableValue senderSp, AllocatableValue initialInfo, HotSpotVMConfig config) {
         super(TYPE);
         this.frameSize = frameSize;
         this.framePc = framePc;

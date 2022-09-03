@@ -49,7 +49,7 @@ public final class EndLockScopeNode extends AbstractMemoryCheckpoint implements 
 
     @Override
     public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
+        return LocationIdentity.ANY_LOCATION;
     }
 
     @Override

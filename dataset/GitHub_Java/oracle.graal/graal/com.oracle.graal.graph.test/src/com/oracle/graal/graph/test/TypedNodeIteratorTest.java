@@ -22,21 +22,14 @@
  */
 package com.oracle.graal.graph.test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
-import java.util.Iterator;
+import java.util.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.graph.Graph;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 
 public class TypedNodeIteratorTest {
 
@@ -46,7 +39,7 @@ public class TypedNodeIteratorTest {
         public static final NodeClass<TestNode> TYPE = NodeClass.create(TestNode.class);
         protected final String name;
 
-        protected TestNode(String name) {
+        public TestNode(String name) {
             super(TYPE);
             this.name = name;
         }

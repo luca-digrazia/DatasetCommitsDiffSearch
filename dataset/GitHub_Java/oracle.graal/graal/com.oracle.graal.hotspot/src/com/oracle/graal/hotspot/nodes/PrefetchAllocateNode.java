@@ -28,26 +28,27 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.memory.address.*;
-import com.oracle.graal.nodes.memory.address.AddressNode.Address;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.word.*;
 
 @NodeInfo
 public final class PrefetchAllocateNode extends FixedWithNextNode implements LIRLowerable {
 
     public static final NodeClass<PrefetchAllocateNode> TYPE = NodeClass.create(PrefetchAllocateNode.class);
-    @Input(InputType.Association) AddressNode address;
+    @Input ValueNode distance;
+    @Input ValueNode address;
 
-    public PrefetchAllocateNode(ValueNode address) {
+    public PrefetchAllocateNode(ValueNode address, ValueNode distance) {
         super(TYPE, StampFactory.forVoid());
-        this.address = (AddressNode) address;
+        this.address = address;
+        this.distance = distance;
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitPrefetchAllocate(gen.operand(address));
+        ((HotSpotNodeLIRBuilder) gen).emitPrefetchAllocate(address, distance);
     }
 
     @NodeIntrinsic
-    public static native void prefetch(Address address);
+    public static native void prefetch(Word address, Word distance);
 }

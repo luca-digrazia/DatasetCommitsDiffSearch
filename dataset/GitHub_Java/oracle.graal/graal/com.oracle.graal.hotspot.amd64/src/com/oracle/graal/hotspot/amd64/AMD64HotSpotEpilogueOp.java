@@ -23,27 +23,33 @@
 package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.amd64.AMD64.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.jvmci.code.ValueUtil.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * Superclass for operations that use the value of RBP saved in a method's prologue.
  */
 abstract class AMD64HotSpotEpilogueOp extends AMD64LIRInstruction {
 
-    protected AMD64HotSpotEpilogueOp(LIRInstructionClass<? extends AMD64HotSpotEpilogueOp> c, AllocatableValue savedRbp) {
+    protected AMD64HotSpotEpilogueOp(LIRInstructionClass<? extends AMD64HotSpotEpilogueOp> c) {
         super(c);
-        this.savedRbp = savedRbp;
     }
 
-    @Use({REG, STACK}) private AllocatableValue savedRbp;
+    /**
+     * The type of location (i.e., stack or register) in which RBP is saved is not known until
+     * initial LIR generation is finished. Until then, we use a placeholder variable so that LIR
+     * verification is successful.
+     */
+    private static final Variable PLACEHOLDER = new Variable(LIRKind.value(Kind.Long), Integer.MAX_VALUE);
+
+    @Use({REG, STACK}) protected AllocatableValue savedRbp = PLACEHOLDER;
 
     protected void leaveFrameAndRestoreRbp(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
         if (isStackSlot(savedRbp)) {

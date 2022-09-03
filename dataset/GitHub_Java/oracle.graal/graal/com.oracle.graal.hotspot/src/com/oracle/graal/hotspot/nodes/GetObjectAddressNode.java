@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,17 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.*;
 
 /**
  * Intrinsification for getting the address of an object. The code path(s) between a call to
- * {@link #get(Object)} and all uses of the returned value must not contain safepoints. This can
- * only be guaranteed if used in a snippet that is instantiated after frame state assignment.
- * {@link ComputeObjectAddressNode} should generally be used in preference to this node.
+ * {@link #get(Object)} and all uses of the returned value must be atomic. The only exception to
+ * this is if the usage is not an attempt to dereference the value.
  */
 @NodeInfo
 public final class GetObjectAddressNode extends FixedWithNextNode implements LIRLowerable {
@@ -53,14 +50,8 @@ public final class GetObjectAddressNode extends FixedWithNextNode implements LIR
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        AllocatableValue obj = gen.getLIRGeneratorTool().newVariable(LIRKind.unknownReference(gen.getLIRGeneratorTool().target().wordKind));
+        AllocatableValue obj = gen.getLIRGeneratorTool().newVariable(LIRKind.derivedReference(gen.getLIRGeneratorTool().target().wordKind));
         gen.getLIRGeneratorTool().emitMove(obj, gen.operand(object));
         gen.setResult(this, obj);
-    }
-
-    @Override
-    public boolean verify() {
-        assert graph().getGuardsStage().areFrameStatesAtDeopts() || graph().method().getAnnotation(Snippet.class) != null : "GetObjectAddressNode can't be used directly until frame states are fixed";
-        return super.verify();
     }
 }

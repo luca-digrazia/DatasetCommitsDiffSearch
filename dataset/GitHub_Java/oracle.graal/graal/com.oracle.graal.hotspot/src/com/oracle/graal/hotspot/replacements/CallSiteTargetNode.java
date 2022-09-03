@@ -27,7 +27,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.nodes.*;
@@ -37,18 +36,18 @@ public final class CallSiteTargetNode extends MacroStateSplitNode implements Can
 
     public static final NodeClass<CallSiteTargetNode> TYPE = NodeClass.create(CallSiteTargetNode.class);
 
-    public CallSiteTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, JavaType returnType, ValueNode receiver) {
-        super(TYPE, invokeKind, targetMethod, bci, returnType, receiver);
+    public CallSiteTargetNode(Invoke invoke) {
+        super(TYPE, invoke);
     }
 
     private ValueNode getCallSite() {
         return arguments.get(0);
     }
 
-    public static ConstantNode tryFold(ValueNode callSite, MetaAccessProvider metaAccess, Assumptions assumptions) {
-        if (callSite != null && callSite.isConstant() && !callSite.isNullConstant()) {
-            HotSpotObjectConstant c = (HotSpotObjectConstant) callSite.asConstant();
-            JavaConstant target = c.getCallSiteTarget(assumptions);
+    private ConstantNode getConstantCallTarget(MetaAccessProvider metaAccess) {
+        if (getCallSite().isConstant() && !getCallSite().isNullConstant()) {
+            HotSpotObjectConstant c = (HotSpotObjectConstant) getCallSite().asConstant();
+            JavaConstant target = c.getCallSiteTarget(graph().getAssumptions());
             if (target != null) {
                 return ConstantNode.forConstant(target, metaAccess);
             }
@@ -58,7 +57,7 @@ public final class CallSiteTargetNode extends MacroStateSplitNode implements Can
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        ConstantNode target = tryFold(getCallSite(), tool.getMetaAccess(), graph().getAssumptions());
+        ConstantNode target = getConstantCallTarget(tool.getMetaAccess());
         if (target != null) {
             return target;
         }
@@ -68,7 +67,7 @@ public final class CallSiteTargetNode extends MacroStateSplitNode implements Can
 
     @Override
     public void lower(LoweringTool tool) {
-        ConstantNode target = tryFold(getCallSite(), tool.getMetaAccess(), graph().getAssumptions());
+        ConstantNode target = getConstantCallTarget(tool.getMetaAccess());
 
         if (target != null) {
             graph().replaceFixedWithFloating(this, target);

@@ -197,9 +197,9 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             private boolean controlFlowSplit;
 
             private FixedWithNextNode[] firstInstructionArray;
-            private HIRFrameStateBuilder[] entryStateArray;
+            private AbstractFrameStateBuilder<?, ?>[] entryStateArray;
             private FixedWithNextNode[][] firstInstructionMatrix;
-            private HIRFrameStateBuilder[][] entryStateMatrix;
+            private AbstractFrameStateBuilder<?, ?>[][] entryStateMatrix;
 
             /**
              * @param isReplacement specifies if this object is being used to parse a method that
@@ -253,7 +253,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     BciBlockMapping newMapping = BciBlockMapping.create(stream, method);
                     this.blockMap = newMapping;
                     this.firstInstructionArray = new FixedWithNextNode[blockMap.getBlockCount()];
-                    this.entryStateArray = new HIRFrameStateBuilder[blockMap.getBlockCount()];
+                    this.entryStateArray = new AbstractFrameStateBuilder<?, ?>[blockMap.getBlockCount()];
 
                     if (graphBuilderConfig.doLivenessAnalysis()) {
                         try (Scope s = Debug.scope("LivenessAnalysis")) {
@@ -642,8 +642,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return (ValueNode) currentGraph.unique((Node & ValueNumberable) x);
             }
 
-            protected ValueNode genIfNode(LogicNode condition, FixedNode falseSuccessor, FixedNode trueSuccessor, double d) {
-                return new IfNode(condition, falseSuccessor, trueSuccessor, d);
+            protected ValueNode genIfNode(ValueNode condition, ValueNode falseSuccessor, ValueNode trueSuccessor, double d) {
+                return new IfNode((LogicNode) condition, (FixedNode) falseSuccessor, (FixedNode) trueSuccessor, d);
             }
 
             @Override
@@ -1038,7 +1038,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
                 synchronizedEpilogue(BytecodeFrame.AFTER_BCI, x);
                 if (frameState.lockDepth() != 0) {
-                    throw bailout("unbalanced monitors");
+                    throw new BailoutException("unbalanced monitors");
                 }
             }
 
@@ -1055,7 +1055,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 MonitorIdNode monitorId = frameState.peekMonitorId();
                 ValueNode lockedObject = frameState.popLock();
                 if (GraphUtil.originalValue(lockedObject) != GraphUtil.originalValue(x)) {
-                    throw bailout(String.format("unbalanced monitors: mismatch at monitorexit, %s != %s", GraphUtil.originalValue(x), GraphUtil.originalValue(lockedObject)));
+                    throw new BailoutException("unbalanced monitors: mismatch at monitorexit, %s != %s", GraphUtil.originalValue(x), GraphUtil.originalValue(lockedObject));
                 }
                 MonitorExitNode monitorExit = append(new MonitorExitNode(x, monitorId, escapedReturnValue));
                 return monitorExit;
@@ -1260,7 +1260,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
             }
 
-            private void setEntryState(BciBlock block, int dimension, HIRFrameStateBuilder entryState) {
+            private void setEntryState(BciBlock block, int dimension, AbstractFrameStateBuilder<?, ?> entryState) {
                 int id = block.id;
                 if (dimension == 0) {
                     this.entryStateArray[id] = entryState;
@@ -1269,9 +1269,9 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
             }
 
-            private void setEntryStateMultiDimension(int dimension, HIRFrameStateBuilder entryState, int id) {
+            private void setEntryStateMultiDimension(int dimension, AbstractFrameStateBuilder<?, ?> entryState, int id) {
                 if (entryStateMatrix == null) {
-                    entryStateMatrix = new HIRFrameStateBuilder[4][];
+                    entryStateMatrix = new AbstractFrameStateBuilder<?, ?>[4][];
                 }
                 if (dimension - 1 < entryStateMatrix.length) {
                     // We are within bounds.
@@ -1280,7 +1280,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     entryStateMatrix = Arrays.copyOf(entryStateMatrix, Math.max(entryStateMatrix.length * 2, dimension));
                 }
                 if (entryStateMatrix[dimension - 1] == null) {
-                    entryStateMatrix[dimension - 1] = new HIRFrameStateBuilder[blockMap.getBlockCount()];
+                    entryStateMatrix[dimension - 1] = new AbstractFrameStateBuilder<?, ?>[blockMap.getBlockCount()];
                 }
                 entryStateMatrix[dimension - 1][id] = entryState;
             }
@@ -1367,7 +1367,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     targetNode = getFirstInstruction(block, operatingDimension);
                     Target target = checkLoopExit(targetNode, block, state);
                     FixedNode result = target.fixed;
-                    HIRFrameStateBuilder currentEntryState = target.state == state ? (isGoto ? state : state.copy()) : target.state;
+                    AbstractFrameStateBuilder<?, ?> currentEntryState = target.state == state ? state.copy() : target.state;
                     setEntryState(block, operatingDimension, currentEntryState);
                     currentEntryState.clearNonLiveLocals(block, liveness, true);
 
@@ -1377,7 +1377,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
                 // We already saw this block before, so we have to merge states.
                 if (!((HIRFrameStateBuilder) getEntryState(block, operatingDimension)).isCompatibleWith(state)) {
-                    throw bailout("stacks do not match; bytecodes would not verify");
+                    throw new BailoutException("stacks do not match; bytecodes would not verify");
                 }
 
                 if (getFirstInstruction(block, operatingDimension) instanceof LoopBeginNode) {
@@ -1461,7 +1461,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                                 if (FailedLoopExplosionIsFatal.getValue()) {
                                     throw new RuntimeException(message);
                                 } else {
-                                    throw bailout(message);
+                                    throw new BailoutException(message);
                                 }
                             }
                         }
@@ -1838,23 +1838,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     // Need to get probability based on current bci.
                     double probability = branchProbability();
 
-                    if (negate) {
-                        BciBlock tmpBlock = trueBlock;
-                        trueBlock = falseBlock;
-                        falseBlock = tmpBlock;
-                        probability = 1 - probability;
-                    }
-
-                    if (isNeverExecutedCode(probability)) {
-                        append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, true));
-                        appendGoto(falseBlock);
-                        return;
-                    } else if (isNeverExecutedCode(1 - probability)) {
-                        append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, false));
-                        appendGoto(trueBlock);
-                        return;
-                    }
-
                     int oldBci = stream.currentBCI();
                     int trueBlockInt = checkPositiveIntConstantPushed(trueBlock);
                     if (trueBlockInt != -1) {
@@ -1873,6 +1856,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                             if (genConditional) {
                                 ConstantNode trueValue = currentGraph.unique(ConstantNode.forInt(trueBlockInt));
                                 ConstantNode falseValue = currentGraph.unique(ConstantNode.forInt(falseBlockInt));
+                                if (negate) {
+                                    ConstantNode tmp = falseValue;
+                                    falseValue = trueValue;
+                                    trueValue = tmp;
+                                }
                                 ValueNode conditionalNode = ConditionalNode.create(condition, trueValue, falseValue);
                                 if (conditionalNode.graph() == null) {
                                     conditionalNode = currentGraph.addOrUnique(conditionalNode);
@@ -1891,10 +1879,10 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
                     this.controlFlowSplit = true;
 
-                    FixedNode trueSuccessor = createTarget(trueBlock, frameState);
-                    FixedNode falseSuccessor = createTarget(falseBlock, frameState);
+                    ValueNode trueSuccessor = createBlockTarget(probability, trueBlock, frameState);
+                    ValueNode falseSuccessor = createBlockTarget(1 - probability, falseBlock, frameState);
 
-                    ValueNode ifNode = genIfNode(condition, trueSuccessor, falseSuccessor, probability);
+                    ValueNode ifNode = negate ? genIfNode(condition, falseSuccessor, trueSuccessor, 1 - probability) : genIfNode(condition, trueSuccessor, falseSuccessor, probability);
                     append(ifNode);
                 }
             }
@@ -1973,13 +1961,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             @Override
             public String toString() {
                 return method.format("%H.%n(%p)@") + bci();
-            }
-
-            public BailoutException bailout(String string) {
-                FrameState currentFrameState = this.frameState.create(bci());
-                StackTraceElement[] elements = GraphUtil.approxSourceStackTraceElement(currentFrameState);
-                BailoutException bailout = new BailoutException(string);
-                throw GraphUtil.createBailoutException(string, bailout, elements);
             }
         }
     }

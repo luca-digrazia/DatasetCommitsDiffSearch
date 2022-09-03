@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,42 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.nodes.*;
 
 /**
  * {@link MacroNode Macro node} for {@link Class#getComponentType()}.
- * 
- * @see ClassSubstitutions#getComponentType(Class)
+ *
+ * @see HotSpotClassSubstitutions#getComponentType(Class)
  */
-public class ClassGetComponentTypeNode extends MacroNode implements Canonicalizable {
+@NodeInfo
+public final class ClassGetComponentTypeNode extends MacroNode implements Canonicalizable {
+
+    public static final NodeClass<ClassGetComponentTypeNode> TYPE = NodeClass.create(ClassGetComponentTypeNode.class);
 
     public ClassGetComponentTypeNode(Invoke invoke) {
-        super(invoke);
+        super(TYPE, invoke);
     }
 
     private ValueNode getJavaClass() {
         return arguments.get(0);
     }
 
-    public ValueNode canonical(CanonicalizerTool tool) {
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            Class c = (Class) javaClass.asConstant().asObject();
-            Class componentType = c.getComponentType();
-            return ConstantNode.forObject(componentType, tool.runtime(), graph());
+            HotSpotObjectConstant c = (HotSpotObjectConstant) javaClass.asConstant();
+            JavaConstant componentType = c.getComponentType();
+            if (componentType != null) {
+                return ConstantNode.forConstant(componentType, tool.getMetaAccess());
+            }
         }
         return this;
     }
