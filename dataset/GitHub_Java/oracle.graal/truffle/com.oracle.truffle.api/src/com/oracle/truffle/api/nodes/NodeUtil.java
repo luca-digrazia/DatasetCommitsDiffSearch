@@ -214,7 +214,7 @@ public final class NodeUtil {
     }
 
     /*
-     * Fast version of child adoption.
+     * Fast version of child adoption without recursion.
      */
     static void adoptChildrenHelper(Node currentNode) {
         NodeClass clazz = currentNode.getNodeClass();
