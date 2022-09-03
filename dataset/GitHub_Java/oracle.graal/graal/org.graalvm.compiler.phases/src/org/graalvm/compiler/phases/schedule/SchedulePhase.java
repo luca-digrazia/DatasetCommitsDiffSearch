@@ -52,7 +52,6 @@ import org.graalvm.compiler.nodes.ControlSplitNode;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.GuardNode;
-import org.graalvm.compiler.nodes.KillingBeginNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.PhiNode;
@@ -318,15 +317,6 @@ public final class SchedulePhase extends Phase {
                 lastBlock = currentBlock;
             }
 
-            if (lastBlock.getBeginNode() instanceof KillingBeginNode) {
-                LocationIdentity locationIdentity = ((KillingBeginNode) lastBlock.getBeginNode()).getLocationIdentity();
-                if ((locationIdentity.isAny() || locationIdentity.equals(location)) && lastBlock != earliestBlock) {
-                    // The begin of this block kills the location, so we *have* to schedule the node
-                    // in the dominating block.
-                    lastBlock = lastBlock.getDominator();
-                }
-            }
-
             return lastBlock;
         }
 
@@ -515,14 +505,8 @@ public final class SchedulePhase extends Phase {
 
                 if (strategy == SchedulingStrategy.FINAL_SCHEDULE || strategy == SchedulingStrategy.LATEST_OUT_OF_LOOPS) {
                     assert latestBlock != null;
-                    Block currentBlock = latestBlock;
-                    while (currentBlock.getLoopDepth() > earliestBlock.getLoopDepth() && currentBlock != earliestBlock.getDominator()) {
-                        Block previousCurrentBlock = currentBlock;
-                        currentBlock = currentBlock.getDominator();
-                        if (previousCurrentBlock.isLoopHeader() && currentBlock.probability() < latestBlock.probability()) {
-                            // Only assign new latest block if frequency is actually lower.
-                            latestBlock = currentBlock;
-                        }
+                    while (latestBlock.getLoopDepth() > earliestBlock.getLoopDepth() && latestBlock != earliestBlock.getDominator()) {
+                        latestBlock = latestBlock.getDominator();
                     }
                 }
 
