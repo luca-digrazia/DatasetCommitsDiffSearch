@@ -71,7 +71,6 @@ public final class AMD64MathIntrinsicUnaryOp extends AMD64LIRInstruction {
     @Temp({REG, ILLEGAL}) protected Value xmm7Temp = Value.ILLEGAL;
     @Temp({REG, ILLEGAL}) protected Value xmm8Temp = Value.ILLEGAL;
     @Temp({REG, ILLEGAL}) protected Value xmm9Temp = Value.ILLEGAL;
-    @Temp({REG, ILLEGAL}) protected Value xmm10Temp = Value.ILLEGAL;
     @Temp({REG, ILLEGAL}) protected Value gpr1Temp = Value.ILLEGAL;
     @Temp({REG, ILLEGAL}) protected Value gpr2Temp = Value.ILLEGAL;
     @Temp protected AllocatableValue rcxTemp;
@@ -109,8 +108,6 @@ public final class AMD64MathIntrinsicUnaryOp extends AMD64LIRInstruction {
             if (opcode == UnaryIntrinsicOpcode.EXP) {
                 this.gpr5Temp = tool.newVariable(LIRKind.value(AMD64Kind.QWORD));
                 this.xmm8Temp = tool.newVariable(LIRKind.value(AMD64Kind.DOUBLE));
-                this.xmm9Temp = tool.newVariable(LIRKind.value(AMD64Kind.DOUBLE));
-                this.xmm10Temp = tool.newVariable(LIRKind.value(AMD64Kind.DOUBLE));
             }
 
             if (opcode == UnaryIntrinsicOpcode.TAN) {
@@ -145,7 +142,7 @@ public final class AMD64MathIntrinsicUnaryOp extends AMD64LIRInstruction {
         internalCrb = crb;
     }
 
-    private AMD64Address externalAddress(ArrayDataPointerConstant curPtr) {
+    public AMD64Address externalAddress(ArrayDataPointerConstant curPtr) {
         return (AMD64Address) internalCrb.recordDataReferenceInCode(curPtr);
     }
 
@@ -3599,8 +3596,6 @@ public final class AMD64MathIntrinsicUnaryOp extends AMD64LIRInstruction {
         Register temp6 = asRegister(xmm6Temp, AMD64Kind.DOUBLE);
         Register temp7 = asRegister(xmm7Temp, AMD64Kind.DOUBLE);
         Register temp8 = asRegister(xmm8Temp, AMD64Kind.DOUBLE);
-        Register temp9 = asRegister(xmm9Temp, AMD64Kind.DOUBLE);
-        Register temp10 = asRegister(xmm10Temp, AMD64Kind.DOUBLE);
 
         AMD64Address stackSlot = (AMD64Address) crb.asAddress(stackTemp);
 
@@ -3610,14 +3605,6 @@ public final class AMD64MathIntrinsicUnaryOp extends AMD64LIRInstruction {
             masm.movdqu(dest, value);
         }
 
-        masm.movdqu(temp9, externalAddress(mMaskExpPtr));                                // 0xffffffc0,
-                                                                                         // 0x00000000,
-                                                                                         // 0xffffffc0,
-                                                                                         // 0x00000000
-        masm.movdqu(temp10, externalAddress(biasExpPtr));                                // 0x0000ffc0,
-                                                                                         // 0x00000000,
-                                                                                         // 0x0000ffc0,
-                                                                                         // 0x00000000
         masm.unpcklpd(dest, dest);
         masm.leaq(gpr5, stackSlot);
         masm.leaq(gpr2, externalAddress(cvExpPtr));
@@ -3663,11 +3650,17 @@ public final class AMD64MathIntrinsicUnaryOp extends AMD64LIRInstruction {
         masm.addpd(temp1, temp6);
         masm.movapd(temp7, temp1);
         masm.movdl(gpr1, temp1);
-        masm.pand(temp7, temp9);
+        masm.pand(temp7, externalAddress(mMaskExpPtr));                                  // 0xffffffc0,
+                                                                                         // 0x00000000,
+                                                                                         // 0xffffffc0,
+                                                                                         // 0x00000000
         masm.subpd(temp1, temp6);
         masm.mulpd(temp2, temp1);
         masm.mulpd(temp3, temp1);
-        masm.paddq(temp7, temp10);
+        masm.paddq(temp7, externalAddress(biasExpPtr));                                  // 0x0000ffc0,
+                                                                                         // 0x00000000,
+                                                                                         // 0x0000ffc0,
+                                                                                         // 0x00000000
         masm.subpd(dest, temp2);
         masm.movl(gpr3, gpr1);
         masm.andl(gpr3, 63);

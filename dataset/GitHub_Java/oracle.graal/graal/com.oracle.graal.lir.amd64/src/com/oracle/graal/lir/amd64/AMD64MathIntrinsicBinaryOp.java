@@ -112,7 +112,7 @@ public final class AMD64MathIntrinsicBinaryOp extends AMD64LIRInstruction {
         internalCrb = crb;
     }
 
-    private AMD64Address externalAddress(ArrayDataPointerConstant curPtr) {
+    public AMD64Address externalAddress(ArrayDataPointerConstant curPtr) {
         return (AMD64Address) internalCrb.recordDataReferenceInCode(curPtr);
     }
 
