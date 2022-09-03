@@ -61,7 +61,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.graalvm.compiler.options.OptionKey;
-import org.graalvm.nativeimage.ProcessProperties;
 
 import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.svm.core.OS;
@@ -69,6 +68,8 @@ import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.jdk.LocalizationSupport;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
+import com.oracle.svm.core.posix.PosixExecutableName;
+import com.oracle.svm.core.posix.PosixUtils;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.driver.MacroOption.EnabledOption;
 import com.oracle.svm.driver.MacroOption.MacroOptionKind;
@@ -78,6 +79,7 @@ import com.oracle.svm.hosted.FeatureHandler;
 import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.image.AbstractBootImage.NativeImageKind;
 import com.oracle.svm.hosted.substitute.DeclarativeSubstitutionProcessor;
+import com.oracle.svm.jni.hosted.JNIFeature;
 import com.oracle.svm.reflect.hosted.ReflectionFeature;
 import com.oracle.svm.reflect.proxy.hosted.DynamicProxyFeature;
 
@@ -91,6 +93,7 @@ public class NativeImage {
         return (OS.getCurrent().className + "-" + SubstrateUtil.getArchitectureName()).toLowerCase();
     }
 
+    static final String svmVersion = System.getProperty("substratevm.version", "dev");
     static final String graalvmVersion = System.getProperty("org.graalvm.version", System.getProperty("graalvm.version", "dev"));
 
     static String getResource(String resourceName) {
@@ -138,14 +141,13 @@ public class NativeImage {
     static final String oHFeatures = oH(FeatureHandler.Options.Features);
     static final String oHSubstitutionFiles = oH(DeclarativeSubstitutionProcessor.Options.SubstitutionFiles);
     static final String oHSubstitutionResources = oH(DeclarativeSubstitutionProcessor.Options.SubstitutionResources);
-    static final String oHEnableUrlProtocols = oH(SubstrateOptions.EnableURLProtocols);
     static final String oHIncludeResourceBundles = oH(LocalizationSupport.Options.IncludeResourceBundles);
     static final String oHReflectionConfigurationFiles = oH(ReflectionFeature.Options.ReflectionConfigurationFiles);
     static final String oHReflectionConfigurationResources = oH(ReflectionFeature.Options.ReflectionConfigurationResources);
     static final String oHDynamicProxyConfigurationFiles = oH(DynamicProxyFeature.Options.DynamicProxyConfigurationFiles);
     static final String oHDynamicProxyConfigurationResources = oH(DynamicProxyFeature.Options.DynamicProxyConfigurationResources);
-    static final String oHJNIConfigurationFiles = oH(SubstrateOptions.JNIConfigurationFiles);
-    static final String oHJNIConfigurationResources = oH(SubstrateOptions.JNIConfigurationResources);
+    static final String oHJNIConfigurationFiles = oH(JNIFeature.Options.JNIConfigurationFiles);
+    static final String oHJNIConfigurationResources = oH(JNIFeature.Options.JNIConfigurationResources);
     static final String oHInterfacesForJNR = oH + "InterfacesForJNR=";
 
     static final String oHMaxRuntimeCompileMethods = oH(GraalFeature.Options.MaxRuntimeCompileMethods);
@@ -268,12 +270,11 @@ public class NativeImage {
         private final Path rootDir;
         private final String[] args;
 
-        @SuppressWarnings("deprecation")
         DefaultBuildConfiguration(String[] args) {
             this.args = args;
             workDir = Paths.get(".").toAbsolutePath().normalize();
             if (IS_AOT) {
-                Path executablePath = Paths.get(ProcessProperties.getExecutableName());
+                Path executablePath = Paths.get((String) Compiler.command(new Object[]{PosixExecutableName.getKey()}));
                 assert executablePath != null;
                 Path binDir = executablePath.getParent();
                 Path rootDirCandidate = binDir.getParent();
@@ -421,14 +422,10 @@ public class NativeImage {
         addImageBuilderJavaArgs("-server", "-d64", "-noverify");
         addImageBuilderJavaArgs("-XX:+UnlockExperimentalVMOptions", "-XX:+EnableJVMCI");
 
-        /*
-         * GR-8656: Do not run with Graal as JIT compiler until libgraal is available. Note that we
-         * really need to explicitly disable UseJVMCICompiler, otherwise it is implicitly enabled
-         * when a "lib/jvmci/compiler-name" file is present in the JDK.
-         */
-        addImageBuilderJavaArgs("-XX:-UseJVMCICompiler");
-
-        addImageBuilderJavaArgs("-XX:-UseJVMCIClassLoader");
+        // Same as GRAAL_COMPILER_FLAGS in mx.substratevm/mx_substratevm.py
+        int ciCompilerCount = Runtime.getRuntime().availableProcessors() <= 4 ? 2 : 4;
+        addImageBuilderJavaArgs("-XX:-UseJVMCIClassLoader", "-XX:+UseJVMCICompiler", "-Dgraal.CompileGraalWithC1Only=false", "-XX:CICompilerCount=" + ciCompilerCount);
+        addImageBuilderJavaArgs("-Dgraal.VerifyGraalGraphs=false", "-Dgraal.VerifyGraalGraphEdges=false", "-Dgraal.VerifyGraalPhasesSize=false", "-Dgraal.VerifyPhases=false");
 
         addImageBuilderJavaArgs("-Dgraal.EagerSnippets=true");
 
@@ -438,6 +435,7 @@ public class NativeImage {
 
         addImageBuilderJavaArgs("-Duser.country=US", "-Duser.language=en");
 
+        addImageBuilderJavaArgs("-Dsubstratevm.version=" + svmVersion);
         addImageBuilderJavaArgs("-Dgraalvm.version=" + graalvmVersion);
         addImageBuilderJavaArgs("-Dorg.graalvm.version=" + graalvmVersion);
 
@@ -653,7 +651,6 @@ public class NativeImage {
         consolidateListArgs(imageBuilderArgs, oHCLibraryPath, ",", canonicalizedPathStr);
         consolidateListArgs(imageBuilderArgs, oHSubstitutionFiles, ",", canonicalizedPathStr);
         consolidateListArgs(imageBuilderArgs, oHSubstitutionResources, ",", Function.identity());
-        consolidateListArgs(imageBuilderArgs, oHEnableUrlProtocols, ",", Function.identity());
         consolidateListArgs(imageBuilderArgs, oHIncludeResourceBundles, ",", Function.identity());
         consolidateListArgs(imageBuilderArgs, oHInterfacesForJNR, ",", Function.identity());
         consolidateListArgs(imageBuilderArgs, oHReflectionConfigurationFiles, ",", canonicalizedPathStr);
@@ -775,7 +772,7 @@ public class NativeImage {
              * GR-8254: Ensure image-building VM shuts down even if native-image dies unexpected
              * (e.g. using CTRL-C in Gradle daemon mode)
              */
-            command.addAll(Arrays.asList("-watchpid", "" + ProcessProperties.getProcessID()));
+            command.addAll(Arrays.asList("-watchpid", "" + PosixUtils.getpid()));
         }
         command.addAll(imageArgs);
 
