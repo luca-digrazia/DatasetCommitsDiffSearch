@@ -43,11 +43,12 @@ public final class InstanceOf extends TypeCheck {
      * @param graph
      */
     public InstanceOf(Constant targetClassInstruction, Value object, Graph graph) {
-        super(targetClassInstruction, object, CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(targetClassInstruction, object, CiKind.Int, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override
     public void accept(ValueVisitor v) {
+        v.visitInstanceOf(this);
     }
 
     @Override

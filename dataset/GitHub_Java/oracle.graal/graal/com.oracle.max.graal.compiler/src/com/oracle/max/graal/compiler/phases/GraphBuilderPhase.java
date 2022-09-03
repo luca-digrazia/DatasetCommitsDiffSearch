@@ -201,7 +201,7 @@ public final class GraphBuilderPhase extends Phase {
         List<Loop> loops = LoopUtil.computeLoops(graph);
         NodeBitMap loopExits = graph.createNodeBitMap();
         for (Loop loop : loops) {
-            loopExits.setUnion(loop.exits());
+            loopExits.markAll(loop.exist());
         }
 
         // remove Placeholders
@@ -436,17 +436,12 @@ public final class GraphBuilderPhase extends Phase {
             p.setStateAfter(frameState.duplicateWithoutStack(bci));
 
             Value currentExceptionObject;
-            ExceptionObject newObj = null;
             if (exceptionObject == null) {
-                newObj = new ExceptionObject(graph);
-                currentExceptionObject = newObj;
+                currentExceptionObject = new ExceptionObject(graph);
             } else {
                 currentExceptionObject = exceptionObject;
             }
             FrameState stateWithException = frameState.duplicateWithException(bci, currentExceptionObject);
-            if (newObj != null) {
-                newObj.setStateAfter(stateWithException);
-            }
             FixedNode target = createTarget(dispatchBlock, stateWithException);
             if (exceptionObject == null) {
                 ExceptionObject eObj = (ExceptionObject) currentExceptionObject;
@@ -743,10 +738,10 @@ public final class GraphBuilderPhase extends Phase {
         int cpi = stream().readCPI();
         RiType type = constantPool.lookupType(cpi, CHECKCAST);
         boolean isInitialized = type.isResolved();
-        Value typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, isInitialized, cpi);
+        Constant typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, isInitialized, cpi);
         Value object = frameState.apop();
         if (typeInstruction != null) {
-            frameState.apush(append(new CheckCast(type, typeInstruction, object, graph)));
+            frameState.apush(append(new CheckCast(typeInstruction, object, graph)));
         } else {
             frameState.apush(appendConstant(CiConstant.NULL_OBJECT));
         }
@@ -756,10 +751,10 @@ public final class GraphBuilderPhase extends Phase {
         int cpi = stream().readCPI();
         RiType type = constantPool.lookupType(cpi, INSTANCEOF);
         boolean isInitialized = type.isResolved();
-        Value typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, isInitialized, cpi);
+        Constant typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, isInitialized, cpi);
         Value object = frameState.apop();
         if (typeInstruction != null) {
-            frameState.ipush(append(new InstanceOf(type, typeInstruction, object, graph)));
+            frameState.ipush(append(new InstanceOf(typeInstruction, object, graph)));
         } else {
             frameState.ipush(appendConstant(CiConstant.INT_0));
         }
@@ -874,7 +869,7 @@ public final class GraphBuilderPhase extends Phase {
         }
     }
 
-    private Value genTypeOrDeopt(RiType.Representation representation, RiType holder, boolean initialized, int cpi) {
+    private Constant genTypeOrDeopt(RiType.Representation representation, RiType holder, boolean initialized, int cpi) {
         if (initialized) {
             return appendConstant(holder.getEncoding(representation));
         } else {
@@ -968,7 +963,7 @@ public final class GraphBuilderPhase extends Phase {
             append(deoptimize);
             frameState.pushReturn(resultType, Constant.defaultForKind(resultType, graph));
         } else {
-            Invoke invoke = new Invoke(bci(), opcode, resultType.stackKind(), args, target, target.signature().returnType(method.holder()), graph);
+            Invoke invoke = new Invoke(bci(), opcode, resultType.stackKind(), args, target, target.signature().returnType(method.holder()), method.typeProfile(bci()), graph);
             Value result = appendWithBCI(invoke);
             invoke.setExceptionEdge(handleException(null, bci()));
             frameState.pushReturn(resultType, result);
@@ -1124,11 +1119,41 @@ public final class GraphBuilderPhase extends Phase {
         append(lookupSwitch);
     }
 
-    private Value appendConstant(CiConstant constant) {
-        return append(new Constant(constant, graph));
+    private Constant appendConstant(CiConstant constant) {
+        return new Constant(constant, graph);
     }
 
     private Value append(FixedNode fixed) {
+        if (fixed instanceof Deoptimize && lastInstr.predecessors().size() > 0) {
+            Node cur = lastInstr;
+            Node prev = cur;
+            while (cur != cur.graph().start() && !(cur instanceof ControlSplit)) {
+                assert cur.predecessors().size() == 1;
+                prev = cur;
+                cur = cur.predecessors().get(0);
+                if (cur.predecessors().size() == 0) {
+                    break;
+                }
+            }
+
+            if (cur instanceof If) {
+                If ifNode = (If) cur;
+                if (ifNode.falseSuccessor() == prev) {
+                    FixedNode successor = ifNode.trueSuccessor();
+                    BooleanNode condition = ifNode.compare();
+                    FixedGuard fixedGuard = new FixedGuard(graph);
+                    fixedGuard.setNext(successor);
+                    fixedGuard.setNode(condition);
+                    ifNode.replaceAndDelete(fixedGuard);
+                    lastInstr = null;
+                    return fixed;
+                }
+            } else if (prev != cur) {
+                prev.replaceAtPredecessors(fixed);
+                lastInstr = null;
+                return fixed;
+            }
+        }
         lastInstr.setNext(fixed);
         lastInstr = null;
         return fixed;
@@ -1172,7 +1197,6 @@ public final class GraphBuilderPhase extends Phase {
         if (block.firstInstruction == null) {
             if (block.isLoopHeader) {
                 LoopBegin loopBegin = new LoopBegin(graph);
-                loopBegin.addEnd(new EndNode(graph));
                 LoopEnd loopEnd = new LoopEnd(graph);
                 loopEnd.setLoopBegin(loopBegin);
                 Placeholder pBegin = new Placeholder(graph);

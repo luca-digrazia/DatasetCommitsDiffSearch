@@ -55,9 +55,8 @@ public final class GuardNode extends FloatingNode {
         inputs().set(super.inputCount() + INPUT_NODE, n);
     }
 
-    public GuardNode(BooleanNode node, Graph graph) {
+    public GuardNode(Graph graph) {
         super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-        setNode(node);
     }
 
     @Override
@@ -72,7 +71,7 @@ public final class GuardNode extends FloatingNode {
 
     @Override
     public Node copy(Graph into) {
-        return new GuardNode(null, into);
+        return new GuardNode(into);
     }
 
     @SuppressWarnings("unchecked")
