@@ -29,6 +29,7 @@
  */
 package com.oracle.truffle.llvm.nodes.vars;
 
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -37,26 +38,19 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMBasicBlockNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMFunctionStartNode;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeField(name = "slot", type = FrameSlot.class)
-@NodeField(name = "source", type = SourceSection.class)
 public abstract class LLVMWriteNode extends LLVMExpressionNode {
 
+    @CompilationFinal private SourceSection sourceSection;
+
     protected abstract FrameSlot getSlot();
-
-    protected abstract SourceSection getSource();
-
-    @Override
-    public SourceSection getSourceSection() {
-        return getSource();
-    }
 
     @Override
     public String getSourceDescription() {
@@ -171,12 +165,6 @@ public abstract class LLVMWriteNode extends LLVMExpressionNode {
 
     @NodeChild(value = "valueNode", type = LLVMExpressionNode.class)
     public abstract static class LLVMWriteAddressNode extends LLVMWriteNode {
-
-        @Specialization
-        protected Object writeObject(VirtualFrame frame, LLVMAddress value) {
-            frame.setObject(getSlot(), value);
-            return null;
-        }
 
         @Specialization
         protected Object writeObject(VirtualFrame frame, Object value) {

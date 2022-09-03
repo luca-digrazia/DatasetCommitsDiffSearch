@@ -34,9 +34,9 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.context.LLVMLanguage;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.api.LLVMStackFrameNuller;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 
 public class LLVMFunctionStartNode extends RootNode {
 
@@ -45,17 +45,15 @@ public class LLVMFunctionStartNode extends RootNode {
     @Children private final LLVMExpressionNode[] afterFunction;
     @Children private final LLVMStackFrameNuller[] nullers;
     private final String name;
-    private final int explicitArgumentsCount;
 
     public LLVMFunctionStartNode(LLVMExpressionNode node, LLVMExpressionNode[] beforeFunction, LLVMExpressionNode[] afterFunction, SourceSection sourceSection, FrameDescriptor frameDescriptor,
-                    String name, LLVMStackFrameNuller[] initNullers, int explicitArgumentsCount) {
+                    String name, LLVMStackFrameNuller[] initNullers) {
         super(LLVMLanguage.class, sourceSection, frameDescriptor);
         this.node = node;
         this.beforeFunction = beforeFunction;
         this.afterFunction = afterFunction;
         this.nullers = initNullers;
         this.name = name;
-        this.explicitArgumentsCount = explicitArgumentsCount;
     }
 
     @Override
@@ -98,7 +96,4 @@ public class LLVMFunctionStartNode extends RootNode {
         return name;
     }
 
-    public int getExplicitArgumentsCount() {
-        return explicitArgumentsCount;
-    }
 }

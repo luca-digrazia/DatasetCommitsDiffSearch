@@ -117,10 +117,8 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
 
     @TruffleBoundary
     private static void trace(LLVMExpressionNode statement) {
-        SourceSection section = statement.getEncapsulatingSourceSection();
-        String name = section == null ? "null" : section.getSource().getName();
         LLVMLogger.print(LLVMOptions.DEBUG.traceExecution()).accept(
-                        String.format("[sulong] %s in %s", statement.getSourceDescription(), name));
+                        String.format("[sulong] %s in %s", statement.getSourceDescription(), statement.getEncapsulatingSourceSection().getSource().getName()));
     }
 
     /**
