@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -38,7 +36,7 @@ import org.graalvm.compiler.nodes.util.GraphUtil;
 
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.SpeculationLog.Speculation;
+import jdk.vm.ci.meta.JavaConstant;
 
 @NodeInfo
 public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNode implements Simplifiable, GuardingNode, DeoptimizingGuard {
@@ -47,7 +45,7 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
     @Input(InputType.Condition) protected LogicNode condition;
     protected DeoptimizationReason reason;
     protected DeoptimizationAction action;
-    protected Speculation speculation;
+    protected JavaConstant speculation;
     protected boolean negated;
     protected NodeSourcePosition noDeoptSuccessorPosition;
 
@@ -67,18 +65,17 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
         this.negated = negated;
     }
 
-    protected AbstractFixedGuardNode(NodeClass<? extends AbstractFixedGuardNode> c, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, Speculation speculation,
+    protected AbstractFixedGuardNode(NodeClass<? extends AbstractFixedGuardNode> c, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, JavaConstant speculation,
                     boolean negated) {
         super(c, StampFactory.forVoid());
         this.action = action;
-        assert speculation != null;
         this.speculation = speculation;
         this.negated = negated;
         this.condition = condition;
         this.reason = deoptReason;
     }
 
-    protected AbstractFixedGuardNode(NodeClass<? extends AbstractFixedGuardNode> c, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, Speculation speculation,
+    protected AbstractFixedGuardNode(NodeClass<? extends AbstractFixedGuardNode> c, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, JavaConstant speculation,
                     boolean negated, NodeSourcePosition noDeoptSuccessorPosition) {
         this(c, condition, deoptReason, action, speculation, negated);
         this.noDeoptSuccessorPosition = noDeoptSuccessorPosition;
@@ -95,7 +92,7 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
     }
 
     @Override
-    public Speculation getSpeculation() {
+    public JavaConstant getSpeculation() {
         return speculation;
     }
 
@@ -126,14 +123,6 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
         try (DebugCloseable position = this.withNodeSourcePosition()) {
             FixedNode currentNext = next();
             setNext(null);
-            if (currentNext instanceof AbstractBeginNode && currentNext instanceof StateSplit && ((StateSplit) currentNext).stateAfter() != null) {
-                // Force an extra BeginNode in case any guarded Nodes are inputs to the StateSplit
-                BeginNode begin = graph().add(new BeginNode());
-                begin.setNodeSourcePosition(getNoDeoptSuccessorPosition());
-                begin.setNext(currentNext);
-                currentNext = begin;
-            }
-
             DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason, speculation));
             deopt.setStateBefore(stateBefore());
             IfNode ifNode;
@@ -169,13 +158,14 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
         this.reason = reason;
     }
 
-    @Override
     public NodeSourcePosition getNoDeoptSuccessorPosition() {
         return noDeoptSuccessorPosition;
     }
 
-    @Override
-    public void setNoDeoptSuccessorPosition(NodeSourcePosition noDeoptSuccessorPosition) {
-        this.noDeoptSuccessorPosition = noDeoptSuccessorPosition;
+    public void addCallerToNoDeoptSuccessorPosition(NodeSourcePosition caller) {
+        if (noDeoptSuccessorPosition == null) {
+            return;
+        }
+        noDeoptSuccessorPosition = noDeoptSuccessorPosition.addCaller(caller);
     }
 }

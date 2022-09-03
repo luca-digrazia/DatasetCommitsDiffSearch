@@ -703,7 +703,6 @@ public class InliningUtil extends ValueMergeUtil {
                 // There's no caller information so the source position for this node will be
                 // invalid, so it should be cleared.
                 value.clearNodeSourcePosition();
-                assert false : "clearNodeSourcePosition";
             } else {
                 NodeSourcePosition pos = cursor.getKey().getNodeSourcePosition();
                 if (pos != null) {

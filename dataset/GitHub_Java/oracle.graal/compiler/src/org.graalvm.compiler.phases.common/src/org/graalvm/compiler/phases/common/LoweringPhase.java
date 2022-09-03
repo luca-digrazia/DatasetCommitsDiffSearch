@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -38,7 +36,6 @@ import java.util.Collection;
 import java.util.List;
 
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
-import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.GraalError;
@@ -84,9 +81,8 @@ import org.graalvm.word.LocationIdentity;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.SpeculationLog;
-import jdk.vm.ci.meta.SpeculationLog.Speculation;
 
 /**
  * Processes all {@link Lowerable} nodes to do their lowering.
@@ -170,18 +166,13 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         }
 
         @Override
-        public ForeignCallsProvider getForeignCalls() {
-            return context.getForeignCalls();
-        }
-
-        @Override
         public AnchoringNode getCurrentGuardAnchor() {
             return guardAnchor;
         }
 
         @Override
         public GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action) {
-            return createGuard(before, condition, deoptReason, action, SpeculationLog.NO_SPECULATION, false, null);
+            return createGuard(before, condition, deoptReason, action, JavaConstant.NULL_POINTER, false, null);
         }
 
         @Override
@@ -190,7 +181,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         }
 
         @Override
-        public GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, Speculation speculation, boolean negated,
+        public GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, JavaConstant speculation, boolean negated,
                         NodeSourcePosition noDeoptSucccessorPosition) {
             StructuredGraph graph = before.graph();
             if (OptEliminateGuards.getValue(graph.getOptions())) {
