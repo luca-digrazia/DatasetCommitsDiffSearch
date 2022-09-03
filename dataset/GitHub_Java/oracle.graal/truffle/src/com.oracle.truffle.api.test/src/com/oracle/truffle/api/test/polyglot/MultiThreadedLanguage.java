@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,6 +27,7 @@ package com.oracle.truffle.api.test.polyglot;
 import java.util.function.Function;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -113,18 +116,23 @@ public class MultiThreadedLanguage extends TruffleLanguage<LanguageContext> {
         return Truffle.getRuntime().createCallTarget(new RootNode(this) {
             @Override
             public Object execute(VirtualFrame frame) {
-                Object result = "null result";
+                Object result = run();
+                if (result == null) {
+                    result = "null result";
+                }
+                return getContext().env.asGuestValue(result);
+            }
+
+            @TruffleBoundary
+            private Object run() {
                 if (runinside.get() != null) {
                     try {
-                        result = runinside.get().apply(getContext().env);
+                        return runinside.get().apply(getContext().env);
                     } finally {
                         runinside.set(null);
                     }
                 }
-                if (result == null) {
-                    result = "null result";
-                }
-                return result;
+                return "null result";
             }
         });
     }
@@ -137,11 +145,6 @@ public class MultiThreadedLanguage extends TruffleLanguage<LanguageContext> {
     @Override
     protected void disposeContext(LanguageContext context) {
         context.disposeCalled++;
-    }
-
-    @Override
-    protected Object getLanguageGlobal(LanguageContext context) {
-        return null;
     }
 
     @Override
