@@ -27,9 +27,9 @@ import static org.graalvm.compiler.core.common.CompilationIdentifier.INVALID_COM
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Objects;
 
-import org.graalvm.compiler.core.common.ImmutableMapCursor;
 import org.graalvm.compiler.core.common.Fields;
 import org.graalvm.compiler.core.common.util.FrequencyEncoder;
 import org.graalvm.compiler.core.common.util.TypeConversion;
@@ -213,10 +213,9 @@ public class GraphEncoder {
         assert nodeCount == graph.getNodeCount() + 1;
 
         long[] nodeStartOffsets = new long[nodeCount];
-        ImmutableMapCursor<Node, Integer> cursor = nodeOrder.orderIds.getEntries();
-        while (cursor.advance()) {
-            Node node = cursor.getKey();
-            Integer orderId = cursor.getValue();
+        for (Map.Entry<Node, Integer> entry : nodeOrder.orderIds.entries()) {
+            Node node = entry.getKey();
+            Integer orderId = entry.getValue();
 
             assert !(node instanceof AbstractBeginNode) || nodeOrder.orderIds.get(((AbstractBeginNode) node).next()) == orderId + BEGIN_NEXT_ORDER_ID_OFFSET;
             nodeStartOffsets[orderId] = writer.getBytesWritten();
@@ -339,7 +338,7 @@ public class GraphEncoder {
             } while (current != null);
 
             for (Node node : graph.getNodes()) {
-                assert (node instanceof FixedNode) == (orderIds.get(node) != null) : "all fixed nodes must be ordered";
+                assert (node instanceof FixedNode) == (orderIds.get(node) != null) : "all fixed nodes must be ordered: " + node;
                 add(node);
             }
         }

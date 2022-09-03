@@ -48,7 +48,6 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
@@ -186,7 +185,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
             if (!wholeGraph) {
                 workList.addAll(graph.getNewNodes(newNodesMark));
             }
-            tool = new Tool(graph.getAssumptions(), graph.getOptions());
+            tool = new Tool(graph.getAssumptions());
             processWorkSet(graph);
         }
 
@@ -237,11 +236,11 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                 return true;
             }
             NodeClass<?> nodeClass = node.getNodeClass();
-            StructuredGraph graph = (StructuredGraph) node.graph();
-            if (tryCanonicalize(node, nodeClass)) {
+            if (tryGlobalValueNumbering(node, nodeClass)) {
                 return true;
             }
-            if (tryGlobalValueNumbering(node, nodeClass)) {
+            StructuredGraph graph = (StructuredGraph) node.graph();
+            if (tryCanonicalize(node, nodeClass)) {
                 return true;
             }
             if (node instanceof ValueNode) {
@@ -367,7 +366,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                                     (canonical.predecessor() != null || canonical instanceof StartNode || canonical instanceof AbstractMergeNode) : node +
                                                     " -> " + canonical + " : replacement should be floating or fixed and connected";
                     node.replaceAtUsages(canonical);
-                    GraphUtil.killWithUnusedFloatingInputs(node, true);
+                    GraphUtil.killWithUnusedFloatingInputs(node);
                 } else {
                     assert node instanceof FixedNode && node.predecessor() != null : node + " -> " + canonical + " : node should be fixed & connected (" + node.predecessor() + ")";
                     FixedNode fixed = (FixedNode) node;
@@ -432,11 +431,9 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
         private final class Tool implements SimplifierTool {
 
             private final Assumptions assumptions;
-            private final OptionValues options;
 
-            Tool(Assumptions assumptions, OptionValues options) {
+            Tool(Assumptions assumptions) {
                 this.assumptions = assumptions;
-                this.options = options;
             }
 
             @Override
@@ -494,11 +491,6 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
             @Override
             public boolean supportSubwordCompare(int bits) {
                 return context.getLowerer().supportSubwordCompare(bits);
-            }
-
-            @Override
-            public OptionValues getOptions() {
-                return options;
             }
         }
     }

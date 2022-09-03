@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,7 @@
  */
 package org.graalvm.compiler.nodes.util;
 
-import static org.graalvm.compiler.graph.Graph.Options.VerifyGraalGraphEdges;
-import static org.graalvm.compiler.nodes.util.GraphUtil.Options.VerifyKillCFGUnusedNodes;
+import static org.graalvm.compiler.graph.Graph.Options.VerifyGraalGraphs;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -67,9 +66,6 @@ import org.graalvm.compiler.nodes.spi.ArrayLengthProvider;
 import org.graalvm.compiler.nodes.spi.LimitedValueProxy;
 import org.graalvm.compiler.nodes.spi.LoweringProvider;
 import org.graalvm.compiler.nodes.spi.ValueProxy;
-import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.options.OptionValue;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodePosition;
@@ -81,22 +77,15 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class GraphUtil {
 
-    public static class Options {
-        @Option(help = "Verify that there are no new unused nodes when performing killCFG", type = OptionType.Debug)//
-        public static final OptionValue<Boolean> VerifyKillCFGUnusedNodes = new OptionValue<>(false);
-    }
-
     @SuppressWarnings("try")
     public static void killCFG(FixedNode node, SimplifierTool tool) {
         try (Debug.Scope scope = Debug.scope("KillCFG", node)) {
             Set<Node> unusedNodes = null;
             Set<Node> unsafeNodes = null;
             Graph.NodeEventScope nodeEventScope = null;
-            if (VerifyGraalGraphEdges.getValue()) {
-                unsafeNodes = collectUnsafeNodes(node.graph());
-            }
-            if (VerifyKillCFGUnusedNodes.getValue()) {
+            if (VerifyGraalGraphs.getValue()) {
                 Set<Node> collectedUnusedNodes = unusedNodes = CollectionsFactory.newSet();
+                unsafeNodes = collectUnsafeNodes(node.graph());
                 nodeEventScope = node.graph().trackNodeEvents(new Graph.NodeEventListener() {
                     @Override
                     public void event(Graph.NodeEvent e, Node n) {
@@ -113,15 +102,13 @@ public class GraphUtil {
                     killCFG(n, tool, worklist);
                 }
             }
-            if (VerifyGraalGraphEdges.getValue()) {
-                Set<Node> newUnsafeNodes = collectUnsafeNodes(node.graph());
-                newUnsafeNodes.removeAll(unsafeNodes);
-                assert newUnsafeNodes.isEmpty() : "New unsafe nodes: " + newUnsafeNodes;
-            }
-            if (VerifyKillCFGUnusedNodes.getValue()) {
+            if (VerifyGraalGraphs.getValue()) {
                 nodeEventScope.close();
                 unusedNodes.removeIf(n -> n.isDeleted());
                 assert unusedNodes.isEmpty() : "New unused nodes: " + unusedNodes;
+                Set<Node> newUnsafeNodes = collectUnsafeNodes(node.graph());
+                newUnsafeNodes.removeAll(unsafeNodes);
+                assert newUnsafeNodes.isEmpty() : "New unsafe nodes: " + newUnsafeNodes;
             }
         } catch (Throwable t) {
             throw Debug.handle(t);

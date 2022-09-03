@@ -39,7 +39,6 @@ import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.extended.IntegerSwitchNode;
 import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.nodes.util.GraphUtil;
-import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.Assumptions;
@@ -63,16 +62,9 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
     protected class PECanonicalizerTool implements CanonicalizerTool {
 
         private final Assumptions assumptions;
-        private final OptionValues options;
 
-        public PECanonicalizerTool(Assumptions assumptions, OptionValues options) {
+        public PECanonicalizerTool(Assumptions assumptions) {
             this.assumptions = assumptions;
-            this.options = options;
-        }
-
-        @Override
-        public OptionValues getOptions() {
-            return options;
         }
 
         @Override
@@ -135,11 +127,6 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
         this.constantFieldProvider = constantFieldProvider;
         this.stampProvider = stampProvider;
         this.canonicalizeReads = canonicalizeReads;
-    }
-
-    @Override
-    protected CanonicalizerTool createCanonicalizerTool(StructuredGraph graph) {
-        return new PECanonicalizerTool(graph.getAssumptions(), graph.getOptions());
     }
 
     @Override
@@ -245,7 +232,7 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
             }
 
         } else if (node instanceof Canonicalizable) {
-            Node canonical = ((Canonicalizable) node).canonical(methodScope.canonicalizerTool);
+            Node canonical = ((Canonicalizable) node).canonical(new PECanonicalizerTool(methodScope.graph.getAssumptions()));
             if (canonical != node) {
                 handleCanonicalization(methodScope, loopScope, nodeOrderId, node, canonical);
             }
@@ -296,7 +283,7 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
             ((ValueNode) node).inferStamp();
         }
         if (node instanceof Canonicalizable) {
-            Node canonical = ((Canonicalizable) node).canonical(methodScope.canonicalizerTool);
+            Node canonical = ((Canonicalizable) node).canonical(new PECanonicalizerTool(methodScope.graph.getAssumptions()));
             if (canonical == null) {
                 /*
                  * This is a possible return value of canonicalization. However, we might need to

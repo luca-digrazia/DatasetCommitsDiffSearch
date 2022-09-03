@@ -37,7 +37,6 @@ import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.graph.spi.Simplifiable;
 import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.memory.MemoryPhiNode;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
@@ -107,8 +106,8 @@ public abstract class AbstractMergeNode extends BeginStateSplitNode implements I
             }
             ValueNode removedValue = phi.valueAt(predIndex);
             phi.removeInput(predIndex);
-            if (removedValue != null && removedValue.isAlive() && removedValue.hasNoUsages() && GraphUtil.isFloatingNode(removedValue)) {
-                GraphUtil.killWithUnusedFloatingInputs(removedValue);
+            if (removedValue != null) {
+                GraphUtil.tryKillUnused(removedValue);
             }
         }
     }
@@ -142,11 +141,7 @@ public abstract class AbstractMergeNode extends BeginStateSplitNode implements I
     }
 
     public NodeIterable<ValuePhiNode> valuePhis() {
-        return this.usages().filter(ValuePhiNode.class);
-    }
-
-    public NodeIterable<MemoryPhiNode> memoryPhis() {
-        return this.usages().filter(MemoryPhiNode.class);
+        return this.usages().filter(ValuePhiNode.class).filter(this::isPhiAtMerge);
     }
 
     @Override
