@@ -70,7 +70,7 @@ import com.oracle.graal.snippets.*;
 /**
  * HotSpot implementation of {@link GraalCodeCacheProvider}.
  */
-public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetProvider {
+public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
     public final HotSpotVMConfig config;
 
     protected final RegisterConfig regConfig;
@@ -238,9 +238,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetP
                         /*           temps */ null,
                         /*             ret */ ret(Kind.Void),
                         /* arg0:    format */ arg(0, Kind.Object),
-                        /* arg1:     value */ arg(1, Kind.Long),
-                        /* arg2:     value */ arg(2, Kind.Long),
-                        /* arg3:     value */ arg(3, Kind.Long));
+                        /* arg1:     value */ arg(1, Kind.Long));
 
         addRuntimeCall(LOG_OBJECT, config.logObjectStub,
                         /*           temps */ null,
@@ -294,24 +292,12 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetP
     protected abstract RegisterConfig createRegisterConfig(boolean globalStubConfig);
 
     public void installSnippets(SnippetInstaller installer, Assumptions assumptions) {
-        if (GraalOptions.IntrinsifyObjectMethods) {
-            installer.install(ObjectSnippets.class);
-        }
-        if (GraalOptions.IntrinsifySystemMethods) {
-            installer.install(SystemSnippets.class);
-        }
-        if (GraalOptions.IntrinsifyThreadMethods) {
-            installer.install(ThreadSnippets.class);
-        }
-        if (GraalOptions.IntrinsifyUnsafeMethods) {
-            installer.install(UnsafeSnippets.class);
-        }
-        if (GraalOptions.IntrinsifyClassMethods) {
-            installer.install(ClassSnippets.class);
-        }
-        if (GraalOptions.IntrinsifyArrayCopy) {
-            installer.install(ArrayCopySnippets.class);
-        }
+        installer.install(ObjectSnippets.class);
+        installer.install(ClassSnippets.class);
+        installer.install(ThreadSnippets.class);
+        installer.install(SystemSnippets.class);
+        installer.install(UnsafeSnippets.class);
+        installer.install(ArrayCopySnippets.class);
 
         installer.install(CheckCastSnippets.class);
         installer.install(InstanceOfSnippets.class);
