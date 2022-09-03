@@ -127,7 +127,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
          */
         final StackSlot reservedSlot;
 
-        SaveRbp(NoOp placeholder) {
+        public SaveRbp(NoOp placeholder) {
             this.placeholder = placeholder;
             AMD64FrameMapBuilder frameMapBuilder = (AMD64FrameMapBuilder) getResult().getFrameMapBuilder();
             this.reservedSlot = frameMapBuilder.allocateRBPSpillSlot();
@@ -174,7 +174,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
         @Alive({OperandFlag.STACK, OperandFlag.UNINITIALIZED}) private AllocatableValue slot;
 
-        RescueSlotDummyOp(FrameMapBuilder frameMapBuilder, LIRKind kind) {
+        public RescueSlotDummyOp(FrameMapBuilder frameMapBuilder, LIRKind kind) {
             super(TYPE);
             slot = frameMapBuilder.allocateSpillSlot(kind);
         }
@@ -293,6 +293,20 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     public void emitLeaveUnpackFramesStackFrame(SaveRegistersOp saveRegisterOp) {
         Register threadRegister = getProviders().getRegisters().getThreadRegister();
         append(new AMD64HotSpotLeaveUnpackFramesStackFrameOp(threadRegister, config.threadLastJavaSpOffset(), config.threadLastJavaPcOffset(), config.threadLastJavaFpOffset(), saveRegisterOp));
+    }
+
+    @Override
+    public Value emitCardTableShift() {
+        Variable result = newVariable(LIRKind.value(AMD64Kind.QWORD));
+        append(new AMD64HotSpotCardTableShiftOp(result, config));
+        return result;
+    }
+
+    @Override
+    public Value emitCardTableAddress() {
+        Variable result = newVariable(LIRKind.value(AMD64Kind.QWORD));
+        append(new AMD64HotSpotCardTableAddressOp(result, config));
+        return result;
     }
 
     /**

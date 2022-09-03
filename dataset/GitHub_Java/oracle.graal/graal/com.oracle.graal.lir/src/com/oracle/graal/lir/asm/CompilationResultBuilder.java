@@ -34,13 +34,15 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.CompilationResult;
+import jdk.vm.ci.code.CompilationResult.ConstantReference;
+import jdk.vm.ci.code.CompilationResult.DataSectionReference;
+import jdk.vm.ci.code.DataSection.Data;
+import jdk.vm.ci.code.DataSection.DataBuilder;
 import jdk.vm.ci.code.DebugInfo;
+import jdk.vm.ci.code.InfopointReason;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.code.site.ConstantReference;
-import jdk.vm.ci.code.site.DataSectionReference;
-import jdk.vm.ci.code.site.InfopointReason;
-import jdk.vm.ci.code.site.Mark;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.InvokeTarget;
@@ -52,9 +54,6 @@ import jdk.vm.ci.meta.Value;
 import com.oracle.graal.asm.AbstractAddress;
 import com.oracle.graal.asm.Assembler;
 import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.code.CompilationResult;
-import com.oracle.graal.code.DataSection.Data;
-import com.oracle.graal.code.DataSection.RawData;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
 import com.oracle.graal.debug.Debug;
@@ -84,14 +83,13 @@ public class CompilationResultBuilder {
         public final int codeOffset;
         public final LabelRef exceptionEdge;
 
-        ExceptionInfo(int pcOffset, LabelRef exceptionEdge) {
+        public ExceptionInfo(int pcOffset, LabelRef exceptionEdge) {
             this.codeOffset = pcOffset;
             this.exceptionEdge = exceptionEdge;
         }
     }
 
     public final Assembler asm;
-    public final DataBuilder dataBuilder;
     public final CompilationResult compilationResult;
     public final TargetDescription target;
     public final CodeCacheProvider codeCache;
@@ -120,14 +118,12 @@ public class CompilationResultBuilder {
     private Consumer<LIRInstruction> beforeOp;
     private Consumer<LIRInstruction> afterOp;
 
-    public CompilationResultBuilder(CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, FrameMap frameMap, Assembler asm, DataBuilder dataBuilder, FrameContext frameContext,
-                    CompilationResult compilationResult) {
+    public CompilationResultBuilder(CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, FrameMap frameMap, Assembler asm, FrameContext frameContext, CompilationResult compilationResult) {
         this.target = codeCache.getTarget();
         this.codeCache = codeCache;
         this.foreignCalls = foreignCalls;
         this.frameMap = frameMap;
         this.asm = asm;
-        this.dataBuilder = dataBuilder;
         this.compilationResult = compilationResult;
         this.frameContext = frameContext;
         assert frameContext != null;
@@ -140,7 +136,7 @@ public class CompilationResultBuilder {
         compilationResult.setTotalFrameSize(frameSize);
     }
 
-    public Mark recordMark(Object id) {
+    public CompilationResult.Mark recordMark(Object id) {
         return compilationResult.recordMark(asm.position(), id);
     }
 
@@ -231,7 +227,7 @@ public class CompilationResultBuilder {
         Debug.log("Constant reference in code: pos = %d, data = %s", asm.position(), constant);
         Data data = dataCache.get(constant);
         if (data == null) {
-            data = dataBuilder.createDataItem(constant);
+            data = codeCache.createDataItem(constant);
             dataCache.put(constant, data);
         }
         data.updateAlignment(alignment);
@@ -243,7 +239,7 @@ public class CompilationResultBuilder {
         if (Debug.isLogEnabled()) {
             Debug.log("Data reference in code: pos = %d, data = %s", asm.position(), Arrays.toString(data));
         }
-        return recordDataSectionReference(new RawData(data, alignment));
+        return recordDataSectionReference(new Data(alignment, data.length, DataBuilder.raw(data)));
     }
 
     /**

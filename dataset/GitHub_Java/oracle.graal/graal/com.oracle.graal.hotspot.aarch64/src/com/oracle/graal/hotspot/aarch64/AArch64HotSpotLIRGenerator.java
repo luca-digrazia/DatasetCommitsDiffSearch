@@ -23,6 +23,24 @@
 
 package com.oracle.graal.hotspot.aarch64;
 
+import com.oracle.graal.asm.aarch64.AArch64Address;
+import com.oracle.graal.compiler.aarch64.AArch64ArithmeticLIRGenerator;
+import com.oracle.graal.compiler.aarch64.AArch64LIRGenerator;
+import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.compiler.common.spi.LIRKindTool;
+import com.oracle.graal.hotspot.HotSpotBackend;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.hotspot.HotSpotLockStack;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.hotspot.stubs.Stub;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
+import com.oracle.graal.lir.Variable;
+import com.oracle.graal.lir.VirtualStackSlot;
+import com.oracle.graal.lir.aarch64.AArch64AddressValue;
+import com.oracle.graal.lir.aarch64.AArch64Move;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.CallingConvention;
@@ -37,53 +55,33 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.Value;
 
-import com.oracle.graal.asm.aarch64.AArch64Address;
-import com.oracle.graal.compiler.aarch64.AArch64ArithmeticLIRGenerator;
-import com.oracle.graal.compiler.aarch64.AArch64LIRGenerator;
-import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.compiler.common.spi.LIRKindTool;
-import com.oracle.graal.hotspot.HotSpotBackend;
-import com.oracle.graal.hotspot.HotSpotDebugInfoBuilder;
-import com.oracle.graal.hotspot.HotSpotLIRGenerationResult;
-import com.oracle.graal.hotspot.HotSpotLIRGenerator;
-import com.oracle.graal.hotspot.HotSpotLockStack;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.stubs.Stub;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.VirtualStackSlot;
-import com.oracle.graal.lir.aarch64.AArch64AddressValue;
-import com.oracle.graal.lir.aarch64.AArch64FrameMapBuilder;
-import com.oracle.graal.lir.aarch64.AArch64Move;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-
 /**
  * LIR generator specialized for AArch64 HotSpot.
  */
 public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements HotSpotLIRGenerator {
 
     final HotSpotVMConfig config;
-    private HotSpotDebugInfoBuilder debugInfoBuilder;
+    private HotSpotLockStack lockStack;
 
-    protected AArch64HotSpotLIRGenerator(HotSpotProviders providers, HotSpotVMConfig config, LIRGenerationResult lirGenRes) {
-        this(providers, config, lirGenRes, new ConstantTableBaseProvider());
+    protected AArch64HotSpotLIRGenerator(HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes) {
+        this(providers, config, cc, lirGenRes, new ConstantTableBaseProvider());
     }
 
-    private AArch64HotSpotLIRGenerator(HotSpotProviders providers, HotSpotVMConfig config, LIRGenerationResult lirGenRes, ConstantTableBaseProvider constantTableBaseProvider) {
-        this(new AArch64HotSpotLIRKindTool(), new AArch64ArithmeticLIRGenerator(), new AArch64HotSpotMoveFactory(constantTableBaseProvider), providers, config, lirGenRes, constantTableBaseProvider);
+    private AArch64HotSpotLIRGenerator(HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes, ConstantTableBaseProvider constantTableBaseProvider) {
+        this(new AArch64HotSpotLIRKindTool(), new AArch64ArithmeticLIRGenerator(), new AArch64HotSpotMoveFactory(constantTableBaseProvider), providers, config, cc, lirGenRes,
+                        constantTableBaseProvider);
     }
 
     protected AArch64HotSpotLIRGenerator(LIRKindTool lirKindTool, AArch64ArithmeticLIRGenerator arithmeticLIRGen, MoveFactory moveFactory, HotSpotProviders providers, HotSpotVMConfig config,
-                    LIRGenerationResult lirGenRes, ConstantTableBaseProvider constantTableBaseProvider) {
-        super(lirKindTool, arithmeticLIRGen, moveFactory, providers, lirGenRes, constantTableBaseProvider);
+                    CallingConvention cc, LIRGenerationResult lirGenRes, ConstantTableBaseProvider constantTableBaseProvider) {
+        super(lirKindTool, arithmeticLIRGen, moveFactory, providers, cc, lirGenRes, constantTableBaseProvider);
         this.config = config;
     }
 
     @Override
     public boolean needOnlyOopMaps() {
         // Stubs only need oop maps
-        return getResult().getStub() != null;
+        return ((AArch64HotSpotLIRGenerationResult) getResult()).getStub() != null;
     }
 
     @Override
@@ -107,8 +105,13 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
     }
 
     private HotSpotLockStack getLockStack() {
-        assert debugInfoBuilder != null && debugInfoBuilder.lockStack() != null;
-        return debugInfoBuilder.lockStack();
+        assert lockStack != null;
+        return lockStack;
+    }
+
+    protected void setLockStack(HotSpotLockStack lockStack) {
+        assert this.lockStack == null;
+        this.lockStack = lockStack;
     }
 
     @SuppressWarnings("unused")
@@ -144,17 +147,6 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
     @Override
     public void emitPrefetchAllocate(Value address) {
         // TODO (das) Optimization for later.
-    }
-
-    @Override
-    public void beforeRegisterAllocation() {
-        super.beforeRegisterAllocation();
-        boolean hasDebugInfo = getResult().getLIR().hasDebugInfo();
-        if (hasDebugInfo) {
-            getResult().setDeoptimizationRescueSlot(((AArch64FrameMapBuilder) getResult().getFrameMapBuilder()).allocateDeoptimizationRescueSlot());
-        }
-
-        getResult().setMaxInterpreterFrameSize(debugInfoBuilder.maxInterpreterFrameSize());
     }
 
     @Override
@@ -208,16 +200,7 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
      * being generated.
      */
     public Stub getStub() {
-        return getResult().getStub();
-    }
-
-    @Override
-    public HotSpotLIRGenerationResult getResult() {
-        return ((HotSpotLIRGenerationResult) super.getResult());
-    }
-
-    public void setDebugInfoBuilder(HotSpotDebugInfoBuilder debugInfoBuilder) {
-        this.debugInfoBuilder = debugInfoBuilder;
+        return ((AArch64HotSpotLIRGenerationResult) getResult()).getStub();
     }
 
 }

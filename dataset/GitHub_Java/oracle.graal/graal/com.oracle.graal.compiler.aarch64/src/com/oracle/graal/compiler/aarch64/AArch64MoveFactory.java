@@ -27,10 +27,9 @@ import static com.oracle.graal.lir.LIRValueUtil.asConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
 import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 
-import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
+import com.oracle.graal.compiler.aarch64.AArch64LIRGenerator.ConstantTableBaseProvider;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.aarch64.AArch64AddressValue;
-import com.oracle.graal.lir.aarch64.AArch64Move;
 import com.oracle.graal.lir.aarch64.AArch64Move.LoadAddressOp;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 
@@ -41,6 +40,12 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.Value;
 
 public class AArch64MoveFactory implements MoveFactory {
+
+    protected final ConstantTableBaseProvider constantTableBaseProvider;
+
+    public AArch64MoveFactory(ConstantTableBaseProvider constantTableBaseProvider) {
+        this.constantTableBaseProvider = constantTableBaseProvider;
+    }
 
     @Override
     public LIRInstruction createMove(AllocatableValue dst, Value src) {
@@ -55,14 +60,16 @@ public class AArch64MoveFactory implements MoveFactory {
             if (srcIsSlot && dstIsSlot) {
                 throw JVMCIError.shouldNotReachHere(src.getClass() + " " + dst.getClass());
             } else {
-                return new AArch64Move.Move(dst, (AllocatableValue) src);
+                // return new Move(dst, (AllocatableValue) src);
+                throw JVMCIError.unimplemented();
             }
         }
     }
 
     @Override
     public LIRInstruction createStackMove(AllocatableValue result, AllocatableValue input) {
-        return new AArch64Move.Move(result, input);
+        // return new AArch64Move.Move(result, input);
+        throw JVMCIError.unimplemented();
     }
 
     @Override
@@ -70,15 +77,15 @@ public class AArch64MoveFactory implements MoveFactory {
         if (src instanceof JavaConstant) {
             JavaConstant javaConstant = (JavaConstant) src;
             if (canInlineConstant(javaConstant)) {
-                return new AArch64Move.LoadInlineConstant(javaConstant, dst);
+                // return new AArch64Move.LoadInlineConstant(javaConstant, dst);
+                throw JVMCIError.unimplemented();
             } else {
                 // return new AArch64Move.LoadConstantFromTable(javaConstant,
                 // constantTableBaseProvider.getConstantTableBase(), dst);
-                return new AArch64Move.LoadInlineConstant(javaConstant, dst);
+                throw JVMCIError.unimplemented();
             }
         } else {
-            // throw JVMCIError.shouldNotReachHere(src.getClass().toString());
-            throw JVMCIError.unimplemented();
+            throw JVMCIError.shouldNotReachHere(src.getClass().toString());
         }
     }
 
@@ -90,9 +97,11 @@ public class AArch64MoveFactory implements MoveFactory {
             case Char:
             case Short:
             case Int:
-                return AArch64MacroAssembler.isMovableImmediate(c.asInt());
+                // return SPARCAssembler.isSimm13(c.asInt()) && !codeCache.needsDataPatch(c);
+                throw JVMCIError.unimplemented();
             case Long:
-                return AArch64MacroAssembler.isMovableImmediate(c.asLong());
+                // return SPARCAssembler.isSimm13(c.asLong()) && !codeCache.needsDataPatch(c);
+                throw JVMCIError.unimplemented();
             case Object:
                 return c.isNull();
             default:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,21 +23,15 @@
 
 package com.oracle.graal.compiler.sparc;
 
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.memory.address.*;
+import jdk.vm.ci.meta.JavaConstant;
+
+import com.oracle.graal.asm.sparc.SPARCAssembler;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.AddNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
 import com.oracle.graal.phases.common.AddressLoweringPhase.AddressLowering;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.meta.*;
 
 public class SPARCAddressLowering extends AddressLowering {
-
-    private final CodeCacheProvider codeCache;
-
-    public SPARCAddressLowering(CodeCacheProvider codeCache) {
-        this.codeCache = codeCache;
-    }
 
     @Override
     public AddressNode lower(ValueNode address) {
@@ -55,7 +49,6 @@ public class SPARCAddressLowering extends AddressLowering {
         if (immOffset != null && SPARCAssembler.isSimm13(immOffset)) {
             return lower(base, immOffset.asLong());
         }
-
         return base.graph().unique(new SPARCIndexedAddressNode(base, offset));
     }
 
@@ -82,9 +75,9 @@ public class SPARCAddressLowering extends AddressLowering {
         return base.graph().unique(new SPARCImmediateAddressNode(base, (int) displacement));
     }
 
-    private JavaConstant asImmediate(ValueNode value) {
+    private static JavaConstant asImmediate(ValueNode value) {
         JavaConstant c = value.asJavaConstant();
-        if (c != null && c.getKind().isNumericInteger() && !codeCache.needsDataPatch(c)) {
+        if (c != null && c.getJavaKind().isNumericInteger()) {
             return c;
         } else {
             return null;

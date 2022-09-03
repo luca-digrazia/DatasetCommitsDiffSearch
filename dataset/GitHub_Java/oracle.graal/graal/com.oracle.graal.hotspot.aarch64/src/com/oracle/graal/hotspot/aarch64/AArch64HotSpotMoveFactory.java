@@ -26,9 +26,11 @@ import static jdk.vm.ci.hotspot.HotSpotCompressedNullConstant.COMPRESSED_NULL;
 import static jdk.vm.ci.meta.JavaConstant.INT_0;
 import static jdk.vm.ci.meta.JavaConstant.LONG_0;
 
+import com.oracle.graal.compiler.aarch64.AArch64LIRGenerator.ConstantTableBaseProvider;
 import com.oracle.graal.compiler.aarch64.AArch64MoveFactory;
 import com.oracle.graal.lir.LIRInstruction;
 
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
 import jdk.vm.ci.hotspot.HotSpotConstant;
 import jdk.vm.ci.hotspot.HotSpotObjectConstant;
@@ -37,6 +39,10 @@ import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 
 public class AArch64HotSpotMoveFactory extends AArch64MoveFactory {
+
+    public AArch64HotSpotMoveFactory(ConstantTableBaseProvider constantTableBaseProvider) {
+        super(constantTableBaseProvider);
+    }
 
     @Override
     public boolean canInlineConstant(JavaConstant c) {
@@ -62,12 +68,12 @@ public class AArch64HotSpotMoveFactory extends AArch64MoveFactory {
         if (usedSource instanceof HotSpotConstant) {
             HotSpotConstant constant = (HotSpotConstant) usedSource;
             if (constant.isCompressed()) {
-                return new AArch64HotSpotMove.LoadHotSpotObjectConstantInline(constant, dst);
+                // return new SPARCHotSpotMove.LoadHotSpotObjectConstantInline(constant, dst);
+                throw JVMCIError.unimplemented();
             } else {
-                // XXX Do we need the constant table?
                 // return new SPARCHotSpotMove.LoadHotSpotObjectConstantFromTable(constant, dst,
                 // constantTableBaseProvider.getConstantTableBase());
-                return new AArch64HotSpotMove.LoadHotSpotObjectConstantInline(constant, dst);
+                throw JVMCIError.unimplemented();
             }
         } else {
             return super.createLoad(dst, usedSource);

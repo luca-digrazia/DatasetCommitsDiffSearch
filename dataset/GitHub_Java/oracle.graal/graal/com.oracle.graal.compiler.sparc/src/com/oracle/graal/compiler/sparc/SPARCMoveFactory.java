@@ -33,7 +33,6 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.Value;
 
 import com.oracle.graal.asm.sparc.SPARCAssembler;
-import com.oracle.graal.compiler.common.type.DataPointerConstant;
 import com.oracle.graal.compiler.sparc.SPARCLIRGenerator.ConstantTableBaseProvider;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
@@ -82,8 +81,6 @@ public class SPARCMoveFactory implements MoveFactory {
             } else {
                 return new SPARCMove.LoadConstantFromTable(javaConstant, constantTableBaseProvider.getConstantTableBase(), dst);
             }
-        } else if (src instanceof DataPointerConstant) {
-            return new SPARCMove.LoadDataAddressOp(dst, (DataPointerConstant) src);
         } else {
             throw JVMCIError.shouldNotReachHere(src.getClass().toString());
         }
