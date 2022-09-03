@@ -46,8 +46,6 @@ public class AMD64GlobalStubEmitter implements GlobalStubEmitter {
     private static final long DoubleSignFlip = 0x8000000000000000L;
     private static final CiRegister convertArgument = AMD64.xmm0;
     private static final CiRegister convertResult = AMD64.rax;
-    private static final CiRegister negateArgument = AMD64.xmm0;
-    private static final CiRegister negateTemp = AMD64.xmm1;
 
     private TargetMethodAssembler tasm;
     private AMD64MacroAssembler asm;
@@ -59,12 +57,12 @@ public class AMD64GlobalStubEmitter implements GlobalStubEmitter {
     private int registerRestoreEpilogueOffset;
 
     private RiRuntime runtime;
-    private C1XCompiler compiler;
+    private GraalCompiler compiler;
     private CiRegister[] registersSaved;
 
     private boolean savedAllRegisters;
 
-    public AMD64GlobalStubEmitter(C1XCompiler compiler) {
+    public AMD64GlobalStubEmitter(GraalCompiler compiler) {
         this.compiler = compiler;
         this.target = compiler.target;
         this.runtime = compiler.runtime;
@@ -98,7 +96,7 @@ public class AMD64GlobalStubEmitter implements GlobalStubEmitter {
         emitStandardForward(null, runtimeCall);
         String name = "stub-" + runtimeCall;
         CiTargetMethod targetMethod = tasm.finishTargetMethod(name, runtime, registerRestoreEpilogueOffset, true);
-        Object stubObject = runtime.registerGlobalStub(targetMethod, name);
+        Object stubObject = runtime.registerCompilerStub(targetMethod, name);
         return new GlobalStub(null, runtimeCall.resultKind, stubObject, argsSize, argOffsets, resultOffset);
     }
 
@@ -118,17 +116,11 @@ public class AMD64GlobalStubEmitter implements GlobalStubEmitter {
             case d2l:
                 emitD2L();
                 break;
-            case fneg:
-                emitFNEG();
-                break;
-            case dneg:
-                emitDNEG();
-                break;
         }
 
         String name = "stub-" + stub;
         CiTargetMethod targetMethod = tasm.finishTargetMethod(name, runtime, registerRestoreEpilogueOffset, true);
-        Object stubObject = runtime.registerGlobalStub(targetMethod, name);
+        Object stubObject = runtime.registerCompilerStub(targetMethod, name);
         return new GlobalStub(stub, stub.resultKind, stubObject, argsSize, argOffsets, resultOffset);
     }
 
@@ -156,7 +148,7 @@ public class AMD64GlobalStubEmitter implements GlobalStubEmitter {
     }
 
     public GlobalStub emit(XirTemplate template, RiRuntime runtime) {
-        C1XCompilation compilation = new C1XCompilation(compiler, null, -1, null);
+        GraalCompilation compilation = new GraalCompilation(compiler, null, -1, null);
         try {
             return emit(template, compilation);
         } finally {
@@ -164,7 +156,7 @@ public class AMD64GlobalStubEmitter implements GlobalStubEmitter {
         }
     }
 
-    public GlobalStub emit(XirTemplate template, C1XCompilation compilation) {
+    public GlobalStub emit(XirTemplate template, GraalCompilation compilation) {
         reset(template.resultOperand.kind, getArgumentKinds(template));
         compilation.initFrameMap(0);
         compilation.frameMap().setFrameSize(frameSize());
@@ -238,7 +230,7 @@ public class AMD64GlobalStubEmitter implements GlobalStubEmitter {
         assembler.emitXirInstructions(null, template.fastPath, labels, operands, null);
         epilogue();
         CiTargetMethod targetMethod = tasm.finishTargetMethod(template.name, runtime, registerRestoreEpilogueOffset, true);
-        Object stubObject = runtime.registerGlobalStub(targetMethod, template.name);
+        Object stubObject = runtime.registerCompilerStub(targetMethod, template.name);
         return new GlobalStub(null, template.resultOperand.kind, stubObject, argsSize, argOffsets, resultOffset);
     }
 
@@ -249,30 +241,6 @@ public class AMD64GlobalStubEmitter implements GlobalStubEmitter {
             result[i] = params[i].kind;
         }
         return result;
-    }
-
-    private void negatePrologue() {
-        partialSavePrologue(negateArgument, negateTemp);
-        loadArgument(0, negateArgument);
-    }
-
-    private void negateEpilogue() {
-        storeArgument(0, negateArgument);
-        epilogue();
-    }
-
-    private void emitDNEG() {
-        negatePrologue();
-        asm.movsd(negateTemp, tasm.recordDataReferenceInCode(CiConstant.forLong(DoubleSignFlip)));
-        asm.xorpd(negateArgument, negateTemp);
-        negateEpilogue();
-    }
-
-    private void emitFNEG() {
-        negatePrologue();
-        asm.movsd(negateTemp, tasm.recordDataReferenceInCode(CiConstant.forLong(FloatSignFlip)));
-        asm.xorps(negateArgument, negateTemp);
-        negateEpilogue();
     }
 
     private void convertPrologue() {
@@ -377,7 +345,7 @@ public class AMD64GlobalStubEmitter implements GlobalStubEmitter {
     }
 
     private void completeSavePrologue() {
-        CiCalleeSaveArea csa = compiler.globalStubRegisterConfig.getCalleeSaveArea();
+        CiCalleeSaveLayout csa = compiler.globalStubRegisterConfig.getCalleeSaveLayout();
         this.saveSize = csa.size;
         int entryCodeOffset = runtime.codeOffset();
         if (entryCodeOffset != 0) {
@@ -396,7 +364,7 @@ public class AMD64GlobalStubEmitter implements GlobalStubEmitter {
         registerRestoreEpilogueOffset = asm.codeBuffer.position();
 
         if (savedAllRegisters) {
-            CiCalleeSaveArea csa = compiler.globalStubRegisterConfig.getCalleeSaveArea();
+            CiCalleeSaveLayout csa = compiler.globalStubRegisterConfig.getCalleeSaveLayout();
             int frameToCSA = 0;
             asm.restore(csa, frameToCSA);
         } else {
@@ -419,7 +387,7 @@ public class AMD64GlobalStubEmitter implements GlobalStubEmitter {
 
     private void forwardRuntimeCall(CiRuntimeCall call) {
         // Load arguments
-        CiCallingConvention cc = compiler.globalStubRegisterConfig.getCallingConvention(RuntimeCall, call.arguments, target);
+        CiCallingConvention cc = compiler.globalStubRegisterConfig.getCallingConvention(RuntimeCall, call.arguments, target, false);
         for (int i = 0; i < cc.locations.length; ++i) {
             CiValue location = cc.locations[i];
             loadArgument(i, location.asRegister());

@@ -71,12 +71,12 @@ public class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public boolean canInlineAsConstant(Value v) {
-        if (!v.isConstant()) {
-            return false;
-        }
+    protected boolean canInlineAsConstant(Value v) {
         if (v.kind == CiKind.Long) {
-            return NumUtil.isInt(v.asConstant().asLong());
+            if (v.isConstant() && NumUtil.isInt(v.asConstant().asLong())) {
+                return true;
+            }
+            return false;
         }
         return v.kind != CiKind.Object || v.isNullConstant();
     }

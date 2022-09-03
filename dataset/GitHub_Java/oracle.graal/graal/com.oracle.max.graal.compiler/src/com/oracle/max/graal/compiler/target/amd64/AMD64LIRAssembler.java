@@ -754,14 +754,6 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                 acond = ConditionFlag.above;
                 ncond = ConditionFlag.belowEqual;
                 break;
-            case OF:
-                acond = ConditionFlag.overflow;
-                ncond = ConditionFlag.noOverflow;
-                break;
-            case NOF:
-                acond = ConditionFlag.noOverflow;
-                ncond = ConditionFlag.overflow;
-                break;
             default:
                 throw Util.shouldNotReachHere();
         }
@@ -790,11 +782,10 @@ public final class AMD64LIRAssembler extends LIRAssembler {
 
         if (!other.isConstant()) {
             // optimized version that does not require a branch
-            TTY.println("> emitting cmov");
             if (other.isRegister()) {
                 assert other.asRegister() != result.asRegister() : "other already overwritten by previous move";
                 if (other.kind.isInt()) {
-                    masm.cmovl(ncond, result.asRegister(), other.asRegister());
+                    masm.cmovq(ncond, result.asRegister(), other.asRegister());
                 } else {
                     masm.cmovq(ncond, result.asRegister(), other.asRegister());
                 }
