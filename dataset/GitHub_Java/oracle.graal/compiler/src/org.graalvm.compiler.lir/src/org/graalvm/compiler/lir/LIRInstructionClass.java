@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -73,13 +71,13 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
         LIRInstructionFieldsScanner ifs = new LIRInstructionFieldsScanner(calcOffset);
         ifs.scan(clazz);
 
-        uses = Values.create(ifs.valueAnnotations.get(LIRInstruction.Use.class));
-        alives = Values.create(ifs.valueAnnotations.get(LIRInstruction.Alive.class));
-        temps = Values.create(ifs.valueAnnotations.get(LIRInstruction.Temp.class));
-        defs = Values.create(ifs.valueAnnotations.get(LIRInstruction.Def.class));
+        uses = new Values(ifs.valueAnnotations.get(LIRInstruction.Use.class));
+        alives = new Values(ifs.valueAnnotations.get(LIRInstruction.Alive.class));
+        temps = new Values(ifs.valueAnnotations.get(LIRInstruction.Temp.class));
+        defs = new Values(ifs.valueAnnotations.get(LIRInstruction.Def.class));
 
-        states = Fields.create(ifs.states);
-        data = Fields.create(ifs.data);
+        states = new Fields(ifs.states);
+        data = new Fields(ifs.data);
 
         opcodeConstant = ifs.opcodeConstant;
         if (ifs.opcodeField == null) {

@@ -126,7 +126,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
 
     public static <T> NodeClass<T> get(Class<T> clazz) {
         NodeClass<T> result = getUnchecked(clazz);
-        if (result == null && clazz != NODE_CLASS) {
+        if (result == null) {
             throw GraalError.shouldNotReachHere("TYPE field not initialized for class " + clazz.getTypeName());
         }
         return result;
