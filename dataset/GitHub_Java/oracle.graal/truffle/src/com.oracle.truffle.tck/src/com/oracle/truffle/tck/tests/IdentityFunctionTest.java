@@ -24,16 +24,9 @@
  */
 package com.oracle.truffle.tck.tests;
 
-import static org.graalvm.polyglot.tck.TypeDescriptor.ARRAY;
-import static org.graalvm.polyglot.tck.TypeDescriptor.BOOLEAN;
-import static org.graalvm.polyglot.tck.TypeDescriptor.HOST_OBJECT;
-import static org.graalvm.polyglot.tck.TypeDescriptor.NATIVE_POINTER;
-import static org.graalvm.polyglot.tck.TypeDescriptor.NULL;
-import static org.graalvm.polyglot.tck.TypeDescriptor.NUMBER;
-import static org.graalvm.polyglot.tck.TypeDescriptor.OBJECT;
-import static org.graalvm.polyglot.tck.TypeDescriptor.STRING;
-
 import java.io.IOException;
+
+import static org.graalvm.polyglot.tck.TypeDescriptor.*;
 import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Collection;
