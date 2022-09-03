@@ -31,8 +31,6 @@ import static com.oracle.graal.compiler.GraalCompilerOptions.PrintFilter;
 import static com.oracle.graal.compiler.GraalCompilerOptions.PrintStackTraceOnException;
 import static com.oracle.graal.compiler.phases.HighTier.Options.Inline;
 
-import java.util.List;
-
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
@@ -40,7 +38,6 @@ import com.oracle.graal.debug.DebugCloseable;
 import com.oracle.graal.debug.DebugCounter;
 import com.oracle.graal.debug.DebugDumpScope;
 import com.oracle.graal.debug.DebugTimer;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Management;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.debug.TimeSource;
@@ -49,7 +46,6 @@ import com.oracle.graal.options.OptionValue.OverrideScope;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.hotspot.EventProvider;
 import jdk.vm.ci.hotspot.HotSpotCompilationRequest;
 import jdk.vm.ci.hotspot.HotSpotCompilationRequestResult;
 import jdk.vm.ci.hotspot.HotSpotCompiledCode;
@@ -57,8 +53,9 @@ import jdk.vm.ci.hotspot.HotSpotInstalledCode;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
 import jdk.vm.ci.hotspot.HotSpotNmethod;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.vm.ci.hotspot.services.EventProvider;
 import jdk.vm.ci.runtime.JVMCICompiler;
-import jdk.vm.ci.services.JVMCIServiceLocator;
+import jdk.vm.ci.services.Services;
 
 //JaCoCo Exclude
 
@@ -69,13 +66,11 @@ public class CompilationTask {
     private static final EventProvider eventProvider;
 
     static {
-        List<EventProvider> providers = JVMCIServiceLocator.getProviders(EventProvider.class);
-        if (providers.size() > 1) {
-            throw new GraalError("Multiple %s providers found: %s", EventProvider.class.getName(), providers);
-        } else if (providers.isEmpty()) {
+        EventProvider provider = Services.loadSingle(EventProvider.class, false);
+        if (provider == null) {
             eventProvider = EventProvider.createEmptyEventProvider();
         } else {
-            eventProvider = providers.get(0);
+            eventProvider = provider;
         }
     }
 
