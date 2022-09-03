@@ -59,11 +59,14 @@ import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import org.graalvm.compiler.hotspot.nodes.BeginLockScopeNode;
+import org.graalvm.compiler.hotspot.replacements.arraycopy.HotSpotArraycopySnippets;
+import org.graalvm.compiler.nodes.ComputeObjectAddressNode;
 import org.graalvm.compiler.hotspot.nodes.G1ArrayRangePostWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.G1ArrayRangePreWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.G1PostWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.G1PreWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.G1ReferentFieldReadBarrier;
+import org.graalvm.compiler.nodes.GetObjectAddressNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotCompressionNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotDirectCallTargetNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotIndirectCallTargetNode;
@@ -87,22 +90,20 @@ import org.graalvm.compiler.hotspot.replacements.KlassLayoutHelperNode;
 import org.graalvm.compiler.hotspot.replacements.LoadExceptionObjectSnippets;
 import org.graalvm.compiler.hotspot.replacements.MonitorSnippets;
 import org.graalvm.compiler.hotspot.replacements.NewObjectSnippets;
-import org.graalvm.compiler.hotspot.replacements.ObjectCloneSnippets;
 import org.graalvm.compiler.hotspot.replacements.StringToBytesSnippets;
 import org.graalvm.compiler.hotspot.replacements.UnsafeLoadSnippets;
 import org.graalvm.compiler.hotspot.replacements.WriteBarrierSnippets;
 import org.graalvm.compiler.hotspot.replacements.aot.ResolveConstantSnippets;
-import org.graalvm.compiler.hotspot.replacements.arraycopy.HotSpotArraycopySnippets;
+import org.graalvm.compiler.replacements.arraycopy.ArrayCopyNode;
+import org.graalvm.compiler.replacements.arraycopy.ArrayCopySnippets;
+import org.graalvm.compiler.replacements.arraycopy.ArrayCopyWithSlowPathNode;
 import org.graalvm.compiler.hotspot.replacements.profiling.ProfileSnippets;
-import org.graalvm.compiler.hotspot.stubs.ForeignCallSnippets;
 import org.graalvm.compiler.hotspot.word.KlassPointer;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractDeoptimizeNode;
 import org.graalvm.compiler.nodes.CompressionNode.CompressionOp;
-import org.graalvm.compiler.nodes.ComputeObjectAddressNode;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FixedNode;
-import org.graalvm.compiler.nodes.GetObjectAddressNode;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.LoweredCallTargetNode;
@@ -158,11 +159,7 @@ import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.DefaultJavaLoweringProvider;
-import org.graalvm.compiler.replacements.arraycopy.ArrayCopyNode;
-import org.graalvm.compiler.replacements.arraycopy.ArrayCopySnippets;
-import org.graalvm.compiler.replacements.arraycopy.ArrayCopyWithSlowPathNode;
 import org.graalvm.compiler.replacements.nodes.AssertionNode;
-import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.code.TargetDescription;
@@ -199,9 +196,6 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     protected ResolveConstantSnippets.Templates resolveConstantSnippets;
     protected ProfileSnippets.Templates profileSnippets;
 
-    protected ObjectCloneSnippets.Templates objectCloneSnippets;
-    protected ForeignCallSnippets.Templates foreignCallSnippets;
-
     public DefaultHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
                     HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
         super(metaAccess, foreignCalls, target, runtime.getVMConfig().useCompressedOops);
@@ -226,11 +220,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         stringToBytesSnippets = new StringToBytesSnippets.Templates(options, factories, providers, target);
         hashCodeSnippets = new HashCodeSnippets.Templates(options, factories, providers, target);
         resolveConstantSnippets = new ResolveConstantSnippets.Templates(options, factories, providers, target);
-        if (!GraalServices.Java8OrEarlier) {
-            profileSnippets = new ProfileSnippets.Templates(options, factories, providers, target);
-        }
-        objectCloneSnippets = new ObjectCloneSnippets.Templates(options, factories, providers, target);
-        foreignCallSnippets = new ForeignCallSnippets.Templates(options, factories, providers, target);
+        profileSnippets = new ProfileSnippets.Templates(options, factories, providers, target);
     }
 
     public MonitorSnippets.Templates getMonitorSnippets() {
@@ -296,7 +286,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             } else if (n instanceof DynamicNewInstanceNode) {
                 DynamicNewInstanceNode newInstanceNode = (DynamicNewInstanceNode) n;
                 if (newInstanceNode.getClassClass() == null) {
-                    JavaConstant classClassMirror = constantReflection.asJavaClass(metaAccess.lookupJavaType(Class.class));
+                    JavaConstant classClassMirror = constantReflection.forObject(Class.class);
                     ConstantNode classClass = ConstantNode.forConstant(classClassMirror, tool.getMetaAccess(), graph);
                     newInstanceNode.setClassClass(classClass);
                 }
@@ -310,7 +300,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             } else if (n instanceof DynamicNewArrayNode) {
                 DynamicNewArrayNode dynamicNewArrayNode = (DynamicNewArrayNode) n;
                 if (dynamicNewArrayNode.getVoidClass() == null) {
-                    JavaConstant voidClassMirror = constantReflection.asJavaClass(metaAccess.lookupJavaType(void.class));
+                    JavaConstant voidClassMirror = constantReflection.forObject(void.class);
                     ConstantNode voidClass = ConstantNode.forConstant(voidClassMirror, tool.getMetaAccess(), graph);
                     dynamicNewArrayNode.setVoidClass(voidClass);
                 }
@@ -780,7 +770,8 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
 
     @Override
     public int fieldOffset(ResolvedJavaField f) {
-        return f.getOffset();
+        HotSpotResolvedJavaField field = (HotSpotResolvedJavaField) f;
+        return field.getOffset();
     }
 
     @Override
@@ -791,15 +782,5 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     @Override
     protected final JavaKind getStorageKind(ResolvedJavaField field) {
         return field.getJavaKind();
-    }
-
-    @Override
-    public ObjectCloneSnippets.Templates getObjectCloneSnippets() {
-        return objectCloneSnippets;
-    }
-
-    @Override
-    public ForeignCallSnippets.Templates getForeignCallSnippets() {
-        return foreignCallSnippets;
     }
 }

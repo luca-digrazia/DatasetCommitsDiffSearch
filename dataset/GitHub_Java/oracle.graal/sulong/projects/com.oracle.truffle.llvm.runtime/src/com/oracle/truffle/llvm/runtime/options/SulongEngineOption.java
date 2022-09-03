@@ -135,7 +135,7 @@ public final class SulongEngineOption {
     }
 
     public static boolean isTrue(String option) {
-        return "true".equalsIgnoreCase(option) || "stdout".equalsIgnoreCase(option) || "stderr".equalsIgnoreCase(option);
+        return "true".equals(option.toLowerCase()) || "stdout".equals(option.toLowerCase()) || "stderr".equals(option.toLowerCase());
     }
 
     public static List<String> getPolyglotOptionSearchPaths(TruffleLanguage.Env env) {
