@@ -30,6 +30,7 @@ import static com.oracle.graal.hotspot.HotSpotBackend.FETCH_UNROLL_INFO;
 import static com.oracle.graal.hotspot.HotSpotBackend.UNCOMMON_TRAP;
 import static com.oracle.graal.lir.LIRValueUtil.asConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
+import static jdk.internal.jvmci.amd64.AMD64.cpuxmmRegisters;
 import static jdk.internal.jvmci.amd64.AMD64.rbp;
 
 import java.util.ArrayList;
@@ -338,18 +339,6 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     /**
-     * Allocate a stack slot for saving a register.
-     */
-    protected StackSlotValue allocateSaveRegisterLocation(Register register) {
-        PlatformKind kind = target().arch.getLargestStorableKind(register.getRegisterCategory());
-        if (kind.getVectorLength() > 1) {
-            // we don't use vector registers, so there is no need to save them
-            kind = AMD64Kind.DOUBLE;
-        }
-        return getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(kind));
-    }
-
-    /**
      * Adds a node to the graph that saves all allocatable registers to the stack.
      *
      * @param supportsRemove determines if registers can be pruned
@@ -369,7 +358,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     public SaveRegistersOp emitSaveAllRegisters() {
         // We are saving all registers.
         // TODO Save upper half of YMM registers.
-        return emitSaveAllRegisters(target().arch.getAvailableValueRegisters(), false);
+        return emitSaveAllRegisters(cpuxmmRegisters, false);
     }
 
     protected void emitRestoreRegisters(AMD64SaveRegistersOp save) {
