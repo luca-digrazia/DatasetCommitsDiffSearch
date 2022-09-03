@@ -48,9 +48,9 @@ public class BasicInductionVariable extends InductionVariable {
         if (stamp instanceof IntegerStamp) {
             IntegerStamp integerStamp = (IntegerStamp) stamp;
             Direction dir = null;
-            if (integerStamp.isStrictlyPositive()) {
+            if (integerStamp.lowerBound() > 0) {
                 dir = Direction.Up;
-            } else if (integerStamp.isStrictlyNegative()) {
+            } else if (integerStamp.upperBound() < 0) {
                 dir =  Direction.Down;
             }
             if (dir != null) {

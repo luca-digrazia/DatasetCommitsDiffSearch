@@ -139,8 +139,7 @@ public class LoopsData {
                         break;
                     default: throw GraalInternalError.shouldNotReachHere();
                 }
-                // TODO (gd)
-                Debug.log("absorb %b %s", oneOff, limit);
+                Debug.log("Counted loop : %s stride %s and limit%s %s", iv.valueNode().kind(), iv.isConstantStride() ? iv.constantStride() : iv.strideNode(), oneOff ? " (oneOff)" : "", limit instanceof ConstantNode ? limit.asConstant().asLong() : limit, loopBegin);
             }
         }
     }

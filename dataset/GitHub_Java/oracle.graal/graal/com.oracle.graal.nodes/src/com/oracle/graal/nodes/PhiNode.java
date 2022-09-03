@@ -36,7 +36,8 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
 
     public static enum PhiType {
         Value(null), // normal value phis
-        Memory(StampFactory.dependency());
+        Memory(StampFactory.dependency()), // memory phis
+        Virtual(StampFactory.virtual()); // phis used for VirtualObjectField merges
 
         public final Stamp stamp;
 
@@ -84,17 +85,14 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
         return values;
     }
 
-    @Override
     public boolean inferStamp() {
-        if (type == PhiType.Value) {
-            return inferPhiStamp();
-        } else {
+        Stamp newStamp = StampFactory.meet(values());
+        if (stamp().equals(newStamp)) {
             return false;
+        } else {
+            setStamp(newStamp);
+            return true;
         }
-    }
-
-    public boolean inferPhiStamp() {
-        return updateStamp(StampTool.meet(values()));
     }
 
     @Override
