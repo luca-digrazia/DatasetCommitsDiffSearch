@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,28 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.compiler.common.CollectionsFactory;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.nodes.ValueNode;
 
 public class ReadEliminationBlockState extends EffectsBlockState<ReadEliminationBlockState> {
 
-    final HashMap<ReadCacheEntry, ValueNode> readCache;
+    final HashMap<CacheEntry<?>, ValueNode> readCache;
 
-    static class ReadCacheEntry {
+    abstract static class CacheEntry<T> {
 
-        public final ResolvedJavaField identity;
         public final ValueNode object;
+        public final T identity;
 
-        public ReadCacheEntry(ResolvedJavaField identity, ValueNode object) {
-            this.identity = identity;
+        CacheEntry(ValueNode object, T identity) {
             this.object = object;
+            this.identity = identity;
         }
+
+        public abstract CacheEntry<T> duplicateWithObject(ValueNode newObject);
 
         @Override
         public int hashCode() {
@@ -49,23 +53,101 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
 
         @Override
         public boolean equals(Object obj) {
-            ReadCacheEntry other = (ReadCacheEntry) obj;
-            return identity == other.identity && object == other.object;
+            if (!(obj instanceof CacheEntry<?>)) {
+                return false;
+            }
+            CacheEntry<?> other = (CacheEntry<?>) obj;
+            return identity.equals(other.identity) && object == other.object;
         }
 
         @Override
         public String toString() {
             return object + ":" + identity;
         }
+
+        public abstract boolean conflicts(LocationIdentity other);
+
+        public abstract LocationIdentity getIdentity();
+    }
+
+    static class LoadCacheEntry extends CacheEntry<LocationIdentity> {
+
+        LoadCacheEntry(ValueNode object, LocationIdentity identity) {
+            super(object, identity);
+        }
+
+        @Override
+        public CacheEntry<LocationIdentity> duplicateWithObject(ValueNode newObject) {
+            return new LoadCacheEntry(newObject, identity);
+        }
+
+        @Override
+        public boolean conflicts(LocationIdentity other) {
+            return identity.equals(other);
+        }
+
+        @Override
+        public LocationIdentity getIdentity() {
+            return identity;
+        }
+    }
+
+    /**
+     * CacheEntry describing an Unsafe memory reference. The memory location and the location
+     * identity are separate so both must be considered when looking for optimizable memory
+     * accesses.
+     */
+    static class UnsafeLoadCacheEntry extends CacheEntry<ValueNode> {
+
+        private final LocationIdentity locationIdentity;
+
+        UnsafeLoadCacheEntry(ValueNode object, ValueNode location, LocationIdentity locationIdentity) {
+            super(object, location);
+            assert locationIdentity != null;
+            this.locationIdentity = locationIdentity;
+        }
+
+        @Override
+        public CacheEntry<ValueNode> duplicateWithObject(ValueNode newObject) {
+            return new UnsafeLoadCacheEntry(newObject, identity, locationIdentity);
+        }
+
+        @Override
+        public boolean conflicts(LocationIdentity other) {
+            return locationIdentity.equals(other);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * super.hashCode() + locationIdentity.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof UnsafeLoadCacheEntry) {
+                UnsafeLoadCacheEntry other = (UnsafeLoadCacheEntry) obj;
+                return super.equals(other) && locationIdentity.equals(other.locationIdentity);
+            }
+            return false;
+        }
+
+        @Override
+        public LocationIdentity getIdentity() {
+            return locationIdentity;
+        }
+
+        @Override
+        public String toString() {
+            return "UNSAFE:" + super.toString() + " location:" + locationIdentity;
+        }
     }
 
     public ReadEliminationBlockState() {
-        readCache = new HashMap<>();
+        readCache = CollectionsFactory.newMap();
     }
 
     public ReadEliminationBlockState(ReadEliminationBlockState other) {
-        super(other);
-        readCache = new HashMap<>(other.readCache);
+        readCache = CollectionsFactory.newMap(other.readCache);
     }
 
     @Override
@@ -75,35 +157,26 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
 
     @Override
     public boolean equivalentTo(ReadEliminationBlockState other) {
-        if (!compareMapsNoSize(readCache, other.readCache)) {
-            return false;
-        }
-        return super.equivalentTo(other);
+        return compareMapsNoSize(readCache, other.readCache);
     }
 
-    public void addReadCache(ValueNode object, ResolvedJavaField identity, ValueNode value) {
-        readCache.put(new ReadCacheEntry(identity, object), value);
+    public void addCacheEntry(CacheEntry<?> identifier, ValueNode value) {
+        readCache.put(identifier, value);
     }
 
-    public ValueNode getReadCache(ValueNode object, ResolvedJavaField identity) {
-        return readCache.get(new ReadCacheEntry(identity, object));
+    public ValueNode getCacheEntry(CacheEntry<?> identifier) {
+        return readCache.get(identifier);
     }
 
     public void killReadCache() {
         readCache.clear();
     }
 
-    public void killReadCache(ResolvedJavaField identity) {
-        Iterator<Map.Entry<ReadCacheEntry, ValueNode>> iter = readCache.entrySet().iterator();
-        while (iter.hasNext()) {
-            Map.Entry<ReadCacheEntry, ValueNode> entry = iter.next();
-            if (entry.getKey().identity == identity) {
-                iter.remove();
-            }
-        }
+    public void killReadCache(LocationIdentity identity) {
+        readCache.entrySet().removeIf(entry -> entry.getKey().conflicts(identity));
     }
 
-    public Map<ReadCacheEntry, ValueNode> getReadCache() {
+    public Map<CacheEntry<?>, ValueNode> getReadCache() {
         return readCache;
     }
 }

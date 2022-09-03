@@ -359,8 +359,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
     }
 
     @Override
-    protected ReadEliminationBlockState stripKilledLoopLocations(Loop<Block> loop, ReadEliminationBlockState originalInitialState) {
-        ReadEliminationBlockState initialState = super.stripKilledLoopLocations(loop, originalInitialState);
+    protected ReadEliminationBlockState stripKilledLoopLocations(Loop<Block> loop, ReadEliminationBlockState initialState) {
         LoopKillCache loopKilledLocations = loopLocationKillCache.get(loop);
         if (loopKilledLocations != null && loopKilledLocations.loopKillsLocations()) {
             Set<CacheEntry<?>> forwardEndLiveLocations = initialState.readCache.keySet();

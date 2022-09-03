@@ -414,8 +414,7 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
     }
 
     @Override
-    protected PEReadEliminationBlockState stripKilledLoopLocations(Loop<Block> loop, PEReadEliminationBlockState originalInitialState) {
-        PEReadEliminationBlockState initialState = super.stripKilledLoopLocations(loop, originalInitialState);
+    protected PEReadEliminationBlockState stripKilledLoopLocations(Loop<Block> loop, PEReadEliminationBlockState initialState) {
         LoopKillCache loopKilledLocations = loopLocationKillCache.get(loop);
         if (loopKilledLocations != null && loopKilledLocations.loopKillsLocations()) {
             Set<ReadCacheEntry> forwardEndLiveLocations = initialState.readCache.keySet();
