@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -37,7 +37,6 @@ import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.scanner.Block;
 import com.oracle.truffle.llvm.parser.util.SymbolNameMangling;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
 public final class BCFileRoot implements ParserListener {
@@ -66,11 +65,12 @@ public final class BCFileRoot implements ParserListener {
         }
     }
 
-    public void exit(LLVMContext context) {
+    @Override
+    public void exit() {
         int globalIndex = setMissingNames(module.getGlobalVariables(), 0);
         setMissingNames(module.getAliases(), globalIndex);
         SymbolNameMangling.demangleGlobals(module);
-        DebugInfoModuleProcessor.processModule(module, scope.getMetadata(), context);
+        DebugInfoModuleProcessor.processModule(module, scope.getMetadata());
     }
 
     private static int setMissingNames(List<? extends GlobalValueSymbol> globals, int startIndex) {
