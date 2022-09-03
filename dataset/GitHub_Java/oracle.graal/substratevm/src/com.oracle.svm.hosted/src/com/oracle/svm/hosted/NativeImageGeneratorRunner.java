@@ -54,7 +54,6 @@ import com.oracle.graal.pointsto.util.Timer.StopTimer;
 import com.oracle.svm.core.JavaMainWrapper;
 import com.oracle.svm.core.JavaMainWrapper.JavaMainSupport;
 import com.oracle.svm.core.OS;
-import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.InterruptImageBuilding;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.UserError.UserException;
@@ -166,7 +165,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             String imageName = NativeImageOptions.Name.getValue(parsedHostedOptions);
             if (imageName.length() == 0) {
                 throw UserError.abort("No output file name specified. " +
-                                "Use '" + SubstrateOptionsParser.commandArgument(NativeImageOptions.Name, "<output-file>") + "'.");
+                                "Use '" + HostedOptionParser.commandArgument(NativeImageOptions.Name, "<output-file>") + "'.");
             }
 
             // print the time here to avoid interactions with flags processing
@@ -181,7 +180,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
                 String className = NativeImageOptions.Class.getValue(parsedHostedOptions);
                 if (className == null || className.length() == 0) {
                     throw UserError.abort("Must specify main entry point class when building " + AbstractBootImage.NativeImageKind.EXECUTABLE + " native image. " +
-                                    "Use '" + SubstrateOptionsParser.commandArgument(NativeImageOptions.Class, "<fully-qualified-class-name>") + "'.");
+                                    "Use '" + HostedOptionParser.commandArgument(NativeImageOptions.Class, "<fully-qualified-class-name>") + "'.");
                 }
                 Class<?> mainClass;
                 try {
@@ -193,7 +192,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
                 String mainEntryPointName = NativeImageOptions.Method.getValue(parsedHostedOptions);
                 if (mainEntryPointName == null || mainEntryPointName.length() == 0) {
                     throw UserError.abort("Must specify main entry point method when building " + AbstractBootImage.NativeImageKind.EXECUTABLE + " native image. " +
-                                    "Use '" + SubstrateOptionsParser.commandArgument(NativeImageOptions.Method, "<method-name>") + "'.");
+                                    "Use '" + HostedOptionParser.commandArgument(NativeImageOptions.Method, "<method-name>") + "'.");
                 }
 
                 try {
