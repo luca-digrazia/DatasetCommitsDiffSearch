@@ -22,31 +22,25 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static jdk.vm.ci.code.CodeUtil.isOdd;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlotValue;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static jdk.internal.jvmci.code.CodeUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.AllocatableRegisters;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.util.Util;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.util.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
-import com.oracle.graal.lir.alloc.lsra.OutOfRegistersException;
+import com.oracle.graal.lir.alloc.lsra.*;
 import com.oracle.graal.lir.alloc.trace.TraceInterval.RegisterPriority;
 import com.oracle.graal.lir.alloc.trace.TraceInterval.SpillState;
 import com.oracle.graal.lir.alloc.trace.TraceInterval.State;
@@ -249,13 +243,16 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
         AbstractBlockBase<?> toBlock = allocator.blockForId(opId);
         AbstractBlockBase<?> fromBlock = allocator.blockForId(opId - 2);
 
+        final int operandId;
         if (fromBlock.getSuccessorCount() == 1) {
             // insert move in predecessor
-            return opId - 2;
+            operandId = opId - 2;
+        } else {
+            assert toBlock.getPredecessorCount() == 1 : String.format("Critical Edge? %s->%s", fromBlock, toBlock);
+            // insert move in predecessor
+            operandId = opId + 2;
         }
-        assert toBlock.getPredecessorCount() == 1 : String.format("Critical Edge? %s->%s", fromBlock, toBlock);
-        // insert move in successor
-        return opId + 2;
+        return operandId;
     }
 
     private void insertMove(int operandId, TraceInterval srcIt, TraceInterval dstIt) {
