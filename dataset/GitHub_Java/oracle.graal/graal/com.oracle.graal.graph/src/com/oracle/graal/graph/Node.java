@@ -578,7 +578,7 @@ public abstract class Node implements Cloneable, Formattable {
                 }
             }
             if (oldInput != null && oldInput.recordsUsages() && oldInput.usages().isEmpty()) {
-                maybeNotifyZeroUsages(oldInput);
+                maybeNotifyZeroInputs(oldInput);
             }
         }
     }
@@ -707,7 +707,7 @@ public abstract class Node implements Cloneable, Formattable {
         }
     }
 
-    private void maybeNotifyZeroUsages(Node node) {
+    private void maybeNotifyZeroInputs(Node node) {
         if (graph != null) {
             assert !graph.isFrozen();
             NodeEventListener listener = graph.nodeEventListener;
@@ -753,7 +753,7 @@ public abstract class Node implements Cloneable, Formattable {
             if (input.recordsUsages()) {
                 removeThisFromUsages(input);
                 if (input.usages().isEmpty()) {
-                    maybeNotifyZeroUsages(input);
+                    maybeNotifyZeroInputs(input);
                 }
             }
         }
@@ -806,18 +806,12 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     public final Node copyWithInputs() {
-        return copyWithInputs(true);
-    }
-
-    public final Node copyWithInputs(boolean addToGraph) {
-        Node newNode = clone(addToGraph ? graph : null);
+        Node newNode = clone(graph);
         NodeClass clazz = getNodeClass();
         clazz.copyInputs(this, newNode);
-        if (addToGraph) {
-            for (Node input : inputs()) {
-                if (input.recordsUsages()) {
-                    input.addUsage(newNode);
-                }
+        for (Node input : inputs()) {
+            if (input.recordsUsages()) {
+                input.addUsage(newNode);
             }
         }
         return newNode;
@@ -840,7 +834,7 @@ public abstract class Node implements Cloneable, Formattable {
 
     final Node clone(Graph into, boolean clearInputsAndSuccessors) {
         NodeClass nodeClass = getNodeClass();
-        if (into != null && nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
+        if (nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
             Node otherNode = into.findNodeInCache(this);
             if (otherNode != null) {
                 return otherNode;
@@ -860,15 +854,13 @@ public abstract class Node implements Cloneable, Formattable {
         newNode.graph = into;
         newNode.typeCacheNext = null;
         newNode.id = INITIAL_ID;
-        if (into != null) {
-            into.register(newNode);
-        }
+        into.register(newNode);
         newNode.usage0 = null;
         newNode.usage1 = null;
         newNode.extraUsages = NO_NODES;
         newNode.predecessor = null;
 
-        if (into != null && nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
+        if (nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
             into.putNodeIntoCache(newNode);
         }
         newNode.afterClone(this);

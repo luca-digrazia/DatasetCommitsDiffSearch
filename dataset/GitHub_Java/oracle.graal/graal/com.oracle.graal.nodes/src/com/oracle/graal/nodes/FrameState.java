@@ -39,7 +39,7 @@ import com.oracle.graal.nodes.virtual.*;
  * This can be used as debug or deoptimization information.
  */
 @NodeInfo(nameTemplate = "FrameState@{p#method/s}:{p#bci}")
-public class FrameState extends VirtualState implements IterableNodeType {
+public final class FrameState extends VirtualState implements IterableNodeType {
 
     private static final DebugMetric METRIC_FRAMESTATE_COUNT = Debug.metric("FrameStateCount");
 
@@ -86,10 +86,9 @@ public class FrameState extends VirtualState implements IterableNodeType {
      * @param monitorIds one MonitorIdNode for each locked object
      * @param virtualObjectMappings a description of the current state for every virtual object
      */
-    public FrameState(FrameState outerFrameState, ResolvedJavaMethod method, int bci, List<ValueNode> values, int localsSize, int stackSize, boolean rethrowException, boolean duringCall,
-                    List<MonitorIdNode> monitorIds, List<EscapeObjectState> virtualObjectMappings) {
+    public FrameState(ResolvedJavaMethod method, int bci, List<ValueNode> values, int localsSize, int stackSize, boolean rethrowException, boolean duringCall, List<MonitorIdNode> monitorIds,
+                    List<EscapeObjectState> virtualObjectMappings) {
         assert stackSize >= 0;
-        this.outerFrameState = outerFrameState;
         this.method = method;
         this.bci = bci;
         this.localsSize = localsSize;
@@ -110,13 +109,13 @@ public class FrameState extends VirtualState implements IterableNodeType {
      * @param bci marker bci, needs to be &lt; 0
      */
     public FrameState(int bci) {
-        this(null, null, bci, Collections.<ValueNode> emptyList(), 0, 0, false, false, Collections.<MonitorIdNode> emptyList(), Collections.<EscapeObjectState> emptyList());
+        this(null, bci, Collections.<ValueNode> emptyList(), 0, 0, false, false, Collections.<MonitorIdNode> emptyList(), Collections.<EscapeObjectState> emptyList());
         assert bci == BytecodeFrame.BEFORE_BCI || bci == BytecodeFrame.AFTER_BCI || bci == BytecodeFrame.AFTER_EXCEPTION_BCI || bci == BytecodeFrame.UNKNOWN_BCI ||
                         bci == BytecodeFrame.INVALID_FRAMESTATE_BCI;
     }
 
     public FrameState(ResolvedJavaMethod method, int bci, ValueNode[] locals, List<ValueNode> stack, ValueNode[] locks, MonitorIdNode[] monitorIds, boolean rethrowException, boolean duringCall) {
-        this(null, method, bci, createValues(locals, stack, locks), locals.length, stack.size(), rethrowException, duringCall, Arrays.asList(monitorIds), Collections.<EscapeObjectState> emptyList());
+        this(method, bci, createValues(locals, stack, locks), locals.length, stack.size(), rethrowException, duringCall, Arrays.asList(monitorIds), Collections.<EscapeObjectState> emptyList());
     }
 
     private static List<ValueNode> createValues(ValueNode[] locals, List<ValueNode> stack, ValueNode[] locks) {
@@ -138,10 +137,6 @@ public class FrameState extends VirtualState implements IterableNodeType {
 
     public NodeInputList<ValueNode> values() {
         return values;
-    }
-
-    public NodeInputList<MonitorIdNode> monitorIds() {
-        return monitorIds;
     }
 
     public FrameState outerFrameState() {
@@ -192,7 +187,9 @@ public class FrameState extends VirtualState implements IterableNodeType {
      * Gets a copy of this frame state.
      */
     public FrameState duplicate(int newBci) {
-        return graph().add(new FrameState(outerFrameState(), method, newBci, values, localsSize, stackSize, rethrowException, duringCall, monitorIds, virtualObjectMappings));
+        FrameState other = graph().add(new FrameState(method, newBci, values, localsSize, stackSize, rethrowException, duringCall, monitorIds, virtualObjectMappings));
+        other.setOuterFrameState(outerFrameState());
+        return other;
     }
 
     /**
@@ -216,7 +213,9 @@ public class FrameState extends VirtualState implements IterableNodeType {
         for (EscapeObjectState state : virtualObjectMappings) {
             newVirtualMappings.add(state.duplicateWithVirtualState());
         }
-        return graph().add(new FrameState(newOuterFrameState, method, bci, values, localsSize, stackSize, rethrowException, duringCall, monitorIds, newVirtualMappings));
+        FrameState other = graph().add(new FrameState(method, bci, values, localsSize, stackSize, rethrowException, duringCall, monitorIds, newVirtualMappings));
+        other.setOuterFrameState(newOuterFrameState);
+        return other;
     }
 
     /**
@@ -256,7 +255,9 @@ public class FrameState extends VirtualState implements IterableNodeType {
         int newStackSize = copy.size() - localsSize;
         copy.addAll(values.subList(localsSize + stackSize, values.size()));
 
-        return graph().add(new FrameState(outerFrameState(), newMethod, newBci, copy, localsSize, newStackSize, newRethrowException, false, monitorIds, virtualObjectMappings));
+        FrameState other = graph().add(new FrameState(newMethod, newBci, copy, localsSize, newStackSize, newRethrowException, false, monitorIds, virtualObjectMappings));
+        other.setOuterFrameState(outerFrameState());
+        return other;
     }
 
     /**
