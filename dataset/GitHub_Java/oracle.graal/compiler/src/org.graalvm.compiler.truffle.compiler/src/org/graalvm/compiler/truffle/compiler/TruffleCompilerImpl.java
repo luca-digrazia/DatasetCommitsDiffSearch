@@ -153,7 +153,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
                         ArithmeticException.class,
                         IllegalArgumentException.class,
                         VirtualMachineError.class,
-                        IndexOutOfBoundsException.class,
+                        StringIndexOutOfBoundsException.class,
                         ClassCastException.class
         });
         ResolvedJavaType[] tail = {
