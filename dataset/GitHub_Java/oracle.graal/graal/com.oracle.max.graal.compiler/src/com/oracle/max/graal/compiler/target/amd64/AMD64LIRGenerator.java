@@ -408,7 +408,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void visitNormalizeCompare(NormalizeCompare x) {
+    public void visitMaterialize(NormalizeCompare x) {
         LIRItem left = new LIRItem(x.x(), this);
         LIRItem right = new LIRItem(x.y(), this);
         if (!x.kind.isVoid() && x.x().kind.isLong()) {
@@ -462,36 +462,5 @@ public class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public void visitValueAnchor(ValueAnchor valueAnchor) {
         // nothing to do for ValueAnchors
-    }
-
-    @Override
-    public void visitMathIntrinsic(MathIntrinsic node) {
-        LIRItem opd = new LIRItem(node.x(), this);
-        opd.setDestroysRegister();
-        opd.loadItem();
-        CiVariable dest = createResultVariable(node);
-        switch (node.operation()) {
-            case SQRT:
-                lir.sqrt(opd.result(), dest, CiValue.IllegalValue);
-                break;
-            default:
-                throw Util.shouldNotReachHere();
-        }
-    }
-
-    @Override
-    public Condition floatingPointCondition(Condition cond) {
-        switch(cond) {
-            case LT:
-                return Condition.BT;
-            case LE:
-                return Condition.BE;
-            case GT:
-                return Condition.AT;
-            case GE:
-                return Condition.AE;
-            default :
-                return cond;
-        }
     }
 }

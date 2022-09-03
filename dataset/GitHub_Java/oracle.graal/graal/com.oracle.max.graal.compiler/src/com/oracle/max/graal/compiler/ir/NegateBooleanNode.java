@@ -28,21 +28,34 @@ import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 public final class NegateBooleanNode extends BooleanNode {
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_NODE = 0;
 
-    @NodeInput
-    private Value value;
+    private static final int SUCCESSOR_COUNT = 0;
 
-    public Value value() {
-        return value;
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setValue(Value x) {
-        updateUsages(value, x);
-        value = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
     }
 
-    public NegateBooleanNode(Value value, Graph graph) {
-        super(CiKind.Int, graph);
+    /**
+     * The instruction that produces the array object.
+     */
+     public BooleanNode value() {
+        return (BooleanNode) inputs().get(super.inputCount() + INPUT_NODE);
+    }
+
+    public BooleanNode setValue(BooleanNode n) {
+        return (BooleanNode) inputs().set(super.inputCount() + INPUT_NODE, n);
+    }
+
+    public NegateBooleanNode(BooleanNode value, Graph graph) {
+        super(CiKind.Int, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setValue(value);
     }
 
@@ -83,6 +96,10 @@ public final class NegateBooleanNode extends BooleanNode {
                 return ((NegateBooleanNode) value).value();
             } else if (value instanceof Constant) {
                 return Constant.forBoolean(!value.asConstant().asBoolean(), node.graph());
+            } else if (value instanceof Compare) {
+                Compare compare = (Compare) value;
+                compare.condition = compare.condition.negate();
+                return compare;
             }
             return negateNode;
         }

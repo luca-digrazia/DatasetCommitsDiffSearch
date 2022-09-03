@@ -754,6 +754,14 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                 acond = ConditionFlag.above;
                 ncond = ConditionFlag.belowEqual;
                 break;
+            case OF:
+                acond = ConditionFlag.overflow;
+                ncond = ConditionFlag.noOverflow;
+                break;
+            case NOF:
+                acond = ConditionFlag.noOverflow;
+                ncond = ConditionFlag.overflow;
+                break;
             default:
                 throw Util.shouldNotReachHere();
         }
@@ -782,10 +790,11 @@ public final class AMD64LIRAssembler extends LIRAssembler {
 
         if (!other.isConstant()) {
             // optimized version that does not require a branch
+            TTY.println("> emitting cmov");
             if (other.isRegister()) {
                 assert other.asRegister() != result.asRegister() : "other already overwritten by previous move";
                 if (other.kind.isInt()) {
-                    masm.cmovq(ncond, result.asRegister(), other.asRegister());
+                    masm.cmovl(ncond, result.asRegister(), other.asRegister());
                 } else {
                     masm.cmovq(ncond, result.asRegister(), other.asRegister());
                 }
@@ -1141,12 +1150,16 @@ public final class AMD64LIRAssembler extends LIRAssembler {
 
         Label continuation = new Label();
 
-        if (GraalOptions.GenSpecialDivChecks && code == LIROpcode.Div) {
+        if (GraalOptions.GenSpecialDivChecks) {
             // check for special case of Long.MIN_VALUE / -1
             Label normalCase = new Label();
             masm.movq(AMD64.rdx, java.lang.Long.MIN_VALUE);
             masm.cmpq(AMD64.rax, AMD64.rdx);
             masm.jcc(ConditionFlag.notEqual, normalCase);
+            if (code == LIROpcode.Lrem) {
+                // prepare X86Register.rdx for possible special case (where remainder = 0)
+                masm.xorq(AMD64.rdx, AMD64.rdx);
+            }
             masm.cmpl(rreg, -1);
             masm.jcc(ConditionFlag.equal, continuation);
 

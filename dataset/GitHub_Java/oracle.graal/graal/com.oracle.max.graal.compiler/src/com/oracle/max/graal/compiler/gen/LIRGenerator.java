@@ -296,9 +296,9 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
         }
         if (block.blockSuccessors().size() >= 1 && !block.endsWithJump()) {
-            NodeSuccessorsIterable successors = block.lastInstruction().successors();
-            assert successors.explicitCount() >= 1 : "should have at least one successor : " + block.lastInstruction();
-            block.lir().jump(getLIRBlock((FixedNode) successors.first()));
+            NodeArray successors = block.lastInstruction().successors();
+            assert successors.size() >= 1 : "should have at least one successor : " + block.lastInstruction();
+            block.lir().jump(getLIRBlock((FixedNode) successors.get(0)));
         }
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
@@ -504,9 +504,11 @@ public abstract class LIRGenerator extends ValueVisitor {
         lir.branch(cond, trueSuccessor);
     }
 
-    public void emitBooleanBranch(Node node, LIRBlock trueSuccessor, LIRBlock falseSuccessor, LIRDebugInfo info) {
+    public void emitBooleanBranch(BooleanNode node, LIRBlock trueSuccessor, LIRBlock falseSuccessor, LIRDebugInfo info) {
         if (node instanceof NegateBooleanNode) {
             emitBooleanBranch(((NegateBooleanNode) node).value(), falseSuccessor, trueSuccessor, info);
+        } else if (node instanceof IsNonNull) {
+            emitIsNonNullBranch((IsNonNull) node, trueSuccessor, falseSuccessor);
         } else if (node instanceof Compare) {
             emitCompare((Compare) node, trueSuccessor, falseSuccessor);
         } else if (node instanceof InstanceOf) {
@@ -515,6 +517,25 @@ public abstract class LIRGenerator extends ValueVisitor {
             emitConstantBranch(((Constant) node).asConstant().asBoolean(), trueSuccessor, falseSuccessor, info);
         } else {
             throw Util.unimplemented(node.toString());
+        }
+    }
+
+    private void emitIsNonNullBranch(IsNonNull node, LIRBlock trueSuccessor, LIRBlock falseSuccessor) {
+        Condition cond = Condition.NE;
+        if (trueSuccessor == null) {
+            cond = cond.negate();
+            trueSuccessor = falseSuccessor;
+            falseSuccessor = null;
+        }
+
+        LIRItem xitem = new LIRItem(node.object(), this);
+        xitem.loadItem();
+
+        lir.cmp(cond, xitem.result(), CiConstant.NULL_OBJECT);
+        lir.branch(cond, trueSuccessor);
+
+        if (falseSuccessor != null) {
+            lir.jump(falseSuccessor);
         }
     }
 
@@ -595,32 +616,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         if (falseSuccessorBlock != null) {
             lir.jump(falseSuccessorBlock);
         }
-    }
-
-    @Override
-    public void visitIfOp(Conditional i) {
-        Value x = i.x();
-        Value y = i.y();
-        CiKind xtype = x.kind;
-        CiKind ttype = i.trueValue().kind;
-        assert xtype.isInt() || xtype.isObject() : "cannot handle others";
-        assert ttype.isInt() || ttype.isObject() || ttype.isLong() || ttype.isWord() : "cannot handle others";
-        assert ttype.equals(i.falseValue().kind) : "cannot handle others";
-
-        CiValue left = load(x);
-        CiValue right = null;
-        if (!canInlineAsConstant(y)) {
-            right = load(y);
-        } else {
-            right = makeOperand(y);
-        }
-
-        CiValue tVal = makeOperand(i.trueValue());
-        CiValue fVal = makeOperand(i.falseValue());
-        CiValue reg = createResultVariable(i);
-
-        lir.cmp(i.condition(), left, right);
-        lir.cmove(i.condition(), tVal, fVal, reg);
     }
 
     protected FrameState stateBeforeInvokeReturn(Invoke invoke) {
@@ -1766,7 +1761,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    protected abstract boolean canInlineAsConstant(Value i);
+    public abstract boolean canInlineAsConstant(Value i);
 
     protected abstract boolean canStoreAsConstant(Value i, CiKind kind);
 
