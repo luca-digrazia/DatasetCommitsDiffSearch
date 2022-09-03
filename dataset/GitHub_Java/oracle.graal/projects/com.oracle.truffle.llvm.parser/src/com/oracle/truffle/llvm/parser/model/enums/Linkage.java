@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,44 +32,43 @@ package com.oracle.truffle.llvm.parser.model.enums;
 public enum Linkage {
 
     EXTERNAL("external", 0L),
-    WEAK("weak", 1L),
+    WEAK("weak", 1L, 16L),
     APPENDING("appending", 2L),
     INTERNAL("internal", 3L),
-    LINKONCE("linkonce", 4L),
+    LINKONCE("linkonce", 4L, 18L),
     DLL_IMPORT("dllimport", 5L),
     DLL_EXPORT("dllexport", 6L),
     EXTERN_WEAK("extern_weak", 7L),
     COMMON("common", 8L),
     PRIVATE("private", 9L),
-    WEAK_ODR("weak_odr", 10L),
-    LINK_ONCE_ODR("linkonce_odr", 11L),
+    WEAK_ODR("weak_odr", 10L, 17L),
+    LINK_ONCE_ODR("linkonce_odr", 11L, 19L),
     AVAILABLE_EXTERNALLY("available_externally", 12L),
     LINKER_PRIVATE("linker_private", 13L),
     LINKER_PRIVATE_WEAK("linker_private_weak", 14L),
-    LINK_ONCE_ODR_AUTO_HIDE("linkonce_odr_auto_hide", 15L),
-    UNKNOWN("", -1); // TODO: required by LLVM IR Parser, should be removed when no longer needed
+    LINK_ONCE_ODR_AUTO_HIDE("linkonce_odr_auto_hide", 15L);
+
+    private static final Linkage[] VALUES = values();
 
     private final String irString;
 
-    private final long encodedValue;
+    private final long[] encodedValue;
 
-    Linkage(String irString, long encodedValue) {
+    Linkage(String irString, long... encodedValue) {
         this.irString = irString;
         this.encodedValue = encodedValue;
     }
 
-    public long getEncodedValue() {
+    private long[] getEncodedValue() {
         return encodedValue;
     }
 
     public static Linkage decode(long value) {
-        if (value == UNKNOWN.getEncodedValue()) {
-            // TODO remove this together with UNKNOWN
-            return EXTERNAL;
-        }
-        for (Linkage linkage : values()) {
-            if (linkage.getEncodedValue() == value) {
-                return linkage;
+        for (Linkage linkage : VALUES) {
+            for (long l : linkage.getEncodedValue()) {
+                if (l == value) {
+                    return linkage;
+                }
             }
         }
         return EXTERNAL;
@@ -79,8 +78,80 @@ public enum Linkage {
         return irString;
     }
 
-    @Override
-    public String toString() {
-        return name().toLowerCase();
+    public static boolean isExported(Linkage linkage, Visibility visibility) {
+        switch (linkage) {
+            case AVAILABLE_EXTERNALLY:
+            case DLL_IMPORT:
+                return true;
+            case EXTERNAL:
+            case DLL_EXPORT:
+            case WEAK:
+            case APPENDING:
+            case LINKONCE:
+            case EXTERN_WEAK:
+            case COMMON:
+            case WEAK_ODR:
+            case LINK_ONCE_ODR:
+                return visibility == Visibility.DEFAULT || visibility == Visibility.PROTECTED;
+            case INTERNAL:
+            case PRIVATE:
+            case LINKER_PRIVATE:
+            case LINKER_PRIVATE_WEAK:
+            case LINK_ONCE_ODR_AUTO_HIDE:
+                return false;
+            default:
+                throw new IllegalStateException("Unknown linkage: " + linkage);
+        }
+    }
+
+    public static boolean isOverridable(Linkage linkage, Visibility visibility) {
+        switch (linkage) {
+            case AVAILABLE_EXTERNALLY:
+            case DLL_IMPORT:
+                return true;
+            case EXTERNAL:
+            case DLL_EXPORT:
+            case WEAK:
+            case APPENDING:
+            case LINKONCE:
+            case EXTERN_WEAK:
+            case COMMON:
+            case WEAK_ODR:
+            case LINK_ONCE_ODR:
+                return visibility == Visibility.DEFAULT;
+            case INTERNAL:
+            case PRIVATE:
+            case LINKER_PRIVATE:
+            case LINKER_PRIVATE_WEAK:
+            case LINK_ONCE_ODR_AUTO_HIDE:
+                return false;
+            default:
+                throw new IllegalStateException("Unknown linkage: " + linkage);
+        }
+    }
+
+    public static boolean isExternal(Linkage linkage) {
+        switch (linkage) {
+            case AVAILABLE_EXTERNALLY:
+            case DLL_IMPORT:
+                return true;
+            case EXTERNAL:
+            case EXTERN_WEAK:
+            case WEAK:
+            case APPENDING:
+            case LINKONCE:
+            case DLL_EXPORT:
+            case COMMON:
+            case WEAK_ODR:
+            case LINK_ONCE_ODR:
+            case INTERNAL:
+            case PRIVATE:
+            case LINKER_PRIVATE:
+            case LINKER_PRIVATE_WEAK:
+            case LINK_ONCE_ODR_AUTO_HIDE:
+                return false;
+            default:
+                throw new IllegalStateException("Unknown linkage: " + linkage);
+        }
     }
 }

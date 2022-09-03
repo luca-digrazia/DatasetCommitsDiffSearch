@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,49 +29,68 @@
  */
 package com.oracle.truffle.llvm.parser;
 
-import org.eclipse.emf.ecore.EObject;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMScope;
+import com.oracle.truffle.llvm.runtime.LLVMSymbol;
+import com.oracle.truffle.llvm.runtime.NodeFactory;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 
-import com.intel.llvm.ireditor.lLVM_IR.GlobalVariable;
-import com.intel.llvm.ireditor.types.ResolvedType;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
-import com.oracle.truffle.llvm.types.LLVMAddress;
+public final class LLVMParserRuntime {
+    private final LLVMContext context;
+    private final NodeFactory nodeFactory;
+    private final ExternalLibrary library;
+    private final LLVMScope fileScope;
 
-public interface LLVMParserRuntime {
+    public LLVMParserRuntime(LLVMContext context, NodeFactory nodeFactory, ExternalLibrary library, LLVMScope fileScope) {
+        this.context = context;
+        this.nodeFactory = nodeFactory;
+        this.library = library;
+        this.fileScope = fileScope;
+    }
 
-    ResolvedType resolve(EObject e);
+    public ExternalLibrary getLibrary() {
+        return library;
+    }
 
-    /**
-     * Performs an <code>alloc</code> style allocation. At the begin of a function (or the global
-     * scope) the memory is allocated and again released when leaving the function (or the global
-     * scope). The intrinsic <code>@llvm.stacksave</code> might also cause the allocation to be
-     * released earlier.
-     *
-     * @see <a href="http://llvm.org/docs/LangRef.html#llvm-stacksave-intrinsic">llvm.stacksave
-     *      intrinsic</a>
-     * @param size the bytes to be allocated
-     * @return a node that allocates the requested memory.
-     */
-    LLVMExpressionNode allocateFunctionLifetime(int size, int alignment);
+    public LLVMContext getContext() {
+        return context;
+    }
 
-    /**
-     * Gets the return slot where the function return value is stored.
-     *
-     * @return the return slot.
-     */
-    FrameSlot getReturnSlot();
+    public NodeFactory getNodeFactory() {
+        return nodeFactory;
+    }
 
-    LLVMExpressionNode allocateVectorResult(EObject type);
+    public LLVMScope getFileScope() {
+        return fileScope;
+    }
 
-    LLVMAddress getGlobalAddress(GlobalVariable var);
+    public LLVMScope getGlobalScope() {
+        return context.getGlobalScope();
+    }
 
-    FrameSlot getStackPointerSlot();
+    public LLVMFunctionDescriptor lookupFunction(String name, boolean useGlobalScope) {
+        return getScope(useGlobalScope).getFunction(name);
+    }
 
-    LLVMOptimizationConfiguration getOptimizationConfiguration();
+    public LLVMGlobal lookupGlobal(String name, boolean useGlobalScope) {
+        return getScope(useGlobalScope).getGlobalVariable(name);
+    }
 
-    int getBitAlignment(LLVMBaseType type);
+    public LLVMSymbol lookupSymbol(String name, boolean useGlobalScope) {
+        LLVMSymbol symbol = getScope(useGlobalScope).get(name);
+        if (symbol != null) {
+            return symbol;
+        }
+        throw new IllegalStateException("Unknown symbol: " + name);
+    }
 
-    FrameDescriptor getGlobalFrameDescriptor();
+    private LLVMScope getScope(boolean useGlobalScope) {
+        if (useGlobalScope) {
+            return getGlobalScope();
+        } else {
+            return fileScope;
+        }
+    }
 }

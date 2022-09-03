@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,34 +29,36 @@
  */
 package com.oracle.truffle.llvm.parser.model.functions;
 
-import java.util.Optional;
-
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
+import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.Constant;
-import com.oracle.truffle.llvm.parser.model.visitors.ConstantVisitor;
+import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
-import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
-public final class FunctionDeclaration implements Constant, ValueSymbol {
+public final class FunctionDeclaration implements Constant, FunctionSymbol {
 
     private final FunctionType type;
     private String name;
     private final AttributesCodeEntry paramAttr;
+    private final Linkage linkage;
 
-    public FunctionDeclaration(FunctionType type, String name, AttributesCodeEntry paramAttr) {
+    public FunctionDeclaration(FunctionType type, String name, Linkage linkage, AttributesCodeEntry paramAttr) {
         this.type = type;
         this.name = name;
         this.paramAttr = paramAttr;
+        this.linkage = linkage;
     }
 
-    public FunctionDeclaration(FunctionType type, AttributesCodeEntry paramAttr) {
-        this(type, LLVMIdentifier.UNKNOWN, paramAttr);
+    public FunctionDeclaration(FunctionType type, Linkage linkage, AttributesCodeEntry paramAttr) {
+        this(type, LLVMIdentifier.UNKNOWN, linkage, paramAttr);
     }
 
-    public FunctionDeclaration(FunctionType type) {
-        this(type, LLVMIdentifier.UNKNOWN, AttributesCodeEntry.EMPTY);
+    public Linkage getLinkage() {
+        return linkage;
     }
 
     @Override
@@ -66,17 +68,22 @@ public final class FunctionDeclaration implements Constant, ValueSymbol {
 
     @Override
     public void setName(String name) {
-        this.name = LLVMIdentifier.toGlobalIdentifier(name);
+        this.name = name;
     }
 
     @Override
-    public void accept(ConstantVisitor visitor) {
+    public void replace(SymbolImpl oldValue, SymbolImpl newValue) {
+    }
+
+    @Override
+    public void accept(SymbolVisitor visitor) {
         visitor.visit(this);
     }
 
     @Override
     public String toString() {
-        return "FunctionDeclaration [type=" + type + ", name=" + name + ", paramattr=" + paramAttr + "]";
+        CompilerAsserts.neverPartOfCompilation();
+        return String.format("%s %s ;", type.toString(), name);
     }
 
     @Override
@@ -84,21 +91,16 @@ public final class FunctionDeclaration implements Constant, ValueSymbol {
         return type;
     }
 
-    public Optional<AttributesGroup> getFunctionAttributesGroup() {
+    public AttributesGroup getFunctionAttributesGroup() {
         return paramAttr.getFunctionAttributesGroup();
     }
 
-    public Optional<AttributesGroup> getReturnAttributesGroup() {
+    public AttributesGroup getReturnAttributesGroup() {
         return paramAttr.getReturnAttributesGroup();
     }
 
-    public Optional<AttributesGroup> getParameterAttributesGroup(int idx) {
+    public AttributesGroup getParameterAttributesGroup(int idx) {
         return paramAttr.getParameterAttributesGroup(idx);
-    }
-
-    @Override
-    public boolean hasName() {
-        return name != null;
     }
 
     @Override
@@ -136,6 +138,21 @@ public final class FunctionDeclaration implements Constant, ValueSymbol {
         } else if (!type.equals(other.type)) {
             return false;
         }
+        return true;
+    }
+
+    @Override
+    public boolean isExported() {
+        return true;
+    }
+
+    @Override
+    public boolean isOverridable() {
+        return true;
+    }
+
+    @Override
+    public boolean isExternal() {
         return true;
     }
 }

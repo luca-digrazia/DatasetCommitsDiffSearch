@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,29 +29,30 @@
  */
 package com.oracle.truffle.llvm.parser.model.symbols.globals;
 
-import com.oracle.truffle.llvm.parser.metadata.MDAttachment;
-import com.oracle.truffle.llvm.parser.metadata.MetadataAttachmentHolder;
-import com.oracle.truffle.llvm.parser.model.SymbolTable;
-import com.oracle.truffle.llvm.parser.model.enums.Linkage;
-import com.oracle.truffle.llvm.parser.model.enums.Visibility;
-import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
-import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
-import com.oracle.truffle.llvm.parser.model.Symbol;
-import com.oracle.truffle.llvm.parser.model.ValueSymbol;
-
 import java.util.ArrayList;
 import java.util.List;
 
+import com.oracle.truffle.llvm.parser.metadata.MDAttachment;
+import com.oracle.truffle.llvm.parser.metadata.MetadataAttachmentHolder;
+import com.oracle.truffle.llvm.parser.model.SymbolImpl;
+import com.oracle.truffle.llvm.parser.model.SymbolTable;
+import com.oracle.truffle.llvm.parser.model.ValueSymbol;
+import com.oracle.truffle.llvm.parser.model.enums.Linkage;
+import com.oracle.truffle.llvm.parser.model.enums.Visibility;
+import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
+
 public abstract class GlobalValueSymbol implements ValueSymbol, MetadataAttachmentHolder {
 
-    private final Type type;
+    private final PointerType type;
 
     private final int align;
 
     private String name = LLVMIdentifier.UNKNOWN;
 
-    private Symbol value = null;
+    private SymbolImpl value = null;
 
     private final Linkage linkage;
 
@@ -59,12 +60,15 @@ public abstract class GlobalValueSymbol implements ValueSymbol, MetadataAttachme
 
     private List<MDAttachment> mdAttachments = null;
 
-    GlobalValueSymbol(Type type, int align, Linkage linkage, Visibility visibility, SymbolTable symbolTable, int value) {
+    private LLVMSourceSymbol sourceSymbol;
+
+    GlobalValueSymbol(PointerType type, int align, Linkage linkage, Visibility visibility, SymbolTable symbolTable, int value) {
         this.type = type;
         this.align = align;
         this.linkage = linkage;
         this.visibility = visibility;
         this.value = value > 0 ? symbolTable.getForwardReferenced(value - 1, this) : null;
+        this.sourceSymbol = null;
     }
 
     public abstract void accept(ModelVisitor visitor);
@@ -78,21 +82,25 @@ public abstract class GlobalValueSymbol implements ValueSymbol, MetadataAttachme
         return value != null;
     }
 
-    @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public Type getType() {
-        return type;
+    public int getInitialiser() {
+        return isInitialized() ? 1 : 0;
     }
 
     public Linkage getLinkage() {
         return linkage;
     }
 
-    public Symbol getValue() {
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public PointerType getType() {
+        return type;
+    }
+
+    public SymbolImpl getValue() {
         return value;
     }
 
@@ -100,9 +108,17 @@ public abstract class GlobalValueSymbol implements ValueSymbol, MetadataAttachme
         return visibility;
     }
 
+    public LLVMSourceSymbol getSourceSymbol() {
+        return sourceSymbol;
+    }
+
+    public void setSourceSymbol(LLVMSourceSymbol sourceSymbol) {
+        this.sourceSymbol = sourceSymbol;
+    }
+
     @Override
     public void setName(String name) {
-        this.name = LLVMIdentifier.toGlobalIdentifier(name);
+        this.name = name;
     }
 
     @Override
@@ -124,9 +140,21 @@ public abstract class GlobalValueSymbol implements ValueSymbol, MetadataAttachme
     }
 
     @Override
-    public void replace(Symbol oldValue, Symbol newValue) {
+    public void replace(SymbolImpl oldValue, SymbolImpl newValue) {
         if (value == oldValue) {
             value = newValue;
         }
+    }
+
+    public boolean isExported() {
+        return Linkage.isExported(linkage, visibility);
+    }
+
+    public boolean isOverridable() {
+        return Linkage.isOverridable(linkage, visibility);
+    }
+
+    public boolean isExternal() {
+        return getInitialiser() == 0 && isExported();
     }
 }
