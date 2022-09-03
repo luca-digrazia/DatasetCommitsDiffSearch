@@ -1,52 +1,32 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.dsl.processor;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -64,10 +44,7 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.ElementFilter;
-import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.FileObject;
 import javax.tools.StandardLocation;
@@ -75,24 +52,11 @@ import javax.tools.StandardLocation;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.dsl.processor.LanguageRegistrationProcessor.SortedProperties;
-import com.oracle.truffle.dsl.processor.generator.GeneratorUtils;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
-import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
-import com.oracle.truffle.dsl.processor.java.model.CodeTreeBuilder;
-import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
-import com.oracle.truffle.dsl.processor.java.transform.FixWarningsVisitor;
-import com.oracle.truffle.dsl.processor.java.transform.GenerateOverrideVisitor;
-import com.oracle.truffle.dsl.processor.model.Template;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.util.Collections;
-import java.util.HashMap;
-import javax.annotation.processing.FilerException;
 
 @SupportedAnnotationTypes("com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration")
 public final class InstrumentRegistrationProcessor extends AbstractProcessor {
-    private final Map<String, TypeElement> registrations = new HashMap<>();
-    private final List<TypeElement> legacyRegistrations = new ArrayList<>();
+    private final List<TypeElement> registrations = new ArrayList<>();
 
     @Override
     public SourceVersion getSupportedSourceVersion() {
@@ -101,88 +65,7 @@ public final class InstrumentRegistrationProcessor extends AbstractProcessor {
 
     private static final int NUMBER_OF_PROPERTIES_PER_ENTRY = 4;
 
-    private static String generateProvider(TypeElement instrument) {
-        ProcessorContext context = ProcessorContext.getInstance();
-        Elements elements = context.getEnvironment().getElementUtils();
-        Template instrumentModel = new Template(context, instrument, null) {
-        };
-        TypeElement providerElement = context.getTypeElement(TruffleInstrument.Provider.class);
-        CodeTypeElement providerClass = GeneratorUtils.createClass(instrumentModel, null, EnumSet.of(Modifier.PUBLIC),
-                        createProviderSimpleName(instrument), null);
-        providerClass.getImplements().add(providerElement.asType());
-        AnnotationMirror registration = ElementUtils.findAnnotationMirror(instrument.getAnnotationMirrors(), ProcessorContext.getInstance().getType(Registration.class));
-        for (Element method : ElementFilter.methodsIn(providerElement.getEnclosedElements())) {
-            CodeExecutableElement implementedMethod = CodeExecutableElement.clone((ExecutableElement) method);
-            implementedMethod.getModifiers().remove(Modifier.ABSTRACT);
-            CodeTreeBuilder builder = implementedMethod.createBuilder();
-            switch (method.getSimpleName().toString()) {
-                case "create":
-                    builder.startReturn().startNew(instrument.asType()).end().end();
-                    break;
-                case "getInstrumentClassName":
-                    builder.startReturn().doubleQuote(elements.getBinaryName(instrument).toString()).end();
-                    break;
-                default:
-                    throw new IllegalStateException("Unsupported method: " + method.getSimpleName());
-            }
-            providerClass.add(implementedMethod);
-        }
-
-        providerClass.addAnnotationMirror(registration);
-        DeclaredType overrideType = (DeclaredType) context.getType(Override.class);
-        providerClass.accept(new GenerateOverrideVisitor(overrideType), null);
-        providerClass.accept(new FixWarningsVisitor(instrument, overrideType), null);
-        providerClass.accept(new CodeWriter(context.getEnvironment(), instrument), null);
-        return providerClass.getQualifiedName().toString();
-    }
-
-    private static String createProviderSimpleName(TypeElement language) {
-        StringBuilder nameBuilder = new StringBuilder();
-        List<Element> hierarchy = ElementUtils.getElementHierarchy(language);
-        for (ListIterator<Element> it = hierarchy.listIterator(hierarchy.size()); it.hasPrevious();) {
-            Element enc = it.previous();
-            if (enc.getKind().isClass() || enc.getKind().isInterface()) {
-                nameBuilder.append(enc.getSimpleName());
-            }
-        }
-        nameBuilder.append("Provider");
-        return nameBuilder.toString();
-    }
-
-    private static void generateServicesRegistration(Map<String, ? extends TypeElement> providerFqns) {
-        ProcessorContext context = ProcessorContext.getInstance();
-        ProcessingEnvironment env = context.getEnvironment();
-        Elements elements = env.getElementUtils();
-        Name providerBinName = elements.getBinaryName(context.getTypeElement(TruffleInstrument.Provider.class));
-        String filename = "META-INF/services/" + providerBinName;
-        List<String> providerClassNames = new ArrayList<>(providerFqns.size());
-        for (String providerFqn : providerFqns.keySet()) {
-            TypeElement te = ElementUtils.getTypeElement(env, providerFqn);
-            providerClassNames.add(elements.getBinaryName(te).toString());
-        }
-        Collections.sort(providerClassNames);
-        if (!providerClassNames.isEmpty()) {
-            try {
-                FileObject file = env.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "", filename, providerFqns.values().toArray(new Element[providerFqns.size()]));
-                try (PrintWriter out = new PrintWriter(new OutputStreamWriter(file.openOutputStream(), "UTF-8"))) {
-                    out.println("# Generated by " + InstrumentRegistrationProcessor.class.getName());
-                    for (String providerClassName : providerClassNames) {
-                        out.println(providerClassName);
-                    }
-                }
-            } catch (IOException e) {
-                if (e instanceof FilerException) {
-                    if (e.getMessage().startsWith("Source file already created")) {
-                        // ignore source file already created errors
-                        return;
-                    }
-                }
-                env.getMessager().printMessage(Kind.ERROR, e.getMessage(), providerFqns.values().iterator().next());
-            }
-        }
-    }
-
-    private void generateLegacyRegistration(List<TypeElement> instruments) {
+    private void generateFile(List<TypeElement> instruments) {
         String filename = "META-INF/truffle/instrument";
         Properties p = new SortedProperties();
         int numInstruments = loadIfFileAlreadyExists(filename, p);
@@ -286,7 +169,7 @@ public final class InstrumentRegistrationProcessor extends AbstractProcessor {
                 break;
             }
             env.getMessager().printMessage(Kind.NOTE, filename + className, null);
-            TypeElement foundType = ElementUtils.getTypeElement(env, className);
+            TypeElement foundType = env.getElementUtils().getTypeElement(className);
             if (foundType != null && !typeNames.contains(ElementUtils.getQualifiedName(foundType))) {
                 instruments.add(foundType);
             }
@@ -295,56 +178,33 @@ public final class InstrumentRegistrationProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        ProcessorContext.setThreadLocalInstance(new ProcessorContext(processingEnv, null));
-        try {
-            if (roundEnv.processingOver()) {
-                generateServicesRegistration(registrations);
-                generateLegacyRegistration(legacyRegistrations);
-                registrations.clear();
-                legacyRegistrations.clear();
-                return true;
-            }
-            for (Element e : roundEnv.getElementsAnnotatedWith(Registration.class)) {
-                Registration annotation = e.getAnnotation(Registration.class);
-                if (annotation != null && e.getKind() == ElementKind.CLASS) {
-                    if (!e.getModifiers().contains(Modifier.PUBLIC)) {
-                        emitError("Registered instrument class must be public", e);
-                        continue;
-                    }
-                    if (e.getEnclosingElement().getKind() != ElementKind.PACKAGE && !e.getModifiers().contains(Modifier.STATIC)) {
-                        emitError("Registered instrument inner-class must be static", e);
-                        continue;
-                    }
-                    TypeMirror truffleInstrument = ProcessorContext.getInstance().getType(TruffleInstrument.class);
-                    TypeMirror truffleInstrumentProvider = ProcessorContext.getInstance().getType(TruffleInstrument.Provider.class);
-                    boolean processingTruffleInstrument;
-                    if (processingEnv.getTypeUtils().isAssignable(e.asType(), truffleInstrument)) {
-                        processingTruffleInstrument = true;
-                    } else if (processingEnv.getTypeUtils().isAssignable(e.asType(), truffleInstrumentProvider)) {
-                        processingTruffleInstrument = false;
-                    } else {
-                        emitError("Registered instrument class must subclass TruffleInstrument", e);
-                        continue;
-                    }
-                    assertNoErrorExpected(e);
-                    if (processingTruffleInstrument) {
-                        TypeElement languageTypeElement = (TypeElement) e;
-                        if (requiresLegacyRegistration(languageTypeElement)) {
-                            legacyRegistrations.add(languageTypeElement);
-                        } else {
-                            registrations.put(generateProvider(languageTypeElement), languageTypeElement);
-                        }
-                    }
-                }
-            }
+        if (roundEnv.processingOver()) {
+            generateFile(registrations);
+            registrations.clear();
             return true;
-        } finally {
-            ProcessorContext.setThreadLocalInstance(null);
         }
-    }
+        for (Element e : roundEnv.getElementsAnnotatedWith(Registration.class)) {
+            Registration annotation = e.getAnnotation(Registration.class);
+            if (annotation != null && e.getKind() == ElementKind.CLASS) {
+                if (!e.getModifiers().contains(Modifier.PUBLIC)) {
+                    emitError("Registered instrument class must be public", e);
+                    continue;
+                }
+                if (e.getEnclosingElement().getKind() != ElementKind.PACKAGE && !e.getModifiers().contains(Modifier.STATIC)) {
+                    emitError("Registered instrument inner-class must be static", e);
+                    continue;
+                }
+                TypeMirror truffleLang = processingEnv.getTypeUtils().erasure(processingEnv.getElementUtils().getTypeElement(TruffleInstrument.class.getName()).asType());
+                if (!processingEnv.getTypeUtils().isAssignable(e.asType(), truffleLang)) {
+                    emitError("Registered instrument class must subclass TruffleInstrument", e);
+                    continue;
+                }
+                assertNoErrorExpected(e);
+                registrations.add((TypeElement) e);
+            }
+        }
 
-    private static boolean requiresLegacyRegistration(TypeElement language) {
-        return language.getAnnotation(GenerateLegacyRegistration.class) != null;
+        return true;
     }
 
     void assertNoErrorExpected(Element e) {
