@@ -22,15 +22,13 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
-
-import java.util.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.sun.cri.ci.*;
 
 public enum AMD64ConvertOpcode implements LIROpcode {
     I2L, L2I, I2B, I2C, I2S,
@@ -39,22 +37,18 @@ public enum AMD64ConvertOpcode implements LIROpcode {
     L2F, L2D,
     MOV_I2F, MOV_L2D, MOV_F2I, MOV_D2L;
 
-    public LIRInstruction create(Variable result, Variable input) {
+    public LIRInstruction create(CiVariable result, CiVariable input) {
         CiValue[] inputs = new CiValue[] {input};
-        CiValue[] outputs = new CiValue[] {result};
 
-        return new AMD64LIRInstruction(this, outputs, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+        return new AMD64LIRInstruction(this, result, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                emit(tasm, masm, output(0), input(0));
+                emit(tasm, masm, result(), input(0));
             }
 
             @Override
-            protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-                if (mode == OperandMode.Output && index == 0) {
-                    return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
-                }
-                return super.flagsFor(mode, index);
+            public CiValue registerHint() {
+                return input(0);
             }
         };
     }

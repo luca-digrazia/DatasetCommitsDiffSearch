@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,6 +23,7 @@
 package com.oracle.max.graal.compiler.target.amd64;
 
 import static com.sun.cri.ci.CiCallingConvention.Type.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import java.util.*;
 
@@ -68,22 +69,19 @@ public class AMD64CompilerStubEmitter {
     /**
      * The layout of the callee save area of the stub being emitted.
      */
-    private CiCalleeSaveLayout csl;
+    private CiCalleeSaveLayout calleeSaveLayout;
 
     /**
      * The compilation object for the stub being emitted.
      */
     private final GraalCompilation comp;
 
-    private final GraalContext context;
-
     private final TargetMethodAssembler tasm;
     private final AMD64MacroAssembler asm;
 
-    public AMD64CompilerStubEmitter(GraalContext context, GraalCompilation compilation, CiKind[] argTypes, CiKind resultKind) {
-        compilation.initFrameMap(0);
+    public AMD64CompilerStubEmitter(GraalCompilation compilation, CiKind[] argTypes, CiKind resultKind) {
+        compilation.initFrameMap();
         this.comp = compilation;
-        this.context = context;
         final RiRegisterConfig registerConfig = compilation.compiler.compilerStubRegisterConfig;
         this.asm = new AMD64MacroAssembler(compilation.compiler.target, registerConfig);
         this.tasm = new TargetMethodAssembler(compilation, asm);
@@ -134,7 +132,7 @@ public class AMD64CompilerStubEmitter {
         return new CompilerStub(stub, stub.resultKind, stubObject, inArgs, outResult);
     }
 
-    private CiValue allocateOperand(XirTemp temp, ArrayList<CiRegister> allocatableRegisters) {
+    private static CiValue allocateOperand(XirTemp temp, ArrayList<CiRegister> allocatableRegisters) {
         if (temp instanceof XirRegister) {
             XirRegister fixed = (XirRegister) temp;
             return fixed.register;
@@ -143,19 +141,19 @@ public class AMD64CompilerStubEmitter {
         return newRegister(temp.kind, allocatableRegisters);
     }
 
-    private CiValue newRegister(CiKind kind, ArrayList<CiRegister> allocatableRegisters) {
+    private static CiValue newRegister(CiKind kind, ArrayList<CiRegister> allocatableRegisters) {
         assert kind != CiKind.Float && kind != CiKind.Double;
         assert allocatableRegisters.size() > 0;
         return allocatableRegisters.remove(allocatableRegisters.size() - 1).asValue(kind);
     }
 
     public CompilerStub emit(XirTemplate template) {
-        ArrayList<CiRegister> allocatableRegisters = new ArrayList<CiRegister>(Arrays.asList(comp.registerConfig.getCategorizedAllocatableRegisters().get(RegisterFlag.CPU)));
+        ArrayList<CiRegister> allocatableRegisters = new ArrayList<>(Arrays.asList(comp.registerConfig.getCategorizedAllocatableRegisters().get(RegisterFlag.CPU)));
         for (XirTemp t : template.temps) {
             if (t instanceof XirRegister) {
                 final XirRegister fixed = (XirRegister) t;
-                if (fixed.register.isRegister()) {
-                    allocatableRegisters.remove(fixed.register.asRegister());
+                if (isRegister(fixed.register)) {
+                    allocatableRegisters.remove(asRegister(fixed.register));
                 }
             }
         }
@@ -223,22 +221,13 @@ public class AMD64CompilerStubEmitter {
         return new CompilerStub(null, template.resultOperand.kind, stubObject, inArgs, outResult);
     }
 
-    private CiKind[] getArgumentKinds(XirTemplate template) {
-        CiXirAssembler.XirParameter[] params = template.parameters;
-        CiKind[] result = new CiKind[params.length];
-        for (int i = 0; i < params.length; i++) {
-            result[i] = params[i].kind;
-        }
-        return result;
-    }
-
     private void convertPrologue() {
         prologue(new CiCalleeSaveLayout(0, -1, comp.compiler.target.wordSize, convertArgument, convertResult));
-        asm.movq(convertArgument, comp.frameMap().toStackAddress(inArgs[0]));
+        asm.movq(convertArgument, tasm.asAddress(inArgs[0]));
     }
 
     private void convertEpilogue() {
-        asm.movq(comp.frameMap().toStackAddress(outResult), convertResult);
+        asm.movq(tasm.asAddress(outResult), convertResult);
         epilogue();
     }
 
@@ -258,7 +247,8 @@ public class AMD64CompilerStubEmitter {
         emitCOMISSD(false, true);
     }
 
-    private void emitCOMISSD(boolean isDouble, boolean isInt) {
+    private void emitCOMISSD(boolean isDouble, @SuppressWarnings("unused") boolean isInt) {
+        // TODO(tw): Check why isInt is never checked?
         convertPrologue();
         if (isDouble) {
             asm.ucomisd(convertArgument, tasm.asDoubleConstRef(CiConstant.DOUBLE_0));
@@ -298,9 +288,9 @@ public class AMD64CompilerStubEmitter {
     }
 
     private void prologue(CiCalleeSaveLayout csl) {
-        assert this.csl == null;
+        assert this.calleeSaveLayout == null;
         assert csl != null : "stub should define a callee save area";
-        this.csl = csl;
+        this.calleeSaveLayout = csl;
         int entryCodeOffset = comp.compiler.runtime.codeOffset();
         if (entryCodeOffset != 0) {
             // pad to normal code entry point
@@ -317,8 +307,8 @@ public class AMD64CompilerStubEmitter {
         tasm.targetMethod.setRegisterRestoreEpilogueOffset(asm.codeBuffer.position());
 
         // Restore registers
-        int frameToCSA = csl.frameOffsetToCSA;
-        asm.restore(csl, frameToCSA);
+        int frameToCSA = calleeSaveLayout.frameOffsetToCSA;
+        asm.restore(calleeSaveLayout, frameToCSA);
 
         // Restore rsp
         asm.addq(AMD64.rsp, frameSize());
@@ -326,7 +316,7 @@ public class AMD64CompilerStubEmitter {
     }
 
     private int frameSize() {
-        return comp.compiler.target.alignFrameSize(csl.size);
+        return comp.compiler.target.alignFrameSize(calleeSaveLayout.size);
     }
 
     private void forwardRuntimeCall(CiRuntimeCall call) {
@@ -334,7 +324,7 @@ public class AMD64CompilerStubEmitter {
         CiCallingConvention cc = comp.registerConfig.getCallingConvention(RuntimeCall, call.arguments, comp.compiler.target, false);
         for (int i = 0; i < cc.locations.length; ++i) {
             CiValue location = cc.locations[i];
-            asm.movq(location.asRegister(), comp.frameMap().toStackAddress(inArgs[i]));
+            asm.movq(asRegister(location), tasm.asAddress(inArgs[i]));
         }
 
         if (GraalOptions.AlignCallsForPatching) {
@@ -349,7 +339,7 @@ public class AMD64CompilerStubEmitter {
 
         if (call.resultKind != CiKind.Void) {
             CiRegister returnRegister = comp.registerConfig.getReturnRegister(call.resultKind);
-            asm.movq(comp.frameMap().toStackAddress(outResult), returnRegister);
+            asm.movq(tasm.asAddress(outResult), returnRegister);
         }
     }
 }

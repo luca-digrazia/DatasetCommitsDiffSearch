@@ -22,15 +22,14 @@
  */
 package com.oracle.max.graal.compiler.lir;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ci.CiTargetMethod.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.xir.CiXirAssembler.*;
-import com.oracle.max.graal.compiler.util.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ci.CiTargetMethod.Mark;
+import com.sun.cri.ri.*;
+import com.sun.cri.xir.CiXirAssembler.XirMark;
 
 /**
  * This class represents a call instruction; either to a {@linkplain CiRuntimeCall runtime method},
@@ -66,7 +65,7 @@ public abstract class LIRCall extends LIRInstruction {
                    CiValue targetAddress,
                    LIRDebugInfo info,
                    Map<XirMark, Mark> marks) {
-        super(opcode, isLegal(result) ? new CiValue[] {result} : LIRInstruction.NO_OPERANDS, info, toArray(arguments, targetAddress), LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
+        super(opcode, result, info, toArray(arguments, targetAddress), LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
         this.marks = marks;
         if (targetAddress == null) {
             this.targetAddressIndex = -1;
@@ -94,12 +93,33 @@ public abstract class LIRCall extends LIRInstruction {
     }
 
     @Override
-    protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-        if (mode == OperandMode.Input) {
-            return EnumSet.of(OperandFlag.Register, OperandFlag.Stack);
-        } else if (mode == OperandMode.Output) {
-            return EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
+    public String operationString() {
+        StringBuilder buf = new StringBuilder();
+        if (isLegal(result)) {
+            buf.append(result).append(" = ");
         }
-        throw Util.shouldNotReachHere();
+        if (targetAddressIndex >= 0) {
+            buf.append(targetAddress());
+        }
+        if (inputs.length + alives.length > 1) {
+            buf.append("(");
+        }
+        String sep = "";
+        for (CiValue input : inputs) {
+            if (input != targetAddress()) {
+                buf.append(sep).append(input);
+                sep = ", ";
+            }
+        }
+        for (CiValue input : alives) {
+            if (input != targetAddress()) {
+                buf.append(sep).append(input).append(" ~");
+                sep = ", ";
+            }
+        }
+        if (inputs.length + alives.length > 1) {
+            buf.append(")");
+        }
+        return buf.toString();
     }
 }

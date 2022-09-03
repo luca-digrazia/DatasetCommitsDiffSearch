@@ -22,13 +22,13 @@
  */
 package com.oracle.max.graal.compiler.lir;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.xir.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
+import com.sun.cri.xir.*;
 
 public abstract class LIRXirInstruction extends LIRInstruction {
 
@@ -54,7 +54,7 @@ public abstract class LIRXirInstruction extends LIRInstruction {
                              RiMethod method) {
         // Note that we register the XIR input operands as Alive, because the XIR specification allows that input operands
         // are used at any time, even when the temp operands and the actual output operands have already be assigned.
-        super(opcode, isLegal(outputOperand) ? new CiValue[] {outputOperand} : LIRInstruction.NO_OPERANDS, info, LIRInstruction.NO_OPERANDS, inputs, temps);
+        super(opcode, outputOperand, info, LIRInstruction.NO_OPERANDS, inputs, temps);
         this.infoAfter = infoAfter;
         this.method = method;
         this.snippet = snippet;
@@ -62,16 +62,8 @@ public abstract class LIRXirInstruction extends LIRInstruction {
         this.tempOperandIndices = tempOperandIndices;
         this.outputOperandIndex = outputOperandIndex;
         this.originalOperands = originalOperands;
-        assert isLegal(outputOperand) || outputOperandIndex == -1;
     }
 
-    @Override
-    protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-        if (mode == OperandMode.Alive || mode == OperandMode.Temp) {
-            return EnumSet.of(OperandFlag.Register, OperandFlag.Constant, OperandFlag.Illegal);
-        }
-        return super.flagsFor(mode, index);
-    }
 
     public void setFalseSuccessor(LabelRef falseSuccessor) {
         this.falseSuccessor = falseSuccessor;
@@ -98,13 +90,74 @@ public abstract class LIRXirInstruction extends LIRInstruction {
             originalOperands[tempOperandIndices[i]] = temp(i);
         }
         if (outputOperandIndex != -1) {
-            originalOperands[outputOperandIndex] = output(0);
+            originalOperands[outputOperandIndex] = result();
         }
         return originalOperands;
     }
 
+     /**
+     * Prints this instruction.
+     */
     @Override
-    public String name() {
-        return "XIR: " + snippet.template;
+    public String operationString() {
+        return toString();
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("XIR: ");
+
+        if (isLegal(result())) {
+            sb.append(result() + " = ");
+        }
+
+        sb.append(snippet.template);
+        sb.append("(");
+        for (int i = 0; i < snippet.arguments.length; i++) {
+            XirArgument a = snippet.arguments[i];
+            if (i > 0) {
+                sb.append(", ");
+            }
+            if (a.constant != null) {
+                sb.append(a.constant);
+            } else {
+                sb.append(a.object);
+            }
+        }
+        sb.append(')');
+
+        if (method != null) {
+            sb.append(" method=");
+            sb.append(method.toString());
+        }
+
+
+        for (LIRInstruction.OperandMode mode : LIRInstruction.OPERAND_MODES) {
+            int n = operandCount(mode);
+            if (mode == OperandMode.Output && n <= 1) {
+                // Already printed single output (i.e. result())
+                continue;
+            }
+            if (n != 0) {
+                sb.append(' ').append(mode.name().toLowerCase()).append("=(");
+                HashSet<String> operands = new HashSet<>();
+                for (int i = 0; i < n; i++) {
+                    String operand = operandAt(mode, i).toString();
+                    if (!operands.contains(operand)) {
+                        if (!operands.isEmpty()) {
+                            sb.append(", ");
+                        }
+                        operands.add(operand);
+                        sb.append(operand);
+                    }
+                }
+                sb.append(')');
+            }
+        }
+
+        appendDebugInfo(sb);
+
+        return sb.toString();
     }
 }

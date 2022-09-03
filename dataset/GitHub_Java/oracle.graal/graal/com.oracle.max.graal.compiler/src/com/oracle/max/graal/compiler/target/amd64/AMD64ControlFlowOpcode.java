@@ -22,20 +22,18 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
-
-import java.util.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ci.CiAddress.Scale;
-import com.oracle.max.cri.ci.CiTargetMethod.JumpTable;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.nodes.calc.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ci.CiAddress.Scale;
+import com.sun.cri.ci.CiTargetMethod.JumpTable;
 
 public class AMD64ControlFlowOpcode {
 
@@ -43,7 +41,7 @@ public class AMD64ControlFlowOpcode {
         LABEL;
 
         public LIRInstruction create(final Label label, final boolean align) {
-            return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, CiValue.IllegalValue, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
                     if (align) {
@@ -67,18 +65,10 @@ public class AMD64ControlFlowOpcode {
         public LIRInstruction create(CiValue input) {
             CiValue[] inputs = new CiValue[] {input};
 
-            return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, CiValue.IllegalValue, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
                     masm.ret(0);
-                }
-
-                @Override
-                protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-                    if (mode == OperandMode.Input && index == 0) {
-                        return EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
-                    }
-                    throw Util.shouldNotReachHere();
                 }
             };
         }
@@ -147,11 +137,11 @@ public class AMD64ControlFlowOpcode {
     public enum TableSwitchOpcode implements LIROpcode {
         TABLE_SWITCH;
 
-        public LIRInstruction create(final int lowKey, final LabelRef defaultTarget, final LabelRef[] targets, Variable index, Variable scratch) {
+        public LIRInstruction create(final int lowKey, final LabelRef defaultTarget, final LabelRef[] targets, CiVariable index, CiVariable scratch) {
             CiValue[] alives = new CiValue[] {index};
             CiValue[] temps = new CiValue[] {scratch};
 
-            return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, null, LIRInstruction.NO_OPERANDS, alives, temps) {
+            return new AMD64LIRInstruction(this, CiValue.IllegalValue, null, LIRInstruction.NO_OPERANDS, alives, temps) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
                     tableswitch(tasm, masm, lowKey, defaultTarget, targets, asIntReg(alive(0)), asLongReg(temp(0)));
@@ -176,25 +166,19 @@ public class AMD64ControlFlowOpcode {
     public enum CondMoveOpcode implements LIROpcode {
         CMOVE;
 
-        public LIRInstruction create(Variable result, final Condition condition, Variable trueValue, CiValue falseValue) {
+        public LIRInstruction create(CiVariable result, final Condition condition, CiVariable trueValue, CiValue falseValue) {
             CiValue[] inputs = new CiValue[] {falseValue};
             CiValue[] alives = new CiValue[] {trueValue};
-            CiValue[] outputs = new CiValue[] {result};
 
-            return new AMD64LIRInstruction(this, outputs, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, result, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    cmove(tasm, masm, output(0), false, condition, false, alive(0), input(0));
+                    cmove(tasm, masm, result(), false, condition, false, alive(0), input(0));
                 }
 
                 @Override
-                protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-                    if (mode == OperandMode.Input && index == 0) {
-                        return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
-                    } else if (mode == OperandMode.Output && index == 0) {
-                        return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
-                    }
-                    return super.flagsFor(mode, index);
+                public CiValue registerHint() {
+                    return input(0);
                 }
 
                 @Override
@@ -209,14 +193,13 @@ public class AMD64ControlFlowOpcode {
     public enum FloatCondMoveOpcode implements LIROpcode {
         FLOAT_CMOVE;
 
-        public LIRInstruction create(Variable result, final Condition condition, final boolean unorderedIsTrue, Variable trueValue, Variable falseValue) {
+        public LIRInstruction create(CiVariable result, final Condition condition, final boolean unorderedIsTrue, CiVariable trueValue, CiVariable falseValue) {
             CiValue[] alives = new CiValue[] {trueValue, falseValue};
-            CiValue[] outputs = new CiValue[] {result};
 
-            return new AMD64LIRInstruction(this, outputs, null, LIRInstruction.NO_OPERANDS, alives, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, result, null, LIRInstruction.NO_OPERANDS, alives, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    cmove(tasm, masm, output(0), true, condition, unorderedIsTrue, alive(0), alive(1));
+                    cmove(tasm, masm, result(), true, condition, unorderedIsTrue, alive(0), alive(1));
                 }
 
                 @Override

@@ -20,7 +20,7 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.max.cri.ci;
+package com.sun.cri.ci;
 
 public class CiValueUtil {
     public static boolean isIllegal(CiValue value) {
@@ -37,10 +37,17 @@ public class CiValueUtil {
         return value instanceof CiVirtualObject;
     }
 
-    public static CiVirtualObject asVirtualObject(CiValue value) {
+
+    public static boolean isVariable(CiValue value) {
         assert value != null;
-        return (CiVirtualObject) value;
+        return value instanceof CiVariable;
     }
+
+    public static CiVariable asVariable(CiValue value) {
+        assert value != null;
+        return (CiVariable) value;
+    }
+
 
     public static boolean isConstant(CiValue value) {
         assert value != null;

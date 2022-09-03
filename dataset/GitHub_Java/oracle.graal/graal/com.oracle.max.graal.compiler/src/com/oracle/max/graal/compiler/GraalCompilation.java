@@ -23,18 +23,17 @@
 
 package com.oracle.max.graal.compiler;
 
+import static com.sun.cri.ci.CiValueUtil.*;
+
 import java.util.*;
 
 import com.oracle.max.asm.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ci.CiCompiler.DebugInfoLevel;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.xir.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.alloc.simple.*;
 import com.oracle.max.graal.compiler.alloc.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.gen.*;
+import com.oracle.max.graal.compiler.graphbuilder.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.phases.*;
@@ -42,6 +41,11 @@ import com.oracle.max.graal.compiler.phases.PhasePlan.PhasePosition;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.nodes.virtual.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ci.CiCompiler.DebugInfoLevel;
+import com.sun.cri.ri.*;
+import com.sun.cri.xir.*;
 
 /**
  * This class encapsulates global information about the compilation of a particular method,
@@ -56,6 +60,7 @@ public final class GraalCompilation {
 
     public final StructuredGraph graph;
     public final CiAssumptions assumptions = GraalOptions.OptAssumptions ? new CiAssumptions() : null;
+    public NodeMap<CiValue> nodeOperands;
 
     private FrameMap frameMap;
 
@@ -71,7 +76,7 @@ public final class GraalCompilation {
      * @param stats externally supplied statistics object to be used if not {@code null}
      * @param debugInfoLevel TODO
      */
-    private GraalCompilation(GraalContext context, GraalCompiler compiler, RiResolvedMethod method, StructuredGraph graph, int osrBCI, CiStatistics stats, DebugInfoLevel debugInfoLevel) {
+    public GraalCompilation(GraalContext context, GraalCompiler compiler, RiResolvedMethod method, StructuredGraph graph, int osrBCI, CiStatistics stats, DebugInfoLevel debugInfoLevel) {
         if (osrBCI != -1) {
             throw new CiBailout("No OSR supported");
         }
@@ -80,7 +85,7 @@ public final class GraalCompilation {
         this.method = method;
         this.stats = stats == null ? new CiStatistics() : stats;
         this.registerConfig = method == null ? compiler.compilerStubRegisterConfig : compiler.runtime.getRegisterConfig(method);
-        this.placeholderState = debugInfoLevel == DebugInfoLevel.REF_MAPS ? new FrameState(method, 0, 0, 0, false) : null;
+        this.placeholderState = debugInfoLevel == DebugInfoLevel.REF_MAPS ? new FrameState(method, 0, 0, 0, 0, false) : null;
 
         if (context().isObserved() && method != null) {
             context().observable.fireCompilationStarted(this);
@@ -88,7 +93,7 @@ public final class GraalCompilation {
     }
 
     public GraalCompilation(GraalContext context, GraalCompiler compiler, RiResolvedMethod method, int osrBCI, CiStatistics stats, DebugInfoLevel debugInfoLevel) {
-        this(context, compiler, method, new StructuredGraph(method), osrBCI, stats, debugInfoLevel);
+        this(context, compiler, method, new StructuredGraph(), osrBCI, stats, debugInfoLevel);
     }
 
 
@@ -98,6 +103,21 @@ public final class GraalCompilation {
 
     public LIR lir() {
         return lir;
+    }
+
+    public CiValue operand(ValueNode valueNode) {
+        if (nodeOperands == null) {
+            return null;
+        }
+        return nodeOperands.get(valueNode);
+    }
+
+    public void setOperand(ValueNode valueNode, CiValue operand) {
+        assert operand(valueNode) == null : "operand cannot be set twice";
+        assert operand != null && isLegal(operand) : "operand must be legal";
+        assert operand.kind.stackKind() == valueNode.kind();
+        assert !(valueNode instanceof VirtualObjectNode);
+        nodeOperands.set(valueNode, operand);
     }
 
     /**
@@ -169,7 +189,11 @@ public final class GraalCompilation {
             context().timers.startScope("HIR");
 
             if (graph.start().next() == null) {
+                GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(compiler.runtime, method, stats);
+                graphBuilderPhase.apply(graph, context());
+
                 plan.runPhases(PhasePosition.AFTER_PARSING, graph, context());
+
                 new DeadCodeEliminationPhase().apply(graph, context());
             } else {
                 if (context().isObserved()) {
@@ -295,7 +319,7 @@ public final class GraalCompilation {
     }
 
     public void initFrameMap() {
-        frameMap = this.compiler.backend.newFrameMap(compiler.runtime, compiler.target, registerConfig);
+        frameMap = this.compiler.backend.newFrameMap(this);
     }
 
     private void emitLIR(RiXirGenerator xir) {
@@ -303,6 +327,7 @@ public final class GraalCompilation {
         try {
             if (GraalOptions.GenLIR) {
                 context().timers.startScope("Create LIR");
+                nodeOperands = graph.createNodeMap();
                 LIRGenerator lirGenerator = null;
                 try {
                     initFrameMap();
@@ -330,7 +355,7 @@ public final class GraalCompilation {
                 }
 
                 if (GraalOptions.AllocSSA) {
-                    new SpillAllAllocator(context(), lir, this, registerConfig).execute();
+                    new SpillAllAllocator(context(), lir, this, lirGenerator.operands, registerConfig, lirGenerator.incomingArguments).execute();
                 } else {
                     new LinearScan(this, lir, lirGenerator, frameMap()).allocate();
                 }
@@ -372,6 +397,25 @@ public final class GraalCompilation {
         }
 
         return null;
+    }
+
+    /**
+     * Gets the maximum number of locks in the graph's frame states.
+     */
+    public int maxLocks() {
+        int maxLocks = 0;
+        for (FrameState node : graph.getNodes(FrameState.class)) {
+            int lockCount = 0;
+            FrameState current = node;
+            while (current != null) {
+                lockCount += current.locksSize();
+                current = current.outerFrameState();
+            }
+            if (lockCount > maxLocks) {
+                maxLocks = lockCount;
+            }
+        }
+        return maxLocks;
     }
 
     private GraalContext context() {

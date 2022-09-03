@@ -22,39 +22,38 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.sun.cri.ci.*;
 
 public enum AMD64DivOpcode implements LIROpcode {
-    IDIV, IREM, IUDIV, IUREM,
-    LDIV, LREM, LUDIV, LUREM;
+    IDIV, IREM, UIDIV, UIREM,
+    LDIV, LREM, ULDIV, ULREM;
 
-    public LIRInstruction create(CiValue result, LIRDebugInfo info, CiValue x, CiValue y) {
-        CiValue[] inputs = new CiValue[] {x};
-        CiValue[] alives = new CiValue[] {y};
-        CiValue[] temps = new CiValue[] {asRegister(result) == AMD64.rax ? AMD64.rdx.asValue(result.kind) : AMD64.rax.asValue(result.kind)};
-        CiValue[] outputs = new CiValue[] {result};
+    public LIRInstruction create(CiRegisterValue result, LIRDebugInfo info, CiRegisterValue left, CiVariable right) {
+        CiValue[] inputs = new CiValue[] {left};
+        CiValue[] alives = new CiValue[] {right};
+        CiValue[] temps = new CiValue[] {result.reg == AMD64.rax ? AMD64.rdx.asValue(result.kind) : AMD64.rax.asValue(result.kind)};
 
-        return new AMD64LIRInstruction(this, outputs, info, inputs, alives, temps) {
+        return new AMD64LIRInstruction(this, result, info, inputs, alives, temps) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                emit(tasm, masm, output(0), info, input(0), alive(0));
+                emit(tasm, masm, asRegister(result()), info, asRegister(input(0)), asRegister(alive(0)));
             }
         };
     }
 
-    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, LIRDebugInfo info, CiValue x, CiValue y) {
+    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiRegister result, LIRDebugInfo info, CiRegister left, CiRegister right) {
         // left input in rax, right input in any register but rax and rdx, result quotient in rax, result remainder in rdx
-        assert asRegister(x) == AMD64.rax;
-        assert differentRegisters(y, AMD64.rax.asValue(), AMD64.rdx.asValue());
-        assert (name().endsWith("DIV") && asRegister(result) == AMD64.rax) || (name().endsWith("REM") && asRegister(result) == AMD64.rdx);
+        assert left == AMD64.rax;
+        assert right != AMD64.rax && right != AMD64.rdx;
+        assert (name().endsWith("DIV") && result == AMD64.rax) || (name().endsWith("REM") && result == AMD64.rdx);
 
         int exceptionOffset;
         switch (this) {
@@ -62,7 +61,7 @@ public enum AMD64DivOpcode implements LIROpcode {
             case IREM:
                 masm.cdql();
                 exceptionOffset = masm.codeBuffer.position();
-                masm.idivl(asRegister(y));
+                masm.idivl(right);
                 break;
 
             case LDIV:
@@ -74,31 +73,31 @@ public enum AMD64DivOpcode implements LIROpcode {
                     masm.movq(AMD64.rdx, java.lang.Long.MIN_VALUE);
                     masm.cmpq(AMD64.rax, AMD64.rdx);
                     masm.jcc(ConditionFlag.notEqual, normalCase);
-                    masm.cmpl(asRegister(y), -1);
+                    masm.cmpl(right, -1);
                     masm.jcc(ConditionFlag.equal, continuation);
                     masm.bind(normalCase);
                 }
 
                 masm.cdqq();
                 exceptionOffset = masm.codeBuffer.position();
-                masm.idivq(asRegister(y));
+                masm.idivq(right);
                 masm.bind(continuation);
                 break;
 
-            case IUDIV:
-            case IUREM:
+            case UIDIV:
+            case UIREM:
                 // Must zero the high 64-bit word (in RDX) of the dividend
                 masm.xorq(AMD64.rdx, AMD64.rdx);
                 exceptionOffset = masm.codeBuffer.position();
-                masm.divl(asRegister(y));
+                masm.divl(right);
                 break;
 
-            case LUDIV:
-            case LUREM:
+            case ULDIV:
+            case ULREM:
                 // Must zero the high 64-bit word (in RDX) of the dividend
                 masm.xorq(AMD64.rdx, AMD64.rdx);
                 exceptionOffset = masm.codeBuffer.position();
-                masm.divq(asRegister(y));
+                masm.divq(right);
                 break;
 
             default:

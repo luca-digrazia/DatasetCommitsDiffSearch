@@ -22,15 +22,15 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.sun.cri.ci.*;
 
 /**
  * Implementation of the Java bytecodes that compare a long, float, or double value and produce the
@@ -40,13 +40,11 @@ import com.oracle.max.graal.compiler.util.*;
 public enum AMD64CompareToIntOpcode implements LIROpcode {
     CMP2INT, CMP2INT_UG, CMP2INT_UL;
 
-    public LIRInstruction create(CiValue result) {
-        CiValue[] outputs = new CiValue[] {result};
-
-        return new AMD64LIRInstruction(this, outputs, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+    public LIRInstruction create(CiVariable result) {
+        return new AMD64LIRInstruction(this, result, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                emit(masm, output(0));
+                emit(masm, result());
             }
         };
     }

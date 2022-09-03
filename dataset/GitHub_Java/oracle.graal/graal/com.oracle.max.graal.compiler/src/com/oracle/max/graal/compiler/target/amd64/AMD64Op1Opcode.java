@@ -22,38 +22,35 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
-
-import java.util.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.sun.cri.ci.*;
 
 public enum AMD64Op1Opcode implements LIROpcode {
     INEG, LNEG;
 
-    public LIRInstruction create(Variable result, CiValue input) {
+    public LIRInstruction create(CiVariable result, CiValue input) {
         CiValue[] inputs = new CiValue[] {input};
-        CiValue[] outputs = new CiValue[] {result};
 
-        return new AMD64LIRInstruction(this, outputs, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+        return new AMD64LIRInstruction(this, result, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                AMD64MoveOpcode.move(tasm, masm, output(0), input(0));
-                emit(masm, output(0));
+                AMD64MoveOpcode.move(tasm, masm, result(), input(0));
+                emit(masm, result());
             }
 
             @Override
-            public EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-                if (mode == OperandMode.Input && index == 0) {
-                    return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
-                } else if (mode == OperandMode.Output && index == 0) {
-                    return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
-                }
-                return super.flagsFor(mode, index);
+            public boolean inputCanBeMemory(int index) {
+                return true;
+            }
+
+            @Override
+            public CiValue registerHint() {
+                return input(0);
             }
         };
     }

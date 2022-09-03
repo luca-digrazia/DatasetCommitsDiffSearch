@@ -20,24 +20,19 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.sun.cri.ci;
+package com.oracle.max.graal.alloc.util;
 
-public final class CiMonitorValue extends CiValue {
-    private static final long serialVersionUID = 8241681800464483691L;
+import com.sun.cri.ci.*;
 
-    public CiValue owner;
-    public final CiValue lockData;
-    public final boolean eliminated;
+public class ValueUtil extends CiValueUtil {
 
-    public CiMonitorValue(CiValue owner, CiValue lockData, boolean eliminated) {
-        super(CiKind.Illegal);
-        this.owner = owner;
-        this.lockData = lockData;
-        this.eliminated = eliminated;
+    public static boolean isLocation(CiValue value) {
+        assert value != null;
+        return value instanceof Location;
     }
 
-    @Override
-    public String toString() {
-        return "monitor[" + owner + (lockData != null ? ", " + lockData : "") + (eliminated ? ", eliminated" : "") + "]";
+    public static Location asLocation(CiValue value) {
+        assert value != null;
+        return (Location) value;
     }
 }

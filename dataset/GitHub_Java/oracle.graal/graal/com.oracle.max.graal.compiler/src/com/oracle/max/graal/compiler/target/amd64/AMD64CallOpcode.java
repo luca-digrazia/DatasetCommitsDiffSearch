@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
  * questions.
  */
 package com.oracle.max.graal.compiler.target.amd64;
+
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import java.util.*;
 
@@ -66,12 +68,12 @@ public enum AMD64CallOpcode implements StandardOpcode.CallOpcode {
                 if (op.marks != null) {
                     op.marks.put(XirMark.CALLSITE, tasm.recordMark(null, new Mark[0]));
                 }
-                CiRegister reg = tasm.asRegister(op.targetAddress());
+                CiRegister reg = asRegister(op.targetAddress());
                 indirectCall(tasm, masm, reg, op.target, op.info);
                 break;
             }
             case NATIVE_CALL: {
-                CiRegister reg = tasm.asRegister(op.targetAddress());
+                CiRegister reg = asRegister(op.targetAddress());
                 indirectCall(tasm, masm, reg, op.target, op.info);
                 break;
             }
@@ -81,7 +83,7 @@ public enum AMD64CallOpcode implements StandardOpcode.CallOpcode {
     }
 
 
-    public void callAlignment(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+    public static void callAlignment(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
         if (GraalOptions.AlignCallsForPatching) {
             // make sure that the displacement word of the call ends up word aligned
             int offset = masm.codeBuffer.position();
@@ -92,7 +94,7 @@ public enum AMD64CallOpcode implements StandardOpcode.CallOpcode {
         }
     }
 
-    public static void callStub(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CompilerStub stub, CiKind resultKind, LIRDebugInfo info, CiValue result, CiValue... args) {
+    public static void callStub(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CompilerStub stub, LIRDebugInfo info, CiValue result, CiValue... args) {
         assert args.length == stub.inArgs.length;
         for (int i = 0; i < args.length; i++) {
             assert stub.inArgs[i].inCallerFrame();
@@ -101,7 +103,7 @@ public enum AMD64CallOpcode implements StandardOpcode.CallOpcode {
 
         directCall(tasm, masm, stub.stubObject, info);
 
-        if (result.isLegal()) {
+        if (isLegal(result)) {
             AMD64MoveOpcode.move(tasm, masm, result, stub.outResult.asOutArg());
         }
 

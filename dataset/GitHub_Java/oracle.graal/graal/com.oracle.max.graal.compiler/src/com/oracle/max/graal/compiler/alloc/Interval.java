@@ -22,16 +22,15 @@
  */
 package com.oracle.max.graal.compiler.alloc;
 
-import static com.oracle.max.graal.alloc.util.ValueUtil.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.debug.*;
+import com.sun.cri.ci.*;
 
 /**
  * Represents an interval in the {@linkplain LinearScan linear scan register allocator}.
@@ -399,7 +398,7 @@ public final class Interval {
     }
 
     /**
-     * The {@linkplain CiRegisterValue register} or {@linkplain Variable variable} for this interval prior to register allocation.
+     * The {@linkplain CiRegisterValue register} or {@linkplain CiVariable variable} for this interval prior to register allocation.
      */
     public final CiValue operand;
 
@@ -660,10 +659,10 @@ public final class Interval {
      */
     static final Interval EndMarker = new Interval(null, CiValue.IllegalValue, -1);
 
-    private static final Debug.Metric instanceMetric = Debug.metric("LSRAIntervalsCreated");
-
     Interval(GraalContext context, CiValue operand, int operandNumber) {
-        //instanceMetric.increment();
+        if (GraalOptions.Meter && context != null) {
+            context.metrics.LSRAIntervalsCreated++;
+        }
         assert operand != null;
         this.operand = operand;
         this.operandNumber = operandNumber;

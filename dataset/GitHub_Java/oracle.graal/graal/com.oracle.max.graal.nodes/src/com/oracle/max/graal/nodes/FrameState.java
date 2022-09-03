@@ -454,7 +454,7 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
 
     public void deleteRedundantPhi(PhiNode redundantPhi, ValueNode phiValue) {
         Collection<PhiNode> phiUsages = redundantPhi.usages().filter(PhiNode.class).snapshot();
-        ((StructuredGraph) graph()).replaceFloating(redundantPhi, phiValue);
+        redundantPhi.replaceAndDelete(phiValue);
         for (Node n : phiUsages) {
             PhiNode phiNode = (PhiNode) n;
             checkRedundantPhi(phiNode);
@@ -476,7 +476,7 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
         if (!phiNode.isDeleted()) {
             Collection<PhiNode> phiUsages = phiNode.usages().filter(PhiNode.class).snapshot();
             phiNode.replaceAtUsages(null);
-            phiNode.safeDelete();
+            phiNode.delete();
             for (Node n : phiUsages) {
                 deleteInvalidPhi((PhiNode) n);
             }

@@ -22,25 +22,28 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.oracle.max.cri.ci.CiCallingConvention.Type.*;
-import static com.oracle.max.cri.ci.CiValue.*;
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.sun.cri.ci.CiCallingConvention.Type.*;
+import static com.sun.cri.ci.CiValue.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import java.util.*;
 
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ci.CiTargetMethod.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.xir.*;
-import com.oracle.max.cri.xir.CiXirAssembler.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ci.CiTargetMethod.Mark;
+import com.sun.cri.ri.*;
+import com.sun.cri.xir.*;
+import com.sun.cri.xir.CiXirAssembler.RuntimeCallInformation;
+import com.sun.cri.xir.CiXirAssembler.XirInstruction;
+import com.sun.cri.xir.CiXirAssembler.XirLabel;
+import com.sun.cri.xir.CiXirAssembler.XirMark;
 
 public enum AMD64XirOpcode implements StandardOpcode.XirOpcode {
     XIR;
@@ -154,7 +157,7 @@ public enum AMD64XirOpcode implements StandardOpcode.XirOpcode {
                     break;
 
                 case Shr:
-                    emitXirViaLir(tasm, masm, AMD64ShiftOpcode.IUSHR, AMD64ShiftOpcode.LUSHR, null, null, operands[inst.x().index], operands[inst.y().index], operands[inst.result.index]);
+                    emitXirViaLir(tasm, masm, AMD64ShiftOpcode.UISHR, AMD64ShiftOpcode.ULSHR, null, null, operands[inst.x().index], operands[inst.y().index], operands[inst.result.index]);
                     break;
 
                 case And:
@@ -531,13 +534,13 @@ public enum AMD64XirOpcode implements StandardOpcode.XirOpcode {
         }
 
         if (code instanceof AMD64ArithmeticOpcode) {
-            ((AMD64ArithmeticOpcode) code).emit(tasm, masm, result, left, right);
+            ((AMD64ArithmeticOpcode) code).emit(tasm, masm, left, right);
         } else if (code instanceof AMD64MulOpcode) {
-            ((AMD64MulOpcode) code).emit(tasm, masm, result, left, right);
+            ((AMD64MulOpcode) code).emit(tasm, masm, left, right);
         } else if (code instanceof AMD64DivOpcode) {
-            ((AMD64DivOpcode) code).emit(tasm, masm, result, null, left, right);
+            ((AMD64DivOpcode) code).emit(tasm, masm, asRegister(result), null, asRegister(left), asRegister(right));
         } else if (code instanceof AMD64ShiftOpcode) {
-            ((AMD64ShiftOpcode) code).emit(tasm, masm, result, left, right);
+            ((AMD64ShiftOpcode) code).emit(tasm, masm, left, right);
         }
     }
 

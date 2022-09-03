@@ -22,42 +22,37 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
-
-import java.util.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.sun.cri.ci.*;
 
 public enum AMD64MulOpcode implements LIROpcode {
     IMUL, LMUL;
 
-    public LIRInstruction create(Variable result, CiValue left, CiValue right) {
+    public LIRInstruction create(CiVariable result, CiValue left, CiValue right) {
         CiValue[] inputs = new CiValue[] {left};
         CiValue[] alives = new CiValue[] {right};
-        CiValue[] outputs = new CiValue[] {result};
 
-        return new AMD64LIRInstruction(this, outputs, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
+        return new AMD64LIRInstruction(this, result, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                assert !(alive(0) instanceof CiRegisterValue) || asRegister(output(0)) != asRegister(alive(0)) : "result and right must be different registers";
-                AMD64MoveOpcode.move(tasm, masm, output(0), input(0));
-                emit(tasm, masm, output(0), alive(0));
+                assert !(alive(0) instanceof CiRegisterValue) || asRegister(result()) != asRegister(alive(0)) : "result and right must be different registers";
+                AMD64MoveOpcode.move(tasm, masm, result(), input(0));
+                emit(tasm, masm, result(), alive(0));
             }
 
             @Override
-            public EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-                if (mode == OperandMode.Input && index == 0) {
-                    return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
-                } else if (mode == OperandMode.Alive && index == 0) {
-                    return EnumSet.of(OperandFlag.Register, OperandFlag.Constant);
-                } else if (mode == OperandMode.Output && index == 0) {
-                    return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
-                }
-                return super.flagsFor(mode, index);
+            public boolean inputCanBeMemory(int index) {
+                return index == 0;
+            }
+
+            @Override
+            public CiValue registerHint() {
+                return input(0);
             }
         };
     }
@@ -70,14 +65,12 @@ public enum AMD64MulOpcode implements LIROpcode {
                 case LMUL: masm.imulq(dst, asRegister(right)); break;
                 default:   throw Util.shouldNotReachHere();
             }
-        } else if (isConstant(right)) {
+        } else {
             switch (this) {
                 case IMUL: masm.imull(dst, dst, tasm.asIntConst(right)); break;
                 case LMUL: masm.imulq(dst, dst, tasm.asIntConst(right)); break;
                 default:   throw Util.shouldNotReachHere();
             }
-        } else {
-            throw Util.shouldNotReachHere();
         }
     }
 }

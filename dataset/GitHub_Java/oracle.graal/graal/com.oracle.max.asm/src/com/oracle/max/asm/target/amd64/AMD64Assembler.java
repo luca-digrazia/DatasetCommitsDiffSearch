@@ -22,14 +22,14 @@
  */
 package com.oracle.max.asm.target.amd64;
 
+import static com.sun.cri.ci.CiValueUtil.*;
 import static com.oracle.max.asm.NumUtil.*;
 import static com.oracle.max.asm.target.amd64.AMD64.*;
-import static com.oracle.max.cri.ci.CiValueUtil.*;
-import static com.oracle.max.cri.util.MemoryBarriers.*;
+import static com.oracle.max.cri.intrinsics.MemoryBarriers.*;
 
 import com.oracle.max.asm.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * This class implements an assembler that can encode most X86 instructions.
@@ -79,7 +79,7 @@ public class AMD64Assembler extends AbstractAssembler {
     /**
      * Constants for X86 prefix bytes.
      */
-    private static class Prefix {
+    private class Prefix {
         private static final int REX = 0x40;
         private static final int REXB = 0x41;
         private static final int REXX = 0x42;
@@ -1516,6 +1516,13 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0x58 | encode);
     }
 
+    public final void popl(CiAddress dst) {
+        // NOTE: this will adjust stack by 8byte on 64bits
+        prefix(dst);
+        emitByte(0x8F);
+        emitOperandHelper(rax, dst);
+    }
+
     public final void prefetchPrefix(CiAddress src) {
         prefix(src);
         emitByte(0x0F);
@@ -1645,6 +1652,13 @@ public class AMD64Assembler extends AbstractAssembler {
 
     public final void pushf() {
         emitByte(0x9C);
+    }
+
+    public final void pushl(CiAddress src) {
+        // Note this will push 64bit on 64bit
+        prefix(src);
+        emitByte(0xFF);
+        emitOperandHelper(rsi, src);
     }
 
     public final void pxor(CiRegister dst, CiAddress src) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,6 +22,8 @@
  */
 package com.oracle.max.graal.snippets.target.amd64;
 
+import static com.sun.cri.ci.CiValueUtil.*;
+
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
@@ -40,12 +42,14 @@ public enum AMD64MathIntrinsicOpcode implements LIROpcode {
         return new AMD64LIRInstruction(this, result, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                CiValue input = input(0);
-                emit(tasm, masm, tasm.asDoubleReg(result()), tasm.asDoubleReg(input));
+                emit(tasm, masm, asDoubleReg(result()), asDoubleReg(input(0)));
             }
         };
     }
 
+    /**
+     * @param tasm
+     */
     private void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiRegister result, CiRegister input) {
         switch (this) {
             case SQRT:  masm.sqrtsd(result, input); break;

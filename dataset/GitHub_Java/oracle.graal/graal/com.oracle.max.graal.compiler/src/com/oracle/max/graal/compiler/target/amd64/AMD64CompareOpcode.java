@@ -22,20 +22,18 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
-
-import java.util.*;
+import static com.sun.cri.ci.CiValueUtil.*;
 
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.sun.cri.ci.*;
 
 public enum AMD64CompareOpcode implements LIROpcode {
     ICMP, LCMP, ACMP, FCMP, DCMP;
 
-    public LIRInstruction create(Variable left, CiValue right) {
+    public LIRInstruction create(CiVariable left, CiValue right) {
         assert (name().startsWith("I") && left.kind == CiKind.Int && right.kind.stackKind() == CiKind.Int)
             || (name().startsWith("I") && left.kind == CiKind.Jsr && right.kind == CiKind.Jsr)
             || (name().startsWith("L") && left.kind == CiKind.Long && right.kind == CiKind.Long)
@@ -44,18 +42,15 @@ public enum AMD64CompareOpcode implements LIROpcode {
             || (name().startsWith("D") && left.kind == CiKind.Double && right.kind == CiKind.Double) : "left.kind=" + left.kind + ", right.kind=" + right.kind;
         CiValue[] inputs = new CiValue[] {left, right};
 
-        return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+        return new AMD64LIRInstruction(this, CiValue.IllegalValue, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
                 emit(tasm, masm, input(0), input(1));
             }
 
             @Override
-            public EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-                if (mode == OperandMode.Input && index == 1) {
-                    return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
-                }
-                return super.flagsFor(mode, index);
+            public boolean inputCanBeMemory(int index) {
+                return index == 1;
             }
         };
     }

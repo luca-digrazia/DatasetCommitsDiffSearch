@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,13 @@
  */
 package com.oracle.max.graal.compiler.alloc;
 
+import static com.sun.cri.ci.CiValueUtil.*;
+
 import java.util.*;
 
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.nodes.*;
 import com.sun.cri.ci.*;
 
 /**
@@ -36,8 +39,6 @@ import com.sun.cri.ci.*;
  *
  * In the original HotSpot C1 source code, this pool corresponds to the
  * "flat register file" mentioned in c1_LinearScan.cpp.
- *
- * @author Doug Simon
  */
 public final class OperandPool {
 
@@ -59,9 +60,9 @@ public final class OperandPool {
 
     /**
      * Map from a {@linkplain CiVariable#index variable index} to the instruction whose result is stored in the denoted variable.
-     * This map is only populated and used if {@link C1XOptions#DetailedAsserts} is {@code true}.
+     * This map is only populated and used if {@link GraalOptions#DetailedAsserts} is {@code true}.
      */
-    private final ArrayList<Value> variableDefs;
+    private final ArrayList<ValueNode> variableDefs;
 
     /**
      * The {@linkplain #operandNumber(CiValue) number} of the first variable operand
@@ -72,20 +73,20 @@ public final class OperandPool {
     /**
      * Records which variable operands have the {@link VariableFlag#MustBeByteRegister} flag set.
      */
-    private CiBitMap mustBeByteRegister;
+    private BitMap mustBeByteRegister;
 
     /**
      * Records which variable operands have the {@link VariableFlag#MustStartInMemory} flag set.
      */
-    private CiBitMap mustStartInMemory;
+    private BitMap mustStartInMemory;
 
     /**
      * Records which variable operands have the {@link VariableFlag#MustStayInMemory} flag set.
      */
-    private CiBitMap mustStayInMemory;
+    private BitMap mustStayInMemory;
 
     /**
-     * Flags that can be set for {@linkplain CiValue#isVariable() variable} operands.
+     * Flags that can be set for {@linkplain CiValue#xxisVariable() variable} operands.
      */
     public enum VariableFlag {
         /**
@@ -108,19 +109,20 @@ public final class OperandPool {
         public static final VariableFlag[] VALUES = values();
     }
 
-    private static CiBitMap set(CiBitMap map, CiVariable variable) {
-        if (map == null) {
-            int length = CiBitMap.roundUpLength(variable.index + 1);
-            map = new CiBitMap(length);
-        } else if (map.size() <= variable.index) {
-            int length = CiBitMap.roundUpLength(variable.index + 1);
-            map.grow(length);
+    private static BitMap set(BitMap map, CiVariable variable) {
+        BitMap result = map;
+        if (result == null) {
+            int length = BitMap.roundUpLength(variable.index + 1);
+            result = new BitMap(length);
+        } else if (result.size() <= variable.index) {
+            int length = BitMap.roundUpLength(variable.index + 1);
+            result.grow(length);
         }
-        map.set(variable.index);
-        return map;
+        result.set(variable.index);
+        return result;
     }
 
-    private static boolean get(CiBitMap map, CiVariable variable) {
+    private static boolean get(BitMap map, CiVariable variable) {
         if (map == null || map.size() <= variable.index) {
             return false;
         }
@@ -133,11 +135,10 @@ public final class OperandPool {
      * @param target description of the target architecture for a compilation
      */
     public OperandPool(CiTarget target) {
-        CiRegister[] registers = target.arch.registers;
+        this.registers = target.arch.registers;
         this.firstVariableNumber = registers.length;
-        this.registers = registers;
-        variables = new ArrayList<CiVariable>(INITIAL_VARIABLE_CAPACITY);
-        variableDefs = C1XOptions.DetailedAsserts ? new ArrayList<Value>(INITIAL_VARIABLE_CAPACITY) : null;
+        variables = new ArrayList<>(INITIAL_VARIABLE_CAPACITY);
+        variableDefs = GraalOptions.DetailedAsserts ? new ArrayList<ValueNode>(INITIAL_VARIABLE_CAPACITY) : null;
     }
 
     /**
@@ -147,6 +148,7 @@ public final class OperandPool {
      * @return a new variable
      */
     public CiVariable newVariable(CiKind kind) {
+        // TODO since we ensure that the variable kind is a stackKind, the checks for Boolean and Byte here are useless!
         return newVariable(kind, kind == CiKind.Boolean || kind == CiKind.Byte ? VariableFlag.MustBeByteRegister : null);
     }
 
@@ -159,8 +161,23 @@ public final class OperandPool {
      */
     public CiVariable newVariable(CiKind kind, VariableFlag flag) {
         assert kind != CiKind.Void;
+        assert kind.stackKind() == kind : "Variables can only be created for stack-kinds";
+
         int varIndex = variables.size();
         CiVariable var = CiVariable.get(kind, varIndex);
+        setFlag(var, flag);
+        variables.add(var);
+        return var;
+    }
+
+    /**
+     * Creates a new {@linkplain CiVariable variable} operand.
+     *
+     * @param kind the kind of the variable
+     * @param flag a flag that is set for the new variable operand (ignored if {@code null})
+     * @return a new variable operand
+     */
+    public void setFlag(CiVariable var, VariableFlag flag) {
         if (flag == VariableFlag.MustBeByteRegister) {
             mustBeByteRegister = set(mustBeByteRegister, var);
         } else if (flag == VariableFlag.MustStartInMemory) {
@@ -170,8 +187,6 @@ public final class OperandPool {
         } else {
             assert flag == null;
         }
-        variables.add(var);
-        return var;
     }
 
     /**
@@ -182,12 +197,12 @@ public final class OperandPool {
      * @return the unique number for {@code operand} in the range {@code [0 .. size())}
      */
     public int operandNumber(CiValue operand) {
-        if (operand.isRegister()) {
-            int number = operand.asRegister().number;
+        if (isRegister(operand)) {
+            int number = asRegister(operand).number;
             assert number < firstVariableNumber;
             return number;
         }
-        assert operand.isVariable();
+        assert isVariable(operand) : operand;
         return firstVariableNumber + ((CiVariable) operand).index;
     }
 
@@ -214,7 +229,7 @@ public final class OperandPool {
      * @param result the variable storing the result of {@code instruction}
      * @param instruction an instruction that produces a result (i.e. pushes a value to the stack)
      */
-    public void recordResult(CiVariable result, Value instruction) {
+    public void recordResult(CiVariable result, ValueNode instruction) {
         while (variableDefs.size() <= result.index) {
             variableDefs.add(null);
         }
@@ -227,7 +242,7 @@ public final class OperandPool {
      * @param result the variable storing the result of an instruction
      * @return the instruction that stores its result in {@code result}
      */
-    public Value instructionForResult(CiVariable result) {
+    public ValueNode instructionForResult(CiVariable result) {
         if (variableDefs.size() > result.index) {
             return variableDefs.get(result.index);
         }
@@ -264,5 +279,9 @@ public final class OperandPool {
      */
     public int maxRegisterNumber() {
         return firstVariableNumber - 1;
+    }
+
+    public int numVariables() {
+        return variables.size();
     }
 }
