@@ -25,8 +25,8 @@
 package com.oracle.truffle.tools.profiler.impl;
 
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.tools.profiler.MemoryTracer;
 import com.oracle.truffle.tools.profiler.ProfilerNode;
+import com.oracle.truffle.tools.profiler.MemoryTracer;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
@@ -34,17 +34,15 @@ import org.graalvm.options.OptionType;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-class MemoryTracerCLI extends ProfilerCLI {
+public class MemoryTracerCLI extends ProfilerCLI {
 
     enum Output {
         TYPE_HISTOGRAM,
@@ -122,29 +120,8 @@ class MemoryTracerCLI extends ProfilerCLI {
         }
     }
 
-    private static Map<String, List<MemoryTracer.AllocationEventInfo>> computeMetaObjectHistogram(MemoryTracer tracer) {
-        Map<String, List<MemoryTracer.AllocationEventInfo>> histogram = new HashMap<>();
-        computeMetaObjectHistogramImpl(tracer.getRootNodes(), histogram);
-        return histogram;
-    }
-
-    private static void computeMetaObjectHistogramImpl(Collection<ProfilerNode<MemoryTracer.Payload>> children, Map<String, List<MemoryTracer.AllocationEventInfo>> histogram) {
-        for (ProfilerNode<MemoryTracer.Payload> treeNode : children) {
-            for (MemoryTracer.AllocationEventInfo info : treeNode.getPayload().getEvents()) {
-                List<MemoryTracer.AllocationEventInfo> nodes = histogram.computeIfAbsent(info.getMetaObjectString(), new Function<String, List<MemoryTracer.AllocationEventInfo>>() {
-                    @Override
-                    public List<MemoryTracer.AllocationEventInfo> apply(String s) {
-                        return new ArrayList<>();
-                    }
-                });
-                nodes.add(info);
-            }
-            computeMetaObjectHistogramImpl(treeNode.getChildren(), histogram);
-        }
-    }
-
     private static void printMetaObjectHistogram(PrintStream out, MemoryTracer tracer) {
-        final Map<String, List<MemoryTracer.AllocationEventInfo>> histogram = computeMetaObjectHistogram(tracer);
+        final Map<String, List<MemoryTracer.AllocationEventInfo>> histogram = tracer.computeMetaObjectHistogram();
         final List<String> keys = new ArrayList<>(histogram.keySet());
         keys.sort(new Comparator<String>() {
             @Override
@@ -175,28 +152,8 @@ class MemoryTracerCLI extends ProfilerCLI {
         out.println(sep);
     }
 
-    private static Map<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>> computeSourceLocationHistogram(MemoryTracer tracer) {
-        Map<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>> histogram = new HashMap<>();
-        computeSourceLocationHistogramImpl(tracer.getRootNodes(), histogram);
-        return histogram;
-    }
-
-    private static void computeSourceLocationHistogramImpl(Collection<ProfilerNode<MemoryTracer.Payload>> children, Map<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>> histogram) {
-        for (ProfilerNode<MemoryTracer.Payload> treeNode : children) {
-            List<ProfilerNode<MemoryTracer.Payload>> nodes = histogram.computeIfAbsent(new SourceLocation(treeNode.getSourceSection(), treeNode.getRootName()),
-                            new Function<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>>() {
-                                @Override
-                                public List<ProfilerNode<MemoryTracer.Payload>> apply(SourceLocation sourceLocation) {
-                                    return new ArrayList<>();
-                                }
-                            });
-            nodes.add(treeNode);
-            computeSourceLocationHistogramImpl(treeNode.getChildren(), histogram);
-        }
-    }
-
     private static void printLocationHistogram(PrintStream out, MemoryTracer tracer) {
-        final Map<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>> histogram = computeSourceLocationHistogram(tracer);
+        final Map<SourceLocation, List<ProfilerNode<MemoryTracer.Payload>>> histogram = tracer.computeSourceLocationHistogram();
         final List<SourceLocation> keys = getSortedSourceLocations(histogram);
         int nameMax = 1;
         Iterator<List<ProfilerNode<MemoryTracer.Payload>>> iterator = histogram.values().iterator();
