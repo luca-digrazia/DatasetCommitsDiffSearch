@@ -24,14 +24,13 @@ package com.oracle.graal.jtt.jdk;
 
 import java.lang.reflect.*;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
 
 import sun.misc.*;
 
 /*
  */
-public class UnsafeAccess01 extends JTTTest {
+public class UnsafeAccess01 {
 
     @SuppressWarnings("unused")
     private int field = 42;
@@ -58,7 +57,7 @@ public class UnsafeAccess01 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTest("test");
+        Assert.assertEquals(42, test());
     }
 
 }
