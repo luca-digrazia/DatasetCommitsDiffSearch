@@ -24,21 +24,15 @@
  */
 package com.oracle.svm.jni.functions;
 
-import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.c.function.CFunctionPointer;
+import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.struct.SizeOf;
-import org.graalvm.word.Pointer;
-import org.graalvm.word.UnsignedWord;
-import org.graalvm.word.WordBase;
+import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.FrameAccess;
-import com.oracle.svm.core.hub.DynamicHub;
-import com.oracle.svm.core.hub.LayoutEncoding;
-import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.core.annotate.UnknownObjectField;
+import com.oracle.svm.core.jdk.RuntimeSupport;
+import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicPointer;
 import com.oracle.svm.jni.nativeapi.JNIInvokeInterface;
 import com.oracle.svm.jni.nativeapi.JNIJavaVM;
 import com.oracle.svm.jni.nativeapi.JNINativeInterface;
@@ -56,78 +50,54 @@ public final class JNIFunctionTables {
         return ImageSingletons.lookup(JNIFunctionTables.class);
     }
 
-    /*
-     * Space for C data structures that are passed out to C code at run time. Because these arrays
-     * are in the image heap, they are never moved by the GC at run time.
-     */
-    private final WordBase[] javaVMData;
-    private final WordBase[] invokeInterfaceDataMutable;
-    final CFunctionPointer[] invokeInterfaceDataPrototype;
-    final CFunctionPointer[] functionTableData;
-
-    @Platforms(Platform.HOSTED_ONLY.class)
     private JNIFunctionTables() {
-        javaVMData = new WordBase[wordArrayLength(SizeOf.get(JNIJavaVM.class))];
-        invokeInterfaceDataMutable = new WordBase[wordArrayLength(SizeOf.get(JNIInvokeInterface.class))];
-        invokeInterfaceDataPrototype = new CFunctionPointer[wordArrayLength(SizeOf.get(JNIInvokeInterface.class))];
-        functionTableData = new CFunctionPointer[wordArrayLength(SizeOf.get(JNINativeInterface.class))];
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
-    private static int wordArrayLength(int sizeInBytes) {
-        int wordSize = FrameAccess.wordSize();
-        VMError.guarantee(sizeInBytes % wordSize == 0);
-        return sizeInBytes / wordSize;
+    void initialize(JNIStructFunctionsInitializer<JNIInvokeInterface> invokes, JNIStructFunctionsInitializer<JNINativeInterface> functionTable) {
+        assert this.invokesInitializer == null && this.functionTableInitializer == null;
+        this.invokesInitializer = invokes;
+        this.functionTableInitializer = functionTable;
     }
+
+    @UnknownObjectField(types = JNIStructFunctionsInitializer.class) //
+    private JNIStructFunctionsInitializer<JNIInvokeInterface> invokesInitializer;
 
     private JNIJavaVM globalJavaVM;
 
     public JNIJavaVM getGlobalJavaVM() {
-        JNIJavaVM javaVM = globalJavaVM;
-        if (javaVM.isNull()) {
-            /*
-             * The function pointer table filled during image generation must be in the read-only
-             * part of the image heap, because code relocations are needed for it. To work around
-             * this limitation, we copy the read-only table filled during image generation to a
-             * writable table of the same size.
-             */
-            for (int i = 0; i < invokeInterfaceDataPrototype.length; i++) {
-                invokeInterfaceDataMutable[i] = invokeInterfaceDataPrototype[i];
-            }
-
-            javaVM = (JNIJavaVM) dataAddress(javaVMData);
-            JNIInvokeInterface invokes = (JNIInvokeInterface) dataAddress(invokeInterfaceDataMutable);
+        if (globalJavaVM.isNull()) {
+            JNIInvokeInterface invokes = UnmanagedMemory.calloc(SizeOf.get(JNIInvokeInterface.class));
+            invokesInitializer.initialize(invokes);
             invokes.setIsolate(CurrentIsolate.getIsolate());
-            javaVM.setFunctions(invokes);
-
-            globalJavaVM = javaVM;
+            globalJavaVM = UnmanagedMemory.calloc(SizeOf.get(JNIJavaVM.class));
+            globalJavaVM.setFunctions(invokes);
+            RuntimeSupport.getRuntimeSupport().addTearDownHook(() -> {
+                UnmanagedMemory.free(globalJavaVM.getFunctions());
+                UnmanagedMemory.free(globalJavaVM);
+                globalJavaVM = WordFactory.nullPointer();
+            });
         }
-        return javaVM;
+        return globalJavaVM;
     }
 
-    private JNINativeInterface globalFunctionTable;
+    @UnknownObjectField(types = JNIStructFunctionsInitializer.class) //
+    private JNIStructFunctionsInitializer<JNINativeInterface> functionTableInitializer;
+
+    private final AtomicPointer<JNINativeInterface> globalFunctionTable = new AtomicPointer<>();
 
     public JNINativeInterface getGlobalFunctionTable() {
-        JNINativeInterface functionTable = globalFunctionTable;
+        JNINativeInterface functionTable = globalFunctionTable.get();
         if (functionTable.isNull()) {
-            /*
-             * The JNI function table is filled during image generation and is ready to use, so we
-             * do not need to copy it to a modifiable part of the image heap.
-             */
-            functionTable = (JNINativeInterface) dataAddress(functionTableData);
-
-            globalFunctionTable = functionTable;
+            functionTable = UnmanagedMemory.malloc(SizeOf.get(JNINativeInterface.class));
+            functionTableInitializer.initialize(functionTable);
+            if (globalFunctionTable.compareAndSet(WordFactory.nullPointer(), functionTable)) {
+                RuntimeSupport.getRuntimeSupport().addTearDownHook(() -> UnmanagedMemory.free(globalFunctionTable.get()));
+            } else { // lost the race
+                UnmanagedMemory.free(functionTable);
+                functionTable = globalFunctionTable.get();
+            }
         }
         return functionTable;
     }
 
-    /**
-     * Returns the absolute address of the first array element of the provided array. The array must
-     * be in the image heap, i.e., never moved by the GC.
-     */
-    private static Pointer dataAddress(WordBase[] dataArray) {
-        final DynamicHub hub = DynamicHub.fromClass(dataArray.getClass());
-        final UnsignedWord offsetOfFirstArrayElement = LayoutEncoding.getArrayElementOffset(hub.getLayoutEncoding(), 0);
-        return Word.objectToUntrackedPointer(dataArray).add(offsetOfFirstArrayElement);
-    }
 }
