@@ -28,7 +28,7 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.debug.*;
 
-public final class DebugScope implements AutoCloseable {
+public final class DebugScope {
 
     private final class IndentImpl implements Indent {
 
@@ -99,8 +99,6 @@ public final class DebugScope implements AutoCloseable {
     private static ThreadLocal<Throwable> lastExceptionThrownTL = new ThreadLocal<>();
 
     private final DebugScope parent;
-    private final DebugConfig parentConfig;
-    private final boolean sandbox;
     private IndentImpl lastUsedIndent;
     private boolean logScopeName;
 
@@ -120,7 +118,7 @@ public final class DebugScope implements AutoCloseable {
     public static DebugScope getInstance() {
         DebugScope result = instanceTL.get();
         if (result == null) {
-            DebugScope topLevelDebugScope = new DebugScope(Thread.currentThread().getName(), "", null, false);
+            DebugScope topLevelDebugScope = new DebugScope(Thread.currentThread().getName(), "", null);
             instanceTL.set(topLevelDebugScope);
             DebugValueMap.registerTopLevel(topLevelDebugScope.getValueMap());
             return topLevelDebugScope;
@@ -133,10 +131,8 @@ public final class DebugScope implements AutoCloseable {
         return configTL.get();
     }
 
-    private DebugScope(String name, String qualifiedName, DebugScope parent, boolean sandbox, Object... context) {
+    private DebugScope(String name, String qualifiedName, DebugScope parent, Object... context) {
         this.parent = parent;
-        this.sandbox = sandbox;
-        this.parentConfig = getConfig();
         this.context = context;
         this.qualifiedName = qualifiedName;
         if (parent != null) {
@@ -164,12 +160,6 @@ public final class DebugScope implements AutoCloseable {
         } else {
             this.valueMap = new DebugValueMap(name);
         }
-    }
-
-    public void close() {
-        context = null;
-        instanceTL.set(parent);
-        setConfig(parentConfig);
     }
 
     public boolean isDumpEnabled() {
@@ -237,28 +227,32 @@ public final class DebugScope implements AutoCloseable {
      * @param newName the name of the new scope
      * @param runnable the task to run (must be null iff {@code callable} is not null)
      * @param callable the task to run (must be null iff {@code runnable} is not null)
-     * @param sandboxConfig if non-null, a new top level scope is entered with this configuration
+     * @param sandbox specifies if the scope is a child of the current scope or a top level scope
+     * @param sandboxConfig the config to use of a new top level scope (ignored if
+     *            {@code sandbox == false})
      * @param newContext context objects of the new scope
      * @return the value returned by the task
      */
-    public <T> T scope(String newName, Runnable runnable, Callable<T> callable, DebugConfig sandboxConfig, Object[] newContext) {
-        try (DebugScope s = openScope(newName, sandboxConfig, newContext)) {
-            return executeScope(runnable, callable);
-        }
-    }
-
-    public DebugScope openScope(String newName, DebugConfig sandboxConfig, Object... newContext) {
-        DebugScope newScope = null;
-        if (sandboxConfig != null) {
-            newScope = new DebugScope(newName, newName, this, true, newContext);
+    public <T> T scope(String newName, Runnable runnable, Callable<T> callable, boolean sandbox, DebugConfig sandboxConfig, Object[] newContext) {
+        DebugScope oldContext = getInstance();
+        DebugConfig oldConfig = getConfig();
+        DebugScope newChild = null;
+        if (sandbox) {
+            newChild = new DebugScope(newName, newName, null, newContext);
             setConfig(sandboxConfig);
         } else {
-            newScope = this.createChild(newName, newContext);
+            newChild = oldContext.createChild(newName, newContext);
         }
-        instanceTL.set(newScope);
-        newScope.setLogEnabled(this.isLogEnabled());
-        newScope.updateFlags();
-        return newScope;
+        instanceTL.set(newChild);
+        newChild.setLogEnabled(oldContext.isLogEnabled());
+        newChild.updateFlags();
+        try {
+            return executeScope(runnable, callable);
+        } finally {
+            newChild.context = null;
+            instanceTL.set(oldContext);
+            setConfig(oldConfig);
+        }
     }
 
     private <T> T executeScope(Runnable runnable, Callable<T> callable) {
@@ -321,7 +315,7 @@ public final class DebugScope implements AutoCloseable {
                         return new RuntimeException("Exception while intercepting exception", t);
                     }
                 }
-            }, null, new Object[]{e});
+            }, false, null, new Object[]{e});
         }
         return null;
     }
@@ -343,7 +337,7 @@ public final class DebugScope implements AutoCloseable {
         if (this.qualifiedName.length() > 0) {
             newQualifiedName = this.qualifiedName + SCOPE_SEP + newName;
         }
-        DebugScope result = new DebugScope(newName, newQualifiedName, this, false, newContext);
+        DebugScope result = new DebugScope(newName, newQualifiedName, this, newContext);
         return result;
     }
 
@@ -366,7 +360,7 @@ public final class DebugScope implements AutoCloseable {
 
                     private void selectScope() {
                         while (currentScope != null && currentScope.context.length <= objectIndex) {
-                            currentScope = currentScope.sandbox ? null : currentScope.parent;
+                            currentScope = currentScope.parent;
                             objectIndex = 0;
                         }
                     }
