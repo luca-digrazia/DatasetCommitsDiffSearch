@@ -22,7 +22,9 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.*;
+import org.junit.Test;
+
+import com.oracle.graal.api.directives.GraalDirectives;
 
 /**
  * Collection of tests for
@@ -37,16 +39,20 @@ public class ConditionalEliminationTest5 extends ConditionalEliminationTestBase 
     interface B extends A {
     }
 
-    @SuppressWarnings("all")
-    public static int reference1Snippet(A a, B b) {
+    static final class DistinctA {
+    }
+
+    static final class DistinctB {
+    }
+
+    public static int reference1Snippet(Object a) {
         if (a instanceof B) {
             return 1;
         }
         return 2;
     }
 
-    @SuppressWarnings("all")
-    public static int test1Snippet(A a, B b) {
+    public static int test1Snippet(Object a) {
         if (a instanceof B) {
             if (a instanceof A) {
                 return 1;
@@ -57,19 +63,17 @@ public class ConditionalEliminationTest5 extends ConditionalEliminationTestBase 
 
     @Test
     public void test1() {
-        test("test1Snippet", "reference1Snippet");
+        testConditionalElimination("test1Snippet", "reference1Snippet");
     }
 
-    @SuppressWarnings("all")
-    public static int reference2Snippet(A a, B b) {
+    public static int reference2Snippet(A a) {
         if (a instanceof B) {
             return 1;
         }
         return 2;
     }
 
-    @SuppressWarnings("all")
-    public static int test2Snippet(A a, B b) {
+    public static int test2Snippet(A a) {
         if (a instanceof B) {
             B newVal = (B) a;
             if (newVal != null) {
@@ -81,6 +85,69 @@ public class ConditionalEliminationTest5 extends ConditionalEliminationTestBase 
 
     @Test
     public void test2() {
-        test("test2Snippet", "reference2Snippet");
+        testConditionalElimination("test2Snippet", "reference2Snippet");
+    }
+
+    @SuppressWarnings("unused")
+    public static int reference3Snippet(Object a, Object b) {
+        if (a instanceof DistinctA) {
+            DistinctA proxyA = (DistinctA) a;
+            if (b instanceof DistinctB) {
+                return 1;
+            }
+        }
+        return 2;
+    }
+
+    @SuppressWarnings("all")
+    public static int test3Snippet(Object a, Object b) {
+        if (a instanceof DistinctA) {
+            DistinctA proxyA = (DistinctA) a;
+            if (b instanceof DistinctB) {
+                if (proxyA == b) {
+                    return 42;
+                }
+                return 1;
+            }
+        }
+        return 2;
+    }
+
+    @Test
+    public void test3() {
+        testConditionalElimination("test3Snippet", "reference3Snippet", true);
+    }
+
+    public static int reference4Snippet(Object a) {
+        if (!(a instanceof B)) {
+            GraalDirectives.deoptimize();
+        }
+        return 1;
+    }
+
+    public static int test4Snippet1(Object a) {
+        if (!(a instanceof B)) {
+            GraalDirectives.deoptimize();
+        }
+        if (!(a instanceof A)) {
+            GraalDirectives.deoptimize();
+        }
+        return 1;
+    }
+
+    public static int test4Snippet2(Object a) {
+        if (!(a instanceof A)) {
+            GraalDirectives.deoptimize();
+        }
+        if (!(a instanceof B)) {
+            GraalDirectives.deoptimize();
+        }
+        return 1;
+    }
+
+    @Test
+    public void test4() {
+        testConditionalElimination("test4Snippet1", "reference4Snippet");
+        testConditionalElimination("test4Snippet2", "reference4Snippet");
     }
 }
