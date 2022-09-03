@@ -215,7 +215,7 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
             copy.addAnnotationMirror(mirror);
         }
         for (VariableElement var : method.getParameters()) {
-            copy.addParameter(CodeVariableElement.clone(var));
+            copy.addParameter(var);
         }
         for (Element element : method.getEnclosedElements()) {
             copy.add(element);
@@ -225,4 +225,7 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
         return copy;
     }
 
+    public TypeMirror getReceiverType() {
+        throw new UnsupportedOperationException();
+    }
 }

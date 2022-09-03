@@ -22,6 +22,7 @@
  */
 package com.oracle.truffle.codegen.processor.ast;
 
+import java.lang.annotation.*;
 import java.util.*;
 
 import javax.lang.model.element.*;
@@ -63,17 +64,11 @@ public class CodeTypeMirror implements TypeMirror {
 
     public static class DeclaredCodeTypeMirror extends CodeTypeMirror implements DeclaredType {
 
-        private final TypeElement clazz;
-        private final List<? extends TypeMirror> typeArguments;
+        private final CodeTypeElement clazz;
 
-        public DeclaredCodeTypeMirror(TypeElement clazz) {
-            this(clazz, Collections.<TypeMirror> emptyList());
-        }
-
-        public DeclaredCodeTypeMirror(TypeElement clazz, List<? extends TypeMirror> typeArguments) {
+        public DeclaredCodeTypeMirror(CodeTypeElement clazz) {
             super(TypeKind.DECLARED);
             this.clazz = clazz;
-            this.typeArguments = typeArguments;
         }
 
         @Override
@@ -88,7 +83,7 @@ public class CodeTypeMirror implements TypeMirror {
 
         @Override
         public List<? extends TypeMirror> getTypeArguments() {
-            return typeArguments;
+            return Collections.emptyList();
         }
 
         @Override
@@ -98,4 +93,21 @@ public class CodeTypeMirror implements TypeMirror {
 
     }
 
+    public List<? extends AnnotationMirror> getAnnotationMirrors() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * @param annotationType
+     */
+    public <A extends Annotation> A getAnnotation(Class<A> annotationType) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * @param annotationType
+     */
+    public <A extends Annotation> A[] getAnnotationsByType(Class<A> annotationType) {
+        throw new UnsupportedOperationException();
+    }
 }
