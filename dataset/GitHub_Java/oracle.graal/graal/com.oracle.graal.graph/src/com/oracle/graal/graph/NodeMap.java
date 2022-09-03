@@ -72,10 +72,6 @@ public final class NodeMap<T> {
         assert !isNew(node) : "this node was added to the graph after creating the node map : " + node;
     }
 
-    public void clear() {
-        Arrays.fill(values, null);
-    }
-
     public Iterable<Entry<Node, T>> entries() {
         return new Iterable<Entry<Node, T>>() {
 
