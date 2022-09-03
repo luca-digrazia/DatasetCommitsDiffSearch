@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -30,14 +29,10 @@ import com.oracle.graal.nodes.spi.*;
  * Write a raw memory location according to Java field or array write semantics. It will perform
  * write barriers, implicit conversions and optionally oop compression.
  */
-@NodeInfo
-public class JavaWriteNode extends AbstractWriteNode implements Lowerable, StateSplit, MemoryAccess, MemoryCheckpoint.Single {
-
-    private final boolean compressible;
+public final class JavaWriteNode extends AbstractWriteNode implements Lowerable, StateSplit, MemoryAccess, MemoryCheckpoint.Single {
 
     public JavaWriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean compressible, boolean initialization) {
-        super(object, value, location, barrierType, initialization);
-        this.compressible = compressible;
+        super(object, value, location, barrierType, compressible, initialization);
     }
 
     public void lower(LoweringTool tool) {
@@ -46,9 +41,5 @@ public class JavaWriteNode extends AbstractWriteNode implements Lowerable, State
 
     public boolean canNullCheck() {
         return true;
-    }
-
-    public boolean isCompressible() {
-        return compressible;
     }
 }

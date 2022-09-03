@@ -33,7 +33,7 @@ import com.oracle.graal.nodes.virtual.*;
 /**
  * Reads an {@linkplain FixedAccessNode accessed} value.
  */
-public final class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, PiPushable, Virtualizable, GuardingNode {
+public final class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, PiPushable, Virtualizable {
 
     public ReadNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType, boolean compressible) {
         super(object, location, stamp, barrierType, compressible);
@@ -62,7 +62,7 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (object() instanceof PiNode && ((PiNode) object()).getGuard() == getGuard()) {
-            return graph().add(new ReadNode(((PiNode) object()).getOriginalNode(), location(), stamp(), getGuard(), getBarrierType(), isCompressible()));
+            return graph().add(new ReadNode(((PiNode) object()).getOriginalValue(), location(), stamp(), getGuard(), getBarrierType(), isCompressible()));
         }
         return canonicalizeRead(this, location(), object(), tool, isCompressible());
     }
@@ -70,11 +70,6 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
     @Override
     public FloatingAccessNode asFloatingNode(MemoryNode lastLocationAccess) {
         return graph().unique(new FloatingReadNode(object(), location(), lastLocationAccess, stamp(), getGuard(), getBarrierType(), isCompressible()));
-    }
-
-    @Override
-    public boolean isAllowedUsageType(InputType type) {
-        return (getNullCheck() && type == InputType.Guard) ? true : super.isAllowedUsageType(type);
     }
 
     public static ValueNode canonicalizeRead(ValueNode read, LocationNode location, ValueNode object, CanonicalizerTool tool, boolean compressible) {
