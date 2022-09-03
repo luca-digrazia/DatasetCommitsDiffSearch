@@ -35,7 +35,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public final class CodePointSet implements CharacterSet, JsonConvertible {
+public final class CodePointSet implements JsonConvertible {
 
     private List<CodePointRange> ranges;
     private boolean normalized;
@@ -182,7 +182,7 @@ public final class CodePointSet implements CharacterSet, JsonConvertible {
     /**
      * Makes this CodePointSet immutable. Any calls to {@link #addRange(CodePointRange) addRange} or
      * {@link #addSet(CodePointSet) addSet} will throw an {@link UnsupportedOperationException}.
-     *
+     * 
      * @return this, now immutable
      */
     public CodePointSet freeze() {
@@ -190,7 +190,6 @@ public final class CodePointSet implements CharacterSet, JsonConvertible {
         return this;
     }
 
-    @Override
     public boolean contains(int codePoint) {
         normalize();
         int low = 0;
