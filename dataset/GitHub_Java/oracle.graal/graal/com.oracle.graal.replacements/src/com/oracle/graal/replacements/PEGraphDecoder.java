@@ -110,13 +110,15 @@ import com.oracle.graal.phases.common.inlining.InliningUtil;
 public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
     public static class Options {
-        @Option(help = "Maximum inlining depth during partial evaluation before reporting an infinite recursion")//
-        public static final OptionValue<Integer> InliningDepthError = new OptionValue<>(1000);
+        // Default value of 275 is determined experimentally with default HotSpot stack sizes on
+        // SPARC and Intel
+        @Option(help = "Maximum inlining depth during partial evaluation before reporting an infinite recursion") public static final OptionValue<Integer> InliningDepthError = new OptionValue<>(275);
     }
 
     protected class PEMethodScope extends MethodScope {
         /** The state of the caller method. Only non-null during method inlining. */
         protected final PEMethodScope caller;
+        protected final LoopScope callerLoopScope;
         protected final ResolvedJavaMethod method;
         protected final InvokeData invokeData;
         protected final int inliningDepth;
@@ -135,9 +137,10 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         protected PEMethodScope(StructuredGraph targetGraph, PEMethodScope caller, LoopScope callerLoopScope, EncodedGraph encodedGraph, ResolvedJavaMethod method, InvokeData invokeData,
                         int inliningDepth, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins, InlineInvokePlugin[] inlineInvokePlugins, ParameterPlugin parameterPlugin,
                         ValueNode[] arguments) {
-            super(callerLoopScope, targetGraph, encodedGraph, loopExplosionKind(method, loopExplosionPlugin));
+            super(targetGraph, encodedGraph, loopExplosionKind(method, loopExplosionPlugin));
 
             this.caller = caller;
+            this.callerLoopScope = callerLoopScope;
             this.method = method;
             this.invokeData = invokeData;
             this.inliningDepth = inliningDepth;
@@ -362,7 +365,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                     ParameterPlugin parameterPlugin) {
         PEMethodScope methodScope = new PEMethodScope(targetGraph, null, null, lookupEncodedGraph(method, false), method, null, 0, loopExplosionPlugin, invocationPlugins, inlineInvokePlugins,
                         parameterPlugin, null);
-        decode(createInitialLoopScope(methodScope, null));
+        decode(methodScope, null);
         cleanupGraph(methodScope, null);
         methodScope.graph.verify();
     }
@@ -405,7 +408,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     }
 
     @Override
-    protected LoopScope handleInvoke(MethodScope s, LoopScope loopScope, InvokeData invokeData) {
+    protected void handleInvoke(MethodScope s, LoopScope loopScope, InvokeData invokeData) {
         PEMethodScope methodScope = (PEMethodScope) s;
 
         /*
@@ -414,20 +417,16 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
          */
         assert invokeData.invoke.callTarget() == null : "callTarget edge is ignored during decoding of Invoke";
         CallTargetNode callTarget = (CallTargetNode) decodeFloatingNode(methodScope, loopScope, invokeData.callTargetOrderId);
-        if (callTarget instanceof MethodCallTargetNode) {
-            LoopScope inlineLoopScope = trySimplifyInvoke(methodScope, loopScope, invokeData, (MethodCallTargetNode) callTarget);
-            if (inlineLoopScope != null) {
-                return inlineLoopScope;
-            }
-        }
+        if (!(callTarget instanceof MethodCallTargetNode) || !trySimplifyInvoke(methodScope, loopScope, invokeData, (MethodCallTargetNode) callTarget)) {
 
-        /* We know that we need an invoke, so now we can add the call target to the graph. */
-        methodScope.graph.add(callTarget);
-        registerNode(loopScope, invokeData.callTargetOrderId, callTarget, false, false);
-        return super.handleInvoke(methodScope, loopScope, invokeData);
+            /* We know that we need an invoke, so now we can add the call target to the graph. */
+            methodScope.graph.add(callTarget);
+            registerNode(loopScope, invokeData.callTargetOrderId, callTarget, false, false);
+            super.handleInvoke(methodScope, loopScope, invokeData);
+        }
     }
 
-    protected LoopScope trySimplifyInvoke(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
+    protected boolean trySimplifyInvoke(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
         // attempt to devirtualize the call
         ResolvedJavaMethod specialCallTarget = MethodCallTargetNode.findSpecialCallTarget(callTarget.invokeKind(), callTarget.receiver(), callTarget.targetMethod(), invokeData.contextType);
         if (specialCallTarget != null) {
@@ -436,23 +435,16 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         if (tryInvocationPlugin(methodScope, loopScope, invokeData, callTarget)) {
-            /*
-             * The invocation plugin handled the call, so decoding continues in the calling method.
-             */
-            return loopScope;
+            return true;
         }
-        LoopScope inlineLoopScope = tryInline(methodScope, loopScope, invokeData, callTarget);
-        if (inlineLoopScope != null) {
-            /*
-             * We can inline the call, so decoding continues in the inlined method.
-             */
-            return inlineLoopScope;
+        if (tryInline(methodScope, loopScope, invokeData, callTarget)) {
+            return true;
         }
 
         for (InlineInvokePlugin plugin : methodScope.inlineInvokePlugins) {
             plugin.notifyNotInlined(new PENonAppendGraphBuilderContext(methodScope, invokeData.invoke), callTarget.targetMethod(), invokeData.invoke);
         }
-        return null;
+        return false;
     }
 
     protected boolean tryInvocationPlugin(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
@@ -502,14 +494,14 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
     }
 
-    protected LoopScope tryInline(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
+    protected boolean tryInline(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
         if (!callTarget.invokeKind().isDirect()) {
-            return null;
+            return false;
         }
 
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
         if (!targetMethod.canBeInlined()) {
-            return null;
+            return false;
         }
 
         ValueNode[] arguments = callTarget.arguments().toArray(new ValueNode[0]);
@@ -519,20 +511,20 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             InlineInfo inlineInfo = plugin.shouldInlineInvoke(graphBuilderContext, targetMethod, arguments);
             if (inlineInfo != null) {
                 if (inlineInfo.getMethodToInline() == null) {
-                    return null;
+                    return false;
                 } else {
                     return doInline(methodScope, loopScope, invokeData, inlineInfo, arguments);
                 }
             }
         }
-        return null;
+        return false;
     }
 
-    protected LoopScope doInline(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, InlineInfo inlineInfo, ValueNode[] arguments) {
+    protected boolean doInline(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, InlineInfo inlineInfo, ValueNode[] arguments) {
         ResolvedJavaMethod inlineMethod = inlineInfo.getMethodToInline();
         EncodedGraph graphToInline = lookupEncodedGraph(inlineMethod, inlineInfo.isIntrinsic());
         if (graphToInline == null) {
-            return null;
+            return false;
         }
 
         if (methodScope.inliningDepth > Options.InliningDepthError.getValue()) {
@@ -550,24 +542,8 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
         PEMethodScope inlineScope = new PEMethodScope(methodScope.graph, methodScope, loopScope, graphToInline, inlineMethod, invokeData, methodScope.inliningDepth + 1,
                         methodScope.loopExplosionPlugin, methodScope.invocationPlugins, methodScope.inlineInvokePlugins, null, arguments);
-
-        /*
-         * After decoding all the nodes of the inlined method, we need to re-wire the return and
-         * unwind nodes. Since inlining is non-recursive, this cannot be done at the end of this
-         * method, but must be registered as a cleanup task that runs when all nodes of the inlined
-         * methods have been decoded.
-         */
-        inlineScope.cleanupTasks.add(() -> finishInlining(methodScope, loopScope, invokeData, inlineMethod, inlineScope));
-
-        /*
-         * Do the actual inlining by returning the initial loop scope for the inlined method scope.
-         */
-        return createInitialLoopScope(inlineScope, predecessor);
-    }
-
-    protected void finishInlining(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, ResolvedJavaMethod inlineMethod, PEMethodScope inlineScope) {
-        Invoke invoke = invokeData.invoke;
-        FixedNode invokeNode = invoke.asNode();
+        /* Do the actual inlining by decoding the inlineMethod */
+        decode(inlineScope, predecessor);
 
         ValueNode exceptionValue = null;
         if (inlineScope.unwindNode != null) {
@@ -635,6 +611,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL) && DumpDuringGraphBuilding.getValue()) {
             Debug.dump(Debug.INFO_LOG_LEVEL, methodScope.graph, "Inline finished: %s.%s", inlineMethod.getDeclaringClass().getUnqualifiedName(), inlineMethod.getName());
         }
+        return true;
     }
 
     private static RuntimeException tooDeepInlining(PEMethodScope methodScope) {

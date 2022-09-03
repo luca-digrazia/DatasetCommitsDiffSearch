@@ -387,7 +387,6 @@ import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.InvocationPluginReceiver;
 import com.oracle.graal.nodes.graphbuilderconf.NodePlugin;
-import com.oracle.graal.nodes.graphbuilderconf.TypePlugin;
 import com.oracle.graal.nodes.java.ArrayLengthNode;
 import com.oracle.graal.nodes.java.ExceptionObjectNode;
 import com.oracle.graal.nodes.java.InstanceOfNode;
@@ -628,7 +627,7 @@ public class BytecodeParser implements GraphBuilderContext {
     @SuppressWarnings("try")
     protected void buildRootMethod() {
         FrameStateBuilder startFrameState = new FrameStateBuilder(this, method, graph);
-        startFrameState.initializeForMethodStart(graph.getAssumptions(), graphBuilderConfig.eagerResolving() || intrinsicContext != null, graphBuilderConfig.getPlugins());
+        startFrameState.initializeForMethodStart(graph.getAssumptions(), graphBuilderConfig.eagerResolving() || intrinsicContext != null, graphBuilderConfig.getPlugins().getParameterPlugins());
 
         try (IntrinsicScope s = intrinsicContext != null ? new IntrinsicScope(this) : null) {
             build(graph.start(), startFrameState);
@@ -1165,19 +1164,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected ValueNode genLoadField(ValueNode receiver, ResolvedJavaField field) {
-        StampPair stamp = null;
-        for (TypePlugin type : graphBuilderConfig.getPlugins().getTypePlugins()) {
-            stamp = type.interceptType(this, field.getType(), false);
-            if (stamp != null) {
-                break;
-            }
-        }
-
-        if (stamp == null) {
-            return LoadFieldNode.create(this.graph.getAssumptions(), receiver, field);
-        } else {
-            return LoadFieldNode.createOverrideStamp(stamp, receiver, field);
-        }
+        return LoadFieldNode.create(this.graph.getAssumptions(), receiver, field);
     }
 
     protected ValueNode emitExplicitNullCheck(ValueNode receiver) {
@@ -1406,19 +1393,7 @@ public class BytecodeParser implements GraphBuilderContext {
         if (invokeKind.isIndirect() && profilingInfo != null && this.optimisticOpts.useTypeCheckHints()) {
             profile = profilingInfo.getTypeProfile(bci());
         }
-
-        StampPair returnStamp = null;
-        for (TypePlugin plugin : graphBuilderConfig.getPlugins().getTypePlugins()) {
-            returnStamp = plugin.interceptType(this, returnType, false);
-            if (returnStamp != null) {
-                break;
-            }
-        }
-        if (returnStamp == null) {
-            returnStamp = StampFactory.forDeclaredType(graph.getAssumptions(), returnType, false);
-        }
-
-        MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, targetMethod, args, returnStamp, profile));
+        MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, targetMethod, args, StampFactory.forDeclaredType(graph.getAssumptions(), returnType, false), profile));
 
         Invoke invoke;
         if (omitInvokeExceptionEdge(callTarget, inlineInfo)) {

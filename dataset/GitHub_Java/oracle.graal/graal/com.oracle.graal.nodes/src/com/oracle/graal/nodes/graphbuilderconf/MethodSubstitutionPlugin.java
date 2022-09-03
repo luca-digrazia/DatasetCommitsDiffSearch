@@ -22,15 +22,17 @@
  */
 package com.oracle.graal.nodes.graphbuilderconf;
 
+import static com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.resolveType;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import sun.misc.Launcher;
 
 import com.oracle.graal.nodes.ValueNode;
 
@@ -38,6 +40,12 @@ import com.oracle.graal.nodes.ValueNode;
  * An {@link InvocationPlugin} for a method where the implementation of the method is provided by a
  * {@linkplain #getSubstitute(MetaAccessProvider) substitute} method. A substitute method must be
  * static even if the substituted method is not.
+ *
+ * While performing intrinsification with method substitutions is simpler than writing an
+ * {@link InvocationPlugin} that does manual graph weaving, it has a higher compile time cost than
+ * the latter; parsing bytecodes to create nodes is slower than simply creating nodes. As such, the
+ * recommended practice is to use {@link MethodSubstitutionPlugin} only for complex
+ * intrinsifications which is typically those using non-straight-line control flow.
  */
 public final class MethodSubstitutionPlugin implements InvocationPlugin {
 
@@ -56,7 +64,7 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
     /**
      * The parameter types of the substitute method.
      */
-    private final Class<?>[] parameters;
+    private final Type[] parameters;
 
     private final boolean originalIsStatic;
 
@@ -69,7 +77,7 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
      *            static, then {@code parameters[0]} must be the {@link Class} value denoting
      *            {@link InvocationPlugin.Receiver}
      */
-    public MethodSubstitutionPlugin(Class<?> declaringClass, String name, Class<?>... parameters) {
+    public MethodSubstitutionPlugin(Class<?> declaringClass, String name, Type... parameters) {
         this.declaringClass = declaringClass;
         this.name = name;
         this.parameters = parameters;
@@ -83,13 +91,14 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
      * @param name the name of the substitute method
      * @param parameters the parameter types of the substitute method
      */
-    public MethodSubstitutionPlugin(boolean originalIsStatic, Class<?> declaringClass, String name, Class<?>... parameters) {
+    public MethodSubstitutionPlugin(boolean originalIsStatic, Class<?> declaringClass, String name, Type... parameters) {
         this.declaringClass = declaringClass;
         this.name = name;
         this.parameters = parameters;
         this.originalIsStatic = originalIsStatic;
     }
 
+    @Override
     public boolean inlineOnly() {
         // Conservatively assume MacroNodes may be used in a substitution
         return true;
@@ -130,12 +139,12 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
                 int start = 0;
                 if (!originalIsStatic) {
                     start = 1;
-                    if (!mparams[0].isAssignableFrom(parameters[0])) {
+                    if (!mparams[0].isAssignableFrom(resolveType(parameters[0], false))) {
                         return false;
                     }
                 }
                 for (int i = start; i < mparams.length; i++) {
-                    if (mparams[i] != parameters[i]) {
+                    if (mparams[i] != resolveType(parameters[i], false)) {
                         return false;
                     }
                 }
@@ -157,37 +166,13 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
         throw new JVMCIError("No method found specified by %s", this);
     }
 
-    /**
-     * Resolves a name to a class.
-     *
-     * @param className the name of the class to resolve
-     * @param optional if true, resolution failure returns null
-     * @return the resolved class or null if resolution fails and {@code optional} is true
-     */
-    public static Class<?> resolveClass(String className, boolean optional) {
-        try {
-            // Need to use launcher class path to handle classes
-            // that are not on the boot class path
-            ClassLoader cl = Launcher.getLauncher().getClassLoader();
-            return Class.forName(className, false, cl);
-        } catch (ClassNotFoundException e) {
-            if (optional) {
-                return null;
-            }
-            throw new JVMCIError("Could not resolve type " + className);
-        }
-    }
-
     @Override
     public boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode[] argsIncludingReceiver) {
         ResolvedJavaMethod subst = getSubstitute(b.getMetaAccess());
-        if (receiver != null) {
-            receiver.get();
-        }
-        b.intrinsify(targetMethod, subst, argsIncludingReceiver);
-        return true;
+        return b.intrinsify(targetMethod, subst, receiver, argsIncludingReceiver);
     }
 
+    @Override
     public StackTraceElement getApplySourceLocation(MetaAccessProvider metaAccess) {
         Class<?> c = getClass();
         for (Method m : c.getDeclaredMethods()) {
@@ -201,6 +186,6 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
     @Override
     public String toString() {
         return String.format("%s[%s.%s(%s)]", getClass().getSimpleName(), declaringClass.getName(), name,
-                        Arrays.asList(parameters).stream().map(c -> c.getSimpleName()).collect(Collectors.joining(", ")));
+                        Arrays.asList(parameters).stream().map(c -> c.getTypeName()).collect(Collectors.joining(", ")));
     }
 }
