@@ -36,8 +36,6 @@ import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock.MetadataRe
 import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
-import java.util.Arrays;
-
 public final class StructureType implements AggregateType, ValueSymbol {
 
     private String name = ValueSymbol.UNKNOWN;
@@ -59,17 +57,25 @@ public final class StructureType implements AggregateType, ValueSymbol {
     }
 
     @Override
-    public int getBits() {
-        if (isPacked) {
-            return Arrays.stream(types).mapToInt(Type::getBits).sum();
-        } else {
-            throw new UnsupportedOperationException("TargetDataLayout is necessary to compute Padding information!");
-        }
-    }
-
-    @Override
     public Type getElementType(int index) {
         return types[index];
+    }
+
+    public long getElementOffset(int index) {
+        int offset = 0;
+        for (int i = 0; i <= index; i++) {
+            if (!isPacked() && (offset % types[i].getAlignment() != 0)) {
+                offset += types[i].getAlignment() - (offset % types[i].getAlignment());
+            }
+
+            if (i == index) {
+                break;
+            }
+
+            offset += types[i].sizeof();
+        }
+
+        return offset * Byte.SIZE;
     }
 
     @Override
@@ -93,18 +99,18 @@ public final class StructureType implements AggregateType, ValueSymbol {
     }
 
     @Override
-    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+    public int getAlignmentByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
         return getLargestAlignment(targetDataLayout);
     }
 
     @Override
-    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+    public int getSizeByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
         int sumByte = 0;
         for (final Type elementType : types) {
             if (!isPacked) {
                 sumByte += getStructPaddingByteSize(sumByte, elementType, targetDataLayout);
             }
-            sumByte += elementType.getSize(targetDataLayout);
+            sumByte += elementType.getSizeByte(targetDataLayout);
         }
 
         int padding = 0;
@@ -116,16 +122,16 @@ public final class StructureType implements AggregateType, ValueSymbol {
     }
 
     @Override
-    public int getIndexOffset(int index, DataLayoutConverter.DataSpecConverter targetDataLayout) {
+    public int getIndexOffsetByte(int index, DataLayoutConverter.DataSpecConverter targetDataLayout) {
         int offset = 0;
         for (int i = 0; i < index; i++) {
             final Type elementType = types[i];
-            offset += elementType.getSize(targetDataLayout);
+            offset += elementType.getSizeByte(targetDataLayout);
             if (!isPacked) {
                 offset += getPadding(offset, elementType, targetDataLayout);
             }
         }
-        if (!isPacked && getSize(targetDataLayout) > offset) {
+        if (!isPacked && getSizeByte(targetDataLayout) > offset) {
             offset += getPadding(offset, types[index], targetDataLayout);
         }
         return offset;
@@ -134,13 +140,13 @@ public final class StructureType implements AggregateType, ValueSymbol {
     private int getLargestAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
         int largestAlignment = 0;
         for (final Type elementType : types) {
-            largestAlignment = Math.max(largestAlignment, elementType.getAlignment(targetDataLayout));
+            largestAlignment = Math.max(largestAlignment, elementType.getAlignmentByte(targetDataLayout));
         }
         return largestAlignment;
     }
 
     private static int getStructPaddingByteSize(int currentOffset, Type elemType, DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        final int alignment = elemType.getAlignment(targetDataLayout);
+        final int alignment = elemType.getAlignmentByte(targetDataLayout);
         if (alignment == 0) {
             return 0;
         } else {
@@ -160,6 +166,24 @@ public final class StructureType implements AggregateType, ValueSymbol {
     @Override
     public void setName(String name) {
         this.name = name;
+    }
+
+    @Override
+    public int sizeof() {
+        int size = 0;
+        for (Type type : types) {
+            size += type.sizeof() + calculatePadding(type.getAlignment(), size);
+        }
+        return size;
+    }
+
+    @Override
+    public int sizeof(int alignment) {
+        int size = 0;
+        for (Type type : types) {
+            size = size + type.sizeof(alignment) + calculatePadding(Math.min(alignment, type.getAlignment()), size);
+        }
+        return size;
     }
 
     private String toDeclarationString() {
@@ -200,6 +224,14 @@ public final class StructureType implements AggregateType, ValueSymbol {
         }
     }
 
+    private int calculatePadding(int alignment, int address) {
+        if (isPacked || alignment == 1) {
+            return 0;
+        }
+        int mask = alignment - 1;
+        return (alignment - (address & mask)) & mask;
+    }
+
     @Override
     public void setMetadataReference(MetadataReference metadata) {
         this.metadata = metadata;
@@ -218,7 +250,7 @@ public final class StructureType implements AggregateType, ValueSymbol {
     }
 
     private static int getPadding(int offset, Type type, DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        final int alignment = type.getAlignment(targetDataLayout);
+        final int alignment = type.getAlignmentByte(targetDataLayout);
         return alignment == 0 ? 0 : getPadding(offset, alignment);
     }
 }

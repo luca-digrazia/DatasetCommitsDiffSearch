@@ -78,8 +78,8 @@ public final class PointerType implements Type {
     }
 
     @Override
-    public int getBits() {
-        return Long.BYTES * Byte.SIZE;
+    public int sizeof() {
+        return Long.BYTES;
     }
 
     @Override
@@ -88,7 +88,7 @@ public final class PointerType implements Type {
     }
 
     @Override
-    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+    public int getAlignmentByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
         if (targetDataLayout != null) {
             return targetDataLayout.getBitAlignment(getLLVMBaseType()) / Byte.SIZE;
         } else {
@@ -97,7 +97,7 @@ public final class PointerType implements Type {
     }
 
     @Override
-    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+    public int getSizeByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
         if (type instanceof FunctionType) {
             return LLVMHeap.FUNCTION_PTR_SIZE_BYTE;
         } else {
@@ -106,8 +106,8 @@ public final class PointerType implements Type {
     }
 
     @Override
-    public int getIndexOffset(int index, DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        return type.getSize(targetDataLayout) * index;
+    public int getIndexOffsetByte(int index, DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return type.getSizeByte(targetDataLayout) * index;
     }
 
     @Override

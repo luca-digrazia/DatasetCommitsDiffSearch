@@ -95,6 +95,7 @@ import com.oracle.truffle.llvm.parser.base.model.visitors.ModelVisitor;
 import com.oracle.truffle.llvm.parser.base.model.symbols.Symbol;
 import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.ArrayConstant;
 import com.oracle.truffle.llvm.parser.bc.impl.parser.listeners.ModuleVersion;
+import com.oracle.truffle.llvm.parser.base.model.target.TargetDataLayout;
 import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
 import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
 import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
@@ -114,11 +115,9 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         LLVMLabelList labels = LLVMLabelList.generate(model);
 
-        final String layout = ((ModelModule) model.createModule()).getTargetDataLayout().getDataLayout();
-        final DataLayoutConverter.DataSpecConverter targetDataLayout = layout != null ? DataLayoutConverter.getConverter(layout) : null;
-        LLVMMetadata.generate(model, targetDataLayout);
+        LLVMMetadata.generate(model);
 
-        LLVMBitcodeVisitor module = new LLVMBitcodeVisitor(source, context, lifetimes, labels, phis, targetDataLayout);
+        LLVMBitcodeVisitor module = new LLVMBitcodeVisitor(source, context, lifetimes, labels, phis, ((ModelModule) model.createModule()).getTargetDataLayout());
 
         model.accept(module);
 
@@ -172,13 +171,17 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
     private final Source source;
 
     public LLVMBitcodeVisitor(Source source, LLVMContext context, LLVMFrameDescriptors frames, LLVMLabelList labels, LLVMPhiManager phis,
-                    DataLayoutConverter.DataSpecConverter layout) {
+                    TargetDataLayout layout) {
         this.source = source;
         this.context = context;
         this.frames = frames;
         this.labels = labels;
         this.phis = phis;
-        this.targetDataLayout = layout;
+        if (layout != null) {
+            this.targetDataLayout = DataLayoutConverter.getConverter(layout.getDataLayout());
+        } else {
+            this.targetDataLayout = null;
+        }
         this.typeHelper = new LLVMBitcodeTypeHelper(targetDataLayout);
     }
 
@@ -236,7 +239,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         if (constant != null) {
             final Type type = ((PointerType) global.getType()).getPointeeType();
             final LLVMBaseType baseType = type.getLLVMBaseType();
-            final int size = type.getSize(targetDataLayout);
+            final int size = type.getSizeByte(targetDataLayout);
 
             final LLVMAddressNode globalVarAddress = (LLVMAddressNode) getGlobalVariable(global);
 
@@ -246,7 +249,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
                     store = LLVMMemI32CopyFactory.create(globalVarAddress, (LLVMAddressNode) constant, new LLVMI32LiteralNode(size), new LLVMI32LiteralNode(0), new LLVMI1LiteralNode(false));
                 } else {
                     final Type t = global.getValue().getType();
-                    store = LLVMMemoryReadWriteFactory.createStore(globalVarAddress, constant, t.getLLVMBaseType(), t.getSize(targetDataLayout));
+                    store = LLVMMemoryReadWriteFactory.createStore(globalVarAddress, constant, t.getLLVMBaseType(), t.getSizeByte(targetDataLayout));
                 }
                 return store;
             }
@@ -323,10 +326,10 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         final int elemCount = arrayConstant.getElementCount();
 
         final StructureType elementType = (StructureType) arrayConstant.getType().getElementType();
-        final int structSize = elementType.getSize(targetDataLayout);
+        final int structSize = elementType.getSizeByte(targetDataLayout);
 
         final FunctionType functionType = (FunctionType) ((PointerType) elementType.getElementType(1)).getPointeeType();
-        final int indexedTypeLength = functionType.getAlignment(targetDataLayout);
+        final int indexedTypeLength = functionType.getAlignmentByte(targetDataLayout);
 
         final LLVMNode[] structors = new LLVMNode[elemCount];
         for (int i = 0; i < elemCount; i++) {
@@ -367,7 +370,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         // this case we assume memory has already been allocated elsewhere
         final boolean allocateMemory = !descriptor.isDeclared() && global.getValue() != null;
         if (allocateMemory) {
-            final int byteSize = ((PointerType) global.getType()).getPointeeType().getSize(targetDataLayout);
+            final int byteSize = ((PointerType) global.getType()).getPointeeType().getSizeByte(targetDataLayout);
             final LLVMAddress nativeStorage = LLVMHeap.allocateMemory(byteSize);
             final LLVMAddressNode addressLiteralNode = new LLVMAddressLiteralNode(nativeStorage);
             deallocations.add(LLVMFreeFactory.create(addressLiteralNode));

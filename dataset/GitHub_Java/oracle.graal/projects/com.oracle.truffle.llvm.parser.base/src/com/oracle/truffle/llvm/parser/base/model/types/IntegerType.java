@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.parser.base.model.types;
 
-import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
@@ -69,23 +68,6 @@ public final class IntegerType implements Type {
             return Integer.BYTES;
         }
         return Long.BYTES;
-    }
-
-    @Override
-    public FrameSlotKind getFrameSlotKind() {
-        switch (bits) {
-            case BOOLEAN_BITS:
-                return FrameSlotKind.Boolean;
-            case BYTE_BITS:
-                return FrameSlotKind.Byte;
-            case SHORT_BITS:
-            case INTEGER_BITS:
-                return FrameSlotKind.Int;
-            case LONG_BITS:
-                return FrameSlotKind.Long;
-            default:
-                return FrameSlotKind.Object;
-        }
     }
 
     @Override
