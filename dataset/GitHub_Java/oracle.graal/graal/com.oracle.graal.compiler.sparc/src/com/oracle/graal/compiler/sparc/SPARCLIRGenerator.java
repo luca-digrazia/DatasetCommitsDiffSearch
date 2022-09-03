@@ -44,7 +44,6 @@ import com.oracle.graal.lir.sparc.SPARCArithmetic.BinaryRegConst;
 import com.oracle.graal.lir.sparc.SPARCArithmetic.BinaryRegReg;
 import com.oracle.graal.lir.sparc.SPARCArithmetic.MulHighOp;
 import com.oracle.graal.lir.sparc.SPARCArithmetic.RemOp;
-import com.oracle.graal.lir.sparc.SPARCArithmetic.SPARCLMulccOp;
 import com.oracle.graal.lir.sparc.SPARCArithmetic.Unary2Op;
 import com.oracle.graal.lir.sparc.SPARCCompare.CompareOp;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.BranchOp;
@@ -319,7 +318,8 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         }
         Variable result = newVariable(trueValue.getLIRKind());
         ConditionFlag finalCondition = ConditionFlag.fromCondtition(conditionFlags, mirrored ? cond.mirror() : cond, unorderedIsTrue);
-        append(new CondMoveOp(result, conditionFlags, finalCondition, actualTrueValue, actualFalseValue));
+        Kind kind = result.getKind().getStackKind();
+        append(new CondMoveOp(kind, result, conditionFlags, finalCondition, actualTrueValue, actualFalseValue));
         return result;
     }
 
@@ -395,7 +395,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 throw GraalInternalError.shouldNotReachHere();
         }
         ConditionFlag flag = ConditionFlag.fromCondtition(conditionCode, Condition.EQ, false);
-        append(new CondMoveOp(result, conditionCode, flag, loadSimm11(trueValue), loadSimm11(falseValue)));
+        append(new CondMoveOp(kind, result, conditionCode, flag, loadSimm11(trueValue), loadSimm11(falseValue)));
         return result;
     }
 
@@ -463,6 +463,34 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     public Value emitMathSqrt(Value input) {
         Variable result = newVariable(LIRKind.derive(input));
         append(new SPARCMathIntrinsicOp(SQRT, result, asAllocatable(input)));
+        return result;
+    }
+
+    @Override
+    public Value emitMathLog(Value input, boolean base10) {
+        Variable result = newVariable(LIRKind.derive(input));
+        append(new SPARCMathIntrinsicOp(LOG, result, asAllocatable(input)));
+        return result;
+    }
+
+    @Override
+    public Value emitMathCos(Value input) {
+        Variable result = newVariable(LIRKind.derive(input));
+        append(new SPARCMathIntrinsicOp(COS, result, asAllocatable(input)));
+        return result;
+    }
+
+    @Override
+    public Value emitMathSin(Value input) {
+        Variable result = newVariable(LIRKind.derive(input));
+        append(new SPARCMathIntrinsicOp(SIN, result, asAllocatable(input)));
+        return result;
+    }
+
+    @Override
+    public Value emitMathTan(Value input) {
+        Variable result = newVariable(LIRKind.derive(input));
+        append(new SPARCMathIntrinsicOp(TAN, result, asAllocatable(input)));
         return result;
     }
 
