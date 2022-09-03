@@ -58,19 +58,34 @@ import com.oracle.truffle.api.source.SourceSection;
 @Instrumentable(factory = SLStatementNodeWrapper.class)
 public abstract class SLStatementNode extends Node {
 
-    private SourceSection sourceSection;
+    private static final int STATEMENT_BIT = 0;
+    private static final int ROOT_BIT = 1;
 
-    private boolean hasStatementTag;
-    private boolean hasRootTag;
+    private final SourceSection section;
+    /*
+     * Bitmask 0bSR, S = node is tagged as statement, R = node is tagged as root
+     */
+    private byte tags;
+
+    public SLStatementNode(SourceSection src) {
+        section = src;
+    }
 
     @Override
     public final SourceSection getSourceSection() {
-        return sourceSection;
+        return section;
     }
 
-    public void setSourceSection(SourceSection section) {
-        assert this.sourceSection == null : "overwriting existing SourceSection";
-        this.sourceSection = section;
+    protected SLStatementNode(SLStatementNode delegate) {
+        this(delegate.getSourceSection());
+        tags = delegate.tags;
+    }
+
+    @Override
+    public Node copy() {
+        SLStatementNode statementNode = (SLStatementNode) super.copy();
+        statementNode.tags = tags;
+        return statementNode;
     }
 
     /**
@@ -78,26 +93,36 @@ public abstract class SLStatementNode extends Node {
      */
     public abstract void executeVoid(VirtualFrame frame);
 
-    /**
-     * Marks this node as being a {@link StandardTags.StatementTag} for instrumentation purposes.
-     */
-    public final void addStatementTag() {
-        hasStatementTag = true;
+    public SLStatementNode getNonWrapperNode() {
+        return this;
     }
 
-    /**
-     * Marks this node as being a {@link StandardTags.RootTag} for instrumentation purposes.
-     */
-    public final void addRootTag() {
-        hasRootTag = true;
+    public void setStatementTagged(boolean isStatementTagged) {
+        setTagBit(STATEMENT_BIT, isStatementTagged);
+    }
+
+    public void setRootTagged(boolean isRootTagged) {
+        setTagBit(ROOT_BIT, isRootTagged);
+    }
+
+    private void setTagBit(int pos, boolean value) {
+        if (value) {
+            tags = (byte) (tags | (1 << pos));
+        } else {
+            tags = (byte) (tags & ~(1 << pos));
+        }
+    }
+
+    private boolean isTagBit(int pos) {
+        return (tags & 1 << pos) != 0;
     }
 
     @Override
     protected boolean isTaggedWith(Class<?> tag) {
         if (tag == StandardTags.StatementTag.class) {
-            return hasStatementTag;
+            return isTagBit(STATEMENT_BIT);
         } else if (tag == StandardTags.RootTag.class) {
-            return hasRootTag;
+            return isTagBit(ROOT_BIT);
         }
         return false;
     }
