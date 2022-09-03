@@ -85,9 +85,6 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
         if ((config.x86CPUFeatures & config.cpu3DNOWPREFETCH) != 0) {
             features.add(AMD64.CPUFeature.AMD_3DNOW_PREFETCH);
         }
-        if ((config.x86CPUFeatures & config.cpuBMI1) != 0) {
-            features.add(AMD64.CPUFeature.BMI1);
-        }
         return features;
     }
 
@@ -105,7 +102,6 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
 
         HotSpotProviders providers;
         HotSpotRegistersProvider registers;
-        RegisterConfig regConfig;
         HotSpotCodeCacheProvider codeCache;
         HotSpotConstantReflectionProvider constantReflection;
         HotSpotHostForeignCallsProvider foreignCalls;
@@ -116,6 +112,7 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
         Replacements replacements;
         HotSpotDisassemblerProvider disassembler;
         HotSpotSuitesProvider suites;
+        HotSpotMethodHandleAccessProvider methodHandleAccess;
         try (InitTimer t = timer("create providers")) {
             try (InitTimer rt = timer("create HotSpotRegisters provider")) {
                 registers = createRegisters();
@@ -123,11 +120,8 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
             try (InitTimer rt = timer("create MetaAccess provider")) {
                 metaAccess = createMetaAccess(runtime);
             }
-            try (InitTimer rt = timer("create RegisterConfig")) {
-                regConfig = createRegisterConfig(runtime, target);
-            }
             try (InitTimer rt = timer("create CodeCache provider")) {
-                codeCache = createCodeCache(runtime, target, regConfig);
+                codeCache = createCodeCache(runtime, target);
             }
             try (InitTimer rt = timer("create ConstantReflection provider")) {
                 constantReflection = createConstantReflection(runtime);
@@ -157,7 +151,10 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
             try (InitTimer rt = timer("create Suites provider")) {
                 suites = createSuites(runtime);
             }
-            providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, snippetReflection);
+            try (InitTimer rt = timer("create MethodHandleAccess provider")) {
+                methodHandleAccess = new HotSpotMethodHandleAccessProvider();
+            }
+            providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, snippetReflection, methodHandleAccess);
         }
         try (InitTimer rt = timer("instantiate backend")) {
             return createBackend(runtime, providers);
@@ -189,12 +186,8 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
         return new HotSpotConstantReflectionProvider(runtime);
     }
 
-    protected RegisterConfig createRegisterConfig(HotSpotGraalRuntime runtime, TargetDescription target) {
-        return new AMD64HotSpotRegisterConfig(target.arch, runtime.getConfig());
-    }
-
-    protected HotSpotCodeCacheProvider createCodeCache(HotSpotGraalRuntime runtime, TargetDescription target, RegisterConfig regConfig) {
-        return new HotSpotCodeCacheProvider(runtime, target, regConfig);
+    protected AMD64HotSpotCodeCacheProvider createCodeCache(HotSpotGraalRuntime runtime, TargetDescription target) {
+        return new AMD64HotSpotCodeCacheProvider(runtime, target);
     }
 
     protected HotSpotMetaAccessProvider createMetaAccess(HotSpotGraalRuntime runtime) {
@@ -240,15 +233,15 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
         } else {
             /*
              * System V Application Binary Interface, AMD64 Architecture Processor Supplement
-             * 
+             *
              * Draft Version 0.96
-             * 
+             *
              * http://www.uclibc.org/docs/psABI-x86_64.pdf
-             * 
+             *
              * 3.2.1
-             * 
+             *
              * ...
-             * 
+             *
              * This subsection discusses usage of each register. Registers %rbp, %rbx and %r12
              * through %r15 "belong" to the calling function and the called function is required to
              * preserve their values. In other words, a called function must preserve these

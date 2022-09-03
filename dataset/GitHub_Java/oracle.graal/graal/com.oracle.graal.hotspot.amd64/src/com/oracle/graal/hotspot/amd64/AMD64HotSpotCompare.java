@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,9 +26,9 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.hotspot.data.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
@@ -41,9 +41,9 @@ public class AMD64HotSpotCompare {
     public static class HotSpotCompareConstantOp extends AMD64LIRInstruction {
 
         @Use({REG}) protected AllocatableValue x;
-        protected JavaConstant y;
+        protected Constant y;
 
-        public HotSpotCompareConstantOp(AllocatableValue x, JavaConstant y) {
+        public HotSpotCompareConstantOp(AllocatableValue x, Constant y) {
             this.x = x;
             this.y = y;
         }
@@ -55,23 +55,23 @@ public class AMD64HotSpotCompare {
                 // compressed null
                 masm.testl(asRegister(x), asRegister(x));
             } else if (y instanceof HotSpotObjectConstant) {
-                if (HotSpotObjectConstantImpl.isCompressed(y)) {
+                if (HotSpotObjectConstant.isCompressed(y)) {
                     // compressed oop
-                    crb.recordInlineDataInCode(y);
+                    crb.recordInlineDataInCode(new OopData(0, HotSpotObjectConstant.asObject(y), true));
                     masm.cmpl(asRegister(x), 0xDEADDEAD);
                 } else {
                     // uncompressed oop
-                    AMD64Address patch = (AMD64Address) crb.recordDataReferenceInCode(y, 8);
+                    AMD64Address patch = (AMD64Address) crb.recordDataReferenceInCode(new OopData(8, HotSpotObjectConstant.asObject(y), false));
                     masm.cmpq(asRegister(x), patch);
                 }
             } else if (y instanceof HotSpotMetaspaceConstant) {
                 if (y.getKind() == Kind.Int) {
                     // compressed metaspace pointer
-                    crb.recordInlineDataInCode(y);
+                    crb.recordInlineDataInCode(new MetaspaceData(0, y.asInt(), HotSpotMetaspaceConstant.getMetaspaceObject(y), true));
                     masm.cmpl(asRegister(x), y.asInt());
                 } else {
                     // uncompressed metaspace pointer
-                    AMD64Address patch = (AMD64Address) crb.recordDataReferenceInCode(y, 8);
+                    AMD64Address patch = (AMD64Address) crb.recordDataReferenceInCode(new MetaspaceData(8, y.asLong(), HotSpotObjectConstant.asObject(y), false));
                     masm.cmpq(asRegister(x), patch);
                 }
             } else {
@@ -83,9 +83,9 @@ public class AMD64HotSpotCompare {
     @Opcode("CMP")
     public static class HotSpotCompareMemoryConstantOp extends MemOp {
 
-        protected JavaConstant y;
+        protected Constant y;
 
-        public HotSpotCompareMemoryConstantOp(Kind kind, AMD64AddressValue x, JavaConstant y, LIRFrameState state) {
+        public HotSpotCompareMemoryConstantOp(Kind kind, AMD64AddressValue x, Constant y, LIRFrameState state) {
             super(kind, x, state);
             this.y = y;
         }
@@ -96,9 +96,9 @@ public class AMD64HotSpotCompare {
                 // compressed null
                 masm.cmpl(address.toAddress(), 0);
             } else if (y instanceof HotSpotObjectConstant) {
-                if (HotSpotObjectConstantImpl.isCompressed(y) && crb.target.inlineObjects) {
+                if (HotSpotObjectConstant.isCompressed(y) && crb.target.inlineObjects) {
                     // compressed oop
-                    crb.recordInlineDataInCode(y);
+                    crb.recordInlineDataInCode(new OopData(0, HotSpotObjectConstant.asObject(y), true));
                     masm.cmpl(address.toAddress(), 0xDEADDEAD);
                 } else {
                     // uncompressed oop
@@ -107,13 +107,10 @@ public class AMD64HotSpotCompare {
             } else if (y instanceof HotSpotMetaspaceConstant) {
                 if (y.getKind() == Kind.Int) {
                     // compressed metaspace pointer
-                    crb.recordInlineDataInCode(y);
+                    crb.recordInlineDataInCode(new MetaspaceData(0, y.asInt(), HotSpotMetaspaceConstant.getMetaspaceObject(y), true));
                     masm.cmpl(address.toAddress(), y.asInt());
-                } else if (y.getKind() == Kind.Long && NumUtil.is32bit(y.asLong())) {
-                    // uncompressed metaspace pointer
-                    crb.recordInlineDataInCode(y);
-                    masm.cmpq(address.toAddress(), (int) y.asLong());
                 } else {
+                    // uncompressed metaspace pointer
                     throw GraalInternalError.shouldNotReachHere();
                 }
             } else {

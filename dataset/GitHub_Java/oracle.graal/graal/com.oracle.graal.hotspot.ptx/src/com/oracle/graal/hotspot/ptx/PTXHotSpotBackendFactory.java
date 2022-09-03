@@ -39,7 +39,7 @@ public class PTXHotSpotBackendFactory implements HotSpotBackendFactory {
 
     public HotSpotBackend createBackend(HotSpotGraalRuntime runtime, HotSpotBackend hostBackend) {
         HotSpotProviders host = hostBackend.getProviders();
-        MetaAccessProvider metaAccess;
+        HotSpotMetaAccessProvider metaAccess;
         PTXHotSpotCodeCacheProvider codeCache;
         ConstantReflectionProvider constantReflection;
         HotSpotForeignCallsProvider foreignCalls;
@@ -77,7 +77,8 @@ public class PTXHotSpotBackendFactory implements HotSpotBackendFactory {
             try (InitTimer rt = timer("create HotSpotRegisters provider")) {
                 registers = new HotSpotRegisters(PTX.tid, Register.None, Register.None);
             }
-            providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, host.getSnippetReflection());
+            providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, host.getSnippetReflection(),
+                            host.getMethodHandleAccess());
         }
         try (InitTimer rt = timer("instantiate backend")) {
             return new PTXHotSpotBackend(runtime, providers);

@@ -26,8 +26,8 @@ import java.nio.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.nodes.type.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.hotspot.*;
 
 /**
  * A data item that represents an oop value.
@@ -39,6 +39,7 @@ public class OopData extends PatchedData {
 
     public OopData(int alignment, Object object, boolean compressed) {
         super(alignment);
+        assert !compressed || HotSpotGraalRuntime.runtime().getConfig().useCompressedOops;
         this.object = object;
         this.compressed = compressed;
     }
@@ -46,7 +47,7 @@ public class OopData extends PatchedData {
     @Override
     public int getSize(TargetDescription target) {
         if (compressed) {
-            return target.getSizeInBytes(NarrowOopStamp.NarrowOop);
+            return target.getSizeInBytes(Kind.Int);
         } else {
             return target.getSizeInBytes(Kind.Object);
         }

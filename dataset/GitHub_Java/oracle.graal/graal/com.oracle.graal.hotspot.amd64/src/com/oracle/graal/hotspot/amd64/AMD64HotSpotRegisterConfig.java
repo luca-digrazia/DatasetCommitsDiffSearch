@@ -26,7 +26,6 @@ import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import java.util.*;
-import java.util.concurrent.*;
 
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
@@ -52,7 +51,7 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
 
     private final boolean allAllocatableAreCallerSaved;
 
-    private final Map<PlatformKind, Register[]> categorized = new ConcurrentHashMap<>();
+    private final HashMap<PlatformKind, Register[]> categorized = new HashMap<>();
 
     private final RegisterAttributes[] attributesMap;
 
@@ -77,7 +76,7 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
             }
         }
 
-        Register[] ret = list.toArray(new Register[list.size()]);
+        Register[] ret = list.toArray(new Register[0]);
         categorized.put(kind, ret);
         return ret;
     }

@@ -26,17 +26,17 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.hsail.replacements.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hsail.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.graal.hotspot.hsail.replacements.*;
 
 @ServiceProvider(HotSpotBackendFactory.class)
 public class HSAILHotSpotBackendFactory implements HotSpotBackendFactory {
 
-    protected HotSpotLoweringProvider createLowerer(HotSpotGraalRuntime runtime, MetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
+    protected HotSpotLoweringProvider createLowerer(HotSpotGraalRuntime runtime, HotSpotMetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
                     TargetDescription target) {
         return new HSAILHotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers, target);
     }
@@ -46,7 +46,7 @@ public class HSAILHotSpotBackendFactory implements HotSpotBackendFactory {
         HotSpotProviders host = hostBackend.getProviders();
 
         HotSpotRegisters registers = new HotSpotRegisters(HSAIL.threadRegister, Register.None, Register.None);
-        MetaAccessProvider metaAccess = host.getMetaAccess();
+        HotSpotMetaAccessProvider metaAccess = host.getMetaAccess();
         TargetDescription target = createTarget();
         HSAILHotSpotCodeCacheProvider codeCache = new HSAILHotSpotCodeCacheProvider(runtime, target);
         ConstantReflectionProvider constantReflection = host.getConstantReflection();
@@ -59,7 +59,8 @@ public class HSAILHotSpotBackendFactory implements HotSpotBackendFactory {
         Replacements replacements = new HSAILHotSpotReplacementsImpl(p, host.getSnippetReflection(), assumptions, codeCache.getTarget(), host.getReplacements());
         HotSpotDisassemblerProvider disassembler = host.getDisassembler();
         SuitesProvider suites = new HotSpotSuitesProvider(runtime);
-        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, host.getSnippetReflection());
+        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, host.getSnippetReflection(),
+                        host.getMethodHandleAccess());
 
         // pass registers info down to ReplacementsUtil (maybe a better way to do this?)
         HSAILHotSpotReplacementsUtil.initialize(providers.getRegisters());
