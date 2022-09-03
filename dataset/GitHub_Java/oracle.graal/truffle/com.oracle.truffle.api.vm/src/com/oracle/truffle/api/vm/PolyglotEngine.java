@@ -129,7 +129,7 @@ public class PolyglotEngine {
     private final List<Object[]> config;
     private final Object[] debugger = {null};
     private final ContextStore context;
-    private boolean disposed;
+    private volatile boolean disposed;
 
     static final boolean JDK8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
 
@@ -950,7 +950,7 @@ public class PolyglotEngine {
 
         private final InstrumentCache info;
 
-        private boolean enabled;
+        private volatile boolean enabled;
 
         Instrument(InstrumentCache cache) {
             this.info = cache;
@@ -1013,20 +1013,26 @@ public class PolyglotEngine {
          * @since 0.9
          */
         public void setEnabled(final boolean enabled) {
-            assert checkThread();
+            if (disposed) {
+                throw new IllegalStateException("Engine has already been disposed");
+            }
             if (this.enabled != enabled) {
-                ComputeInExecutor<Void> compute = new ComputeInExecutor<Void>(executor) {
-                    @Override
-                    protected Void compute() throws IOException {
-                        setEnabledImpl(enabled, true);
-                        return null;
-                    }
+                if (executor == null) {
+                    setEnabledImpl(enabled, true);
+                } else {
+                    ComputeInExecutor<Void> compute = new ComputeInExecutor<Void>(executor) {
+                        @Override
+                        protected Void compute() throws IOException {
+                            setEnabledImpl(enabled, true);
+                            return null;
+                        }
 
-                };
-                try {
-                    compute.perform();
-                } catch (IOException ex) {
-                    throw new IllegalStateException(ex);
+                    };
+                    try {
+                        compute.perform();
+                    } catch (IOException ex) {
+                        throw new IllegalStateException(ex);
+                    }
                 }
             }
         }
@@ -1321,13 +1327,6 @@ public class PolyglotEngine {
             @Override
             public <C> FindContextNode<C> createFindContextNode(TruffleLanguage<C> lang) {
                 return new FindContextNodeImpl<>(lang);
-            }
-
-            @Override
-            public void registerDebugger(Object vm, Object debugger) {
-                PolyglotEngine engine = (PolyglotEngine) vm;
-                assert engine.debugger()[0] == null || engine.debugger()[0] == debugger;
-                engine.debugger()[0] = debugger;
             }
         }
 
