@@ -284,7 +284,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
         }
         // Emit code for the LIR
         try {
-            crb.emit(lirGen.lir);
+            lirGen.lir.emitCode(crb);
         } catch (GraalInternalError e) {
             e.printStackTrace();
             // TODO : Better error handling needs to be done once

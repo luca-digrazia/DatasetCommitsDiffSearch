@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.lir.ptx;
 
+import static com.oracle.graal.asm.ptx.PTXAssembler.*;
+import static com.oracle.graal.asm.ptx.PTXMacroAssembler.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
 import static com.oracle.graal.nodes.calc.Condition.*;
@@ -30,12 +32,9 @@ import com.oracle.graal.api.code.CompilationResult.JumpTable;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.ptx.*;
-import com.oracle.graal.asm.ptx.PTXAssembler.Global;
-import com.oracle.graal.asm.ptx.PTXAssembler.Setp;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Mov;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.BlockEndOp;
+import com.oracle.graal.lir.StandardOp.FallThroughOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.calc.*;
 
@@ -70,29 +69,30 @@ public class PTXControlFlow {
 
     public static class BranchOp extends PTXLIRInstruction implements StandardOp.BranchOp {
 
-        protected final Condition condition;
-        protected final LabelRef trueDestination;
-        protected final LabelRef falseDestination;
+        protected Condition condition;
+        protected LabelRef destination;
         protected int predRegNum;
 
-        public BranchOp(Condition condition, LabelRef trueDestination, LabelRef falseDestination, int predReg) {
+        public BranchOp(Condition condition, LabelRef destination, int predReg) {
             this.condition = condition;
-            this.trueDestination = trueDestination;
-            this.falseDestination = falseDestination;
+            this.destination = destination;
             this.predRegNum = predReg;
         }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            int sourceIndex = crb.getCurrentBlockIndex();
-            if (trueDestination.isCodeEmittingOrderSuccessorEdge(sourceIndex)) {
-                masm.bra(masm.nameOf(falseDestination.label()), predRegNum);
-            } else {
-                masm.bra(masm.nameOf(trueDestination.label()));
-                if (!falseDestination.isCodeEmittingOrderSuccessorEdge(sourceIndex)) {
-                    masm.jmp(falseDestination.label());
-                }
-            }
+            masm.bra(masm.nameOf(destination.label()), predRegNum);
+        }
+
+        @Override
+        public LabelRef destination() {
+            return destination;
+        }
+
+        @Override
+        public void negate(LabelRef newDestination) {
+            destination = newDestination;
+            condition = condition.negate();
         }
     }
 
@@ -193,7 +193,7 @@ public class PTXControlFlow {
         }
     }
 
-    public static class SequentialSwitchOp extends PTXLIRInstruction implements BlockEndOp {
+    public static class SequentialSwitchOp extends PTXLIRInstruction implements FallThroughOp {
 
         @Use({CONST}) protected Constant[] keyConstants;
         private final LabelRef[] keyTargets;
@@ -235,16 +235,24 @@ public class PTXControlFlow {
                 throw new GraalInternalError("sequential switch only supported for int, long and object");
             }
             if (defaultTarget != null) {
-                if (!defaultTarget.isCodeEmittingOrderSuccessorEdge(crb.getCurrentBlockIndex())) {
-                    masm.jmp(defaultTarget.label());
-                }
+                masm.jmp(defaultTarget.label());
             } else {
                 // masm.hlt();
             }
         }
+
+        @Override
+        public LabelRef fallThroughTarget() {
+            return defaultTarget;
+        }
+
+        @Override
+        public void setFallThroughTarget(LabelRef target) {
+            defaultTarget = target;
+        }
     }
 
-    public static class TableSwitchOp extends PTXLIRInstruction implements BlockEndOp {
+    public static class TableSwitchOp extends PTXLIRInstruction {
 
         private final int lowKey;
         private final LabelRef defaultTarget;

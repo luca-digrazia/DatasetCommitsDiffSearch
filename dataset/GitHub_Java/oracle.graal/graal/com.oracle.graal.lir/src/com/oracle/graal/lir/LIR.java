@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
@@ -140,11 +139,7 @@ public class LIR {
     public void emitCode(CompilationResultBuilder crb) {
         crb.frameContext.enter(crb);
 
-        // notifyBlocksOfSuccessors();
-
-        int index = 0;
-        for (Block b : codeEmittingOrder) {
-            crb.setCurrentBlockIndex(index++);
+        for (Block b : codeEmittingOrder()) {
             emitBlock(crb, b);
         }
     }
@@ -159,21 +154,21 @@ public class LIR {
                 crb.blockComment(String.format("%d %s", op.id(), op));
             }
 
-            try {
-                emitOp(crb, op);
-            } catch (GraalInternalError e) {
-                throw e.addContext("lir instruction", block + "@" + op.id() + " " + op + "\n" + codeEmittingOrder);
-            }
+            emitOp(crb, op);
         }
     }
 
     private static void emitOp(CompilationResultBuilder crb, LIRInstruction op) {
         try {
-            op.emitCode(crb);
-        } catch (AssertionError t) {
-            throw new GraalInternalError(t);
-        } catch (RuntimeException t) {
-            throw new GraalInternalError(t);
+            try {
+                op.emitCode(crb);
+            } catch (AssertionError t) {
+                throw new GraalInternalError(t);
+            } catch (RuntimeException t) {
+                throw new GraalInternalError(t);
+            }
+        } catch (GraalInternalError e) {
+            throw e.addContext("lir instruction", op);
         }
     }
 
@@ -187,31 +182,5 @@ public class LIR {
      */
     public boolean hasArgInCallerFrame() {
         return hasArgInCallerFrame;
-    }
-
-    public static boolean verifyBlock(LIR lir, Block block) {
-        List<LIRInstruction> ops = lir.lir(block);
-        if (ops.size() == 0) {
-            return true;
-        }
-        for (LIRInstruction op : ops.subList(0, ops.size() - 1)) {
-            assert !(op instanceof BlockEndOp) : op.getClass();
-        }
-        LIRInstruction end = ops.get(ops.size() - 1);
-        assert end instanceof BlockEndOp : end.getClass();
-        return true;
-    }
-
-    public static boolean verifyBlocks(LIR lir, List<Block> blocks) {
-        for (Block block : blocks) {
-            for (Block sux : block.getSuccessors()) {
-                assert blocks.contains(sux) : "missing successor from: " + block + "to: " + sux;
-            }
-            for (Block pred : block.getPredecessors()) {
-                assert blocks.contains(pred) : "missing predecessor from: " + block + "to: " + pred;
-            }
-            verifyBlock(lir, block);
-        }
-        return true;
     }
 }

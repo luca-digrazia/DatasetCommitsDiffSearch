@@ -109,7 +109,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
      * The size of the instruction used to patch the verified entry point of an nmethod when the
      * nmethod is made non-entrant or a zombie (e.g. during deopt or class unloading). The first
      * instruction emitted at an nmethod's verified entry point must be at least this length to
-     * ensure mt-safe patching.
+     * ensure mp-safe patching.
      */
     public static final int PATCHED_VERIFIED_ENTRY_POINT_INSTRUCTION_SIZE = 5;
 
@@ -228,10 +228,10 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
         FrameMap frameMap = crb.frameMap;
         RegisterConfig regConfig = frameMap.registerConfig;
         HotSpotVMConfig config = getRuntime().getConfig();
-        Label verifiedEntry = new Label();
+        Label verifiedStub = new Label();
 
         // Emit the prefix
-        emitCodePrefix(installedCodeOwner, crb, asm, regConfig, config, verifiedEntry);
+        emitCodePrefix(installedCodeOwner, crb, asm, regConfig, config, verifiedStub);
 
         // Emit code for the LIR
         emitCodeBody(installedCodeOwner, crb, lirGen);
@@ -245,7 +245,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
      * 
      * @param installedCodeOwner see {@link Backend#emitCode}
      */
-    public void emitCodePrefix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotVMConfig config, Label verifiedEntry) {
+    public void emitCodePrefix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotVMConfig config, Label verifiedStub) {
         HotSpotProviders providers = getProviders();
         if (installedCodeOwner != null && !isStatic(installedCodeOwner.getModifiers())) {
             crb.recordMark(Marks.MARK_UNVERIFIED_ENTRY);
@@ -268,7 +268,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
 
         asm.align(config.codeEntryAlignment);
         crb.recordMark(Marks.MARK_OSR_ENTRY);
-        asm.bind(verifiedEntry);
+        asm.bind(verifiedStub);
         crb.recordMark(Marks.MARK_VERIFIED_ENTRY);
     }
 

@@ -28,7 +28,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.hsail.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.*;
+import com.oracle.graal.lir.StandardOp.FallThroughOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.calc.*;
 
@@ -46,7 +46,7 @@ public class HSAILControlFlow {
      * performing HSAIL code. Thus the execution path for both the TABLESWITCH and LOOKUPSWITCH
      * bytecodes go through this op.
      */
-    public static class SwitchOp extends HSAILLIRInstruction implements BlockEndOp {
+    public static class SwitchOp extends HSAILLIRInstruction implements FallThroughOp {
         /**
          * The array of key constants used for the cases of this switch statement.
          */
@@ -78,6 +78,25 @@ public class HSAILControlFlow {
         }
 
         /**
+         * Get the default target for this switch op.
+         */
+        @Override
+        public LabelRef fallThroughTarget() {
+            return defaultTarget;
+        }
+
+        /**
+         * Set the default target.
+         * 
+         * @param target the default target
+         */
+        @Override
+        public void setFallThroughTarget(LabelRef target) {
+            defaultTarget = target;
+
+        }
+
+        /**
          * Generates the code for this switch op.
          * 
          * The keys for switch statements in Java bytecode for of type int. However, Graal also
@@ -97,7 +116,7 @@ public class HSAILControlFlow {
                     masm.cbr(masm.nameOf(keyTargets[i].label()));
                 }
                 // Generate a jump for the default target if there is one.
-                if (defaultTarget != null && !defaultTarget.isCodeEmittingOrderSuccessorEdge(crb.getCurrentBlockIndex())) {
+                if (defaultTarget != null) {
                     masm.jmp(defaultTarget.label());
                 }
 
@@ -108,7 +127,7 @@ public class HSAILControlFlow {
         }
     }
 
-    public static class ReturnOp extends HSAILLIRInstruction implements BlockEndOp {
+    public static class ReturnOp extends HSAILLIRInstruction {
 
         @Use({REG, ILLEGAL}) protected Value x;
 
@@ -165,37 +184,119 @@ public class HSAILControlFlow {
         @Use({REG, CONST}) protected Value x;
         @Use({REG, CONST}) protected Value y;
         @Def({REG}) protected Value z;
-        protected final Condition condition;
-        protected final LabelRef trueDestination;
-        protected final LabelRef falseDestination;
+        protected Condition condition;
+        protected LabelRef destination;
+        protected boolean unordered = false;
         @Def({REG}) protected Value result;
-        protected final boolean unordered;
 
-        public CompareBranchOp(HSAILCompare opcode, Condition condition, Value x, Value y, Value z, Value result, LabelRef trueDestination, LabelRef falseDestination, boolean unordered) {
+        public CompareBranchOp(HSAILCompare opcode, Condition condition, Value x, Value y, Value z, Value result, LabelRef destination) {
             this.condition = condition;
             this.opcode = opcode;
             this.x = x;
             this.y = y;
             this.z = z;
             this.result = result;
-            this.trueDestination = trueDestination;
-            this.falseDestination = falseDestination;
-            this.unordered = unordered;
+            this.destination = destination;
+        }
+
+        @Override
+        public LabelRef destination() {
+            return destination;
+        }
+
+        @Override
+        public void negate(LabelRef newDestination) {
+            destination = newDestination;
+            condition = condition.negate();
         }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            int sourceIndex = crb.getCurrentBlockIndex();
-            if (trueDestination.isCodeEmittingOrderSuccessorEdge(sourceIndex)) {
-                HSAILCompare.emit(crb, masm, condition.negate(), x, y, z, !unordered);
-                masm.cbr(masm.nameOf(falseDestination.label()));
-            } else {
-                HSAILCompare.emit(crb, masm, condition, x, y, z, unordered);
-                masm.cbr(masm.nameOf(trueDestination.label()));
-                if (!falseDestination.isCodeEmittingOrderSuccessorEdge(sourceIndex)) {
-                    masm.jmp(falseDestination.label());
-                }
-            }
+            HSAILCompare.emit(crb, masm, condition, x, y, z, unordered);
+            masm.cbr(masm.nameOf(destination.label()));
+        }
+    }
+
+    public static class FloatCompareBranchOp extends CompareBranchOp {
+
+        public FloatCompareBranchOp(HSAILCompare opcode, Condition condition, Value x, Value y, Value z, Value result, LabelRef destination, boolean unordered) {
+            super(opcode, condition, x, y, z, result, destination);
+            this.unordered = unordered;
+        }
+
+        @Override
+        public void negate(LabelRef newDestination) {
+            destination = newDestination;
+            condition = condition.negate();
+            unordered = !unordered;
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+            HSAILCompare.emit(crb, masm, condition, x, y, z, unordered);
+            masm.cbr(masm.nameOf(destination.label()));
+        }
+    }
+
+    public static class DoubleCompareBranchOp extends CompareBranchOp {
+
+        public DoubleCompareBranchOp(HSAILCompare opcode, Condition condition, Value x, Value y, Value z, Value result, LabelRef destination, boolean unordered) {
+            super(opcode, condition, x, y, z, result, destination);
+            this.unordered = unordered;
+        }
+
+        @Override
+        public void negate(LabelRef newDestination) {
+            destination = newDestination;
+            condition = condition.negate();
+            unordered = !unordered;
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+            HSAILCompare.emit(crb, masm, condition, x, y, z, unordered);
+            masm.cbr(masm.nameOf(destination.label()));
+        }
+    }
+
+    public static class BranchOp extends HSAILLIRInstruction implements StandardOp.BranchOp {
+
+        protected Condition condition;
+        protected LabelRef destination;
+        @Def({REG}) protected Value result;
+
+        public BranchOp(Condition condition, Value result, LabelRef destination) {
+            this.condition = condition;
+            this.destination = destination;
+            this.result = result;
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+            masm.cbr(masm.nameOf(destination.label()));
+        }
+
+        @Override
+        public LabelRef destination() {
+            return destination;
+        }
+
+        @Override
+        public void negate(LabelRef newDestination) {
+            destination = newDestination;
+            condition = condition.negate();
+        }
+    }
+
+    public static class FloatBranchOp extends BranchOp {
+
+        public FloatBranchOp(Condition condition, Value result, LabelRef destination) {
+            super(condition, result, destination);
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+            masm.cbr(masm.nameOf(destination.label()));
         }
     }
 

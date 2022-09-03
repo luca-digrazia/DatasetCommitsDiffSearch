@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.lir.asm;
 
-
 /**
  * Code for managing a method's native frame.
  */
 public interface FrameContext {
+
     /**
      * Emits code common to all entry points of a method. This may include:
      * <ul>
@@ -35,7 +35,7 @@ public interface FrameContext {
      * <li>stack overflow checking</li>
      * </ul>
      */
-    void enter(TargetMethodAssembler tasm);
+    void enter(CompilationResultBuilder crb);
 
     /**
      * Emits code to be executed just prior to returning from a method. This may include:
@@ -45,5 +45,10 @@ public interface FrameContext {
      * <li>destroying the stack frame</li>
      * </ul>
      */
-    void leave(TargetMethodAssembler tasm);
+    void leave(CompilationResultBuilder crb);
+
+    /**
+     * Determines if a frame is set up and torn down by this object.
+     */
+    boolean hasFrame();
 }
