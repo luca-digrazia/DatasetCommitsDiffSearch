@@ -27,6 +27,7 @@ package com.oracle.truffle.api.debug;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -169,24 +170,34 @@ public final class DebuggerSession implements Closeable {
     private volatile boolean suspendNext;
     private boolean suspendAll;
     private final StableBoolean stepping = new StableBoolean(false);
-    private final StableBoolean breakpointsActive = new StableBoolean(true);
 
+    /*
+     * Legacy mode for backwards compatibility. Legacy mode means that recursive events will be
+     * dispatched and stepping bindings will be added and removed when they are needed. Since the
+     * legacy session is always active we don't want to keep the stepping bindings active all the
+     * time as we want for regular sessions, which can be closed.
+     */
+    // TODO remove when deprecated event dispatching is removed
+    private final boolean legacy;
     private final int sessionId;
 
     private volatile boolean closed;
 
-    DebuggerSession(Debugger debugger, SuspendedCallback callback) {
+    DebuggerSession(Debugger debugger, SuspendedCallback callback, boolean legacy) {
         this.sessionId = SESSIONS.incrementAndGet();
         this.debugger = debugger;
         this.callback = callback;
         SourceSectionFilter filter = SourceSectionFilter.newBuilder().tagIs(DebuggerTags.AlwaysHalt.class).build();
-        this.alwaysHaltBreakpoint = new Breakpoint(BreakpointLocation.ANY, filter, false);
+        this.alwaysHaltBreakpoint = new Breakpoint(new BreakpointLocation(null, -1, -1), filter, false);
         this.alwaysHaltBreakpoint.setEnabled(true);
         this.alwaysHaltBreakpoint.install(this);
+        this.legacy = legacy;
         if (Debugger.TRACE) {
             trace("open with callback %s", callback);
         }
-        addBindings();
+        if (!legacy) {
+            addBindings();
+        }
     }
 
     private void trace(String msg, Object... parameters) {
@@ -353,6 +364,14 @@ public final class DebuggerSession implements Closeable {
         }
 
         stepping.set(needsStepping);
+
+        if (legacy) {
+            if (needsStepping) {
+                addBindings();
+            } else {
+                removeBindings();
+            }
+        }
     }
 
     private void addBindings() {
@@ -427,27 +446,30 @@ public final class DebuggerSession implements Closeable {
         return Collections.unmodifiableList(b);
     }
 
-    /**
-     * Set whether breakpoints are active in this session. This has no effect on breakpoints
-     * enabled/disabled state. Breakpoints need to be active to actually break the execution. The
-     * breakpoints are active by default.
+    /*
+     * Deprecation Note: Usually you want to return unmodifiable collections instead of mutable
+     * collections in APIs. Also sorting does not really make sense, in the new session based API
+     * installation order is a lot simpler and the client can use its own breakpoint sorting if they
+     * want.
      *
-     * @param active <code>true</code> to make all breakpoints active, <code>false</code> to make
-     *            all breakpoints inactive.
-     * @since 0.24
+     * TODO remove this when deprecated APIs are removed.
      */
-    public void setBreakpointsActive(boolean active) {
-        breakpointsActive.set(active);
-    }
+    Collection<Breakpoint> getLegacyBreakpoints() {
+        if (closed) {
+            throw new IllegalStateException("session already closed");
+        }
 
-    /**
-     * Test whether breakpoints are active in this session. Breakpoints do not break execution when
-     * not active.
-     *
-     * @since 0.24
-     */
-    public boolean isBreakpointsActive() {
-        return breakpointsActive.get();
+        List<Breakpoint> sortedBreakpoints;
+        synchronized (breakpoints) {
+            // need to synchronize manually breakpoints are iterated which is not
+            // synchronized by default.
+            sortedBreakpoints = new ArrayList<>(this.breakpoints);
+        }
+        Collections.sort(sortedBreakpoints, Breakpoint.COMPARATOR);
+
+        // unfortunately spec says that we need to return a modifiable list
+        // should we deprecate that?
+        return sortedBreakpoints;
     }
 
     /**
@@ -484,6 +506,7 @@ public final class DebuggerSession implements Closeable {
 
     synchronized void disposeBreakpoint(Breakpoint breakpoint) {
         breakpoints.remove(breakpoint);
+        debugger.disposeBreakpoint(breakpoint);
         if (Debugger.TRACE) {
             trace("disposed breakpoint %s", breakpoint);
         }
@@ -493,7 +516,7 @@ public final class DebuggerSession implements Closeable {
     void notifyCallback(DebuggerNode source, MaterializedFrame frame, Object returnValue, BreakpointConditionFailure conditionFailure) {
         Thread currentThread = Thread.currentThread();
         SuspendedEvent event = currentSuspendedEventMap.get(currentThread);
-        if (event != null) {
+        if (!legacy && event != null) {
             if (Debugger.TRACE) {
                 trace("ignored suspended reason: recursive from source:%s context:%s location:%s", source, source.getContext(), source.getSteppingLocation());
             }
@@ -546,7 +569,7 @@ public final class DebuggerSession implements Closeable {
         List<Breakpoint> breaks = null;
         for (DebuggerNode node : nodes) {
             Breakpoint breakpoint = node.getBreakpoint();
-            if (breakpoint == null || !isBreakpointsActive()) {
+            if (breakpoint == null) {
                 continue; // not a breakpoint node
             }
             boolean hit = true;
@@ -610,7 +633,7 @@ public final class DebuggerSession implements Closeable {
         }
 
         SteppingStrategy strategy = suspendedEvent.getNextStrategy();
-        if (!strategy.isKill()) {
+        if (!legacy && !strategy.isKill()) {
             // suspend(...) has been called during SuspendedEvent notification. this is only
             // possible in non-legacy mode.
             SteppingStrategy currentStrategy = getSteppingStrategy(currentThread);
@@ -638,10 +661,7 @@ public final class DebuggerSession implements Closeable {
             if (stepping.get()) {
                 EventBinding<? extends ExecutionEventNodeFactory> localStatementBinding = statementBinding;
                 if (localStatementBinding != null) {
-                    DebuggerNode node = (DebuggerNode) context.lookupExecutionEventNode(localStatementBinding);
-                    if (node != null) {
-                        nodes.add(node);
-                    }
+                    nodes.add((DebuggerNode) context.lookupExecutionEventNode(localStatementBinding));
                 }
             }
             if (!breakpoints.isEmpty()) {
@@ -706,7 +726,7 @@ public final class DebuggerSession implements Closeable {
                 frame = ev.getMaterializedFrame();
             } else {
                 node = frameInstance.getCallNode();
-                frame = frameInstance.getFrame(FrameAccess.MATERIALIZE).materialize();
+                frame = frameInstance.getFrame(FrameAccess.MATERIALIZE, true).materialize();
             }
             return Debugger.ACCESSOR.evalInContext(ev.getSession().getDebugger().getSourceVM(), node, frame, code);
         } catch (KillException kex) {
