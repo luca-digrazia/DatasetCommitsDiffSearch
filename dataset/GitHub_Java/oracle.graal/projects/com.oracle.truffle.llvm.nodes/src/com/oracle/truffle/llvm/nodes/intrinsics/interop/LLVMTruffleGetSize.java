@@ -29,52 +29,47 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.types.LLVMTruffleObject;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
 public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
 
-    @Child private Node foreignGetSize = Message.GET_SIZE.createNode();
-    @Child private ToLLVMNode toLLVM = ToLLVMNode.createNode(int.class);
-
-    private static void checkLLVMTruffleObject(LLVMTruffleObject value) {
-        if (value.getOffset() != 0 || value.getName() != null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw new IllegalAccessError("Pointee must be unmodified");
-        }
-    }
-
-    private int getSize(TruffleObject value) {
+    private Object getSize(VirtualFrame frame, LLVMTruffleObject value) {
         try {
-            Object rawValue = ForeignAccess.sendGetSize(foreignGetSize, value);
-            return (int) toLLVM.executeWithTarget(rawValue);
+            if (value.getOffset() != 0 || value.getName() != null) {
+                throw new IllegalAccessError("Pointee must be unmodified");
+            }
+            Object rawValue = ForeignAccess.sendGetSize(foreignGetSize, frame, value.getObject());
+            return toLLVM.convert(frame, rawValue, expectedType);
         } catch (UnsupportedMessageException e) {
-            CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);
         }
     }
 
+    @Child private Node foreignGetSize = Message.GET_SIZE.createNode();
+    @Child private ToLLVMNode toLLVM = new ToLLVMNode();
+
+    private static final Class<?> expectedType = int.class;
+
     @Specialization
-    public int executeIntrinsic(LLVMTruffleObject value) {
-        checkLLVMTruffleObject(value);
-        return getSize(value.getObject());
+    public int executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
+        return (int) getSize(frame, value);
     }
 
     @Specialization
-    public int executeIntrinsic(TruffleObject value) {
-        return getSize(value);
+    public int executeIntrinsic(VirtualFrame frame, TruffleObject value) {
+        return executeIntrinsic(frame, new LLVMTruffleObject(value));
     }
 
 }

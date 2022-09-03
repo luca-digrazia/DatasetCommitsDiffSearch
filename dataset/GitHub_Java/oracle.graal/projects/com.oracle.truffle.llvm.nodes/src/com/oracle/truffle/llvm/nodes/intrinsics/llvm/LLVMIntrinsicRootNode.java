@@ -33,34 +33,27 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.context.LLVMLanguage;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 
 /**
  * This class is the entry point for every intrinsified (substituted) function.
  */
 public abstract class LLVMIntrinsicRootNode extends RootNode {
 
-    private final String name;
-
-    LLVMIntrinsicRootNode(LLVMLanguage language, String name) {
-        super(language, new FrameDescriptor());
-        this.name = name;
+    LLVMIntrinsicRootNode() {
+        super(LLVMLanguage.class, null, new FrameDescriptor());
     }
 
     public abstract LLVMExpressionNode getNode();
 
     @Override
     public String toString() {
-        return name;
+        return getNode().getClass().getSimpleName();
     }
 
     @NodeChild(type = LLVMExpressionNode.class, value = "node")
     public abstract static class LLVMIntrinsicExpressionNode extends LLVMIntrinsicRootNode {
-
-        public LLVMIntrinsicExpressionNode(LLVMLanguage language, String name) {
-            super(language, name);
-        }
 
         @Specialization
         public Object execute(Object val) {

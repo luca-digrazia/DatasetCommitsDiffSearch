@@ -35,20 +35,14 @@ import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMPerformance;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.types.memory.LLVMMemory;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
 public abstract class LLVMTruffleReadNString extends LLVMIntrinsic {
     @Specialization
-    public Object executeIntrinsic(LLVMAddress value, int n) {
-        LLVMPerformance.warn(this);
-        return getString(value, n);
-    }
-
     @TruffleBoundary
-    private static Object getString(LLVMAddress value, int n) {
+    public Object executeIntrinsic(LLVMAddress value, int n) {
         LLVMAddress adr = value;
         int count = n < 0 ? 0 : n;
         StringBuilder sb = new StringBuilder();
