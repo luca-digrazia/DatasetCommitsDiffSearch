@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_40;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_40;
-
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.TypeReference;
 import com.oracle.graal.graph.NodeClass;
@@ -50,7 +47,7 @@ import jdk.vm.ci.meta.TriState;
  * known at compile time. This is used, for instance, to intrinsify {@link Class#isInstance(Object)}
  * .
  */
-@NodeInfo(cycles = CYCLES_40, size = SIZE_40)
+@NodeInfo
 public class InstanceOfDynamicNode extends BinaryOpLogicNode implements Canonicalizable.Binary<ValueNode>, Lowerable {
     public static final NodeClass<InstanceOfDynamicNode> TYPE = NodeClass.create(InstanceOfDynamicNode.class);
 
