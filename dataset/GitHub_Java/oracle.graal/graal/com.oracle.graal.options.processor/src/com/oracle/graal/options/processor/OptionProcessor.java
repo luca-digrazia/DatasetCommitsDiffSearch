@@ -22,46 +22,32 @@
  */
 package com.oracle.graal.options.processor;
 
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.io.*;
+import java.util.*;
 
-import javax.annotation.processing.AbstractProcessor;
-import javax.annotation.processing.Filer;
-import javax.annotation.processing.RoundEnvironment;
-import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.lang.model.SourceVersion;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.Name;
-import javax.lang.model.element.PackageElement;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.TypeKind;
-import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Elements;
-import javax.lang.model.util.Types;
+import javax.annotation.processing.*;
+import javax.lang.model.*;
+import javax.lang.model.element.*;
+import javax.lang.model.type.*;
+import javax.lang.model.util.*;
 import javax.tools.Diagnostic.Kind;
-import javax.tools.JavaFileObject;
+import javax.tools.*;
 
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionDescriptor;
-import com.oracle.graal.options.OptionDescriptors;
-import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.options.*;
 
 /**
- * Processes static fields annotated with {@link Option}. An {@link OptionDescriptors}
- * implementation is generated for each top level class containing at least one such field. The name
- * of the generated class for top level class {@code com.foo.Bar} is
- * {@code com.foo.Bar_OptionDescriptors}.
+ * Processes static fields annotated with {@link Option}. An {@link Options} service is generated
+ * for each top level class containing at least one such field. These service objects can be
+ * retrieved as follows:
+ *
+ * <pre>
+ * ServiceLoader&lt;Options&gt; sl = ServiceLoader.load(Options.class);
+ * for (Options opts : sl) {
+ *     for (OptionDescriptor desc : sl) {
+ *         // use desc
+ *     }
+ * }
+ * </pre>
  */
 @SupportedAnnotationTypes({"com.oracle.graal.options.Option"})
 public class OptionProcessor extends AbstractProcessor {
@@ -77,10 +63,6 @@ public class OptionProcessor extends AbstractProcessor {
 
         if (!element.getModifiers().contains(Modifier.STATIC)) {
             processingEnv.getMessager().printMessage(Kind.ERROR, "Option field must be static", element);
-            return;
-        }
-        if (element.getModifiers().contains(Modifier.PRIVATE)) {
-            processingEnv.getMessager().printMessage(Kind.ERROR, "Option field cannot be private", element);
             return;
         }
 
@@ -112,10 +94,6 @@ public class OptionProcessor extends AbstractProcessor {
             processingEnv.getMessager().printMessage(Kind.ERROR, "Option field must be static", element);
             return;
         }
-        if (field.getModifiers().contains(Modifier.PRIVATE)) {
-            processingEnv.getMessager().printMessage(Kind.ERROR, "Option field cannot be private", element);
-            return;
-        }
 
         String help = annotation.help();
         if (help.length() != 0) {
@@ -129,11 +107,6 @@ public class OptionProcessor extends AbstractProcessor {
         String optionName = annotation.name();
         if (optionName.equals("")) {
             optionName = fieldName;
-        }
-
-        if (!Character.isUpperCase(optionName.charAt(0))) {
-            processingEnv.getMessager().printMessage(Kind.ERROR, "Option name must start with capital letter", element);
-            return;
         }
 
         DeclaredType declaredOptionValueType = declaredFieldType;
@@ -176,72 +149,36 @@ public class OptionProcessor extends AbstractProcessor {
     private void createFiles(OptionsInfo info) {
         String pkg = ((PackageElement) info.topDeclaringType.getEnclosingElement()).getQualifiedName().toString();
         Name topDeclaringClass = info.topDeclaringType.getSimpleName();
+
+        String optionsClassName = topDeclaringClass + "_" + Options.class.getSimpleName();
         Element[] originatingElements = info.originatingElements.toArray(new Element[info.originatingElements.size()]);
-
-        createOptionsDescriptorsFile(info, pkg, topDeclaringClass, originatingElements);
-    }
-
-    private void createOptionsDescriptorsFile(OptionsInfo info, String pkg, Name topDeclaringClass, Element[] originatingElements) {
-        String optionsClassName = topDeclaringClass + "_" + OptionDescriptors.class.getSimpleName();
 
         Filer filer = processingEnv.getFiler();
         try (PrintWriter out = createSourceFile(pkg, optionsClassName, filer, originatingElements)) {
 
             out.println("// CheckStyle: stop header check");
-            out.println("// CheckStyle: stop line length check");
             out.println("// GENERATED CONTENT - DO NOT EDIT");
             out.println("// Source: " + topDeclaringClass + ".java");
             out.println("package " + pkg + ";");
             out.println("");
             out.println("import java.util.*;");
-            out.println("import " + OptionDescriptors.class.getPackage().getName() + ".*;");
+            out.println("import " + Options.class.getPackage().getName() + ".*;");
             out.println("");
-            out.println("public class " + optionsClassName + " implements " + OptionDescriptors.class.getSimpleName() + " {");
-
+            out.println("public class " + optionsClassName + " implements " + Options.class.getSimpleName() + " {");
+            out.println("    @Override");
             String desc = OptionDescriptor.class.getSimpleName();
-
-            int i = 0;
-            Collections.sort(info.options);
-
-            out.println("    @Override");
-            out.println("    public OptionDescriptor get(String value) {");
-            out.println("        // CheckStyle: stop line length check");
-            if (info.options.size() == 1) {
-                out.println("        if (value.equals(\"" + info.options.get(0).name + "\")) {");
-            } else {
-                out.println("        switch (value) {");
-            }
-            for (OptionInfo option : info.options) {
-                String name = option.name;
-                String optionValue;
-                if (option.field.getModifiers().contains(Modifier.PRIVATE)) {
-                    throw new InternalError();
-                } else {
-                    optionValue = option.declaringClass + "." + option.field.getSimpleName();
-                }
-                String type = option.type;
-                String help = option.help;
-                String declaringClass = option.declaringClass;
-                Name fieldName = option.field.getSimpleName();
-                if (info.options.size() == 1) {
-                    out.printf("            return %s.create(\"%s\", %s.class, \"%s\", %s.class, \"%s\", %s);\n", desc, name, type, help, declaringClass, fieldName, optionValue);
-                } else {
-                    out.printf("            case \"" + name + "\": return %s.create(\"%s\", %s.class, \"%s\", %s.class, \"%s\", %s);\n", desc, name, type, help, declaringClass, fieldName, optionValue);
-                }
-            }
-            out.println("        }");
-            out.println("        // CheckStyle: resume line length check");
-            out.println("        return null;");
-            out.println("    }");
-            out.println();
-            out.println("    @Override");
             out.println("    public Iterator<" + desc + "> iterator() {");
             out.println("        // CheckStyle: stop line length check");
             out.println("        List<" + desc + "> options = Arrays.asList(");
+
+            boolean needPrivateFieldAccessor = false;
+            int i = 0;
+            Collections.sort(info.options);
             for (OptionInfo option : info.options) {
                 String optionValue;
                 if (option.field.getModifiers().contains(Modifier.PRIVATE)) {
-                    throw new InternalError();
+                    needPrivateFieldAccessor = true;
+                    optionValue = "field(" + option.declaringClass + ".class, \"" + option.field.getSimpleName() + "\")";
                 } else {
                     optionValue = option.declaringClass + "." + option.field.getSimpleName();
                 }
@@ -251,20 +188,85 @@ public class OptionProcessor extends AbstractProcessor {
                 String declaringClass = option.declaringClass;
                 Name fieldName = option.field.getSimpleName();
                 String comma = i == info.options.size() - 1 ? "" : ",";
-                out.printf("            %s.create(\"%s\", %s.class, \"%s\", %s.class, \"%s\", %s)%s\n", desc, name, type, help, declaringClass, fieldName, optionValue, comma);
+                out.printf("            new %s(\"%s\", %s.class, \"%s\", %s.class, \"%s\", %s)%s\n", desc, name, type, help, declaringClass, fieldName, optionValue, comma);
                 i++;
             }
             out.println("        );");
             out.println("        // CheckStyle: resume line length check");
             out.println("        return options.iterator();");
             out.println("    }");
+            if (needPrivateFieldAccessor) {
+                out.println("    private static " + OptionValue.class.getSimpleName() + "<?> field(Class<?> declaringClass, String fieldName) {");
+                out.println("        try {");
+                out.println("            java.lang.reflect.Field field = declaringClass.getDeclaredField(fieldName);");
+                out.println("            field.setAccessible(true);");
+                out.println("            return (" + OptionValue.class.getSimpleName() + "<?>) field.get(null);");
+                out.println("        } catch (Exception e) {");
+                out.println("            throw (InternalError) new InternalError().initCause(e);");
+                out.println("        }");
+                out.println("    }");
+            }
             out.println("}");
+        }
+
+        try {
+            createProviderFile(pkg, optionsClassName, originatingElements);
+            createOptionsFile(info, pkg, topDeclaringClass.toString(), originatingElements);
+        } catch (IOException e) {
+            processingEnv.getMessager().printMessage(Kind.ERROR, e.getMessage(), info.topDeclaringType);
+        }
+    }
+
+    private void createProviderFile(String pkg, String providerClassName, Element... originatingElements) throws IOException {
+        String filename = "META-INF/providers/" + pkg + "." + providerClassName;
+        FileObject file = processingEnv.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "", filename, originatingElements);
+        PrintWriter writer = new PrintWriter(new OutputStreamWriter(file.openOutputStream(), "UTF-8"));
+        writer.println(Options.class.getName());
+        writer.close();
+    }
+
+    private void createOptionsFile(OptionsInfo info, String pkg, String relativeName, Element... originatingElements) throws IOException {
+        String filename = "META-INF/options/" + pkg + "." + relativeName;
+        FileObject file = processingEnv.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "", filename, originatingElements);
+        PrintWriter writer = new PrintWriter(new OutputStreamWriter(file.openOutputStream(), "UTF-8"));
+        for (OptionInfo option : info.options) {
+            String help = option.help;
+            if (help.indexOf('\t') >= 0 || help.indexOf('\r') >= 0 || help.indexOf('\n') >= 0) {
+                processingEnv.getMessager().printMessage(Kind.WARNING, "Option help should not contain '\\t', '\\r' or '\\n'", option.field);
+                help = help.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
+            }
+            try {
+                char optionTypeToChar = optionTypeToChar(option);
+                writer.printf("%s\t%s\t%s%n", option.name, optionTypeToChar, help);
+            } catch (IllegalArgumentException iae) {
+            }
+        }
+        writer.close();
+    }
+
+    private char optionTypeToChar(OptionInfo option) {
+        switch (option.type) {
+            case "Boolean":
+                return 'z';
+            case "Integer":
+                return 'i';
+            case "Long":
+                return 'j';
+            case "Float":
+                return 'f';
+            case "Double":
+                return 'd';
+            case "String":
+                return 's';
+            default:
+                processingEnv.getMessager().printMessage(Kind.ERROR, "Unsoported option type: " + option.type, option.field);
+                throw new IllegalArgumentException();
         }
     }
 
     protected PrintWriter createSourceFile(String pkg, String relativeName, Filer filer, Element... originatingElements) {
         try {
-            // Ensure Unix line endings to comply with code style guide checked by Checkstyle
+            // Ensure Unix line endings to comply with Graal code style guide checked by Checkstyle
             JavaFileObject sourceFile = filer.createSourceFile(pkg + "." + relativeName, originatingElements);
             return new PrintWriter(sourceFile.openWriter()) {
 
