@@ -187,7 +187,6 @@ public class BitOpNodesTest extends GraalCompilerTest {
 
     @Test
     public void testScanReverseInt() {
-        /* This test isn't valid unless the BitScanReverseNode intrinsic is used. */
         ValueNode result = parseAndInline("scanReverseIntSnippet", BitScanReverseNode.class);
         if (result != null) {
             Assert.assertEquals(StampFactory.forInteger(Kind.Int, 16, 20), result.stamp());
@@ -212,7 +211,6 @@ public class BitOpNodesTest extends GraalCompilerTest {
 
     @Test
     public void testScanReverseLong() {
-        /* This test isn't valid unless the BitScanReverseNode intrinsic is used. */
         ValueNode result = parseAndInline("scanReverseLongSnippet", BitScanReverseNode.class);
         if (result != null) {
             Assert.assertEquals(StampFactory.forInteger(Kind.Int, 48, 64), result.stamp());
@@ -227,7 +225,6 @@ public class BitOpNodesTest extends GraalCompilerTest {
 
     @Test
     public void testScanReverseLongEmpty() {
-        /* This test isn't valid unless the BitScanReverseNode intrinsic is used. */
         ValueNode result = parseAndInline("scanReverseLongEmptySnippet", BitScanReverseNode.class);
         if (result != null) {
             Assert.assertEquals(StampFactory.forInteger(Kind.Int, 24, 64), result.stamp());
@@ -238,15 +235,7 @@ public class BitOpNodesTest extends GraalCompilerTest {
         return parseAndInline(name, null);
     }
 
-    /**
-     * Parse and optimize {@code name}. If {@code expectedClass} is non-null and a node of that type
-     * isn't found simply return null. Otherwise return the node returned by the graph.
-     *
-     * @param name
-     * @param expectedClass
-     * @return the returned value or null if {@code expectedClass} is not found in the graph.
-     */
-    private ValueNode parseAndInline(String name, Class<? extends ValueNode> expectedClass) {
+    private ValueNode parseAndInline(String name, Class<? extends ValueNode> requiredClass) {
         StructuredGraph graph = parse(name);
         HighTierContext context = new HighTierContext(getProviders(), new Assumptions(false), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.NONE);
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
@@ -254,8 +243,8 @@ public class BitOpNodesTest extends GraalCompilerTest {
         new InliningPhase(canonicalizer).apply(graph, context);
         canonicalizer.apply(graph, context);
         Assert.assertEquals(1, graph.getNodes(ReturnNode.class).count());
-        if (expectedClass != null) {
-            if (graph.getNodes().filter(expectedClass).count() == 0) {
+        if (requiredClass != null) {
+            if (graph.getNodes().filter(requiredClass).count() == 0) {
                 return null;
             }
         }
