@@ -233,10 +233,9 @@ public class CompilationTask {
             handleException(t);
             /*
              * Treat random exceptions from the compiler as indicating a problem compiling this
-             * method. Report the result of toString instead of getMessage to ensure that the
-             * exception type is included in the output in case there's no detail mesage.
+             * method.
              */
-            return CompilationRequestResult.failure(t.toString(), false);
+            return CompilationRequestResult.failure(t.getMessage(), false);
         } finally {
             try {
                 int compiledBytecodes = 0;
