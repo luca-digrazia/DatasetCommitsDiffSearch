@@ -117,8 +117,8 @@ public final class Debugger {
             }
         };
 
-        this.lineBreaks = new LineBreakpointFactory(breakpointCallback, warningLog);
-        this.tagBreaks = new TagBreakpointFactory(breakpointCallback, warningLog);
+        this.lineBreaks = new LineBreakpointFactory(this, breakpointCallback, warningLog);
+        this.tagBreaks = new TagBreakpointFactory(this, breakpointCallback, warningLog);
     }
 
     TruffleVM vm() {
@@ -266,18 +266,10 @@ public final class Debugger {
      * @throws IOException if the factory cannot be created, for example if the expression is badly
      *             formed.
      */
-    @SuppressWarnings("rawtypes")
-    static AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(Probe probe, String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
+    AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(Probe probe, String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
         try {
             Class<? extends TruffleLanguage> langugageClass = ACCESSOR.findLanguage(probe);
-            TruffleLanguage<?> l;
-            try {
-                l = langugageClass.newInstance();
-            } catch (InstantiationException ex) {
-                throw new IllegalStateException(ex);
-            } catch (IllegalAccessException ex) {
-                throw new IllegalStateException(ex);
-            }
+            TruffleLanguage l = ACCESSOR.findLanguage(vm, langugageClass);
             DebugSupportProvider dsp = ACCESSOR.getDebugSupport(l);
             return dsp.createAdvancedInstrumentRootFactory(expr, resultListener);
         } catch (DebugSupportException ex) {
@@ -797,7 +789,6 @@ public final class Debugger {
         debugContext = debugContext.predecessor;
     }
 
-    @SuppressWarnings("rawtypes")
     private static final class AccessorDebug extends Accessor {
         @Override
         protected Closeable executionStart(TruffleVM vm, Debugger[] fillIn, Source s) {
@@ -822,12 +813,12 @@ public final class Debugger {
         }
 
         @Override
-        protected TruffleLanguage.Env findLanguage(TruffleVM vm, Class<? extends TruffleLanguage> languageClass) {
+        protected TruffleLanguage findLanguage(TruffleVM vm, Class<? extends TruffleLanguage> languageClass) {
             return super.findLanguage(vm, languageClass);
         }
 
         @Override
-        protected DebugSupportProvider getDebugSupport(TruffleLanguage<?> l) {
+        protected DebugSupportProvider getDebugSupport(TruffleLanguage l) {
             return super.getDebugSupport(l);
         }
 
