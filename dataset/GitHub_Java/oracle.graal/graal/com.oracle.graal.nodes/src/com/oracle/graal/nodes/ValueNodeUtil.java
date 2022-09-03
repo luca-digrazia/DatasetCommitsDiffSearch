@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.Verbosity;
-import com.oracle.graal.nodes.extended.*;
 
 public class ValueNodeUtil {
 
@@ -95,13 +94,5 @@ public class ValueNodeUtil {
      */
     public static String valueString(ValueNode value) {
         return (value == null) ? "-" : ("" + value.kind().getTypeChar() + value.toString(Verbosity.Id));
-    }
-
-    public static ValueNode asNode(MemoryNode node) {
-        if (node == null) {
-            return null;
-        } else {
-            return node.asNode();
-        }
     }
 }

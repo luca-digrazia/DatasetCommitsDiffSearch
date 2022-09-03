@@ -49,10 +49,6 @@ public class FrameStateBuilder {
     private ValueNode[] locks;
 
     private int stackSize;
-
-    /**
-     * @see BytecodeFrame#rethrowException
-     */
     private boolean rethrowException;
 
     public FrameStateBuilder(ResolvedJavaMethod method, StructuredGraph graph, boolean eagerResolve) {
@@ -86,7 +82,7 @@ public class FrameStateBuilder {
             if (kind == Kind.Object && type instanceof ResolvedJavaType) {
                 stamp = StampFactory.declared((ResolvedJavaType) type);
             } else {
-                stamp = StampFactory.forKind(type.getKind());
+                stamp = StampFactory.forKind(kind);
             }
             LocalNode local = graph.unique(new LocalNode(index, stamp));
             storeLocal(javaIndex, local);
@@ -312,16 +308,10 @@ public class FrameStateBuilder {
         }
     }
 
-    /**
-     * @see BytecodeFrame#rethrowException
-     */
     public boolean rethrowException() {
         return rethrowException;
     }
 
-    /**
-     * @see BytecodeFrame#rethrowException
-     */
     public void setRethrowException(boolean b) {
         rethrowException = b;
     }
