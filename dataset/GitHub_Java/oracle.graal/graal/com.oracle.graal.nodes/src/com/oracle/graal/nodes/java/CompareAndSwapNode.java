@@ -34,12 +34,13 @@ import com.oracle.graal.nodes.type.*;
  * Represents an atomic compare-and-swap operation The result is a boolean that contains whether the
  * value matched the expected value.
  */
-public class CompareAndSwapNode extends AbstractStateSplit implements Lowerable, MemoryCheckpoint.Single {
+public class CompareAndSwapNode extends AbstractStateSplit implements StateSplit, Lowerable, MemoryCheckpoint.Single {
 
     @Input private ValueNode object;
     @Input private ValueNode offset;
     @Input private ValueNode expected;
     @Input private ValueNode newValue;
+    @Input private LocationNode location;
     private final int displacement;
 
     public ValueNode object() {
@@ -62,6 +63,15 @@ public class CompareAndSwapNode extends AbstractStateSplit implements Lowerable,
         return displacement;
     }
 
+    public LocationNode getLocation() {
+        return location;
+    }
+
+    public void setLocation(LocationNode location) {
+        updateUsages(this.location, location);
+        this.location = location;
+    }
+
     public CompareAndSwapNode(ValueNode object, int displacement, ValueNode offset, ValueNode expected, ValueNode newValue) {
         super(StampFactory.forKind(Kind.Boolean.getStackKind()));
         assert expected.kind() == newValue.kind();
@@ -78,7 +88,7 @@ public class CompareAndSwapNode extends AbstractStateSplit implements Lowerable,
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         tool.getRuntime().lower(this, tool);
     }
 

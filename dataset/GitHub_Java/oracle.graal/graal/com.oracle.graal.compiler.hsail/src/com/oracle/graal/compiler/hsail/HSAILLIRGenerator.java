@@ -32,9 +32,9 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.hsail.*;
@@ -46,19 +46,20 @@ import com.oracle.graal.lir.hsail.HSAILControlFlow.CompareBranchOp;
 import com.oracle.graal.lir.hsail.HSAILControlFlow.CondMoveOp;
 import com.oracle.graal.lir.hsail.HSAILControlFlow.FloatCompareBranchOp;
 import com.oracle.graal.lir.hsail.HSAILControlFlow.FloatCondMoveOp;
-import com.oracle.graal.lir.hsail.HSAILControlFlow.ForeignCall1ArgOp;
-import com.oracle.graal.lir.hsail.HSAILControlFlow.ForeignCallNoArgOp;
 import com.oracle.graal.lir.hsail.HSAILControlFlow.ReturnOp;
+import com.oracle.graal.lir.hsail.HSAILControlFlow.ForeignCallNoArgOp;
+import com.oracle.graal.lir.hsail.HSAILControlFlow.ForeignCall1ArgOp;
 import com.oracle.graal.lir.hsail.HSAILMove.LeaOp;
-import com.oracle.graal.lir.hsail.HSAILMove.LoadCompressedPointer;
 import com.oracle.graal.lir.hsail.HSAILMove.LoadOp;
 import com.oracle.graal.lir.hsail.HSAILMove.MoveFromRegOp;
 import com.oracle.graal.lir.hsail.HSAILMove.MoveToRegOp;
-import com.oracle.graal.lir.hsail.HSAILMove.StoreCompressedPointer;
 import com.oracle.graal.lir.hsail.HSAILMove.StoreOp;
+import com.oracle.graal.lir.hsail.HSAILMove.LoadCompressedPointer;
+import com.oracle.graal.lir.hsail.HSAILMove.StoreCompressedPointer;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.hotspot.meta.*;
 
 /**
  * This class implements the HSAIL specific portion of the LIR generator.
@@ -86,6 +87,15 @@ public class HSAILLIRGenerator extends LIRGenerator {
     public HSAILLIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, CallingConvention cc, LIR lir) {
         super(graph, runtime, target, frameMap, cc, lir);
         lir.spillMoveFactory = new HSAILSpillMoveFactory();
+    }
+
+    @Override
+    protected void emitNode(ValueNode node) {
+        if (node instanceof LIRGenLowerable) {
+            ((LIRGenLowerable) node).generate(this);
+        } else {
+            super.emitNode(node);
+        }
     }
 
     @Override
@@ -292,20 +302,6 @@ public class HSAILLIRGenerator extends LIRGenerator {
         switch (input.getKind()) {
             case Int:
                 append(new Op1Stack(INEG, result, input));
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-        return result;
-
-    }
-
-    @Override
-    public Variable emitNot(Value input) {
-        Variable result = newVariable(input.getKind());
-        switch (input.getKind()) {
-            case Int:
-                append(new Op1Stack(INOT, result, input));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -639,34 +635,32 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Value emitMathAbs(Value input) {
+    public void emitMathAbs(Variable result, Variable input) {
         throw new InternalError("NYI");
     }
 
     @Override
-    public Value emitMathSqrt(Value input) {
-        Variable result = newVariable(input.getPlatformKind());
+    public void emitMathSqrt(Variable result, Variable input) {
         append(new Op1Stack(SQRT, result, input));
-        return result;
     }
 
     @Override
-    public Value emitMathLog(Value input, boolean base10) {
+    public void emitMathLog(Variable result, Variable input, boolean base10) {
         throw new InternalError("NYI");
     }
 
     @Override
-    public Value emitMathCos(Value input) {
+    public void emitMathCos(Variable result, Variable input) {
         throw new InternalError("NYI");
     }
 
     @Override
-    public Value emitMathSin(Value input) {
+    public void emitMathSin(Variable result, Variable input) {
         throw new InternalError("NYI");
     }
 
     @Override
-    public Value emitMathTan(Value input) {
+    public void emitMathTan(Variable result, Variable input) {
         throw new InternalError("NYI");
     }
 
