@@ -32,8 +32,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import org.graalvm.polyglot.Engine;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.impl.DebuggerInstrument;
@@ -43,20 +41,19 @@ import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.LoadSourceEvent;
 import com.oracle.truffle.api.instrumentation.LoadSourceListener;
-import com.oracle.truffle.api.instrumentation.SourceFilter;
-import com.oracle.truffle.api.instrumentation.TruffleInstrument;
+import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
 
 /**
- * Class that simplifies implementing a debugger on top of Truffle. Primarily used to implement
- * debugging protocol support.
+ * Represents debugging related state of a {@link PolyglotEngine}.
  * <p>
  * Access to the (singleton) instance in an engine, is available via:
  * <ul>
- * <li>{@link Debugger#find(Engine)}</li>
+ * <li>{@link Debugger#find(PolyglotEngine)}</li>
  * <li>{@link Debugger#find(TruffleLanguage.Env)}</li>
  * <li>{@link DebuggerSession#getDebugger()}</li>
  * </ul>
@@ -96,44 +93,22 @@ public final class Debugger {
     Debugger(Env env) {
         this.env = env;
         this.msgNodes = new ObjectStructures.MessageNodes();
-        this.alwaysHaltBreakpoint = new Breakpoint(BreakpointLocation.ANY, SuspendAnchor.BEFORE, false, null);
+        SourceSectionFilter filter = SourceSectionFilter.newBuilder().tagIs(DebuggerTags.AlwaysHalt.class).build();
+        this.alwaysHaltBreakpoint = new Breakpoint(BreakpointLocation.ANY, filter, false);
         this.alwaysHaltBreakpoint.setEnabled(true);
     }
 
     /**
      * Starts a new {@link DebuggerSession session} provided with a callback that gets notified
-     * whenever the execution is suspended. Uses {@link SourceElement#STATEMENT} as the source
-     * element available for stepping. Use
-     * {@link #startSession(SuspendedCallback, SourceElement...)} to specify a different set of
-     * source elements.
+     * whenever the execution is suspended.
      *
      * @param callback the callback to notify
      * @see DebuggerSession
      * @see SuspendedEvent
-     * @see #startSession(SuspendedCallback, SourceElement...)
      * @since 0.17
      */
     public DebuggerSession startSession(SuspendedCallback callback) {
-        return startSession(callback, SourceElement.STATEMENT);
-    }
-
-    /**
-     * Starts a new {@link DebuggerSession session} provided with a callback that gets notified
-     * whenever the execution is suspended and with a list of source syntax elements on which it is
-     * possible to step. Only steps created with one of these element kinds are accepted in this
-     * session. All specified elements are used by steps by default, if not specified otherwise by
-     * {@link StepConfig.Builder#sourceElements(SourceElement...)}. When no elements are provided,
-     * stepping is not possible and the session itself has no instrumentation overhead.
-     *
-     * @param callback the callback to notify
-     * @param defaultSourceElements a list of source elements, an explicit empty list disables
-     *            stepping
-     * @see DebuggerSession
-     * @see SuspendedEvent
-     * @since 0.33
-     */
-    public DebuggerSession startSession(SuspendedCallback callback, SourceElement... defaultSourceElements) {
-        DebuggerSession session = new DebuggerSession(this, callback, defaultSourceElements);
+        DebuggerSession session = new DebuggerSession(this, callback);
         Breakpoint[] bpts;
         synchronized (this) {
             sessions.add(session);
@@ -241,12 +216,10 @@ public final class Debugger {
      *
      * @return an unmodifiable list of sources
      * @since 0.17
-     * @deprecated not very flexible, polls all sources without any notification about changes.
      */
-    @Deprecated
     public List<Source> getLoadedSources() {
         final List<Source> sources = new ArrayList<>();
-        EventBinding<?> binding = env.getInstrumenter().attachLoadSourceListener(SourceFilter.ANY, new LoadSourceListener() {
+        EventBinding<?> binding = env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.ANY, new LoadSourceListener() {
             public void onLoad(LoadSourceEvent event) {
                 sources.add(event.getSource());
             }
@@ -297,43 +270,22 @@ public final class Debugger {
     }
 
     /**
+     * Finds debugger associated with given engine. There is at most one debugger associated with
+     * any {@link PolyglotEngine}.
+     *
+     * @param engine the engine to find debugger for
+     * @return an instance of associated debugger, never <code>null</code>
      * @since 0.9
-     * @deprecated use {@link #find(TruffleInstrument.Env)}, {@link #find(TruffleLanguage.Env)} or
-     *             {@link #find(Engine)} instead.
      */
-    @Deprecated
-    @SuppressWarnings("all")
-    public static Debugger find(com.oracle.truffle.api.vm.PolyglotEngine engine) {
+    public static Debugger find(PolyglotEngine engine) {
         return DebuggerInstrument.getDebugger(engine);
     }
 
     /**
-     * Finds the debugger associated with a given instrument environment.
-     *
-     * @param env the instrument environment to find debugger for
-     * @return an instance of associated debugger, never <code>null</code>
-     * @since 0.33
-     */
-    public static Debugger find(TruffleInstrument.Env env) {
-        return env.lookup(env.getInstruments().get("debugger"), Debugger.class);
-    }
-
-    /**
-     * Finds the debugger associated with a given an engine.
-     *
-     * @param engine the engine to find debugger for
-     * @return an instance of associated debugger, never <code>null</code>
-     * @since 0.33
-     */
-    public static Debugger find(Engine engine) {
-        return engine.getInstruments().get("debugger").lookup(Debugger.class);
-    }
-
-    /**
      * Finds the debugger associated with a given language environment. There is at most one
-     * debugger associated with any {@link org.graalvm.polyglot.Engine}. Please note that a debugger
-     * instance looked up with a language also has access to all other languages and sources that
-     * were loaded by them.
+     * debugger associated with any {@link PolyglotEngine}. Please note that a debugger instance
+     * looked up with a language also has access to all other languages and sources that were loaded
+     * by them.
      *
      * @param env the language environment to find debugger for
      * @return an instance of associated debugger, never <code>null</code>

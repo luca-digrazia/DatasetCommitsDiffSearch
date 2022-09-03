@@ -48,8 +48,7 @@ final class ValueInteropList extends AbstractList<DebugValue> {
     @Override
     public DebugValue get(int index) {
         Object obj = list.get(index);
-        String name = Integer.toString(index);
-        DebugValue dv = new DebugValue.HeapValue(debugger, language, name, obj);
+        DebugValue dv = new DebugValue.HeapValue(debugger, language, null, obj);
         return dv;
     }
 
