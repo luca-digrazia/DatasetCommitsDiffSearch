@@ -76,14 +76,13 @@ final class FileSourceImpl extends Content implements Content.CreateURI {
             try {
                 return readCode();
             } catch (IOException e) {
-                throw Source.raise(RuntimeException.class, e);
             }
         }
         try {
             return Source.read(file);
         } catch (IOException e) {
-            throw Source.raise(RuntimeException.class, e);
         }
+        return null;
     }
 
     @Override
