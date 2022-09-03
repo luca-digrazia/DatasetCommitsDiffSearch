@@ -107,7 +107,6 @@ public final class GraalOptions {
     public static int     LoopMaxUnswitch                    = 3;
     public static int     LoopUnswitchMaxIncrease            = 50;
     public static int     LoopUnswitchUncertaintyBoost       = 5;
-    public static boolean UseLoopLimitChecks                 = true;
 
     // debugging settings
     public static boolean ZapStackOnMethodEntry              = ____;
