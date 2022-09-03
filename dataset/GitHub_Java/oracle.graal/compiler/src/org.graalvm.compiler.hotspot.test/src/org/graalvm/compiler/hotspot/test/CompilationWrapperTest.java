@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -58,7 +56,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
                         "-XX:+UseJVMCICompiler",
                         "-Dgraal.CompilationFailureAction=ExitVM",
                         "-Dgraal.CrashAt=Object.*,String.*",
-                        "-Dgraal.ShowDumpFiles=true",
                         "-version"));
     }
 
@@ -72,7 +69,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
                         "-XX:+UseJVMCICompiler",
                         "-Dgraal.ExitVMOnException=true",
                         "-Dgraal.CrashAt=Object.*,String.*",
-                        "-Dgraal.ShowDumpFiles=true",
                         "-version"));
     }
 
@@ -123,7 +119,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
                         "-Dgraal.CompilationFailureAction=Diagnose",
                         "-Dgraal.MaxCompilationProblemsPerAction=" + maxProblems,
                         "-Dgraal.CrashAt=Object.*,String.*",
-                        "-Dgraal.ShowDumpFiles=true",
                         "-version"));
     }
 
@@ -136,7 +131,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
                         Arrays.asList(
                                         "-Dgraal.CompilationFailureAction=ExitVM",
                                         "-Dgraal.TrufflePerformanceWarningsAreFatal=true",
-                                        "-Dgraal.ShowDumpFiles=true",
                                         "-Dgraal.CrashAt=root test1"),
                         "org.graalvm.compiler.truffle.test.SLTruffleGraalTestSuite", "test");
     }
@@ -153,7 +147,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
                         Arrays.asList(
                                         "-Dgraal.CompilationFailureAction=Silent",
                                         "-Dgraal.TruffleCompilationExceptionsAreFatal=true",
-                                        "-Dgraal.ShowDumpFiles=true",
                                         "-Dgraal.CrashAt=root test1"),
                         "org.graalvm.compiler.truffle.test.SLTruffleGraalTestSuite", "test");
     }
@@ -170,7 +163,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
                         Arrays.asList(
                                         "-Dgraal.CompilationFailureAction=Silent",
                                         "-Dgraal.TrufflePerformanceWarningsAreFatal=true",
-                                        "-Dgraal.ShowDumpFiles=true",
                                         "-Dgraal.CrashAt=root test1:PermanentBailout"),
                         "org.graalvm.compiler.truffle.test.SLTruffleGraalTestSuite", "test");
     }
