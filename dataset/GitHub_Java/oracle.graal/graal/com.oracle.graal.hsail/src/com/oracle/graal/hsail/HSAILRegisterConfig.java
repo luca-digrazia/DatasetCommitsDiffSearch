@@ -24,6 +24,7 @@
 package com.oracle.graal.hsail;
 
 import com.oracle.graal.api.code.*;
+
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
@@ -164,11 +165,6 @@ public class HSAILRegisterConfig implements RegisterConfig {
     public Register[] getCallerSaveRegisters() {
         // TODO Auto-generated method stub
         return new Register[0];
-    }
-
-    @Override
-    public boolean areAllAllocatableRegistersCallerSaved() {
-        return false;
     }
 
     @Override

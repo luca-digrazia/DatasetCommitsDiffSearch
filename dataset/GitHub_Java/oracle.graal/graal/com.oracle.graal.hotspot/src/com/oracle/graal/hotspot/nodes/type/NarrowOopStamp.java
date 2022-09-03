@@ -66,11 +66,6 @@ public class NarrowOopStamp extends ObjectStamp {
     }
 
     @Override
-    public Stamp illegal() {
-        return new NarrowOopStamp((ObjectStamp) super.illegal(), encoding);
-    }
-
-    @Override
     public Kind getStackKind() {
         return Kind.Object;
     }
@@ -93,8 +88,11 @@ public class NarrowOopStamp extends ObjectStamp {
         if (this == otherStamp) {
             return this;
         }
+        if (otherStamp instanceof IllegalStamp) {
+            return otherStamp.meet(this);
+        }
         if (!isCompatible(otherStamp)) {
-            return StampFactory.illegal();
+            return StampFactory.illegal(Kind.Illegal);
         }
         return new NarrowOopStamp((ObjectStamp) super.meet(otherStamp), encoding);
     }
@@ -103,6 +101,9 @@ public class NarrowOopStamp extends ObjectStamp {
     public Stamp join(Stamp otherStamp) {
         if (this == otherStamp) {
             return this;
+        }
+        if (otherStamp instanceof IllegalStamp) {
+            return otherStamp.join(this);
         }
         if (!isCompatible(otherStamp)) {
             return StampFactory.illegal(Kind.Illegal);

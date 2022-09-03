@@ -98,8 +98,8 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator {
      */
     @Override
     public void visitCompareAndSwap(LoweredCompareAndSwapNode node, Value address) {
-        Kind kind = node.getNewValue().getKind();
-        assert kind == node.getExpectedValue().getKind();
+        Kind kind = node.getNewValue().kind();
+        assert kind == node.getExpectedValue().kind();
         Variable expected = load(operand(node.getExpectedValue()));
         Variable newValue = load(operand(node.getNewValue()));
         HSAILAddressValue addressValue = asAddressValue(address);
@@ -117,7 +117,7 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator {
         } else {
             append(new CompareAndSwapOp(casResult, addressValue, expected, newValue));
         }
-        Variable nodeResult = newVariable(node.getKind());
+        Variable nodeResult = newVariable(node.kind());
         append(new CondMoveOp(mapKindToCompareOp(kind), casResult, expected, nodeResult, Condition.EQ, Constant.INT_1, Constant.INT_0));
         setResult(node, nodeResult);
     }
@@ -162,7 +162,7 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator {
             if (canStoreConstant(c, isCompressed)) {
                 if (isCompressed) {
                     if ((c.getKind() == Kind.Object) && c.isNull()) {
-                        append(new StoreConstantOp(Kind.NarrowOop, storeAddress, c, state));
+                        append(new StoreConstantOp(Kind.Int, storeAddress, Constant.forInt(0), state));
                     } else {
                         throw GraalInternalError.shouldNotReachHere("can't handle: " + access);
                     }
