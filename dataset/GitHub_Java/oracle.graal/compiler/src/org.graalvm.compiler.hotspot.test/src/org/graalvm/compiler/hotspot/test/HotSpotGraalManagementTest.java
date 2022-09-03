@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -358,17 +356,14 @@ public class HotSpotGraalManagementTest {
         assertNotNull("Info is found", info);
 
         final MBeanOperationInfo[] arr = info.getOperations();
+        assertEquals("Currently three overloads", 3, arr.length);
         MBeanOperationInfo dumpOp = null;
-        int dumpMethodCount = 0;
         for (int i = 0; i < arr.length; i++) {
-            if ("dumpMethod".equals(arr[i].getName())) {
-                if (arr[i].getSignature().length == 3) {
-                    dumpOp = arr[i];
-                }
-                dumpMethodCount++;
+            assertEquals("dumpMethod", arr[i].getName());
+            if (arr[i].getSignature().length == 3) {
+                dumpOp = arr[i];
             }
         }
-        assertEquals("Currently three overloads", 3, dumpMethodCount);
         assertNotNull("three args variant (as used by VisualVM) found", dumpOp);
 
         MBeanAttributeInfo dumpPath = findAttributeInfo("DumpPath", info);
