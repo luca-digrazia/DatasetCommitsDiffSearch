@@ -295,24 +295,13 @@ public class CompilationResultBuilder {
     public AbstractAddress recordDataReferenceInCode(Constant constant, int alignment) {
         assert constant != null;
         debug.log("Constant reference in code: pos = %d, data = %s", asm.position(), constant);
-        Data data = createDataItem(constant);
-        data.updateAlignment(alignment);
-        return recordDataSectionReference(data);
-    }
-
-    public AbstractAddress recordDataReferenceInCode(Data data, int alignment) {
-        assert data != null;
-        data.updateAlignment(alignment);
-        return recordDataSectionReference(data);
-    }
-
-    public Data createDataItem(Constant constant) {
         Data data = dataCache.get(constant);
         if (data == null) {
             data = dataBuilder.createDataItem(constant);
             dataCache.put(constant, data);
         }
-        return data;
+        data.updateAlignment(alignment);
+        return recordDataSectionReference(data);
     }
 
     public AbstractAddress recordDataReferenceInCode(byte[] data, int alignment) {
