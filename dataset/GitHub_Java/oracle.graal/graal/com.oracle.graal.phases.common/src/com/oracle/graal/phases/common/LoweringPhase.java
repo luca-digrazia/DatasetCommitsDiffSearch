@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +26,7 @@ import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.Graph.Mark;
@@ -47,12 +48,11 @@ import com.oracle.graal.phases.tiers.*;
 public class LoweringPhase extends BasePhase<PhaseContext> {
 
     @NodeInfo
-    static final class DummyGuardHandle extends ValueNode implements GuardedNode {
-        public static final NodeClass TYPE = NodeClass.get(DummyGuardHandle.class);
+    static class DummyGuardHandle extends ValueNode implements GuardedNode {
         @Input(InputType.Guard) GuardingNode guard;
 
         public DummyGuardHandle(GuardingNode guard) {
-            super(TYPE, StampFactory.forVoid());
+            super(StampFactory.forVoid());
             this.guard = guard;
         }
 
@@ -118,6 +118,11 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         @Override
         public GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action) {
             return createGuard(before, condition, deoptReason, action, false);
+        }
+
+        @Override
+        public Assumptions assumptions() {
+            return context.getAssumptions();
         }
 
         public StampProvider getStampProvider() {
@@ -314,7 +319,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                     if (loweringTool.guardAnchor.asNode().isDeleted()) {
                         // TODO nextNode could be deleted but this is not currently supported
                         assert nextNode.isAlive();
-                        loweringTool.guardAnchor = AbstractBeginNode.prevBegin(nextNode);
+                        loweringTool.guardAnchor = BeginNode.prevBegin(nextNode);
                     }
                     assert checkPostNodeLowering(node, loweringTool, preLoweringMark, unscheduledUsages);
                 }
@@ -331,7 +336,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                         // FixedWithNextNode is followed by some kind of BeginNode.
                         // For example the when a FixedGuard followed by a loop exit is lowered to a
                         // control-split + deopt.
-                        AbstractBeginNode begin = node.graph().add(new BeginNode());
+                        BeginNode begin = node.graph().add(new BeginNode());
                         nextLastFixed.replaceFirstSuccessor(nextNode, begin);
                         begin.setNext(nextNode);
                         nextLastFixed = begin;

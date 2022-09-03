@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,26 +22,16 @@
  */
 package com.oracle.graal.phases.common;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.iterators.NodePredicate;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.DeoptimizingNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.Phase;
-import com.oracle.graal.phases.graph.ReentrantNodeIterator;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.graph.ReentrantNodeIterator.NodeIteratorClosure;
 
 /**
@@ -54,7 +44,6 @@ import com.oracle.graal.phases.graph.ReentrantNodeIterator.NodeIteratorClosure;
  * This Phase processes the graph in post order, assigning the {@link FrameState} from the last
  * {@link StateSplit} node to {@link DeoptimizingNode DeoptimizingNodes}.
  */
-@SuppressWarnings("unused")
 public class FrameStateAssignmentPhase extends Phase {
 
     private static class FrameStateAssignmentClosure extends NodeIteratorClosure<FrameState> {
@@ -65,7 +54,7 @@ public class FrameStateAssignmentPhase extends Phase {
             if (node instanceof DeoptimizingNode.DeoptBefore) {
                 DeoptimizingNode.DeoptBefore deopt = (DeoptimizingNode.DeoptBefore) node;
                 if (deopt.canDeoptimize() && deopt.stateBefore() == null) {
-                    JVMCIError.guarantee(currentState != null, "no FrameState at DeoptimizingNode %s", deopt);
+                    GraalInternalError.guarantee(currentState != null, "no FrameState at DeoptimizingNode %s", deopt);
                     deopt.setStateBefore(currentState);
                 }
             }
@@ -82,7 +71,7 @@ public class FrameStateAssignmentPhase extends Phase {
             if (node instanceof DeoptimizingNode.DeoptDuring) {
                 DeoptimizingNode.DeoptDuring deopt = (DeoptimizingNode.DeoptDuring) node;
                 if (deopt.canDeoptimize()) {
-                    JVMCIError.guarantee(currentState != null, "no FrameState at DeoptimizingNode %s", deopt);
+                    GraalInternalError.guarantee(currentState != null, "no FrameState at DeoptimizingNode %s", deopt);
                     deopt.computeStateDuring(currentState);
                 }
             }
@@ -90,7 +79,7 @@ public class FrameStateAssignmentPhase extends Phase {
             if (node instanceof DeoptimizingNode.DeoptAfter) {
                 DeoptimizingNode.DeoptAfter deopt = (DeoptimizingNode.DeoptAfter) node;
                 if (deopt.canDeoptimize() && deopt.stateAfter() == null) {
-                    JVMCIError.guarantee(currentState != null, "no FrameState at DeoptimizingNode %s", deopt);
+                    GraalInternalError.guarantee(currentState != null, "no FrameState at DeoptimizingNode %s", deopt);
                     deopt.setStateAfter(currentState);
                 }
             }
@@ -99,13 +88,13 @@ public class FrameStateAssignmentPhase extends Phase {
         }
 
         @Override
-        protected FrameState merge(AbstractMergeNode merge, List<FrameState> states) {
+        protected FrameState merge(MergeNode merge, List<FrameState> states) {
             FrameState singleFrameState = singleFrameState(states);
             return singleFrameState == null ? merge.stateAfter() : singleFrameState;
         }
 
         @Override
-        protected FrameState afterSplit(AbstractBeginNode node, FrameState oldState) {
+        protected FrameState afterSplit(BeginNode node, FrameState oldState) {
             return oldState;
         }
 
@@ -117,24 +106,22 @@ public class FrameStateAssignmentPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        assert !graph.getGuardsStage().allowsFloatingGuards() && !hasFloatingDeopts(graph);
+        assert !graph.getGuardsStage().allowsFloatingGuards() && checkFixedDeopts(graph);
         if (graph.getGuardsStage().areFrameStatesAtSideEffects()) {
             ReentrantNodeIterator.apply(new FrameStateAssignmentClosure(), graph.start(), null);
             graph.setGuardsStage(GuardsStage.AFTER_FSA);
-            graph.getNodes(FrameState.TYPE).filter(state -> state.hasNoUsages()).forEach(GraphUtil::killWithUnusedFloatingInputs);
+            graph.getNodes(FrameState.class).filter(state -> state.hasNoUsages()).forEach(GraphUtil::killWithUnusedFloatingInputs);
         }
     }
 
-    private static boolean hasFloatingDeopts(StructuredGraph graph) {
-        for (Node n : graph.getNodes()) {
-            if (n instanceof DeoptimizingNode && GraphUtil.isFloatingNode(n)) {
-                DeoptimizingNode deoptimizingNode = (DeoptimizingNode) n;
-                if (deoptimizingNode.canDeoptimize()) {
-                    return true;
-                }
+    private static boolean checkFixedDeopts(StructuredGraph graph) {
+        NodePredicate isFloatingNode = GraphUtil.isFloatingNode();
+        for (Node n : graph.getNodes().filterInterface(DeoptimizingNode.class)) {
+            if (((DeoptimizingNode) n).canDeoptimize() && isFloatingNode.apply(n)) {
+                return false;
             }
         }
-        return false;
+        return true;
     }
 
     private static FrameState singleFrameState(List<FrameState> states) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ import static com.oracle.graal.api.meta.LocationIdentity.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -34,9 +33,8 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
-public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerable, MemoryCheckpoint.Single {
+public class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerable, MemoryCheckpoint.Single {
 
-    public static final NodeClass TYPE = NodeClass.get(UnsafeArrayCopyNode.class);
     @Input ValueNode src;
     @Input ValueNode srcPos;
     @Input ValueNode dest;
@@ -47,7 +45,7 @@ public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lo
     protected Kind elementKind;
 
     public UnsafeArrayCopyNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode layoutHelper, Kind elementKind) {
-        super(TYPE, StampFactory.forVoid());
+        super(StampFactory.forVoid());
         assert layoutHelper == null || elementKind == null;
         this.src = src;
         this.srcPos = srcPos;

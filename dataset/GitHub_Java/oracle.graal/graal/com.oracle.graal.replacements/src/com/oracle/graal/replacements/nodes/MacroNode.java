@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,9 +57,8 @@ import com.oracle.graal.replacements.*;
  * </ul>
  */
 @NodeInfo
-public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
+public class MacroNode extends FixedWithNextNode implements Lowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(MacroNode.class);
     @Input protected NodeInputList<ValueNode> arguments;
 
     protected final int bci;
@@ -67,8 +66,8 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
     protected final JavaType returnType;
     protected final InvokeKind invokeKind;
 
-    protected MacroNode(NodeClass c, Invoke invoke) {
-        super(c, StampFactory.forKind(((MethodCallTargetNode) invoke.callTarget()).targetMethod().getSignature().getReturnKind()));
+    public MacroNode(Invoke invoke) {
+        super(StampFactory.forKind(((MethodCallTargetNode) invoke.callTarget()).targetMethod().getSignature().getReturnKind()));
         MethodCallTargetNode methodCallTarget = (MethodCallTargetNode) invoke.callTarget();
         this.arguments = new NodeInputList<>(this, methodCallTarget.arguments());
         this.bci = invoke.bci();
@@ -130,7 +129,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
      * @param replacementGraph a replacement (i.e., snippet or method substitution) graph
      */
     protected StructuredGraph lowerReplacement(final StructuredGraph replacementGraph, LoweringTool tool) {
-        final PhaseContext c = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getLowerer(), tool.getReplacements(), tool.getStampProvider());
+        final PhaseContext c = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getLowerer(), tool.getReplacements(), tool.assumptions(), tool.getStampProvider());
         if (!graph().hasValueProxies()) {
             new RemoveValueProxyPhase().apply(replacementGraph);
         }
