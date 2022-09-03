@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -56,6 +54,7 @@ import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.BinaryOpLogicNode;
 import org.graalvm.compiler.nodes.ConditionAnchorNode;
+import org.graalvm.compiler.nodes.DeoptimizeNode;
 import org.graalvm.compiler.nodes.DeoptimizingGuard;
 import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FixedGuardNode;
@@ -63,7 +62,6 @@ import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.GuardNode;
 import org.graalvm.compiler.nodes.IfNode;
-import org.graalvm.compiler.nodes.LogicConstantNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.MergeNode;
@@ -99,7 +97,6 @@ import org.graalvm.compiler.phases.tiers.PhaseContext;
 
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.SpeculationLog.Speculation;
 import jdk.vm.ci.meta.TriState;
 
 public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
@@ -201,7 +198,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                     for (GuardNode guard : node.falseSuccessor().guards().snapshot()) {
                         GuardNode otherGuard = trueGuards.get(guard.getCondition());
                         if (otherGuard != null && guard.isNegated() == otherGuard.isNegated()) {
-                            Speculation speculation = otherGuard.getSpeculation();
+                            JavaConstant speculation = otherGuard.getSpeculation();
                             if (speculation == null) {
                                 speculation = guard.getSpeculation();
                             } else if (guard.getSpeculation() != null && guard.getSpeculation() != speculation) {
@@ -335,18 +332,11 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                 if (result != node.isNegated()) {
                     node.replaceAndDelete(guard.asNode());
                 } else {
-                    /*
-                     * Don't kill this branch immediately because `killCFG` can have complex
-                     * implications in the presence of loops: it might replace or delete nodes in
-                     * other branches or even above the kill point. Instead of killing immediately,
-                     * just leave the graph in a state that is easy to simplify by a subsequent
-                     * canonicalizer phase.
-                     */
-                    FixedGuardNode deopt = new FixedGuardNode(LogicConstantNode.forBoolean(result, node.graph()), node.getReason(), node.getAction(), node.getSpeculation(), node.isNegated(),
-                                    node.getNodeSourcePosition());
+                    DeoptimizeNode deopt = node.graph().add(new DeoptimizeNode(node.getAction(), node.getReason(), node.getSpeculation()));
                     AbstractBeginNode beginNode = (AbstractBeginNode) node.getAnchor();
-                    graph.addAfterFixed(beginNode, node.graph().add(deopt));
-
+                    FixedNode next = beginNode.next();
+                    beginNode.setNext(deopt);
+                    GraphUtil.killCFG(next);
                 }
                 return true;
             })) {
@@ -361,8 +351,10 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                     GraphUtil.unlinkFixedNode(node);
                     GraphUtil.killWithUnusedFloatingInputs(node);
                 } else {
-                    node.setCondition(LogicConstantNode.forBoolean(result, node.graph()), node.isNegated());
-                    // Don't kill this branch immediately, see `processGuard`.
+                    DeoptimizeNode deopt = node.graph().add(new DeoptimizeNode(node.getAction(), node.getReason(), node.getSpeculation()));
+                    deopt.setStateBefore(node.stateBefore());
+                    node.replaceAtPredecessor(deopt);
+                    GraphUtil.killCFG(node);
                 }
                 debug.log("Kill fixed guard guard");
                 return true;
@@ -373,10 +365,11 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
 
         protected void processIf(IfNode node) {
             tryProveCondition(node.condition(), (guard, result, guardedValueStamp, newInput) -> {
-                node.setCondition(LogicConstantNode.forBoolean(result, node.graph()));
                 AbstractBeginNode survivingSuccessor = node.getSuccessor(result);
                 survivingSuccessor.replaceAtUsages(InputType.Guard, guard.asNode());
-                // Don't kill the other branch immediately, see `processGuard`.
+                survivingSuccessor.replaceAtPredecessor(null);
+                node.replaceAtPredecessor(survivingSuccessor);
+                GraphUtil.killCFG(node);
                 counterIfsKilled.increment(debug);
                 return true;
             });
@@ -528,7 +521,8 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                                     if (input == null) {
                                         input = valueAt;
                                     }
-                                    valueAt = graph.maybeAddOrUnique(PiNode.create(input, curBestStamp, (ValueNode) infoElement.guard));
+                                    ValueNode valueNode = graph.maybeAddOrUnique(PiNode.create(input, curBestStamp, (ValueNode) infoElement.guard));
+                                    valueAt = valueNode;
                                 }
                                 newPhi.addInput(valueAt);
                             }
