@@ -24,18 +24,20 @@
  */
 package com.oracle.truffle.sl.tools.debug;
 
+import java.io.*;
 import java.util.*;
 
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.api.vm.*;
-import com.oracle.truffle.api.vm.TruffleVM.Language;
 import com.oracle.truffle.tools.debug.engine.*;
 import com.oracle.truffle.tools.debug.shell.*;
 import com.oracle.truffle.tools.debug.shell.client.*;
 import com.oracle.truffle.tools.debug.shell.server.*;
+import com.oracle.truffle.sl.factory.*;
+import com.oracle.truffle.sl.runtime.*;
 
 /**
  * Instantiation of the "server" side of the "REPL*" debugger for the Simple language.
@@ -47,11 +49,10 @@ import com.oracle.truffle.tools.debug.shell.server.*;
  * @see SimpleREPLClient
  */
 public final class SLREPLServer implements REPLServer {
-
     public static void main(String[] args) {
         // Cheating for the prototype: start from SL, rather than from the client.
         final SLREPLServer server = new SLREPLServer();
-        final SimpleREPLClient client = new SimpleREPLClient(server.language.getShortName(), server);
+        final SimpleREPLClient client = new SimpleREPLClient(server.slContext, server);
 
         // Cheating for the prototype: allow server access to client for recursive debugging
         server.setClient(client);
@@ -62,7 +63,7 @@ public final class SLREPLServer implements REPLServer {
         }
     }
 
-    private final Language language;
+    private final SLContext slContext;
     private final DebugEngine slDebugEngine;
     private final String statusPrefix;
     private final Map<String, REPLHandler> handlerMap = new HashMap<>();
@@ -98,14 +99,13 @@ public final class SLREPLServer implements REPLServer {
         add(REPLHandler.TRUFFLE_HANDLER);
         add(REPLHandler.TRUFFLE_NODE_HANDLER);
 
-        TruffleVM vm = TruffleVM.newVM().build();
-        this.language = vm.getLanguages().get("application/x-sl");
-        assert language != null;
+        // Set up an SL context
+        this.slContext = SLContextFactory.create(null, new PrintWriter(System.out));
 
-        final SLREPLDebugClient slDebugClient = new SLREPLDebugClient(language);
-        this.slDebugEngine = DebugEngine.create(slDebugClient, language);
-
-        this.statusPrefix = language.getShortName() + " REPL:";
+        final SLSourceExecutionProvider slSourceExecution = new SLSourceExecutionProvider(slContext);
+        final SLREPLDebugClient slDebugClient = new SLREPLDebugClient(this.slContext);
+        this.slDebugEngine = DebugEngine.create(slDebugClient, slSourceExecution);
+        this.statusPrefix = slContext.getLanguageShortName() + " REPL:";
     }
 
     private void setClient(SimpleREPLClient replClient) {
@@ -119,7 +119,7 @@ public final class SLREPLServer implements REPLServer {
         // SL doesn't load modules (like other languages), so we just return a success
         final REPLMessage reply = new REPLMessage();
         reply.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
-        reply.put(REPLMessage.DISPLAY_MSG, language.getShortName() + " started");
+        reply.put(REPLMessage.DISPLAY_MSG, slContext.getLanguageShortName() + " started");
         return reply;
     }
 
@@ -163,8 +163,8 @@ public final class SLREPLServer implements REPLServer {
         }
 
         @Override
-        public Language getLanguage() {
-            return language;
+        public SLContext getLanguageContext() {
+            return slContext;
         }
 
         @Override
@@ -186,10 +186,10 @@ public final class SLREPLServer implements REPLServer {
      */
     private final class SLREPLDebugClient implements DebugClient {
 
-        private final Language language;
+        private final SLContext slContext;
 
-        SLREPLDebugClient(Language language) {
-            this.language = language;
+        SLREPLDebugClient(SLContext slContext) {
+            this.slContext = slContext;
         }
 
         public void haltedAt(Node node, MaterializedFrame mFrame, List<String> warnings) {
@@ -225,8 +225,8 @@ public final class SLREPLServer implements REPLServer {
             }
         }
 
-        public Language getLanguage() {
-            return language;
+        public ExecutionContext getExecutionContext() {
+            return slContext;
         }
     }
 

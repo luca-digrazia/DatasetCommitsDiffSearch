@@ -22,16 +22,15 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.InputType.Condition;
+import static com.oracle.graal.nodeinfo.InputType.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.Node.IndirectCanonicalization;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.calc.*;
 
 @NodeInfo(allowedUsageTypes = {Condition})
-public abstract class LogicNode extends FloatingNode implements IndirectCanonicalization {
+public abstract class LogicNode extends FloatingNode {
 
     public static final NodeClass<LogicNode> TYPE = NodeClass.create(LogicNode.class);
 

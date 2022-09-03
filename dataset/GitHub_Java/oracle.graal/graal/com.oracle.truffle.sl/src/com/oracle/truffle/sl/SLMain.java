@@ -31,11 +31,9 @@ import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.api.tools.*;
-import com.oracle.truffle.api.vm.TruffleVM;
-import com.oracle.truffle.api.vm.TruffleVM.Symbol;
+import com.oracle.truffle.api.vm.*;
 import com.oracle.truffle.sl.builtins.*;
-import com.oracle.truffle.sl.factory.SLContextFactory;
+import com.oracle.truffle.sl.factory.*;
 import com.oracle.truffle.sl.nodes.*;
 import com.oracle.truffle.sl.nodes.call.*;
 import com.oracle.truffle.sl.nodes.controlflow.*;
@@ -44,9 +42,7 @@ import com.oracle.truffle.sl.nodes.instrument.*;
 import com.oracle.truffle.sl.nodes.local.*;
 import com.oracle.truffle.sl.parser.*;
 import com.oracle.truffle.sl.runtime.*;
-import java.net.URI;
-import java.util.Collections;
-import java.util.List;
+import com.oracle.truffle.tools.*;
 
 /**
  * SL is a simple language to demonstrate and showcase features of Truffle. The implementation is as
@@ -136,17 +132,10 @@ import java.util.List;
  */
 @TruffleLanguage.Registration(name = "sl", mimeType = "application/x-sl")
 public class SLMain extends TruffleLanguage {
-    private static SLMain LAST;
-    private static List<NodeFactory<? extends SLBuiltinNode>> builtins = Collections.emptyList();
     private final SLContext context;
 
-    public SLMain(Env env) {
-        super(env);
-        context = SLContextFactory.create(new BufferedReader(env().stdIn()), new PrintWriter(env().stdOut(), true));
-        LAST = this;
-        for (NodeFactory<? extends SLBuiltinNode> builtin : builtins) {
-            context.installBuiltin(builtin);
-        }
+    public SLMain() {
+        this.context = SLContextFactory.create(new BufferedReader(new InputStreamReader(System.in)), new PrintWriter(System.out));
     }
 
     /* Demonstrate per-type tabulation of node execution counts */
@@ -160,7 +149,7 @@ public class SLMain extends TruffleLanguage {
      * The main entry point. Use the mx command "mx sl" to run it with the correct class path setup.
      */
     public static void main(String[] args) throws IOException {
-        TruffleVM vm = TruffleVM.newVM().build();
+        TruffleVM vm = TruffleVM.create();
         assert vm.getLanguages().containsKey("application/x-sl");
 
         int repeats = 1;
@@ -168,17 +157,12 @@ public class SLMain extends TruffleLanguage {
             repeats = Integer.parseInt(args[1]);
         }
 
-        if (args.length == 0) {
-            vm.eval("application/x-sl", new InputStreamReader(System.in));
-        } else {
-            vm.eval(new File(args[0]).toURI());
-        }
-        Symbol main = vm.findGlobalSymbol("main");
-        if (main == null) {
-            throw new SLException("No function main() defined in SL source file.");
-        }
         while (repeats-- > 0) {
-            main.invoke(null);
+            if (args.length == 0) {
+                vm.eval("application/x-sl", new InputStreamReader(System.in));
+            } else {
+                vm.eval(new File(args[0]).toURI());
+            }
         }
     }
 
@@ -186,9 +170,7 @@ public class SLMain extends TruffleLanguage {
      * Parse and run the specified SL source. Factored out in a separate method so that it can also
      * be used by the unit test harness.
      */
-    public static long run(TruffleVM context, URI source, PrintWriter logOutput, PrintWriter out, int repeats, List<NodeFactory<? extends SLBuiltinNode>> currentBuiltins) throws IOException {
-        builtins = currentBuiltins;
-
+    public static long run(SLContext context, Source source, PrintWriter logOutput, int repeats) {
         if (logOutput != null) {
             logOutput.println("== running on " + Truffle.getRuntime().getName());
             // logOutput.println("Source = " + source.getCode());
@@ -217,14 +199,11 @@ public class SLMain extends TruffleLanguage {
         }
 
         /* Parse the SL source file. */
-        Object result = context.eval(source);
-        if (result != null) {
-            out.println(result);
-        }
+        Parser.parseSL(context, source);
 
         /* Lookup our main entry point, which is per definition always named "main". */
-        Symbol main = context.findGlobalSymbol("main");
-        if (main == null) {
+        SLFunction main = context.getFunctionRegistry().lookup("main");
+        if (main.getCallTarget() == null) {
             throw new SLException("No function main() defined in SL source file.");
         }
 
@@ -235,21 +214,19 @@ public class SLMain extends TruffleLanguage {
         /* Change to dump the AST to IGV over the network. */
         boolean dumpASTToIGV = false;
 
-        printScript("before execution", LAST.context, logOutput, printASTToLog, printSourceAttributionToLog, dumpASTToIGV);
+        printScript("before execution", context, logOutput, printASTToLog, printSourceAttributionToLog, dumpASTToIGV);
         long totalRuntime = 0;
         try {
             for (int i = 0; i < repeats; i++) {
                 long start = System.nanoTime();
                 /* Call the main entry point, without any arguments. */
                 try {
-                    result = main.invoke(null);
+                    Object result = main.getCallTarget().call();
                     if (result != SLNull.SINGLETON) {
-                        out.println(result);
+                        context.getOutput().println(result);
                     }
                 } catch (UnsupportedSpecializationException ex) {
-                    out.println(formatTypeError(ex));
-                } catch (SLUndefinedFunctionException ex) {
-                    out.println(String.format("Undefined function: %s", ex.getFunctionName()));
+                    context.getOutput().println(formatTypeError(ex));
                 }
                 long end = System.nanoTime();
                 totalRuntime += end - start;
@@ -260,7 +237,7 @@ public class SLMain extends TruffleLanguage {
             }
 
         } finally {
-            printScript("after execution", LAST.context, logOutput, printASTToLog, printSourceAttributionToLog, dumpASTToIGV);
+            printScript("after execution", context, logOutput, printASTToLog, printSourceAttributionToLog, dumpASTToIGV);
         }
         if (nodeExecCounter != null) {
             nodeExecCounter.print(System.out);
@@ -329,7 +306,7 @@ public class SLMain extends TruffleLanguage {
         if (ex.getNode() != null && ex.getNode().getSourceSection() != null) {
             SourceSection ss = ex.getNode().getSourceSection();
             if (ss != null && !(ss instanceof NullSourceSection)) {
-                result.append(" at ").append(ss.getSource().getShortName()).append(" line ").append(ss.getStartLine()).append(" col ").append(ss.getStartColumn());
+                result.append(" at ").append(ss.getSource().getName()).append(" line ").append(ss.getStartLine()).append(" col ").append(ss.getStartColumn());
             }
         }
         result.append(": operation");
@@ -372,32 +349,23 @@ public class SLMain extends TruffleLanguage {
 
     @Override
     protected Object eval(Source code) throws IOException {
-        try {
-            context.executeMain(code);
-        } catch (Exception e) {
-            throw new IOException(e);
-        }
+        context.executeMain(code);
         return null;
     }
 
     @Override
     protected Object findExportedSymbol(String globalName) {
-        for (SLFunction f : context.getFunctionRegistry().getFunctions()) {
-            if (globalName.equals(f.getName())) {
-                return f;
-            }
-        }
         return null;
     }
 
     @Override
     protected Object getLanguageGlobal() {
-        return context;
+        return null;
     }
 
     @Override
     protected boolean isObjectOfLanguage(Object object) {
-        return object instanceof SLFunction;
+        return false;
     }
 
 }
