@@ -199,17 +199,7 @@ public class EscapeAnalysisPhase extends Phase {
                         }
                         if (!curNode.isDeleted() && curNode instanceof StateSplit && ((StateSplit) curNode).stateAfter() != null) {
                             if (state.virtualObjectField != null) {
-                                ValueNode v = state.virtualObjectField;
-                                if (curNode instanceof LoopBeginNode) {
-                                    while (!((LoopBeginNode) curNode).isPhiAtMerge(v)) {
-                                        if (v instanceof PhiNode) {
-                                            v = ((PhiNode) v).valueAt(0);
-                                        } else {
-                                            v = ((VirtualObjectFieldNode) v).lastState();
-                                        }
-                                    }
-                                }
-                                ((StateSplit) curNode).stateAfter().addVirtualObjectMapping(v);
+                                ((StateSplit) curNode).stateAfter().addVirtualObjectMapping(state.virtualObjectField);
                             }
                         }
                     }
