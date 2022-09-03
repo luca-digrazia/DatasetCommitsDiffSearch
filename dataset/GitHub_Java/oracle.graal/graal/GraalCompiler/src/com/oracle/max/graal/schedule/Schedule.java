@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.ir.*;
-import com.sun.c1x.lir.*;
 
 
 public class Schedule {
@@ -68,20 +67,18 @@ public class Schedule {
     private Block assignBlock(Node n, Block b) {
         assert nodeToBlock.get(n) == null;
         nodeToBlock.set(n, b);
-        if (n != n.graph().start()) {
-            b.getInstructions().add((Instruction) n);
-        }
+        b.getInstructions().add((Instruction) n);
         return b;
     }
 
     private boolean isCFG(Node n) {
-        return n != null && ((n instanceof Instruction) || n == n.graph().start());
+        return n != null && (n instanceof Instruction);
     }
 
     private void identifyBlocks() {
         // Identify blocks.
         final ArrayList<Node> blockBeginNodes = new ArrayList<Node>();
-        NodeIterator.iterate(EdgeType.SUCCESSORS, graph.start(), null, new NodeVisitor() {
+        NodeIterator.iterate(EdgeType.SUCCESSORS, graph.start().successors().get(0), null, new NodeVisitor() {
             @Override
             public boolean visit(Node n) {
                 if (!isCFG(n)) {
@@ -188,11 +185,8 @@ public class Schedule {
                TTY.print(pred + ";");
            }
            TTY.println();
-
-           if (b.getInstructions().size() > 0) {
-               TTY.print("first instr: " + b.getInstructions().get(0));
-               TTY.print("last instr: " + b.getInstructions().get(b.getInstructions().size() - 1));
-           }
+           TTY.print("first instr: " + b.getInstructions().get(0));
+           TTY.print("last instr: " + b.getInstructions().get(b.getInstructions().size() - 1));
         }
 
 /*

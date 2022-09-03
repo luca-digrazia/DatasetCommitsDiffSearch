@@ -81,7 +81,6 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
     public final int opcode;
     public final RiMethod target;
     public final RiType returnType;
-    public final int bci; // XXX needed because we can not compute the bci from the sateBefore bci of this Invoke was optimized from INVOKEINTERFACE to INVOKESPECIAL
 
     /**
      * Constructs a new Invoke instruction.
@@ -93,12 +92,11 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
      * @param target the target method being called
      * @param stateBefore the state before executing the invocation
      */
-    public Invoke(int opcode, CiKind result, Value[] args, RiMethod target, RiType returnType, Graph graph, int bci) {
+    public Invoke(int opcode, CiKind result, Value[] args, RiMethod target, RiType returnType, Graph graph) {
         super(result, args.length, SUCCESSOR_COUNT, graph);
         this.opcode = opcode;
         this.target = target;
         this.returnType = returnType;
-        this.bci = bci;
 
         this.argumentCount = args.length;
         for (int i = 0; i < args.length; i++) {

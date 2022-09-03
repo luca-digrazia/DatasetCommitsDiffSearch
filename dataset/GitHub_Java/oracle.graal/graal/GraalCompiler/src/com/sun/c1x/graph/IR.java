@@ -124,13 +124,7 @@ public class IR {
         }
         startBlock = valueToBlock.get(getHIRStartBlock());
         assert startBlock != null;
-
-        if (startBlock.blockPredecessors().size() > 0) {
-            LIRBlock oldStartBlock = startBlock;
-            startBlock = new LIRBlock(orderedBlocks.size());
-            startBlock.blockSuccessors().add(oldStartBlock);
-            orderedBlocks.add(startBlock);
-        }
+        verifyAndPrint("After linear scan order");
 
         ComputeLinearScanOrder clso = new ComputeLinearScanOrder(lirBlocks.size(), startBlock);
         orderedBlocks = clso.linearScanOrder();
@@ -141,7 +135,7 @@ public class IR {
             b.setLinearScanNumber(z++);
         }
 
-        verifyAndPrint("After linear scan order");
+
 
         if (C1XOptions.PrintTimers) {
             C1XTimers.HIR_OPTIMIZE.stop();

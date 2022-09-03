@@ -105,7 +105,7 @@ public final class GraphBuilder {
     // Exception handler list
     private List<ExceptionHandler> exceptionHandlers;
 
-    private FrameStateBuilder frameState;          // the current execution state
+    private final FrameStateBuilder frameState;          // the current execution state
     private Instruction lastInstr;                 // the last instruction added
 
     private final LogStream log;
@@ -961,7 +961,7 @@ public final class GraphBuilder {
         }
     }
 
-    private void genMonitorExit(Value x) {
+    private void genMonitorExit(Value x, int bci) {
         int lockNumber = frameState.locksSize() - 1;
         if (lockNumber < 0) {
             throw new CiBailout("monitor stack underflow");
@@ -1088,6 +1088,7 @@ public final class GraphBuilder {
 
     private void fillSyncHandler(Value lock, Block syncHandler) {
         FrameState origState = frameState.create(-1);
+        Instruction origLast = lastInstr;
 
         lastInstr = syncHandler.firstInstruction;
         while (lastInstr.next() != null) {
@@ -1095,7 +1096,9 @@ public final class GraphBuilder {
             lastInstr = lastInstr.next();
         }
 
+//        TTY.println("first instruction: " + syncHandler.firstInstruction);
         frameState.initializeFrom(((StateSplit) syncHandler.firstInstruction).stateBefore());
+
         int bci = Instruction.SYNCHRONIZATION_ENTRY_BCI;
 
         assert lock != null;
@@ -1106,13 +1109,14 @@ public final class GraphBuilder {
                 lock = appendWithBCI(l);
             }
         }
-        // Exit the monitor and unwind the stack.
-        genMonitorExit(lock);
-        append(new Unwind(frameState.apop(), graph));
+        // exit the monitor
+        genMonitorExit(lock, Instruction.SYNCHRONIZATION_ENTRY_BCI);
 
-        // The sync handler is always the last thing to add => we can clear the frameState.
-        frameState = null;
-        lastInstr = null;
+        genThrow(bci);
+
+        frameState.initializeFrom(origState);
+        origState.delete();
+        lastInstr = origLast;
     }
 
     private void iterateAllBlocks() {
@@ -1432,7 +1436,7 @@ public final class GraphBuilder {
             case CHECKCAST      : genCheckCast(); break;
             case INSTANCEOF     : genInstanceOf(); break;
             case MONITORENTER   : genMonitorEnter(frameState.apop(), stream.currentBCI()); break;
-            case MONITOREXIT    : genMonitorExit(frameState.apop()); break;
+            case MONITOREXIT    : genMonitorExit(frameState.apop(), stream.currentBCI()); break;
             case MULTIANEWARRAY : genNewMultiArray(stream.readCPI()); break;
             case IFNULL         : genIfNull(Condition.EQ); break;
             case IFNONNULL      : genIfNull(Condition.NE); break;

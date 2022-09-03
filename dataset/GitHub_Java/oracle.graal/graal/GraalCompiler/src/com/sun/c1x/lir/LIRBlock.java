@@ -256,7 +256,6 @@ public final class LIRBlock {
         for (int i = 0; i < successors.size(); ++i) {
             if (successors.get(i) == target) {
                 successors.set(i, newSucc);
-                break;
             }
         }
     }
@@ -265,7 +264,6 @@ public final class LIRBlock {
         for (int i = 0; i < predecessors.size(); ++i) {
             if (predecessors.get(i) == source) {
                 predecessors.set(i, newSucc);
-                break;
             }
         }
     }

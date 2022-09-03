@@ -46,7 +46,7 @@ public abstract class Instruction extends Value {
     private static final int INPUT_COUNT = 0;
 
     private static final int SUCCESSOR_COUNT = 1;
-    public static final int SUCCESSOR_NEXT = 0;
+    private static final int SUCCESSOR_NEXT = 0;
 
     @Override
     protected int inputCount() {
@@ -68,10 +68,6 @@ public abstract class Instruction extends Value {
 
     private Node setNext(Instruction next) {
         return successors().set(super.successorCount() + SUCCESSOR_NEXT, next);
-    }
-
-    public int nextIndex() {
-        return super.successorCount() + SUCCESSOR_NEXT;
     }
 
 
@@ -146,13 +142,13 @@ public abstract class Instruction extends Value {
     }
 
     @Override
-    public Merge block() {
+    public BlockBegin block() {
         Instruction cur = this;
-        while (!(cur instanceof Merge)) {
+        while (!(cur instanceof BlockBegin)) {
             List<Node> preds = cur.predecessors();
             cur = (Instruction) preds.get(0);
         }
-        return (Merge) cur;
+        return (BlockBegin) cur;
     }
 
     /**
