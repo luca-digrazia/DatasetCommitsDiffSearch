@@ -31,9 +31,9 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     private final ResolvedJavaType type;
     private final ResolvedJavaField[] fields;
 
-    public VirtualInstanceNode(ResolvedJavaType type) {
+    public VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields) {
         this.type = type;
-        this.fields = type.getInstanceFields(true);
+        this.fields = fields;
     }
 
     @Override
@@ -91,6 +91,6 @@ public class VirtualInstanceNode extends VirtualObjectNode {
 
     @Override
     public VirtualInstanceNode duplicate() {
-        return new VirtualInstanceNode(type);
+        return new VirtualInstanceNode(type, fields);
     }
 }
