@@ -70,7 +70,6 @@ import com.oracle.graal.sparc.SPARC.CPUFeature;
 public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     private StackSlotValue tmpStackSlot;
-    private SPARCSpillMoveFactory moveFactory;
 
     private class SPARCSpillMoveFactory implements LIRGeneratorTool.SpillMoveFactory {
 
@@ -85,19 +84,12 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     public SpillMoveFactory getSpillMoveFactory() {
-        if (moveFactory == null) {
-            moveFactory = new SPARCSpillMoveFactory();
-        }
-        return moveFactory;
+        return new SPARCSpillMoveFactory();
     }
 
     @Override
     public boolean canInlineConstant(JavaConstant c) {
         switch (c.getKind()) {
-            case Boolean:
-            case Byte:
-            case Char:
-            case Short:
             case Int:
                 return SPARCAssembler.isSimm13(c.asInt()) && !getCodeCache().needsDataPatch(c);
             case Long:
@@ -225,7 +217,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public void emitCompareBranch(PlatformKind cmpKind, Value x, Value y, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
                     double trueDestinationProbability) {
-        Value left;
+        Variable left;
         Value right;
         Condition actualCondition;
         if (isConstant(x)) {
@@ -238,20 +230,8 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             actualCondition = cond;
         }
         SPARCCompare opcode;
-        Kind actualCmpKind = (Kind) cmpKind;
-        switch (actualCmpKind) {
-            case Byte:
-                left = emitSignExtend(left, 8, 32);
-                right = emitSignExtend(right, 8, 32);
-                actualCmpKind = Kind.Int;
-                opcode = ICMP;
-                break;
-            case Short:
-                left = emitSignExtend(left, 16, 32);
-                right = emitSignExtend(right, 16, 32);
-                actualCmpKind = Kind.Int;
-                opcode = ICMP;
-                break;
+        Kind kind = left.getKind().getStackKind();
+        switch (kind) {
             case Object:
                 opcode = ACMP;
                 break;
@@ -259,6 +239,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 opcode = LCMP;
                 break;
             case Int:
+            case Short:
+            case Char:
+            case Byte:
                 opcode = ICMP;
                 break;
             case Float:
@@ -268,9 +251,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 opcode = DCMP;
                 break;
             default:
-                throw GraalInternalError.shouldNotReachHere(actualCmpKind.toString());
+                throw GraalInternalError.shouldNotReachHere(kind.toString());
         }
-        append(new SPARCControlFlow.CompareBranchOp(opcode, left, right, actualCondition, trueDestination, falseDestination, actualCmpKind, unorderedIsTrue, trueDestinationProbability));
+        append(new SPARCControlFlow.CompareBranchOp(opcode, left, right, actualCondition, trueDestination, falseDestination, kind, unorderedIsTrue, trueDestinationProbability));
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +22,13 @@
  */
 package com.oracle.graal.api.meta;
 
+import java.nio.*;
+
 /**
  * Represents a primitive constant value, such as an integer or floating point number, within the
  * compiler and across the compiler/runtime interface.
  */
-public class PrimitiveConstant extends JavaConstant {
+public class PrimitiveConstant extends AbstractValue implements JavaConstant, SerializableConstant {
 
     private static final long serialVersionUID = 8787949721295655376L;
 
@@ -62,7 +64,7 @@ public class PrimitiveConstant extends JavaConstant {
 
     @Override
     public int asInt() {
-        assert getKind().getStackKind() == Kind.Int;
+        assert getKind().getStackKind() == Kind.Int : getKind().getStackKind();
         return (int) primitive;
     }
 
@@ -103,6 +105,41 @@ public class PrimitiveConstant extends JavaConstant {
                 return Float.valueOf(asFloat());
             case Double:
                 return Double.valueOf(asDouble());
+            default:
+                throw new IllegalArgumentException("unexpected kind " + getKind());
+        }
+    }
+
+    @Override
+    public int getSerializedSize() {
+        return getKind().getByteCount();
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        switch (getKind()) {
+            case Byte:
+            case Boolean:
+                buffer.put((byte) primitive);
+                break;
+            case Short:
+                buffer.putShort((short) primitive);
+                break;
+            case Char:
+                buffer.putChar((char) primitive);
+                break;
+            case Int:
+                buffer.putInt(asInt());
+                break;
+            case Long:
+                buffer.putLong(asLong());
+                break;
+            case Float:
+                buffer.putFloat(asFloat());
+                break;
+            case Double:
+                buffer.putDouble(asDouble());
+                break;
             default:
                 throw new IllegalArgumentException("unexpected kind " + getKind());
         }

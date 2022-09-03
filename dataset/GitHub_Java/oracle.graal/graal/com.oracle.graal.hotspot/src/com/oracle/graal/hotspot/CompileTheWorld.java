@@ -388,14 +388,10 @@ public final class CompileTheWorld {
         if (!running) {
             startThreads();
         }
-        int wakeups = 0;
         while (threadPool.getCompletedTaskCount() != threadPool.getTaskCount()) {
-            if (wakeups % 15 == 0) {
-                TTY.println("CompileTheWorld : Waiting for " + (threadPool.getTaskCount() - threadPool.getCompletedTaskCount()) + " compiles");
-            }
+            TTY.println("CompileTheWorld : Waiting for " + (threadPool.getTaskCount() - threadPool.getCompletedTaskCount()) + " compiles");
             try {
-                threadPool.awaitTermination(1, TimeUnit.SECONDS);
-                wakeups++;
+                threadPool.awaitTermination(15, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
             }
         }
