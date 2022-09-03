@@ -120,9 +120,9 @@ public class HotSpotDebugConfig implements DebugConfig {
     }
 
     @Override
-    public RuntimeException interceptException(Throwable e) {
+    public RuntimeException interceptException(RuntimeException e) {
         if (e instanceof CiBailout) {
-            return null;
+            return e;
         }
         Debug.setConfig(Debug.fixedConfig(true, true, false, false, dumpHandlers));
         // sync "Exception occured in scope: " with mx/sanitycheck.py::Test.__init__
@@ -135,7 +135,7 @@ public class HotSpotDebugConfig implements DebugConfig {
                 Debug.dump(o, "Exception graph");
             }
         }
-        return null;
+        return e;
     }
 
     @Override

@@ -32,7 +32,7 @@ public final class DebugScope {
 
     private static ThreadLocal<DebugScope> instanceTL = new ThreadLocal<>();
     private static ThreadLocal<DebugConfig> configTL = new ThreadLocal<>();
-    private static ThreadLocal<Throwable> lastExceptionThrownTL = new ThreadLocal<>();
+    private static ThreadLocal<RuntimeException> lastExceptionThrownTL = new ThreadLocal<>();
     private static DebugTimer scopeTime = Debug.timer("ScopeTime");
     private static DebugMetric scopeCount = Debug.metric("ScopeCount");
 
@@ -142,18 +142,13 @@ public final class DebugScope {
             if (callable != null) {
                 return call(callable);
             }
-        } catch (Throwable e) {
+        } catch (RuntimeException e) {
             if (e == lastExceptionThrownTL.get()) {
                 throw e;
             } else {
                 RuntimeException newException = interceptException(e);
-                if (newException == null) {
-                    lastExceptionThrownTL.set(e);
-                    throw e;
-                } else {
-                    lastExceptionThrownTL.set(newException);
-                    throw newException;
-                }
+                lastExceptionThrownTL.set(newException);
+                throw newException;
             }
         }
         return null;
@@ -178,7 +173,7 @@ public final class DebugScope {
         context = null;
     }
 
-    private RuntimeException interceptException(final Throwable e) {
+    private RuntimeException interceptException(final RuntimeException e) {
         final DebugConfig config = getConfig();
         if (config != null) {
             return scope("InterceptException", null, new Callable<RuntimeException>() {
@@ -188,12 +183,12 @@ public final class DebugScope {
                     try {
                         return config.interceptException(e);
                     } catch (Throwable t) {
-                        return new RuntimeException("Exception while intercepting exception", e);
+                        return e;
                     }
                 }
             }, false, new Object[] {e});
         }
-        return null;
+        return e;
     }
 
     private DebugValueMap getValueMap() {
