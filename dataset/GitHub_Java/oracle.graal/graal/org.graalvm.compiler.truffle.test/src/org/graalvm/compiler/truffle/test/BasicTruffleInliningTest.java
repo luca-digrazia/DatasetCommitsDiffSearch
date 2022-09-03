@@ -22,6 +22,8 @@
  */
 package org.graalvm.compiler.truffle.test;
 
+import static org.graalvm.compiler.test.GraalTest.assertTrue;
+
 import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.TruffleInlining;
 import org.junit.Assert;
@@ -51,7 +53,7 @@ public class BasicTruffleInliningTest extends TruffleInliningTest {
                     .calls("callee")
                 .build();
         // @formatter:on
-        Assert.assertTrue(countInlines(decisions, "callee") == 2);
+        assertTrue(countInlines(decisions, "callee") == 2);
 
         int inlineCount = 100;
         builder.target("callee").target("caller", inlineCount);
@@ -118,7 +120,7 @@ public class BasicTruffleInliningTest extends TruffleInliningTest {
                 .build(true);
         // @formatter:on
         assertNotInlined(decisions, "callee");
-        Assert.assertTrue("Wrong reason for not inlining!", decisions.getCallSites().get(0).getProfile().getFailedReason().startsWith("deepNodeCount * callSites  >"));
+        assertTrue(decisions.getCallSites().get(0).getProfile().getFailedReason().startsWith("deepNodeCount * callSites  >"), "Wrong reason for not inlining!");
     }
 
     @Test
@@ -133,7 +135,7 @@ public class BasicTruffleInliningTest extends TruffleInliningTest {
         final int[] inlineDepth = {0};
         TruffleInlining decisions = builder.build();
         traverseDecisions(decisions.getCallSites(), decision -> {
-            Assert.assertTrue(decision.isInline());
+            assertTrue(decision.isInline());
             inlineDepth[0]++;
         });
         Assert.assertEquals(inlineDepth[0], depth);
