@@ -46,28 +46,4 @@ final class JavaFunctionObject implements TruffleObject {
     public ForeignAccess getForeignAccess() {
         return JavaFunctionMessageResolutionForeign.ACCESS;
     }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o instanceof JavaFunctionObject) {
-            JavaFunctionObject other = (JavaFunctionObject) o;
-            return this.method == other.method && this.obj == other.obj && this.languageContext == other.languageContext;
-        }
-        return false;
-    }
-
-    @Override
-    public int hashCode() {
-        return method.hashCode();
-    }
-
-    String getDescription() {
-        if (obj == null) {
-            return "null";
-        }
-        String typeName = "";
-        typeName = obj.getClass().getTypeName();
-        return typeName + "." + method.getName();
-    }
-
 }
