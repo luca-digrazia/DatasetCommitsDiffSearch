@@ -23,11 +23,9 @@
 package org.graalvm.compiler.truffle.test;
 
 import org.graalvm.compiler.code.SourceStackTraceBailoutException;
-import org.graalvm.compiler.core.common.GraalBailoutException;
-import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.replacements.PEGraphDecoder;
-import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
-import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.test.nodes.AbstractTestNode;
 import org.graalvm.compiler.truffle.test.nodes.AddTestNode;
 import org.graalvm.compiler.truffle.test.nodes.BlockTestNode;
@@ -38,7 +36,6 @@ import org.graalvm.compiler.truffle.test.nodes.InliningNullCheckNode1;
 import org.graalvm.compiler.truffle.test.nodes.InliningNullCheckNode2;
 import org.graalvm.compiler.truffle.test.nodes.LambdaTestNode;
 import org.graalvm.compiler.truffle.test.nodes.LoadLocalTestNode;
-import org.graalvm.compiler.truffle.test.nodes.LoopExplosionPhiNode;
 import org.graalvm.compiler.truffle.test.nodes.LoopTestNode;
 import org.graalvm.compiler.truffle.test.nodes.NestedExplodedLoopTestNode;
 import org.graalvm.compiler.truffle.test.nodes.NeverPartOfCompilationTestNode;
@@ -90,16 +87,14 @@ public class SimplePartialEvaluationTest extends PartialEvaluationTest {
         try {
             assertPartialEvalEquals("constant42", new RootTestNode(fd, "neverPartOfCompilationTest", secondTree));
             Assert.fail("Expected verification error!");
-        } catch (GraalBailoutException t) {
+        } catch (SourceStackTraceBailoutException t) {
             // Expected verification error occurred.
             StackTraceElement[] trace = t.getStackTrace();
-            if (truffleCompiler.getPartialEvaluator().getConfigForParsing().trackNodeSourcePosition() || GraalOptions.TrackNodeSourcePosition.getValue(getInitialOptions())) {
-                assertStack(trace[0], "com.oracle.truffle.api.CompilerAsserts", "neverPartOfCompilation", "CompilerAsserts.java");
-                assertStack(trace[1], "org.graalvm.compiler.truffle.test.nodes.NeverPartOfCompilationTestNode", "execute", "NeverPartOfCompilationTestNode.java");
-                assertStack(trace[2], "org.graalvm.compiler.truffle.test.nodes.RootTestNode", "execute", "RootTestNode.java");
-            } else {
-                assertStack(trace[0], "org.graalvm.compiler.truffle.test.nodes.NeverPartOfCompilationTestNode", "execute", "NeverPartOfCompilationTestNode.java");
+            assertStack(trace[0], "org.graalvm.compiler.truffle.test.nodes.NeverPartOfCompilationTestNode", "execute", "NeverPartOfCompilationTestNode.java");
+            if (!truffleCompiler.getPartialEvaluator().getConfigForParsing().trackNodeSourcePosition()) {
                 assertStack(trace[1], "org.graalvm.compiler.truffle.test.nodes.RootTestNode", "execute", "RootTestNode.java");
+            } else {
+                // When NodeSourcePosition tracking is enabled, a smaller stack trace is produced
             }
         }
     }
@@ -325,15 +320,5 @@ public class SimplePartialEvaluationTest extends PartialEvaluationTest {
         OptimizedCallTarget compilable = compileHelper("inliningNullCheck2", rootNode, new Object[0]);
 
         Assert.assertEquals(42, compilable.call(new Object[0]));
-    }
-
-    @Test
-    public void loopExplosionPhi() {
-        FrameDescriptor fd = new FrameDescriptor();
-        AbstractTestNode result = new LoopExplosionPhiNode();
-        RootNode rootNode = new RootTestNode(fd, "loopExplosionPhi", result);
-        OptimizedCallTarget compilable = compileHelper("loopExplosionPhi", rootNode, new Object[0]);
-
-        Assert.assertEquals(1, compilable.call(new Object[0]));
     }
 }
