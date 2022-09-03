@@ -42,7 +42,7 @@ import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.lir.ssi.*;
 
-public final class TraceRegisterAllocationPhase extends AllocationPhase {
+public class TraceRegisterAllocationPhase extends AllocationPhase {
     public static class Options {
         // @formatter:off
         @Option(help = "Use inter-trace register hints.", type = OptionType.Debug)
@@ -59,7 +59,6 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
     private static final DebugMetric tracesMetric = Debug.metric("TraceRA[traces]");
 
     @Override
-    @SuppressWarnings("try")
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
                     RegisterAllocationConfig registerAllocationConfig) {
         LIR lir = lirGenRes.getLIR();
