@@ -30,7 +30,7 @@ import java.util.concurrent.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
-import com.oracle.max.graal.java.*;
+import com.oracle.max.graal.java.bytecode.*;
 
 /**
  * Implementation of RiMethod for resolved HotSpot methods.
@@ -238,7 +238,6 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
         return ((HotSpotTypeResolvedImpl) holder()).constantPool();
     }
 
-    @Override
     public void dumpProfile() {
         TTY.println("profile info for %s", this);
         TTY.println("canBeStaticallyBound: " + canBeStaticallyBound());

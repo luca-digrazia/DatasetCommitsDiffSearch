@@ -268,12 +268,11 @@ public final class BciBlockMapping {
         // iterate over the bytecodes top to bottom.
         // mark the entrypoints of basic blocks and build lists of successors for
         // all bytecodes that end basic blocks (i.e. goto, ifs, switches, throw, jsr, returns, ret)
+        byte[] code = method.code();
         RiProfilingInfo profilingInfo = method.profilingInfo();
         Block current = null;
-        stream.setBCI(0);
-        while (stream.currentBC() != Bytecodes.END) {
-            int bci = stream.currentBCI();
-
+        int bci = 0;
+        while (bci < code.length) {
             if (current == null || blockMap[bci] != null) {
                 Block b = makeBlock(bci);
                 if (current != null) {
@@ -284,7 +283,8 @@ public final class BciBlockMapping {
             blockMap[bci] = current;
             current.endBci = bci;
 
-            switch (stream.currentBC()) {
+            int opcode = Bytes.beU1(code, bci);
+            switch (opcode) {
                 case IRETURN: // fall through
                 case LRETURN: // fall through
                 case FRETURN: // fall through
@@ -316,37 +316,41 @@ public final class BciBlockMapping {
                 case IFNULL:    // fall through
                 case IFNONNULL: {
                     current = null;
-                    setSuccessors(bci, makeBlock(stream.readBranchDest()), makeBlock(stream.nextBCI()));
+                    Block b1 = makeBlock(bci + Bytes.beS2(code, bci + 1));
+                    Block b2 = makeBlock(bci + 3);
+                    setSuccessors(bci, b1, b2);
                     break;
                 }
                 case GOTO:
                 case GOTO_W: {
                     current = null;
-                    setSuccessors(bci, makeBlock(stream.readBranchDest()));
+                    int target = bci + Bytes.beSVar(code, bci + 1, opcode == GOTO_W);
+                    Block b1 = makeBlock(target);
+                    setSuccessors(bci, b1);
                     break;
                 }
                 case TABLESWITCH: {
                     current = null;
-                    BytecodeTableSwitch sw = new BytecodeTableSwitch(stream, bci);
+                    BytecodeTableSwitch sw = new BytecodeTableSwitch(code, bci);
                     setSuccessors(bci, makeSwitchSuccessors(sw));
                     break;
                 }
                 case LOOKUPSWITCH: {
                     current = null;
-                    BytecodeLookupSwitch sw = new BytecodeLookupSwitch(stream, bci);
+                    BytecodeLookupSwitch sw = new BytecodeLookupSwitch(code, bci);
                     setSuccessors(bci, makeSwitchSuccessors(sw));
                     break;
                 }
                 case JSR:
                 case JSR_W: {
                     hasJsrBytecodes = true;
-                    int target = stream.readBranchDest();
+                    int target = bci + Bytes.beSVar(code, bci + 1, opcode == JSR_W);
                     if (target == 0) {
                         throw new JsrNotSupportedBailout("jsr target bci 0 not allowed");
                     }
                     Block b1 = makeBlock(target);
                     current.jsrSuccessor = b1;
-                    current.jsrReturnBci = stream.nextBCI();
+                    current.jsrReturnBci = bci + lengthOf(opcode);
                     current = null;
                     setSuccessors(bci, b1);
                     break;
@@ -356,40 +360,64 @@ public final class BciBlockMapping {
                     current = null;
                     break;
                 }
+                case WIDE: {
+                    int opcode2 = Bytes.beU1(code, bci);
+                    switch (opcode2) {
+                        case RET: {
+                            current.endsWithRet = true;
+                            current = null;
+                            break;
+                        }
+                    }
+                    break;
+                }
                 case INVOKEINTERFACE:
                 case INVOKESPECIAL:
                 case INVOKESTATIC:
                 case INVOKEVIRTUAL: {
                     current = null;
-                    setSuccessors(bci, makeBlock(stream.nextBCI()));
+                    int target = bci + lengthOf(code, bci);
+                    Block b1 = makeBlock(target);
+                    setSuccessors(bci, b1);
                     canTrap.set(bci);
                     break;
                 }
-                case IASTORE:
-                case LASTORE:
-                case FASTORE:
-                case DASTORE:
-                case AASTORE:
-                case BASTORE:
-                case CASTORE:
-                case SASTORE:
-                case IALOAD:
-                case LALOAD:
-                case FALOAD:
-                case DALOAD:
-                case AALOAD:
-                case BALOAD:
-                case CALOAD:
-                case SALOAD:
-                case PUTFIELD:
-                case GETFIELD: {
-                    if (GraalOptions.AllowExplicitExceptionChecks && profilingInfo.getExceptionSeen(bci) != RiExceptionSeen.FALSE) {
+                default: {
+                    if (canTrap(opcode, bci, profilingInfo)) {
                         canTrap.set(bci);
                     }
                 }
             }
-            stream.next();
+            bci += lengthOf(code, bci);
         }
+    }
+
+    private static boolean canTrap(int opcode, int bci, RiProfilingInfo profilingInfo) {
+        switch (opcode) {
+            case IASTORE:
+            case LASTORE:
+            case FASTORE:
+            case DASTORE:
+            case AASTORE:
+            case BASTORE:
+            case CASTORE:
+            case SASTORE:
+            case IALOAD:
+            case LALOAD:
+            case FALOAD:
+            case DALOAD:
+            case AALOAD:
+            case BALOAD:
+            case CALOAD:
+            case SALOAD:
+            case PUTFIELD:
+            case GETFIELD: {
+                if (GraalOptions.AllowExplicitExceptionChecks) {
+                    return profilingInfo.getExceptionSeen(bci) != RiExceptionSeen.FALSE;
+                }
+            }
+        }
+        return false;
     }
 
     private Block makeBlock(int startBci) {
