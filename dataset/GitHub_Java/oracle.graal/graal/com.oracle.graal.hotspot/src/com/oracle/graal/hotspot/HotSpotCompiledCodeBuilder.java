@@ -201,8 +201,7 @@ public class HotSpotCompiledCodeBuilder {
      * {@link Infopoint} PCs to be unique.
      */
     private static Site[] getSortedSites(CompilationResult target) {
-        List<Site> sites = new ArrayList<>(
-                        target.getExceptionHandlers().size() + target.getInfopoints().size() + target.getDataPatches().size() + target.getMarks().size() + target.getSourceMappings().size());
+        List<Site> sites = new ArrayList<>();
         sites.addAll(target.getExceptionHandlers());
         sites.addAll(target.getInfopoints());
         sites.addAll(target.getDataPatches());
