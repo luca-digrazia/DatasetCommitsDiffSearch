@@ -322,12 +322,12 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
     /**
      * <pre>
      * variant1 $condition != null
-     * 
+     *
      * $type $name = defaultValue($type);
      * if ($condition) {
      *     $name = $value;
      * }
-     * 
+     *
      * variant2 $condition != null
      * $type $name = $value;
      * </pre>
@@ -1249,7 +1249,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
 
             CodeTreeBuilder createSpecializationCall = builder.create();
             createSpecializationCall.startCall(SPECIALIZE);
-            addInternalValueParameterNames(createSpecializationCall, generic, generic, null, node.isFrameUsedByAnyGuard(getContext()), null);
+            addInternalValueParameterNames(createSpecializationCall, generic, generic, null, node.needsFrame(getContext()), null);
             createSpecializationCall.end();
             builder.declaration(baseClassName(node), "newNode", createSpecializationCall);
 
@@ -1302,7 +1302,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             String baseClassName = baseClassName(getModel().getNode());
             CodeTreeBuilder createSpecializationCall = builder.create();
             createSpecializationCall.startCall(SPECIALIZE);
-            addInternalValueParameterNames(createSpecializationCall, generic, generic, null, node.isFrameUsedByAnyGuard(getContext()), null);
+            addInternalValueParameterNames(createSpecializationCall, generic, generic, null, node.needsFrame(getContext()), null);
             createSpecializationCall.end();
             builder.declaration(baseClassName, "newNode", createSpecializationCall);
 
@@ -1356,19 +1356,16 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
         private CodeExecutableElement createCreateSpecializationMethod(NodeData node, SpecializationGroup group) {
             CodeExecutableElement method = new CodeExecutableElement(modifiers(PROTECTED, FINAL), new GeneratedTypeMirror(ElementUtils.getPackageName(node.getTemplateType()), baseClassName(node)),
                             SPECIALIZE);
-
-            final boolean needsFrame = node.isFrameUsedByAnyGuard(getContext());
-
-            if (!needsFrame) {
+            if (!node.needsFrame(getContext())) {
                 method.getAnnotationMirrors().add(new CodeAnnotationMirror(getContext().getTruffleTypes().getSlowPath()));
             }
 
-            addInternalValueParameters(method, node.getGenericSpecialization(), needsFrame, false);
+            addInternalValueParameters(method, node.getGenericSpecialization(), node.needsFrame(getContext()), false);
             final CodeTreeBuilder builder = method.createBuilder();
             builder.tree(createExecuteTree(builder, node.getGenericSpecialization(), group, new CodeBlock<SpecializationData>() {
 
                 public CodeTree create(CodeTreeBuilder b, SpecializationData current) {
-                    return createCreateSpecializationMethodBody0(builder, current, needsFrame);
+                    return createCreateSpecializationMethodBody0(builder, current);
                 }
             }, null, false, true, false, true));
 
@@ -1377,7 +1374,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             return method;
         }
 
-        protected CodeTree createCreateSpecializationMethodBody0(CodeTreeBuilder parent, SpecializationData current, boolean useDeoptimize) {
+        protected CodeTree createCreateSpecializationMethodBody0(CodeTreeBuilder parent, SpecializationData current) {
             CodeTreeBuilder builder = new CodeTreeBuilder(parent);
             if (current.isGeneric()) {
                 builder.startReturn().nullLiteral().end();
@@ -1389,7 +1386,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
                     builder.startBlock();
                 }
 
-                if (current.getNode().getGenericSpecialization().isReachable() && useDeoptimize) {
+                if (current.getNode().getGenericSpecialization().isReachable()) {
                     builder.tree(createDeoptimize(builder));
                 }
                 builder.startReturn();
@@ -1748,14 +1745,14 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
                 builder.startReturn().tree(createTemplateMethodCall(builder, null, source, current, null)).end();
             }
 
-            return encloseThrowsWithFallThrough(parent, current, builder.getRoot());
+            return encloseThrowsWithFallThrough(current, builder.getRoot());
         }
 
-        private CodeTree encloseThrowsWithFallThrough(CodeTreeBuilder parent, SpecializationData current, CodeTree tree) {
+        private CodeTree encloseThrowsWithFallThrough(SpecializationData current, CodeTree tree) {
             if (current.getExceptions().isEmpty()) {
                 return tree;
             }
-            CodeTreeBuilder builder = new CodeTreeBuilder(parent);
+            CodeTreeBuilder builder = new CodeTreeBuilder(null);
 
             builder.startTryBlock();
             builder.tree(tree);
@@ -1883,36 +1880,36 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
 
         private CodeTree createExecuteChild(CodeTreeBuilder parent, NodeExecutionData execution, ExecutableTypeData sourceExecutable, Parameter targetParameter, Parameter unexpectedParameter) {
             SpecializationData specialization = getModel();
-            if (specialization.isPolymorphic() && targetParameter.getTypeSystemType().isGeneric() && unexpectedParameter == null) {
-                List<TypeData> possiblePolymorphicTypes = lookupPolymorphicTargetTypes(targetParameter);
-                if (possiblePolymorphicTypes.size() > 1) {
-                    CodeTreeBuilder builder = parent.create();
+            TreeSet<TypeData> possiblePolymorphicTypes = lookupPolymorphicTargetTypes(targetParameter);
+            if (specialization.isPolymorphic() && targetParameter.getTypeSystemType().isGeneric() && unexpectedParameter == null && possiblePolymorphicTypes.size() > 1) {
 
-                    boolean elseIf = false;
-                    for (TypeData possiblePolymoprhicType : possiblePolymorphicTypes) {
-                        if (possiblePolymoprhicType.isGeneric()) {
-                            continue;
-                        }
-                        elseIf = builder.startIf(elseIf);
+                CodeTreeBuilder builder = parent.create();
 
-                        Parameter sourceParameter = sourceExecutable.findParameter(targetParameter.getLocalName());
-                        TypeData sourceType = sourceParameter != null ? sourceParameter.getTypeSystemType() : null;
-                        builder.string(polymorphicTypeName(targetParameter.getSpecification().getExecution())).string(" == ").typeLiteral(possiblePolymoprhicType.getPrimitiveType());
-                        builder.end().startBlock();
-                        builder.startStatement();
-                        builder.tree(createExecuteChildExpression(parent, execution, sourceType, new Parameter(targetParameter, possiblePolymoprhicType), unexpectedParameter, null));
-                        builder.end();
-                        builder.end();
+                boolean elseIf = false;
+                for (TypeData possiblePolymoprhicType : possiblePolymorphicTypes) {
+                    if (possiblePolymoprhicType.isGeneric()) {
+                        continue;
                     }
+                    elseIf = builder.startIf(elseIf);
 
-                    builder.startElseBlock();
-                    builder.startStatement().tree(createExecuteChildImplicit(parent, execution, sourceExecutable, targetParameter, unexpectedParameter)).end();
+                    Parameter sourceParameter = sourceExecutable.findParameter(targetParameter.getLocalName());
+                    TypeData sourceType = sourceParameter != null ? sourceParameter.getTypeSystemType() : null;
+                    builder.string(polymorphicTypeName(targetParameter.getSpecification().getExecution())).string(" == ").typeLiteral(possiblePolymoprhicType.getPrimitiveType());
+                    builder.end().startBlock();
+                    builder.startStatement();
+                    builder.tree(createExecuteChildExpression(parent, execution, sourceType, new Parameter(targetParameter, possiblePolymoprhicType), unexpectedParameter, null));
                     builder.end();
-
-                    return builder.getRoot();
+                    builder.end();
                 }
+
+                builder.startElseBlock();
+                builder.startStatement().tree(createExecuteChildImplicit(parent, execution, sourceExecutable, targetParameter, unexpectedParameter)).end();
+                builder.end();
+
+                return builder.getRoot();
+            } else {
+                return createExecuteChildImplicit(parent, execution, sourceExecutable, targetParameter, unexpectedParameter);
             }
-            return createExecuteChildImplicit(parent, execution, sourceExecutable, targetParameter, unexpectedParameter);
         }
 
         protected final List<Parameter> getImplicitTypeParameters(SpecializationData model) {
@@ -1927,9 +1924,9 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             return parameter;
         }
 
-        protected final List<TypeData> lookupPolymorphicTargetTypes(Parameter param) {
+        protected final TreeSet<TypeData> lookupPolymorphicTargetTypes(Parameter param) {
             SpecializationData specialization = getModel();
-            Set<TypeData> possiblePolymorphicTypes = new HashSet<>();
+            TreeSet<TypeData> possiblePolymorphicTypes = new TreeSet<>();
             for (SpecializationData otherSpecialization : specialization.getNode().getSpecializations()) {
                 if (!otherSpecialization.isSpecialized()) {
                     continue;
@@ -1939,9 +1936,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
                     possiblePolymorphicTypes.add(otherParameter.getTypeSystemType());
                 }
             }
-            List<TypeData> types = new ArrayList<>(possiblePolymorphicTypes);
-            Collections.sort(types);
-            return types;
+            return possiblePolymorphicTypes;
         }
 
         private CodeTree createExecuteChildImplicit(CodeTreeBuilder parent, NodeExecutionData execution, ExecutableTypeData sourceExecutable, Parameter param, Parameter unexpectedParameter) {
@@ -2120,12 +2115,9 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
                 return true;
             }
 
-            List<CodeTree> enclosing = tree.getEnclosedElements();
-            if (enclosing != null) {
-                for (CodeTree codeTree : enclosing) {
-                    if (containsNewLine(codeTree)) {
-                        return true;
-                    }
+            for (CodeTree codeTree : tree.getEnclosedElements()) {
+                if (containsNewLine(codeTree)) {
+                    return true;
                 }
             }
             return false;
@@ -2136,7 +2128,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
 
             if (getModel().isPolymorphic() && targetParameter.getTypeSystemType().isGeneric() && unexpectedParameter == null) {
                 // check for other polymorphic types
-                List<TypeData> polymorphicTargetTypes = lookupPolymorphicTargetTypes(targetParameter);
+                TreeSet<TypeData> polymorphicTargetTypes = lookupPolymorphicTargetTypes(targetParameter);
                 if (polymorphicTargetTypes.size() > 1) {
                     for (TypeData polymorphicTargetType : polymorphicTargetTypes) {
                         if (hasUnexpectedType(execution, sourceParameter, polymorphicTargetType)) {

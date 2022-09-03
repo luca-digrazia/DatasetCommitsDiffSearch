@@ -99,12 +99,12 @@ public class NodeData extends Template implements Comparable<NodeData> {
         return 0;
     }
 
-    public boolean isFrameUsedByAnyGuard(ProcessorContext context) {
+    public boolean needsFrame(ProcessorContext context) {
         for (SpecializationData specialization : specializations) {
             if (!specialization.isReachable()) {
                 continue;
             }
-            if (specialization.isFrameUsedByGuard(context)) {
+            if (specialization.hasFrame(context)) {
                 return true;
             }
         }

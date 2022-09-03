@@ -32,40 +32,40 @@ import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 
 public class ImportGuardsTest {
 
-    @ImportStatic(Imports0.class)
+    @ImportGuards(Imports0.class)
     @NodeChild("a")
     static class ImportGuards0 extends ValueNode {
 
-        @Specialization(guards = "staticGuard(a)")
+        @Specialization(guards = "staticGuard")
         int f0(int a) {
             return a;
         }
     }
 
     @NodeChild("a")
-    @ImportStatic(Imports0.class)
+    @ImportGuards(Imports0.class)
     static class ImportGuards1 extends ValueNode {
 
-        @ExpectError("Error parsing expression 'nonStaticGuard(a)': The method nonStaticGuard is undefined for the enclosing scope.")
-        @Specialization(guards = "nonStaticGuard(a)")
+        @ExpectError("No compatible guard with method name 'nonStaticGuard' found.")
+        @Specialization(guards = "nonStaticGuard")
         int f1(int a) {
             return a;
         }
 
-        @ExpectError("Error parsing expression 'protectedGuard(a)': The method protectedGuard is undefined for the enclosing scope.")
-        @Specialization(guards = "protectedGuard(a)")
+        @ExpectError("No compatible guard with method name 'protectedGuard' found.")
+        @Specialization(guards = "protectedGuard")
         int f2(int a) {
             return a;
         }
 
-        @ExpectError("Error parsing expression 'packageGuard(a)': The method packageGuard is undefined for the enclosing scope.")
-        @Specialization(guards = "packageGuard(a)")
+        @ExpectError("No compatible guard with method name 'packageGuard' found.")
+        @Specialization(guards = "packageGuard")
         int f3(int a) {
             return a;
         }
 
-        @ExpectError("Error parsing expression 'privateGuard(a)': The method privateGuard is undefined for the enclosing scope.")
-        @Specialization(guards = "privateGuard(a)")
+        @ExpectError("No compatible guard with method name 'privateGuard' found.")
+        @Specialization(guards = "privateGuard")
         int f4(int a) {
             return a;
         }
@@ -97,7 +97,7 @@ public class ImportGuardsTest {
 
     @ExpectError("The specified import guard class 'com.oracle.truffle.api.dsl.test.ImportGuardsTest.Imports1' must be public.")
     @NodeChild("a")
-    @ImportStatic(Imports1.class)
+    @ImportGuards(Imports1.class)
     static class ImportGuards2 extends ValueNode {
 
         int do1(int a) {
@@ -111,7 +111,7 @@ public class ImportGuardsTest {
 
     @ExpectError("The specified import guard class 'com.oracle.truffle.api.dsl.test.ImportGuardsTest.Imports2' must be public.")
     @NodeChild("a")
-    @ImportStatic(Imports2.class)
+    @ImportGuards(Imports2.class)
     static class ImportGuards3 extends ValueNode {
 
         int do1(int a) {
@@ -121,7 +121,7 @@ public class ImportGuardsTest {
 
     @ExpectError("The specified import guard class 'boolean' is not a declared type.")
     @NodeChild("a")
-    @ImportStatic(boolean.class)
+    @ImportGuards(boolean.class)
     static class ImportGuards4 extends ValueNode {
 
         int do1(int a) {
@@ -135,7 +135,7 @@ public class ImportGuardsTest {
 
     @ExpectError("At least import guard classes must be specified.")
     @NodeChild("a")
-    @ImportStatic({})
+    @ImportGuards({})
     static class ImportGuards5 extends ValueNode {
 
         int do1(int a) {
@@ -151,7 +151,7 @@ public class ImportGuardsTest {
                         array(1, 1));
     }
 
-    @ImportStatic(Imports0.class)
+    @ImportGuards(Imports0.class)
     @NodeChild("a")
     static class ImportGuards6 extends ValueNode {
 
@@ -159,7 +159,7 @@ public class ImportGuardsTest {
             return a == 1;
         }
 
-        @Specialization(guards = "staticGuard(a)")
+        @Specialization(guards = "staticGuard")
         int f0(int a) {
             return a;
         }

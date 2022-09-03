@@ -576,10 +576,12 @@ public class ElementUtils {
 
     public static List<TypeElement> getDirectSuperTypes(TypeElement element) {
         List<TypeElement> types = new ArrayList<>();
-        TypeElement superElement = getSuperType(element);
-        if (superElement != null) {
-            types.add(superElement);
-            types.addAll(getDirectSuperTypes(superElement));
+        if (element.getSuperclass() != null) {
+            TypeElement superElement = fromTypeMirror(element.getSuperclass());
+            if (superElement != null) {
+                types.add(superElement);
+                types.addAll(getDirectSuperTypes(superElement));
+            }
         }
 
         return types;
@@ -591,16 +593,11 @@ public class ElementUtils {
         } else if (type.getKind() == TypeKind.ARRAY) {
             return Arrays.asList(type, context.getType(Object.class));
         } else if (type.getKind() == TypeKind.DECLARED) {
-            DeclaredType declaredType = (DeclaredType) type;
-            TypeElement typeElement = fromTypeMirror(declaredType);
-            List<TypeElement> types = getSuperTypes(typeElement);
+            List<TypeElement> types = getSuperTypes(fromTypeMirror(type));
             List<TypeMirror> mirrors = new ArrayList<>(types.size());
             mirrors.add(type);
-            for (TypeElement superTypeElement : types) {
-                mirrors.add(superTypeElement.asType());
-            }
-            if (typeElement.getKind().isInterface()) {
-                mirrors.add(getType(context.getEnvironment(), Object.class));
+            for (TypeElement typeElement : types) {
+                mirrors.add(typeElement.asType());
             }
             return mirrors;
         } else {
@@ -608,25 +605,16 @@ public class ElementUtils {
         }
     }
 
-    /**
-     * Gets the element representing the {@linkplain TypeElement#getSuperclass() super class} of a
-     * given type element.
-     */
-    public static TypeElement getSuperType(TypeElement element) {
-        if (element.getSuperclass() != null) {
-            return fromTypeMirror(element.getSuperclass());
-        }
-        return null;
-    }
-
     public static List<TypeElement> getSuperTypes(TypeElement element) {
         List<TypeElement> types = new ArrayList<>();
         List<TypeElement> superTypes = null;
         List<TypeElement> superInterfaces = null;
-        TypeElement superElement = getSuperType(element);
-        if (superElement != null) {
-            types.add(superElement);
-            superTypes = getSuperTypes(superElement);
+        if (element.getSuperclass() != null) {
+            TypeElement superElement = fromTypeMirror(element.getSuperclass());
+            if (superElement != null) {
+                types.add(superElement);
+                superTypes = getSuperTypes(superElement);
+            }
         }
         for (TypeMirror interfaceMirror : element.getInterfaces()) {
             TypeElement interfaceElement = fromTypeMirror(interfaceMirror);
@@ -900,29 +888,19 @@ public class ElementUtils {
         return null;
     }
 
-    public static boolean isDeclaredMethodInSuperType(TypeElement element, String name, TypeMirror[] params) {
-        return !getDeclaredMethodsInSuperTypes(element, name, params).isEmpty();
+    private static boolean isDeclaredMethod(TypeElement element, String name, TypeMirror[] params) {
+        return getDeclaredMethod(element, name, params) != null;
     }
 
-    /**
-     * Gets the methods in the super type hierarchy (excluding interfaces) that are overridden by a
-     * method in a subtype.
-     *
-     * @param declaringElement the subtype element declaring the method
-     * @param name the name of the method
-     * @param params the signature of the method
-     */
-    public static List<ExecutableElement> getDeclaredMethodsInSuperTypes(TypeElement declaringElement, String name, TypeMirror... params) {
-        List<ExecutableElement> superMethods = new ArrayList<>();
-        List<TypeElement> superElements = getSuperTypes(declaringElement);
+    public static boolean isDeclaredMethodInSuperType(TypeElement element, String name, TypeMirror[] params) {
+        List<TypeElement> superElements = getSuperTypes(element);
 
-        for (TypeElement superElement : superElements) {
-            ExecutableElement superMethod = getDeclaredMethod(superElement, name, params);
-            if (superMethod != null) {
-                superMethods.add(superMethod);
+        for (TypeElement typeElement : superElements) {
+            if (isDeclaredMethod(typeElement, name, params)) {
+                return true;
             }
         }
-        return superMethods;
+        return false;
     }
 
     public static boolean typeEquals(TypeMirror type1, TypeMirror type2) {
