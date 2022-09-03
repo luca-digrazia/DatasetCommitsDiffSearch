@@ -32,13 +32,13 @@ import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import com.oracle.graal.asm.aarch64.AArch64Assembler;
 import com.oracle.graal.asm.aarch64.AArch64Assembler.ConditionFlag;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 import jdk.vm.ci.code.Register;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaConstant;
 
@@ -51,7 +51,6 @@ public enum AArch64ArithmeticOp {
     SUB(ARITHMETIC),
     SUBS(ARITHMETIC),
     MUL,
-    MULVS,
     DIV,
     SMULH,
     UMULH,
@@ -137,7 +136,7 @@ public enum AArch64ArithmeticOp {
                     masm.fsqrt(size, dst, src);
                     break;
                 default:
-                    throw GraalError.shouldNotReachHere("op=" + opcode.name());
+                    throw JVMCIError.shouldNotReachHere("op=" + opcode.name());
             }
         }
     }
@@ -177,14 +176,6 @@ public enum AArch64ArithmeticOp {
                     assert AArch64MacroAssembler.isArithmeticImmediate(b.asLong());
                     masm.sub(size, dst, src, (int) b.asLong());
                     break;
-                case ADDS:
-                    assert AArch64MacroAssembler.isArithmeticImmediate(b.asLong());
-                    masm.adds(size, dst, src, (int) b.asLong());
-                    break;
-                case SUBS:
-                    assert AArch64MacroAssembler.isArithmeticImmediate(b.asLong());
-                    masm.subs(size, dst, src, (int) b.asLong());
-                    break;
                 case AND:
                     // XXX Should this be handled somewhere else?
                     if (size == 32 && b.asLong() == 0xFFFF_FFFFL) {
@@ -212,7 +203,7 @@ public enum AArch64ArithmeticOp {
                     masm.ashr(size, dst, src, b.asLong());
                     break;
                 default:
-                    throw GraalError.shouldNotReachHere("op=" + op.name());
+                    throw JVMCIError.shouldNotReachHere("op=" + op.name());
             }
         }
     }
@@ -300,11 +291,8 @@ public enum AArch64ArithmeticOp {
                 case FDIV:
                     masm.fdiv(size, dst, src1, src2);
                     break;
-                case MULVS:
-                    masm.mulvs(size, dst, src1, src2);
-                    break;
                 default:
-                    throw GraalError.shouldNotReachHere("op=" + op.name());
+                    throw JVMCIError.shouldNotReachHere("op=" + op.name());
             }
         }
     }
@@ -348,7 +336,7 @@ public enum AArch64ArithmeticOp {
                     masm.frem(size, dst, src1, src2);
                     break;
                 default:
-                    throw GraalError.shouldNotReachHere();
+                    throw JVMCIError.shouldNotReachHere();
             }
         }
     }
@@ -388,7 +376,7 @@ public enum AArch64ArithmeticOp {
                     masm.sub(size, asRegister(result), asRegister(src1), asRegister(src2), shiftType, shiftAmt);
                     break;
                 default:
-                    throw GraalError.shouldNotReachHere();
+                    throw JVMCIError.shouldNotReachHere();
             }
         }
     }

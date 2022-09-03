@@ -24,12 +24,12 @@ package com.oracle.graal.asm.aarch64;
 
 import static jdk.vm.ci.aarch64.AArch64.zr;
 
-import com.oracle.graal.asm.AbstractAddress;
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.debug.GraalError;
-
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.code.Register;
+import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.asm.AbstractAddress;
+
+import jdk.vm.ci.common.JVMCIError;
 
 /**
  * Represents an address in target machine memory, specified using one of the different addressing
@@ -257,7 +257,7 @@ public final class AArch64Address extends AbstractAddress {
                 assert NumUtil.isSignedNbit(9, immediate);
                 break;
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
 
         return true;
@@ -274,7 +274,7 @@ public final class AArch64Address extends AbstractAddress {
     /**
      * @return immediate in correct representation for the given addressing mode. For example in
      *         case of <code>addressingMode ==IMMEDIATE_UNSCALED </code> the value will be returned
-     *         as the 9-bit signed representation.
+     *         as the 9bit signed representation.
      */
     public int getImmediate() {
         switch (addressingMode) {
@@ -282,18 +282,15 @@ public final class AArch64Address extends AbstractAddress {
             case IMMEDIATE_POST_INDEXED:
             case IMMEDIATE_PRE_INDEXED:
                 // 9-bit signed value
-                assert NumUtil.isSignedNbit(9, immediate);
                 return immediate & NumUtil.getNbitNumberInt(9);
             case IMMEDIATE_SCALED:
                 // Unsigned value can be returned as-is.
-                assert NumUtil.isUnsignedNbit(9, immediate);
                 return immediate;
             case PC_LITERAL:
                 // 21-bit signed value, but lower 2 bits are always 0 and are shifted out.
-                assert NumUtil.isSignedNbit(19, immediate >> 2);
                 return (immediate >> 2) & NumUtil.getNbitNumberInt(19);
             default:
-                throw GraalError.shouldNotReachHere("Should only be called for addressing modes that use immediate values.");
+                throw JVMCIError.shouldNotReachHere("Should only be called for addressing modes that use immediate values.");
         }
     }
 
@@ -309,7 +306,7 @@ public final class AArch64Address extends AbstractAddress {
             case PC_LITERAL:
                 return immediate;
             default:
-                throw GraalError.shouldNotReachHere("Should only be called for addressing modes that use immediate values.");
+                throw JVMCIError.shouldNotReachHere("Should only be called for addressing modes that use immediate values.");
         }
     }
 
@@ -355,7 +352,7 @@ public final class AArch64Address extends AbstractAddress {
             case IMMEDIATE_PRE_INDEXED:
                 return String.format("[X%d,%d]!", base.encoding, immediate);
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 

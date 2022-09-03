@@ -1344,7 +1344,9 @@ public class AArch64MacroAssembler extends AArch64Assembler {
                 int information = instruction >>> PatchLabelKind.INFORMATION_OFFSET;
                 int regEncoding = information;
                 Register reg = AArch64.cpuRegisters[regEncoding];
-                super.adr(reg, branchOffset, branch);
+                // XXX The -4 is an ugly hack for the fact that we can't pass the Label to
+                // AArch64Call.directCall
+                super.adr(reg, branchOffset - 4, branch);
                 break;
             }
             default:
