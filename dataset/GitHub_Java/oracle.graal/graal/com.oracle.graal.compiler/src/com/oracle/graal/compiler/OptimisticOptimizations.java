@@ -22,55 +22,96 @@
  */
 package com.oracle.graal.compiler;
 
+import java.util.*;
+
+import com.oracle.graal.debug.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
+import com.oracle.max.criutils.*;
 
 
 
 public final class OptimisticOptimizations {
-    public static OptimisticOptimizations ALL = new OptimisticOptimizations(true, true, true, true);
-    public static OptimisticOptimizations NONE = new OptimisticOptimizations(false, false, false, false);
+    public static final OptimisticOptimizations ALL = new OptimisticOptimizations(EnumSet.allOf(Optimization.class));
+    public static final OptimisticOptimizations NONE = new OptimisticOptimizations(EnumSet.noneOf(Optimization.class));
+    private static final DebugMetric disabledOptimisticOptsMetric = Debug.metric("DisabledOptimisticOpts");
 
-    private final boolean removeNeverExecutedCode;
-    private final boolean useTypeCheckedInlining;
-    private final boolean useTypeCheckHints;
-    private final boolean useExceptionProbability;
-
-    public OptimisticOptimizations(RiResolvedMethod method) {
-        RiProfilingInfo profilingInfo = method.profilingInfo();
-        removeNeverExecutedCode = profilingInfo.getDeoptimizationCount(RiDeoptReason.UnreachedCode) < GraalOptions.MaximumDeoptsBeforeDisablingOptimisticOptimization;
-        useTypeCheckedInlining = profilingInfo.getDeoptimizationCount(RiDeoptReason.TypeCheckedInliningViolated) < GraalOptions.MaximumDeoptsBeforeDisablingOptimisticOptimization;
-        useTypeCheckHints = profilingInfo.getDeoptimizationCount(RiDeoptReason.OptimizedTypeCheckViolated) < GraalOptions.MaximumDeoptsBeforeDisablingOptimisticOptimization;
-        useExceptionProbability = profilingInfo.getDeoptimizationCount(RiDeoptReason.NotCompiledExceptionHandler) < GraalOptions.MaximumDeoptsBeforeDisablingOptimisticOptimization;
+    private static enum Optimization {
+        RemoveNeverExecutedCode,
+        UseTypeCheckedInlining,
+        UseTypeCheckHints,
+        UseExceptionProbability
     }
 
-    public OptimisticOptimizations(boolean removeNeverExecutedCode, boolean useTypeCheckedInlining, boolean useTypeCheckHints, boolean useExceptionProbability) {
-        this.removeNeverExecutedCode = removeNeverExecutedCode;
-        this.useTypeCheckedInlining = useTypeCheckedInlining;
-        this.useTypeCheckHints = useTypeCheckHints;
-        this.useExceptionProbability = useExceptionProbability;
+    private final Set<Optimization> enabledOpts;
+
+    public OptimisticOptimizations(RiResolvedMethod method) {
+        this.enabledOpts = EnumSet.noneOf(Optimization.class);
+
+        RiProfilingInfo profilingInfo = method.profilingInfo();
+        if (checkDeoptimizations(profilingInfo, RiDeoptReason.UnreachedCode)) {
+            enabledOpts.add(Optimization.RemoveNeverExecutedCode);
+        }
+        if (checkDeoptimizations(profilingInfo, RiDeoptReason.TypeCheckedInliningViolated)) {
+            enabledOpts.add(Optimization.UseTypeCheckedInlining);
+        }
+        if (checkDeoptimizations(profilingInfo, RiDeoptReason.OptimizedTypeCheckViolated)) {
+            enabledOpts.add(Optimization.UseTypeCheckHints);
+        }
+        if (checkDeoptimizations(profilingInfo, RiDeoptReason.NotCompiledExceptionHandler)) {
+            enabledOpts.add(Optimization.UseExceptionProbability);
+        }
+    }
+
+    private OptimisticOptimizations(Set<Optimization> enabledOpts) {
+        this.enabledOpts = enabledOpts;
+    }
+
+    public void log(RiMethod method) {
+        for (Optimization opt: Optimization.values()) {
+            if (!enabledOpts.contains(opt)) {
+                if (GraalOptions.PrintDisabledOptimisticOptimizations) {
+                    TTY.println("WARN: deactivated optimistic optimization %s for %s", opt.name(), CiUtil.format("%H.%n(%p)", method));
+                }
+                disabledOptimisticOptsMetric.increment();
+            }
+        }
     }
 
     public boolean removeNeverExecutedCode() {
-        return GraalOptions.RemoveNeverExecutedCode && removeNeverExecutedCode;
+        return GraalOptions.RemoveNeverExecutedCode && enabledOpts.contains(Optimization.RemoveNeverExecutedCode);
     }
 
     public boolean useUseTypeCheckHints() {
-        return GraalOptions.UseTypeCheckHints && useTypeCheckHints;
+        return GraalOptions.UseTypeCheckHints && enabledOpts.contains(Optimization.UseTypeCheckHints);
     }
 
     public boolean inlineMonomorphicCalls() {
-        return GraalOptions.InlineMonomorphicCalls && useTypeCheckedInlining;
+        return GraalOptions.InlineMonomorphicCalls && enabledOpts.contains(Optimization.UseTypeCheckedInlining);
     }
 
     public boolean inlinePolymorphicCalls() {
-        return GraalOptions.InlinePolymorphicCalls && useTypeCheckedInlining;
+        return GraalOptions.InlinePolymorphicCalls && enabledOpts.contains(Optimization.UseTypeCheckedInlining);
     }
 
     public boolean inlineMegamorphicCalls() {
-        return GraalOptions.InlineMegamorphicCalls && useTypeCheckedInlining;
+        return GraalOptions.InlineMegamorphicCalls && enabledOpts.contains(Optimization.UseTypeCheckedInlining);
     }
 
     public boolean useExceptionProbability() {
-        return useExceptionProbability;
+        return GraalOptions.UseExceptionProbability && enabledOpts.contains(Optimization.UseExceptionProbability);
+    }
+
+    public boolean lessOptimisticThan(OptimisticOptimizations other) {
+        for (Optimization opt: Optimization.values()) {
+            if (!enabledOpts.contains(opt) && other.enabledOpts.contains(opt)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean checkDeoptimizations(RiProfilingInfo profilingInfo, RiDeoptReason reason) {
+        return profilingInfo.getDeoptimizationCount(reason) < GraalOptions.DeoptsToDisableOptimisticOptimization;
     }
 }
