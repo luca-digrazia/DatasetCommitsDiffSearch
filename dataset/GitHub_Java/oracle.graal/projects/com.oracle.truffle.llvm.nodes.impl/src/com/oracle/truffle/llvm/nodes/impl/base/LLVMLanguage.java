@@ -34,31 +34,66 @@ import java.io.IOException;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.instrument.Visualizer;
-import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
-@TruffleLanguage.Registration(name = "Sulong", version = "0.01", mimeType = LLVMLanguage.LLVM_MIME_TYPE)
+@TruffleLanguage.Registration(name = "Sulong", version = "0.01", mimeType = {LLVMLanguage.LLVM_IR_MIME_TYPE, LLVMLanguage.LLVM_BITCODE_MIME_TYPE, LLVMLanguage.SULONG_LIBRARY_MIME_TYPE})
 public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
-    public static final String LLVM_MIME_TYPE = "application/x-llvm-ir-text";
-    public static final String LLVM_BITCODE_EXTENSION = "ll";
+    /*
+     * The LLVM class has static initializers with side effects that we rely on, but we have no
+     * dependency on it here, and no way to statically reference it even.
+     */
+
+    static {
+        try {
+            Class.forName("com.oracle.truffle.llvm.LLVM", true, ClassLoader.getSystemClassLoader());
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static final String LLVM_IR_MIME_TYPE = "application/x-llvm-ir-text";
+    public static final String LLVM_IR_EXTENSION = "ll";
+
+    public static final String LLVM_BITCODE_MIME_TYPE = "application/x-llvm-ir-bitcode";
+    public static final String LLVM_BITCODE_EXTENSION = "bc";
+
+    public static final String SULONG_LIBRARY_MIME_TYPE = "application/x-sulong-library";
+    public static final String SULONG_LIBRARY_EXTENSION = "su";
 
     public static final LLVMLanguage INSTANCE = new LLVMLanguage();
 
     public interface LLVMLanguageProvider {
         LLVMContext createContext(com.oracle.truffle.api.TruffleLanguage.Env env);
 
-        CallTarget parse(Source code, Node context, String... argumentNames);
+        CallTarget parse(Source code, Node context, String... argumentNames) throws IOException;
+
+        void disposeContext(LLVMContext context);
     }
 
     public static LLVMLanguageProvider provider;
 
+    public static final String MAIN_ARGS_KEY = "Sulong Main Args";
+    public static final String LLVM_SOURCE_FILE_KEY = "Sulong Source File";
+    public static final String PARSE_ONLY_KEY = "Parse only";
+
+    private com.oracle.truffle.api.TruffleLanguage.Env environment;
+
     @Override
     protected LLVMContext createContext(com.oracle.truffle.api.TruffleLanguage.Env env) {
+        this.environment = env;
         return provider.createContext(env);
+    }
+
+    public com.oracle.truffle.api.TruffleLanguage.Env getEnvironment() {
+        return environment;
+    }
+
+    @Override
+    protected void disposeContext(LLVMContext context) {
+        provider.disposeContext(context);
     }
 
     @Override
@@ -68,7 +103,15 @@ public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     @Override
     protected Object findExportedSymbol(LLVMContext context, String globalName, boolean onlyExplicit) {
-        return LLVMFunction.createFromName(globalName);
+        String atname = "@" + globalName; // for interop
+        for (LLVMFunctionDescriptor descr : context.getFunctionRegistry().getFunctionDescriptors()) {
+            if (descr != null && descr.getName().equals(globalName)) {
+                return descr;
+            } else if (descr != null && descr.getName().equals(atname)) {
+                return descr;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -90,25 +133,8 @@ public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     }
 
     @Override
-    protected boolean isInstrumentable(Node node) {
-        return false;
-    }
-
-    @Override
-    protected WrapperNode createWrapperNode(Node node) {
-        throw new AssertionError();
-    }
-
-    @Override
     protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
         throw new AssertionError();
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    protected Visualizer getVisualizer() {
-        // TODO Auto-generated method stub
-        return null;
     }
 
 }
