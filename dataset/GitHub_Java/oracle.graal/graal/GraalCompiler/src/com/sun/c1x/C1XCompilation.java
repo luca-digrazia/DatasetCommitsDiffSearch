@@ -166,7 +166,7 @@ public final class C1XCompilation {
      */
     public BlockMap getBlockMap(RiMethod method) {
         // PERF: cache the block map for methods that are compiled or inlined often
-        BlockMap map = new BlockMap(method, hir.numberOfBlocks(), hir.graph());
+        BlockMap map = new BlockMap(method, hir.numberOfBlocks());
         if (!map.build(C1XOptions.PhiLoopStores)) {
             throw new CiBailout("build of BlockMap failed for " + method);
         } else {
@@ -309,5 +309,4 @@ public final class C1XCompilation {
     public static C1XCompilation compilationOrNull() {
         return currentCompilation.get();
     }
-
 }

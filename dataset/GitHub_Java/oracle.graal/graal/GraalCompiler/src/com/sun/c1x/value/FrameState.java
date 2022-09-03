@@ -528,7 +528,7 @@ public abstract class FrameState {
     }
 
     /**
-     * Traverses all {@linkplain Value#isLive() live values} of this frame state.
+     * Traverses all {@linkplain Value#isLive() live values} of this frame state and it's callers.
      *
      * @param proc the call back called to process each live value traversed
      */
