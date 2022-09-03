@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +22,21 @@
  */
 package com.oracle.graal.lir.framemap;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.List;
 
-import java.util.*;
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
+import com.oracle.graal.asm.NumUtil;
 
 /**
  * This class is used to build the stack frame layout for a compiled method. A {@link StackSlot} is
@@ -42,6 +50,13 @@ public abstract class FrameMap {
 
     private final TargetDescription target;
     private final RegisterConfig registerConfig;
+
+    public interface ReferenceMapBuilderFactory {
+
+        ReferenceMapBuilder newReferenceMapBuilder(int totalFrameSize);
+    }
+
+    private final ReferenceMapBuilderFactory referenceMapFactory;
 
     /**
      * The final frame size, not including the size of the
@@ -70,7 +85,7 @@ public abstract class FrameMap {
     /**
      * Determines if this frame has values on the stack for outgoing calls.
      */
-    private boolean hasOutgoingStackArguments;
+    protected boolean hasOutgoingStackArguments;
 
     /**
      * The list of stack slots allocated in this frame that are present in every reference map.
@@ -87,12 +102,13 @@ public abstract class FrameMap {
      * Creates a new frame map for the specified method. The given registerConfig is optional, in
      * case null is passed the default RegisterConfig from the CodeCacheProvider will be used.
      */
-    public FrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig) {
+    public FrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ReferenceMapBuilderFactory referenceMapFactory) {
         this.target = codeCache.getTarget();
         this.registerConfig = registerConfig == null ? codeCache.getRegisterConfig() : registerConfig;
         this.frameSize = -1;
         this.outgoingSize = codeCache.getMinimumOutgoingSize();
         this.objectStackSlots = new ArrayList<>();
+        this.referenceMapFactory = referenceMapFactory;
     }
 
     public RegisterConfig getRegisterConfig() {
@@ -103,13 +119,14 @@ public abstract class FrameMap {
         return target;
     }
 
-    protected int returnAddressSize() {
-        return getTarget().arch.getReturnAddressSize();
+    public void addLiveValues(ReferenceMapBuilder refMap) {
+        for (Value value : objectStackSlots) {
+            refMap.addLiveValue(value);
+        }
     }
 
-    protected int calleeSaveAreaSize() {
-        CalleeSaveLayout csl = getRegisterConfig().getCalleeSaveLayout();
-        return csl != null ? csl.size : 0;
+    protected int returnAddressSize() {
+        return getTarget().arch.getReturnAddressSize();
     }
 
     /**
@@ -164,7 +181,9 @@ public abstract class FrameMap {
      * @param size the initial frame size to be aligned
      * @return the aligned frame size
      */
-    protected abstract int alignFrameSize(int size);
+    protected int alignFrameSize(int size) {
+        return NumUtil.roundUp(size, getTarget().stackAlignment);
+    }
 
     /**
      * Computes the final size of this frame. After this method has been called, methods that change
@@ -185,25 +204,11 @@ public abstract class FrameMap {
      * @return the offset of the stack slot
      */
     public int offsetForStackSlot(StackSlot slot) {
-        // @formatter:off
-        assert (!slot.getRawAddFrameSize() && slot.getRawOffset() <  outgoingSize) ||
-               (slot.getRawAddFrameSize() && slot.getRawOffset()  <  0 && -slot.getRawOffset() <= spillSize) ||
-               (slot.getRawAddFrameSize() && slot.getRawOffset()  >= 0) :
-                   String.format("RawAddFrameSize: %b RawOffset: 0x%x spillSize: 0x%x outgoingSize: 0x%x", slot.getRawAddFrameSize(), slot.getRawOffset(), spillSize, outgoingSize);
-        // @formatter:on
         if (slot.isInCallerFrame()) {
             accessesCallerFrame = true;
         }
         return slot.getOffset(totalFrameSize());
     }
-
-    /**
-     * Gets the offset from the stack pointer to the stack area where callee-saved registers are
-     * stored.
-     *
-     * @return The offset to the callee save area (in bytes).
-     */
-    public abstract int offsetToCalleeSaveArea();
 
     /**
      * Informs the frame map that the compiled code calls a particular method, which may need stack
@@ -235,7 +240,9 @@ public abstract class FrameMap {
      * @param additionalOffset
      * @return A spill slot denoting the reserved memory area.
      */
-    protected abstract StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset);
+    protected StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset) {
+        return StackSlot.get(kind, -spillSize + additionalOffset, true);
+    }
 
     /**
      * Returns the spill slot size for the given {@link LIRKind}. The default value is the size in
@@ -245,7 +252,7 @@ public abstract class FrameMap {
      * @return the size in bytes
      */
     public int spillSlotSize(LIRKind kind) {
-        return getTarget().getSizeInBytes(kind.getPlatformKind());
+        return kind.getPlatformKind().getSizeInBytes();
     }
 
     /**
@@ -256,11 +263,21 @@ public abstract class FrameMap {
      * @param kind The kind of the spill slot to be reserved.
      * @return A spill slot denoting the reserved memory area.
      */
-    protected StackSlot allocateSpillSlot(LIRKind kind) {
+    public StackSlot allocateSpillSlot(LIRKind kind) {
         assert frameSize == -1 : "frame size must not yet be fixed";
         int size = spillSlotSize(kind);
         spillSize = NumUtil.roundUp(spillSize + size, size);
         return allocateNewSpillSlot(kind, 0);
+    }
+
+    /**
+     * Returns the size of the stack slot range for {@code slots} objects.
+     *
+     * @param slots The number of slots.
+     * @return The size in byte
+     */
+    public int spillSlotRangeSize(int slots) {
+        return slots * getTarget().wordSize;
     }
 
     /**
@@ -274,12 +291,12 @@ public abstract class FrameMap {
      *            collector could see garbage object values.
      * @return the first reserved stack slot (i.e., at the lowest address)
      */
-    protected StackSlot allocateStackSlots(int slots, BitSet objects) {
+    public StackSlot allocateStackSlots(int slots, BitSet objects) {
         assert frameSize == -1 : "frame size must not yet be fixed";
         if (slots == 0) {
             return null;
         }
-        spillSize += (slots * getTarget().wordSize);
+        spillSize += spillSlotRangeSize(slots);
 
         if (!objects.isEmpty()) {
             assert objects.length() <= slots;
@@ -287,14 +304,14 @@ public abstract class FrameMap {
             for (int slotIndex = 0; slotIndex < slots; slotIndex++) {
                 StackSlot objectSlot = null;
                 if (objects.get(slotIndex)) {
-                    objectSlot = allocateNewSpillSlot(LIRKind.reference(Kind.Object), slotIndex * getTarget().wordSize);
+                    objectSlot = allocateNewSpillSlot(LIRKind.reference(getTarget().arch.getWordKind()), slotIndex * getTarget().wordSize);
                     addObjectStackSlot(objectSlot);
                 }
                 if (slotIndex == 0) {
                     if (objectSlot != null) {
                         result = objectSlot;
                     } else {
-                        result = allocateNewSpillSlot(LIRKind.value(getTarget().wordKind), 0);
+                        result = allocateNewSpillSlot(LIRKind.value(getTarget().arch.getWordKind()), 0);
                     }
                 }
             }
@@ -302,7 +319,7 @@ public abstract class FrameMap {
             return result;
 
         } else {
-            return allocateNewSpillSlot(LIRKind.value(getTarget().wordKind), 0);
+            return allocateNewSpillSlot(LIRKind.value(getTarget().arch.getWordKind()), 0);
         }
     }
 
@@ -310,43 +327,7 @@ public abstract class FrameMap {
         objectStackSlots.add(objectSlot);
     }
 
-    public ReferenceMap initReferenceMap(boolean hasRegisters) {
-        ReferenceMap refMap = getTarget().createReferenceMap(hasRegisters, frameSize() / getTarget().wordSize);
-        for (StackSlot slot : objectStackSlots) {
-            setReference(slot, refMap);
-        }
-        return refMap;
-    }
-
-    /**
-     * Marks the specified location as a reference in the reference map of the debug information.
-     * The tracked location can be a {@link RegisterValue} or a {@link StackSlot}. Note that a
-     * {@link JavaConstant} is automatically tracked.
-     *
-     * @param location The location to be added to the reference map.
-     * @param refMap A reference map, as created by {@link #initReferenceMap(boolean)}.
-     */
-    public void setReference(Value location, ReferenceMap refMap) {
-        LIRKind kind = location.getLIRKind();
-        if (isRegister(location)) {
-            refMap.setRegister(asRegister(location).getReferenceMapIndex(), kind);
-        } else if (isStackSlot(location)) {
-            int offset = offsetForStackSlot(asStackSlot(location));
-            refMap.setStackSlot(offset, kind);
-        } else {
-            assert isConstant(location);
-        }
-    }
-
-    public void clearReference(Value location, ReferenceMap refMap) {
-        LIRKind kind = location.getLIRKind();
-        if (isRegister(location)) {
-            refMap.clearRegister(asRegister(location).getReferenceMapIndex(), kind);
-        } else if (isStackSlot(location)) {
-            int offset = offsetForStackSlot(asStackSlot(location));
-            refMap.clearStackSlot(offset, kind);
-        } else {
-            assert isConstant(location);
-        }
+    public ReferenceMapBuilder newReferenceMapBuilder() {
+        return referenceMapFactory.newReferenceMapBuilder(totalFrameSize());
     }
 }
