@@ -173,11 +173,9 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
 
         static int getNodeDepth(List<TruffleInlining> decisionStack, Node node) {
             int depth = calculateNodeDepth(node);
-            if (decisionStack != null) {
-                for (int i = decisionStack.size() - 1; i > 0; i--) {
-                    TruffleInliningDecision decision = (TruffleInliningDecision) decisionStack.get(i);
-                    depth += calculateNodeDepth(decision.getProfile().getCallNode());
-                }
+            for (int i = decisionStack.size() - 1; i > 0; i--) {
+                TruffleInliningDecision decision = (TruffleInliningDecision) decisionStack.get(i);
+                depth += calculateNodeDepth(decision.getProfile().getCallNode());
             }
             return depth;
         }
@@ -193,7 +191,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
         }
 
         static TruffleInliningDecision getCurrentInliningDecision(List<TruffleInlining> decisionStack) {
-            if (decisionStack == null || decisionStack.size() <= 1) {
+            if (decisionStack.size() <= 1) {
                 return null;
             }
             return (TruffleInliningDecision) decisionStack.get(decisionStack.size() - 1);

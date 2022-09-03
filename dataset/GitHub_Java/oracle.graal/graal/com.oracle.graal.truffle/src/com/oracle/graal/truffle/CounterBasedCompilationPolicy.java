@@ -27,8 +27,7 @@ public class CounterBasedCompilationPolicy implements CompilationPolicy {
     private boolean compilationFailed;
 
     public boolean shouldCompile(CompilationProfile profile) {
-        return !compilationFailed && profile.getInterpreterCallCount() >= profile.getCompilationCallThreshold() &&
-                        profile.getInterpreterCallAndLoopCount() >= profile.getCompilationCallAndLoopThreshold();
+        return !compilationFailed && profile.getInterpreterCallCount() >= profile.getCompilationCallThreshold() && profile.getInterpreterCallAndLoopCount() >= profile.getCompilationCallAndLoopThreshold();
     }
 
     public void recordCompilationFailure(Throwable t) {
