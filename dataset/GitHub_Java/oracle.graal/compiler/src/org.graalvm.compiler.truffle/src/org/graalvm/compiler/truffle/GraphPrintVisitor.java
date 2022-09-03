@@ -230,7 +230,7 @@ final class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeE
     @Override
     protected String findJavaTypeName(Object obj) {
         if (obj instanceof Class<?>) {
-            return ((Class<?>) obj).getName();
+            return ((Class<?>)obj).getName();
         }
         return null;
     }
@@ -411,11 +411,11 @@ final class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeE
         }
     }
 
-    NodeElement getElementByObject(Object obj) {
+    final NodeElement getElementByObject(Object obj) {
         return nodeMap.get(obj);
     }
 
-    void createElementForNode(Object node) {
+    final void createElementForNode(Object node) {
         boolean exists = nodeMap.containsKey(node);
         if (!exists) {
             int nodeId = !exists ? oldOrNextId(node) : nextId();
@@ -446,7 +446,7 @@ final class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeE
         return className.replaceFirst("Node$", "");
     }
 
-    void setNodeProperty(Object node, String propertyName, Object value) {
+    final void setNodeProperty(Object node, String propertyName, Object value) {
         NodeElement nodeElem = getElementByObject(node);
         nodeElem.getProperties().put(propertyName, value);
     }
@@ -475,7 +475,7 @@ final class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeE
         return !isChildField(nodeClass, field) && !isChildrenField(nodeClass, field);
     }
 
-    void connectNodes(Object a, Object b, String label) {
+    final void connectNodes(Object a, Object b, String label) {
         NodeElement fromNode = getElementByObject(a);
         NodeElement toNode = getElementByObject(b);
         if (fromNode == null || toNode == null) {
