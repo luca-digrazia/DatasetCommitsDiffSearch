@@ -209,8 +209,8 @@ public class Graph {
     /**
      * Creates an empty Graph with no name.
      */
-    public Graph(OptionValues options) {
-        this(null, options);
+    public Graph() {
+        this(null, OptionValues.GLOBAL);
     }
 
     /**
@@ -236,7 +236,7 @@ public class Graph {
         iterableNodesFirst = new ArrayList<>(NodeClass.allocatedNodeIterabledIds());
         iterableNodesLast = new ArrayList<>(NodeClass.allocatedNodeIterabledIds());
         this.name = name;
-        this.options = options;
+        this.options = options != null ? options : OptionValues.GLOBAL;
 
         if (isModificationCountsEnabled()) {
             nodeModCounts = new int[INITIAL_NODES_SIZE];
@@ -951,36 +951,31 @@ public class Graph {
         assert !isFrozen();
         assert node.id() == Node.INITIAL_ID;
         if (nodes.length == nodesSize) {
-            grow();
+            Node[] newNodes = new Node[(nodesSize * 2) + 1];
+            System.arraycopy(nodes, 0, newNodes, 0, nodesSize);
+            nodes = newNodes;
         }
-        int id = nodesSize++;
+        int id = nodesSize;
         nodes[id] = node;
-        node.id = id;
         if (currentNodeSourcePosition != null) {
             node.setNodeSourcePosition(currentNodeSourcePosition);
+        } else if (!seenNodeSourcePosition && node.getNodeSourcePosition() != null) {
+            seenNodeSourcePosition = true;
         }
-        seenNodeSourcePosition = seenNodeSourcePosition || node.getNodeSourcePosition() != null;
+        nodesSize++;
 
         updateNodeCaches(node);
 
+        node.id = id;
         if (nodeEventListener != null) {
             nodeEventListener.nodeAdded(node);
+        }
+        if (!seenNodeSourcePosition && node.sourcePosition != null) {
+            seenNodeSourcePosition = true;
         }
         if (Fingerprint.ENABLED) {
             Fingerprint.submit("%s: %s", NodeEvent.NODE_ADDED, node);
         }
-        afterRegister(node);
-    }
-
-    private void grow() {
-        Node[] newNodes = new Node[(nodesSize * 2) + 1];
-        System.arraycopy(nodes, 0, newNodes, 0, nodesSize);
-        nodes = newNodes;
-    }
-
-    @SuppressWarnings("unused")
-    protected void afterRegister(Node node) {
-
     }
 
     @SuppressWarnings("unused")
@@ -1112,6 +1107,16 @@ public class Graph {
     public EconomicMap<Node, Node> addDuplicates(Iterable<? extends Node> newNodes, final Graph oldGraph, int estimatedNodeCount, DuplicationReplacement replacements) {
         try (DebugCloseable s = DuplicateGraph.start()) {
             return NodeClass.addGraphDuplicate(this, oldGraph, estimatedNodeCount, newNodes, replacements);
+        }
+    }
+
+    /**
+     * Reverses the usage orders of all nodes. This is used for debugging to make sure an unorthodox
+     * usage order does not trigger bugs in the compiler.
+     */
+    public void reverseUsageOrder() {
+        for (Node n : getNodes()) {
+            n.reverseUsageOrder();
         }
     }
 
