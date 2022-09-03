@@ -89,18 +89,18 @@ public final class GraalTruffleRuntime implements TruffleRuntime {
     }
 
     @Override
-    public VirtualFrame createVirtualFrame(Object[] arguments, FrameDescriptor frameDescriptor) {
-        return OptimizedCallTargetImpl.createFrame(frameDescriptor, arguments);
+    public VirtualFrame createVirtualFrame(PackedFrame caller, Arguments arguments, FrameDescriptor frameDescriptor) {
+        return OptimizedCallTargetImpl.createFrame(frameDescriptor, caller, arguments);
     }
 
     @Override
-    public MaterializedFrame createMaterializedFrame(Object[] arguments) {
+    public MaterializedFrame createMaterializedFrame(Arguments arguments) {
         return createMaterializedFrame(arguments, new FrameDescriptor());
     }
 
     @Override
-    public MaterializedFrame createMaterializedFrame(Object[] arguments, FrameDescriptor frameDescriptor) {
-        return new FrameWithoutBoxing(frameDescriptor, arguments);
+    public MaterializedFrame createMaterializedFrame(Arguments arguments, FrameDescriptor frameDescriptor) {
+        return new FrameWithoutBoxing(frameDescriptor, null, arguments);
     }
 
     @Override
@@ -173,7 +173,7 @@ public final class GraalTruffleRuntime implements TruffleRuntime {
     private static Method getCallMethod() {
         Method method;
         try {
-            method = OptimizedCallTargetImpl.class.getDeclaredMethod("call", new Class[]{Object[].class});
+            method = OptimizedCallTargetImpl.class.getDeclaredMethod("call", new Class[]{PackedFrame.class, Arguments.class});
         } catch (NoSuchMethodException | SecurityException e) {
             throw GraalInternalError.shouldNotReachHere();
         }

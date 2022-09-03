@@ -58,6 +58,15 @@ import com.oracle.graal.phases.*;
  */
 public abstract class NodeLIRGenerator implements NodeLIRGeneratorTool {
 
+    public static class Options {
+        // @formatter:off
+//        @Option(help = "Print HIR along side LIR as the latter is generated")
+//        public static final OptionValue<Boolean> PrintIRWithLIR = new OptionValue<>(false);
+//        @Option(help = "The trace level for the LIR generator")
+//        public static final OptionValue<Integer> TraceLIRGeneratorLevel = new OptionValue<>(0);
+        // @formatter:on
+    }
+
     private final NodeMap<Value> nodeOperands;
     private final DebugInfoBuilder debugInfoBuilder;
 
@@ -225,6 +234,24 @@ public abstract class NodeLIRGenerator implements NodeLIRGeneratorTool {
         }
     }
 
+    /**
+     * For Baseline compilation
+     */
+
+    public <T extends AbstractBlock<T>> void doBlock(T block, ResolvedJavaMethod method, BytecodeParser<T> parser) {
+        doBlockStart(block);
+
+        if (block == res.getLIR().getControlFlowGraph().getStartBlock()) {
+            assert block.getPredecessorCount() == 0;
+            emitPrologue(method, parser);
+        } else {
+            assert block.getPredecessorCount() > 0;
+        }
+        parser.processBlock(block);
+
+        doBlockEnd(block);
+    }
+
     public void doBlock(Block block, StructuredGraph graph, BlockMap<List<ScheduledNode>> blockMap) {
         doBlockStart(block);
 
@@ -300,8 +327,6 @@ public abstract class NodeLIRGenerator implements NodeLIRGeneratorTool {
         return null;
     }
 
-    private static final Object LOG_OUTPUT_LOCK = new Object();
-
     /**
      * Try to find a sequence of Nodes which can be passed to the backend to look for optimized
      * instruction sequences using memory. Currently this basically is a read with a single
@@ -334,7 +359,7 @@ public abstract class NodeLIRGenerator implements NodeLIRGeneratorTool {
                                     int start = nodes.indexOf(access);
                                     int end = nodes.indexOf(operation);
                                     for (int i1 = Math.min(start, end); i1 <= Math.max(start, end); i1++) {
-                                        Debug.log("%d: (%d) %1s", i1, nodes.get(i1).usages().count(), nodes.get(i1));
+                                        indent.log("%d: (%d) %1s", i1, nodes.get(i1).usages().count(), nodes.get(i1));
                                     }
                                 }
                                 return 0;
@@ -344,12 +369,12 @@ public abstract class NodeLIRGenerator implements NodeLIRGeneratorTool {
                         }
                     }
                     if (Debug.isLogEnabled()) {
-                        synchronized (LOG_OUTPUT_LOCK) {  // Hack to ensure the output is grouped.
+                        synchronized ("lock") {  // Hack to ensure the output is grouped.
                             try (Indent indent = Debug.logAndIndent("checking operations")) {
                                 int start = nodes.indexOf(access);
                                 int end = nodes.indexOf(operation);
                                 for (int i1 = Math.min(start, end); i1 <= Math.max(start, end); i1++) {
-                                    Debug.log("%d: (%d) %1s", i1, nodes.get(i1).usages().count(), nodes.get(i1));
+                                    indent.log("%d: (%d) %1s", i1, nodes.get(i1).usages().count(), nodes.get(i1));
                                 }
                             }
                         }
@@ -633,6 +658,24 @@ public abstract class NodeLIRGenerator implements NodeLIRGeneratorTool {
             throw GraalInternalError.unimplemented(node.toString());
         }
     }
+
+// public abstract void emitJump(LabelRef label);
+//
+// public abstract void emitCompareBranch(Value left, Value right, Condition cond, boolean
+// unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination, double
+// trueDestinationProbability);
+//
+// public abstract void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, double
+// overflowProbability);
+//
+// public abstract void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination,
+// LabelRef falseDestination, double trueSuccessorProbability);
+//
+// public abstract Variable emitConditionalMove(Value leftVal, Value right, Condition cond, boolean
+// unorderedIsTrue, Value trueValue, Value falseValue);
+//
+// public abstract Variable emitIntegerTestMove(Value leftVal, Value right, Value trueValue, Value
+// falseValue);
 
     @Override
     public void emitInvoke(Invoke x) {

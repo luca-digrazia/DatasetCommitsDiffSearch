@@ -136,7 +136,6 @@ public final class OptimizedCallTargetImpl extends OptimizedCallTarget {
         return false;
     }
 
-    @Override
     public InstalledCode compile() {
         if (isCompiling()) {
             if (installedCodeTask.isDone()) {

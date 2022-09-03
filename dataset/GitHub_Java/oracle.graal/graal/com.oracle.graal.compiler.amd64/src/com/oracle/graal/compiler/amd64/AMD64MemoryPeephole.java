@@ -436,7 +436,7 @@ public class AMD64MemoryPeephole implements MemoryArithmeticLIRLowerer {
                 return false;
             }
             if (kind == Kind.Object) {
-                if (!constant.isNull()) {
+                if (!access.isCompressible() && !constant.isNull()) {
                     Debug.log("Skipping constant compares for Object kinds");
                     return false;
                 }

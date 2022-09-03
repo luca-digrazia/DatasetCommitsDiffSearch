@@ -91,8 +91,6 @@ public abstract class OptimizedCallTarget extends DefaultCallTarget implements L
     @Override
     public abstract Object call(PackedFrame caller, Arguments args);
 
-    public abstract InstalledCode compile();
-
     public Object callInlined(PackedFrame caller, Arguments arguments) {
         if (CompilerDirectives.inInterpreter()) {
             compilationProfile.reportInlinedCall();
