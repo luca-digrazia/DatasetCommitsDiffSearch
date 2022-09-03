@@ -29,7 +29,6 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 
@@ -48,18 +47,13 @@ final class MoveResolver {
     private boolean multipleReadsAllowed;
     private final int[] registerBlocked;
 
-    private void setValueBlocked(Value location, int direction) {
-        assert direction == 1 || direction == -1 : "out of bounds";
-        if (isRegister(location)) {
-            registerBlocked[asRegister(location).number] += direction;
-        }
+    private int registerBlocked(int reg) {
+        return registerBlocked[reg];
     }
 
-    private int valueBlocked(Value location) {
-        if (isRegister(location)) {
-            return registerBlocked[asRegister(location).number];
-        }
-        throw GraalInternalError.shouldNotReachHere("unhandled value " + location);
+    private void setRegisterBlocked(int reg, int direction) {
+        assert direction == 1 || direction == -1 : "out of bounds";
+        registerBlocked[reg] += direction;
     }
 
     void setMultipleReadsAllowed() {
@@ -86,7 +80,7 @@ final class MoveResolver {
     boolean checkEmpty() {
         assert mappingFrom.size() == 0 && mappingFromOpr.size() == 0 && mappingTo.size() == 0 : "list must be empty before and after processing";
         for (int i = 0; i < allocator.registers.length; i++) {
-            assert registerBlocked[i] == 0 : "register map must be empty before and after processing";
+            assert registerBlocked(i) == 0 : "register map must be empty before and after processing";
         }
         assert !multipleReadsAllowed : "must have default value";
         return true;
@@ -155,9 +149,9 @@ final class MoveResolver {
     private void blockRegisters(Interval interval) {
         Value location = interval.location();
         if (isRegister(location)) {
-            assert multipleReadsAllowed || valueBlocked(location) == 0 : "register already marked as used";
-            int direction = 1;
-            setValueBlocked(location, direction);
+            int reg = asRegister(location).number;
+            assert multipleReadsAllowed || registerBlocked(reg) == 0 : "register already marked as used";
+            setRegisterBlocked(reg, 1);
         }
     }
 
@@ -165,8 +159,9 @@ final class MoveResolver {
     private void unblockRegisters(Interval interval) {
         Value location = interval.location();
         if (isRegister(location)) {
-            assert valueBlocked(location) > 0 : "register already marked as unused";
-            setValueBlocked(location, -1);
+            int reg = asRegister(location).number;
+            assert registerBlocked(reg) > 0 : "register already marked as unused";
+            setRegisterBlocked(reg, -1);
         }
     }
 
@@ -179,7 +174,7 @@ final class MoveResolver {
 
         Value reg = to.location();
         if (isRegister(reg)) {
-            if (valueBlocked(reg) > 1 || (valueBlocked(reg) == 1 && !reg.equals(fromReg))) {
+            if (registerBlocked(asRegister(reg).number) > 1 || (registerBlocked(asRegister(reg).number) == 1 && !reg.equals(fromReg))) {
                 return false;
             }
         }
