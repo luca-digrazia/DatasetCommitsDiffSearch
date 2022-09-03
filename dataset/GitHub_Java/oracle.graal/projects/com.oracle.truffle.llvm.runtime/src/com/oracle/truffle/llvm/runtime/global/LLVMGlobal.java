@@ -380,7 +380,6 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
         throw new IllegalStateException("unknown state of global variable");
     }
 
-    @TruffleBoundary
     private LLVMAddress transformToNative(LLVMContext context, TruffleObject value) {
         try {
             Object nativized = ForeignAccess.sendToNative(Message.TO_NATIVE.createNode(), value);
