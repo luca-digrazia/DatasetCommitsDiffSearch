@@ -249,7 +249,7 @@ public class LayoutParser {
         final PropertyBuilder property = getProperty(name);
 
         if (isFactoryGetter) {
-            property.setHasShapeGetter(true);
+            property.setHasFactoryGetter(true);
         } else if (isObjectTypeGetter) {
             property.setHasObjectTypeGetter(true);
         } else {
@@ -285,7 +285,7 @@ public class LayoutParser {
         final PropertyBuilder property = getProperty(name);
 
         if (isFactorySetter) {
-            property.setHasShapeSetter(true);
+            property.setHasFactorySetter(true);
         } else {
             if (isUnsafeSetter) {
                 property.setHasUnsafeSetter(isUnsafeSetter);

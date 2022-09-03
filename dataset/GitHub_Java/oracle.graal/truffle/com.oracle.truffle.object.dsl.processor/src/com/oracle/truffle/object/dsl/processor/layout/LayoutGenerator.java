@@ -630,7 +630,7 @@ public class LayoutGenerator {
                 stream.println("    ");
             }
 
-            if (property.hasShapeGetter()) {
+            if (property.hasFactoryGetter()) {
                 stream.println("    @Override");
                 stream.printf("    public %s %s(DynamicObjectFactory factory) {%n", property.getType(), NameUtils.asGetter(property.getName()));
                 stream.printf("        assert creates%s(factory);%n", layout.getName());
@@ -669,7 +669,7 @@ public class LayoutGenerator {
                 stream.println("    ");
             }
 
-            if (property.hasShapeSetter()) {
+            if (property.hasFactorySetter()) {
                 stream.println("    @TruffleBoundary");
                 stream.println("    @Override");
                 stream.printf("    public DynamicObjectFactory %s(DynamicObjectFactory factory, %s value) {%n", NameUtils.asSetter(property.getName()), property.getType());
