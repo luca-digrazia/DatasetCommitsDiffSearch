@@ -516,32 +516,10 @@ public final class GraphBuilderPhase extends Phase {
             probability = 0.5;
         }
 
-        // the mirroring and negation operations get the condition into canonical form
-        boolean mirror = cond.canonicalMirror();
-        boolean negate = cond.canonicalNegate();
-
-        ValueNode a = mirror ? y : x;
-        ValueNode b = mirror ? x : y;
-
-        CompareNode condition;
-        assert !a.kind().isFloatOrDouble();
-        if (cond == Condition.EQ || cond == Condition.NE) {
-            if (a.kind() == CiKind.Object) {
-                condition = new ObjectEqualsNode(a, b);
-            } else {
-                condition = new IntegerEqualsNode(a, b);
-            }
-        } else {
-            assert a.kind() != CiKind.Object && !cond.isUnsigned();
-            condition = new IntegerLessThanNode(a, b);
-        }
-        condition = currentGraph.unique(condition);
-
+        CompareNode condition = currentGraph.unique(new CompareNode(x, cond, y));
         BeginNode trueSuccessor = createBlockTarget(probability, trueBlock, frameState);
         BeginNode falseSuccessor = createBlockTarget(1 - probability, falseBlock, frameState);
-
-        IfNode ifNode = negate ? new IfNode(condition, falseSuccessor, trueSuccessor, 1 - probability) : new IfNode(condition, trueSuccessor, falseSuccessor, probability);
-        append(currentGraph.add(ifNode));
+        append(currentGraph.add(new IfNode(condition, trueSuccessor, falseSuccessor, probability)));
     }
 
     private void genIfZero(Condition cond) {
@@ -565,7 +543,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genThrow() {
         ValueNode exception = frameState.apop();
-        FixedGuardNode node = currentGraph.add(new FixedGuardNode(currentGraph.unique(new IsNullNode(exception)), RiDeoptReason.NullCheckException, RiDeoptAction.InvalidateReprofile, true, graphId));
+        FixedGuardNode node = currentGraph.add(new FixedGuardNode(currentGraph.unique(new NullCheckNode(exception, false)), RiDeoptReason.NullCheckException, RiDeoptAction.InvalidateReprofile, graphId));
         append(node);
         append(handleException(exception, bci()));
     }
@@ -635,7 +613,7 @@ public final class GraphBuilderPhase extends Phase {
             frameState.apush(checkCast);
         } else {
             ValueNode object = frameState.apop();
-            append(currentGraph.add(new FixedGuardNode(currentGraph.unique(new IsNullNode(object)), RiDeoptReason.Unresolved, RiDeoptAction.InvalidateRecompile, graphId)));
+            append(currentGraph.add(new FixedGuardNode(currentGraph.unique(new CompareNode(object, Condition.EQ, ConstantNode.forObject(null, runtime, currentGraph))), RiDeoptReason.Unresolved, RiDeoptAction.InvalidateRecompile, graphId)));
             frameState.apush(appendConstant(CiConstant.NULL_OBJECT));
         }
     }
@@ -647,14 +625,14 @@ public final class GraphBuilderPhase extends Phase {
         if (type instanceof RiResolvedType) {
             RiResolvedType resolvedType = (RiResolvedType) type;
             ConstantNode hub = appendConstant(resolvedType.getEncoding(RiType.Representation.ObjectHub));
-            InstanceOfNode instanceOfNode = new InstanceOfNode(hub, (RiResolvedType) type, object, getProfileForTypeCheck(resolvedType));
+            InstanceOfNode instanceOfNode = new InstanceOfNode(hub, (RiResolvedType) type, object, getProfileForTypeCheck(resolvedType), false);
             frameState.ipush(append(MaterializeNode.create(currentGraph.unique(instanceOfNode), currentGraph)));
         } else {
-            BlockPlaceholderNode successor = currentGraph.add(new BlockPlaceholderNode());
+            BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
             DeoptimizeNode deopt = currentGraph.add(new DeoptimizeNode(RiDeoptAction.InvalidateRecompile, RiDeoptReason.Unresolved, graphId));
-            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(object)), successor, deopt, 0));
+            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new NullCheckNode(object, true)), trueSucc, deopt, 1));
             append(ifNode);
-            lastInstr = successor;
+            lastInstr = trueSucc;
             frameState.ipush(appendConstant(CiConstant.INT_0));
         }
     }
@@ -756,18 +734,18 @@ public final class GraphBuilderPhase extends Phase {
     private void emitNullCheck(ValueNode receiver) {
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
         BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
-        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 1));
+        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new NullCheckNode(receiver, false)), trueSucc, falseSucc, 1));
 
         append(ifNode);
-        lastInstr = falseSucc;
+        lastInstr = trueSucc;
 
         if (GraalOptions.OmitHotExceptionStacktrace) {
             ValueNode exception = ConstantNode.forObject(new NullPointerException(), runtime, currentGraph);
-            trueSucc.setNext(handleException(exception, bci()));
+            falseSucc.setNext(handleException(exception, bci()));
         } else {
             RuntimeCallNode call = currentGraph.add(new RuntimeCallNode(CiRuntimeCall.CreateNullPointerException));
             call.setStateAfter(frameState.create(bci()));
-            trueSucc.setNext(call);
+            falseSucc.setNext(call);
             call.setNext(handleException(call, bci()));
         }
     }
@@ -775,7 +753,7 @@ public final class GraphBuilderPhase extends Phase {
     private void emitBoundsCheck(ValueNode index, ValueNode length) {
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
         BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
-        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IntegerBelowThanNode(index, length)), trueSucc, falseSucc, 1));
+        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new CompareNode(index, Condition.BT, length)), trueSucc, falseSucc, 1));
 
         append(ifNode);
         lastInstr = trueSucc;
@@ -1045,7 +1023,7 @@ public final class GraphBuilderPhase extends Phase {
         ValueNode local = frameState.loadLocal(localIndex);
         JsrScope scope = currentBlock.jsrScope;
         int retAddress = scope.nextReturnAddress();
-        append(currentGraph.add(new FixedGuardNode(currentGraph.unique(new IntegerEqualsNode(local, ConstantNode.forJsr(retAddress, currentGraph))), RiDeoptReason.JavaSubroutineMismatch, RiDeoptAction.InvalidateReprofile, graphId)));
+        append(currentGraph.add(new FixedGuardNode(currentGraph.unique(new CompareNode(local, Condition.EQ, ConstantNode.forJsr(retAddress, currentGraph))), RiDeoptReason.JavaSubroutineMismatch, RiDeoptAction.InvalidateReprofile, graphId)));
         if (!successor.jsrScope.equals(scope.pop())) {
             throw new JsrNotSupportedBailout("unstructured control flow (ret leaves more than one scope)");
         }
@@ -1413,7 +1391,7 @@ public final class GraphBuilderPhase extends Phase {
             FixedNode catchSuccessor = createTarget(block.successors.get(0), frameState);
             FixedNode nextDispatch = createTarget(nextBlock, frameState);
             ValueNode exception = frameState.stackAt(0);
-            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new InstanceOfNode(typeInstruction, (RiResolvedType) catchType, exception)), catchSuccessor, nextDispatch, 0.5));
+            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new InstanceOfNode(typeInstruction, (RiResolvedType) catchType, exception, false)), catchSuccessor, nextDispatch, 0.5));
             append(ifNode);
         }
     }
