@@ -211,6 +211,8 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
                     break;
                 case Int:
                     return impl.typeInt;
+                case Jsr:
+                    break;
                 case Long:
                     return impl.typeLong;
                 case Object:
