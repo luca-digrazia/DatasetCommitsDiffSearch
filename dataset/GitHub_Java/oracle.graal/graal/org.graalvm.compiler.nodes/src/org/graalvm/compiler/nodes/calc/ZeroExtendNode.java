@@ -106,21 +106,23 @@ public final class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow>
         if (forValue instanceof NarrowNode) {
             NarrowNode narrow = (NarrowNode) forValue;
             Stamp inputStamp = narrow.getValue().stamp();
-            if (inputStamp instanceof IntegerStamp) {
+            Stamp curStamp = stamp();
+            if (inputStamp instanceof IntegerStamp && curStamp instanceof IntegerStamp) {
                 IntegerStamp istamp = (IntegerStamp) inputStamp;
+                IntegerStamp icurStamp = (IntegerStamp) curStamp;
                 long mask = CodeUtil.mask(PrimitiveStamp.getBits(narrow.stamp()));
 
                 if ((istamp.upMask() & ~mask) == 0) {
                     // The original value cannot change because of the narrow and zero extend.
 
-                    if (istamp.getBits() < resultBits) {
+                    if (istamp.getBits() < icurStamp.getBits()) {
                         // Need to keep the zero extend, skip the narrow.
-                        return create(narrow.getValue(), resultBits);
-                    } else if (istamp.getBits() > resultBits) {
+                        return create(narrow.getValue(), icurStamp.getBits());
+                    } else if (istamp.getBits() > icurStamp.getBits()) {
                         // Need to keep the narrow, skip the zero extend.
-                        return NarrowNode.create(narrow.getValue(), resultBits);
+                        return NarrowNode.create(narrow.getValue(), icurStamp.getBits());
                     } else {
-                        assert istamp.getBits() == resultBits;
+                        assert istamp.getBits() == icurStamp.getBits();
                         // Just return the original value.
                         return narrow.getValue();
                     }
