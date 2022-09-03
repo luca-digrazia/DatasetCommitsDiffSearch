@@ -29,7 +29,6 @@ import java.util.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
@@ -91,10 +90,12 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
                 }
 
                 // apply the effects collected during this iteration
-                HashSetNodeEventListener listener = new HashSetNodeEventListener();
-                try (NodeEventScope nes = graph.trackNodeEvents(listener)) {
-                    closure.applyEffects();
-                }
+                HashSetNodeChangeListener listener = new HashSetNodeChangeListener();
+                graph.trackInputChange(listener);
+                graph.trackUsagesDroppedZero(listener);
+                closure.applyEffects();
+                graph.stopTrackingInputChange();
+                graph.stopTrackingUsagesDroppedZero();
 
                 if (Debug.isDumpEnabled()) {
                     Debug.dump(graph, "after " + getName() + " iteration");
@@ -102,7 +103,7 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
 
                 new DeadCodeEliminationPhase().apply(graph);
 
-                Set<Node> changedNodes = listener.getNodes();
+                Set<Node> changedNodes = listener.getChangedNodes();
                 for (Node node : graph.getNodes()) {
                     if (node instanceof Simplifiable) {
                         changedNodes.add(node);

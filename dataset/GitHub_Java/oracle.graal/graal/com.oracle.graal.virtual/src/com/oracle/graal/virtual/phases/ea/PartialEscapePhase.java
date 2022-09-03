@@ -45,7 +45,7 @@ public class PartialEscapePhase extends EffectsPhase<PhaseContext> {
 
     static class Options {
         //@formatter:off
-        @Option(help = "", type = OptionType.Debug)
+        @Option(help = "")
         public static final OptionValue<Boolean> OptEarlyReadElimination = new OptionValue<>(true);
         //@formatter:on
     }

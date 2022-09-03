@@ -229,35 +229,33 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 proxies.put(obj.virtual, proxy);
             }
         }
-        if (exitNode.graph().hasValueProxies()) {
-            for (ObjectState obj : exitState.getStates()) {
-                ObjectState initialObj = initialState.getObjectStateOptional(obj.virtual);
-                if (obj.isVirtual()) {
-                    for (int i = 0; i < obj.getEntries().length; i++) {
-                        ValueNode value = obj.getEntry(i);
-                        if (!(value instanceof VirtualObjectNode || value.isConstant())) {
-                            if (exitNode.loopBegin().isPhiAtMerge(value) || initialObj == null || !initialObj.isVirtual() || initialObj.getEntry(i) != value) {
-                                ProxyNode proxy = new ValueProxyNode(value, exitNode);
-                                obj.setEntry(i, proxy);
-                                effects.addFloatingNode(proxy, "virtualProxy");
-                            }
+        for (ObjectState obj : exitState.getStates()) {
+            ObjectState initialObj = initialState.getObjectStateOptional(obj.virtual);
+            if (obj.isVirtual()) {
+                for (int i = 0; i < obj.getEntries().length; i++) {
+                    ValueNode value = obj.getEntry(i);
+                    if (!(value instanceof VirtualObjectNode || value.isConstant())) {
+                        if (exitNode.loopBegin().isPhiAtMerge(value) || initialObj == null || !initialObj.isVirtual() || initialObj.getEntry(i) != value) {
+                            ProxyNode proxy = new ValueProxyNode(value, exitNode);
+                            obj.setEntry(i, proxy);
+                            effects.addFloatingNode(proxy, "virtualProxy");
                         }
                     }
-                } else {
-                    if (initialObj == null || initialObj.isVirtual()) {
-                        ProxyNode proxy = proxies.get(obj.virtual);
-                        if (proxy == null) {
-                            proxy = new ValueProxyNode(obj.getMaterializedValue(), exitNode);
-                            effects.addFloatingNode(proxy, "proxy");
-                        } else {
-                            effects.replaceFirstInput(proxy, proxy.value(), obj.getMaterializedValue());
-                            // nothing to do - will be handled in processNode
-                        }
-                        obj.updateMaterializedValue(proxy);
+                }
+            } else {
+                if (initialObj == null || initialObj.isVirtual()) {
+                    ProxyNode proxy = proxies.get(obj.virtual);
+                    if (proxy == null) {
+                        proxy = new ValueProxyNode(obj.getMaterializedValue(), exitNode);
+                        effects.addFloatingNode(proxy, "proxy");
                     } else {
-                        if (initialObj.getMaterializedValue() == obj.getMaterializedValue()) {
-                            Debug.log("materialized value changes within loop: %s vs. %s at %s", initialObj.getMaterializedValue(), obj.getMaterializedValue(), exitNode);
-                        }
+                        effects.replaceFirstInput(proxy, proxy.value(), obj.getMaterializedValue());
+                        // nothing to do - will be handled in processNode
+                    }
+                    obj.updateMaterializedValue(proxy);
+                } else {
+                    if (initialObj.getMaterializedValue() == obj.getMaterializedValue()) {
+                        Debug.log("materialized value changes within loop: %s vs. %s at %s", initialObj.getMaterializedValue(), obj.getMaterializedValue(), exitNode);
                     }
                 }
             }
@@ -458,9 +456,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         if (phis[valueIndex] == null && values[valueIndex] != fields[valueIndex]) {
                             phis[valueIndex] = new ValuePhiNode(values[valueIndex].stamp().unrestricted(), merge);
                         }
-                    }
-                    if (phis[valueIndex] != null && !phis[valueIndex].stamp().isCompatible(values[valueIndex].stamp())) {
-                        phis[valueIndex] = new ValuePhiNode(values[valueIndex].stamp().unrestricted(), merge);
                     }
                     if (twoSlotKinds != null && twoSlotKinds[valueIndex] != null) {
                         // skip an entry after a long/double value that occupies two int slots
