@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,10 @@
  */
 package org.graalvm.compiler.nodes.calc;
 
-import jdk.vm.ci.meta.JavaConstant;
+import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
+import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_2;
+import static org.graalvm.compiler.nodes.calc.CompareNode.createCompareNode;
+
 import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -32,7 +35,6 @@ import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.spi.Canonicalizable;
 import org.graalvm.compiler.graph.spi.CanonicalizerTool;
-import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool.RoundingMode;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -45,9 +47,7 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
-import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_2;
-import static org.graalvm.compiler.nodes.calc.CompareNode.createCompareNode;
+import jdk.vm.ci.meta.JavaConstant;
 
 /**
  * The {@code ConditionalNode} class represents a comparison that yields one of two (eagerly
@@ -86,7 +86,7 @@ public final class ConditionalNode extends FloatingNode implements Canonicalizab
         if (synonym != null) {
             return synonym;
         }
-        ValueNode result = canonicalizeConditional(condition, trueValue, falseValue, trueValue.stamp(view).meet(falseValue.stamp(view)), view, null);
+        ValueNode result = canonicalizeConditional(condition, trueValue, falseValue, trueValue.stamp(view).meet(falseValue.stamp(view)), view);
         if (result != null) {
             return result;
         }
@@ -139,7 +139,7 @@ public final class ConditionalNode extends FloatingNode implements Canonicalizab
             return synonym;
         }
 
-        ValueNode result = canonicalizeConditional(condition, trueValue(), falseValue(), stamp, view, tool);
+        ValueNode result = canonicalizeConditional(condition, trueValue(), falseValue(), stamp, view);
         if (result != null) {
             return result;
         }
@@ -147,7 +147,7 @@ public final class ConditionalNode extends FloatingNode implements Canonicalizab
         return this;
     }
 
-    public static ValueNode canonicalizeConditional(LogicNode condition, ValueNode trueValue, ValueNode falseValue, Stamp stamp, NodeView view, CanonicalizerTool canonicalizer) {
+    public static ValueNode canonicalizeConditional(LogicNode condition, ValueNode trueValue, ValueNode falseValue, Stamp stamp, NodeView view) {
         if (trueValue == falseValue) {
             return trueValue;
         }
@@ -214,7 +214,8 @@ public final class ConditionalNode extends FloatingNode implements Canonicalizab
                     // (value & 1) == 0 ? 0 : 1
                     // (value & 1) == 1 ? 1 : 0
                     IntegerTestNode integerTestNode = (IntegerTestNode) condition;
-                    if (integerTestNode.getY().isConstant() && integerTestNode.getX().stamp(view) instanceof IntegerStamp) {
+                    if (integerTestNode.getY().isConstant()) {
+                        assert integerTestNode.getX().stamp(view) instanceof IntegerStamp;
                         long testY = integerTestNode.getY().asJavaConstant().asLong();
                         if (testY == 1 && constTrueValue == 0 && constFalseValue == 1) {
                             return IntegerConvertNode.convertUnsigned(AndNode.create(integerTestNode.getX(), integerTestNode.getY(), view), stamp, view);
@@ -244,33 +245,6 @@ public final class ConditionalNode extends FloatingNode implements Canonicalizab
                 }
             }
         }
-
-        /*
-         * Convert `x < 0.0 ? Math.ceil(x) : Math.floor(x)` to RoundNode(x, TRUNCATE).
-         */
-        // @formatter:off
-        if (canonicalizer != null &&
-                canonicalizer.supportsRounding() &&
-                condition instanceof FloatLessThanNode &&
-                trueValue instanceof RoundNode &&
-                falseValue instanceof RoundNode &&
-                ((RoundNode) trueValue).value.valueEquals(((RoundNode) falseValue).value) &&
-                (
-                        (
-                                // x < 0.0 ? ceil(x) : floor(x)
-                                ((FloatLessThanNode) condition).getY().isDefaultConstant() &&
-                                ((RoundNode) trueValue).mode() == RoundingMode.UP &&
-                                ((RoundNode) falseValue).mode() == RoundingMode.DOWN
-                        ) || (
-                                // 0.0 < x ? floor(x) : ceil(x)
-                                ((FloatLessThanNode) condition).getX().isDefaultConstant() &&
-                                ((RoundNode) trueValue).mode() == RoundingMode.DOWN &&
-                                ((RoundNode) falseValue).mode() == RoundingMode.UP
-                        )
-                )) {
-            return new RoundNode(((RoundNode) trueValue).value, RoundingMode.TRUNCATE);
-        }
-        // @formatter:on
 
         return null;
     }

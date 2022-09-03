@@ -134,6 +134,7 @@ public abstract class ValueNode extends org.graalvm.compiler.graph.Node implemen
         return value != null && value.isNull();
     }
 
+
     public final boolean isDefaultConstant() {
         JavaConstant value = asJavaConstant();
         return value != null && value.isDefaultForKind();
