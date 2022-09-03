@@ -1088,7 +1088,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected ValueNode genNormalizeCompare(ValueNode x, ValueNode y, boolean isUnorderedLess) {
-        return NormalizeCompareNode.create(x, y, isUnorderedLess, JavaKind.Int, constantReflection);
+        return NormalizeCompareNode.create(x, y, isUnorderedLess, constantReflection);
     }
 
     protected ValueNode genFloatConvert(FloatConvert op, ValueNode input) {

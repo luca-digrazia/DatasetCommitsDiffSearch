@@ -40,9 +40,6 @@ public class BytecodeParserOptions {
     @Option(help = "Inlines trivial methods during bytecode parsing.", type = OptionType.Expert)
     public static final OptionKey<Boolean> InlineDuringParsing = new OptionKey<>(true);
 
-    @Option(help = "Inlines partial intrinsic exits during bytecode parsing when possible.", type = OptionType.Expert)
-    public static final OptionKey<Boolean> InlinePartialIntrinsicExitDuringParsing = new OptionKey<>(true);
-
     @Option(help = "Inlines intrinsic methods during bytecode parsing.", type = OptionType.Expert)
     public static final OptionKey<Boolean> InlineIntrinsicsDuringParsing = new OptionKey<>(true);
 
