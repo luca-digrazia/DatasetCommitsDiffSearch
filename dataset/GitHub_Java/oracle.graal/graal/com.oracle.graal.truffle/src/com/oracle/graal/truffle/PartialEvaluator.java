@@ -73,8 +73,7 @@ public class PartialEvaluator {
     private Set<Constant> constantReceivers;
     private final TruffleCache truffleCache;
     private final SnippetReflectionProvider snippetReflection;
-    private final ResolvedJavaMethod callDirectMethod;
-    private final ResolvedJavaMethod callSiteProxyMethod;
+    private final ResolvedJavaMethod directCallMethod;
 
     public PartialEvaluator(Providers providers, TruffleCache truffleCache) {
         this.providers = providers;
@@ -82,8 +81,7 @@ public class PartialEvaluator {
         this.canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue(), customCanonicalizer);
         this.snippetReflection = Graal.getRequiredCapability(SnippetReflectionProvider.class);
         this.truffleCache = truffleCache;
-        this.callDirectMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod());
-        this.callSiteProxyMethod = providers.getMetaAccess().lookupJavaMethod(GraalFrameInstance.CallNodeFrame.METHOD);
+        this.directCallMethod = providers.getMetaAccess().lookupJavaMethod(GraalFrameInstance.CallNodeFrame.METHOD);
     }
 
     public StructuredGraph createGraph(final OptimizedCallTarget callTarget, final Assumptions assumptions, ContextSensitiveInlining inlining) {
@@ -109,7 +107,7 @@ public class PartialEvaluator {
 
             expandTree(graph, assumptions);
 
-            expandDirectCalls(graph, assumptions, inlining != null ? new TruffleInliningCache() : null, inlining);
+            expandCallBoundaries(graph, assumptions, inlining != null ? new TruffleInliningCache() : null, inlining);
 
             if (Thread.currentThread().isInterrupted()) {
                 return null;
@@ -174,7 +172,7 @@ public class PartialEvaluator {
         return graph;
     }
 
-    private void expandDirectCalls(StructuredGraph graph, Assumptions assumptions, TruffleInliningCache inliningCache, ContextSensitiveInlining inlining) {
+    private void expandCallBoundaries(StructuredGraph graph, Assumptions assumptions, TruffleInliningCache inliningCache, ContextSensitiveInlining inlining) {
         if (inlining == null) {
             return;
         }
@@ -182,24 +180,12 @@ public class PartialEvaluator {
         TruffleExpansionLogger expansionLogger = new TruffleExpansionLogger(providers, graph);
 
         for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.class).snapshot()) {
-            StructuredGraph inlineGraph = parseDirectCallGraph(phaseContext, assumptions, inliningCache, inlining, methodCallTargetNode);
+            StructuredGraph inlineGraph = parseInlineGraph(phaseContext, assumptions, inliningCache, inlining, methodCallTargetNode);
 
             if (inlineGraph != null) {
                 expandTreeInline(graph, phaseContext, expansionLogger, methodCallTargetNode, inlineGraph);
             }
         }
-        // non inlined direct calls need to be expanded until TruffleCallBoundary.
-        expandTree(graph, assumptions);
-        assert noDirectCallsLeft(graph);
-    }
-
-    private boolean noDirectCallsLeft(StructuredGraph graph) {
-        for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.class).snapshot()) {
-            if (methodCallTargetNode.targetMethod().equals(callDirectMethod)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private void injectConstantCallTarget(final StructuredGraph graph, final OptimizedCallTarget constantCallTarget, PhaseContext baseContext) {
@@ -261,8 +247,7 @@ public class PartialEvaluator {
                         }
                         StructuredGraph inlineGraph = replacements.getMethodSubstitution(methodCallTargetNode.targetMethod());
 
-                        ResolvedJavaMethod targetMethod = methodCallTargetNode.targetMethod();
-                        if (inlineGraph == null && !targetMethod.isNative() && targetMethod.canBeInlined()) {
+                        if (inlineGraph == null && !methodCallTargetNode.targetMethod().isNative() && methodCallTargetNode.targetMethod().canBeInlined()) {
                             inlineGraph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, phaseContext);
                         }
 
@@ -286,7 +271,7 @@ public class PartialEvaluator {
         return changed;
     }
 
-    private StructuredGraph parseDirectCallGraph(PhaseContext phaseContext, Assumptions assumptions, TruffleInliningCache inliningCache, ContextSensitiveInlining inlining,
+    private StructuredGraph parseInlineGraph(PhaseContext phaseContext, Assumptions assumptions, TruffleInliningCache inliningCache, ContextSensitiveInlining inlining,
                     MethodCallTargetNode methodCallTargetNode) {
         OptimizedDirectCallNode callNode = resolveConstantCallNode(methodCallTargetNode);
         if (callNode == null) {
@@ -304,6 +289,10 @@ public class PartialEvaluator {
 
         assert decision.getProfile().getCallNode() == callNode;
 
+        if (!decision.isInline()) {
+            return null;
+        }
+
         OptimizedCallTarget currentTarget = decision.getProfile().getCallNode().getCurrentCallTarget();
         if (decision.getTarget() != currentTarget) {
             if (TruffleCompilerOptions.PrintTrufflePerformanceWarnings.getValue()) {
@@ -315,16 +304,13 @@ public class PartialEvaluator {
         }
 
         StructuredGraph graph;
-        if (decision.isInline()) {
-            if (inliningCache == null) {
-                graph = createInlineGraph(phaseContext, assumptions, null, decision);
-            } else {
-                graph = inliningCache.getCachedGraph(phaseContext, assumptions, decision);
-            }
-            decision.getProfile().setGraalDeepNodeCount(graph.getNodeCount());
+        if (inliningCache == null) {
+            graph = createInlineGraph(phaseContext, assumptions, null, decision);
         } else {
-            graph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, phaseContext);
+            graph = inliningCache.getCachedGraph(phaseContext, assumptions, decision);
         }
+
+        decision.getProfile().setGraalDeepNodeCount(graph.getNodeCount());
 
         return graph;
     }
@@ -334,12 +320,12 @@ public class PartialEvaluator {
         StructuredGraph inlineGraph = truffleCache.createInlineGraph(target.toString());
         injectConstantCallTarget(inlineGraph, decision.getTarget(), phaseContext);
         expandTree(inlineGraph, assumptions);
-        expandDirectCalls(inlineGraph, assumptions, cache, decision);
+        expandCallBoundaries(inlineGraph, assumptions, cache, decision);
         return inlineGraph;
     }
 
     private OptimizedDirectCallNode resolveConstantCallNode(MethodCallTargetNode methodCallTargetNode) {
-        if (!methodCallTargetNode.targetMethod().equals(callDirectMethod)) {
+        if (methodCallTargetNode.targetMethod().getAnnotation(TruffleCallBoundary.class) == null) {
             return null;
         }
 
@@ -349,7 +335,7 @@ public class PartialEvaluator {
         }
 
         FrameState directCallState = invoke.stateAfter();
-        while (directCallState != null && directCallState.method() != callSiteProxyMethod) {
+        while (directCallState != null && directCallState.method() != directCallMethod) {
             directCallState = directCallState.outerFrameState();
         }
 
@@ -359,12 +345,12 @@ public class PartialEvaluator {
         }
 
         if (directCallState.values().isEmpty()) {
-            throw new AssertionError(String.format("Frame state of method '%s' is invalid.", callDirectMethod.toString()));
+            throw new AssertionError(String.format("Frame state of method '%s' is invalid.", directCallMethod.toString()));
         }
 
         ValueNode node = directCallState.values().get(0);
         if (!node.isConstant()) {
-            throw new AssertionError(String.format("Method argument for method '%s' is not constant.", callDirectMethod.toString()));
+            throw new AssertionError(String.format("Method argument for method '%s' is not constant.", directCallMethod.toString()));
         }
 
         Constant constantCallNode = node.asConstant();
