@@ -923,8 +923,7 @@ public abstract class Source {
      * @since 1.0
      */
     public static String findLanguage(TruffleFile file) throws IOException {
-        String mimeType = findMimeType(file);
-        return mimeType != null ? findLanguage(mimeType) : null;
+        return findLanguage(findMimeType(file));
     }
 
     /**
@@ -945,8 +944,7 @@ public abstract class Source {
      * @since 1.0
      */
     public static String findLanguage(URL url) throws IOException {
-        String mimeType = findMimeType(url);
-        return mimeType != null ? findLanguage(mimeType) : null;
+        return findLanguage(findMimeType(url));
     }
 
     /**
