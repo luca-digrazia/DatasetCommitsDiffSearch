@@ -77,7 +77,6 @@ public interface GraphBuilderTool {
      */
     boolean parsingIntrinsic();
 
-    @SuppressWarnings("unused")
     default boolean canDeferPlugin(GeneratedInvocationPlugin plugin) {
         // By default generated plugins must be completely processed during parsing.
         return false;
