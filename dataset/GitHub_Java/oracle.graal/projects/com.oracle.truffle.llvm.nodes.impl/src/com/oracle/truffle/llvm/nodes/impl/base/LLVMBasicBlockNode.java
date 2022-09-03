@@ -61,7 +61,7 @@ public class LLVMBasicBlockNode extends LLVMNode {
     @Children private final LLVMNode[] statements;
     @Child private LLVMTerminatorNode termInstruction;
 
-    @CompilationFinal(dimensions = 1) private final long[] successorCount;
+    @CompilationFinal private final long[] successorCount;
     @CompilationFinal private long totalExecutionCount = 0;
     private final int blockId;
     private final String blockName;
@@ -111,10 +111,16 @@ public class LLVMBasicBlockNode extends LLVMNode {
         return termInstruction.executeGetSuccessorIndex(frame);
     }
 
-    private void incrementCountAtIndex(int successorIndex) {
+    private void incrementTotalCount() {
         if (totalExecutionCount != Long.MAX_VALUE) {
-            successorCount[successorIndex]++;
             totalExecutionCount++;
+        }
+    }
+
+    private void incrementSuccessorCount(int successorIndex) {
+        long currentCount = successorCount[successorIndex];
+        if (currentCount != Long.MAX_VALUE && totalExecutionCount != Long.MAX_VALUE) {
+            successorCount[successorIndex]++;
         }
     }
 
@@ -136,12 +142,12 @@ public class LLVMBasicBlockNode extends LLVMNode {
      */
     public double getBranchProbability(int successorIndex) {
         double successorBranchProbability;
-        long succCount = successorCount[successorIndex];
-        if (succCount == 0) {
+        if (successorCount[successorIndex] == 0) {
             successorBranchProbability = 0;
         } else {
-            successorBranchProbability = (double) succCount / totalExecutionCount;
+            successorBranchProbability = (double) successorCount[successorIndex] / totalExecutionCount;
         }
+        assert successorBranchProbability >= 0 && successorBranchProbability <= 1;
         return successorBranchProbability;
     }
 
@@ -150,7 +156,8 @@ public class LLVMBasicBlockNode extends LLVMNode {
             CompilerDirectives.transferToInterpreterAndInvalidate();
         }
         if (CompilerDirectives.inInterpreter()) {
-            incrementCountAtIndex(successorIndex);
+            incrementSuccessorCount(successorIndex);
+            incrementTotalCount();
         }
     }
 
