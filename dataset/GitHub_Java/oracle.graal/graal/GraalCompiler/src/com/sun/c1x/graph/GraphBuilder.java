@@ -344,8 +344,7 @@ public final class GraphBuilder {
             // this is a load of class constant which might be unresolved
             RiType riType = (RiType) con;
             if (!riType.isResolved() || C1XOptions.TestPatching) {
-                ResolveClass rc = new ResolveClass(riType, RiType.Representation.JavaClass, graph, frameState.create(bci()));
-                frameState.push(CiKind.Object, append(rc));
+                frameState.push(CiKind.Object, append(new ResolveClass(riType, RiType.Representation.JavaClass, graph)));
             } else {
                 frameState.push(CiKind.Object, append(new Constant(riType.getEncoding(Representation.JavaClass), graph)));
             }
@@ -553,9 +552,7 @@ public final class GraphBuilder {
     }
 
     void genThrow(int bci) {
-        FrameState stateBefore = frameState.create(bci);
         Throw t = new Throw(frameState.apop(), !noSafepoints(), graph);
-        t.setStateBefore(stateBefore);
         appendWithoutOptimization(t, bci);
     }
 
@@ -588,42 +585,27 @@ public final class GraphBuilder {
 
     void genNewInstance(int cpi) {
         RiType type = constantPool().lookupType(cpi, NEW);
-        FrameState stateBefore = null;
-        if (!type.isResolved()) {
-            stateBefore = frameState.create(bci());
-        }
         NewInstance n = new NewInstance(type, cpi, constantPool(), graph);
         if (memoryMap != null) {
             memoryMap.newInstance(n);
         }
-        n.setStateBefore(stateBefore);
         frameState.apush(append(n));
     }
 
     void genNewTypeArray(int typeCode) {
         CiKind kind = CiKind.fromArrayTypeCode(typeCode);
         RiType elementType = compilation.runtime.asRiType(kind);
-        NewTypeArray nta = new NewTypeArray(frameState.ipop(), elementType, graph);
-        frameState.apush(append(nta));
+        frameState.apush(append(new NewTypeArray(frameState.ipop(), elementType, graph)));
     }
 
     void genNewObjectArray(int cpi) {
         RiType type = constantPool().lookupType(cpi, ANEWARRAY);
-        FrameState stateBefore = null;
-        if (!type.isResolved()) {
-            stateBefore = frameState.create(bci());
-        }
         NewArray n = new NewObjectArray(type, frameState.ipop(), graph);
         frameState.apush(append(n));
-        n.setStateBefore(stateBefore);
     }
 
     void genNewMultiArray(int cpi) {
         RiType type = constantPool().lookupType(cpi, MULTIANEWARRAY);
-        FrameState stateBefore = null;
-        if (!type.isResolved()) {
-            stateBefore = frameState.create(bci());
-        }
         int rank = stream().readUByte(bci() + 3);
         Value[] dims = new Value[rank];
         for (int i = rank - 1; i >= 0; i--) {
@@ -631,41 +613,26 @@ public final class GraphBuilder {
         }
         NewArray n = new NewMultiArray(type, dims, cpi, constantPool(), graph);
         frameState.apush(append(n));
-        n.setStateBefore(stateBefore);
     }
 
     void genGetField(int cpi, RiField field) {
         // Must copy the state here, because the field holder must still be on the stack.
-        FrameState stateBefore = null;
-        if (!field.isResolved()) {
-            stateBefore = frameState.create(bci());
-        }
         LoadField load = new LoadField(frameState.apop(), field, graph);
         appendOptimizedLoadField(field.kind(), load);
-        load.setStateBefore(stateBefore);
     }
 
     void genPutField(int cpi, RiField field) {
         // Must copy the state here, because the field holder must still be on the stack.
-        FrameState stateBefore = null;
-        if (!field.isResolved()) {
-            stateBefore = frameState.create(bci());
-        }
         Value value = frameState.pop(field.kind().stackKind());
-        StoreField store = new StoreField(frameState.apop(), field, value, graph);
-        appendOptimizedStoreField(store);
-        store.setStateBefore(stateBefore);
+        appendOptimizedStoreField(new StoreField(frameState.apop(), field, value, graph));
     }
 
     void genGetStatic(int cpi, RiField field) {
         RiType holder = field.holder();
         boolean isInitialized = !C1XOptions.TestPatching && field.isResolved();
         CiConstant constantValue = null;
-        FrameState stateBefore = null;
         if (isInitialized) {
             constantValue = field.constantValue(null);
-        } else {
-            stateBefore = frameState.create(bci());
         }
         if (constantValue != null) {
             frameState.push(constantValue.kind.stackKind(), appendConstant(constantValue));
@@ -673,21 +640,15 @@ public final class GraphBuilder {
             Value container = genResolveClass(RiType.Representation.StaticFields, holder, field.isResolved(), cpi);
             LoadField load = new LoadField(container, field, graph);
             appendOptimizedLoadField(field.kind(), load);
-            load.setStateBefore(stateBefore);
         }
     }
 
     void genPutStatic(int cpi, RiField field) {
         RiType holder = field.holder();
-        FrameState stateBefore = null;
-        if (!field.isResolved()) {
-            stateBefore = frameState.create(bci());
-        }
         Value container = genResolveClass(RiType.Representation.StaticFields, holder, field.isResolved(), cpi);
         Value value = frameState.pop(field.kind().stackKind());
         StoreField store = new StoreField(container, field, value, graph);
         appendOptimizedStoreField(store);
-        store.setStateBefore(stateBefore);
     }
 
     private Value genResolveClass(RiType.Representation representation, RiType holder, boolean initialized, int cpi) {
@@ -695,8 +656,7 @@ public final class GraphBuilder {
         if (initialized) {
             holderInstr = appendConstant(holder.getEncoding(representation));
         } else {
-            ResolveClass rc = new ResolveClass(holder, representation, graph, frameState.create(bci()));
-            holderInstr = append(rc);
+            holderInstr = append(new ResolveClass(holder, representation, graph));
         }
         return holderInstr;
     }

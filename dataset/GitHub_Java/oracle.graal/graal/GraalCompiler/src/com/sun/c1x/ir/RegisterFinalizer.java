@@ -24,7 +24,6 @@ package com.sun.c1x.ir;
 
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
 /**
@@ -58,10 +57,9 @@ public class RegisterFinalizer extends StateSplit {
         return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, n);
     }
 
-    public RegisterFinalizer(Value object, FrameState stateBefore, Graph graph) {
+    public RegisterFinalizer(Value object, Graph graph) {
         super(CiKind.Void, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setObject(object);
-        setStateBefore(stateBefore);
     }
 
     @Override
@@ -72,12 +70,5 @@ public class RegisterFinalizer extends StateSplit {
     @Override
     public void print(LogStream out) {
         out.print("register finalizer ").print(object());
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        RegisterFinalizer x = new RegisterFinalizer(null, null, into);
-        x.setNonNull(isNonNull());
-        return x;
     }
 }

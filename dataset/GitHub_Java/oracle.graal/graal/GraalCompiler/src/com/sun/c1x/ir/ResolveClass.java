@@ -22,25 +22,25 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * An instruction that represents the runtime resolution of a Java class object. For example, an
  * ldc of a class constant that is unresolved.
- *
- * @author Ben L. Titzer
- * @author Thomas Wuerthinger
  */
 public final class ResolveClass extends StateSplit {
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
 
     public final RiType type;
     public final RiType.Representation portion;
 
-    public ResolveClass(RiType type, RiType.Representation r, FrameState stateBefore) {
-        super(type.getRepresentationKind(r), stateBefore);
+    public ResolveClass(RiType type, RiType.Representation r, Graph graph) {
+        super(type.getRepresentationKind(r), INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.portion = r;
         this.type = type;
         setFlag(Flag.NonNull);
@@ -49,11 +49,6 @@ public final class ResolveClass extends StateSplit {
     @Override
     public void accept(ValueVisitor v) {
         v.visitResolveClass(this);
-    }
-
-    @Override
-    public boolean canTrap() {
-        return true;
     }
 
     @Override
