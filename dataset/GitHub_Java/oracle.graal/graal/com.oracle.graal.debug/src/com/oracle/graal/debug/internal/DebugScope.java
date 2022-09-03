@@ -53,52 +53,28 @@ public final class DebugScope implements Debug.Scope {
             this.indent = (parentIndent == null ? "" : parentIndent.indent + INDENTATION_INCREMENT);
         }
 
-        private boolean logScopeName() {
-            return logScopeName;
-        }
-
-        private void printScopeName(StringBuilder str, boolean isCurrent) {
+        private void printScopeName(StringBuilder str) {
             if (logScopeName) {
-                boolean parentPrinted = false;
                 if (parentIndent != null) {
-                    parentPrinted = parentIndent.logScopeName();
-                    parentIndent.printScopeName(str, false);
+                    parentIndent.printScopeName(str);
                 }
-                /*
-                 * Always print the current scope, scopes with context and the any scope whose
-                 * parent didn't print. This ensure the first new scope always shows up.
-                 */
-                if (isCurrent || printContext(null) != 0 || !parentPrinted) {
-                    str.append(indent).append("[thread:").append(Thread.currentThread().getId()).append("] scope: ").append(getQualifiedName()).append(System.lineSeparator());
-                }
-                printContext(str);
-                logScopeName = false;
-            }
-        }
-
-        /**
-         * Print or count the context objects for the current scope.
-         */
-        private int printContext(StringBuilder str) {
-            int count = 0;
-            if (context != null && context.length > 0) {
-                // Include some context in the scope output
-                for (Object contextObj : context) {
-                    if (contextObj instanceof JavaMethodContext || contextObj instanceof JavaMethod) {
-                        if (str != null) {
-                            str.append(indent).append("Context: ").append(contextObj).append(System.lineSeparator());
+                str.append(indent).append("[thread:").append(Thread.currentThread().getId()).append("] scope: ").append(getQualifiedName()).append(System.lineSeparator());
+                if (context != null && context.length > 0) {
+                    // Include some context in the scope output
+                    for (Object contextObj : context) {
+                        if (contextObj instanceof JavaMethodContext || contextObj instanceof JavaMethod) {
+                            str.append(indent).append("Context obj ").append(contextObj).append(System.lineSeparator());
                         }
-                        count++;
                     }
                 }
+                logScopeName = false;
             }
-            return count;
         }
 
         public void log(int logLevel, String msg, Object... args) {
             if (isLogEnabled(logLevel)) {
                 StringBuilder str = new StringBuilder();
-                printScopeName(str, true);
+                printScopeName(str);
                 str.append(indent);
                 String result = args.length == 0 ? msg : String.format(msg, args);
                 String lineSep = System.lineSeparator();
