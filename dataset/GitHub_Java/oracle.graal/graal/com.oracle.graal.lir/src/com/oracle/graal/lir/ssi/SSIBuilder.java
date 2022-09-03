@@ -165,13 +165,11 @@ public class SSIBuilder {
                 InstructionValueConsumer useConsumer = new InstructionValueConsumer() {
                     public void visitValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                         processLocalUse(liveGen, liveKill, operand);
-                        visitUse(block, op, operand, mode, flags);
                     }
                 };
                 InstructionValueConsumer aliveConsumer = new InstructionValueConsumer() {
                     public void visitValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                         processLocalUse(liveGen, liveKill, operand);
-                        visitAlive(block, op, operand, mode, flags);
                     }
                 };
                 InstructionValueConsumer stateConsumer = new InstructionValueConsumer() {
@@ -185,19 +183,16 @@ public class SSIBuilder {
                                 }
                             }
                         }
-                        visitState(block, op, operand, mode, flags);
                     }
                 };
                 InstructionValueConsumer defConsumer = new InstructionValueConsumer() {
                     public void visitValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                         processLocalDef(liveKill, operand);
-                        visitDef(block, op, operand, mode, flags);
                     }
                 };
                 InstructionValueConsumer tempConsumer = new InstructionValueConsumer() {
                     public void visitValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                         processLocalDef(liveKill, operand);
-                        visitTemp(block, op, operand, mode, flags);
                     }
                 };
 
@@ -248,56 +243,6 @@ public class SSIBuilder {
                 Debug.log("liveKill for operand %d(%s)", operandNum, operand);
             }
         }
-    }
-
-    /**
-     * @param block
-     * @param op
-     * @param operand
-     * @param mode
-     * @param flags
-     */
-    protected void visitUse(AbstractBlockBase<?> block, LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
-    }
-
-    /**
-     * @param block
-     * @param op
-     * @param operand
-     * @param mode
-     * @param flags
-     */
-    protected void visitAlive(AbstractBlockBase<?> block, LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
-    }
-
-    /**
-     * @param block
-     * @param op
-     * @param operand
-     * @param mode
-     * @param flags
-     */
-    protected void visitDef(AbstractBlockBase<?> block, LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
-    }
-
-    /**
-     * @param block
-     * @param op
-     * @param operand
-     * @param mode
-     * @param flags
-     */
-    protected void visitTemp(AbstractBlockBase<?> block, LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
-    }
-
-    /**
-     * @param block
-     * @param op
-     * @param operand
-     * @param mode
-     * @param flags
-     */
-    protected void visitState(AbstractBlockBase<?> block, LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
     }
 
     /**
