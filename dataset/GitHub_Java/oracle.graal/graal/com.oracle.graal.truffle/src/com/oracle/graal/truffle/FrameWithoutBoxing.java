@@ -283,14 +283,6 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     @Override
     public boolean isInitialized(FrameSlot slot) {
-        try {
-            return tags[slot.getIndex()] != 0;
-        } catch (ArrayIndexOutOfBoundsException ex) {
-            CompilerDirectives.transferToInterpreter();
-            if (slot.getIndex() >= 0 && slot.getIndex() < descriptor.getSize()) {
-                return false;
-            }
-            throw ex;
-        }
+        return tags[slot.getIndex()] != FrameSlotKind.Illegal.ordinal();
     }
 }
