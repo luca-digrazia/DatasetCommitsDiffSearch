@@ -23,25 +23,29 @@
 package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.amd64.AMD64.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
-import static com.oracle.jvmci.code.ValueUtil.*;
 
 import com.oracle.graal.amd64.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp;
-import com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize;
-import com.oracle.graal.asm.amd64.AMD64Assembler.SSEOp;
+import com.oracle.graal.asm.amd64.AMD64Assembler.*;
 import com.oracle.graal.compiler.amd64.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.match.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.amd64.AMD64HotSpotLIRGenerator.SaveRbp;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.StandardOp.NoOp;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
 import com.oracle.graal.lir.gen.*;
@@ -49,11 +53,6 @@ import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.memory.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * LIR generator specialized for AMD64 HotSpot.
@@ -101,6 +100,14 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
         return (AMD64HotSpotLIRGenerator) gen;
     }
 
+    private SaveRbp getSaveRbp() {
+        return getGen().saveRbp;
+    }
+
+    private void setSaveRbp(SaveRbp saveRbp) {
+        getGen().saveRbp = saveRbp;
+    }
+
     @Override
     protected DebugInfoBuilder createDebugInfoBuilder(StructuredGraph graph, NodeMap<Value> nodeOperands) {
         HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMapBuilder(), LIRKind.value(Kind.Long));
@@ -126,7 +133,8 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
 
         gen.emitIncomingValues(params);
 
-        getGen().emitSaveRbp();
+        setSaveRbp(((AMD64HotSpotLIRGenerator) gen).new SaveRbp(new NoOp(gen.getCurrentBlock(), gen.getResult().getLIR().getLIRforBlock(gen.getCurrentBlock()).size())));
+        append(getSaveRbp().placeholder);
 
         for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
             Value paramValue = params[param.index()];

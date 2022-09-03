@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,9 @@ package com.oracle.graal.hotspot.sparc;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -31,25 +34,32 @@ import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.sparc.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.meta.*;
-import com.oracle.jvmci.runtime.*;
-import com.oracle.jvmci.service.*;
-import com.oracle.jvmci.sparc.*;
+import com.oracle.graal.sparc.*;
+import com.oracle.graal.sparc.SPARC.CPUFeature;
 
 @ServiceProvider(HotSpotBackendFactory.class)
 public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
 
-    @Override
-    public HotSpotBackend createBackend(HotSpotGraalRuntimeProvider runtime, JVMCIBackend jvmci, HotSpotBackend host) {
+    protected Architecture createArchitecture(HotSpotVMConfig config) {
+        return new SPARC(computeFeatures(config));
+    }
+
+    protected TargetDescription createTarget(HotSpotVMConfig config) {
+        final int stackFrameAlignment = 16;
+        final int implicitNullCheckLimit = 4096;
+        final boolean inlineObjects = true;
+        return new HotSpotTargetDescription(createArchitecture(config), true, stackFrameAlignment, implicitNullCheckLimit, inlineObjects);
+    }
+
+    public HotSpotBackend createBackend(HotSpotGraalRuntimeProvider runtime, HotSpotBackend host) {
         assert host == null;
+        TargetDescription target = createTarget(runtime.getConfig());
 
         HotSpotRegistersProvider registers = createRegisters();
-        HotSpotMetaAccessProvider metaAccess = (HotSpotMetaAccessProvider) jvmci.getMetaAccess();
-        HotSpotCodeCacheProvider codeCache = (HotSpotCodeCacheProvider) jvmci.getCodeCache();
-        TargetDescription target = codeCache.getTarget();
-        HotSpotConstantReflectionProvider constantReflection = new HotSpotGraalConstantReflectionProvider(runtime.getJVMCIRuntime());
+        HotSpotMetaAccessProvider metaAccess = new HotSpotMetaAccessProvider(runtime);
+        RegisterConfig regConfig = new SPARCHotSpotRegisterConfig(target, runtime.getConfig());
+        HotSpotCodeCacheProvider codeCache = createCodeCache(runtime, target, regConfig);
+        HotSpotConstantReflectionProvider constantReflection = new HotSpotConstantReflectionProvider(runtime);
         Value[] nativeABICallerSaveRegisters = createNativeABICallerSaveRegisters(runtime.getConfig(), codeCache.getRegisterConfig());
         HotSpotForeignCallsProvider foreignCalls = new SPARCHotSpotForeignCallsProvider(runtime, metaAccess, codeCache, nativeABICallerSaveRegisters);
         LoweringProvider lowerer = createLowerer(runtime, metaAccess, foreignCalls, registers, target);
@@ -57,11 +67,13 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
         Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null, stampProvider);
         HotSpotSnippetReflectionProvider snippetReflection = new HotSpotSnippetReflectionProvider(runtime);
         HotSpotReplacementsImpl replacements = new HotSpotReplacementsImpl(p, snippetReflection, runtime.getConfig(), target);
+        HotSpotDisassemblerProvider disassembler = new HotSpotDisassemblerProvider(runtime);
         HotSpotWordTypes wordTypes = new HotSpotWordTypes(metaAccess, target.wordKind);
         Plugins plugins = createGraphBuilderPlugins(runtime, metaAccess, constantReflection, foreignCalls, stampProvider, snippetReflection, replacements, wordTypes);
         replacements.setGraphBuilderPlugins(plugins);
         HotSpotSuitesProvider suites = createSuites(runtime, plugins);
-        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, suites, registers, snippetReflection, wordTypes, plugins);
+        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, snippetReflection,
+                        wordTypes, plugins);
 
         return createBackend(runtime, providers);
     }
@@ -78,6 +90,10 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
         return new HotSpotSuitesProvider(runtime, plugins);
     }
 
+    protected HotSpotCodeCacheProvider createCodeCache(HotSpotGraalRuntimeProvider runtime, TargetDescription target, RegisterConfig regConfig) {
+        return new HotSpotCodeCacheProvider(runtime, runtime.getConfig(), target, regConfig);
+    }
+
     protected SPARCHotSpotBackend createBackend(HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
         return new SPARCHotSpotBackend(runtime, providers);
     }
@@ -85,6 +101,23 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
     protected HotSpotLoweringProvider createLowerer(HotSpotGraalRuntimeProvider runtime, HotSpotMetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls,
                     HotSpotRegistersProvider registers, TargetDescription target) {
         return new SPARCHotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers, target);
+    }
+
+    protected EnumSet<CPUFeature> computeFeatures(HotSpotVMConfig config) {
+        EnumSet<CPUFeature> features = EnumSet.noneOf(CPUFeature.class);
+        if ((config.sparcFeatures & config.vis1Instructions) != 0) {
+            features.add(CPUFeature.VIS1);
+        }
+        if ((config.sparcFeatures & config.vis2Instructions) != 0) {
+            features.add(CPUFeature.VIS2);
+        }
+        if ((config.sparcFeatures & config.vis3Instructions) != 0) {
+            features.add(CPUFeature.VIS3);
+        }
+        if ((config.sparcFeatures & config.cbcondInstructions) != 0) {
+            features.add(CPUFeature.CBCOND);
+        }
+        return features;
     }
 
     protected HotSpotRegistersProvider createRegisters() {
@@ -105,12 +138,10 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
         return nativeABICallerSaveRegisters;
     }
 
-    @Override
     public String getArchitecture() {
         return "SPARC";
     }
 
-    @Override
     public String getGraalRuntimeName() {
         return "basic";
     }

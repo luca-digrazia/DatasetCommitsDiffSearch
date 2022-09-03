@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,18 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.asm.NumUtil.isInt;
-import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
-import static jdk.vm.ci.amd64.AMD64.rax;
-import static jdk.vm.ci.amd64.AMD64.rip;
+import static com.oracle.graal.amd64.AMD64.*;
+import static com.oracle.graal.asm.NumUtil.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import com.oracle.graal.asm.amd64.AMD64Address;
-import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.compiler.common.LIRKind;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.amd64.AMD64LIRInstruction;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.site.InfopointReason;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.amd64.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Emits a safepoint poll.
@@ -56,14 +45,14 @@ public final class AMD64HotSpotSafepointOp extends AMD64LIRInstruction {
     @State protected LIRFrameState state;
     @Temp({OperandFlag.REG, OperandFlag.ILLEGAL}) private AllocatableValue temp;
 
-    private final GraalHotSpotVMConfig config;
+    private final HotSpotVMConfig config;
 
-    public AMD64HotSpotSafepointOp(LIRFrameState state, GraalHotSpotVMConfig config, NodeLIRBuilderTool tool) {
+    public AMD64HotSpotSafepointOp(LIRFrameState state, HotSpotVMConfig config, NodeLIRBuilderTool tool) {
         super(TYPE);
         this.state = state;
         this.config = config;
         if (isPollingPageFar(config) || ImmutableCode.getValue()) {
-            temp = tool.getLIRGeneratorTool().newVariable(LIRKind.value(tool.getLIRGeneratorTool().target().arch.getWordKind()));
+            temp = tool.getLIRGeneratorTool().newVariable(LIRKind.value(tool.getLIRGeneratorTool().target().wordKind));
         } else {
             // Don't waste a register if it's unneeded
             temp = Value.ILLEGAL;
@@ -79,15 +68,15 @@ public final class AMD64HotSpotSafepointOp extends AMD64LIRInstruction {
      * Tests if the polling page address can be reached from the code cache with 32-bit
      * displacements.
      */
-    private static boolean isPollingPageFar(GraalHotSpotVMConfig config) {
+    private static boolean isPollingPageFar(HotSpotVMConfig config) {
         final long pollingPageAddress = config.safepointPollingAddress;
-        return config.forceUnreachable || !isInt(pollingPageAddress - config.codeCacheLowBound) || !isInt(pollingPageAddress - config.codeCacheHighBound);
+        return config.forceUnreachable || !isInt(pollingPageAddress - config.codeCacheLowBoundary()) || !isInt(pollingPageAddress - config.codeCacheHighBoundary());
     }
 
-    public static void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler asm, GraalHotSpotVMConfig config, boolean atReturn, LIRFrameState state, Register scratch) {
+    public static void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler asm, HotSpotVMConfig config, boolean atReturn, LIRFrameState state, Register scratch) {
         assert !atReturn || state == null : "state is unneeded at return";
         if (ImmutableCode.getValue()) {
-            JavaKind hostWordKind = JavaKind.Long;
+            Kind hostWordKind = Kind.Long;
             int alignment = hostWordKind.getBitCount() / Byte.SIZE;
             JavaConstant pollingPageAddress = JavaConstant.forIntegerKind(hostWordKind, config.safepointPollingAddress);
             // This move will be patched to load the safepoint page from a data segment

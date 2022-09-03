@@ -22,14 +22,14 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import static jdk.internal.jvmci.sparc.SPARC.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
@@ -44,7 +44,6 @@ import com.oracle.graal.lir.sparc.SPARCCall.IndirectCallOp;
 @Opcode("CALL_INDIRECT")
 final class SPARCIndirectCallOp extends IndirectCallOp {
     public static final LIRInstructionClass<SPARCIndirectCallOp> TYPE = LIRInstructionClass.create(SPARCIndirectCallOp.class);
-    public static final SizeEstimate SIZE = SizeEstimate.create(2);
 
     /**
      * Vtable stubs expect the metaspace Method in g5.
@@ -56,7 +55,7 @@ final class SPARCIndirectCallOp extends IndirectCallOp {
     private final HotSpotVMConfig config;
 
     SPARCIndirectCallOp(ResolvedJavaMethod targetMethod, Value result, Value[] parameters, Value[] temps, Value metaspaceMethod, Value targetAddress, LIRFrameState state, HotSpotVMConfig config) {
-        super(TYPE, SIZE, targetMethod, result, parameters, temps, targetAddress, state);
+        super(TYPE, targetMethod, result, parameters, temps, targetAddress, state);
         this.metaspaceMethod = metaspaceMethod;
         this.config = config;
     }

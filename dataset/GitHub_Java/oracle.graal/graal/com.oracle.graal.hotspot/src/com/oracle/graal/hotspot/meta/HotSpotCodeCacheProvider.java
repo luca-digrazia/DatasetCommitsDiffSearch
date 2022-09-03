@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,48 +22,60 @@
  */
 package com.oracle.graal.hotspot.meta;
 
+import static com.oracle.graal.hotspot.meta.HotSpotCompressedNullConstant.*;
+
 import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CodeUtil.DefaultRefMapFormatter;
 import com.oracle.graal.api.code.CodeUtil.RefMapFormatter;
 import com.oracle.graal.api.code.CompilationResult.Call;
+import com.oracle.graal.api.code.CompilationResult.ConstantReference;
 import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.code.CompilationResult.Infopoint;
 import com.oracle.graal.api.code.CompilationResult.Mark;
+import com.oracle.graal.api.code.DataSection.Data;
+import com.oracle.graal.api.code.DataSection.DataBuilder;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
-import com.oracle.graal.java.*;
 import com.oracle.graal.printer.*;
 
 /**
  * HotSpot implementation of {@link CodeCacheProvider}.
  */
-public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
+public class HotSpotCodeCacheProvider implements CodeCacheProvider {
 
-    protected final HotSpotGraalRuntime graalRuntime;
+    protected final HotSpotGraalRuntimeProvider runtime;
+    public final HotSpotVMConfig config;
+    protected final TargetDescription target;
     protected final RegisterConfig regConfig;
 
-    public HotSpotCodeCacheProvider(HotSpotGraalRuntime graalRuntime) {
-        this.graalRuntime = graalRuntime;
-        regConfig = createRegisterConfig();
+    public HotSpotCodeCacheProvider(HotSpotGraalRuntimeProvider runtime, HotSpotVMConfig config, TargetDescription target, RegisterConfig regConfig) {
+        this.runtime = runtime;
+        this.config = config;
+        this.target = target;
+        this.regConfig = regConfig;
     }
-
-    protected abstract RegisterConfig createRegisterConfig();
 
     @Override
     public String disassemble(CompilationResult compResult, InstalledCode installedCode) {
         byte[] code = installedCode == null ? Arrays.copyOf(compResult.getTargetCode(), compResult.getTargetCodeSize()) : installedCode.getCode();
+        if (code == null) {
+            // Method was deoptimized/invalidated
+            return "";
+        }
         long start = installedCode == null ? 0L : installedCode.getStart();
-        TargetDescription target = graalRuntime.getTarget();
         HexCodeFile hcf = new HexCodeFile(code, start, target.arch.getName(), target.wordSize * 8);
         if (compResult != null) {
             HexCodeFile.addAnnotations(hcf, compResult.getAnnotations());
             addExceptionHandlersComment(compResult, hcf);
             Register fp = regConfig.getFrameRegister();
-            RefMapFormatter slotFormatter = new RefMapFormatter(target.arch, target.wordSize, fp, 0);
+            RefMapFormatter slotFormatter = new DefaultRefMapFormatter(target.arch, target.wordSize, fp, 0);
             for (Infopoint infopoint : compResult.getInfopoints()) {
                 if (infopoint instanceof Call) {
                     Call call = (Call) infopoint;
@@ -78,26 +90,73 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
                     addOperandComment(hcf, infopoint.pcOffset, "{infopoint: " + infopoint.reason + "}");
                 }
             }
-            for (DataPatch site : compResult.getDataReferences()) {
-                hcf.addOperandComment(site.pcOffset, "{" + site.getDataString() + "}");
+            for (DataPatch site : compResult.getDataPatches()) {
+                hcf.addOperandComment(site.pcOffset, "{" + site.reference.toString() + "}");
             }
             for (Mark mark : compResult.getMarks()) {
-                hcf.addComment(mark.pcOffset, getMarkName(mark));
+                hcf.addComment(mark.pcOffset, getMarkIdName((int) mark.id));
             }
         }
-        return hcf.toEmbeddedString();
+        String hcfEmbeddedString = hcf.toEmbeddedString();
+        return HexCodeFileDisTool.tryDisassemble(hcfEmbeddedString);
+    }
+
+    /**
+     * Interface to the tool for disassembling an {@link HexCodeFile#toEmbeddedString() embedded}
+     * {@link HexCodeFile}.
+     */
+    static class HexCodeFileDisTool {
+        static final Method processMethod;
+        static {
+            Method toolMethod = null;
+            try {
+                Class<?> toolClass = Class.forName("com.oracle.max.hcfdis.HexCodeFileDis", true, ClassLoader.getSystemClassLoader());
+                toolMethod = toolClass.getDeclaredMethod("processEmbeddedString", String.class);
+            } catch (Exception e) {
+                // Tool not available on the class path
+            }
+            processMethod = toolMethod;
+        }
+
+        public static String tryDisassemble(String hcfEmbeddedString) {
+            if (processMethod != null) {
+                try {
+                    return (String) processMethod.invoke(null, hcfEmbeddedString);
+                } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+                    // If the tool is available, for now let's be noisy when it fails
+                    throw new GraalInternalError(e);
+                }
+            }
+            return hcfEmbeddedString;
+        }
+    }
+
+    private String getMarkIdName(int markId) {
+        Field[] fields = runtime.getConfig().getClass().getDeclaredFields();
+        for (Field f : fields) {
+            if (f.getName().startsWith("MARKID_")) {
+                f.setAccessible(true);
+                try {
+                    if (f.getInt(runtime.getConfig()) == markId) {
+                        return f.getName();
+                    }
+                } catch (Exception e) {
+                }
+            }
+        }
+        return String.valueOf(markId);
     }
 
     /**
      * Decodes a call target to a mnemonic if possible.
      */
     private String getTargetName(Call call) {
-        Field[] fields = graalRuntime.getConfig().getClass().getDeclaredFields();
+        Field[] fields = runtime.getConfig().getClass().getDeclaredFields();
         for (Field f : fields) {
             if (f.getName().endsWith("Stub")) {
                 f.setAccessible(true);
                 try {
-                    Object address = f.get(graalRuntime.getConfig());
+                    Object address = f.get(runtime.getConfig());
                     if (address.equals(call.target)) {
                         return f.getName() + ":0x" + Long.toHexString((Long) address);
                     }
@@ -106,25 +165,6 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
             }
         }
         return String.valueOf(call.target);
-    }
-
-    /**
-     * Decodes a mark to a mnemonic if possible.
-     */
-    private static String getMarkName(Mark mark) {
-        Field[] fields = Marks.class.getDeclaredFields();
-        for (Field f : fields) {
-            if (Modifier.isStatic(f.getModifiers()) && f.getName().startsWith("MARK_")) {
-                f.setAccessible(true);
-                try {
-                    if (f.get(null).equals(mark.id)) {
-                        return f.getName();
-                    }
-                } catch (Exception e) {
-                }
-            }
-        }
-        return "MARK:" + mark.id;
     }
 
     private static void addExceptionHandlersComment(CompilationResult compResult, HexCodeFile hcf) {
@@ -152,57 +192,142 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
 
     @Override
     public int getMinimumOutgoingSize() {
-        return graalRuntime.getConfig().runtimeCallStackSize;
+        return runtime.getConfig().runtimeCallStackSize;
     }
 
-    public HotSpotInstalledCode installMethod(HotSpotResolvedJavaMethod method, int entryBCI, CompilationResult compResult) {
-        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, true);
-        graalRuntime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(method, entryBCI, compResult), installedCode, method.getSpeculationLog());
+    public InstalledCode logOrDump(InstalledCode installedCode, CompilationResult compResult) {
+        if (Debug.isDumpEnabled()) {
+            Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
+        }
+        if (Debug.isLogEnabled()) {
+            Debug.log("%s", disassemble(installedCode));
+        }
         return installedCode;
     }
 
+    public InstalledCode installMethod(HotSpotResolvedJavaMethod method, CompilationResult compResult, long graalEnv, boolean isDefault) {
+        if (compResult.getId() == -1) {
+            compResult.setId(method.allocateCompileId(compResult.getEntryBCI()));
+        }
+        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, compResult.getName(), isDefault);
+        runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(method, compResult, graalEnv), installedCode, method.getSpeculationLog());
+        return logOrDump(installedCode, compResult);
+    }
+
     @Override
-    public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult) {
+    public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, SpeculationLog log, InstalledCode predefinedInstalledCode) {
         HotSpotResolvedJavaMethod hotspotMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, false);
-        CodeInstallResult result = graalRuntime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(hotspotMethod, -1, compResult), code, null);
+        if (compResult.getId() == -1) {
+            compResult.setId(hotspotMethod.allocateCompileId(compResult.getEntryBCI()));
+        }
+        InstalledCode installedCode = predefinedInstalledCode;
+        if (installedCode == null) {
+            HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, compResult.getName(), false);
+            installedCode = code;
+        }
+        HotSpotCompiledNmethod compiledCode = new HotSpotCompiledNmethod(hotspotMethod, compResult);
+        CodeInstallResult result = runtime.getCompilerToVM().installCode(compiledCode, installedCode, log);
+        if (result != CodeInstallResult.OK) {
+            String msg = compiledCode.getInstallationFailureMessage();
+            if (msg != null) {
+                msg = String.format("Code installation failed: %s%n%s", result, msg);
+            } else {
+                msg = String.format("Code installation failed: %s", result);
+            }
+            if (result == CodeInstallResult.DEPENDENCIES_INVALID) {
+                throw new AssertionError(result + " " + msg);
+            }
+            throw new BailoutException(result != CodeInstallResult.DEPENDENCIES_FAILED, msg);
+        }
+        return logOrDump(installedCode, compResult);
+    }
+
+    @Override
+    public InstalledCode setDefaultMethod(ResolvedJavaMethod method, CompilationResult compResult) {
+        HotSpotResolvedJavaMethod hotspotMethod = (HotSpotResolvedJavaMethod) method;
+        return installMethod(hotspotMethod, compResult, 0L, true);
+    }
+
+    public HotSpotNmethod addExternalMethod(ResolvedJavaMethod method, CompilationResult compResult) {
+        HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) method;
+        if (compResult.getId() == -1) {
+            compResult.setId(javaMethod.allocateCompileId(compResult.getEntryBCI()));
+        }
+        HotSpotNmethod code = new HotSpotNmethod(javaMethod, compResult.getName(), false, true);
+        HotSpotCompiledNmethod compiled = new HotSpotCompiledNmethod(javaMethod, compResult);
+        CompilerToVM vm = runtime.getCompilerToVM();
+        CodeInstallResult result = vm.installCode(compiled, code, null);
         if (result != CodeInstallResult.OK) {
             return null;
         }
         return code;
     }
 
-    public InstalledCode addExternalMethod(ResolvedJavaMethod method, CompilationResult compResult) {
-
-        HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotInstalledCode icode = new HotSpotNmethod(javaMethod, false, true);
-        HotSpotCompiledNmethod compiled = new HotSpotCompiledNmethod(javaMethod, -1, compResult);
-        CompilerToVM vm = graalRuntime.getCompilerToVM();
-        CodeInstallResult result = vm.installCode(compiled, icode, null);
-        if (result != CodeInstallResult.OK) {
-            return null;
-        }
-        return icode;
+    public boolean needsDataPatch(JavaConstant constant) {
+        return constant instanceof HotSpotMetaspaceConstant;
     }
 
-    public boolean needsDataPatch(Constant constant) {
-        return constant.getPrimitiveAnnotation() != null;
+    public Data createDataItem(Constant constant) {
+        int size;
+        DataBuilder builder;
+        if (constant instanceof VMConstant) {
+            VMConstant vmConstant = (VMConstant) constant;
+            boolean compressed;
+            long raw;
+            if (constant instanceof HotSpotObjectConstant) {
+                HotSpotObjectConstant c = (HotSpotObjectConstant) vmConstant;
+                compressed = c.isCompressed();
+                raw = 0xDEADDEADDEADDEADL;
+            } else if (constant instanceof HotSpotMetaspaceConstant) {
+                HotSpotMetaspaceConstant meta = (HotSpotMetaspaceConstant) constant;
+                compressed = meta.isCompressed();
+                raw = meta.rawValue();
+            } else {
+                throw GraalInternalError.shouldNotReachHere();
+            }
+
+            size = target.getSizeInBytes(compressed ? Kind.Int : target.wordKind);
+            if (size == 4) {
+                builder = (buffer, patch) -> {
+                    patch.accept(new DataPatch(buffer.position(), new ConstantReference(vmConstant)));
+                    buffer.putInt((int) raw);
+                };
+            } else {
+                assert size == 8;
+                builder = (buffer, patch) -> {
+                    patch.accept(new DataPatch(buffer.position(), new ConstantReference(vmConstant)));
+                    buffer.putLong(raw);
+                };
+            }
+        } else if (JavaConstant.isNull(constant)) {
+            boolean compressed = COMPRESSED_NULL.equals(constant);
+            size = target.getSizeInBytes(compressed ? Kind.Int : target.wordKind);
+            builder = DataBuilder.zero(size);
+        } else if (constant instanceof SerializableConstant) {
+            SerializableConstant s = (SerializableConstant) constant;
+            size = s.getSerializedSize();
+            builder = DataBuilder.serializable(s);
+        } else {
+            throw GraalInternalError.shouldNotReachHere();
+        }
+
+        return new Data(size, size, builder);
     }
 
     @Override
     public TargetDescription getTarget() {
-        return graalRuntime.getTarget();
+        return target;
     }
 
     public String disassemble(InstalledCode code) {
         if (code.isValid()) {
-            long codeBlob = ((HotSpotInstalledCode) code).getCodeBlob();
-            return graalRuntime.getCompilerToVM().disassembleCodeBlob(codeBlob);
+            long codeBlob = code.getAddress();
+            return runtime.getCompilerToVM().disassembleCodeBlob(codeBlob);
         }
         return null;
     }
 
-    public String disassemble(ResolvedJavaMethod method) {
-        return new BytecodeDisassembler().disassemble(method);
+    public SpeculationLog createSpeculationLog() {
+        return new HotSpotSpeculationLog();
     }
 }

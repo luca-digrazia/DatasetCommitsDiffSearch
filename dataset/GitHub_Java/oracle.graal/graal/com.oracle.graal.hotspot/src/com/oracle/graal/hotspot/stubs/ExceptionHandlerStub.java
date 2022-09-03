@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,13 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.hotspot.*;
-import static com.oracle.graal.hotspot.nodes.JumpToExceptionHandlerNode.*;
 import static com.oracle.graal.hotspot.nodes.PatchReturnAddressNode.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
@@ -97,7 +95,7 @@ public class ExceptionHandlerStub extends SnippetStub {
         }
 
         // patch the return address so that this stub returns to the exception handler
-        jumpToExceptionHandler(handlerPc);
+        patchReturnAddress(handlerPc);
     }
 
     static void checkNoExceptionInThread(Word thread, boolean enabled) {

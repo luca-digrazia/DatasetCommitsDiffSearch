@@ -26,6 +26,9 @@ import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.stack.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -40,13 +43,9 @@ import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.options.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.word.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.code.stack.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.meta.*;
-import com.oracle.jvmci.options.*;
 
 /**
  * HotSpot specific backend.
@@ -234,6 +233,11 @@ public abstract class HotSpotBackend extends Backend {
     @Override
     public SuitesProvider getSuites() {
         return getProviders().getSuites();
+    }
+
+    @Override
+    public DisassemblerProvider getDisassembler() {
+        return getProviders().getDisassembler();
     }
 
     protected void profileInstructions(LIR lir, CompilationResultBuilder crb) {

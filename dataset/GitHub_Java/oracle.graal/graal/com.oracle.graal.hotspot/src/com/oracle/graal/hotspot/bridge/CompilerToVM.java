@@ -23,95 +23,370 @@
 
 package com.oracle.graal.hotspot.bridge;
 
-import java.lang.reflect.*;
+import sun.misc.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.ri.*;
+import com.oracle.graal.hotspot.meta.*;
+
+import com.oracle.graal.hotspotvmconfig.*;
 
 /**
  * Calls from Java into HotSpot.
  */
 public interface CompilerToVM {
 
-    // Checkstyle: stop
+    /**
+     * Copies the original bytecode of a given method into a new byte array and returns it.
+     *
+     * @param metaspaceMethod the metaspace Method object
+     * @return a new byte array containing the original bytecode
+     */
+    byte[] getBytecode(long metaspaceMethod);
 
-    byte[] RiMethod_code(HotSpotMethodResolved method);
+    int exceptionTableLength(long metaspaceMethod);
 
-    String RiMethod_signature(HotSpotMethodResolved method);
+    long exceptionTableStart(long metaspaceMethod);
 
-    RiExceptionHandler[] RiMethod_exceptionHandlers(HotSpotMethodResolved method);
+    /**
+     * Determines if a given metaspace Method object has balanced monitors.
+     *
+     * @param metaspaceMethod the metaspace Method object to query
+     * @return true if the method has balanced monitors
+     */
+    boolean hasBalancedMonitors(long metaspaceMethod);
 
-    boolean RiMethod_hasBalancedMonitors(HotSpotMethodResolved method);
+    /**
+     * Determines if a given metaspace Method can be inlined. A method may not be inlinable for a
+     * number of reasons such as:
+     * <ul>
+     * <li>a CompileOracle directive may prevent inlining or compilation of methods</li>
+     * <li>the method may have a bytecode breakpoint set</li>
+     * <li>the method may have other bytecode features that require special handling by the VM</li>
+     * </ul>
+     *
+     * @param metaspaceMethod the metaspace Method object to query
+     * @return true if the method can be inlined
+     */
+    boolean canInlineMethod(long metaspaceMethod);
 
-    RiMethod RiMethod_uniqueConcreteMethod(HotSpotMethodResolved method);
+    /**
+     * Determines if a given metaspace Method should be inlined at any cost. This could be because:
+     * <ul>
+     * <li>a CompileOracle directive may forces inlining of this methods</li>
+     * <li>an annotation forces inlining of this method</li>
+     * </ul>
+     *
+     * @param metaspaceMethod the metaspace Method object to query
+     * @return true if the method should be inlined
+     */
+    boolean shouldInlineMethod(long metaspaceMethod);
 
-    int RiMethod_invocationCount(HotSpotMethodResolved method);
+    /**
+     * Used to implement {@link ResolvedJavaType#findUniqueConcreteMethod(ResolvedJavaMethod)}.
+     *
+     * @param metaspaceMethod the metaspace Method on which to based the search
+     * @param actualHolderMetaspaceKlass the best known type of receiver
+     * @return the metaspace Method result or 0 is there is no unique concrete method for
+     *         {@code metaspaceMethod}
+     */
+    long findUniqueConcreteMethod(long actualHolderMetaspaceKlass, long metaspaceMethod);
 
-    HotSpotMethodData RiMethod_methodData(HotSpotMethodResolved method);
+    /**
+     * Returns the implementor for the given interface class, if there is a single implementor.
+     *
+     * @param metaspaceKlass the metaspace klass to get the implementor for
+     * @return the implementor as metaspace klass pointer if there is a single implementor, null if
+     *         there is no implementor, or the input metaspace klass pointer ({@code metaspaceKlass}
+     *         ) itself if there is more than one implementor.
+     */
+    long getKlassImplementor(long metaspaceKlass);
 
-    RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass, boolean eagerResolve);
+    /**
+     * Determines if a given metaspace method is ignored by security stack walks.
+     *
+     * @param metaspaceMethod the metaspace Method object
+     * @return true if the method is ignored
+     */
+    boolean methodIsIgnoredBySecurityStackWalk(long metaspaceMethod);
 
-    Object RiConstantPool_lookupConstant(HotSpotTypeResolved pool, int cpi);
+    /**
+     * Converts a name to a metaspace klass.
+     *
+     * @param name a well formed Java type in {@linkplain JavaType#getName() internal} format
+     * @param accessingClass the context of resolution (must not be null)
+     * @param resolve force resolution to a {@link ResolvedJavaType}. If true, this method will
+     *            either return a {@link ResolvedJavaType} or throw an exception
+     * @return a metaspace klass for {@code name}
+     * @throws LinkageError if {@code resolve == true} and the resolution failed
+     */
+    long lookupType(String name, Class<?> accessingClass, boolean resolve);
 
-    RiMethod RiConstantPool_lookupMethod(HotSpotTypeResolved pool, int cpi, byte byteCode);
+    Object resolveConstantInPool(long metaspaceConstantPool, int cpi);
 
-    RiType RiConstantPool_lookupType(HotSpotTypeResolved pool, int cpi);
+    Object resolvePossiblyCachedConstantInPool(long metaspaceConstantPool, int cpi);
 
-    RiField RiConstantPool_lookupField(HotSpotTypeResolved pool, int cpi, byte byteCode);
+    int lookupNameAndTypeRefIndexInPool(long metaspaceConstantPool, int cpi);
 
-    void RiConstantPool_loadReferencedType(HotSpotTypeResolved pool, int cpi, byte byteCode);
+    String lookupNameRefInPool(long metaspaceConstantPool, int cpi);
 
-    HotSpotCompiledMethod installMethod(HotSpotTargetMethod targetMethod, boolean installCode);
+    String lookupSignatureRefInPool(long metaspaceConstantPool, int cpi);
 
-    long installStub(HotSpotTargetMethod targetMethod);
+    int lookupKlassRefIndexInPool(long metaspaceConstantPool, int cpi);
 
-    HotSpotVMConfig getConfiguration();
+    long constantPoolKlassAt(long metaspaceConstantPool, int cpi);
 
-    RiMethod RiType_resolveMethodImpl(HotSpotTypeResolved klass, String name, String signature);
+    /**
+     * Looks up a class entry in a constant pool.
+     *
+     * @param metaspaceConstantPool metaspace constant pool pointer
+     * @param cpi constant pool index
+     * @return a metaspace Klass for a resolved method entry, a metaspace Symbol otherwise (with
+     *         tagging)
+     */
+    long lookupKlassInPool(long metaspaceConstantPool, int cpi);
 
-    boolean RiType_isSubtypeOf(HotSpotTypeResolved klass, RiType other);
+    /**
+     * Looks up a method entry in a constant pool.
+     *
+     * @param metaspaceConstantPool metaspace constant pool pointer
+     * @param cpi constant pool index
+     * @return a metaspace Method for a resolved method entry, 0 otherwise
+     */
+    long lookupMethodInPool(long metaspaceConstantPool, int cpi, byte opcode);
 
-    RiType RiType_leastCommonAncestor(HotSpotTypeResolved thisType, HotSpotTypeResolved otherType);
+    /**
+     * Looks up a field entry in a constant pool and attempts to resolve it. The values returned in
+     * {@code info} are:
+     *
+     * <pre>
+     *     [(int) flags,   // only valid if field is resolved
+     *      (int) offset]  // only valid if field is resolved
+     * </pre>
+     *
+     * @param metaspaceConstantPool metaspace constant pool pointer
+     * @param cpi constant pool index
+     * @param info an array in which the details of the field are returned
+     * @return true if the field is resolved
+     */
+    long resolveField(long metaspaceConstantPool, int cpi, byte opcode, long[] info);
 
-    RiType getPrimitiveArrayType(CiKind kind);
+    int constantPoolRemapInstructionOperandFromCache(long metaspaceConstantPool, int cpi);
 
-    RiType RiType_arrayOf(HotSpotTypeResolved klass);
+    Object lookupAppendixInPool(long metaspaceConstantPool, int cpi);
 
-    RiType RiType_componentType(HotSpotTypeResolved klass);
+    public enum CodeInstallResult {
+        OK("ok"),
+        DEPENDENCIES_FAILED("dependencies failed"),
+        DEPENDENCIES_INVALID("dependencies invalid"),
+        CACHE_FULL("code cache is full"),
+        CODE_TOO_LARGE("code is too large");
 
-    boolean RiType_isInitialized(HotSpotTypeResolved klass);
+        private int value;
+        private String message;
 
-    RiType getType(Class<?> javaClass);
+        private CodeInstallResult(String name) {
+            HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
+            switch (name) {
+                case "ok":
+                    this.value = config.codeInstallResultOk;
+                    break;
+                case "dependencies failed":
+                    this.value = config.codeInstallResultDependenciesFailed;
+                    break;
+                case "dependencies invalid":
+                    this.value = config.codeInstallResultDependenciesInvalid;
+                    break;
+                case "code cache is full":
+                    this.value = config.codeInstallResultCacheFull;
+                    break;
+                case "code is too large":
+                    this.value = config.codeInstallResultCodeTooLarge;
+                    break;
+                default:
+                    throw new IllegalArgumentException(name);
+            }
+            this.message = name;
+        }
 
-    RiType RiType_uniqueConcreteSubtype(HotSpotTypeResolved klass);
+        /**
+         * Returns the enum object for the given value.
+         */
+        public static CodeInstallResult getEnum(int value) {
+            for (CodeInstallResult e : values()) {
+                if (e.value == value) {
+                    return e;
+                }
+            }
+            throw new IllegalArgumentException(String.valueOf(value));
+        }
 
-    RiType RiType_superType(HotSpotTypeResolved klass);
+        @Override
+        public String toString() {
+            return message;
+        }
+    }
 
-    int getArrayLength(CiConstant array);
+    /**
+     * Installs the result of a compilation into the code cache.
+     *
+     * @param compiledCode the result of a compilation
+     * @param code the details of the installed CodeBlob are written to this object
+     * @return the outcome of the installation as a {@link CodeInstallResult}.
+     */
+    CodeInstallResult installCode(HotSpotCompiledCode compiledCode, InstalledCode code, SpeculationLog speculationLog);
 
-    boolean compareConstantObjects(CiConstant x, CiConstant y);
+    /**
+     * Notifies the VM of statistics for a completed compilation.
+     *
+     * @param id the identifier of the compilation
+     * @param method the method compiled
+     * @param osr specifies if the compilation was for on-stack-replacement
+     * @param processedBytecodes the number of bytecodes processed during the compilation, including
+     *            the bytecodes of all inlined methods
+     * @param time the amount time spent compiling {@code method}
+     * @param timeUnitsPerSecond the granularity of the units for the {@code time} value
+     * @param installedCode the nmethod installed as a result of the compilation
+     */
+    void notifyCompilationStatistics(int id, HotSpotResolvedJavaMethod method, boolean osr, int processedBytecodes, long time, long timeUnitsPerSecond, InstalledCode installedCode);
 
-    RiType getRiType(CiConstant constant);
+    void resetCompilationStatistics();
 
-    RiResolvedField[] RiType_fields(HotSpotTypeResolved klass);
+    void initializeConfiguration(HotSpotVMConfig config);
 
-    boolean RiMethod_hasCompiledCode(HotSpotMethodResolved method);
+    long resolveMethod(long metaspaceKlassExactReceiver, long metaspaceMethod, long metaspaceKlassCaller);
 
-    int RiMethod_getCompiledCodeSize(HotSpotMethodResolved method);
+    long getClassInitializer(long metaspaceKlass);
 
-    RiMethod getRiMethod(Method reflectionMethod);
+    boolean hasFinalizableSubclass(long metaspaceKlass);
 
-    long getMaxCallTargetOffset(CiRuntimeCall rtcall);
+    /**
+     * Gets the metaspace Method object corresponding to a given {@link Class} object and slot
+     * number.
+     *
+     * @param holder method holder
+     * @param slot slot number of the method
+     * @return the metaspace Method
+     */
+    long getMetaspaceMethod(Class<?> holder, int slot);
 
-    String disassembleNative(byte[] code, long address);
+    long getMaxCallTargetOffset(long address);
 
-    String disassembleJava(HotSpotMethodResolved method);
+    String disassembleCodeBlob(long codeBlob);
 
-    Object executeCompiledMethod(HotSpotCompiledMethod method, Object arg1, Object arg2, Object arg3);
+    StackTraceElement getStackTraceElement(long metaspaceMethod, int bci);
 
-    int RiMethod_vtableEntryOffset(HotSpotMethodResolved method);
+    Object executeCompiledMethod(Object arg1, Object arg2, Object arg3, InstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException;
 
-    // Checkstyle: resume
+    Object executeCompiledMethodVarargs(Object[] args, InstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException;
+
+    long[] getLineNumberTable(long metaspaceMethod);
+
+    long getLocalVariableTableStart(long metaspaceMethod);
+
+    int getLocalVariableTableLength(long metaspaceMethod);
+
+    String getFileName(HotSpotResolvedJavaType method);
+
+    Class<?> getJavaMirror(long metaspaceKlass);
+
+    long readUnsafeKlassPointer(Object o);
+
+    /**
+     * Reads an object pointer within a VM data structure. That is, any {@link HotSpotVMField} whose
+     * {@link HotSpotVMField#type() type} is {@code "oop"} (e.g.,
+     * {@code ArrayKlass::_component_mirror}, {@code Klass::_java_mirror},
+     * {@code JavaThread::_threadObj}).
+     *
+     * Note that {@link Unsafe#getObject(Object, long)} cannot be used for this since it does a
+     * {@code narrowOop} read if the VM is using compressed oops whereas oops within VM data
+     * structures are (currently) always uncompressed.
+     *
+     * @param address address of an oop field within a VM data structure
+     */
+    Object readUncompressedOop(long address);
+
+    void doNotInlineOrCompile(long metaspaceMethod);
+
+    /**
+     * Invalidates the profiling information and restarts profiling upon the next invocation.
+     *
+     * @param metaspaceMethod the metaspace Method object
+     */
+    void reprofile(long metaspaceMethod);
+
+    void invalidateInstalledCode(InstalledCode hotspotInstalledCode);
+
+    /**
+     * Collects the current values of all Graal benchmark counters, summed up over all threads.
+     */
+    long[] collectCounters();
+
+    boolean isMature(long metaspaceMethodData);
+
+    /**
+     * Generate a unique id to identify the result of the compile.
+     */
+    int allocateCompileId(long metaspaceMethod, int entryBCI);
+
+    /**
+     * Gets the names of the supported GPU architectures.
+     *
+     * @return a comma separated list of names
+     */
+    String getGPUs();
+
+    /**
+     *
+     * @param metaspaceMethod the method to check
+     * @param entryBCI
+     * @param level the compilation level
+     * @return true if the {@code metaspaceMethod} has code for {@code level}
+     */
+    boolean hasCompiledCodeForOSR(long metaspaceMethod, int entryBCI, int level);
+
+    /**
+     * Fetch the time stamp used for printing inside hotspot. It's relative to VM start to that all
+     * events can be ordered.
+     *
+     * @return milliseconds since VM start
+     */
+    long getTimeStamp();
+
+    /**
+     * Gets the value of a metaspace {@code Symbol} as a String.
+     *
+     * @param metaspaceSymbol
+     */
+    String getSymbol(long metaspaceSymbol);
+
+    /**
+     * Looks for the next Java stack frame with the given method.
+     *
+     * @param frame the starting point of the search, where {@code null} refers to the topmost frame
+     * @param methods the metaspace methods to look for, where {@code null} means that any frame is
+     *            returned
+     * @return the frame, or {@code null} if the end of the stack was reached during the search
+     */
+    HotSpotStackFrameReference getNextStackFrame(HotSpotStackFrameReference frame, long[] methods, int initialSkip);
+
+    /**
+     * Materialized all virtual objects within the given stack frame and update the locals within
+     * the given stackFrame object.
+     *
+     * @param invalidate if {@code true}, the compiled method for the stack frame will be
+     *            invalidated.
+     */
+    void materializeVirtualObjects(HotSpotStackFrameReference stackFrame, boolean invalidate);
+
+    void resolveInvokeDynamic(long metaspaceConstantPool, int index);
+
+    int getVtableIndexForInterface(long metaspaceKlass, long metaspaceMethod);
+
+    boolean shouldDebugNonSafepoints();
+
+    void writeDebugOutput(byte[] bytes, int offset, int length);
+
+    void flushDebugOutput();
 }

@@ -22,22 +22,18 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.amd64.AMD64Call;
+import com.oracle.graal.amd64.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.amd64.AMD64Call.IndirectCallOp;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * A register indirect call that complies with the extra conventions for such calls in HotSpot. In
@@ -56,9 +52,9 @@ final class AMD64IndirectCallOp extends IndirectCallOp {
 
     @Use({REG}) protected Value metaspaceMethod;
 
-    private final GraalHotSpotVMConfig config;
+    private final HotSpotVMConfig config;
 
-    AMD64IndirectCallOp(ResolvedJavaMethod targetMethod, Value result, Value[] parameters, Value[] temps, Value metaspaceMethod, Value targetAddress, LIRFrameState state, GraalHotSpotVMConfig config) {
+    AMD64IndirectCallOp(ResolvedJavaMethod targetMethod, Value result, Value[] parameters, Value[] temps, Value metaspaceMethod, Value targetAddress, LIRFrameState state, HotSpotVMConfig config) {
         super(TYPE, targetMethod, result, parameters, temps, targetAddress, state);
         this.metaspaceMethod = metaspaceMethod;
         this.config = config;

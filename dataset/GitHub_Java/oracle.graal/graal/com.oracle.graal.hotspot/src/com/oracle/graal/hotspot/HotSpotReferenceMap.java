@@ -22,19 +22,261 @@
  */
 package com.oracle.graal.hotspot;
 
-import java.io.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.CodeUtil.RefMapFormatter;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 
-public final class HotSpotReferenceMap implements ReferenceMap, Serializable {
+public final class HotSpotReferenceMap extends ReferenceMap {
 
-    private static final long serialVersionUID = -1052183095979496819L;
+    static final int OOP64 = 0b1010;
+    static final int OOP32 = 0b01;
+    static final int NARROW_LOW = OOP32;
+    static final int NARROW_HIGH = OOP32 << 2;
+    static final int NARROW_BOTH = NARROW_LOW | NARROW_HIGH;
 
-    private static final int BITS_PER_WORD = 3;
+    private enum MapEntry {
+        NoReference(0),
+        WideOop(OOP64),
+        NarrowOopLowerHalf(NARROW_LOW),
+        NarrowOopUpperHalf(NARROW_HIGH),
+        TwoNarrowOops(NARROW_BOTH),
+        Illegal(-1);
+
+        MapEntry(int pattern) {
+            this.pattern = pattern;
+        }
+
+        final int pattern;
+
+        /**
+         * Create enum values from OopMap.
+         * <p>
+         * These bits can have the following values (MSB first):
+         *
+         * <pre>
+         * 0000 - contains no references
+         * 1010 - contains a wide oop
+         * 0001 - contains a narrow oop in the lower half
+         * 0101 - contains a narrow oop in the upper half
+         * 0101 - contains two narrow oops
+         * </pre>
+         *
+         * @see HotSpotReferenceMap#registerRefMap
+         * @see HotSpotReferenceMap#frameRefMap
+         */
+        static MapEntry getFromBits(int idx, HotSpotOopMap set) {
+            int n = set.get(idx);
+            switch (n) {
+                case 0:
+                    return NoReference;
+                case OOP64:
+                    return WideOop;
+                case NARROW_LOW:
+                    return NarrowOopLowerHalf;
+                case NARROW_HIGH:
+                    return NarrowOopUpperHalf;
+                case NARROW_BOTH:
+                    return TwoNarrowOops;
+                default:
+                    return Illegal;
+            }
+        }
+
+        String toBitString() {
+            int bits = toBit(this);
+            if (bits == -1) {
+                return "---";
+            }
+            return String.format("%3s", Integer.toBinaryString(bits)).replace(' ', '0');
+        }
+
+        static int toBit(MapEntry type) {
+            return type.pattern;
+        }
+    }
+
+    /**
+     * A specialized bit set that represents both wide and narrow oops in an efficient manner. The
+     * map consists of 4 bit entries that represent 8 bytes of memory.
+     *
+     */
+    class HotSpotOopMap implements Cloneable {
+
+        /**
+         * Each entry is 4 bits long and covers 8 bytes of memory.
+         */
+        private static final int BITS_PER_ENTRY = 4;
+        private static final int BITS_PER_ELEMENT = 64;
+
+        public HotSpotOopMap(int i) {
+            words = new long[(i * BITS_PER_ENTRY + BITS_PER_ELEMENT) / BITS_PER_ELEMENT];
+        }
+
+        public HotSpotOopMap(HotSpotOopMap other) {
+            words = other.words.clone();
+        }
+
+        private long[] words;
+
+        private int get(int i) {
+            return getEntry(i);
+        }
+
+        public void or(HotSpotOopMap src) {
+            if (words.length < src.words.length) {
+                long[] newWords = new long[src.words.length];
+                System.arraycopy(src.words, 0, newWords, 0, src.words.length);
+                for (int i = 0; i < words.length; i++) {
+                    newWords[i] |= words[i];
+                }
+                words = newWords;
+            } else {
+                for (int i = 0; i < src.words.length; i++) {
+                    words[i] |= src.words[i];
+                }
+            }
+        }
+
+        private void setOop(int regIdx) {
+            setEntry(regIdx, OOP64);
+        }
+
+        public int size() {
+            return words.length * BITS_PER_ELEMENT / BITS_PER_ENTRY;
+        }
+
+        @Override
+        public HotSpotOopMap clone() {
+            return new HotSpotOopMap(this);
+        }
+
+        private void setNarrowOop(int offset) {
+            setNarrowEntry(offset, OOP32);
+        }
+
+        private void setEntry(int regIdx, int value) {
+            assert regIdx % 2 == 0 : "must be alinged";
+            int bitIndex = (regIdx >> 1) * BITS_PER_ENTRY;
+            int wordIndex = bitIndex / BITS_PER_ELEMENT;
+            int shift = bitIndex - wordIndex * BITS_PER_ELEMENT;
+            if (wordIndex >= words.length) {
+                if (value == 0) {
+                    // Nothing to do since bits are clear
+                    return;
+                }
+                words = Arrays.copyOf(words, wordIndex + 1);
+            }
+            assert verifyUpdate(this, this);
+            long orig = words[wordIndex];
+            words[wordIndex] = (orig & (~(0b1111L << shift))) | ((long) value << shift);
+            assert get(regIdx / 2) == value;
+            assert verifyUpdate(this, this);
+        }
+
+        private void setNarrowEntry(int offset, int value) {
+            int regIdx = offset >> 1;
+            boolean low = offset % 2 == 0;
+            int bitIndex = regIdx * BITS_PER_ENTRY;
+            int wordIndex = bitIndex / BITS_PER_ELEMENT;
+            int shift = bitIndex - wordIndex * BITS_PER_ELEMENT;
+            if (wordIndex >= words.length) {
+                if (value == 0) {
+                    // Nothing to do since bits are clear
+                    return;
+                }
+                words = Arrays.copyOf(words, wordIndex + 1);
+            }
+            long originalValue = words[wordIndex];
+            int current = ((int) (originalValue >> shift)) & 0b1111;
+            if (current == OOP64) {
+                current = 0;
+            }
+            long newValue;
+            if (value != 0) {
+                newValue = current | (low ? value : (value << 2));
+            } else {
+                newValue = current & (low ? 0b1100 : 0b0011);
+            }
+            long masked = originalValue & (~(0b1111L << shift));
+            words[wordIndex] = masked | (newValue << shift);
+            assert verifyUpdate(this, this);
+        }
+
+        private int getEntry(int regIdx) {
+            int bitIndex = regIdx * BITS_PER_ENTRY;
+            int wordIndex = bitIndex / BITS_PER_ELEMENT;
+            int shift = bitIndex - wordIndex * BITS_PER_ELEMENT;
+            return ((int) (words[wordIndex] >>> shift)) & 0b1111;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+
+            if (other instanceof HotSpotOopMap) {
+                HotSpotOopMap otherMap = (HotSpotOopMap) other;
+                int limit = Math.min(words.length, otherMap.words.length);
+                for (int i = 0; i < limit; i++) {
+                    if (words[i] != otherMap.words[i]) {
+                        return false;
+                    }
+                }
+                for (int i = limit; i < words.length; i++) {
+                    if (words[i] != 0) {
+                        return false;
+                    }
+                }
+                for (int i = limit; i < otherMap.words.length; i++) {
+                    if (otherMap.words[i] != 0) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            long h = 1234;
+            for (int i = words.length; --i >= 0;) {
+                h ^= words[i] * (i + 1);
+            }
+            return (int) ((h >> 32) ^ h);
+        }
+
+        @Override
+        public String toString() {
+            int count = 0;
+            StringBuilder sb = new StringBuilder();
+            sb.append("[");
+            for (int idx = 0; idx < size(); idx++) {
+                MapEntry dstType = MapEntry.getFromBits(idx, this);
+                if (dstType == MapEntry.NoReference) {
+                    continue;
+                }
+                if (count > 0) {
+                    sb.append(", ");
+                }
+                if (dstType == MapEntry.Illegal) {
+                    int value = get(idx);
+                    sb.append("0x");
+                    sb.append(Integer.toHexString(value));
+                } else {
+                    sb.append(idx);
+                    sb.append(':');
+                    sb.append(dstType);
+                }
+                count++;
+            }
+            sb.append("]");
+            return sb.toString();
+        }
+    }
 
     /**
      * Contains 3 bits per scalar register, and n*3 bits per n-word vector register (e.g., on a
@@ -50,7 +292,7 @@ public final class HotSpotReferenceMap implements ReferenceMap, Serializable {
      * 111 - contains two narrow oops
      * </pre>
      */
-    private final BitSet registerRefMap;
+    private final HotSpotOopMap registerRefMap;
 
     /**
      * Contains 3 bits per stack word.
@@ -65,23 +307,23 @@ public final class HotSpotReferenceMap implements ReferenceMap, Serializable {
      * 111 - contains two narrow oops
      * </pre>
      */
-    private final BitSet frameRefMap;
+    private final HotSpotOopMap frameRefMap;
 
     private final TargetDescription target;
 
     public HotSpotReferenceMap(int registerCount, int frameSlotCount, TargetDescription target) {
         if (registerCount > 0) {
-            this.registerRefMap = new BitSet(registerCount * BITS_PER_WORD);
+            this.registerRefMap = new HotSpotOopMap(registerCount);
         } else {
             this.registerRefMap = null;
         }
-        this.frameRefMap = new BitSet(frameSlotCount * BITS_PER_WORD);
+        this.frameRefMap = new HotSpotOopMap(frameSlotCount);
         this.target = target;
     }
 
     private HotSpotReferenceMap(HotSpotReferenceMap other) {
-        this.registerRefMap = (BitSet) other.registerRefMap.clone();
-        this.frameRefMap = (BitSet) other.frameRefMap.clone();
+        this.registerRefMap = other.registerRefMap.clone();
+        this.frameRefMap = other.frameRefMap.clone();
         this.target = other.target;
     }
 
@@ -91,75 +333,34 @@ public final class HotSpotReferenceMap implements ReferenceMap, Serializable {
     }
 
     // setters
-
-    private static void setOop(BitSet map, int startIdx, LIRKind kind) {
-        int length = kind.getPlatformKind().getVectorLength();
-        map.clear(BITS_PER_WORD * startIdx, BITS_PER_WORD * (startIdx + length) - 1);
-        for (int i = 0, idx = BITS_PER_WORD * startIdx; i < length; i++, idx += BITS_PER_WORD) {
-            if (kind.isReference(i)) {
-                map.set(idx);
-            }
-        }
-    }
-
-    private static void setNarrowOop(BitSet map, int idx, LIRKind kind) {
-        int length = kind.getPlatformKind().getVectorLength();
-        int nextIdx = idx + (length + 1) / 2;
-        map.clear(BITS_PER_WORD * idx, BITS_PER_WORD * nextIdx - 1);
-        for (int i = 0, regIdx = BITS_PER_WORD * idx; i < length; i += 2, regIdx += BITS_PER_WORD) {
-            if (kind.isReference(i)) {
-                map.set(regIdx);
-                map.set(regIdx + 1);
-            }
-            if ((i + 1) < length && kind.isReference(i + 1)) {
-                map.set(regIdx);
-                map.set(regIdx + 2);
-            }
-        }
-    }
-
+    @Override
     public void setRegister(int idx, LIRKind kind) {
-        if (kind.isDerivedReference()) {
-            throw GraalInternalError.shouldNotReachHere("derived reference cannot be inserted in ReferenceMap");
-        }
-
-        PlatformKind platformKind = kind.getPlatformKind();
-        int bytesPerElement = target.getSizeInBytes(platformKind) / platformKind.getVectorLength();
-
-        if (bytesPerElement == target.wordSize) {
-            setOop(registerRefMap, idx, kind);
-        } else if (bytesPerElement == target.wordSize / 2) {
-            setNarrowOop(registerRefMap, idx, kind);
-        } else {
-            assert kind.isValue() : "unsupported reference kind " + kind;
-        }
+        set(registerRefMap, idx * 2, kind);
     }
 
+    @Override
     public void setStackSlot(int offset, LIRKind kind) {
+        assert offset % bytesPerElement(kind) == 0 : "unaligned value in ReferenceMap";
+        set(frameRefMap, offset / 4, kind);
+    }
+
+    private void set(HotSpotOopMap refMap, int index, LIRKind kind) {
         if (kind.isDerivedReference()) {
-            throw GraalInternalError.shouldNotReachHere("derived reference cannot be inserted in ReferenceMap");
+            throw new InternalError("derived reference cannot be inserted in ReferenceMap");
         }
 
-        PlatformKind platformKind = kind.getPlatformKind();
-        int bytesPerElement = target.getSizeInBytes(platformKind) / platformKind.getVectorLength();
-        assert offset % bytesPerElement == 0 : "unaligned value in ReferenceMap";
-
-        if (bytesPerElement == target.wordSize) {
-            setOop(frameRefMap, offset / target.wordSize, kind);
-        } else if (bytesPerElement == target.wordSize / 2) {
-            if (platformKind.getVectorLength() > 1) {
-                setNarrowOop(frameRefMap, offset / target.wordSize, kind);
-            } else {
-                // in this case, offset / target.wordSize may not divide evenly
-                // so setNarrowOop won't work correctly
-                int idx = offset / target.wordSize;
-                if (kind.isReference(0)) {
-                    frameRefMap.set(BITS_PER_WORD * idx);
-                    if (offset % target.wordSize == 0) {
-                        frameRefMap.set(BITS_PER_WORD * idx + 1);
-                    } else {
-                        frameRefMap.set(BITS_PER_WORD * idx + 2);
-                    }
+        int bytesPerElement = bytesPerElement(kind);
+        int length = kind.getPlatformKind().getVectorLength();
+        if (bytesPerElement == 8) {
+            for (int i = 0; i < length; i++) {
+                if (kind.isReference(i)) {
+                    refMap.setOop(index + i * 2);
+                }
+            }
+        } else if (bytesPerElement == 4) {
+            for (int i = 0; i < length; i++) {
+                if (kind.isReference(i)) {
+                    refMap.setNarrowOop(index + i);
                 }
             }
         } else {
@@ -167,191 +368,76 @@ public final class HotSpotReferenceMap implements ReferenceMap, Serializable {
         }
     }
 
-    // clear
-
-    private static void clearOop(BitSet map, int startIdx, LIRKind kind) {
-        int length = kind.getPlatformKind().getVectorLength();
-        map.clear(BITS_PER_WORD * startIdx, BITS_PER_WORD * (startIdx + length) - 1);
-    }
-
-    private static void clearNarrowOop(BitSet map, int idx, LIRKind kind) {
-        int length = kind.getPlatformKind().getVectorLength();
-        int nextIdx = idx + (length + 1) / 2;
-        map.clear(BITS_PER_WORD * idx, BITS_PER_WORD * nextIdx - 1);
-    }
-
-    public void clearRegister(int idx, LIRKind kind) {
-
+    private int bytesPerElement(LIRKind kind) {
         PlatformKind platformKind = kind.getPlatformKind();
-        int bytesPerElement = target.getSizeInBytes(platformKind) / platformKind.getVectorLength();
-
-        if (bytesPerElement == target.wordSize) {
-            clearOop(registerRefMap, idx, kind);
-        } else if (bytesPerElement == target.wordSize / 2) {
-            clearNarrowOop(registerRefMap, idx, kind);
-        } else {
-            assert kind.isValue() : "unsupported reference kind " + kind;
-        }
+        return target.getSizeInBytes(platformKind) / platformKind.getVectorLength();
     }
 
-    public void clearStackSlot(int offset, LIRKind kind) {
-
-        PlatformKind platformKind = kind.getPlatformKind();
-        int bytesPerElement = target.getSizeInBytes(platformKind) / platformKind.getVectorLength();
-        assert offset % bytesPerElement == 0 : "unaligned value in ReferenceMap";
-
-        if (bytesPerElement == target.wordSize) {
-            clearOop(frameRefMap, offset / target.wordSize, kind);
-        } else if (bytesPerElement == target.wordSize / 2) {
-            if (platformKind.getVectorLength() > 1) {
-                clearNarrowOop(frameRefMap, offset / target.wordSize, kind);
-            } else {
-                // in this case, offset / target.wordSize may not divide evenly
-                // so setNarrowOop won't work correctly
-                int idx = offset / target.wordSize;
-                if (kind.isReference(0)) {
-                    if (offset % target.wordSize == 0) {
-                        frameRefMap.clear(BITS_PER_WORD * idx + 1);
-                        if (!frameRefMap.get(BITS_PER_WORD * idx + 2)) {
-                            // only reset the first bit if there is no other narrow oop
-                            frameRefMap.clear(BITS_PER_WORD * idx);
-                        }
-                    } else {
-                        frameRefMap.clear(BITS_PER_WORD * idx + 2);
-                        if (!frameRefMap.get(BITS_PER_WORD * idx + 1)) {
-                            // only reset the first bit if there is no other narrow oop
-                            frameRefMap.clear(BITS_PER_WORD * idx);
-                        }
-                    }
-                }
-            }
-        } else {
-            assert kind.isValue() : "unknown reference kind " + kind;
-        }
+    public HotSpotOopMap getFrameMap() {
+        return frameRefMap == null ? null : (HotSpotOopMap) frameRefMap.clone();
     }
 
-    public void mergeMaps(ReferenceMap otherArg) {
-        HotSpotReferenceMap other = (HotSpotReferenceMap) otherArg;
-        if (registerRefMap != null) {
-            assert other.registerRefMap != null;
-            mergeBitSetRaw(registerRefMap, other.registerRefMap);
-        } else {
-            assert other.registerRefMap == null || other.registerRefMap.cardinality() == 0 : "Target register reference map is empty but the source is not: " + other.registerRefMap;
-        }
-        mergeBitSetRaw(frameRefMap, other.frameRefMap);
+    public HotSpotOopMap getRegisterMap() {
+        return registerRefMap == null ? null : (HotSpotOopMap) registerRefMap.clone();
     }
 
-    /**
-     * Merge the references from {@code src} into {@code dst}.
-     *
-     * @see HotSpotReferenceMap#registerRefMap
-     * @see HotSpotReferenceMap#frameRefMap
-     */
-    private static void mergeBitSetRaw(BitSet dst, BitSet src) {
-        assert dst.size() == src.size();
-        assert MergeVerifier.verifyMerge(dst, src);
-        dst.or(src);
+    static MapEntry[] entries(HotSpotOopMap fixedMap) {
+        MapEntry[] result = new MapEntry[fixedMap.size()];
+        for (int idx = 0; idx < fixedMap.size(); idx++) {
+            MapEntry dstType = MapEntry.getFromBits(idx, fixedMap);
+            result[idx] = dstType;
+        }
+        return result;
     }
 
-    private enum MergeVerifier {
-        NoReference,
-        WideOop,
-        NarrowOopLowerHalf,
-        NarrowOopUpperHalf,
-        TwoNarrowOops,
-        Illegal;
+    private static boolean verifyUpdate(HotSpotOopMap dst, HotSpotOopMap src) {
+        return verifyUpdate(dst, src, true);
+    }
 
-        /**
-         * Create enum values from BitSet.
-         * <p>
-         * These bits can have the following values (LSB first):
-         *
-         * <pre>
-         * 000 - contains no references
-         * 100 - contains a wide oop
-         * 110 - contains a narrow oop in the lower half
-         * 101 - contains a narrow oop in the upper half
-         * 111 - contains two narrow oops
-         * </pre>
-         *
-         * @see HotSpotReferenceMap#registerRefMap
-         * @see HotSpotReferenceMap#frameRefMap
-         */
-        static MergeVerifier getFromBits(int idx, BitSet set) {
-            int n = (set.get(idx) ? 1 : 0) << 0 | (set.get(idx + 1) ? 1 : 0) << 1 | (set.get(idx + 2) ? 1 : 0) << 2;
-            switch (n) {
-                case 0:
-                    return NoReference;
-                case 1:
-                    return WideOop;
-                case 3:
-                    return NarrowOopLowerHalf;
-                case 5:
-                    return NarrowOopUpperHalf;
-                case 7:
-                    return TwoNarrowOops;
-                default:
-                    return Illegal;
-            }
-        }
-
-        String toBitString() {
-            int bits = toBit(this);
-            if (bits == -1) {
-                return "---";
-            }
-            return String.format("%3s", Integer.toBinaryString(bits)).replace(' ', '0');
-        }
-
-        static int toBit(MergeVerifier type) {
-            switch (type) {
-                case NoReference:
-                    return 0;
-                case WideOop:
-                    return 1;
-                case NarrowOopLowerHalf:
-                    return 3;
-                case NarrowOopUpperHalf:
-                    return 5;
-                case TwoNarrowOops:
-                    return 7;
-                default:
-                    return -1;
-            }
-        }
-
-        private static boolean verifyMerge(BitSet dst, BitSet src) {
-            for (int idx = 0; idx < dst.size(); idx += BITS_PER_WORD) {
-                if (!verifyMergeEntry(idx, dst, src)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        private static boolean verifyMergeEntry(int idx, BitSet dst, BitSet src) {
-            MergeVerifier dstType = MergeVerifier.getFromBits(idx, dst);
-            MergeVerifier srcType = MergeVerifier.getFromBits(idx, src);
-
-            if (dstType == MergeVerifier.Illegal || srcType == MergeVerifier.Illegal) {
-                assert false : String.format("Illegal RefMap bit pattern: %s (0b%s), %s (0b%s)", dstType, dstType.toBitString(), srcType, srcType.toBitString());
+    private static boolean verifyUpdate(HotSpotOopMap dst, HotSpotOopMap src, boolean doAssert) {
+        for (int idx = 0; idx < Math.min(src.size(), dst.size()); idx++) {
+            if (!verifyUpdateEntry(idx, dst, src, doAssert)) {
                 return false;
             }
-            switch (dstType) {
-                case NoReference:
-                    return true;
-                case WideOop:
-                    switch (srcType) {
-                        case NoReference:
-                        case WideOop:
-                            return true;
-                        default:
-                            assert false : String.format("Illegal RefMap combination: %s (0b%s), %s (0b%s)", dstType, dstType.toBitString(), srcType, srcType.toBitString());
-                            return false;
-                    }
-                default:
-                    return true;
-            }
+        }
+        return true;
+    }
+
+    private static boolean verifyUpdateEntry(int idx, HotSpotOopMap dst, HotSpotOopMap src, boolean doAssert) {
+        MapEntry dstType = MapEntry.getFromBits(idx, dst);
+        MapEntry srcType = MapEntry.getFromBits(idx, src);
+
+        if (dstType == MapEntry.Illegal || srcType == MapEntry.Illegal) {
+            assert !doAssert : String.format("Illegal RefMap bit pattern: %s (0b%s), %s (0b%s)", dstType, dstType.toBitString(), srcType, srcType.toBitString());
+            return false;
+        }
+        switch (dstType) {
+            case NoReference:
+                return true;
+            case WideOop:
+                switch (srcType) {
+                    case NoReference:
+                    case WideOop:
+                        return true;
+                    default:
+                        assert false : String.format("Illegal RefMap combination: %s (0b%s), %s (0b%s)", dstType, dstType.toBitString(), srcType, srcType.toBitString());
+                        return false;
+                }
+            case TwoNarrowOops:
+            case NarrowOopLowerHalf:
+            case NarrowOopUpperHalf:
+                switch (srcType) {
+                    case TwoNarrowOops:
+                    case NarrowOopLowerHalf:
+                    case NarrowOopUpperHalf:
+                    case NoReference:
+                        return true;
+                    default:
+                        assert false : String.format("Illegal RefMap combination: %s (0b%s), %s (0b%s)", dstType, dstType.toBitString(), srcType, srcType.toBitString());
+                        return false;
+                }
+            default:
+                return false;
         }
     }
 
@@ -374,23 +460,50 @@ public final class HotSpotReferenceMap implements ReferenceMap, Serializable {
         return false;
     }
 
+    @Override
     public boolean hasRegisterRefMap() {
         return registerRefMap != null && registerRefMap.size() > 0;
     }
 
+    @Override
     public boolean hasFrameRefMap() {
         return frameRefMap != null && frameRefMap.size() > 0;
     }
 
+    @Override
     public void appendRegisterMap(StringBuilder sb, RefMapFormatter formatter) {
-        for (int reg = registerRefMap.nextSetBit(0); reg >= 0; reg = registerRefMap.nextSetBit(reg + BITS_PER_WORD)) {
-            sb.append(' ').append(formatter.formatRegister(reg / BITS_PER_WORD));
+        for (int idx = 0; idx < registerRefMap.size(); idx++) {
+            MapEntry dstType = MapEntry.getFromBits(idx, registerRefMap);
+            if (dstType != MapEntry.NoReference) {
+                sb.append(' ').append(formatter.formatRegister(idx)).append(':').append(dstType);
+            }
         }
     }
 
+    @Override
     public void appendFrameMap(StringBuilder sb, RefMapFormatter formatter) {
-        for (int slot = frameRefMap.nextSetBit(0); slot >= 0; slot = frameRefMap.nextSetBit(slot + BITS_PER_WORD)) {
-            sb.append(' ').append(formatter.formatStackSlot(slot / BITS_PER_WORD));
+        for (int idx = 0; idx < frameRefMap.size(); idx++) {
+            MapEntry dstType = MapEntry.getFromBits(idx, frameRefMap);
+            if (dstType != MapEntry.NoReference) {
+                sb.append(' ').append(formatter.formatStackSlot(idx)).append(':').append(dstType);
+            }
         }
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        if (registerRefMap != null) {
+            sb.append("Registers = ");
+            sb.append(registerRefMap);
+        }
+        sb.append("Stack = ");
+        sb.append(frameRefMap);
+        return sb.toString();
+    }
+
+    public void verify() {
+        assert verifyUpdate(frameRefMap, frameRefMap);
+        assert registerRefMap == null || verifyUpdate(registerRefMap, registerRefMap);
     }
 }

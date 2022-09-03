@@ -22,13 +22,13 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-import static jdk.internal.jvmci.sparc.SPARC.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.SPARCCall.DirectCallOp;
@@ -41,13 +41,12 @@ import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 @Opcode("CALL_DIRECT")
 final class SPARCHotspotDirectVirtualCallOp extends DirectCallOp {
     public static final LIRInstructionClass<SPARCHotspotDirectVirtualCallOp> TYPE = LIRInstructionClass.create(SPARCHotspotDirectVirtualCallOp.class);
-    public static final SizeEstimate SIZE = SizeEstimate.create(8);
 
     private final InvokeKind invokeKind;
     private final HotSpotVMConfig config;
 
     SPARCHotspotDirectVirtualCallOp(ResolvedJavaMethod target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind, HotSpotVMConfig config) {
-        super(TYPE, SIZE, target, result, parameters, temps, state);
+        super(TYPE, target, result, parameters, temps, state);
         this.invokeKind = invokeKind;
         this.config = config;
         assert invokeKind.isIndirect();
