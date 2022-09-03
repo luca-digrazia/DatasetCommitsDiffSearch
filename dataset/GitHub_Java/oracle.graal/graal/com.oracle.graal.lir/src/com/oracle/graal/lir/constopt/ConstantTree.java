@@ -22,17 +22,10 @@
  */
 package com.oracle.graal.lir.constopt;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.function.BiConsumer;
-import java.util.function.Predicate;
+import java.util.*;
+import java.util.function.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.compiler.common.cfg.PrintableDominatorOptimizationProblem;
-import com.oracle.graal.compiler.common.cfg.PropertyConsumable;
+import com.oracle.graal.compiler.common.cfg.*;
 
 /**
  * Represents a dominator (sub-)tree for a constant definition.
@@ -193,7 +186,7 @@ public class ConstantTree extends PrintableDominatorOptimizationProblem<Constant
     }
 
     public int size() {
-        return getBlocks().length;
+        return getBlocks().size();
     }
 
     public void traverseTreeWhileTrue(AbstractBlockBase<?> block, Predicate<AbstractBlockBase<?>> action) {
