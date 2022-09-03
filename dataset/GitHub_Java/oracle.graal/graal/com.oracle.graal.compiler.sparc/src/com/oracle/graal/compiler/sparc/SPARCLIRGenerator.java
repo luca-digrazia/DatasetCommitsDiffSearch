@@ -27,20 +27,13 @@ import static com.oracle.graal.lir.sparc.SPARCArithmetic.*;
 import static com.oracle.graal.lir.sparc.SPARCBitManipulationOp.IntrinsicOpcode.*;
 import static com.oracle.graal.lir.sparc.SPARCCompare.*;
 import static com.oracle.graal.lir.sparc.SPARCMathIntrinsicOp.IntrinsicOpcode.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.sparc.*;
-import jdk.internal.jvmci.sparc.SPARC.CPUFeature;
+import static com.oracle.jvmci.code.ValueUtil.*;
 
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
-import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
+import com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.NoOp;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.lir.sparc.SPARCArithmetic.BinaryRegConst;
@@ -59,11 +52,19 @@ import com.oracle.graal.lir.sparc.SPARCMove.LoadAddressOp;
 import com.oracle.graal.lir.sparc.SPARCMove.LoadDataAddressOp;
 import com.oracle.graal.lir.sparc.SPARCMove.LoadOp;
 import com.oracle.graal.lir.sparc.SPARCMove.MembarOp;
-import com.oracle.graal.lir.sparc.SPARCMove.Move;
 import com.oracle.graal.lir.sparc.SPARCMove.MoveFpGp;
+import com.oracle.graal.lir.sparc.SPARCMove.MoveFpGpVIS3;
+import com.oracle.graal.lir.sparc.SPARCMove.MoveFromRegOp;
+import com.oracle.graal.lir.sparc.SPARCMove.MoveToRegOp;
 import com.oracle.graal.lir.sparc.SPARCMove.NullCheckOp;
+import com.oracle.graal.lir.sparc.SPARCMove.SPARCStackMove;
 import com.oracle.graal.lir.sparc.SPARCMove.StackLoadAddressOp;
 import com.oracle.graal.phases.util.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.sparc.*;
+import com.oracle.jvmci.sparc.SPARC.CPUFeature;
 
 /**
  * This class implements the SPARC specific portion of the LIR generator.
@@ -72,8 +73,6 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     private StackSlotValue tmpStackSlot;
     private SPARCSpillMoveFactory moveFactory;
-    private Variable constantTableBase;
-    private SPARCLoadConstantTableBaseOp loadConstantTableBaseOp;
 
     private class SPARCSpillMoveFactory implements LIRGeneratorTool.SpillMoveFactory {
 
@@ -118,28 +117,17 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     protected SPARCLIRInstruction createMove(AllocatableValue dst, Value src) {
-        boolean srcIsSlot = isStackSlotValue(src);
-        boolean dstIsSlot = isStackSlotValue(dst);
         if (src instanceof SPARCAddressValue) {
             return new LoadAddressOp(dst, (SPARCAddressValue) src);
-        } else if (src instanceof JavaConstant) {
-            JavaConstant javaConstant = (JavaConstant) src;
-            if (canInlineConstant(javaConstant)) {
-                return new SPARCMove.LoadInlineConstant(javaConstant, dst);
-            } else {
-                return new SPARCMove.LoadConstantFromTable(javaConstant, getConstantTableBase(), dst);
-            }
-        } else if (!srcIsSlot && !dstIsSlot) {
-            return new Move(dst, src);
-        } else if (srcIsSlot != dstIsSlot) {
-            return new Move(dst, src);
+        } else if (isRegister(src) || isStackSlotValue(dst)) {
+            return new MoveFromRegOp(dst, src);
         } else {
-            throw JVMCIError.shouldNotReachHere(src.getClass() + " " + dst.getClass());
+            return new MoveToRegOp(dst, src);
         }
     }
 
     protected LIRInstruction createStackMove(AllocatableValue result, Value input) {
-        return new SPARCMove.Move(result, input);
+        return new SPARCStackMove(result, input);
     }
 
     @Override
@@ -277,7 +265,6 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         CC conditionFlags;
         Value actualTrueValue = trueValue;
         Value actualFalseValue = falseValue;
-        // TODO: (sa) Review this loadSimm11 if it is really necessary
         switch ((Kind) left.getLIRKind().getPlatformKind()) {
             case Byte:
             case Short:
@@ -380,7 +367,6 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 throw JVMCIError.shouldNotReachHere();
         }
         ConditionFlag flag = SPARCControlFlow.fromCondition(conditionCode, Condition.EQ, false);
-        // TODO: (sa) Review this loadSimm11 if it is really necessary
         append(new CondMoveOp(result, conditionCode, flag, loadSimm11(trueValue), loadSimm11(falseValue)));
         return result;
     }
@@ -397,15 +383,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
-        Value scratchValue = newVariable(key.getLIRKind());
-        AllocatableValue base = AllocatableValue.ILLEGAL;
-        for (JavaConstant c : strategy.keyConstants) {
-            if (!canInlineConstant(c)) {
-                base = getConstantTableBase();
-                break;
-            }
-        }
-        append(new StrategySwitchOp(base, strategy, keyTargets, defaultTarget, key, scratchValue));
+        append(new StrategySwitchOp(strategy, keyTargets, defaultTarget, key, newVariable(key.getLIRKind())));
     }
 
     @Override
@@ -656,10 +634,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public Value emitRem(Value a, Value b, LIRFrameState state) {
         Variable result = newVariable(LIRKind.derive(a, b));
-        Variable q1; // Intermediate values
-        Variable q2;
-        Variable q3;
-        Variable q4;
+        Variable q = null;
         switch (a.getKind().getStackKind()) {
             case Int:
                 append(new RemOp(IREM, result, load(a), loadNonConst(b), state, this));
@@ -668,26 +643,20 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 append(new RemOp(LREM, result, load(a), loadNonConst(b), state, this));
                 break;
             case Float:
-                q1 = newVariable(LIRKind.value(Kind.Float));
-                append(new BinaryRegReg(FDIV, q1, a, b, state));
-                q2 = newVariable(LIRKind.value(Kind.Float));
-                append(new Unary2Op(F2I, q2, q1));
-                q3 = newVariable(LIRKind.value(Kind.Float));
-                append(new Unary2Op(I2F, q3, q2));
-                q4 = newVariable(LIRKind.value(Kind.Float));
-                append(new BinaryRegReg(FMUL, q4, q3, b));
-                append(new BinaryRegReg(FSUB, result, a, q4));
+                q = newVariable(LIRKind.value(Kind.Float));
+                append(new BinaryRegReg(FDIV, q, a, b, state));
+                append(new Unary2Op(F2I, q, q));
+                append(new Unary2Op(I2F, q, q));
+                append(new BinaryRegReg(FMUL, q, q, b));
+                append(new BinaryRegReg(FSUB, result, a, q));
                 break;
             case Double:
-                q1 = newVariable(LIRKind.value(Kind.Double));
-                append(new BinaryRegReg(DDIV, q1, a, b, state));
-                q2 = newVariable(LIRKind.value(Kind.Double));
-                append(new Unary2Op(D2L, q2, q1));
-                q3 = newVariable(LIRKind.value(Kind.Double));
-                append(new Unary2Op(L2D, q3, q2));
-                q4 = newVariable(LIRKind.value(Kind.Double));
-                append(new BinaryRegReg(DMUL, q4, q3, b));
-                append(new BinaryRegReg(DSUB, result, a, q4));
+                q = newVariable(LIRKind.value(Kind.Double));
+                append(new BinaryRegReg(DDIV, q, a, b, state));
+                append(new Unary2Op(D2L, q, q));
+                append(new Unary2Op(L2D, q, q));
+                append(new BinaryRegReg(DMUL, q, q, b));
+                append(new BinaryRegReg(DSUB, result, a, q));
                 break;
             default:
                 throw JVMCIError.shouldNotReachHere("missing: " + a.getKind());
@@ -896,13 +865,12 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     private void moveBetweenFpGp(AllocatableValue dst, AllocatableValue src) {
-        AllocatableValue tempSlot;
-        if (getArchitecture().getFeatures().contains(CPUFeature.VIS3)) {
-            tempSlot = AllocatableValue.ILLEGAL;
+        if (!getArchitecture().getFeatures().contains(CPUFeature.VIS3)) {
+            StackSlotValue tempSlot = getTempSlot(LIRKind.value(Kind.Long));
+            append(new MoveFpGp(dst, src, tempSlot));
         } else {
-            tempSlot = getTempSlot(LIRKind.value(Kind.Long));
+            append(new MoveFpGpVIS3(dst, src));
         }
-        append(new MoveFpGp(dst, src, tempSlot));
     }
 
     private StackSlotValue getTempSlot(LIRKind kind) {
@@ -1064,25 +1032,5 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         PlatformKind kind = address.getPlatformKind();
         assert kind == Kind.Object || kind == Kind.Long : address + " - " + kind + " not an object!";
         append(new NullCheckOp(asAddressValue(address), state));
-    }
-
-    public void emitLoadConstantTableBase() {
-        constantTableBase = newVariable(LIRKind.value(Kind.Long));
-        int nextPosition = getResult().getLIR().getLIRforBlock(getCurrentBlock()).size();
-        NoOp placeHolder = append(new NoOp(getCurrentBlock(), nextPosition));
-        loadConstantTableBaseOp = new SPARCLoadConstantTableBaseOp(constantTableBase, placeHolder);
-    }
-
-    boolean useConstantTableBase = false;
-
-    protected Variable getConstantTableBase() {
-        useConstantTableBase = true;
-        return constantTableBase;
-    }
-
-    @Override
-    public void beforeRegisterAllocation() {
-        LIR lir = getResult().getLIR();
-        loadConstantTableBaseOp.setAlive(lir, useConstantTableBase);
     }
 }

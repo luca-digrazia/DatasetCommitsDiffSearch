@@ -23,16 +23,15 @@
 package com.oracle.graal.lir.sparc;
 
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.jvmci.code.ValueUtil.*;
 
 import java.util.*;
-
-import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.jvmci.meta.*;
 
 public final class SPARCImmediateAddressValue extends SPARCAddressValue {
 
@@ -58,7 +57,7 @@ public final class SPARCImmediateAddressValue extends SPARCAddressValue {
     }
 
     @Override
-    protected void visitEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc) {
+    protected void forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc) {
         proc.visitValue(inst, base, mode, flags);
     }
 

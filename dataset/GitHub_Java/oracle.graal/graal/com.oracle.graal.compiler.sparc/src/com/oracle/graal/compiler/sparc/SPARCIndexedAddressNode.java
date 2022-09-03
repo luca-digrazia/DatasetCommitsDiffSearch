@@ -23,14 +23,13 @@
 
 package com.oracle.graal.compiler.sparc;
 
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Represents an address of the form [base + index].
@@ -55,10 +54,7 @@ public class SPARCIndexedAddressNode extends AddressNode implements LIRLowerable
         AllocatableValue baseValue = tool.asAllocatable(gen.operand(base));
         AllocatableValue indexValue = tool.asAllocatable(gen.operand(index));
 
-        AllocatableValue baseReference = LIRKind.derivedBaseFromValue(baseValue);
-        AllocatableValue indexReference = LIRKind.derivedBaseFromValue(indexValue);
-
-        LIRKind kind = LIRKind.combineDerived(tool.getLIRKind(stamp()), baseReference, indexReference);
+        LIRKind kind = tool.getLIRKind(stamp());
         gen.setResult(this, new SPARCIndexedAddressValue(kind, baseValue, indexValue));
     }
 

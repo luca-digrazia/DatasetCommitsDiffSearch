@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,85 +22,17 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.OperandFlag;
+import com.oracle.jvmci.meta.*;
 
-public class SPARCAddressValue extends CompositeValue {
+public abstract class SPARCAddressValue extends CompositeValue {
 
-    private static final long serialVersionUID = -3583286416638228207L;
-
-    @Component({REG, OperandFlag.ILLEGAL}) protected AllocatableValue base;
-    @Component({REG, OperandFlag.ILLEGAL}) protected AllocatableValue index;
-    protected final int displacement;
-
-    public SPARCAddressValue(LIRKind kind, AllocatableValue base, int displacement) {
-        this(kind, base, Value.ILLEGAL, displacement);
-    }
-
-    public SPARCAddressValue(LIRKind kind, AllocatableValue base, AllocatableValue index, int displacement) {
+    public SPARCAddressValue(LIRKind kind) {
         super(kind);
-        assert isIllegal(index) || displacement == 0;
-        this.base = base;
-        this.index = index;
-        this.displacement = displacement;
     }
 
-    private static Register toRegister(AllocatableValue value) {
-        if (isIllegal(value)) {
-            return Register.None;
-        } else {
-            RegisterValue reg = (RegisterValue) value;
-            return reg.getRegister();
-        }
-    }
+    public abstract SPARCAddress toAddress();
 
-    public SPARCAddress toAddress() {
-        if (isLegal(index)) {
-            return new SPARCAddress(toRegister(base), toRegister(index));
-        } else {
-            return new SPARCAddress(toRegister(base), displacement);
-        }
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder s = new StringBuilder("[");
-        String sep = "";
-        if (isLegal(base)) {
-            s.append(base);
-            sep = " + ";
-        }
-        if (isLegal(index)) {
-            s.append(sep).append(index);
-            sep = " + ";
-        } else {
-            if (displacement < 0) {
-                s.append(" - ").append(-displacement);
-            } else if (displacement > 0) {
-                s.append(sep).append(displacement);
-            }
-        }
-        s.append("]");
-        return s.toString();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof SPARCAddressValue) {
-            SPARCAddressValue addr = (SPARCAddressValue) obj;
-            return getLIRKind().equals(addr.getLIRKind()) && displacement == addr.displacement && base.equals(addr.base) && index.equals(addr.index);
-        }
-        return false;
-    }
-
-    @Override
-    public int hashCode() {
-        return base.hashCode() ^ index.hashCode() ^ (displacement << 4) ^ getLIRKind().hashCode();
-    }
+    public abstract boolean isValidImplicitNullCheckFor(Value value, int implicitNullCheckLimit);
 }

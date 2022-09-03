@@ -23,8 +23,6 @@
 
 package com.oracle.graal.compiler.sparc;
 
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.sparc.*;
@@ -32,6 +30,7 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Represents an address of the form [base + simm13].
@@ -57,11 +56,6 @@ public class SPARCImmediateAddressNode extends AddressNode implements LIRLowerab
         AllocatableValue baseValue = tool.asAllocatable(gen.operand(base));
 
         LIRKind kind = tool.getLIRKind(stamp());
-        AllocatableValue baseReference = LIRKind.derivedBaseFromValue(baseValue);
-        if (baseReference != null) {
-            kind = kind.makeDerivedReference(baseReference);
-        }
-
         gen.setResult(this, new SPARCImmediateAddressValue(kind, baseValue, displacement));
     }
 
