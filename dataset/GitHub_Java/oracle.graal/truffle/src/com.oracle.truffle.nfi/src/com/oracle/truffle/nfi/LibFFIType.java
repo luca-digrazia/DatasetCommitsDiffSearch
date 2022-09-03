@@ -102,12 +102,7 @@ abstract class LibFFIType {
         }
 
         private static Number asNumber(Object object) {
-            if (object instanceof Byte ||
-                            object instanceof Short ||
-                            object instanceof Integer ||
-                            object instanceof Long ||
-                            object instanceof Float ||
-                            object instanceof Double) {
+            if (object instanceof Number) {
                 return (Number) object;
             } else if (object instanceof Boolean) {
                 return (Boolean) object ? 1 : 0;
