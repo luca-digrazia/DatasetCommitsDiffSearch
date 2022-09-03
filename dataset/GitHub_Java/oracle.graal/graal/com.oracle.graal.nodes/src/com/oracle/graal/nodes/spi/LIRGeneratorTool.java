@@ -97,15 +97,17 @@ public abstract class LIRGeneratorTool {
 
     public abstract void emitMembar(int barriers);
 
-    public abstract void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason);
+    public abstract void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason);
 
-    public abstract void emitNullCheck(ValueNode v);
+    public abstract void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason);
 
     public abstract Value emitCall(RuntimeCallTarget callTarget, CallingConvention cc, boolean canTrap, Value... args);
 
     public abstract void emitIf(IfNode i);
 
     public abstract void emitConditional(ConditionalNode i);
+
+    public abstract void emitGuardCheck(LogicNode comp, DeoptimizationReason deoptReason, DeoptimizationAction deoptAction, boolean negated);
 
     public abstract void emitSwitch(SwitchNode i);
 
