@@ -25,9 +25,8 @@ package com.oracle.graal.lir;
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.CompositeValue.Component;
-import com.oracle.graal.lir.LIRInstruction.InstructionValueProcedure;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
@@ -87,7 +86,7 @@ public class CompositeValueClass extends LIRIntrospection {
     @Override
     protected void rescanFieldOffsets(CalcOffset calc) {
         ValueFieldScanner scanner = new ValueFieldScanner(calc);
-        scanner.scan(getClazz());
+        scanner.scan(clazz);
 
         OperandModeAnnotation mode = scanner.valueAnnotations.get(CompositeValue.Component.class);
         copyInto(componentOffsets, sortedLongCopy(mode.scalarOffsets, mode.arrayOffsets));
@@ -109,7 +108,7 @@ public class CompositeValueClass extends LIRIntrospection {
         }
 
         @Override
-        public void scan(Class<?> clazz) {
+        protected void scan(Class<?> clazz) {
             super.scan(clazz);
         }
 
@@ -128,7 +127,7 @@ public class CompositeValueClass extends LIRIntrospection {
     @Override
     public String toString() {
         StringBuilder str = new StringBuilder();
-        str.append(getClass().getSimpleName()).append(" ").append(getClazz().getSimpleName()).append(" component[");
+        str.append(getClass().getSimpleName()).append(" ").append(clazz.getSimpleName()).append(" component[");
         for (int i = 0; i < componentOffsets.length; i++) {
             str.append(i == 0 ? "" : ", ").append(componentOffsets[i]);
         }
@@ -142,10 +141,6 @@ public class CompositeValueClass extends LIRIntrospection {
 
     public final void forEachComponent(CompositeValue obj, OperandMode mode, ValueProcedure proc) {
         forEach(obj, directComponentCount, componentOffsets, mode, componentFlags, proc);
-    }
-
-    public final void forEachComponent(LIRInstruction inst, CompositeValue obj, OperandMode mode, InstructionValueProcedure proc) {
-        forEach(inst, obj, directComponentCount, componentOffsets, mode, componentFlags, proc);
     }
 
     public String toString(CompositeValue obj) {
