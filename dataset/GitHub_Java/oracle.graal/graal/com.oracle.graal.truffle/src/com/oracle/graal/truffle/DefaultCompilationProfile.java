@@ -47,7 +47,7 @@ public class DefaultCompilationProfile extends AbstractCompilationProfile {
      * Number of times an installed code for this tree was seen invalidated.
      */
     private int invalidationCount;
-    private int deferedCount;
+    private int deferredCount;
 
     private int interpreterCallCount;
     private int interpreterCallAndLoopCount;
@@ -101,9 +101,6 @@ public class DefaultCompilationProfile extends AbstractCompilationProfile {
                 }
             }
         }
-        if (CompilerDirectives.inInterpreter() && !callTarget.isValid()) {
-            interpreterCall(callTarget);
-        }
     }
 
     @Override
@@ -114,9 +111,6 @@ public class DefaultCompilationProfile extends AbstractCompilationProfile {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             argumentTypesAssumption.invalidate();
             profiledArgumentTypes = null;
-        }
-        if (CompilerDirectives.inInterpreter() && !callTarget.isValid()) {
-            interpreterCall(callTarget);
         }
     }
 
@@ -151,8 +145,8 @@ public class DefaultCompilationProfile extends AbstractCompilationProfile {
         // if cachedClass is null and we are not in the interpreter we don't want to deoptimize
         // This usually happens only if the call target was compiled using compile without ever
         // calling it.
-        if (cachedClass != Object.class && (CompilerDirectives.inInterpreter() || cachedClass != null)) {
-            if (cachedClass == ex.getClass()) {
+        if (cachedClass != Object.class) {
+            if (cachedClass != null && cachedClass == ex.getClass()) {
                 return (E) cachedClass.cast(ex);
             }
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -225,7 +219,8 @@ public class DefaultCompilationProfile extends AbstractCompilationProfile {
         ensureProfiling(1, replaceBackoff);
     }
 
-    private void interpreterCall(OptimizedCallTarget callTarget) {
+    @Override
+    void interpreterCall(OptimizedCallTarget callTarget) {
         int intCallCount = ++interpreterCallCount;
         int intAndLoopCallCount = ++interpreterCallAndLoopCount;
 
@@ -233,10 +228,10 @@ public class DefaultCompilationProfile extends AbstractCompilationProfile {
         if (callsMissing == getTimestampThreshold()) {
             timestamp = System.nanoTime();
         }
-        // check if a call target is hot enough to get compiled
-        if (!callTarget.isCompiling() && !compilationFailed && intAndLoopCallCount >= compilationCallAndLoopThreshold && intCallCount >= compilationCallThreshold) {
-            // check if a call target took too long to get hot
-            if (!isDeferredCompile(callTarget)) {
+        if (!callTarget.isCompiling() && !compilationFailed) {
+            // check if call target is hot enough to get compiled, but took not too long to get hot
+            if ((intAndLoopCallCount >= compilationCallAndLoopThreshold && intCallCount >= compilationCallThreshold && !isDeferredCompile(callTarget)) ||
+                            TruffleCompilerOptions.TruffleCompileImmediately.getValue()) {
                 callTarget.compile();
             }
         }
@@ -259,7 +254,7 @@ public class DefaultCompilationProfile extends AbstractCompilationProfile {
             // defer compilation
             ensureProfiling(0, getTimestampThreshold() + 1);
             timestamp = 0;
-            deferedCount++;
+            deferredCount++;
             return true;
         }
         return false;
@@ -338,8 +333,8 @@ public class DefaultCompilationProfile extends AbstractCompilationProfile {
         return interpreterCallCount;
     }
 
-    public int getDeferedCount() {
-        return deferedCount;
+    public int getDeferredCount() {
+        return deferredCount;
     }
 
     public int getCompilationCallAndLoopThreshold() {
