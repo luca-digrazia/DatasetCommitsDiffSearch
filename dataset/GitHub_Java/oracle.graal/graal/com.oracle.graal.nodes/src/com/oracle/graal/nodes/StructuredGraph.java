@@ -112,9 +112,9 @@ public class StructuredGraph extends Graph {
     private final Assumptions assumptions;
 
     /**
-     * The methods that were inlined while constructing this graph.
+     * The methods whose bytecodes are used while constructing this graph.
      */
-    private Set<ResolvedJavaMethod> inlinedMethods = new HashSet<>();
+    private Set<ResolvedJavaMethod> methods = new HashSet<>();
 
     /**
      * Creates a new Graph containing a single {@link AbstractBeginNode} as the {@link #start()
@@ -220,16 +220,16 @@ public class StructuredGraph extends Graph {
     }
 
     public StructuredGraph copy(String newName, ResolvedJavaMethod newMethod) {
-        return copy(newName, newMethod, AllowAssumptions.from(assumptions != null), isInlinedMethodRecordingEnabled());
+        return copy(newName, newMethod, AllowAssumptions.from(assumptions != null), isMethodRecordingEnabled());
     }
 
-    public StructuredGraph copy(String newName, ResolvedJavaMethod newMethod, AllowAssumptions allowAssumptions, boolean enableInlinedMethodRecording) {
+    public StructuredGraph copy(String newName, ResolvedJavaMethod newMethod, AllowAssumptions allowAssumptions, boolean enableMethodRecording) {
         StructuredGraph copy = new StructuredGraph(newName, newMethod, graphId, entryBCI, allowAssumptions);
         if (allowAssumptions == AllowAssumptions.YES && assumptions != null) {
             copy.assumptions.record(assumptions);
         }
-        if (!enableInlinedMethodRecording) {
-            copy.disableInlinedMethodRecording();
+        if (!enableMethodRecording) {
+            copy.disableMethodRecording();
         }
         copy.setGuardsStage(getGuardsStage());
         copy.isAfterFloatingReadPhase = isAfterFloatingReadPhase;
@@ -512,26 +512,26 @@ public class StructuredGraph extends Graph {
     }
 
     /**
-     * Disables recording of methods inlined while constructing this graph. This can be done at most
-     * once and must be done before any inlined methods are recorded.
+     * Disables recording of method used while constructing this graph. This can be done at most
+     * once and must be done before any methods are recorded.
      */
-    public void disableInlinedMethodRecording() {
-        assert inlinedMethods != null : "cannot disable inlined method recording more than once";
-        assert inlinedMethods.isEmpty() : "cannot disable inlined method recording once methods have been recorded";
-        inlinedMethods = null;
+    public void disableMethodRecording() {
+        assert methods != null : "cannot disable method recording more than once";
+        assert methods.isEmpty() : "cannot disable method recording once methods have been recorded";
+        methods = null;
     }
 
-    public boolean isInlinedMethodRecordingEnabled() {
-        return inlinedMethods != null;
+    public boolean isMethodRecordingEnabled() {
+        return methods != null;
     }
 
     /**
-     * Gets the methods that were inlined while constructing this graph.
+     * Gets the methods whose bytecodes are used while constructing this graph.
      *
-     * @return {@code null} if inlined method recording has been
-     *         {@linkplain #disableInlinedMethodRecording() disabled}
+     * @return {@code null} if method recording has been {@linkplain #disableMethodRecording()
+     *         disabled}
      */
-    public Set<ResolvedJavaMethod> getInlinedMethods() {
-        return inlinedMethods;
+    public Set<ResolvedJavaMethod> getMethods() {
+        return methods;
     }
 }
