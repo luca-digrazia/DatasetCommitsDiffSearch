@@ -745,7 +745,7 @@ public class JavaInteropTest {
         assertTrue(KeyInfo.isInvocable(keyInfo));
     }
 
-    public static final class TestJavaObject {
+    static final class TestJavaObject {
         public int aField = 10;
     }
 
@@ -788,7 +788,7 @@ public class JavaInteropTest {
     }
 
     private static class TemporaryRoot extends RootNode {
-        @Child private Node foreignAccess;
+        @Node.Child private Node foreignAccess;
         private final TruffleObject function;
         private final Object[] args;
 
@@ -807,7 +807,7 @@ public class JavaInteropTest {
                 throw e.raise();
             }
         }
-    }
+    } // end of TemporaryRoot
 
     static final class NoKeysObject implements TruffleObject {
 

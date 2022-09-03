@@ -24,15 +24,21 @@
  */
 package com.oracle.truffle.api.interop.java;
 
+import java.lang.reflect.Method;
+
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 
 final class JavaFunctionObject implements TruffleObject {
-    final JavaMethodDesc method;
+    final Method method;
     final Object obj;
     final Object languageContext;
 
-    JavaFunctionObject(JavaMethodDesc method, Object obj, Object languageContext) {
+    JavaFunctionObject(Method method, Object obj) {
+        this(method, obj, null);
+    }
+
+    JavaFunctionObject(Method method, Object obj, Object languageContext) {
         this.method = method;
         this.obj = obj;
         this.languageContext = languageContext;
@@ -46,4 +52,5 @@ final class JavaFunctionObject implements TruffleObject {
     public ForeignAccess getForeignAccess() {
         return JavaFunctionMessageResolutionForeign.ACCESS;
     }
+
 }
