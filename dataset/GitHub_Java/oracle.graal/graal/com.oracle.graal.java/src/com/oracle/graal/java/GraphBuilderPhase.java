@@ -354,9 +354,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return header.loopEnd + 1;
             }
 
-            private BciBlock returnBlock() {
+            private BciBlock returnBlock(int bci) {
                 if (returnBlock == null) {
                     returnBlock = new BciBlock();
+                    returnBlock.startBci = bci;
+                    returnBlock.endBci = bci;
                     returnBlock.setId(Integer.MAX_VALUE);
                 }
                 return returnBlock;
@@ -365,6 +367,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             private BciBlock unwindBlock() {
                 if (unwindBlock == null) {
                     unwindBlock = new ExceptionDispatchBlock();
+                    unwindBlock.startBci = -1;
+                    unwindBlock.endBci = -1;
                     unwindBlock.deoptBci = method.isSynchronized() ? BytecodeFrame.UNWIND_BCI : BytecodeFrame.AFTER_EXCEPTION_BCI;
                     unwindBlock.setId(Integer.MAX_VALUE);
                 }
@@ -1033,7 +1037,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                             frameState.push(x.getKind(), x);
                         }
                         assert returnCount > 1;
-                        appendGoto(returnBlock());
+                        appendGoto(returnBlock(bci()));
                     }
                 }
             }
