@@ -160,11 +160,6 @@ public final class CompileTheWorld {
     private boolean verbose;
     private final Config config;
 
-    /**
-     * Signal that the threads should start compiling in multithreaded mode.
-     */
-    private boolean running;
-
     private ThreadPoolExecutor threadPool;
 
     /**
@@ -332,7 +327,6 @@ public final class CompileTheWorld {
         }
 
         if (threadPool != null) {
-            startThreads();
             while (threadPool.getCompletedTaskCount() != threadPool.getTaskCount()) {
                 System.out.println("CompileTheWorld : Waiting for " + (threadPool.getTaskCount() - threadPool.getCompletedTaskCount()) + " compiles");
                 try {
@@ -348,21 +342,6 @@ public final class CompileTheWorld {
         println();
         println("CompileTheWorld : Done (%d classes, %d methods, %d ms elapsed, %d ms compile time, %d bytes of memory used)", classFileCounter, compiledMethodsCounter.get(), elapsedTime,
                         compileTime.get(), memoryUsed.get());
-    }
-
-    private synchronized void startThreads() {
-        running = true;
-        // Wake up any waiting threads
-        notifyAll();
-    }
-
-    private synchronized void waitToRun() {
-        while (!running) {
-            try {
-                wait();
-            } catch (InterruptedException e) {
-            }
-        }
     }
 
     class CTWCompilationTask extends CompilationTask {
@@ -385,7 +364,6 @@ public final class CompileTheWorld {
         if (threadPool != null) {
             threadPool.submit(new Runnable() {
                 public void run() {
-                    waitToRun();
                     try (OverrideScope s = config.apply()) {
                         compileMethod(method, classFileCounter);
                     }
