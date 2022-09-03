@@ -40,6 +40,7 @@ import com.oracle.graal.asm.*;
  */
 public abstract class FrameMap {
 
+    public final CodeCacheProvider runtime;
     public final TargetDescription target;
     public final RegisterConfig registerConfig;
 
@@ -73,9 +74,9 @@ public abstract class FrameMap {
     private boolean hasOutgoingStackArguments;
 
     /**
-     * The list of stack slots allocated in this frame that are present in every reference map.
+     * The list of stack areas allocated in this frame that are present in every reference map.
      */
-    private final List<StackSlot> objectStackSlots;
+    private final List<StackSlot> objectStackBlocks;
 
     /**
      * Records whether an offset to an incoming stack argument was ever returned by
@@ -86,12 +87,13 @@ public abstract class FrameMap {
     /**
      * Creates a new frame map for the specified method.
      */
-    public FrameMap(CodeCacheProvider codeCache) {
-        this.target = codeCache.getTarget();
-        this.registerConfig = codeCache.getRegisterConfig();
+    public FrameMap(CodeCacheProvider runtime, TargetDescription target, RegisterConfig registerConfig) {
+        this.runtime = runtime;
+        this.target = target;
+        this.registerConfig = registerConfig;
         this.frameSize = -1;
-        this.outgoingSize = codeCache.getMinimumOutgoingSize();
-        this.objectStackSlots = new ArrayList<>();
+        this.outgoingSize = runtime.getMinimumOutgoingSize();
+        this.objectStackBlocks = new ArrayList<>();
     }
 
     protected int returnAddressSize() {
@@ -114,7 +116,7 @@ public abstract class FrameMap {
     /**
      * Gets the frame size of the compiled frame, not including the size of the
      * {@link Architecture#getReturnAddressSize() return address slot}.
-     * 
+     *
      * @return The size of the frame (in bytes).
      */
     public int frameSize() {
@@ -134,7 +136,7 @@ public abstract class FrameMap {
     /**
      * Gets the total frame size of the compiled frame, including the size of the
      * {@link Architecture#getReturnAddressSize() return address slot}.
-     * 
+     *
      * @return The total size of the frame (in bytes).
      */
     public abstract int totalFrameSize();
@@ -147,7 +149,7 @@ public abstract class FrameMap {
 
     /**
      * Aligns the given frame size to the stack alignment size and return the aligned size.
-     * 
+     *
      * @param size the initial frame size to be aligned
      * @return the aligned frame size
      */
@@ -179,7 +181,7 @@ public abstract class FrameMap {
 
     /**
      * Computes the offset of a stack slot relative to the frame register.
-     * 
+     *
      * @param slot a stack slot
      * @return the offset of the stack slot
      */
@@ -195,7 +197,7 @@ public abstract class FrameMap {
     /**
      * Computes the index of a stack slot relative to slot 0. This is also the bit index of stack
      * slots in the reference map.
-     * 
+     *
      * @param slot a stack slot
      * @return the index of the stack slot
      */
@@ -207,7 +209,7 @@ public abstract class FrameMap {
     /**
      * Gets the offset from the stack pointer to the stack area where callee-saved registers are
      * stored.
-     * 
+     *
      * @return The offset to the callee save area (in bytes).
      */
     public abstract int offsetToCalleeSaveArea();
@@ -215,7 +217,7 @@ public abstract class FrameMap {
     /**
      * Informs the frame map that the compiled code calls a particular method, which may need stack
      * space for outgoing arguments.
-     * 
+     *
      * @param cc The calling convention for the called method.
      */
     public void callsMethod(CallingConvention cc) {
@@ -224,7 +226,7 @@ public abstract class FrameMap {
 
     /**
      * Reserves space for stack-based outgoing arguments.
-     * 
+     *
      * @param argsSize The amount of space (in bytes) to reserve for stack-based outgoing arguments.
      */
     public void reserveOutgoing(int argsSize) {
@@ -237,7 +239,7 @@ public abstract class FrameMap {
      * Reserves a new spill slot in the frame of the method being compiled. The returned slot is
      * aligned on its natural alignment, i.e., an 8-byte spill slot is aligned at an 8-byte
      * boundary.
-     * 
+     *
      * @param kind The kind of the spill slot to be reserved.
      * @param additionalOffset
      * @return A spill slot denoting the reserved memory area.
@@ -245,9 +247,8 @@ public abstract class FrameMap {
     protected abstract StackSlot allocateNewSpillSlot(PlatformKind kind, int additionalOffset);
 
     /**
-     * Returns the spill slot size for the given {@link PlatformKind}. The default value is the size
-     * in bytes for the target architecture.
-     * 
+     * Returns the spill slot size for the given {@link PlatformKind}.
+     * The default value is the size in bytes for the target architecture.
      * @param kind the {@link PlatformKind} to be stored in the spill slot.
      * @return the size in bytes
      */
@@ -257,9 +258,9 @@ public abstract class FrameMap {
 
     /**
      * Reserves a spill slot in the frame of the method being compiled. The returned slot is aligned
-     * on its natural alignment, i.e., an 8-byte spill slot is aligned at an 8-byte boundary, unless
-     * overridden by a subclass.
-     * 
+     * on its natural alignment, i.e., an 8-byte spill slot is aligned at an 8-byte boundary,
+     * unless overridden by a subclass.
+     *
      * @param kind The kind of the spill slot to be reserved.
      * @return A spill slot denoting the reserved memory area.
      */
@@ -296,46 +297,29 @@ public abstract class FrameMap {
     }
 
     /**
-     * Reserves a number of contiguous slots in the frame of the method being compiled. If the
-     * requested number of slots is 0, this method returns {@code null}.
-     * 
-     * @param slots the number of slots to reserve
-     * @param objects specifies the indexes of the object pointer slots. The caller is responsible
-     *            for guaranteeing that each such object pointer slot is initialized before any
-     *            instruction that uses a reference map. Without this guarantee, the garbage
-     *            collector could see garbage object values.
-     * @param outObjectStackSlots if non-null, the object pointer slots allocated are added to this
-     *            list
-     * @return the first reserved stack slot (i.e., at the lowest address)
+     * Reserves a block of memory in the frame of the method being compiled. The returned block is
+     * aligned on a word boundary. If the requested size is 0, the method returns {@code null}.
+     *
+     * @param size The size to reserve (in bytes).
+     * @param refs Specifies if the block is all references. If true, the block will be in all
+     *            reference maps for this method. The caller is responsible to initialize the memory
+     *            block before the first instruction that uses a reference map.
+     * @return A stack slot describing the begin of the memory block.
      */
-    public StackSlot allocateStackSlots(int slots, BitSet objects, List<StackSlot> outObjectStackSlots) {
+    public StackSlot allocateStackBlock(int size, boolean refs) {
         assert frameSize == -1 : "frame size must not yet be fixed";
-        if (slots == 0) {
+        if (size == 0) {
             return null;
         }
-        spillSize += (slots * target.wordSize);
+        spillSize = NumUtil.roundUp(spillSize + size, target.wordSize);
 
-        if (!objects.isEmpty()) {
-            assert objects.length() < slots;
-            StackSlot result = null;
-            for (int slotIndex = 0; slotIndex < slots; slotIndex++) {
-                StackSlot objectSlot = null;
-                if (objects.get(slotIndex)) {
-                    objectSlot = allocateNewSpillSlot(Kind.Object, slotIndex * target.wordSize);
-                    objectStackSlots.add(objectSlot);
-                    if (outObjectStackSlots != null) {
-                        outObjectStackSlots.add(objectSlot);
-                    }
-                }
-                if (slotIndex == 0) {
-                    if (objectSlot != null) {
-                        result = objectSlot;
-                    } else {
-                        result = allocateNewSpillSlot(target.wordKind, 0);
-                    }
-                }
+        if (refs) {
+            assert size % target.wordSize == 0;
+            StackSlot result = allocateNewSpillSlot(Kind.Object, 0);
+            objectStackBlocks.add(result);
+            for (int i = target.wordSize; i < size; i += target.wordSize) {
+                objectStackBlocks.add(allocateNewSpillSlot(Kind.Object, i));
             }
-            assert result != null;
             return result;
 
         } else {
@@ -343,29 +327,42 @@ public abstract class FrameMap {
         }
     }
 
-    public ReferenceMap initReferenceMap(boolean canHaveRegisters) {
-        ReferenceMap refMap = new ReferenceMap(canHaveRegisters ? target.arch.getRegisterReferenceMapBitCount() : 0, frameSize() / target.wordSize);
-        for (StackSlot slot : objectStackSlots) {
-            setReference(slot, refMap);
+    /**
+     * Initializes a reference map that covers all registers of the target architecture.
+     */
+    public BitSet initRegisterRefMap() {
+        return new BitSet(target.arch.getRegisterReferenceMapBitCount());
+    }
+
+    /**
+     * Initializes a reference map. Initially, the size is large enough to cover all the slots in
+     * the frame. If the method has incoming reference arguments on the stack, the reference map
+     * might grow later when such a reference is set.
+     */
+    public BitSet initFrameRefMap() {
+        BitSet frameRefMap = new BitSet(frameSize() / target.wordSize);
+        for (StackSlot slot : objectStackBlocks) {
+            setReference(slot, null, frameRefMap);
         }
-        return refMap;
+        return frameRefMap;
     }
 
     /**
      * Marks the specified location as a reference in the reference map of the debug information.
      * The tracked location can be a {@link RegisterValue} or a {@link StackSlot}. Note that a
      * {@link Constant} is automatically tracked.
-     * 
+     *
      * @param location The location to be added to the reference map.
-     * @param refMap A reference map, as created by {@link #initReferenceMap(boolean)}.
+     * @param registerRefMap A register reference map, as created by {@link #initRegisterRefMap()}.
+     * @param frameRefMap A frame reference map, as created by {@link #initFrameRefMap()}.
      */
-    public void setReference(Value location, ReferenceMap refMap) {
+    public void setReference(Value location, BitSet registerRefMap, BitSet frameRefMap) {
         if (location.getKind() == Kind.Object) {
             if (isRegister(location)) {
-                refMap.setRegister(asRegister(location).number);
+                registerRefMap.set(asRegister(location).number);
             } else if (isStackSlot(location)) {
                 int index = indexForStackSlot(asStackSlot(location));
-                refMap.setStackSlot(index);
+                frameRefMap.set(index);
             } else {
                 assert isConstant(location);
             }
