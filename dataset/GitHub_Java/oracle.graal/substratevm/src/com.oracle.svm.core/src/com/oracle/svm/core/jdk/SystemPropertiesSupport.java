@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,7 +27,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.function.Supplier;
 
-import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
@@ -64,8 +61,6 @@ public abstract class SystemPropertiesSupport {
 
     private volatile boolean fullyInitialized;
 
-    private static final String vmName = "Substrate VM";
-
     @Platforms(Platform.HOSTED_ONLY.class)
     protected SystemPropertiesSupport() {
         properties = new Properties();
@@ -75,14 +70,10 @@ public abstract class SystemPropertiesSupport {
         }
 
         lazyRuntimeValues = new HashMap<>();
-        lazyRuntimeValues.put("java.vm.name", () -> vmName);
         lazyRuntimeValues.put("user.name", this::userNameValue);
         lazyRuntimeValues.put("user.home", this::userHomeValue);
         lazyRuntimeValues.put("user.dir", this::userDirValue);
         lazyRuntimeValues.put("java.io.tmpdir", this::tmpdirValue);
-
-        System.setProperty(ImageInfo.PROPERTY_IMAGE_STAGE_KEY, ImageInfo.ImageStage.BuildTime.name());
-        lazyRuntimeValues.put(ImageInfo.PROPERTY_IMAGE_STAGE_KEY, () -> ImageInfo.ImageStage.RunTime.name());
     }
 
     public Properties getProperties() {
