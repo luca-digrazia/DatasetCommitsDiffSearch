@@ -55,7 +55,6 @@ import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.replacements.ConstantBindingParameterPlugin;
 
-import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
 import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
 import jdk.vm.ci.meta.JavaConstant;
@@ -132,10 +131,9 @@ public class NativeCallStubGraphBuilder {
         CompilationResult compResult = GraalCompiler.compileGraph(g, callStubMethod, providers, backend, graphBuilder, OptimisticOptimizations.ALL, DefaultProfilingInfo.get(TriState.UNKNOWN), suites,
                         lirSuites, new CompilationResult(), CompilationResultBuilderFactory.Default);
 
-        HotSpotCodeCacheProvider codeCache = providers.getCodeCache();
-        try (Scope s = Debug.scope("CodeInstall", codeCache, g.method(), compResult)) {
-            HotSpotCompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(codeCache, g.method(), null, compResult);
-            function.code = codeCache.addCode(g.method(), compiledCode, null, null);
+        try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache(), g.method(), compResult)) {
+            HotSpotCompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(g.method(), null, compResult);
+            function.code = providers.getCodeCache().addCode(g.method(), compiledCode, null, null);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }

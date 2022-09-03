@@ -65,7 +65,7 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
     @Override
     public void initialize(OptionValues options, HotSpotProviders providers, GraalHotSpotVMConfig config) {
         convertSnippets = new AMD64ConvertSnippets.Templates(options, providers, providers.getSnippetReflection(), providers.getCodeCache().getTarget());
-        profileSnippets = ProfileNode.Options.ProbabilisticProfiling.getValue(options)
+        profileSnippets = ProfileNode.Options.ProbabilisticProfiling.getValue(OptionValues.GLOBAL)
                         ? new ProbabilisticProfileSnippets.Templates(options, providers, providers.getCodeCache().getTarget()) : null;
         super.initialize(options, providers, config);
     }
@@ -83,7 +83,7 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
 
     @Override
     protected ForeignCallDescriptor toForeignCall(UnaryOperation operation) {
-        if (GraalArithmeticStubs.getValue(runtime.getOptions())) {
+        if (GraalArithmeticStubs.getValue(OptionValues.GLOBAL)) {
             switch (operation) {
                 case LOG:
                     return ARITHMETIC_LOG_STUB;
@@ -107,7 +107,7 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
 
     @Override
     protected ForeignCallDescriptor toForeignCall(BinaryOperation operation) {
-        if (GraalArithmeticStubs.getValue(runtime.getOptions())) {
+        if (GraalArithmeticStubs.getValue(OptionValues.GLOBAL)) {
             switch (operation) {
                 case POW:
                     return ARITHMETIC_POW_STUB;
@@ -120,7 +120,7 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
     }
 
     @Override
-    public Integer smallestCompareWidth() {
-        return 8;
+    public boolean supportSubwordCompare(int bits) {
+        return true;
     }
 }

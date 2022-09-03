@@ -23,6 +23,7 @@
 package org.graalvm.compiler.replacements;
 
 import static java.util.FormattableFlags.ALTERNATE;
+import static org.graalvm.compiler.core.common.LocationIdentity.ANY_LOCATION;
 import static org.graalvm.compiler.core.common.LocationIdentity.any;
 import static org.graalvm.compiler.debug.Debug.applyFormattingFlagsAndWidth;
 import static org.graalvm.compiler.graph.iterators.NodePredicates.isNotA;
@@ -82,8 +83,6 @@ import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.PhiNode;
-import org.graalvm.compiler.nodes.PiNode;
-import org.graalvm.compiler.nodes.PiNode.Placeholder;
 import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.StartNode;
 import org.graalvm.compiler.nodes.StateSplit;
@@ -114,7 +113,6 @@ import org.graalvm.compiler.phases.common.FloatingReadPhase;
 import org.graalvm.compiler.phases.common.FloatingReadPhase.MemoryMapImpl;
 import org.graalvm.compiler.phases.common.GuardLoweringPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
-import org.graalvm.compiler.phases.common.RemoveValueProxyPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.compiler.phases.util.Providers;
@@ -237,7 +235,7 @@ public class SnippetTemplate {
 
         protected SnippetInfo(ResolvedJavaMethod method, LocationIdentity[] privateLocations) {
             this.method = method;
-            this.privateLocations = privateLocations;
+            this.privateLocations = SnippetCounterNode.addSnippetCounters(privateLocations);
             instantiationCounter = Debug.counter("SnippetInstantiationCount[%s]", method.getName());
             instantiationTimer = Debug.timer("SnippetInstantiationTime[%s]", method.getName());
             assert method.isStatic() : "snippet method must be static: " + method.format("%H.%n");
@@ -608,7 +606,7 @@ public class SnippetTemplate {
          * {@link Snippet} and returns a {@link SnippetInfo} value describing it. There must be
          * exactly one snippet method in {@code declaringClass}.
          */
-        protected SnippetInfo snippet(Class<? extends Snippets> declaringClass, String methodName, LocationIdentity... initialPrivateLocations) {
+        protected SnippetInfo snippet(Class<? extends Snippets> declaringClass, String methodName, LocationIdentity... privateLocations) {
             assert methodName != null;
             Method method = findMethod(declaringClass, methodName, null);
             assert method != null : "did not find @" + Snippet.class.getSimpleName() + " method in " + declaringClass + " named " + methodName;
@@ -616,7 +614,6 @@ public class SnippetTemplate {
             assert findMethod(declaringClass, methodName, method) == null : "found more than one method named " + methodName + " in " + declaringClass;
             ResolvedJavaMethod javaMethod = providers.getMetaAccess().lookupJavaMethod(method);
             providers.getReplacements().registerSnippet(javaMethod);
-            LocationIdentity[] privateLocations = GraalOptions.SnippetCounters.getValue(options) ? SnippetCounterNode.addSnippetCounters(initialPrivateLocations) : initialPrivateLocations;
             if (GraalOptions.EagerSnippets.getValue(options)) {
                 return new EagerSnippetInfo(javaMethod, privateLocations);
             } else {
@@ -841,7 +838,6 @@ public class SnippetTemplate {
             assert checkAllVarargPlaceholdersAreDeleted(parameterCount, placeholders);
 
             new FloatingReadPhase(true, true).apply(snippetCopy);
-            new RemoveValueProxyPhase().apply(snippetCopy);
 
             MemoryAnchorNode anchor = snippetCopy.add(new MemoryAnchorNode());
             snippetCopy.start().replaceAtUsages(InputType.Memory, anchor);
@@ -858,7 +854,7 @@ public class SnippetTemplate {
                 boolean needsMemoryMaps = false;
                 for (ReturnNode retNode : snippet.getNodes(ReturnNode.TYPE)) {
                     MemoryMapNode memoryMap = retNode.getMemoryMap();
-                    if (memoryMap.getLocations().size() > 1 || memoryMap.getLastLocationAccess(LocationIdentity.any()) != anchor) {
+                    if (memoryMap.getLocations().size() > 1 || memoryMap.getLastLocationAccess(ANY_LOCATION) != anchor) {
                         needsMemoryMaps = true;
                         break;
                     }
@@ -1480,13 +1476,7 @@ public class SnippetTemplate {
     private void updateStamps(ValueNode replacee, UnmodifiableEconomicMap<Node, Node> duplicates) {
         for (ValueNode stampNode : stampNodes) {
             Node stampDup = duplicates.get(stampNode);
-            if (stampDup instanceof PiNode.Placeholder) {
-                PiNode.Placeholder placeholder = (Placeholder) stampDup;
-                PiNode pi = placeholder.getReplacement(replacee.stamp());
-                placeholder.replaceAndDelete(pi);
-            } else {
-                ((ValueNode) stampDup).setStamp(replacee.stamp());
-            }
+            ((ValueNode) stampDup).setStamp(replacee.stamp());
         }
         for (ParameterNode paramNode : snippet.getNodes(ParameterNode.TYPE)) {
             for (Node usage : paramNode.usages()) {

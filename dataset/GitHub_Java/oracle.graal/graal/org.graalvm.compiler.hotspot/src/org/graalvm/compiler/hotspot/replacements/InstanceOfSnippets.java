@@ -22,6 +22,8 @@
  */
 package org.graalvm.compiler.hotspot.replacements;
 
+import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
+import static jdk.vm.ci.meta.DeoptimizationReason.OptimizedTypeCheckViolated;
 import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.PRIMARY_SUPERS_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.SECONDARY_SUPER_CACHE_LOCATION;
@@ -42,16 +44,15 @@ import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.LIKELY_P
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.NOT_LIKELY_PROBABILITY;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.probability;
-import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.vm.ci.meta.DeoptimizationReason.OptimizedTypeCheckViolated;
 
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.api.replacements.Snippet.ConstantParameter;
+import org.graalvm.compiler.api.replacements.Snippet.NonNullParameter;
 import org.graalvm.compiler.api.replacements.Snippet.VarargsParameter;
+import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
-import org.graalvm.compiler.hotspot.nodes.SnippetAnchorNode;
 import org.graalvm.compiler.hotspot.nodes.type.KlassPointerStamp;
 import org.graalvm.compiler.hotspot.replacements.TypeCheckSnippetUtils.Hints;
 import org.graalvm.compiler.hotspot.replacements.aot.ResolveConstantSnippets;
@@ -59,6 +60,7 @@ import org.graalvm.compiler.hotspot.word.KlassPointer;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
 import org.graalvm.compiler.nodes.PiNode;
+import org.graalvm.compiler.nodes.SnippetAnchorNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.TypeCheckHints;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -68,6 +70,7 @@ import org.graalvm.compiler.nodes.java.ClassIsAssignableFromNode;
 import org.graalvm.compiler.nodes.java.InstanceOfDynamicNode;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
+import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.InstanceOfSnippetsTemplates;
 import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
 import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
@@ -229,31 +232,44 @@ public class InstanceOfSnippets implements Snippets {
             }
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        KlassPointer objectHub = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
+        KlassPointer nonNullObjectHub = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
         // The hub of a primitive type can be null => always return false in this case.
-        if (hub.isNull() || !checkUnknownSubType(hub, objectHub)) {
-            return falseValue;
+        if (BranchProbabilityNode.probability(BranchProbabilityNode.FAST_PATH_PROBABILITY, !hub.isNull())) {
+            if (checkUnknownSubType(hub, nonNullObjectHub)) {
+                return trueValue;
+            }
         }
-        return trueValue;
+        return falseValue;
     }
 
     @Snippet
-    public static Object isAssignableFrom(Class<?> thisClass, Class<?> otherClass, Object trueValue, Object falseValue) {
-        if (BranchProbabilityNode.probability(BranchProbabilityNode.NOT_FREQUENT_PROBABILITY, otherClass == null)) {
+    public static Object isAssignableFrom(@NonNullParameter Class<?> thisClassNonNull, Class<?> otherClass, Object trueValue, Object falseValue) {
+        if (otherClass == null) {
             DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException);
             return false;
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        KlassPointer thisHub = ClassGetHubNode.readClass(thisClass, anchorNode);
-        KlassPointer otherHub = ClassGetHubNode.readClass(otherClass, anchorNode);
-        if (thisHub.isNull() || otherHub.isNull()) {
-            // primitive types, only true if equal.
-            return thisClass == otherClass ? trueValue : falseValue;
+        Class<?> otherClassNonNull = PiNode.piCastNonNullClass(otherClass, anchorNode);
+
+        if (BranchProbabilityNode.probability(BranchProbabilityNode.NOT_LIKELY_PROBABILITY, thisClassNonNull == otherClassNonNull)) {
+            return trueValue;
         }
-        if (!TypeCheckSnippetUtils.checkUnknownSubType(thisHub, otherHub)) {
-            return falseValue;
+
+        KlassPointer thisHub = ClassGetHubNode.readClass(thisClassNonNull);
+        KlassPointer otherHub = ClassGetHubNode.readClass(otherClassNonNull);
+        if (BranchProbabilityNode.probability(BranchProbabilityNode.FAST_PATH_PROBABILITY, !thisHub.isNull())) {
+            if (BranchProbabilityNode.probability(BranchProbabilityNode.FAST_PATH_PROBABILITY, !otherHub.isNull())) {
+                GuardingNode guardNonNull = SnippetAnchorNode.anchor();
+                KlassPointer nonNullOtherHub = ClassGetHubNode.piCastNonNull(otherHub, guardNonNull);
+                if (TypeCheckSnippetUtils.checkUnknownSubType(thisHub, nonNullOtherHub)) {
+                    return trueValue;
+                }
+            }
         }
-        return trueValue;
+
+        // If either hub is null, one of them is a primitive type and given that the class is not
+        // equal, return false.
+        return falseValue;
     }
 
     public static class Templates extends InstanceOfSnippetsTemplates {
@@ -268,8 +284,8 @@ public class InstanceOfSnippets implements Snippets {
         private final SnippetInfo instanceofDynamic = snippet(InstanceOfSnippets.class, "instanceofDynamic", SECONDARY_SUPER_CACHE_LOCATION);
         private final SnippetInfo isAssignableFrom = snippet(InstanceOfSnippets.class, "isAssignableFrom", SECONDARY_SUPER_CACHE_LOCATION);
 
-        public Templates(HotSpotProviders providers, TargetDescription target) {
-            super(providers, providers.getSnippetReflection(), target);
+        public Templates(OptionValues options, HotSpotProviders providers, TargetDescription target) {
+            super(options, providers, providers.getSnippetReflection(), target);
         }
 
         @Override
@@ -279,13 +295,15 @@ public class InstanceOfSnippets implements Snippets {
                 ValueNode object = instanceOf.getValue();
                 Assumptions assumptions = instanceOf.graph().getAssumptions();
 
+                OptionValues localOptions = instanceOf.getOptions();
                 JavaTypeProfile profile = instanceOf.profile();
-                if (GeneratePIC.getValue()) {
+                if (GeneratePIC.getValue(localOptions)) {
                     // FIXME: We can't embed constants in hints. We can't really load them from GOT
                     // either. Hard problem.
                     profile = null;
                 }
-                TypeCheckHints hintInfo = new TypeCheckHints(instanceOf.type(), profile, assumptions, TypeCheckMinProfileHitProbability.getValue(), TypeCheckMaxHints.getValue());
+                TypeCheckHints hintInfo = new TypeCheckHints(instanceOf.type(), profile, assumptions, TypeCheckMinProfileHitProbability.getValue(localOptions),
+                                TypeCheckMaxHints.getValue(localOptions));
                 final HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) instanceOf.type().getType();
                 ConstantNode hub = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), type.klass(), providers.getMetaAccess(), instanceOf.graph());
 
@@ -299,19 +317,19 @@ public class InstanceOfSnippets implements Snippets {
                     args.addVarargs("hints", KlassPointer.class, KlassPointerStamp.klassNonNull(), hints.hubs);
                     args.addVarargs("hintIsPositive", boolean.class, StampFactory.forKind(JavaKind.Boolean), hints.isPositive);
                 } else if (hintInfo.exact != null) {
-                    SnippetInfo snippet = GeneratePIC.getValue() ? instanceofExactPIC : instanceofExact;
+                    SnippetInfo snippet = GeneratePIC.getValue(localOptions) ? instanceofExactPIC : instanceofExact;
                     args = new Arguments(snippet, graph.getGuardsStage(), tool.getLoweringStage());
                     args.add("object", object);
                     args.add("exactHub", ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), ((HotSpotResolvedObjectType) hintInfo.exact).klass(), providers.getMetaAccess(), graph));
                 } else if (type.isPrimaryType()) {
-                    SnippetInfo snippet = GeneratePIC.getValue() ? instanceofPrimaryPIC : instanceofPrimary;
+                    SnippetInfo snippet = GeneratePIC.getValue(localOptions) ? instanceofPrimaryPIC : instanceofPrimary;
                     args = new Arguments(snippet, graph.getGuardsStage(), tool.getLoweringStage());
                     args.add("hub", hub);
                     args.add("object", object);
                     args.addConst("superCheckOffset", type.superCheckOffset());
                 } else {
                     Hints hints = createHints(hintInfo, providers.getMetaAccess(), false, graph);
-                    SnippetInfo snippet = GeneratePIC.getValue() ? instanceofSecondaryPIC : instanceofSecondary;
+                    SnippetInfo snippet = GeneratePIC.getValue(localOptions) ? instanceofSecondaryPIC : instanceofSecondary;
                     args = new Arguments(snippet, graph.getGuardsStage(), tool.getLoweringStage());
                     args.add("hub", hub);
                     args.add("object", object);
@@ -338,7 +356,8 @@ public class InstanceOfSnippets implements Snippets {
             } else if (replacer.instanceOf instanceof ClassIsAssignableFromNode) {
                 ClassIsAssignableFromNode isAssignable = (ClassIsAssignableFromNode) replacer.instanceOf;
                 Arguments args = new Arguments(isAssignableFrom, isAssignable.graph().getGuardsStage(), tool.getLoweringStage());
-                args.add("thisClass", isAssignable.getThisClass());
+                assert ((ObjectStamp) isAssignable.getThisClass().stamp()).nonNull();
+                args.add("thisClassNonNull", isAssignable.getThisClass());
                 args.add("otherClass", isAssignable.getOtherClass());
                 args.add("trueValue", replacer.trueValue);
                 args.add("falseValue", replacer.falseValue);

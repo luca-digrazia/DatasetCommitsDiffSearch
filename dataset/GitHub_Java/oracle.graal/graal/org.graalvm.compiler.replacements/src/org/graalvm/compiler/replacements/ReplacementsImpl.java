@@ -85,16 +85,11 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
 
-    protected final OptionValues options;
+    public final OptionValues options;
     public final Providers providers;
     public final SnippetReflectionProvider snippetReflection;
     public final TargetDescription target;
     private GraphBuilderConfiguration.Plugins graphBuilderPlugins;
-
-    @Override
-    public OptionValues getOptions() {
-        return options;
-    }
 
     /**
      * The preprocessed replacement graphs.
@@ -322,7 +317,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
 
                 finalizeGraph(graph);
 
-                Debug.dump(Debug.INFO_LEVEL, graph, "%s: Final", method.getName());
+                Debug.dump(Debug.INFO_LOG_LEVEL, graph, "%s: Final", method.getName());
 
                 return graph;
             } catch (Throwable e) {

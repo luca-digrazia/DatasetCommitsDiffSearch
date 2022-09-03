@@ -35,13 +35,13 @@ import static org.graalvm.compiler.hotspot.stubs.StubUtil.decipher;
 import static org.graalvm.compiler.hotspot.stubs.StubUtil.fatal;
 import static org.graalvm.compiler.hotspot.stubs.StubUtil.newDescriptor;
 import static org.graalvm.compiler.hotspot.stubs.StubUtil.printf;
+import static org.graalvm.compiler.options.OptionValues.GLOBAL;
 
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.api.replacements.Snippet.ConstantParameter;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
-import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.graph.Node.ConstantNodeParameter;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
@@ -80,21 +80,18 @@ public class ExceptionHandlerStub extends SnippetStub {
 
     @Override
     protected Object getConstantParameterValue(int index, String name) {
-        if (index == 2) {
-            return providers.getRegisters().getThreadRegister();
-        }
-        assert index == 3;
-        return options;
+        assert index == 2;
+        return providers.getRegisters().getThreadRegister();
     }
 
     @Snippet
-    private static void exceptionHandler(Object exception, Word exceptionPc, @ConstantParameter Register threadRegister, @ConstantParameter OptionValues options) {
+    private static void exceptionHandler(Object exception, Word exceptionPc, @ConstantParameter Register threadRegister) {
         Word thread = registerAsWord(threadRegister);
         checkNoExceptionInThread(thread, assertionsEnabled(INJECTED_VMCONFIG));
         checkExceptionNotNull(assertionsEnabled(INJECTED_VMCONFIG), exception);
         writeExceptionOop(thread, exception);
         writeExceptionPc(thread, exceptionPc);
-        if (logging(options)) {
+        if (logging()) {
             printf("handling exception %p (", Word.objectToTrackedPointer(exception).rawValue());
             decipher(Word.objectToTrackedPointer(exception).rawValue());
             printf(") at %p (", exceptionPc.rawValue());
@@ -107,7 +104,7 @@ public class ExceptionHandlerStub extends SnippetStub {
 
         Word handlerPc = exceptionHandlerForPc(EXCEPTION_HANDLER_FOR_PC, thread);
 
-        if (logging(options)) {
+        if (logging()) {
             printf("handler for exception %p at %p is at %p (", Word.objectToTrackedPointer(exception).rawValue(), exceptionPc.rawValue(), handlerPc.rawValue());
             decipher(handlerPc.rawValue());
             printf(")\n");
@@ -141,18 +138,23 @@ public class ExceptionHandlerStub extends SnippetStub {
     }
 
     @Fold
-    static boolean logging(OptionValues options) {
-        return StubOptions.TraceExceptionHandlerStub.getValue(options);
+    static boolean logging() {
+        return StubOptions.TraceExceptionHandlerStub.getValue(GLOBAL);
     }
 
     /**
-     * Determines if either Java assertions are enabled for Graal or if this is a HotSpot build
-     * where the ASSERT mechanism is enabled.
+     * Determines if either Java assertions are enabled for {@link ExceptionHandlerStub} or if this
+     * is a HotSpot build where the ASSERT mechanism is enabled.
+     * <p>
+     * This first check relies on the per-class assertion status which is why this method must be in
+     * this class.
      */
     @Fold
     @SuppressWarnings("all")
     static boolean assertionsEnabled(@InjectedParameter GraalHotSpotVMConfig config) {
-        return Assertions.ENABLED || cAssertionsEnabled(config);
+        boolean enabled = false;
+        assert enabled = true;
+        return enabled || cAssertionsEnabled(config);
     }
 
     public static final ForeignCallDescriptor EXCEPTION_HANDLER_FOR_PC = newDescriptor(ExceptionHandlerStub.class, "exceptionHandlerForPc", Word.class, Word.class);

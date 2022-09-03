@@ -120,7 +120,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
                 compilationCounters.countCompilation(method);
             }
             // Ensure a debug configuration for this thread is initialized
-            DebugEnvironment.ensureInitialized(graalRuntime.getHostProviders().getSnippetReflection());
+            DebugEnvironment.ensureInitialized(OptionValues.GLOBAL, graalRuntime.getHostProviders().getSnippetReflection());
             CompilationTask task = new CompilationTask(jvmciRuntime, this, hsRequest, true, true, options);
             CompilationRequestResult r = null;
             try (DebugConfigScope dcs = Debug.setConfig(new TopLevelDebugConfig());
@@ -149,14 +149,14 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
         HotSpotBackend backend = graalRuntime.getHostBackend();
         HotSpotProviders providers = backend.getProviders();
         final boolean isOSR = entryBCI != JVMCICompiler.INVOCATION_ENTRY_BCI;
-        StructuredGraph graph = method.isNative() || isOSR ? null : getIntrinsicGraph(method, providers, compilationId);
+        StructuredGraph graph = method.isNative() || isOSR ? null : getIntrinsicGraph(method, providers, compilationId, options);
 
         if (graph == null) {
             SpeculationLog speculationLog = method.getSpeculationLog();
             if (speculationLog != null) {
                 speculationLog.collectFailedSpeculations();
             }
-            graph = new StructuredGraph.Builder(AllowAssumptions.ifTrue(OptAssumptions.getValue(options))).method(method).entryBCI(entryBCI).options(options).speculationLog(
+            graph = new StructuredGraph.Builder(options, AllowAssumptions.ifTrue(OptAssumptions.getValue(options))).method(method).entryBCI(entryBCI).speculationLog(
                             speculationLog).useProfilingInfo(useProfilingInfo).compilationId(compilationId).build();
         }
 
@@ -164,9 +164,12 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
         LIRSuites lirSuites = getLIRSuites(providers, options);
         ProfilingInfo profilingInfo = useProfilingInfo ? method.getProfilingInfo(!isOSR, isOSR) : DefaultProfilingInfo.get(TriState.FALSE);
         OptimisticOptimizations optimisticOpts = getOptimisticOpts(profilingInfo, options);
-        if (isOSR) {
-            // In OSR compiles, we cannot rely on never executed code profiles, because
-            // all code after the OSR loop is never executed.
+
+        /*
+         * Cut off never executed code profiles if there is code, e.g. after the osr loop, that is
+         * never executed.
+         */
+        if (isOSR && !OnStackReplacementPhase.Options.DeoptAfterOSR.getValue(options)) {
             optimisticOpts.remove(Optimization.RemoveNeverExecutedCode);
         }
         CompilationResult result = new CompilationResult();
@@ -189,15 +192,16 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
      *
      * @param method
      * @param compilationId
+     * @param options
      * @return an intrinsic graph that can be compiled and installed for {@code method} or null
      */
     @SuppressWarnings("try")
-    public StructuredGraph getIntrinsicGraph(ResolvedJavaMethod method, HotSpotProviders providers, CompilationIdentifier compilationId) {
+    public StructuredGraph getIntrinsicGraph(ResolvedJavaMethod method, HotSpotProviders providers, CompilationIdentifier compilationId, OptionValues options) {
         Replacements replacements = providers.getReplacements();
         ResolvedJavaMethod substMethod = replacements.getSubstitutionMethod(method);
         if (substMethod != null) {
             assert !substMethod.equals(method);
-            StructuredGraph graph = new StructuredGraph.Builder(AllowAssumptions.YES).method(substMethod).compilationId(compilationId).build();
+            StructuredGraph graph = new StructuredGraph.Builder(options, AllowAssumptions.YES).method(substMethod).compilationId(compilationId).build();
             try (Debug.Scope scope = Debug.scope("GetIntrinsicGraph", graph)) {
                 Plugins plugins = new Plugins(providers.getGraphBuilderPlugins());
                 GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
@@ -248,6 +252,11 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
                 newGbs.findPhase(GraphBuilderPhase.class).set(newGraphBuilderPhase);
             }
             if (isOSR) {
+                // We must not clear non liveness for OSR compilations.
+                GraphBuilderPhase graphBuilderPhase = (GraphBuilderPhase) newGbs.findPhase(GraphBuilderPhase.class).previous();
+                GraphBuilderConfiguration graphBuilderConfig = graphBuilderPhase.getGraphBuilderConfig();
+                GraphBuilderPhase newGraphBuilderPhase = new GraphBuilderPhase(graphBuilderConfig);
+                newGbs.findPhase(GraphBuilderPhase.class).set(newGraphBuilderPhase);
                 newGbs.appendPhase(new OnStackReplacementPhase());
             }
             return newGbs;

@@ -22,6 +22,8 @@
  */
 package org.graalvm.compiler.hotspot;
 
+import static org.graalvm.compiler.core.common.GraalOptions.HotSpotPrintInlining;
+import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.debug.GraalDebugConfig.areScopedGlobalMetricsEnabled;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.DebugValueSummary;
 import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Dump;
@@ -46,11 +48,11 @@ import org.graalvm.compiler.hotspot.CompilerConfigurationFactory.BackendMap;
 import org.graalvm.compiler.hotspot.debug.BenchmarkCounters;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.nodes.spi.StampProvider;
+import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.tiers.CompilerConfiguration;
 import org.graalvm.compiler.replacements.SnippetCounter;
 import org.graalvm.compiler.runtime.RuntimeProvider;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.CompareStrategy;
+import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
 import jdk.vm.ci.code.Architecture;
@@ -83,9 +85,11 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     private final HotSpotBackend hostBackend;
     private DebugValuesPrinter debugValuesPrinter;
 
-    private final EconomicMap<Class<? extends Architecture>, HotSpotBackend> backends = CollectionFactory.newMap(CompareStrategy.IDENTITY);
+    private final EconomicMap<Class<? extends Architecture>, HotSpotBackend> backends = EconomicMap.create(Equivalence.IDENTITY);
 
     private final GraalHotSpotVMConfig config;
+
+    private final OptionValues options;
 
     /**
      * @param compilerConfigurationFactory factory for the compiler configuration
@@ -94,13 +98,15 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     @SuppressWarnings("try")
     HotSpotGraalRuntime(HotSpotJVMCIRuntime jvmciRuntime, CompilerConfigurationFactory compilerConfigurationFactory) {
 
+        OptionValues initialOptions = OptionValues.GLOBAL;
         HotSpotVMConfigStore store = jvmciRuntime.getConfigStore();
-        config = new GraalHotSpotVMConfig(store);
-        CompileTheWorldOptions.overrideWithNativeOptions(config);
+        config = GeneratePIC.getValue(initialOptions) ? new AOTGraalHotSpotVMConfig(store) : new GraalHotSpotVMConfig(store);
 
         // Only set HotSpotPrintInlining if it still has its default value (false).
-        if (GraalOptions.HotSpotPrintInlining.getValue() == false) {
-            GraalOptions.HotSpotPrintInlining.setValue(config.printInlining);
+        if (GraalOptions.HotSpotPrintInlining.getValue(initialOptions) == false && config.printInlining) {
+            options = new OptionValues(initialOptions, HotSpotPrintInlining, true);
+        } else {
+            options = initialOptions;
         }
 
         CompilerConfiguration compilerConfiguration = compilerConfigurationFactory.createCompilerConfiguration();
@@ -113,7 +119,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
             if (factory == null) {
                 throw new GraalError("No backend available for host architecture \"%s\"", hostArchitecture);
             }
-            hostBackend = registerBackend(factory.createBackend(this, compilerConfiguration, jvmciRuntime, null));
+            hostBackend = registerBackend(factory.createBackend(this, options, compilerConfiguration, jvmciRuntime, null));
         }
 
         for (JVMCIBackend jvmciBackend : jvmciRuntime.getJVMCIBackends().values()) {
@@ -127,20 +133,20 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
                 throw new GraalError("No backend available for specified GPU architecture \"%s\"", gpuArchitecture);
             }
             try (InitTimer t = timer("create backend:", gpuArchitecture)) {
-                registerBackend(factory.createBackend(this, compilerConfiguration, null, hostBackend));
+                registerBackend(factory.createBackend(this, options, compilerConfiguration, null, hostBackend));
             }
         }
 
-        if (Log.getValue() == null && !areScopedGlobalMetricsEnabled() && Dump.getValue() == null && Verify.getValue() == null) {
-            if (MethodFilter.getValue() != null && !Debug.isEnabled()) {
+        if (Log.getValue(options) == null && !areScopedGlobalMetricsEnabled(options) && Dump.getValue(options) == null && Verify.getValue(options) == null) {
+            if (MethodFilter.getValue(options) != null && !Debug.isEnabled()) {
                 TTY.println("WARNING: Ignoring MethodFilter option since Log, Meter, Time, TrackMemUse, Dump and Verify options are all null");
             }
         }
 
         if (Debug.isEnabled()) {
-            DebugEnvironment.ensureInitialized(hostBackend.getProviders().getSnippetReflection());
+            DebugEnvironment.ensureInitialized(options, hostBackend.getProviders().getSnippetReflection());
 
-            String summary = DebugValueSummary.getValue();
+            String summary = DebugValueSummary.getValue(options);
             if (summary != null) {
                 switch (summary) {
                     case "Name":
@@ -155,12 +161,12 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         }
 
         if (Debug.areUnconditionalCountersEnabled() || Debug.areUnconditionalTimersEnabled() || Debug.areUnconditionalMethodMetricsEnabled() ||
-                        (Debug.isEnabled() && areScopedGlobalMetricsEnabled()) || (Debug.isEnabled() && Debug.isMethodFilteringEnabled())) {
+                        (Debug.isEnabled() && areScopedGlobalMetricsEnabled(options)) || (Debug.isEnabled() && Debug.isMethodFilteringEnabled())) {
             // This must be created here to avoid loading the DebugValuesPrinter class
             // during shutdown() which in turn can cause a deadlock
             int mmPrinterType = 0;
-            mmPrinterType |= MethodMetricsPrinter.Options.MethodMeterPrintAscii.getValue() ? 1 : 0;
-            mmPrinterType |= MethodMetricsPrinter.Options.MethodMeterFile.getValue() != null ? 2 : 0;
+            mmPrinterType |= MethodMetricsPrinter.Options.MethodMeterPrintAscii.getValue(options) ? 1 : 0;
+            mmPrinterType |= MethodMetricsPrinter.Options.MethodMeterFile.getValue(options) != null ? 2 : 0;
             switch (mmPrinterType) {
                 case 0:
                     debugValuesPrinter = new DebugValuesPrinter();
@@ -183,12 +189,12 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
         // Complete initialization of backends
         try (InitTimer st = timer(hostBackend.getTarget().arch.getName(), ".completeInitialization")) {
-            hostBackend.completeInitialization(jvmciRuntime);
+            hostBackend.completeInitialization(jvmciRuntime, options);
         }
         for (HotSpotBackend backend : backends.getValues()) {
             if (backend != hostBackend) {
                 try (InitTimer st = timer(backend.getTarget().arch.getName(), ".completeInitialization")) {
-                    backend.completeInitialization(jvmciRuntime);
+                    backend.completeInitialization(jvmciRuntime, options);
                 }
             }
         }
@@ -228,6 +234,8 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     public <T> T getCapability(Class<T> clazz) {
         if (clazz == RuntimeProvider.class) {
             return (T) this;
+        } else if (clazz == OptionValues.class) {
+            return (T) options;
         } else if (clazz == StackIntrospection.class) {
             return (T) this;
         } else if (clazz == SnippetReflectionProvider.class) {
@@ -262,7 +270,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     void shutdown() {
         if (debugValuesPrinter != null) {
-            debugValuesPrinter.printDebugValues();
+            debugValuesPrinter.printDebugValues(options);
         }
         phaseTransition("final");
 

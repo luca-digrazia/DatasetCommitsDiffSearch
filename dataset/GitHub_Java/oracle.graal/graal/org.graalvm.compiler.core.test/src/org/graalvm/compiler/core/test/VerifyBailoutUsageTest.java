@@ -30,8 +30,8 @@ import java.lang.reflect.Modifier;
 import org.junit.Test;
 
 import org.graalvm.compiler.api.test.Graal;
-import org.graalvm.compiler.core.common.PermanentBailoutException;
-import org.graalvm.compiler.core.common.RetryableBailoutException;
+import org.graalvm.compiler.common.PermanentBailoutException;
+import org.graalvm.compiler.common.RetryableBailoutException;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.DebugConfigScope;
 import org.graalvm.compiler.debug.GraalError;
@@ -121,7 +121,7 @@ public class VerifyBailoutUsageTest {
         Providers providers = rt.getHostBackend().getProviders();
         MetaAccessProvider metaAccess = providers.getMetaAccess();
         PhaseSuite<HighTierContext> graphBuilderSuite = new PhaseSuite<>();
-        Plugins plugins = new Plugins(new InvocationPlugins());
+        Plugins plugins = new Plugins(new InvocationPlugins(metaAccess));
         GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true);
         graphBuilderSuite.appendPhase(new GraphBuilderPhase(config));
         HighTierContext context = new HighTierContext(providers, graphBuilderSuite, OptimisticOptimizations.NONE);

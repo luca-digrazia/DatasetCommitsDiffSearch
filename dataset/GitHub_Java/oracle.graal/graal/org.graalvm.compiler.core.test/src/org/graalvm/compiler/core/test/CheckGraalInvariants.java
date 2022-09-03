@@ -22,13 +22,13 @@
  */
 package org.graalvm.compiler.core.test;
 
+import static org.graalvm.compiler.core.test.GraalCompilerTest.getInitialOptions;
 import static org.graalvm.compiler.debug.DelegatingDebugConfig.Feature.INTERCEPT;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -41,10 +41,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import org.graalvm.compiler.api.replacements.Snippet;
-import org.graalvm.compiler.api.replacements.Snippet.ConstantParameter;
-import org.graalvm.compiler.api.replacements.Snippet.NonNullParameter;
-import org.graalvm.compiler.api.replacements.Snippet.VarargsParameter;
 import org.graalvm.compiler.api.test.Graal;
 import org.graalvm.compiler.bytecode.BridgeMethodUtils;
 import org.graalvm.compiler.core.CompilerThreadFactory;
@@ -66,8 +62,8 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.VerifyPhase;
@@ -81,6 +77,7 @@ import org.graalvm.compiler.phases.verify.VerifyUpdateUsages;
 import org.graalvm.compiler.phases.verify.VerifyUsageWithEquals;
 import org.graalvm.compiler.phases.verify.VerifyVirtualizableUsage;
 import org.graalvm.compiler.runtime.RuntimeProvider;
+import org.graalvm.compiler.test.GraalTest;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
@@ -101,7 +98,7 @@ import jdk.vm.ci.meta.Value;
  * global invariants such as using {@link Object#equals(Object)} to compare certain types instead of
  * identity comparisons.
  */
-public class CheckGraalInvariants extends GraalCompilerTest {
+public class CheckGraalInvariants extends GraalTest {
 
     private static boolean shouldVerifyEquals(ResolvedJavaMethod m) {
         if (m.getName().equals("identityEquals")) {
@@ -117,7 +114,7 @@ public class CheckGraalInvariants extends GraalCompilerTest {
     private static boolean shouldProcess(String classpathEntry) {
         if (classpathEntry.endsWith(".jar")) {
             String name = new File(classpathEntry).getName();
-            return name.contains("jvmci") || name.contains("graal") || name.contains("jdk.internal.vm.compiler");
+            return name.contains("jvmci") || name.contains("graal") || name.contains("jdk.vm.compiler");
         }
         return false;
     }
@@ -221,7 +218,6 @@ public class CheckGraalInvariants extends GraalCompilerTest {
                                 ResolvedJavaMethod method = metaAccess.lookupJavaMethod(m);
                                 StructuredGraph graph = new StructuredGraph.Builder(options).method(method).build();
                                 try (DebugConfigScope s = Debug.setConfig(new DelegatingDebugConfig().disable(INTERCEPT)); Debug.Scope ds = Debug.scope("CheckingGraph", graph, method)) {
-                                    checkMethod(method);
                                     graphBuilderSuite.apply(graph, context);
                                     // update phi stamps
                                     graph.getNodes().filter(PhiNode.class).forEach(PhiNode::inferStamp);
@@ -284,23 +280,6 @@ public class CheckGraalInvariants extends GraalCompilerTest {
         if (Node.class.isAssignableFrom(c)) {
             if (c.getAnnotation(NodeInfo.class) == null) {
                 throw new AssertionError(String.format("Node subclass %s requires %s annotation", c.getName(), NodeClass.class.getSimpleName()));
-            }
-        }
-    }
-
-    private static void checkMethod(ResolvedJavaMethod method) {
-        if (method.getAnnotation(Snippet.class) == null) {
-            Annotation[][] parameterAnnotations = method.getParameterAnnotations();
-            for (int i = 0; i < parameterAnnotations.length; i++) {
-                for (Annotation a : parameterAnnotations[i]) {
-                    Class<? extends Annotation> annotationType = a.annotationType();
-                    if (annotationType == ConstantParameter.class || annotationType == VarargsParameter.class || annotationType == NonNullParameter.class) {
-                        VerificationError verificationError = new VerificationError("Parameter %d of %s is annotated with %s but the method is not annotated with %s", i, method,
-                                        annotationType.getSimpleName(),
-                                        Snippet.class.getSimpleName());
-                        throw verificationError;
-                    }
-                }
             }
         }
     }

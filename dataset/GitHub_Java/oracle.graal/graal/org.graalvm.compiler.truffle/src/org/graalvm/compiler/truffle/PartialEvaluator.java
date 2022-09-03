@@ -231,10 +231,12 @@ public class PartialEvaluator {
 
         private Deque<TruffleInlining> inlining;
         private OptimizedDirectCallNode lastDirectCallNode;
+        private final ReplacementsImpl replacements;
 
-        PEInlineInvokePlugin(TruffleInlining inlining) {
+        PEInlineInvokePlugin(TruffleInlining inlining, ReplacementsImpl replacements) {
             this.inlining = new ArrayDeque<>();
             this.inlining.push(inlining);
+            this.replacements = replacements;
         }
 
         @Override
@@ -242,6 +244,9 @@ public class PartialEvaluator {
             TruffleBoundary truffleBoundary = original.getAnnotation(TruffleBoundary.class);
             if (truffleBoundary != null) {
                 return truffleBoundary.throwsControlFlowException() ? InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION : InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
+            }
+            if (replacements.hasSubstitution(original, builder.bci())) {
+                return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
             }
             assert !builder.parsingIntrinsic();
 
@@ -305,20 +310,17 @@ public class PartialEvaluator {
 
         @Override
         public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments) {
-            if (invocationPlugins.lookupInvocation(original) != null || replacements.hasSubstitution(original, builder.bci())) {
-                /*
-                 * During partial evaluation, the invocation plugin or the substitution might
-                 * trigger, so we want the call to remain (we have better type information and more
-                 * constant values during partial evaluation). But there is no guarantee for that,
-                 * so we also need to preserve exception handler information for the call.
-                 */
-                return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
+            if (invocationPlugins.lookupInvocation(original) != null) {
+                return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
             } else if (loopExplosionPlugin.loopExplosionKind(original) != LoopExplosionPlugin.LoopExplosionKind.NONE) {
                 return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
             }
             TruffleBoundary truffleBoundary = original.getAnnotation(TruffleBoundary.class);
             if (truffleBoundary != null) {
                 return truffleBoundary.throwsControlFlowException() ? InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION : InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
+            }
+            if (replacements.hasSubstitution(original, builder.bci())) {
+                return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
             }
 
             if (original.equals(callSiteProxyMethod) || original.equals(callDirectMethod)) {
@@ -406,7 +408,7 @@ public class PartialEvaluator {
 
         ReplacementsImpl replacements = (ReplacementsImpl) providers.getReplacements();
         InlineInvokePlugin[] inlineInvokePlugins;
-        InlineInvokePlugin inlineInvokePlugin = new PEInlineInvokePlugin(inliningDecision);
+        InlineInvokePlugin inlineInvokePlugin = new PEInlineInvokePlugin(inliningDecision, replacements);
 
         HistogramInlineInvokePlugin histogramPlugin = null;
         if (TruffleCompilerOptions.getValue(PrintTruffleExpansionHistogram)) {

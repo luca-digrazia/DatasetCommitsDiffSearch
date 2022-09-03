@@ -38,6 +38,7 @@ import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class GraalUtil {
@@ -135,7 +136,8 @@ public class GraalUtil {
     public static StructuredGraph getGraph(GraalState graal, ResolvedJavaMethod javaMethod, boolean useProfilingInfo) {
         StructuredGraph graph = new StructuredGraph.Builder(Graal.getRequiredCapability(OptionValues.class), AllowAssumptions.YES).useProfilingInfo(useProfilingInfo).method(javaMethod).build();
         PhaseSuite<HighTierContext> graphBuilderSuite = new PhaseSuite<>();
-        graphBuilderSuite.appendPhase(new GraphBuilderPhase(GraphBuilderConfiguration.getDefault(new Plugins(new InvocationPlugins()))));
+        MetaAccessProvider metaAccess = graal.providers.getMetaAccess();
+        graphBuilderSuite.appendPhase(new GraphBuilderPhase(GraphBuilderConfiguration.getDefault(new Plugins(new InvocationPlugins(metaAccess)))));
         graphBuilderSuite.apply(graph, new HighTierContext(graal.providers, graphBuilderSuite, OptimisticOptimizations.ALL));
         return graph;
     }

@@ -22,20 +22,21 @@
  */
 package org.graalvm.compiler.core.test;
 
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.org.objectweb.asm.ClassWriter;
+import jdk.internal.org.objectweb.asm.Label;
+import jdk.internal.org.objectweb.asm.MethodVisitor;
+import jdk.internal.org.objectweb.asm.Opcodes;
+
+import org.junit.Test;
+
 import org.graalvm.compiler.java.GraphBuilderPhase;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
+import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
-import org.junit.Test;
-import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Label;
-import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Opcodes;
-
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Exercise handling of unbalanced monitor operations by the parser. Algorithmically Graal assumes
@@ -86,7 +87,7 @@ public class UnbalancedMonitorsTest extends GraalCompilerTest {
         ResolvedJavaMethod method = getResolvedJavaMethod(LOADER.findClass(INNER_CLASS_NAME), name);
         try {
             StructuredGraph graph = new StructuredGraph.Builder(getInitialOptions()).method(method).build();
-            Plugins plugins = new Plugins(new InvocationPlugins());
+            Plugins plugins = new Plugins(new InvocationPlugins(getMetaAccess()));
             GraphBuilderConfiguration graphBuilderConfig = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true);
             OptimisticOptimizations optimisticOpts = OptimisticOptimizations.NONE;
 

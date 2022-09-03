@@ -796,7 +796,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         NodeSourcePosition pos = node.getNodeSourcePosition();
         if (pos != null && methodScope.isInlinedMethod()) {
             NodeSourcePosition newPosition = pos.addCaller(methodScope.getCallerBytecodePosition());
-            try (DebugCloseable scope = node.graph().withNodeSourcePosition(newPosition)) {
+            try (DebugCloseable scope = node.graph().withoutNodeSourcePosition()) {
                 super.handleFixedNode(s, loopScope, nodeOrderId, node);
             }
             if (node.isAlive()) {

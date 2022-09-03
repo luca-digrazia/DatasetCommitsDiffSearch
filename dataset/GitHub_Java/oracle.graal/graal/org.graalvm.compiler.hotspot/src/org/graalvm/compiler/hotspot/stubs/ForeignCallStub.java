@@ -32,7 +32,6 @@ import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.LocationIdentity;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
-import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.debug.Debug;
@@ -50,7 +49,6 @@ import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.phases.common.RemoveValueProxyPhase;
 import org.graalvm.compiler.replacements.GraphKit;
 import org.graalvm.compiler.replacements.nodes.ReadRegisterNode;
 import org.graalvm.compiler.word.Word;
@@ -58,7 +56,6 @@ import org.graalvm.compiler.word.WordTypes;
 
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
 import jdk.vm.ci.hotspot.HotSpotSignature;
-import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaMethod;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -243,13 +240,15 @@ public class ForeignCallStub extends Stub {
         }
         kit.append(new ReturnNode(linkage.getDescriptor().getResultType() == void.class ? null : result));
 
-        Debug.dump(Debug.VERBOSE_LOG_LEVEL, graph, "Initial stub graph");
+        if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL)) {
+            Debug.dump(Debug.INFO_LOG_LEVEL, graph, "Initial stub graph");
+        }
 
         kit.inlineInvokes();
 
-        new RemoveValueProxyPhase().apply(graph);
-
-        Debug.dump(Debug.VERBOSE_LOG_LEVEL, graph, "Stub graph before compilation");
+        if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL)) {
+            Debug.dump(Debug.INFO_LOG_LEVEL, graph, "Stub graph before compilation");
+        }
 
         return graph;
     }
@@ -267,14 +266,13 @@ public class ForeignCallStub extends Stub {
     }
 
     private StubForeignCallNode createTargetCall(GraphKit kit, ParameterNode[] params, ReadRegisterNode thread) {
-        Stamp stamp = StampFactory.forKind(JavaKind.fromJavaClass(target.getDescriptor().getResultType()));
         if (prependThread) {
             ValueNode[] targetArguments = new ValueNode[1 + params.length];
             targetArguments[0] = thread;
             System.arraycopy(params, 0, targetArguments, 1, params.length);
-            return kit.append(new StubForeignCallNode(providers.getForeignCalls(), stamp, target.getDescriptor(), targetArguments));
+            return kit.append(new StubForeignCallNode(providers.getForeignCalls(), target.getDescriptor(), targetArguments));
         } else {
-            return kit.append(new StubForeignCallNode(providers.getForeignCalls(), stamp, target.getDescriptor(), params));
+            return kit.append(new StubForeignCallNode(providers.getForeignCalls(), target.getDescriptor(), params));
         }
     }
 }

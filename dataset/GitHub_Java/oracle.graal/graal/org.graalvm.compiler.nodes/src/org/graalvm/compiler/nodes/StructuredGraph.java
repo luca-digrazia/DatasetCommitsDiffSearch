@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-import org.graalvm.compiler.core.common.CancellationBailoutException;
+import org.graalvm.compiler.common.CancellationBailoutException;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
@@ -236,7 +236,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     private GuardsStage guardsStage = GuardsStage.FLOATING_GUARDS;
     private boolean isAfterFloatingReadPhase = false;
     private boolean hasValueProxies = true;
-    private boolean allowShortCircuitOr = true;
     private final boolean useProfilingInfo;
     private final Cancellable cancellable;
     /**
@@ -427,7 +426,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         copy.setGuardsStage(getGuardsStage());
         copy.isAfterFloatingReadPhase = isAfterFloatingReadPhase;
         copy.hasValueProxies = hasValueProxies;
-        copy.allowShortCircuitOr = allowShortCircuitOr;
         EconomicMap<Node, Node> replacements = EconomicMap.create(Equivalence.IDENTITY);
         replacements.put(start, copy.start);
         UnmodifiableEconomicMap<Node, Node> duplicates = copy.addDuplicates(getNodes(), this, this.getNodeCount(), replacements);
@@ -537,7 +535,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     }
 
     @SuppressWarnings("static-method")
-    public void replaceFixedWithFloating(FixedWithNextNode node, ValueNode replacement) {
+    public void replaceFixedWithFloating(FixedWithNextNode node, FloatingNode replacement) {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
         GraphUtil.unlinkFixedNode(node);
         node.replaceAtUsagesAndDelete(replacement);
@@ -704,15 +702,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         hasValueProxies = state;
     }
 
-    public boolean allowShortCircuitOr() {
-        return allowShortCircuitOr;
-    }
-
-    public void setAllowShortCircuitOr(boolean state) {
-        assert !state : "cannot 'unapply' logic expansion";
-        allowShortCircuitOr = state;
-    }
-
     /**
      * Determines if {@link ProfilingInfo} is used during construction of this graph.
      */
@@ -874,10 +863,5 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
             }
         }
         return false;
-    }
-
-    @Override
-    protected void afterRegister(Node node) {
-        assert hasValueProxies() || !(node instanceof ValueProxyNode);
     }
 }

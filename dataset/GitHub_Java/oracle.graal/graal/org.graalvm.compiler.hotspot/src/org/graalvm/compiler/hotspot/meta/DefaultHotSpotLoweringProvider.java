@@ -37,6 +37,9 @@ import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.HUB_WRITE_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_LAYOUT_HELPER_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION;
+import static org.graalvm.compiler.hotspot.replacements.NewObjectSnippets.INIT_LOCATION;
+import static org.graalvm.compiler.options.OptionValues.GLOBAL;
+
 import java.lang.ref.Reference;
 
 import org.graalvm.compiler.api.directives.GraalDirectives;
@@ -125,7 +128,7 @@ import org.graalvm.compiler.nodes.extended.OSRLockNode;
 import org.graalvm.compiler.nodes.extended.OSRMonitorEnterNode;
 import org.graalvm.compiler.nodes.extended.OSRStartNode;
 import org.graalvm.compiler.nodes.extended.StoreHubNode;
-import org.graalvm.compiler.nodes.extended.RawLoadNode;
+import org.graalvm.compiler.nodes.extended.UnsafeLoadNode;
 import org.graalvm.compiler.nodes.java.ClassIsAssignableFromNode;
 import org.graalvm.compiler.nodes.java.DynamicNewArrayNode;
 import org.graalvm.compiler.nodes.java.DynamicNewInstanceNode;
@@ -197,28 +200,24 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
 
     @Override
     public void initialize(OptionValues options, HotSpotProviders providers, GraalHotSpotVMConfig config) {
-        super.initialize(options, runtime, providers, providers.getSnippetReflection());
+        super.initialize(options, providers, providers.getSnippetReflection());
 
         assert target == providers.getCodeCache().getTarget();
-        instanceofSnippets = new InstanceOfSnippets.Templates(options, runtime, providers, target);
-        newObjectSnippets = new NewObjectSnippets.Templates(options, runtime, providers, target, config);
-        monitorSnippets = new MonitorSnippets.Templates(options, runtime, providers, target, config.useFastLocking);
-        writeBarrierSnippets = new WriteBarrierSnippets.Templates(options, runtime, providers, target, config.useCompressedOops ? config.getOopEncoding() : null);
+        instanceofSnippets = new InstanceOfSnippets.Templates(options, providers, target);
+        newObjectSnippets = new NewObjectSnippets.Templates(options, providers, target, config);
+        monitorSnippets = new MonitorSnippets.Templates(options, providers, target, config.useFastLocking);
+        writeBarrierSnippets = new WriteBarrierSnippets.Templates(options, providers, target, config.useCompressedOops ? config.getOopEncoding() : null);
         exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(options, providers, target);
         unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(options, providers, target);
         assertionSnippets = new AssertionSnippets.Templates(options, providers, target);
-        arraycopySnippets = new ArrayCopySnippets.Templates(options, runtime, providers, target);
+        arraycopySnippets = new ArrayCopySnippets.Templates(options, providers, target);
         stringToBytesSnippets = new StringToBytesSnippets.Templates(options, providers, target);
         hashCodeSnippets = new HashCodeSnippets.Templates(options, providers, target);
-        if (GeneratePIC.getValue(options)) {
+        if (GeneratePIC.getValue(GLOBAL)) {
             resolveConstantSnippets = new ResolveConstantSnippets.Templates(options, providers, target);
             profileSnippets = new ProfileSnippets.Templates(options, providers, target);
         }
         providers.getReplacements().registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(options, providers, target));
-    }
-
-    public MonitorSnippets.Templates getMonitorSnippets() {
-        return monitorSnippets;
     }
 
     @Override
@@ -518,7 +517,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     }
 
     @Override
-    protected void lowerUnsafeLoadNode(RawLoadNode load, LoweringTool tool) {
+    protected void lowerUnsafeLoadNode(UnsafeLoadNode load, LoweringTool tool) {
         StructuredGraph graph = load.graph();
         if (!(load instanceof GuardedUnsafeLoadNode) && !graph.getGuardsStage().allowsFloatingGuards() && addReadBarrier(load)) {
             unsafeLoadSnippets.lower(load, tool);
@@ -687,7 +686,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         graph.replaceFixedWithFixed(node, foreignCallNode);
     }
 
-    private boolean addReadBarrier(RawLoadNode load) {
+    private boolean addReadBarrier(UnsafeLoadNode load) {
         if (runtime.getVMConfig().useG1GC && load.graph().getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS && load.object().getStackKind() == JavaKind.Object &&
                         load.accessKind() == JavaKind.Object && !StampTool.isPointerAlwaysNull(load.object())) {
             ResolvedJavaType type = StampTool.typeOrNull(load.object());
@@ -780,5 +779,10 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     @Override
     public int arrayLengthOffset() {
         return runtime.getVMConfig().arrayOopDescLengthOffset();
+    }
+
+    @Override
+    public LocationIdentity initLocationIdentity() {
+        return INIT_LOCATION;
     }
 }
