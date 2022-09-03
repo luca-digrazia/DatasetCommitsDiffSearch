@@ -22,11 +22,13 @@
  */
 package com.oracle.graal.nodes;
 
+import java.util.*;
+
 import com.oracle.graal.nodes.type.*;
 
 public abstract class FixedNode extends ValueNode {
 
-    @Data private double probability;
+    private double probability;
 
     public FixedNode(Stamp stamp) {
         super(stamp);
@@ -42,6 +44,13 @@ public abstract class FixedNode extends ValueNode {
 
     protected void copyInto(FixedNode newNode) {
         newNode.setProbability(probability);
+    }
+
+    @Override
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("probability", String.format(Locale.ENGLISH, "%7.5f", probability));
+        return properties;
     }
 
     @Override
