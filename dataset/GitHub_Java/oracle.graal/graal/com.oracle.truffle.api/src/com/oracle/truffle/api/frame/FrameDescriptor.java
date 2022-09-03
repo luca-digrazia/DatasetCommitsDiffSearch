@@ -39,7 +39,6 @@ public final class FrameDescriptor implements Cloneable {
     private final ArrayList<FrameSlotImpl> slots;
     private final HashMap<Object, FrameSlotImpl> identifierToSlotMap;
     private Assumption version;
-    private HashMap<Object, Assumption> identifierToNotInFrameAssumptionMap;
 
     public FrameDescriptor() {
         this(DefaultFrameTypeConversion.getInstance());
@@ -62,7 +61,6 @@ public final class FrameDescriptor implements Cloneable {
         slots.add(slot);
         identifierToSlotMap.put(identifier, slot);
         updateVersion();
-        invalidateNotInFrameAssumption(identifier);
         return slot;
     }
 
@@ -134,33 +132,5 @@ public final class FrameDescriptor implements Cloneable {
 
     public FrameTypeConversion getTypeConversion() {
         return typeConversion;
-    }
-
-    public Assumption getNotInFrameAssumption(Object identifier) {
-        if (identifierToSlotMap.containsKey(identifier)) {
-            throw new IllegalArgumentException("Cannot get not-in-frame assumption for existing frame slot!");
-        }
-
-        if (identifierToNotInFrameAssumptionMap == null) {
-            identifierToNotInFrameAssumptionMap = new HashMap<>();
-        } else {
-            Assumption assumption = identifierToNotInFrameAssumptionMap.get(identifier);
-            if (assumption != null) {
-                return assumption;
-            }
-        }
-        Assumption assumption = Truffle.getRuntime().createAssumption("not in frame: " + identifier);
-        identifierToNotInFrameAssumptionMap.put(identifier, assumption);
-        return assumption;
-    }
-
-    private void invalidateNotInFrameAssumption(Object identifier) {
-        if (identifierToNotInFrameAssumptionMap != null) {
-            Assumption assumption = identifierToNotInFrameAssumptionMap.get(identifier);
-            if (assumption != null) {
-                assumption.invalidate();
-                identifierToNotInFrameAssumptionMap.remove(identifier);
-            }
-        }
     }
 }
