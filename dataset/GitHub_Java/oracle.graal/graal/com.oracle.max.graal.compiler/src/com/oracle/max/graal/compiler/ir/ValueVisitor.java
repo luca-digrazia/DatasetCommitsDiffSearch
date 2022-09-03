@@ -35,21 +35,22 @@ public abstract class ValueVisitor {
     public abstract void visitArrayLength(ArrayLength i);
     public abstract void visitMerge(Merge i);
     public abstract void visitCheckCast(CheckCast i);
-    public abstract void visitMaterialize(NormalizeCompare i);
+    public abstract void visitNormalizeCompare(NormalizeCompare i);
     public abstract void visitConstant(Constant i);
     public abstract void visitConvert(Convert i);
     public abstract void visitExceptionObject(ExceptionObject i);
+    public abstract void visitEndNode(EndNode i);
     public abstract void visitFrameState(FrameState i);
     public abstract void visitAnchor(Anchor i);
     public abstract void visitIf(If i);
-    public abstract void visitIfOp(Conditional i);
-    public abstract void visitInstanceOf(InstanceOf i);
     public abstract void visitInvoke(Invoke i);
     public abstract void visitLoadField(LoadField i);
     public abstract void visitLoadIndexed(LoadIndexed i);
     public abstract void visitLocal(Local i);
     public abstract void visitLogic(Logic i);
     public abstract void visitLookupSwitch(LookupSwitch i);
+    public abstract void visitMemoryRead(ReadNode i);
+    public abstract void visitMemoryWrite(WriteNode i);
     public abstract void visitMonitorAddress(MonitorAddress monitorAddress);
     public abstract void visitMonitorEnter(MonitorEnter i);
     public abstract void visitMonitorExit(MonitorExit i);
@@ -67,10 +68,10 @@ public abstract class ValueVisitor {
     public abstract void visitStoreIndexed(StoreIndexed i);
     public abstract void visitTableSwitch(TableSwitch i);
     public abstract void visitDeoptimize(Deoptimize deoptimize);
-    public abstract void visitExceptionDispatch(ExceptionDispatch exceptionDispatch);
     public abstract void visitUnwind(Unwind unwind);
     public abstract void visitLoopBegin(LoopBegin loopBegin);
     public abstract void visitLoopEnd(LoopEnd loopEnd);
     public abstract void visitValueAnchor(ValueAnchor valueAnchor);
     public abstract void visitGuardNode(GuardNode guardNode);
+    public abstract void visitMathIntrinsic(MathIntrinsic node);
 }
