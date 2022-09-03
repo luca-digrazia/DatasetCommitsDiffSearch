@@ -25,19 +25,14 @@ package com.oracle.graal.nodes.spi;
 import java.lang.annotation.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.*;
 
 /**
  * Denotes a macro substitute method. This replaces a method invocation with an instance of the
- * {@link #macro() specified} node class.
- * <p>
- * A macro substitution can be combined with a {@link MethodSubstitution method substitution}. In
- * this case, if the macro is not removed during canonicalization, it is lowered via the method
- * substitution.
- * <p>
- * If a macro is not combined with a method substitution, it is lowered to an invocation of the
- * original method.
+ * specified node class.
+ * 
+ * A macro substitution can be combined with a normal substitution, so that the macro node can be
+ * replaced with the actual substitution code during lowering.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
@@ -78,13 +73,4 @@ public @interface MacroSubstitution {
      * an {@link InvokeNode} as a parameter.
      */
     Class<? extends FixedWithNextNode> macro();
-
-    /**
-     * Determines if this method should be substituted in all cases, even if inlining thinks it is
-     * not important.
-     * 
-     * Note that this is still depending on whether inlining sees the correct call target, so it's
-     * only a hard guarantee for static and special invocations.
-     */
-    boolean forced() default false;
 }
