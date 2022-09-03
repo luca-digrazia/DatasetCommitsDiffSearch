@@ -66,7 +66,7 @@ public class ConditionalEliminationPhase extends Phase {
         new ConditionalElimination(graph.start(), new State()).apply();
     }
 
-    public static class State extends MergeableState<State> {
+    public static class State implements MergeableState<State> {
 
         private IdentityHashMap<ValueNode, ResolvedJavaType> knownTypes;
         private HashSet<ValueNode> knownNonNull;
@@ -205,6 +205,18 @@ public class ConditionalEliminationPhase extends Phase {
 
         public boolean isNonNull(ValueNode value) {
             return value.objectStamp().nonNull() || knownNonNull.contains(GraphUtil.unproxify(value));
+        }
+
+        @Override
+        public void loopBegin(LoopBeginNode loopBegin) {
+        }
+
+        @Override
+        public void loopEnds(LoopBeginNode loopBegin, List<State> loopEndStates) {
+        }
+
+        @Override
+        public void afterSplit(AbstractBeginNode node) {
         }
 
         @Override
