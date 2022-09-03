@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,117 +22,112 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.security.AlgorithmParameters;
+import java.security.SecureRandom;
 
-import java.io.*;
-import java.lang.reflect.*;
-import java.security.*;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 
-import javax.crypto.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import org.junit.*;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.hotspot.meta.HotSpotGraphBuilderPlugins;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.nodes.*;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
- * Tests the intrinsicification of certain crypto methods.
+ * Tests the intrinsification of certain crypto methods.
  */
-public class HotSpotCryptoSubstitutionTest extends GraalCompilerTest {
+public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
 
     @Override
-    protected InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, StructuredGraph graph) {
-        HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotNmethod installedCode = new HotSpotNmethod(hsMethod, graph, true);
-        HotSpotCompiledNmethod compiledNmethod = new HotSpotCompiledNmethod(hsMethod, StructuredGraph.INVOCATION_ENTRY_BCI, compResult);
-        CodeInstallResult result = graalRuntime().getCompilerToVM().installCode(compiledNmethod, installedCode, null);
-        Assert.assertEquals("Error installing method " + method + ": " + result, result, CodeInstallResult.OK);
-        if (Debug.isDumpEnabled()) {
-            Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
-        }
-
-        // HotSpotRuntime hsRuntime = (HotSpotRuntime) runtime;
-        // TTY.println(hsMethod.toString());
-        // TTY.println(hsRuntime.disassemble(installedCode));
-        return installedCode;
+    protected InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult) {
+        return getBackend().createDefaultInstalledCode(method, compResult);
     }
 
-    @Test
-    public void testAESEncryptSubstitution() throws Exception {
+    SecretKey aesKey;
+    SecretKey desKey;
+    byte[] input;
+    ByteArrayOutputStream aesExpected = new ByteArrayOutputStream();
+    ByteArrayOutputStream desExpected = new ByteArrayOutputStream();
+
+    public HotSpotCryptoSubstitutionTest() throws Exception {
         byte[] seed = {0x4, 0x7, 0x1, 0x1};
         SecureRandom random = new SecureRandom(seed);
         KeyGenerator aesKeyGen = KeyGenerator.getInstance("AES");
+        KeyGenerator desKeyGen = KeyGenerator.getInstance("DESede");
         aesKeyGen.init(128, random);
-        SecretKey aesKey = aesKeyGen.generateKey();
-        byte[] input = readClassfile16(getClass());
+        desKeyGen.init(168, random);
+        aesKey = aesKeyGen.generateKey();
+        desKey = desKeyGen.generateKey();
+        input = readClassfile16(getClass());
 
-        ByteArrayOutputStream expected = new ByteArrayOutputStream();
-        expected.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding", input));
-        expected.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding", input));
+        aesExpected.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding"));
+        aesExpected.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding"));
 
-        if (compiledAndInstall("com.sun.crypto.provider.AESCrypt", "encryptBlock", "decryptBlock")) {
+        desExpected.write(runEncryptDecrypt(desKey, "DESede/CBC/NoPadding"));
+        desExpected.write(runEncryptDecrypt(desKey, "DESede/CBC/PKCS5Padding"));
+    }
+
+    @Test
+    public void testAESCryptIntrinsics() throws Exception {
+        if (compileAndInstall("com.sun.crypto.provider.AESCrypt", HotSpotGraphBuilderPlugins.aesEncryptName, HotSpotGraphBuilderPlugins.aesDecryptName)) {
             ByteArrayOutputStream actual = new ByteArrayOutputStream();
-            actual.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding", input));
-            actual.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding", input));
-            Assert.assertArrayEquals(expected.toByteArray(), actual.toByteArray());
+            actual.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding"));
+            actual.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding"));
+            Assert.assertArrayEquals(aesExpected.toByteArray(), actual.toByteArray());
         }
+    }
 
-        if (compiledAndInstall("com.sun.crypto.provider.CipherBlockChaining", "encrypt", "decrypt")) {
+    @Test
+    public void testCipherBlockChainingIntrinsics() throws Exception {
+        if (compileAndInstall("com.sun.crypto.provider.CipherBlockChaining", HotSpotGraphBuilderPlugins.cbcEncryptName, HotSpotGraphBuilderPlugins.cbcDecryptName)) {
             ByteArrayOutputStream actual = new ByteArrayOutputStream();
-            actual.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding", input));
-            actual.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding", input));
-            Assert.assertArrayEquals(expected.toByteArray(), actual.toByteArray());
+            actual.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding"));
+            actual.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding"));
+            Assert.assertArrayEquals(aesExpected.toByteArray(), actual.toByteArray());
+
+            actual.reset();
+            actual.write(runEncryptDecrypt(desKey, "DESede/CBC/NoPadding"));
+            actual.write(runEncryptDecrypt(desKey, "DESede/CBC/PKCS5Padding"));
+            Assert.assertArrayEquals(desExpected.toByteArray(), actual.toByteArray());
         }
     }
 
     /**
      * Compiles and installs the substitution for some specified methods. Once installed, the next
      * execution of the methods will use the newly installed code.
-     * 
+     *
      * @param className the name of the class for which substitutions are available
      * @param methodNames the names of the substituted methods
      * @return true if at least one substitution was compiled and installed
      */
-    private boolean compiledAndInstall(String className, String... methodNames) {
-        boolean atLeastOneCompiled = false;
-        for (String methodName : methodNames) {
-            Method method = lookup(className, methodName);
-            if (method != null) {
-                ResolvedJavaMethod installedCodeOwner = runtime.lookupJavaMethod(method);
-                StructuredGraph graph = replacements.getMethodSubstitution(installedCodeOwner);
-                if (graph != null) {
-                    Assert.assertNotNull(getCode(installedCodeOwner, graph, true));
-                    atLeastOneCompiled = true;
-                } else {
-                    Assert.assertFalse(graalRuntime().getConfig().useAESIntrinsics);
-                }
-            }
+    private boolean compileAndInstall(String className, String... methodNames) {
+        if (!runtime().getVMConfig().useAESIntrinsics) {
+            return false;
         }
-        return atLeastOneCompiled;
-    }
-
-    private static Method lookup(String className, String methodName) {
-        Class c;
+        Class<?> c;
         try {
             c = Class.forName(className);
-            for (Method m : c.getDeclaredMethods()) {
-                if (m.getName().equals(methodName)) {
-                    return m;
-                }
-            }
-            // If the expected security provider exists, the specific method should also exist
-            throw new NoSuchMethodError(className + "." + methodName);
         } catch (ClassNotFoundException e) {
             // It's ok to not find the class - a different security provider
             // may have been installed
-            return null;
+            return false;
         }
+        boolean atLeastOneCompiled = false;
+        for (String methodName : methodNames) {
+            if (compileAndInstallSubstitution(c, methodName) != null) {
+                atLeastOneCompiled = true;
+            }
+        }
+        return atLeastOneCompiled;
     }
 
     AlgorithmParameters algorithmParameters;
@@ -171,7 +166,7 @@ public class HotSpotCryptoSubstitutionTest extends GraalCompilerTest {
         return result;
     }
 
-    private static byte[] readClassfile16(Class c) throws IOException {
+    private static byte[] readClassfile16(Class<? extends HotSpotCryptoSubstitutionTest> c) throws IOException {
         String classFilePath = "/" + c.getName().replace('.', '/') + ".class";
         InputStream stream = c.getResourceAsStream(classFilePath);
         int bytesToRead = stream.available();
@@ -181,7 +176,7 @@ public class HotSpotCryptoSubstitutionTest extends GraalCompilerTest {
         return classFile;
     }
 
-    public byte[] runEncryptDecrypt(SecretKey key, String algorithm, byte[] input) throws Exception {
+    public byte[] runEncryptDecrypt(SecretKey key, String algorithm) throws Exception {
         byte[] indata = input.clone();
         byte[] cipher = encrypt(indata, key, algorithm);
         byte[] plain = decrypt(cipher, key, algorithm);
