@@ -22,21 +22,19 @@
  */
 package com.oracle.graal.nodes;
 
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.meta.JavaKind;
+
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.IterableNodeType;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeCycles;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodes.memory.MemoryMapNode;
 import com.oracle.graal.nodes.spi.LIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.JavaKind;
-
-@NodeInfo(cycles = NodeCycles.CYCLES_UNKNOWN, size = NodeSize.SIZE_UNKNOWN)
+@NodeInfo
 public final class ReturnNode extends ControlSinkNode implements LIRLowerable, IterableNodeType {
 
     public static final NodeClass<ReturnNode> TYPE = NodeClass.create(ReturnNode.class);
@@ -80,7 +78,7 @@ public final class ReturnNode extends ControlSinkNode implements LIRLowerable, I
         if (graph().method() != null) {
             JavaKind actual = result == null ? JavaKind.Void : result.getStackKind();
             JavaKind expected = graph().method().getSignature().getReturnKind().getStackKind();
-            if (actual == target.wordJavaKind && expected == JavaKind.Object) {
+            if (actual == target.wordKind && expected == JavaKind.Object) {
                 // OK, we're compiling a snippet that returns a Word
                 return true;
             }
