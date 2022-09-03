@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,9 +25,6 @@ package org.graalvm.compiler.virtual.phases.ea;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.EconomicSet;
-import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -64,6 +59,9 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.graph.ReentrantBlockIterator;
 import org.graalvm.compiler.phases.graph.ReentrantBlockIterator.BlockIteratorClosure;
 import org.graalvm.compiler.phases.graph.ReentrantBlockIterator.LoopInfo;
+import org.graalvm.util.EconomicMap;
+import org.graalvm.util.EconomicSet;
+import org.graalvm.util.Equivalence;
 import org.graalvm.word.LocationIdentity;
 
 public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> extends EffectsPhase.Closure<BlockT> {
@@ -295,7 +293,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
     protected final List<BlockT> processLoop(Loop<Block> loop, BlockT initialState) {
         if (initialState.isDead()) {
             ArrayList<BlockT> states = new ArrayList<>();
-            for (int i = 0; i < loop.getLoopExits().size(); i++) {
+            for (int i = 0; i < loop.getExits().size(); i++) {
                 states.add(initialState);
             }
             return states;
@@ -347,7 +345,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                     blockEffects.get(loop.getHeader()).insertAll(mergeProcessor.mergeEffects, 0);
                     loopMergeEffects.put(loop, mergeProcessor.afterMergeEffects);
 
-                    assert info.exitStates.size() == loop.getLoopExits().size();
+                    assert info.exitStates.size() == loop.getExits().size();
                     loopEntryStates.put((LoopBeginNode) loop.getHeader().getBeginNode(), loopEntryState);
                     assert assertExitStatesNonEmpty(loop, info);
 
@@ -412,8 +410,8 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
     }
 
     private boolean assertExitStatesNonEmpty(Loop<Block> loop, LoopInfo<BlockT> info) {
-        for (int i = 0; i < loop.getLoopExits().size(); i++) {
-            assert info.exitStates.get(i) != null : "no loop exit state at " + loop.getLoopExits().get(i) + " / " + loop.getHeader();
+        for (int i = 0; i < loop.getExits().size(); i++) {
+            assert info.exitStates.get(i) != null : "no loop exit state at " + loop.getExits().get(i) + " / " + loop.getHeader();
         }
         return true;
     }

@@ -38,25 +38,19 @@ import org.graalvm.compiler.nodes.spi.LoweringTool;
 import jdk.vm.ci.meta.JavaKind;
 
 /**
- * Produces the platform dependent first or second half of a long or double value as an int.
+ * Produces the platform dependent first or second half of a long or double value.
  */
 @NodeInfo(cycles = NodeCycles.CYCLES_2)
-public final class UnpackEndianHalfNode extends UnaryNode implements Lowerable {
+public class UnpackEndianHalfNode extends UnaryNode implements Lowerable {
     public static final NodeClass<UnpackEndianHalfNode> TYPE = NodeClass.create(UnpackEndianHalfNode.class);
 
     private final boolean firstHalf;
 
-    protected UnpackEndianHalfNode(ValueNode value, boolean firstHalf) {
-        super(TYPE, StampFactory.forKind(JavaKind.Int), value);
+    public UnpackEndianHalfNode(ValueNode value, JavaKind kind, boolean firstHalf) {
+        super(TYPE, StampFactory.forKind(kind), value);
+        assert kind == JavaKind.Int || kind == JavaKind.Float;
         assert value.getStackKind() == JavaKind.Double || value.getStackKind() == JavaKind.Long : "unexpected kind " + value.getStackKind();
         this.firstHalf = firstHalf;
-    }
-
-    public static ValueNode create(ValueNode value, boolean firstHalf) {
-        if (value.isConstant() && value.asConstant().isDefaultForKind()) {
-            return ConstantNode.defaultForKind(JavaKind.Int);
-        }
-        return new UnpackEndianHalfNode(value, firstHalf);
     }
 
     public boolean isFirstHalf() {
@@ -78,10 +72,10 @@ public final class UnpackEndianHalfNode extends UnaryNode implements Lowerable {
 
     public void lower(ByteOrder byteOrder) {
         ValueNode result = value;
-        if (value.getStackKind() == JavaKind.Double) {
+        if (result.getStackKind() == JavaKind.Double) {
             result = graph().unique(new ReinterpretNode(JavaKind.Long, value));
         }
-        if ((byteOrder == ByteOrder.LITTLE_ENDIAN) == firstHalf) {
+        if (byteOrder == ByteOrder.LITTLE_ENDIAN) {
             result = graph().unique(new UnsignedRightShiftNode(result, ConstantNode.forInt(32, graph())));
         }
         result = IntegerConvertNode.convert(result, StampFactory.forKind(JavaKind.Int), graph());

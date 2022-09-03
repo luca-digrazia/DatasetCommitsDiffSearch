@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -73,16 +71,12 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
     }
 
     public StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value) {
-        this(object, field, value, field.isVolatile());
-    }
-
-    public StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value, boolean volatileAccess) {
-        super(TYPE, StampFactory.forVoid(), object, field, volatileAccess);
+        super(TYPE, StampFactory.forVoid(), object, field);
         this.value = value;
     }
 
-    public StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value, FrameState stateAfter, boolean volatileAccess) {
-        super(TYPE, StampFactory.forVoid(), object, field, volatileAccess);
+    public StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value, FrameState stateAfter) {
+        super(TYPE, StampFactory.forVoid(), object, field);
         this.value = value;
         this.stateAfter = stateAfter;
     }
@@ -106,7 +100,7 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
 
     @Override
     public NodeCycles estimatedNodeCycles() {
-        if (isVolatile()) {
+        if (field.isVolatile()) {
             return CYCLES_8;
         }
         return super.estimatedNodeCycles();

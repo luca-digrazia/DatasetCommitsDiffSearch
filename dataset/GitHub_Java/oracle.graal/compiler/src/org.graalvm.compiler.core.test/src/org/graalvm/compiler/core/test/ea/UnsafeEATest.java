@@ -173,8 +173,7 @@ public class UnsafeEATest extends EATestBase {
 
     @Test
     public void testSimpleDoubleOverwriteWithSecondInt() {
-        int value = (int) (Double.doubleToRawLongBits(10.1) >> (getTarget().arch.getByteOrder() == ByteOrder.BIG_ENDIAN ? 32 : 0));
-        testEscapeAnalysis("testSimpleDoubleOverwriteWithSecondIntSnippet", JavaConstant.forInt(value), false);
+        testEscapeAnalysis("testSimpleDoubleOverwriteWithIntSnippet", JavaConstant.forInt(10), false);
     }
 
     public static int testSimpleDoubleOverwriteWithSecondIntSnippet() {
