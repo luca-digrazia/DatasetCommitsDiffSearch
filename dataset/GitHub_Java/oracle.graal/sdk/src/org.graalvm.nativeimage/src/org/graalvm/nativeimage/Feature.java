@@ -160,14 +160,6 @@ public interface Feature {
     }
 
     /**
-     * Access methods available for {@link Feature#afterAnalysis}.
-     */
-    @Platforms(Platform.HOSTED_ONLY.class)
-    interface AfterAnalysisAccess extends FeatureAccess {
-
-    }
-
-    /**
      * Access methods available for {@link Feature#beforeCompilation} and
      * {@link Feature#afterCompilation}.
      */
@@ -284,14 +276,6 @@ public interface Feature {
      * @param access The supported operations that the feature can perform at this time
      */
     default void duringAnalysis(DuringAnalysisAccess access) {
-    }
-
-    /**
-     * Handler for initializations after analysis and before universe creation.
-     *
-     * @param access The supported operations that the feature can perform at this time
-     */
-    default void afterAnalysis(AfterAnalysisAccess access) {
     }
 
     /**
