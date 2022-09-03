@@ -193,19 +193,13 @@ public final class NodeClass extends FieldIntrospection {
             this.iterableId = nextIterableId++;
             List<NodeClass> existingClasses = new LinkedList<>();
             for (FieldIntrospection nodeClass : allClasses.values()) {
-                // There are duplicate entries in allClasses when using generated nodes
-                // hence the extra logic below guarded by USE_GENERATED_NODES
                 if (clazz.isAssignableFrom(nodeClass.getClazz())) {
-                    if (!USE_GENERATED_NODES || !existingClasses.contains(nodeClass)) {
-                        existingClasses.add((NodeClass) nodeClass);
-                    }
+                    existingClasses.add((NodeClass) nodeClass);
                 }
                 if (nodeClass.getClazz().isAssignableFrom(clazz) && IterableNodeType.class.isAssignableFrom(nodeClass.getClazz())) {
                     NodeClass superNodeClass = (NodeClass) nodeClass;
-                    if (!USE_GENERATED_NODES || !containsId(this.iterableId, superNodeClass.iterableIds)) {
-                        superNodeClass.iterableIds = Arrays.copyOf(superNodeClass.iterableIds, superNodeClass.iterableIds.length + 1);
-                        superNodeClass.iterableIds[superNodeClass.iterableIds.length - 1] = this.iterableId;
-                    }
+                    superNodeClass.iterableIds = Arrays.copyOf(superNodeClass.iterableIds, superNodeClass.iterableIds.length + 1);
+                    superNodeClass.iterableIds[superNodeClass.iterableIds.length - 1] = this.iterableId;
                 }
             }
             int[] ids = new int[existingClasses.size() + 1];
@@ -221,15 +215,6 @@ public final class NodeClass extends FieldIntrospection {
         }
         isLeafNode = (this.inputOffsets.length == 0 && this.successorOffsets.length == 0);
         nodeIterableCount = Debug.metric("NodeIterable_%s", shortName);
-    }
-
-    private static boolean containsId(int iterableId, int[] iterableIds) {
-        for (int i : iterableIds) {
-            if (i == iterableId) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @Override
