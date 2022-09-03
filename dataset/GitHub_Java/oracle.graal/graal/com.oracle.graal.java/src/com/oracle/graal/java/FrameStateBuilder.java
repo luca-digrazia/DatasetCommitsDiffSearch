@@ -54,6 +54,8 @@ import jdk.vm.ci.meta.Signature;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.debug.Debug;
+import com.oracle.graal.graphbuilderconf.IntrinsicContext.SideEffectsState;
+import com.oracle.graal.graphbuilderconf.ParameterPlugin;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.nodeinfo.Verbosity;
 import com.oracle.graal.nodes.AbstractMergeNode;
@@ -69,8 +71,6 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.ValuePhiNode;
 import com.oracle.graal.nodes.ValueProxyNode;
 import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.graphbuilderconf.ParameterPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.SideEffectsState;
 import com.oracle.graal.nodes.java.MonitorIdNode;
 import com.oracle.graal.nodes.util.GraphUtil;
 
@@ -446,7 +446,8 @@ public final class FrameStateBuilder implements SideEffectsState {
 
         // Remove the phi function from all FrameStates where it is used and then delete it.
         assert node.usages().filter(isNotA(FrameState.class).nor(ValuePhiNode.class).nor(ProxyNode.class)).isEmpty() : "phi function that gets deletes must only be used in frame states";
-        node.replaceAtUsagesAndDelete(null);
+        node.replaceAtUsages(null);
+        node.safeDelete();
 
         for (FloatingNode phiUsage : propagateUsages) {
             propagateDelete(phiUsage);
