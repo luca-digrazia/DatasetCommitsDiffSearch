@@ -39,10 +39,10 @@ public class PTXMove {
     @Opcode("MOVE")
     public static class SpillMoveOp extends PTXLIRInstruction implements MoveOp {
 
-        @Def({REG, STACK}) protected AllocatableValue result;
+        @Def({REG, STACK}) protected Value result;
         @Use({REG, STACK, CONST}) protected Value input;
 
-        public SpillMoveOp(AllocatableValue result, Value input) {
+        public SpillMoveOp(Value result, Value input) {
             this.result = result;
             this.input = input;
         }
@@ -58,7 +58,7 @@ public class PTXMove {
         }
 
         @Override
-        public AllocatableValue getResult() {
+        public Value getResult() {
             return result;
         }
     }
@@ -66,10 +66,10 @@ public class PTXMove {
     @Opcode("MOVE")
     public static class MoveToRegOp extends PTXLIRInstruction implements MoveOp {
 
-        @Def({REG, HINT}) protected AllocatableValue result;
+        @Def({REG, HINT}) protected Value result;
         @Use({REG, STACK, CONST}) protected Value input;
 
-        public MoveToRegOp(AllocatableValue result, Value input) {
+        public MoveToRegOp(Value result, Value input) {
             this.result = result;
             this.input = input;
         }
@@ -85,7 +85,7 @@ public class PTXMove {
         }
 
         @Override
-        public AllocatableValue getResult() {
+        public Value getResult() {
             return result;
         }
     }
@@ -93,10 +93,10 @@ public class PTXMove {
     @Opcode("MOVE")
     public static class MoveFromRegOp extends PTXLIRInstruction implements MoveOp {
 
-        @Def({REG, STACK}) protected AllocatableValue result;
+        @Def({REG, STACK}) protected Value result;
         @Use({REG, CONST, HINT}) protected Value input;
 
-        public MoveFromRegOp(AllocatableValue result, Value input) {
+        public MoveFromRegOp(Value result, Value input) {
             this.result = result;
             this.input = input;
         }
@@ -112,20 +112,18 @@ public class PTXMove {
         }
 
         @Override
-        public AllocatableValue getResult() {
+        public Value getResult() {
             return result;
         }
     }
 
     public static class LoadOp extends PTXLIRInstruction {
 
-        private final Kind kind;
         @Def({REG}) protected AllocatableValue result;
         @Use({COMPOSITE}) protected PTXAddressValue address;
         @State protected LIRFrameState state;
 
-        public LoadOp(Kind kind, AllocatableValue result, PTXAddressValue address, LIRFrameState state) {
-            this.kind = kind;
+        public LoadOp(AllocatableValue result, PTXAddressValue address, LIRFrameState state) {
             this.result = result;
             this.address = address;
             this.state = state;
@@ -134,27 +132,9 @@ public class PTXMove {
         @Override
         public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
             PTXAddress addr = address.toAddress();
-            switch (kind) {
-                case Byte:
-                    masm.ld_global_s8(asRegister(result), addr.getBase(), addr.getDisplacement());
-                    break;
-                case Short:
-                    masm.ld_global_s16(asRegister(result), addr.getBase(), addr.getDisplacement());
-                    break;
-                case Char:
-                    masm.ld_global_u16(asRegister(result), addr.getBase(), addr.getDisplacement());
-                    break;
+            switch (address.getKind()) {
                 case Int:
                     masm.ld_global_s32(asRegister(result), addr.getBase(), addr.getDisplacement());
-                    break;
-                case Long:
-                    masm.ld_global_s64(asRegister(result), addr.getBase(), addr.getDisplacement());
-                    break;
-                case Float:
-                    masm.ld_global_f32(asRegister(result), addr.getBase(), addr.getDisplacement());
-                    break;
-                case Double:
-                    masm.ld_global_f64(asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 case Object:
                     masm.ld_global_u32(asRegister(result), addr.getBase(), addr.getDisplacement());
@@ -167,13 +147,11 @@ public class PTXMove {
 
     public static class StoreOp extends PTXLIRInstruction {
 
-        private final Kind kind;
         @Use({COMPOSITE}) protected PTXAddressValue address;
         @Use({REG}) protected AllocatableValue input;
         @State protected LIRFrameState state;
 
-        public StoreOp(Kind kind, PTXAddressValue address, AllocatableValue input, LIRFrameState state) {
-            this.kind = kind;
+        public StoreOp(PTXAddressValue address, AllocatableValue input, LIRFrameState state) {
             this.address = address;
             this.input = input;
             this.state = state;
@@ -183,24 +161,12 @@ public class PTXMove {
         public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
             assert isRegister(input);
             PTXAddress addr = address.toAddress();
-            switch (kind) {
-                case Byte:
-                    masm.st_global_s8(addr.getBase(), addr.getDisplacement(), asRegister(input));
-                    break;
-                case Short:
-                    masm.st_global_s8(addr.getBase(), addr.getDisplacement(), asRegister(input));
-                    break;
+            switch (address.getKind()) {
                 case Int:
                     masm.st_global_s32(addr.getBase(), addr.getDisplacement(), asRegister(input));
                     break;
-                case Long:
-                    masm.st_global_s64(addr.getBase(), addr.getDisplacement(), asRegister(input));
-                    break;
-                case Float:
-                    masm.st_global_f32(addr.getBase(), addr.getDisplacement(), asRegister(input));
-                    break;
-                case Double:
-                    masm.st_global_f64(addr.getBase(), addr.getDisplacement(), asRegister(input));
+                case Byte:
+                    masm.st_global_s8(addr.getBase(), addr.getDisplacement(), asRegister(input));
                     break;
                 case Object:
                     masm.st_global_s32(addr.getBase(), addr.getDisplacement(), asRegister(input));

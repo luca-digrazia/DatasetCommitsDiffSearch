@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
@@ -33,7 +32,7 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, LIRGenLowerable, ArithmeticOperation {
+public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, LIRGenLowerable {
 
     @Input private ValueNode x;
     private final Operation operation;

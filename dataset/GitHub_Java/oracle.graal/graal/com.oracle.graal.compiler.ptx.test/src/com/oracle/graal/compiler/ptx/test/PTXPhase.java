@@ -22,21 +22,23 @@
  */
 package com.oracle.graal.compiler.ptx.test;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.phases.*;
+import com.oracle.graal.api.meta.Kind;
+import com.oracle.graal.nodes.LocalNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.type.StampFactory;
+import com.oracle.graal.phases.Phase;
+
 
 public class PTXPhase extends Phase {
-
     @Override
     protected void run(StructuredGraph graph) {
         /*
-         * Assume that null checks would be done on the CPU caller side prior to copying data onto
-         * the GPU.
+         * Assume that null checks would be done on the CPU caller side prior
+         * to copying data onto the GPU.
          */
-        for (ParameterNode param : graph.getNodes(ParameterNode.class)) {
-            if (param.stamp() instanceof ObjectStamp) {
-                param.setStamp(StampFactory.declaredNonNull(((ObjectStamp) param.stamp()).type()));
+        for (LocalNode local : graph.getNodes(LocalNode.class)) {
+            if (local.kind() == Kind.Object) {
+                local.setStamp(StampFactory.declaredNonNull(local.objectStamp().type()));
             }
         }
     }

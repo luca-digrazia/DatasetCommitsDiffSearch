@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.ptx.test;
 
 import java.lang.reflect.Method;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 /**
@@ -34,24 +33,28 @@ public class BasicPTXTest extends PTXTestBase {
 
     @Test
     public void testAdd() {
-        compile("testAddConst1I");
+        compile("testAddSnippet");
     }
 
-    @Ignore
-    public void testAddInvoke() {
-        invoke(compile("testAddConst1I"), new Integer(42));
-    }
-
-    public int testAddConst1I(int a) {
+    public static int testAddSnippet(int a) {
         return a + 1;
+    }
+
+    @Test
+    public void testArray() {
+        compile("testArraySnippet");
+    }
+
+    public static int testArraySnippet(int[] array) {
+        return array[0];
     }
 
     public static void main(String[] args) {
         BasicPTXTest test = new BasicPTXTest();
         Method[] methods = BasicPTXTest.class.getMethods();
         for (Method m : methods) {
-            String name = m.getName();
-            if (m.getAnnotation(Test.class) == null && name.startsWith("test")) {
+            if (m.getAnnotation(Test.class) != null) {
+                String name = m.getName() + "Snippet";
                 // CheckStyle: stop system..print check
                 System.out.println(name + ": \n" + new String(test.compile(name).getTargetCode()));
                 // CheckStyle: resume system..print check
