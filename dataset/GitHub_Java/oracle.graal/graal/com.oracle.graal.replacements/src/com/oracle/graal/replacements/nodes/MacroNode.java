@@ -41,12 +41,11 @@ public class MacroNode extends AbstractStateSplit implements Lowerable {
     private final JavaType returnType;
 
     protected MacroNode(Invoke invoke) {
-        super(invoke.asNode().stamp(), invoke.stateAfter());
-        MethodCallTargetNode methodCallTarget = (MethodCallTargetNode) invoke.callTarget();
-        this.arguments = new NodeInputList<>(this, methodCallTarget.arguments());
+        super(invoke.node().stamp(), invoke.stateAfter());
+        this.arguments = new NodeInputList<>(this, invoke.methodCallTarget().arguments());
         this.bci = invoke.bci();
-        this.targetMethod = methodCallTarget.targetMethod();
-        this.returnType = methodCallTarget.returnType();
+        this.targetMethod = invoke.methodCallTarget().targetMethod();
+        this.returnType = invoke.methodCallTarget().returnType();
     }
 
     public int getBci() {
@@ -67,7 +66,7 @@ public class MacroNode extends AbstractStateSplit implements Lowerable {
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         StructuredGraph snippetGraph = getSnippetGraph(tool);
 
         InvokeNode invoke = replaceWithInvoke();
@@ -93,11 +92,11 @@ public class MacroNode extends AbstractStateSplit implements Lowerable {
 
     protected void replaceSnippetInvokes(StructuredGraph snippetGraph) {
         for (InvokeNode invoke : snippetGraph.getNodes(InvokeNode.class)) {
-            if (((MethodCallTargetNode) invoke.callTarget()).targetMethod() != getTargetMethod()) {
+            if (invoke.methodCallTarget().targetMethod() != getTargetMethod()) {
                 throw new GraalInternalError("unexpected invoke %s in snippet", getClass().getSimpleName());
             }
             if (invoke.stateAfter().bci == FrameState.INVALID_FRAMESTATE_BCI) {
-                InvokeNode newInvoke = snippetGraph.add(new InvokeNode(invoke.callTarget(), getBci()));
+                InvokeNode newInvoke = snippetGraph.add(new InvokeNode(invoke.methodCallTarget(), getBci()));
                 newInvoke.setStateAfter(snippetGraph.add(new FrameState(FrameState.AFTER_BCI)));
                 snippetGraph.replaceFixedWithFixed(invoke, newInvoke);
             } else {
