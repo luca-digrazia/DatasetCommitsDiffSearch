@@ -34,7 +34,6 @@ import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
 
 public abstract class MoveResolver {
-    private final LIR lir;
     private final FrameMap frameMap;
     private final int[] registersBlocked;
     private final Map<CiValue, Integer> valuesBlocked;
@@ -43,8 +42,7 @@ public abstract class MoveResolver {
     private final LIRInsertionBuffer insertionBuffer;
     private int insertPos;
 
-    public MoveResolver(LIR lir, FrameMap frameMap) {
-        this.lir = lir;
+    public MoveResolver(FrameMap frameMap) {
         this.frameMap = frameMap;
 
         registersBlocked = new int[frameMap.target.arch.registers.length];
@@ -149,7 +147,7 @@ public abstract class MoveResolver {
         int exchangeCandidate = -1;
         int exchangeOther = -1;
 
-        for (int i = mappingFrom.size() - 1; i >= 0; i--) {
+        for (int i = mappingFrom.size(); i >= 0; i--) {
             CiValue from = mappingFrom.get(i);
             Location to = mappingTo.get(i);
             assert !safeToProcessMove(from, to) : "would not be in this code otherwise";
@@ -294,7 +292,7 @@ public abstract class MoveResolver {
 
         } else {
             assert trace("mr      MOV %s -> %s", src, dst);
-            insertionBuffer.append(insertPos, lir.spillMoveFactory.createMove(dst,  src));
+            insertionBuffer.append(insertPos, StandardOpcode.SPILL_MOVE.create(dst,  src));
         }
     }
 
@@ -328,6 +326,7 @@ public abstract class MoveResolver {
             Location to = mappingTo.get(i);
 
             assert from.kind.stackKind() == to.kind;
+            assert !isLocation(from) || asLocation(from).location != to.location;
 
             for (int j = i + 1; j < mappingTo.size(); j++) {
                 Location otherTo = mappingTo.get(j);

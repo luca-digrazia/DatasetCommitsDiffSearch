@@ -22,20 +22,21 @@
  */
 package com.oracle.max.graal.alloc.util;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
 import static com.oracle.max.graal.alloc.util.ValueUtil.*;
 
 import java.util.*;
 
 import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.lir.*;
-import com.oracle.max.graal.compiler.lir.LIRInstruction.*;
+import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
 import com.oracle.max.graal.compiler.util.*;
 
 public final class RegisterVerifier {
     private final FrameMap frameMap;
+    private final RiRegisterConfig registerConfig;
 
     /**
      * All blocks that must be processed.
@@ -69,15 +70,16 @@ public final class RegisterVerifier {
         return new HashMap<>(inputState);
     }
 
-    public static boolean verify(LIR lir, FrameMap frameMap) {
-        RegisterVerifier verifier = new RegisterVerifier(lir, frameMap);
+    public static boolean verify(LIR lir, FrameMap frameMap, RiRegisterConfig registerConfig) {
+        RegisterVerifier verifier = new RegisterVerifier(lir, frameMap, registerConfig);
         verifier.verify(lir.startBlock());
         return true;
     }
 
     @SuppressWarnings("unchecked")
-    private RegisterVerifier(LIR lir, FrameMap frameMap) {
+    private RegisterVerifier(LIR lir, FrameMap frameMap, RiRegisterConfig registerConfig) {
         this.frameMap = frameMap;
+        this.registerConfig = registerConfig;
         this.workList = new LinkedList<>();
         this.blockStates = new Map[lir.linearScanOrder().size()];
     }
@@ -85,7 +87,7 @@ public final class RegisterVerifier {
     private Map<Object, CiValue> curInputState;
 
     private void verify(LIRBlock startBlock) {
-        ValueProcedure useProc =    new ValueProcedure() { @Override public CiValue doValue(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) { return use(value, flags); } };
+        ValueProcedure useProc =    new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return use(value); } };
         ValueProcedure tempProc =   new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return temp(value); } };
         ValueProcedure outputProc = new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return output(value); } };
 
@@ -160,7 +162,7 @@ public final class RegisterVerifier {
         Iterator<Object> iter = curInputState.keySet().iterator();
         while (iter.hasNext()) {
             Object value1 = iter.next();
-            if (value1 instanceof CiRegister && frameMap.registerConfig.getAttributesMap()[((CiRegister) value1).number].isCallerSave) {
+            if (value1 instanceof CiRegister && registerConfig.getAttributesMap()[((CiRegister) value1).number].isCallerSave) {
                 assert trace("    remove caller save register %s", value1);
                 iter.remove();
             }
@@ -185,15 +187,13 @@ public final class RegisterVerifier {
     }
 
     private boolean isIgnoredRegister(CiValue value) {
-        return isRegister(value) && !frameMap.registerConfig.getAttributesMap()[asRegister(value).number].isAllocatable;
+        return isRegister(value) && !registerConfig.getAttributesMap()[asRegister(value).number].isAllocatable;
     }
 
-    private CiValue use(CiValue value, EnumSet<OperandFlag> flags) {
+    private CiValue use(CiValue value) {
         if (!isConstant(value) && value != CiValue.IllegalValue && !isIgnoredRegister(value)) {
             CiValue actual = curInputState.get(key(value));
-            if (actual == null && flags.contains(OperandFlag.Uninitialized)) {
-                // OK, since uninitialized values are allowed explicitly.
-            } else if (value != actual) {
+            if (value != actual) {
                 TTY.println("!! Error in register allocation: %s != %s for key %s", value, actual, key(value));
                 traceState();
                 throw Util.shouldNotReachHere();

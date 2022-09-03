@@ -22,6 +22,7 @@
  */
 package com.oracle.max.graal.alloc.simple;
 
+import static com.oracle.max.graal.compiler.lir.LIRPhiMapping.*;
 import static com.oracle.max.cri.ci.CiValueUtil.*;
 import static com.oracle.max.graal.alloc.util.ValueUtil.*;
 
@@ -29,14 +30,12 @@ import java.util.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ci.CiRegister.RegisterFlag;
+import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.alloc.util.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.lir.*;
-import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandFlag;
-import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandMode;
-import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
-import com.oracle.max.graal.compiler.lir.LIRPhiMapping.PhiValueProcedure;
+import com.oracle.max.graal.compiler.lir.LIRInstruction.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
 
@@ -44,15 +43,17 @@ public class SpillAllAllocator {
     private final GraalContext context;
     private final LIR lir;
     private final FrameMap frameMap;
+    private final RiRegisterConfig registerConfig;
 
     private final DataFlowAnalysis dataFlow;
 
-    public SpillAllAllocator(GraalContext context, LIR lir, FrameMap frameMap) {
+    public SpillAllAllocator(GraalContext context, LIR lir, GraalCompilation compilation, RiRegisterConfig registerConfig) {
         this.context = context;
         this.lir = lir;
-        this.frameMap = frameMap;
+        this.registerConfig = registerConfig;
+        this.frameMap = compilation.frameMap();
 
-        this.dataFlow = new DataFlowAnalysis(lir, frameMap.registerConfig);
+        this.dataFlow = new DataFlowAnalysis(context, lir, registerConfig);
         this.blockLocations = new LocationMap[lir.linearScanOrder().size()];
         this.moveResolver = new MoveResolverImpl(frameMap);
     }
@@ -64,7 +65,7 @@ public class SpillAllAllocator {
 
         @Override
         protected CiValue scratchRegister(Variable spilled) {
-            EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = frameMap.registerConfig.getCategorizedAllocatableRegisters();
+            EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = registerConfig.getCategorizedAllocatableRegisters();
             CiRegister[] availableRegs = categorizedRegs.get(spilled.flag);
             for (CiRegister reg : availableRegs) {
                 if (curInRegisterState[reg.number] == null && curOutRegisterState[reg.number] == null) {
@@ -76,8 +77,8 @@ public class SpillAllAllocator {
     }
 
     private class ResolveDataFlowImpl extends ResolveDataFlow {
-        public ResolveDataFlowImpl(LIR lir, MoveResolver moveResolver, DataFlowAnalysis dataFlow) {
-            super(lir, moveResolver, dataFlow);
+        public ResolveDataFlowImpl(LIR lir, MoveResolver moveResolver) {
+            super(lir, moveResolver);
         }
 
         @Override
@@ -109,7 +110,7 @@ public class SpillAllAllocator {
     }
 
     private boolean isAllocatableRegister(CiValue value) {
-        return isRegister(value) && frameMap.registerConfig.getAttributesMap()[asRegister(value).number].isAllocatable;
+        return isRegister(value) && registerConfig.getAttributesMap()[asRegister(value).number].isAllocatable;
     }
 
 
@@ -131,27 +132,25 @@ public class SpillAllAllocator {
     private LIRInstruction curInstruction;
 
     public void execute() {
-        assert LIRVerifier.verify(true, lir, frameMap);
+        assert LIRVerifier.verify(true, lir, frameMap, registerConfig);
 
         dataFlow.execute();
-        IntervalPrinter.printBeforeAllocation("Before register allocation", context, lir, frameMap.registerConfig, dataFlow);
-
         allocate();
-
-        IntervalPrinter.printAfterAllocation("After spill all allocation", context, lir, frameMap.registerConfig, dataFlow, blockLocations);
-
-        ResolveDataFlow resolveDataFlow = new ResolveDataFlowImpl(lir, moveResolver, dataFlow);
-        resolveDataFlow.execute();
         frameMap.finish();
 
-        IntervalPrinter.printAfterAllocation("After resolve data flow", context, lir, frameMap.registerConfig, dataFlow, blockLocations);
-        assert RegisterVerifier.verify(lir, frameMap);
+        context.observable.fireCompilationEvent("After spill all allocation", lir);
+
+        ResolveDataFlow resolveDataFlow = new ResolveDataFlowImpl(lir, moveResolver);
+        resolveDataFlow.execute();
+
+        context.observable.fireCompilationEvent("After resolve data flow", lir);
+        assert RegisterVerifier.verify(lir, frameMap, registerConfig);
 
         AssignRegisters assignRegisters = new AssignRegistersImpl(lir, frameMap);
         assignRegisters.execute();
 
         context.observable.fireCompilationEvent("After register asignment", lir);
-        assert LIRVerifier.verify(false, lir, frameMap);
+        assert LIRVerifier.verify(true, lir, frameMap, registerConfig);
     }
 
     private void allocate() {
@@ -405,7 +404,7 @@ public class SpillAllAllocator {
             }
         }
 
-        EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = frameMap.registerConfig.getCategorizedAllocatableRegisters();
+        EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = registerConfig.getCategorizedAllocatableRegisters();
         CiRegister[] availableRegs = categorizedRegs.get(variable.flag);
 
         for (CiRegister reg : availableRegs) {
@@ -458,7 +457,7 @@ public class SpillAllAllocator {
     }
 
     private boolean checkNoCallerSavedRegister() {
-        for (CiRegister reg : frameMap.registerConfig.getCallerSaveRegisters()) {
+        for (CiRegister reg : registerConfig.getCallerSaveRegisters()) {
             assert curOutRegisterState[reg.number] == null || curOutRegisterState[reg.number] == curInstruction : "caller saved register in use accross call site";
         }
         return true;
