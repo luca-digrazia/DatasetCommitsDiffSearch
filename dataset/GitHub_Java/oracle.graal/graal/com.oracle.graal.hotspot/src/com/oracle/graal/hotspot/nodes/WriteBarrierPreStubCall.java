@@ -30,12 +30,12 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * Node implementing a call to HotSpot's {@code graal_monitorenter} stub.
+ * A call to {@code GraalRuntime::write_barrier_pre}.
  */
 public class WriteBarrierPreStubCall extends FixedWithNextNode implements LIRGenLowerable {
 
-    @Input private final ValueNode object;
-    public static final Descriptor WBPRECALL = new Descriptor("wbprecall", true, void.class, Object.class);
+    @Input private ValueNode object;
+    public static final Descriptor WRITE_BARRIER_PRE = new Descriptor("writeBarrierPre", true, void.class, Object.class);
 
     public WriteBarrierPreStubCall(ValueNode object) {
         super(StampFactory.forVoid());
@@ -44,8 +44,8 @@ public class WriteBarrierPreStubCall extends FixedWithNextNode implements LIRGen
 
     @Override
     public void generate(LIRGenerator gen) {
-        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(WriteBarrierPreStubCall.WBPRECALL);
-        gen.emitCall(stub, stub.getCallingConvention(), false, gen.operand(object));
+        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(WriteBarrierPreStubCall.WRITE_BARRIER_PRE);
+        gen.emitCall(stub, stub.getCallingConvention(), null, gen.operand(object));
     }
 
     @NodeIntrinsic
