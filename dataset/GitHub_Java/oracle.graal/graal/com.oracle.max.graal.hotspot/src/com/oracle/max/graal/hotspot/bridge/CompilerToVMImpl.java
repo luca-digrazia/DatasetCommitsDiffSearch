@@ -60,19 +60,7 @@ public class CompilerToVMImpl implements CompilerToVM, Remote {
     public native int RiMethod_invocationCount(HotSpotMethodResolved method);
 
     @Override
-    public native int RiMethod_exceptionProbability(HotSpotMethodResolved method, int bci);
-
-    @Override
-    public native RiTypeProfile RiMethod_typeProfile(HotSpotMethodResolved method, int bci);
-
-    @Override
-    public native double RiMethod_branchProbability(HotSpotMethodResolved method, int bci);
-
-    @Override
-    public native double[] RiMethod_switchProbability(HotSpotMethodResolved method, int bci);
-
-    @Override
-    public native RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass);
+    public native RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass, boolean eagerResolve);
 
     @Override
     public native Object RiConstantPool_lookupConstant(HotSpotTypeResolved pool, int cpi);
@@ -105,6 +93,9 @@ public class CompilerToVMImpl implements CompilerToVM, Remote {
     public native boolean RiType_isSubtypeOf(HotSpotTypeResolved klass, RiType other);
 
     @Override
+    public native RiType RiType_leastCommonAncestor(HotSpotTypeResolved thisType, HotSpotTypeResolved otherType);
+
+    @Override
     public native RiType getPrimitiveArrayType(CiKind kind);
 
     @Override
@@ -121,6 +112,9 @@ public class CompilerToVMImpl implements CompilerToVM, Remote {
 
     @Override
     public native boolean RiType_isInitialized(HotSpotTypeResolved klass);
+
+    @Override
+    public native HotSpotMethodData RiMethod_methodData(HotSpotMethodResolved method);
 
     @Override
     public native RiType getType(Class<?> javaClass);
@@ -151,7 +145,22 @@ public class CompilerToVMImpl implements CompilerToVM, Remote {
     public native boolean RiMethod_hasCompiledCode(HotSpotMethodResolved method);
 
     @Override
+    public native int RiMethod_getCompiledCodeSize(HotSpotMethodResolved method);
+
+    @Override
     public native long getMaxCallTargetOffset(CiRuntimeCall rtcall);
+
+    @Override
+    public native String disassembleNative(byte[] code, long address);
+
+    @Override
+    public native String disassembleJava(HotSpotMethodResolved method);
+
+    @Override
+    public native Object executeCompiledMethod(HotSpotCompiledMethod method, Object arg1, Object arg2, Object arg3);
+
+    @Override
+    public native int RiMethod_vtableEntryOffset(HotSpotMethodResolved method);
 
     // Checkstyle: resume
 }

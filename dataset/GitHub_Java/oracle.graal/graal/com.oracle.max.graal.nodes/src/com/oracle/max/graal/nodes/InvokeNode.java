@@ -26,10 +26,10 @@ import java.util.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.java.*;
 import com.oracle.max.graal.nodes.spi.*;
+import com.oracle.max.graal.nodes.util.*;
 
 /**
  * The {@code InvokeNode} represents all kinds of method calls.
@@ -37,7 +37,10 @@ import com.oracle.max.graal.nodes.spi.*;
 public final class InvokeNode extends AbstractStateSplit implements Node.IterableNodeType, Invoke, LIRLowerable, MemoryCheckpoint  {
 
     @Input private final MethodCallTargetNode callTarget;
-    private final int bci;
+    @Data private final int bci;
+    // megamorph should only be true when the compiler is sure that the call site is megamorph, and false when in doubt
+    @Data private boolean megamorph;
+    private boolean useForInlining;
 
     /**
      * Constructs a new Invoke instruction.
@@ -49,9 +52,10 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
      */
     public InvokeNode(MethodCallTargetNode callTarget, int bci) {
         super(callTarget.returnStamp());
-        assert callTarget != null;
         this.callTarget = callTarget;
         this.bci = bci;
+        this.megamorph = false;
+        this.useForInlining = true;
     }
 
     public MethodCallTargetNode callTarget() {
@@ -59,9 +63,30 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
     }
 
     @Override
+    public boolean megamorph() {
+        return megamorph;
+    }
+
+    @Override
+    public void setMegamorph(boolean megamorph) {
+        this.megamorph = megamorph;
+    }
+
+    public boolean useForInlining() {
+        return useForInlining;
+    }
+
+    @Override
+    public void setUseForInlining(boolean value) {
+        this.useForInlining = value;
+    }
+
+    @Override
     public Map<Object, Object> getDebugProperties() {
         Map<Object, Object> debugProperties = super.getDebugProperties();
-        debugProperties.put("targetMethod", CiUtil.format("%h.%n(%p)", callTarget.targetMethod()));
+        if (callTarget != null && callTarget.targetMethod() != null) {
+            debugProperties.put("targetMethod", CiUtil.format("%h.%n(%p)", callTarget.targetMethod()));
+        }
         return debugProperties;
     }
 
@@ -75,6 +100,9 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
         if (verbosity == Verbosity.Long) {
             return super.toString(Verbosity.Short) + "(bci=" + bci() + ")";
         } else if (verbosity == Verbosity.Name) {
+            if (callTarget == null || callTarget.targetMethod() == null) {
+                return "Invoke#??Invalid!";
+            }
             return "Invoke#" + callTarget.targetMethod().name();
         } else {
             return super.toString(verbosity);
@@ -93,32 +121,37 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
     @Override
     public FrameState stateDuring() {
         FrameState stateAfter = stateAfter();
-        return stateAfter.duplicateModified(bci(), stateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind(false));
+        FrameState stateDuring = stateAfter.duplicateModified(bci(), stateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind(false));
+        stateDuring.setDuringCall(true);
+        return stateDuring;
     }
 
     @Override
     public void intrinsify(Node node) {
-        this.callTarget.delete();
+        MethodCallTargetNode call = callTarget;
+        FrameState stateAfter = stateAfter();
         if (node instanceof StateSplit) {
             StateSplit stateSplit = (StateSplit) node;
-            stateSplit.setStateAfter(stateAfter());
+            stateSplit.setStateAfter(stateAfter);
+        }
+        if (node == null) {
+            assert kind() == CiKind.Void && usages().isEmpty();
+            ((StructuredGraph) graph()).removeFixed(this);
         } else {
-            if (stateAfter().usages().size() == 1) {
-                stateAfter().delete();
+            if (node instanceof FixedWithNextNode) {
+                ((StructuredGraph) graph()).replaceFixedWithFixed(this, (FixedWithNextNode) node);
+            } else if (node instanceof DeoptimizeNode) {
+                this.replaceAtPredecessors(node);
+                this.replaceAtUsages(null);
+                GraphUtil.killCFG(this);
+                return;
+            } else {
+                ((StructuredGraph) graph()).replaceFixed(this, node);
             }
         }
-        if (node instanceof FixedWithNextNode) {
-            FixedWithNextNode fixedWithNextNode = (FixedWithNextNode) node;
-            FixedNode next = this.next();
-            setNext(null);
-            fixedWithNextNode.setNext(next);
-            this.replaceAndDelete(node);
-        } else if (node instanceof FloatingNode || (node == null && this.kind() == CiKind.Void)) {
-            FixedNode next = this.next();
-            setNext(null);
-            this.replaceAtPredecessors(next);
-            this.replaceAtUsages(node);
-            this.safeDelete();
+        call.safeDelete();
+        if (stateAfter.usages().isEmpty()) {
+            stateAfter.safeDelete();
         }
     }
 }

@@ -31,7 +31,7 @@ import com.oracle.max.graal.hotspot.*;
 import com.oracle.max.graal.hotspot.ri.*;
 
 /**
- * Entries into the HotSpot VM from Java code.
+ * Calls from Java into HotSpot.
  */
 public interface CompilerToVM {
 
@@ -49,15 +49,9 @@ public interface CompilerToVM {
 
     int RiMethod_invocationCount(HotSpotMethodResolved method);
 
-    int RiMethod_exceptionProbability(HotSpotMethodResolved method, int bci);
+    HotSpotMethodData RiMethod_methodData(HotSpotMethodResolved method);
 
-    RiTypeProfile RiMethod_typeProfile(HotSpotMethodResolved method, int bci);
-
-    double RiMethod_branchProbability(HotSpotMethodResolved method, int bci);
-
-    double[] RiMethod_switchProbability(HotSpotMethodResolved method, int bci);
-
-    RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass);
+    RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass, boolean eagerResolve);
 
     Object RiConstantPool_lookupConstant(HotSpotTypeResolved pool, int cpi);
 
@@ -78,6 +72,8 @@ public interface CompilerToVM {
     RiMethod RiType_resolveMethodImpl(HotSpotTypeResolved klass, String name, String signature);
 
     boolean RiType_isSubtypeOf(HotSpotTypeResolved klass, RiType other);
+
+    RiType RiType_leastCommonAncestor(HotSpotTypeResolved thisType, HotSpotTypeResolved otherType);
 
     RiType getPrimitiveArrayType(CiKind kind);
 
@@ -103,9 +99,19 @@ public interface CompilerToVM {
 
     boolean RiMethod_hasCompiledCode(HotSpotMethodResolved method);
 
+    int RiMethod_getCompiledCodeSize(HotSpotMethodResolved method);
+
     RiMethod getRiMethod(Method reflectionMethod);
 
     long getMaxCallTargetOffset(CiRuntimeCall rtcall);
+
+    String disassembleNative(byte[] code, long address);
+
+    String disassembleJava(HotSpotMethodResolved method);
+
+    Object executeCompiledMethod(HotSpotCompiledMethod method, Object arg1, Object arg2, Object arg3);
+
+    int RiMethod_vtableEntryOffset(HotSpotMethodResolved method);
 
     // Checkstyle: resume
 }

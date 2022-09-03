@@ -24,21 +24,23 @@ package com.oracle.max.graal.nodes;
 
 import java.util.*;
 
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.java.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.util.*;
-import com.sun.cri.ci.*;
 
 public class InvokeWithExceptionNode extends ControlSplitNode implements Node.IterableNodeType, Invoke, MemoryCheckpoint, LIRLowerable {
-    private static final int NORMAL_EDGE = 0;
-    private static final int EXCEPTION_EDGE = 1;
+    public static final int NORMAL_EDGE = 0;
+    public static final int EXCEPTION_EDGE = 1;
 
     @Input private final MethodCallTargetNode callTarget;
     @Input private FrameState stateAfter;
-    private final int bci;
+    @Data private final int bci;
+    // megamorph should only be true when the compiler is sure that the call site is megamorph, and false when in doubt
+    @Data private boolean megamorph;
+    private boolean useForInlining;
 
     /**
      * @param kind
@@ -47,9 +49,10 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
      */
     public InvokeWithExceptionNode(MethodCallTargetNode callTarget, BeginNode exceptionEdge, int bci) {
         super(callTarget.returnStamp(), new BeginNode[]{null, exceptionEdge}, new double[]{1.0, 0.0});
-        assert callTarget != null;
         this.bci = bci;
         this.callTarget = callTarget;
+        this.megamorph = true;
+        this.useForInlining = true;
     }
 
     public BeginNode exceptionEdge() {
@@ -70,6 +73,26 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
 
     public MethodCallTargetNode callTarget() {
         return callTarget;
+    }
+
+    @Override
+    public boolean megamorph() {
+        return megamorph;
+    }
+
+    @Override
+    public void setMegamorph(boolean megamorph) {
+        this.megamorph = megamorph;
+    }
+
+    @Override
+    public boolean useForInlining() {
+        return useForInlining;
+    }
+
+    @Override
+    public void setUseForInlining(boolean value) {
+        this.useForInlining = value;
     }
 
     @Override
@@ -116,8 +139,10 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     public FrameState stateDuring() {
-        FrameState stateAfter = stateAfter();
-        return stateAfter.duplicateModified(bci(), stateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind(false));
+        FrameState tempStateAfter = stateAfter();
+        FrameState stateDuring = tempStateAfter.duplicateModified(bci(), tempStateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind(false));
+        stateDuring.setDuringCall(true);
+        return stateDuring;
     }
 
     @Override
@@ -143,31 +168,22 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
 
     @Override
     public void intrinsify(Node node) {
-        this.callTarget.delete();
+        MethodCallTargetNode call = callTarget;
+        FrameState state = stateAfter();
         killExceptionEdge();
         if (node instanceof StateSplit) {
             StateSplit stateSplit = (StateSplit) node;
-            stateSplit.setStateAfter(stateAfter());
-        } else {
-            if (stateAfter().usages().size() == 1) {
-                stateAfter().delete();
-            }
+            stateSplit.setStateAfter(state);
         }
-
-        if (node instanceof FixedWithNextNode) {
-            FixedWithNextNode fixedWithNextNode = (FixedWithNextNode) node;
-            FixedNode next = this.next();
-            setNext(null);
-            fixedWithNextNode.setNext(next);
-            this.replaceAndDelete(node);
-        } else if (node instanceof FloatingNode || (node == null && this.kind() == CiKind.Void)) {
-            FixedNode next = this.next();
-            setNext(null);
-            this.replaceAtPredecessors(next);
-            this.replaceAtUsages(node);
-            this.delete();
+        if (node == null) {
+            assert kind() == CiKind.Void && usages().isEmpty();
+            ((StructuredGraph) graph()).removeSplit(this, NORMAL_EDGE);
         } else {
-            assert false : node;
+            ((StructuredGraph) graph()).replaceSplit(this, node, NORMAL_EDGE);
+        }
+        call.safeDelete();
+        if (state.usages().isEmpty()) {
+            state.safeDelete();
         }
     }
 }

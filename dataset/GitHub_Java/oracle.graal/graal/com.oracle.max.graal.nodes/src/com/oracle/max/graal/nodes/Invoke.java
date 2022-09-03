@@ -49,8 +49,6 @@ public interface Invoke extends StateSplit {
 
     double probability();
 
-    void setProbability(double value);
-
     boolean useForInlining();
 
     void setUseForInlining(boolean value);

@@ -28,6 +28,7 @@ import static com.oracle.max.cri.ci.CiValueUtil.*;
 import static com.oracle.max.cri.util.MemoryBarriers.*;
 import static com.oracle.max.graal.lir.ValueUtil.*;
 
+import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.max.asm.*;
@@ -49,11 +50,7 @@ import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.lir.*;
-import com.oracle.max.graal.lir.StandardOp.JumpOp;
-import com.oracle.max.graal.lir.StandardOp.LabelOp;
-import com.oracle.max.graal.lir.StandardOp.ParametersOp;
-import com.oracle.max.graal.lir.StandardOp.PhiJumpOp;
-import com.oracle.max.graal.lir.StandardOp.PhiLabelOp;
+import com.oracle.max.graal.lir.StandardOp.*;
 import com.oracle.max.graal.lir.cfg.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
@@ -350,7 +347,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                 } else {
                     TTY.println("STATE CHANGE (singlePred)");
                     if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
-                        TTY.println(fs.toString(Node.Verbosity.Debugger));
+                        TTY.println(fs.toDetailedString());
                     }
                 }
             }
@@ -398,11 +395,12 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             }
             if (stateAfter != null) {
                 lastState = stateAfter;
+                assert checkStartOperands(instr, lastState);
                 assert checkStateReady(lastState);
                 if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
                     TTY.println("STATE CHANGE");
                     if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
-                        TTY.println(stateAfter.toString(Node.Verbosity.Debugger));
+                        TTY.println(stateAfter.toDetailedString());
                     }
                 }
             }
@@ -430,7 +428,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     private boolean checkStateReady(FrameState state) {
         FrameState fs = state;
         while (fs != null) {
-            for (ValueNode v : fs.values()) {
+            for (int i = 0; i < fs.valuesSize(); i++) {
+                ValueNode v = fs.valueAt(i);
                 if (v != null && !(v instanceof VirtualObjectNode)) {
                     assert operand(v) != null : "Value " + v + " in " + fs + " is not ready!";
                 }
@@ -492,6 +491,25 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             setResult(local, emitMove(param));
         }
     }
+
+    private boolean checkStartOperands(Node node, FrameState fs) {
+        if (!Modifier.isNative(method.accessFlags())) {
+            if (node == ((StructuredGraph) node.graph()).start()) {
+                CiKind[] arguments = CiUtil.signatureToKinds(method);
+                int slot = 0;
+                for (CiKind kind : arguments) {
+                    ValueNode arg = fs.localAt(slot);
+                    assert arg != null && arg.kind() == kind.stackKind() : "No valid local in framestate for slot #" + slot + " (" + arg + ")";
+                    slot++;
+                    if (slot < fs.localsSize() && fs.localAt(slot) == null) {
+                        slot++;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
 
     @Override
     public void visitArrayLength(ArrayLengthNode x) {
@@ -666,7 +684,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @SuppressWarnings("unused")
     protected void preGCWriteBarrier(CiValue addrOpr, boolean patch, LIRDebugInfo info) {
-        // TODO (thomaswue): Implement this.
+        // TODO(tw): Implement this.
     }
 
 
@@ -924,7 +942,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
         CiValue destinationAddress = null;
         if (!target().invokeSnippetAfterArguments) {
-            // This is the version currently necessary for Maxine: since the invokeinterface-snippet uses a division, it
+            // TODO This is the version currently necessary for Maxine: since the invokeinterface-snippet uses a division, it
             // destroys rdx, which is also used to pass a parameter.  Therefore, the snippet must be before the parameters are assigned to their locations.
             LIRDebugInfo addrInfo = stateFor(stateBeforeCallWithArguments(x.stateAfter(), callTarget, x.bci()));
             destinationAddress = emitXir(snippet, x.node(), addrInfo, false);
@@ -938,7 +956,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         List<CiValue> argList = visitInvokeArguments(cc, callTarget.arguments());
 
         if (target().invokeSnippetAfterArguments) {
-            // This is the version currently active for HotSpot.
+            // TODO This is the version currently active for HotSpot.
             LIRDebugInfo addrInfo = stateFor(stateBeforeCallWithArguments(x.stateAfter(), callTarget, x.bci()), null, null);
             destinationAddress = emitXir(snippet, x.node(), addrInfo, false);
         }
@@ -1035,15 +1053,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         LIRDebugInfo info = null;
         FrameState stateAfter = x.stateAfter();
         if (stateAfter != null) {
-            // (cwimmer) I made the code that modifies the operand stack conditional. My scenario: runtime calls to, e.g.,
-            // CreateNullPointerException have no equivalent in the bytecodes, so there is no invoke bytecode.
-            // Therefore, the result of the runtime call was never pushed to the stack, and we cannot pop it here.
-            FrameState stateBeforeReturn = stateAfter;
-            if ((stateAfter.stackSize() > 0 && stateAfter.stackAt(stateAfter.stackSize() - 1) == x) ||
-                (stateAfter.stackSize() > 1 && stateAfter.stackAt(stateAfter.stackSize() - 2) == x)) {
-
-                stateBeforeReturn = stateAfter.duplicateModified(stateAfter.bci, stateAfter.rethrowException(), x.kind());
-            }
+            // TODO change back to stateBeforeReturn() when RuntimeCallNode uses a CallTargetNode
+            FrameState stateBeforeReturn = stateAfter.duplicateModified(stateAfter.bci, stateAfter.rethrowException(), x.kind());
 
             // TODO is it correct here that the pointerSlots are not passed to the oop map generation?
             info = stateFor(stateBeforeReturn);
@@ -1439,6 +1450,19 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     static class XirSupport implements XirSite {
         ValueNode current;
         ValueNode receiver;
+
+        XirSupport() {
+        }
+
+        public CiCodePos getCodePos() {
+            if (current instanceof StateSplit) {
+                FrameState stateAfter = ((StateSplit) current).stateAfter();
+                if (stateAfter != null) {
+                    return stateAfter.toCodePos();
+                }
+            }
+            return null;
+        }
 
         public boolean isNonNull(XirArgument argument) {
             return false;

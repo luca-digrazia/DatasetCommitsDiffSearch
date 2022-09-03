@@ -31,6 +31,24 @@ import com.oracle.max.cri.ri.RiType.Representation;
  */
 public interface RiXirGenerator {
 
+    /**
+     * Note: may return {@code null}.
+     */
+    XirSnippet genPrologue(XirSite site, RiResolvedMethod method);
+
+    /**
+     * Note: may return {@code null} in which case the compiler will not emit a return instruction.
+     */
+    XirSnippet genEpilogue(XirSite site, RiResolvedMethod method);
+
+    XirSnippet genSafepointPoll(XirSite site);
+
+    XirSnippet genExceptionObject(XirSite site);
+
+    XirSnippet genResolveClass(XirSite site, RiType type, Representation representation);
+
+    XirSnippet genIntrinsic(XirSite site, XirArgument[] arguments, RiMethod method);
+
     XirSnippet genInvokeInterface(XirSite site, XirArgument receiver, RiMethod method);
 
     XirSnippet genInvokeVirtual(XirSite site, XirArgument receiver, RiMethod method, boolean megamorph);
@@ -43,17 +61,41 @@ public interface RiXirGenerator {
 
     XirSnippet genMonitorExit(XirSite site, XirArgument receiver, XirArgument lockAddress);
 
+    XirSnippet genGetField(XirSite site, XirArgument receiver, RiField field);
+
+    XirSnippet genPutField(XirSite site, XirArgument receiver, RiField field, XirArgument value);
+
+    XirSnippet genGetStatic(XirSite site, XirArgument staticTuple, RiField field);
+
+    XirSnippet genPutStatic(XirSite site, XirArgument staticTuple, RiField field, XirArgument value);
+
     XirSnippet genNewInstance(XirSite site, RiType type);
 
     XirSnippet genNewArray(XirSite site, XirArgument length, CiKind elementKind, RiType componentType, RiType arrayType);
 
+    XirSnippet genNewObjectArrayClone(XirSite site, XirArgument newLength, XirArgument referenceArray);
+
     XirSnippet genNewMultiArray(XirSite site, XirArgument[] lengths, RiType type);
 
-    XirSnippet genCheckCast(XirSite site, XirArgument receiver, XirArgument hub, RiResolvedType type, RiResolvedType[] hints, boolean hintsExact);
+    XirSnippet genCheckCast(XirSite site, XirArgument receiver, XirArgument hub, RiType type, RiResolvedType[] hints, boolean hintsExact);
 
     XirSnippet genInstanceOf(XirSite site, XirArgument receiver, XirArgument hub, RiType type, RiResolvedType[] hints, boolean hintsExact);
 
     XirSnippet genMaterializeInstanceOf(XirSite site, XirArgument receiver, XirArgument hub, XirArgument trueValue, XirArgument falseValue, RiType type, RiResolvedType[] hints, boolean hintsExact);
+
+    XirSnippet genArrayLoad(XirSite site, XirArgument array, XirArgument index, CiKind elementKind, RiType elementType);
+
+    XirSnippet genArrayStore(XirSite site, XirArgument array, XirArgument index, XirArgument value, CiKind elementKind, RiType elementType);
+
+    XirSnippet genArrayLength(XirSite site, XirArgument array);
+
+    XirSnippet genWriteBarrier(XirArgument object);
+
+    XirSnippet genArrayCopy(XirSite site, XirArgument src, XirArgument srcPos, XirArgument dest, XirArgument destPos, XirArgument length, RiType elementType, boolean inputsSame, boolean inputsDifferent);
+
+    XirSnippet genCurrentThread(XirSite site);
+
+    XirSnippet genGetClass(XirSite site, XirArgument xirArgument);
 
     /**
      * Generates code that checks that the {@linkplain Representation#ObjectHub hub} of
