@@ -33,7 +33,7 @@ import java.util.*;
 import com.oracle.max.asm.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.alloc.*;
-import com.oracle.max.graal.compiler.alloc.OperandPool.VariableFlag;
+import com.oracle.max.graal.compiler.alloc.OperandPool.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.globalstub.*;
 import com.oracle.max.graal.compiler.graph.*;
@@ -43,17 +43,11 @@ import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.bytecode.Bytecodes.MemoryBarriers;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
-import com.sun.cri.ri.RiType.Representation;
-import com.sun.cri.xir.CiXirAssembler.XirConstant;
-import com.sun.cri.xir.CiXirAssembler.XirInstruction;
-import com.sun.cri.xir.CiXirAssembler.XirOperand;
-import com.sun.cri.xir.CiXirAssembler.XirParameter;
-import com.sun.cri.xir.CiXirAssembler.XirRegister;
-import com.sun.cri.xir.CiXirAssembler.XirTemp;
+import com.sun.cri.ri.RiType.*;
 import com.sun.cri.xir.*;
+import com.sun.cri.xir.CiXirAssembler.*;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
@@ -246,19 +240,6 @@ public abstract class LIRGenerator extends ValueVisitor {
             if (instr instanceof Instruction) {
                 stateAfter = ((Instruction) instr).stateAfter();
             }
-            FrameState stateBefore = null;
-            if (instr instanceof StateSplit && ((StateSplit) instr).stateBefore() != null) {
-                stateBefore = ((StateSplit) instr).stateBefore();
-            }
-            if (stateBefore != null) {
-                lastState = stateBefore;
-                if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
-                    TTY.println("STATE CHANGE (stateBefore)");
-                    if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
-                        TTY.println(stateBefore.toString());
-                    }
-                }
-            }
             if (instr != instr.graph().start()) {
                 walkState(instr, stateAfter);
                 doRoot((Value) instr);
@@ -273,17 +254,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                 }
             }
         }
-        if (block.blockSuccessors().size() == 1 && !(block.lastInstruction() instanceof LoopEnd)) {
-            Node firstInstruction = block.blockSuccessors().get(0).firstInstruction();
-            if (firstInstruction instanceof Placeholder) {
-                firstInstruction = ((Placeholder) firstInstruction).next();
-            }
-            //System.out.println("suxSz == 1, fst=" + firstInstruction);
-            if (firstInstruction instanceof LoopBegin) {
-                moveToPhi((LoopBegin) firstInstruction, block.lastInstruction());
-            }
-        }
-        if (block.blockSuccessors().size() >= 1 && !jumpsToNextBlock(block.lastInstruction())) {
+        if (block.blockSuccessors().size() >= 1 && !block.endsWithJump()) {
             block.lir().jump(getLIRBlock((FixedNode) block.lastInstruction().successors().get(0)));
         }
 
@@ -298,13 +269,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitMerge(Merge x) {
-        if (x.next() instanceof LoopBegin) {
-            moveToPhi((LoopBegin) x.next(), x);
-        }
-    }
-
-    private static boolean jumpsToNextBlock(Node node) {
-        return node instanceof BlockEnd || node instanceof EndNode || node instanceof LoopEnd;
+        // Nothing to do.
     }
 
     @Override
@@ -736,6 +701,10 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitFixedGuard(FixedGuard fixedGuard) {
         Node comp = fixedGuard.node();
+        emitGuardComp(comp);
+    }
+
+    public void emitGuardComp(Node comp) {
         if (comp instanceof IsNonNull) {
             IsNonNull x = (IsNonNull) comp;
             CiValue value = load(x.object());
@@ -743,7 +712,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             lir.nullCheck(value, info);
         } else if (comp instanceof IsType) {
             IsType x = (IsType) comp;
-            CiValue value = load(x.object());
+            load(x.object());
             LIRDebugInfo info = stateFor(x);
             XirArgument clazz = toXirArgument(x.type().getEncoding(Representation.ObjectHub));
             XirSnippet typeCheck = xir.genTypeCheck(site(x), toXirArgument(x.object()), clazz, x.type());
@@ -999,10 +968,9 @@ public abstract class LIRGenerator extends ValueVisitor {
             if (rangeDensity >= GraalOptions.RangeTestsSwitchDensity) {
                 visitSwitchRanges(switchRanges, tag, getLIRBlock(x.defaultSuccessor()));
             } else {
-                List<Instruction> nonDefaultSuccessors = x.blockSuccessors().subList(0, x.numberOfCases());
-                LIRBlock[] targets = new LIRBlock[nonDefaultSuccessors.size()];
-                for (int i = 0; i < nonDefaultSuccessors.size(); ++i) {
-                    targets[i] = getLIRBlock(nonDefaultSuccessors.get(i));
+                LIRBlock[] targets = new LIRBlock[x.numberOfCases()];
+                for (int i = 0; i < x.numberOfCases(); ++i) {
+                    targets[i] = getLIRBlock(x.blockSuccessor(i));
                 }
                 lir.tableswitch(tag, x.lowKey(), getLIRBlock(x.defaultSuccessor()), targets);
             }
@@ -1052,7 +1020,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             lastState = fs;
         } else if (block.blockPredecessors().size() == 1) {
             FrameState fs = block.blockPredecessors().get(0).lastState();
-            assert fs != null; //TODO gd maybe this assert should be removed
+            assert fs != null;
             if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
                 TTY.println("STATE CHANGE (singlePred)");
                 if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
@@ -1125,7 +1093,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitRegisterFinalizer(RegisterFinalizer x) {
         CiValue receiver = load(x.object());
-        LIRDebugInfo info = stateFor(x, x.stateBefore());
+        LIRDebugInfo info = stateFor(x);
         callRuntime(CiRuntimeCall.RegisterFinalizer, info, receiver);
         setNoResult(x);
     }
@@ -1403,7 +1371,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    /*void moveToPhi(PhiResolver resolver, Value curVal, Value suxVal, List<Phi> phis, int predIndex) {
+    void moveToPhi(PhiResolver resolver, Value curVal, Value suxVal, List<Phi> phis, int predIndex) {
         // move current value to referenced phi function
         if (suxVal instanceof Phi) {
             Phi phi = (Phi) suxVal;
@@ -1429,58 +1397,88 @@ public abstract class LIRGenerator extends ValueVisitor {
                 resolver.move(operand, operandForPhi(phi));
             }
         }
-    }*/
+    }
+
+    private List<Phi> getPhis(LIRBlock block) {
+        if (block.getInstructions().size() > 0) {
+            Node i = block.firstInstruction();
+            if (i instanceof Merge) {
+                List<Phi> result = new ArrayList<Phi>();
+                for (Node n : i.usages()) {
+                    if (n instanceof Phi) {
+                        result.add((Phi) n);
+                    }
+                }
+                return result;
+            }
+        }
+        return null;
+    }
 
     @Override
     public void visitEndNode(EndNode end) {
         setNoResult(end);
-        moveToPhi(end.merge(), end);
+        Merge merge = end.merge();
+        assert merge != null;
+        moveToPhi(merge, merge.endIndex(end));
         lir.jump(getLIRBlock(end.merge()));
+    }
+
+    @Override
+    public void visitMemoryRead(MemoryRead memRead) {
+        if (memRead.guard() != null) {
+            emitGuardComp(memRead.guard());
+        }
+        lir.move(new CiAddress(memRead.valueKind(), load(memRead.location()), memRead.displacement()), createResultVariable(memRead), memRead.valueKind());
     }
 
 
     @Override
     public void visitLoopEnd(LoopEnd x) {
         setNoResult(x);
-        moveToPhi(x.loopBegin(), x);
+        moveToPhi(x.loopBegin(), x.loopBegin().endCount());
         lir.jump(getLIRBlock(x.loopBegin()));
     }
 
-    private void moveToPhi(PhiPoint merge, Node pred) {
-        int nextSuccIndex = merge.phiPointPredecessorIndex(pred);
+    private void moveToPhi(Merge merge, int nextSuccIndex) {
         PhiResolver resolver = new PhiResolver(this);
-        for (Phi phi : merge.phis()) {
-            if (!phi.isDead()) {
-                Value curVal = phi.valueAt(nextSuccIndex);
-                if (curVal != null && curVal != phi) {
-                    if (curVal instanceof Phi) {
-                        operandForPhi((Phi) curVal);
+        for (Node n : merge.usages()) {
+            if (n instanceof Phi) {
+                Phi phi = (Phi) n;
+                if (!phi.isDead()) {
+                    Value curVal = phi.valueAt(nextSuccIndex);
+                    if (curVal != null && curVal != phi) {
+                        if (curVal instanceof Phi) {
+                            operandForPhi((Phi) curVal);
+                        }
+                        CiValue operand = curVal.operand();
+                        if (operand.isIllegal()) {
+                            assert curVal instanceof Constant || curVal instanceof Local : "these can be produced lazily" + curVal + "/" + phi;
+                            operand = operandForInstruction(curVal);
+                        }
+                        resolver.move(operand, operandForPhi(phi));
                     }
-                    CiValue operand = curVal.operand();
-                    if (operand.isIllegal()) {
-                        assert curVal instanceof Constant || curVal instanceof Local : "these can be produced lazily" + curVal + "/" + phi;
-                        operand = operandForInstruction(curVal);
-                    }
-                    resolver.move(operand, operandForPhi(phi));
                 }
             }
         }
         resolver.dispose();
-        //TODO (gd) remove that later ?
+        //TODO (gd) remove that later
         if (merge instanceof LoopBegin) {
-            LoopBegin loopBegin = (LoopBegin) merge;
-            for (LoopCounter counter : loopBegin.counters()) {
-                if (counter.operand().isIllegal()) {
-                    createResultVariable(counter);
-                }
-                if (nextSuccIndex == 0) {
-                    lir.move(operandForInstruction(counter.init()), counter.operand());
-                } else {
-                    if (counter.kind == CiKind.Int) {
-                        this.arithmeticOpInt(IADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()), CiValue.IllegalValue);
+            for (Node usage : merge.usages()) {
+                if (usage instanceof LoopCounter) {
+                    LoopCounter counter = (LoopCounter) usage;
+                    if (counter.operand().isIllegal()) {
+                        createResultVariable(counter);
+                    }
+                    if (nextSuccIndex == 0) { // (gd) nasty
+                        lir.move(operandForInstruction(counter.init()), counter.operand());
                     } else {
-                        assert counter.kind == CiKind.Long;
-                        this.arithmeticOpLong(LADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()));
+                        if (counter.kind == CiKind.Int) {
+                            this.arithmeticOpInt(IADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()), CiValue.IllegalValue);
+                        } else {
+                            assert counter.kind == CiKind.Long;
+                            this.arithmeticOpLong(LADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()));
+                        }
                     }
                 }
             }

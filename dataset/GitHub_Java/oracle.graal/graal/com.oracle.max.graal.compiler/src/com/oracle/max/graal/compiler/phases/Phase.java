@@ -54,9 +54,7 @@ public abstract class Phase {
             }
             GraalTimers.get(getName()).start();
         }
-        //System.out.println("Starting Phase " + getName());
         run(graph);
-        //System.out.println("Finished Phase " + getName());
         if (GraalOptions.Time) {
             GraalTimers.get(getName()).stop();
             if (oldCurrentPhase != null) {
