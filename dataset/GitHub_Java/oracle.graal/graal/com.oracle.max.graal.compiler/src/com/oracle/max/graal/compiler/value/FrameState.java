@@ -121,10 +121,6 @@ public final class FrameState extends Value implements FrameStateAccess {
         return rethrowException;
     }
 
-    public RiMethod method() {
-        return method;
-    }
-
     /**
      * Gets a copy of this frame state.
      */
@@ -173,28 +169,6 @@ public final class FrameState extends Value implements FrameStateAccess {
             Value x = stackAt(i);
             Value y = other.stackAt(i);
             if (x != y && typeMismatch(x, y)) {
-                return false;
-            }
-        }
-        for (int i = 0; i < locksSize(); i++) {
-            if (lockAt(i) != other.lockAt(i)) {
-                return false;
-            }
-        }
-        if (other.outerFrameState() != outerFrameState()) {
-            return false;
-        }
-        return true;
-    }
-
-    public boolean equals(FrameStateAccess other) {
-        if (stackSize() != other.stackSize() || localsSize() != other.localsSize() || locksSize() != other.locksSize()) {
-            return false;
-        }
-        for (int i = 0; i < stackSize(); i++) {
-            Value x = stackAt(i);
-            Value y = other.stackAt(i);
-            if (x != y) {
                 return false;
             }
         }
@@ -400,7 +374,7 @@ public final class FrameState extends Value implements FrameStateAccess {
                     }
 
                     if (phi.valueCount() == 0) {
-                        int size = block.phiPredecessorCount();
+                        int size = block.endCount();
                         for (int j = 0; j < size; ++j) {
                             phi.addInput(x);
                         }
@@ -409,7 +383,11 @@ public final class FrameState extends Value implements FrameStateAccess {
                         phi.addInput((x == y) ? phi : y);
                     }
 
-                    assert phi.valueCount() == block.phiPredecessorCount() + (block instanceof LoopBegin ? 0 : 1) : "valueCount=" + phi.valueCount() + " predSize= " + block.phiPredecessorCount();
+                    if (block instanceof LoopBegin) {
+//                        assert phi.valueCount() == ((LoopBegin) block).loopEnd().predecessors().size() + 1 : "loop, valueCount=" + phi.valueCount() + " predSize= " + ((LoopBegin) block).loopEnd().predecessors().size();
+                    } else {
+                        assert phi.valueCount() == block.endCount() + 1 : "valueCount=" + phi.valueCount() + " predSize= " + block.endCount();
+                    }
                }
             }
         }
