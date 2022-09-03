@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.runtime.options;
 
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions.OptionParser;
+import com.oracle.truffle.llvm.runtime.options.LLVMOptions.PropertyCategory;
 
 public enum LLVMBaseOption implements LLVMOption {
 
@@ -126,21 +127,13 @@ public enum LLVMBaseOption implements LLVMOption {
     }
 
     @Override
-    public String getCategory() {
-        return category.toString();
+    public PropertyCategory getCategory() {
+        return category;
     }
 
     @Override
     public Object parse() {
         return parser.parse(this);
-    }
-
-    public enum PropertyCategory {
-        GENERAL,
-        DEBUG,
-        PERFORMANCE,
-        TESTS,
-        MX;
     }
 
 }
