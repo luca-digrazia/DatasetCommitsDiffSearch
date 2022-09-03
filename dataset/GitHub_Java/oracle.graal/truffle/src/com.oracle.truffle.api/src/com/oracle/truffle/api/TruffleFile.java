@@ -256,7 +256,7 @@ public final class TruffleFile {
     @TruffleBoundary
     public boolean isSymbolicLink() {
         try {
-            return getAttributeImpl("isSymbolicLink", Boolean.class, LinkOption.NOFOLLOW_LINKS);
+            return getAttributeImpl("isSymbolicLink", Boolean.class);
         } catch (IOException ioe) {
             return false;
         } catch (SecurityException se) {
