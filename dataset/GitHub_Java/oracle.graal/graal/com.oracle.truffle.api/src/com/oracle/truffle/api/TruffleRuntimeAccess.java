@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -20,18 +22,18 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.nfi.api;
+package com.oracle.truffle.api;
 
 import com.oracle.jvmci.service.*;
 
 /**
- * A {@linkplain Service JVMCI service} that provides access to a {@link NativeFunctionInterface}
+ * A {@linkplain Service JVMCI service} that provides access to a {@link TruffleRuntime}
  * implementation.
  */
-public interface NativeFunctionInterfaceAccess extends Service {
+public interface TruffleRuntimeAccess extends Service {
 
     /**
-     * Gets the {@link NativeFunctionInterface} implementation available via this access object.
+     * Gets the {@link TruffleRuntime} implementation available via this access object.
      */
-    NativeFunctionInterface getNativeFunctionInterface();
+    TruffleRuntime getRuntime();
 }
