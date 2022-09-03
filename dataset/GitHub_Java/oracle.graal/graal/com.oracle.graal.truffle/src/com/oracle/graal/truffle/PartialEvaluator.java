@@ -36,7 +36,6 @@ import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node;
-import com.oracle.graal.java.*;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
@@ -72,23 +71,14 @@ public class PartialEvaluator {
     private final SnippetReflectionProvider snippetReflection;
     private final ResolvedJavaMethod callDirectMethod;
     private final ResolvedJavaMethod callSiteProxyMethod;
-    protected final ResolvedJavaMethod callRootMethod;
-    private final GraphBuilderConfiguration configForRoot;
 
-    public PartialEvaluator(Providers providers, GraphBuilderConfiguration configForRoot, TruffleCache truffleCache, SnippetReflectionProvider snippetReflection) {
+    public PartialEvaluator(Providers providers, TruffleCache truffleCache, SnippetReflectionProvider snippetReflection) {
         this.providers = providers;
         this.canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue());
         this.snippetReflection = snippetReflection;
         this.truffleCache = truffleCache;
         this.callDirectMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod());
         this.callSiteProxyMethod = providers.getMetaAccess().lookupJavaMethod(GraalFrameInstance.CallNodeFrame.METHOD);
-        this.configForRoot = configForRoot;
-
-        try {
-            callRootMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.class.getDeclaredMethod("callRoot", Object[].class));
-        } catch (NoSuchMethodException ex) {
-            throw new RuntimeException(ex);
-        }
     }
 
     public StructuredGraph createGraph(final OptimizedCallTarget callTarget, final Assumptions assumptions) {
@@ -101,7 +91,7 @@ public class PartialEvaluator {
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
-        final StructuredGraph graph = createRootGraph(callTarget.toString());
+        final StructuredGraph graph = truffleCache.createRootGraph(callTarget.toString());
         assert graph != null : "no graph for root method";
 
         try (Scope s = Debug.scope("CreateGraph", graph); Indent indent = Debug.logAndIndent("createGraph %s", graph)) {
@@ -166,12 +156,6 @@ public class PartialEvaluator {
             throw Debug.handle(e);
         }
 
-        return graph;
-    }
-
-    public StructuredGraph createRootGraph(String name) {
-        StructuredGraph graph = new StructuredGraph(name, callRootMethod);
-        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), new Assumptions(false), configForRoot, TruffleCompilerImpl.Optimizations).apply(graph);
         return graph;
     }
 
