@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.runtime.nodes.api;
 
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.ObjectType;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
@@ -46,9 +47,9 @@ public interface LLVMObjectAccess {
 
     LLVMObjectReadNode createReadNode(ForeignToLLVMType type);
 
-    LLVMObjectWriteNode createWriteNode(ForeignToLLVMType type);
+    LLVMObjectWriteNode createWriteNode();
 
-    abstract class LLVMObjectAccessNode extends LLVMNode {
+    abstract class LLVMObjectAccessNode extends Node {
 
         public abstract boolean canAccess(Object obj);
     }

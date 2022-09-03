@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.runtime.nodes.factories;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -41,6 +42,8 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.ObjectType;
 import com.oracle.truffle.api.object.Shape;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNodeGen;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
@@ -207,7 +210,7 @@ public abstract class LLVMObjectAccessFactory {
             } else if (obj instanceof DynamicObject) {
                 return DynamicObjectWriteNodeGen.create(type);
             } else {
-                return new FallbackWriteNode(type, false);
+                return new FallbackWriteNode(type, getRootNode().getLanguage(LLVMLanguage.class).getContextReference(), false);
             }
         }
     }
@@ -250,7 +253,7 @@ public abstract class LLVMObjectAccessFactory {
             if (objectType instanceof LLVMObjectAccess) {
                 return ((LLVMObjectAccess) objectType).createWriteNode();
             } else {
-                return new FallbackWriteNode(type, true);
+                return new FallbackWriteNode(type, getRootNode().getLanguage(LLVMLanguage.class).getContextReference(), true);
             }
         }
     }
@@ -261,10 +264,12 @@ public abstract class LLVMObjectAccessFactory {
         @Child private GetWriteIdentifierNode getWriteIdentifier = GetWriteIdentifierNodeGen.create();
         @Child private LLVMDataEscapeNode dataEscape;
 
+        private final ContextReference<LLVMContext> ctxRef;
         private final boolean acceptDynamicObject;
 
-        FallbackWriteNode(Type type, boolean acceptDynamicObject) {
+        FallbackWriteNode(Type type, ContextReference<LLVMContext> ctxRef, boolean acceptDynamicObject) {
             this.dataEscape = LLVMDataEscapeNodeGen.create(type);
+            this.ctxRef = ctxRef;
             this.acceptDynamicObject = acceptDynamicObject;
         }
 
@@ -280,7 +285,7 @@ public abstract class LLVMObjectAccessFactory {
         @Override
         public void executeWrite(Object obj, long offset, Object value) throws InteropException {
             long identifier = getWriteIdentifier.execute(offset, value);
-            Object escaped = dataEscape.executeWithTarget(value);
+            Object escaped = dataEscape.executeWithTarget(value, ctxRef.get());
             ForeignAccess.sendWrite(write, (TruffleObject) obj, identifier, escaped);
         }
     }

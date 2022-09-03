@@ -42,7 +42,7 @@ public abstract class LLVMForeignWriteNode extends LLVMNode {
 
     @Child private LLVMObjectWriteNode write;
 
-    protected LLVMForeignWriteNode(Type valueType) {
+    protected LLVMForeignWriteNode(Type valueType, int elementAccessSize) {
         this.write = LLVMObjectAccessFactory.createWrite(valueType);
     }
 
