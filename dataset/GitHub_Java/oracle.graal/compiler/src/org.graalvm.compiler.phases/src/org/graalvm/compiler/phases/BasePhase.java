@@ -275,7 +275,7 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
 
     @Override
     public String contractorName() {
-        return getName().toString();
+        return (String) getName();
     }
 
     @Override

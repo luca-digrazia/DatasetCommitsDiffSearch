@@ -25,16 +25,14 @@ package org.graalvm.compiler.debug;
 /**
  * Performs some kind of verification on an object.
  */
-public interface DebugVerifyHandler extends DebugHandler {
+public interface DebugVerifyHandler {
 
     /**
      * Verifies that a given object satisfies some invariants.
      *
      * @param object object to verify
-     * @param debug the debug context requesting the dump
-     * @param format a format string specifying a title that describes the context of the
-     *            verification (e.g., the compiler phase in which request is made)
-     * @param arguments arguments referenced by the format specifiers in {@code format}
+     * @param format description of verification context
+     * @param args arguments for the format
      */
-    void verify(DebugContext debug, Object object, String format, Object... arguments);
+    void verify(Object object, String format, Object... args);
 }
