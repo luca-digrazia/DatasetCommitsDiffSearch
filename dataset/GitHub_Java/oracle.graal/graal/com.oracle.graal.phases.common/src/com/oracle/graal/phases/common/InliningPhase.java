@@ -60,7 +60,7 @@ public class InliningPhase extends BasePhase<HighTierContext> {
     }
 
     private final InliningPolicy inliningPolicy;
-    private final CustomCanonicalizer customCanonicalizer;
+    private CustomCanonicalizer customCanonicalizer;
 
     private int inliningCount;
     private int maxMethodPerInlining = Integer.MAX_VALUE;
@@ -72,23 +72,18 @@ public class InliningPhase extends BasePhase<HighTierContext> {
     private static final DebugMetric metricInliningRuns = Debug.metric("Runs");
 
     public InliningPhase() {
-        this(new GreedyInliningPolicy(null), null);
-    }
-
-    public InliningPhase(CustomCanonicalizer canonicalizer) {
-        this(new GreedyInliningPolicy(null), canonicalizer);
+        this(new GreedyInliningPolicy(null));
     }
 
     public InliningPhase(Map<Invoke, Double> hints) {
-        this(new GreedyInliningPolicy(hints), null);
+        this(new GreedyInliningPolicy(hints));
     }
 
     public InliningPhase(InliningPolicy policy) {
-        this(policy, null);
+        this.inliningPolicy = policy;
     }
 
-    private InliningPhase(InliningPolicy policy, CustomCanonicalizer customCanonicalizer) {
-        this.inliningPolicy = policy;
+    public void setCustomCanonicalizer(CustomCanonicalizer customCanonicalizer) {
         this.customCanonicalizer = customCanonicalizer;
     }
 

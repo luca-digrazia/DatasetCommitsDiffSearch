@@ -63,13 +63,13 @@ public class FinalizableSubclassTest extends GraalCompilerTest {
     private StructuredGraph parseAndProcess(Class cl, Assumptions assumptions) {
         Constructor<?>[] constructors = cl.getConstructors();
         Assert.assertTrue(constructors.length == 1);
-        final ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaConstructor(constructors[0]);
+        final ResolvedJavaMethod javaMethod = runtime.lookupJavaConstructor(constructors[0]);
         StructuredGraph graph = new StructuredGraph(javaMethod);
 
         GraphBuilderConfiguration conf = GraphBuilderConfiguration.getSnippetDefault();
-        new GraphBuilderPhase(getMetaAccess(), conf, OptimisticOptimizations.ALL).apply(graph);
-        HighTierContext context = new HighTierContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), assumptions, replacements, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
-        new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
+        new GraphBuilderPhase(runtime, conf, OptimisticOptimizations.ALL).apply(graph);
+        HighTierContext context = new HighTierContext(runtime(), assumptions, replacements, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
+        new InliningPhase().apply(graph, context);
         new CanonicalizerPhase(true).apply(graph, context);
         return graph;
     }

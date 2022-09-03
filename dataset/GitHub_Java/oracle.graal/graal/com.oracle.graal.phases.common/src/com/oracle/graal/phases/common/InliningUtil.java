@@ -478,7 +478,7 @@ public class InliningUtil {
         private void createGuard(StructuredGraph graph, MetaAccessProvider runtime) {
             ValueNode nonNullReceiver = InliningUtil.nonNullReceiver(invoke);
             ConstantNode typeHub = ConstantNode.forConstant(type.getEncoding(Representation.ObjectHub), runtime, graph);
-            LoadHubNode receiverHub = graph.add(new LoadHubNode(nonNullReceiver, typeHub.kind(), null));
+            LoadHubNode receiverHub = graph.add(new LoadHubNode(nonNullReceiver, typeHub.kind()));
 
             CompareNode typeCheck = CompareNode.createCompareNode(Condition.EQ, receiverHub, typeHub);
             FixedGuardNode guard = graph.add(new FixedGuardNode(typeCheck, DeoptimizationReason.TypeCheckedInliningViolated, DeoptimizationAction.InvalidateReprofile));
@@ -487,6 +487,7 @@ public class InliningUtil {
             ValueNode anchoredReceiver = createAnchoredReceiver(graph, guard, type, nonNullReceiver, true);
             invoke.callTarget().replaceFirstInput(nonNullReceiver, anchoredReceiver);
 
+            graph.addBeforeFixed(invoke.asNode(), receiverHub);
             graph.addBeforeFixed(invoke.asNode(), guard);
         }
 
@@ -763,7 +764,8 @@ public class InliningUtil {
             assert ptypes.size() >= 1;
             ValueNode nonNullReceiver = nonNullReceiver(invoke);
             Kind hubKind = ((MethodCallTargetNode) invoke.callTarget()).targetMethod().getDeclaringClass().getEncoding(Representation.ObjectHub).getKind();
-            LoadHubNode hub = graph.add(new LoadHubNode(nonNullReceiver, hubKind, null));
+            LoadHubNode hub = graph.add(new LoadHubNode(nonNullReceiver, hubKind));
+            graph.addBeforeFixed(invoke.asNode(), hub);
 
             if (!invokeIsOnlySuccessor && chooseMethodDispatch()) {
                 assert successors.length == concretes.size() + 1;

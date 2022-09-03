@@ -36,6 +36,7 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
@@ -94,7 +95,7 @@ public class MemoryScheduleTest extends GraphScheduleTest {
     /**
      * In this case the read should be scheduled in the first block.
      */
-    public static int testSplit1Snippet(int a) {
+    public static int testSplitSnippet1(int a) {
         try {
             return container.a;
         } finally {
@@ -109,7 +110,7 @@ public class MemoryScheduleTest extends GraphScheduleTest {
     @Test
     public void testSplit1() {
         for (TestMode mode : TestMode.values()) {
-            SchedulePhase schedule = getFinalSchedule("testSplit1Snippet", mode, MemoryScheduling.OPTIMAL);
+            SchedulePhase schedule = getFinalSchedule("testSplitSnippet1", mode, MemoryScheduling.OPTIMAL);
             assertReadWithinStartBlock(schedule, true);
             assertReadWithinReturnBlock(schedule, false);
         }
@@ -209,42 +210,6 @@ public class MemoryScheduleTest extends GraphScheduleTest {
         assertReadWithinReturnBlock(schedule, false);
     }
 
-    public String testStringReplaceSnippet(String input) {
-        return input.replace('a', 'b');
-    }
-
-    @Test
-    public void testStringReplace() {
-        getFinalSchedule("testStringReplaceSnippet", TestMode.INLINED_WITHOUT_FRAMESTATES, MemoryScheduling.OPTIMAL);
-        test("testStringReplaceSnippet", "acbaaa");
-    }
-
-    /**
-     * Here the read should float out of the loop.
-     */
-    public static int testLoop5Snippet(int a, int b, MemoryScheduleTest obj) {
-        int ret = 0;
-        int bb = b;
-        for (int i = 0; i < a; i++) {
-            ret = obj.hash;
-            if (a > 10) {
-                bb++;
-            } else {
-                bb--;
-            }
-            ret = ret / 10;
-        }
-        return ret + bb;
-    }
-
-    @Test
-    public void testLoop5() {
-        SchedulePhase schedule = getFinalSchedule("testLoop5Snippet", TestMode.WITHOUT_FRAMESTATES, MemoryScheduling.OPTIMAL);
-        assertEquals(7, schedule.getCFG().getBlocks().length);
-        assertReadWithinStartBlock(schedule, false);
-        assertReadWithinReturnBlock(schedule, false);
-    }
-
     /**
      * Here the read should float to the end (into the same block as the return).
      */
@@ -257,7 +222,7 @@ public class MemoryScheduleTest extends GraphScheduleTest {
     public void testArrayCopy() {
         SchedulePhase schedule = getFinalSchedule("testArrayCopySnippet", TestMode.INLINED_WITHOUT_FRAMESTATES, MemoryScheduling.OPTIMAL);
         StructuredGraph graph = schedule.getCFG().getStartBlock().getBeginNode().graph();
-        ReturnNode ret = graph.getNodes().filter(ReturnNode.class).first();
+        ReturnNode ret = graph.getNodes(ReturnNode.class).first();
         assertTrue(ret.result() instanceof FloatingReadNode);
         assertEquals(schedule.getCFG().blockFor(ret), schedule.getCFG().blockFor(ret.result()));
         assertReadWithinReturnBlock(schedule, true);
@@ -345,25 +310,6 @@ public class MemoryScheduleTest extends GraphScheduleTest {
         assertReadWithinStartBlock(schedule, false);
         assertReadWithinReturnBlock(schedule, false);
         assertReadAndWriteInSameBlock(schedule, true);
-    }
-
-    /**
-     * Here the read should float to the end.
-     */
-    public static int testIfRead5Snippet(int a) {
-        if (a < 0) {
-            container.a = 10;
-        }
-        return container.a;
-    }
-
-    @Test
-    public void testIfRead5() {
-        SchedulePhase schedule = getFinalSchedule("testIfRead5Snippet", TestMode.WITHOUT_FRAMESTATES, MemoryScheduling.OPTIMAL);
-        assertEquals(4, schedule.getCFG().getBlocks().length);
-        assertReadWithinStartBlock(schedule, false);
-        assertReadWithinReturnBlock(schedule, true);
-        assertReadAndWriteInSameBlock(schedule, false);
     }
 
     /**
@@ -556,9 +502,9 @@ public class MemoryScheduleTest extends GraphScheduleTest {
                 HighTierContext context = new HighTierContext(runtime(), assumptions, replacements, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
                 new CanonicalizerPhase(true).apply(graph, context);
                 if (mode == TestMode.INLINED_WITHOUT_FRAMESTATES) {
-                    new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
+                    new InliningPhase().apply(graph, context);
                 }
-                new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, context);
+                new LoweringPhase(LoweringType.BEFORE_GUARDS).apply(graph, context);
                 if (mode == TestMode.WITHOUT_FRAMESTATES || mode == TestMode.INLINED_WITHOUT_FRAMESTATES) {
                     for (Node node : graph.getNodes()) {
                         if (node instanceof StateSplit) {
@@ -577,8 +523,8 @@ public class MemoryScheduleTest extends GraphScheduleTest {
 
                 MidTierContext midContext = new MidTierContext(runtime(), assumptions, replacements, runtime().getTarget(), OptimisticOptimizations.ALL);
                 new GuardLoweringPhase().apply(graph, midContext);
-                new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, midContext);
-                new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, midContext);
+                new LoweringPhase(LoweringType.AFTER_GUARDS).apply(graph, midContext);
+                new LoweringPhase(LoweringType.AFTER_FSA).apply(graph, midContext);
 
                 SchedulePhase schedule = new SchedulePhase(SchedulingStrategy.LATEST_OUT_OF_LOOPS, memsched);
                 schedule.apply(graph);

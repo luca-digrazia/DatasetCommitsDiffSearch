@@ -48,6 +48,7 @@ import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.verify.*;
+import com.oracle.graal.virtual.phases.ea.*;
 
 /**
  * Static methods for orchestrating the compilation of a {@linkplain StructuredGraph graph}.
@@ -57,6 +58,8 @@ public class GraalCompiler {
     // @formatter:off
     @Option(help = "")
     public static final OptionValue<Boolean> VerifyUsageWithEquals = new OptionValue<>(true);
+    @Option(help = "Enable inlining")
+    public static final OptionValue<Boolean> Inline = new OptionValue<>(true);
     // @formatter:on
 
     /**
@@ -140,7 +143,27 @@ public class GraalCompiler {
             new VerifyUsageWithEquals(runtime, Register.class).apply(graph);
         }
 
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!AOTCompilation.getValue());
         HighTierContext highTierContext = new HighTierContext(runtime, assumptions, replacements, cache, plan, optimisticOpts);
+
+        if (OptCanonicalizer.getValue()) {
+            canonicalizer.apply(graph, highTierContext);
+        }
+
+        if (Inline.getValue() && !plan.isPhaseDisabled(InliningPhase.class)) {
+            if (IterativeInlining.getValue()) {
+                new IterativeInliningPhase(canonicalizer).apply(graph, highTierContext);
+            } else {
+                new InliningPhase().apply(graph, highTierContext);
+                new DeadCodeEliminationPhase().apply(graph);
+
+                if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
+                    canonicalizer.apply(graph, highTierContext);
+                    new IterativeConditionalEliminationPhase().apply(graph, highTierContext);
+                }
+            }
+        }
+
         suites.getHighTier().apply(graph, highTierContext);
 
         MidTierContext midTierContext = new MidTierContext(runtime, assumptions, replacements, target, optimisticOpts);
