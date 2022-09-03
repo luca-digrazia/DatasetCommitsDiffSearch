@@ -211,13 +211,11 @@ public class GraphBuilderPhase extends Phase {
         return map;
     }
 
-    protected void build() {
+    private void build() {
         if (PrintProfilingInformation.getValue()) {
-            TTY.println("Profiling info for " + method);
+            TTY.println("Profiling info for " + MetaUtil.format("%H.%n(%p)", method));
             TTY.println(MetaUtil.indent(MetaUtil.profileToString(profilingInfo, method, CodeUtil.NEW_LINE), "  "));
         }
-
-        Indent indent = Debug.logAndIndent(false, "build graph for %s", method.toString());
 
         // compute the block map, setup exception handlers and get the entrypoint(s)
         BciBlockMapping blockMap = createBlockMap();
@@ -277,7 +275,6 @@ public class GraphBuilderPhase extends Phase {
                 n.safeDelete();
             }
         }
-        indent.outdent();
     }
 
     private Block unwindBlock(int bci) {
@@ -1593,7 +1590,7 @@ public class GraphBuilderPhase extends Phase {
             Debug.log("Ignoring block %s", block);
             return;
         }
-        Indent indent = Debug.logAndIndent("Parsing block %s  firstInstruction: %s  loopHeader: %b", block, block.firstInstruction, block.isLoopHeader);
+        Debug.log("Parsing block %s  firstInstruction: %s  loopHeader: %b", block, block.firstInstruction, block.isLoopHeader);
 
         lastInstr = block.firstInstruction;
         frameState = block.entryState;
@@ -1620,7 +1617,6 @@ public class GraphBuilderPhase extends Phase {
             frameState.setRethrowException(false);
             iterateBytecodesForBlock(block);
         }
-        indent.outdent();
     }
 
     private void connectLoopEndToBegin() {
