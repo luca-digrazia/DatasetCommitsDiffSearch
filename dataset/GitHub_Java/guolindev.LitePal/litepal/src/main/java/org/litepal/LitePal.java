@@ -18,8 +18,6 @@ package org.litepal;
 
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
-import android.os.Handler;
-import android.os.Looper;
 import android.text.TextUtils;
 
 import org.litepal.parser.LitePalAttr;
@@ -43,8 +41,6 @@ import java.io.File;
  */
 public class LitePal {
 
-    private static Handler handler = new Handler(Looper.getMainLooper());
-
     /**
      * Initialize to make LitePal ready to work. If you didn't configure LitePalApplication
      * in the AndroidManifest.xml, make sure you call this method as soon as possible. In
@@ -64,14 +60,6 @@ public class LitePal {
      */
     public static SQLiteDatabase getDatabase() {
         return Connector.getDatabase();
-    }
-
-    /**
-     * Get the main thread handler. You don't need this method. It's used by framework only.
-     * @return Main thread handler.
-     */
-    public static Handler getHandler() {
-        return handler;
     }
 
     /**
