@@ -70,7 +70,7 @@ import com.oracle.truffle.api.source.SourceSection;
 public final class ProbeNode extends Node {
 
     private final InstrumentationHandler handler;
-    @CompilationFinal private volatile EventContext context;
+    private final EventContext context;
 
     @Child private volatile ProbeNode.EventChainNode chain;
 
@@ -128,13 +128,6 @@ public final class ProbeNode extends Node {
         if (localChain != null) {
             localChain.onReturnExceptional(context, frame, exception);
         }
-    }
-
-    @Override
-    public Node copy() {
-        ProbeNode pn = (ProbeNode) super.copy();
-        pn.context = new EventContext(pn, context.getInstrumentedSourceSection());
-        return pn;
     }
 
     EventContext getContext() {
