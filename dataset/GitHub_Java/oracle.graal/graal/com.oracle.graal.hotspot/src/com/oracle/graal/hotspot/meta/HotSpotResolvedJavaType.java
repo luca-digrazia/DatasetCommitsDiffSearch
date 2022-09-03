@@ -23,8 +23,6 @@
 package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.graph.FieldIntrospection.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static java.lang.reflect.Modifier.*;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
@@ -164,27 +162,16 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
         if (isArrayClass()) {
             return getComponentType().findUniqueConcreteSubtype() == getComponentType() ? this : null;
         } else {
-            HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
-            HotSpotResolvedJavaType type = this;
-            while (isAbstract(type.getModifiers())) {
-                long subklass = unsafeReadWord(type.metaspaceKlass + config.subklassOffset);
-                if (subklass == 0 || unsafeReadWord(subklass + config.nextSiblingOffset) != 0) {
-                    return null;
-                }
-                type = (HotSpotResolvedJavaType) fromMetaspaceKlass(subklass);
-            }
-            if (unsafeReadWord(type.metaspaceKlass + config.subklassOffset) != 0) {
-                return null;
-            }
-            assert !type.isInterface();
-            return type;
+            ResolvedJavaType subtype = (ResolvedJavaType) HotSpotGraalRuntime.getInstance().getCompilerToVM().getUniqueConcreteSubtype(this);
+            assert subtype == null || !subtype.isInterface();
+            return subtype;
         }
     }
 
     @Override
-    public HotSpotResolvedJavaType getSuperclass() {
+    public ResolvedJavaType getSuperclass() {
         Class javaSuperclass = javaMirror.getSuperclass();
-        return javaSuperclass == null ? null : (HotSpotResolvedJavaType) fromClass(javaSuperclass);
+        return javaSuperclass == null ? null : fromClass(javaSuperclass);
     }
 
     @Override
@@ -200,37 +187,12 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
         return interfaces;
     }
 
-    public HotSpotResolvedJavaType getSupertype() {
-        if (isArrayClass()) {
-            ResolvedJavaType componentType = getComponentType();
-            if (javaMirror == Object[].class || componentType instanceof HotSpotTypePrimitive) {
-                return (HotSpotResolvedJavaType) fromClass(Object.class);
-            }
-            return (HotSpotResolvedJavaType) ((HotSpotResolvedJavaType) componentType).getSupertype().getArrayClass();
-        }
-        if (isInterface()) {
-            return (HotSpotResolvedJavaType) fromClass(Object.class);
-        }
-        return getSuperclass();
-    }
-
     @Override
     public ResolvedJavaType findLeastCommonAncestor(ResolvedJavaType otherType) {
         if (otherType instanceof HotSpotTypePrimitive) {
             return null;
         } else {
-            HotSpotResolvedJavaType t1 = this;
-            HotSpotResolvedJavaType t2 = (HotSpotResolvedJavaType) otherType;
-            while (true) {
-              if (t2.isAssignableTo(t1)) {
-                  return t1;
-              }
-              if (t1.isAssignableTo(t2)) {
-                  return t2;
-              }
-              t1 = t1.getSupertype();
-              t2 = t2.getSupertype();
-            }
+            return (ResolvedJavaType) HotSpotGraalRuntime.getInstance().getCompilerToVM().getLeastCommonAncestor(this, (HotSpotResolvedJavaType) otherType);
         }
     }
 
@@ -309,11 +271,11 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
     }
 
     @Override
-    public boolean isAssignableTo(ResolvedJavaType other) {
+    public boolean isSubtypeOf(ResolvedJavaType other) {
         if (other instanceof HotSpotResolvedJavaType) {
-            HotSpotResolvedJavaType otherType = (HotSpotResolvedJavaType) other;
-            return otherType.javaMirror.isAssignableFrom(javaMirror);
+            return HotSpotGraalRuntime.getInstance().getCompilerToVM().isSubtypeOf(this, other);
         }
+        // No resolved type is a subtype of an unresolved type.
         return false;
     }
 
@@ -396,7 +358,7 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
     @Override
     public ResolvedJavaField[] getInstanceFields(boolean includeSuperclasses) {
         if (instanceFields == null) {
-            if (isArrayClass() || isInterface()) {
+            if (isArrayClass() && isInterface()) {
                 instanceFields = new HotSpotResolvedJavaField[0];
             } else {
                 HotSpotResolvedJavaField[] myFields = HotSpotGraalRuntime.getInstance().getCompilerToVM().getInstanceFields(this);
@@ -447,9 +409,7 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
         return this;
     }
 
-    /**
-     * Gets the address of the C++ Klass object for this type.
-     */
+    @Override
     public Constant klass() {
         return new Constant(HotSpotGraalRuntime.getInstance().getTarget().wordKind, metaspaceKlass, this);
     }
