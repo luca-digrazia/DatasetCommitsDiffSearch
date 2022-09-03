@@ -87,18 +87,18 @@ public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArit
                 SubNode x = (SubNode) forX;
                 if (x.getX() == forY) {
                     // (a - b) - a
-                    return NegateNode.create(x.getY());
+                    return new NegateNode(x.getY());
                 }
             }
             if (forY instanceof AddNode) {
                 AddNode y = (AddNode) forY;
                 if (y.getX() == forX) {
                     // a - (a + b)
-                    return NegateNode.create(y.getY());
+                    return new NegateNode(y.getY());
                 }
                 if (y.getY() == forX) {
                     // b - (a + b)
-                    return NegateNode.create(y.getX());
+                    return new NegateNode(y.getX());
                 }
             } else if (forY instanceof SubNode) {
                 SubNode y = (SubNode) forY;
@@ -135,7 +135,7 @@ public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArit
                  * have to test for the neutral element of +, because we are doing this
                  * transformation: 0 - x == (-x) + 0 == -x.
                  */
-                return NegateNode.create(forY);
+                return new NegateNode(forY);
             }
             if (associative && self != null) {
                 return reassociate(self, ValueNode.isConstantPredicate(), forX, forY);
