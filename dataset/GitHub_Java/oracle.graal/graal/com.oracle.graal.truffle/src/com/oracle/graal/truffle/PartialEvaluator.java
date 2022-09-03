@@ -202,7 +202,7 @@ public class PartialEvaluator {
                         }
 
                         StructuredGraph inlineGraph = replacements.getMethodSubstitution(methodCallTargetNode.targetMethod());
-                        if (inlineGraph == null && canBeInlined(methodCallTargetNode)) {
+                        if (inlineGraph == null && !methodCallTargetNode.targetMethod().isNative() && methodCallTargetNode.targetMethod().canBeInlined()) {
                             inlineGraph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, phaseContext, false);
                         }
 
@@ -240,10 +240,6 @@ public class PartialEvaluator {
         if (TraceTruffleExpansion.getValue()) {
             expansionLogger.print();
         }
-    }
-
-    private static boolean canBeInlined(MethodCallTargetNode methodCallTargetNode) {
-        return !methodCallTargetNode.targetMethod().isNative() && methodCallTargetNode.targetMethod().getAnnotation(TruffleCallBoundary.class) == null;
     }
 
     private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final PhaseContext phaseContext,
@@ -284,7 +280,6 @@ public class PartialEvaluator {
                             break;
                         }
                     }
-                    loopsData.deleteUnusedNodes();
                 } while (unrolled);
             } catch (Throwable e) {
                 throw Debug.handle(e);
@@ -302,7 +297,7 @@ public class PartialEvaluator {
 
             @Override
             public int compare(LoopEx o1, LoopEx o2) {
-                return o2.loop().getDepth() - o1.loop().getDepth();
+                return o2.lirLoop().getDepth() - o1.lirLoop().getDepth();
             }
         });
         return sortedLoops;

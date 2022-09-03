@@ -250,11 +250,9 @@ public final class TruffleCacheImpl implements TruffleCache {
     private boolean tryCutOffRuntimeExceptions(MethodCallTargetNode methodCallTargetNode) {
         if (methodCallTargetNode.targetMethod().isConstructor()) {
             ResolvedJavaType runtimeException = providers.getMetaAccess().lookupJavaType(RuntimeException.class);
-            ResolvedJavaType assertionError = providers.getMetaAccess().lookupJavaType(AssertionError.class);
             ResolvedJavaType controlFlowException = providers.getMetaAccess().lookupJavaType(ControlFlowException.class);
             ResolvedJavaType exceptionType = Objects.requireNonNull(StampTool.typeOrNull(methodCallTargetNode.receiver().stamp()));
-            ResolvedJavaType declaringClass = methodCallTargetNode.targetMethod().getDeclaringClass();
-            if ((assertionError.isAssignableFrom(declaringClass) || runtimeException.isAssignableFrom(declaringClass)) && !controlFlowException.isAssignableFrom(exceptionType)) {
+            if (runtimeException.isAssignableFrom(methodCallTargetNode.targetMethod().getDeclaringClass()) && !controlFlowException.isAssignableFrom(exceptionType)) {
                 DeoptimizeNode deoptNode = methodCallTargetNode.graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.UnreachedCode));
                 FixedNode invokeNode = methodCallTargetNode.invoke().asNode();
                 invokeNode.replaceAtPredecessor(deoptNode);
