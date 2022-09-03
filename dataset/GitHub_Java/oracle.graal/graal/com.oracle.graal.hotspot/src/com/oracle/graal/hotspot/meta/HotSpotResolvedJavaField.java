@@ -51,7 +51,12 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
     private final String name;
     private JavaType type;
     private final int offset;
+    private Constant constant;
 
+    /**
+     * The {@linkplain HotSpotResolvedObjectType#getReflectionFieldModifiers() reflection} modifiers
+     * for this field plus the {@link #FIELD_INTERNAL_FLAG} if it applies.
+     */
     /**
      * This value contains all flags as stored in the VM including internal ones.
      */
@@ -65,23 +70,6 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         assert offset == (int) offset : "offset larger than int";
         this.offset = (int) offset;
         this.modifiers = modifiers;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null || !(obj instanceof HotSpotUnresolvedField)) {
-            return false;
-        }
-        HotSpotResolvedJavaField that = (HotSpotResolvedJavaField) obj;
-        return this.holder.equals(that.holder) && this.name.equals(that.name) && this.type.equals(that.type);
-    }
-
-    @Override
-    public int hashCode() {
-        return name.hashCode();
     }
 
     @Override
@@ -201,12 +189,14 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
 
         if (receiver == null) {
             assert isStatic(modifiers);
-            if (Modifier.isFinal(getModifiers())) {
+            if (constant == null) {
                 if (holder.isInitialized() && !holder.getName().equals(SystemClassName) && isEmbeddable()) {
-                    return readValue(receiver);
-
+                    if (Modifier.isFinal(getModifiers())) {
+                        constant = readValue(receiver);
+                    }
                 }
             }
+            return constant;
         } else {
             /*
              * for non-static final fields, we must assume that they are only initialized if they
