@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,7 +43,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Regex AST visitor that will find convert all NFA successors of a given {@link Term} to
@@ -59,7 +58,8 @@ import java.util.Set;
 public final class ASTStepVisitor extends NFATraversalRegexASTVisitor {
 
     private ASTStep stepCur;
-    private final EconomicMap<ASTStepCacheKey, ASTStep> lookAheadMap = EconomicMap.create();
+    private final EconomicMap<LookAheadAssertion, ASTStep> lookAheadMap = EconomicMap.create();
+    private final EconomicMap<LookAheadAssertion, ASTStep> lookAheadMapWithCaret = EconomicMap.create();
     private final List<ASTStep> curLookAheads = new ArrayList<>();
     private final List<ASTStep> curLookBehinds = new ArrayList<>();
     private final Deque<ASTStep> lookAroundExpansionQueue = new ArrayDeque<>();
@@ -213,12 +213,12 @@ public final class ASTStepVisitor extends NFATraversalRegexASTVisitor {
 
     @Override
     protected void enterLookAhead(LookAheadAssertion assertion) {
-        ASTStepCacheKey key = new ASTStepCacheKey(assertion, canTraverseCaret(), getTraversableLookBehindAssertions());
-        ASTStep laStep = lookAheadMap.get(key);
+        EconomicMap<LookAheadAssertion, ASTStep> laMap = canTraverseCaret() ? lookAheadMapWithCaret : lookAheadMap;
+        ASTStep laStep = laMap.get(assertion);
         if (laStep == null) {
             laStep = new ASTStep(assertion.getGroup());
             lookAroundExpansionQueue.push(laStep);
-            lookAheadMap.put(key, laStep);
+            laMap.put(assertion, laStep);
         }
         curLookAheads.add(laStep);
     }
@@ -227,31 +227,5 @@ public final class ASTStepVisitor extends NFATraversalRegexASTVisitor {
     protected void leaveLookAhead(LookAheadAssertion assertion) {
         assert curLookAheads.get(curLookAheads.size() - 1).getRoot().getParent() == assertion;
         curLookAheads.remove(curLookAheads.size() - 1);
-    }
-
-    private static class ASTStepCacheKey {
-        private final RegexASTNode root;
-        private final boolean canTraverseCaret;
-        private final Set<LookBehindAssertion> traversableLookBehindAssertions;
-
-        ASTStepCacheKey(RegexASTNode root, boolean canTraverseCaret, Set<LookBehindAssertion> traversableLookBehindAssertions) {
-            this.root = root;
-            this.canTraverseCaret = canTraverseCaret;
-            this.traversableLookBehindAssertions = traversableLookBehindAssertions;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof ASTStepCacheKey)) {
-                return false;
-            }
-            ASTStepCacheKey that = (ASTStepCacheKey) obj;
-            return this.root.equals(that.root) && this.canTraverseCaret == that.canTraverseCaret && this.traversableLookBehindAssertions.equals(that.traversableLookBehindAssertions);
-        }
-
-        @Override
-        public int hashCode() {
-            return root.hashCode() + 31 * (Boolean.hashCode(canTraverseCaret) + 31 * traversableLookBehindAssertions.hashCode());
-        }
     }
 }

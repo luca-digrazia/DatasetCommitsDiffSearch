@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,7 +40,7 @@ import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 public class NFAStateTransition implements JsonConvertible {
 
     private final short id;
-    private NFAState source;
+    private final NFAState source;
     private final NFAState target;
     private final GroupBoundaries groupBoundaries;
 
@@ -57,10 +57,6 @@ public class NFAStateTransition implements JsonConvertible {
 
     public NFAState getSource() {
         return source;
-    }
-
-    public void setSource(NFAState source) {
-        this.source = source;
     }
 
     public NFAState getTarget() {
