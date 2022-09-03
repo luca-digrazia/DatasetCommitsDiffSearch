@@ -124,8 +124,6 @@ public class GraalDebugConfig implements DebugConfig {
         public static final OptionValue<String> GlobalMetricsInterceptedByMethodMetrics = new OptionValue<>(null);
         @Option(help = "Force-enable debug code paths", type = OptionType.Debug)
         public static final OptionValue<Boolean> ForceDebugEnable = new OptionValue<>(false);
-        @Option(help = "Clear the debug metrics after bootstrap.", type = OptionType.Debug)
-        public static final OptionValue<Boolean> ClearMetricsAfterBootstrap = new OptionValue<>(false);
         // @formatter:on
     }
 
