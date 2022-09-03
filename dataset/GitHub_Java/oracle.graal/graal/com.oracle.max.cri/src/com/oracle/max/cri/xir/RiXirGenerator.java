@@ -51,7 +51,7 @@ public interface RiXirGenerator {
 
     XirSnippet genInvokeInterface(XirSite site, XirArgument receiver, RiMethod method);
 
-    XirSnippet genInvokeVirtual(XirSite site, XirArgument receiver, RiMethod method, boolean megamorph);
+    XirSnippet genInvokeVirtual(XirSite site, XirArgument receiver, RiMethod method);
 
     XirSnippet genInvokeSpecial(XirSite site, XirArgument receiver, RiMethod method);
 
@@ -102,12 +102,12 @@ public interface RiXirGenerator {
      * an object is identical to a given hub constant. In pseudo code:
      * <pre>
      *     if (object.getHub() != hub) {
-     *       jump(falseSuccessor)
+     *         uncommonTrap();
      *     }
      * </pre>
      * This snippet should only be used when the object is guaranteed not to be null.
      */
-    XirSnippet genTypeBranch(XirSite site, XirArgument thisHub, XirArgument otherHub, RiType type);
+    XirSnippet genTypeCheck(XirSite site, XirArgument object, XirArgument hub, RiType type);
 
     /**
      * Initializes the XIR generator for the given XIR assembler.

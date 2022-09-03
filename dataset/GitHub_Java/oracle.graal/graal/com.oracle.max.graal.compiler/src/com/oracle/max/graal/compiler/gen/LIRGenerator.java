@@ -46,9 +46,9 @@ import com.oracle.max.cri.xir.CiXirAssembler.XirTemp;
 import com.oracle.max.cri.xir.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.cfg.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.lir.StandardOp.ParametersOp;
+import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
@@ -77,7 +77,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     protected final RiXirGenerator xir;
     private final DebugInfoBuilder debugInfoBuilder;
 
-    private Block currentBlock;
+    private LIRBlock currentBlock;
     private ValueNode currentInstruction;
     private ValueNode lastInstructionPrinted; // Debugging only
     private FrameState lastState;
@@ -157,12 +157,12 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         return target;
     }
 
-    private LockScope locksFor(Block block) {
-        return blockLocks[block.getId()];
+    private LockScope locksFor(LIRBlock block) {
+        return blockLocks[block.blockID()];
     }
 
-    private void setLocksFor(Block block, LockScope locks) {
-        blockLocks[block.getId()] = locks;
+    private void setLocksFor(LIRBlock block, LockScope locks) {
+        blockLocks[block.blockID()] = locks;
     }
 
     /**
@@ -242,7 +242,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     protected LabelRef getLIRBlock(FixedNode b) {
-        Block result = lir.cfg.blockFor(b);
+        LIRBlock result = lir.valueToBlock().get(b);
         int suxIndex = currentBlock.getSuccessors().indexOf(result);
         assert suxIndex != -1 : "Block not in successor list of current block";
 
@@ -287,49 +287,45 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             TTY.println(op.toStringWithIdPrefix());
             TTY.println();
         }
-        currentBlock.lir.add(op);
+        currentBlock.lir().add(op);
     }
 
-    public void doBlock(Block block) {
+    public void doBlock(LIRBlock block) {
         if (GraalOptions.PrintIRWithLIR) {
             TTY.print(block.toString());
         }
 
         currentBlock = block;
         // set up the list of LIR instructions
-        assert block.lir == null : "LIR list already computed for this block";
-        block.lir = new ArrayList<>();
+        assert block.lir() == null : "LIR list already computed for this block";
+        block.setLir(new ArrayList<LIRInstruction>());
 
-        emitLabel(new Label(), block.align);
+        emitLabel(block.label(), block.align());
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
-            TTY.println("BEGIN Generating LIR for block B" + block.getId());
+            TTY.println("BEGIN Generating LIR for block B" + block.blockID());
         }
 
-        curLocks = null;
-        for (Block pred : block.getPredecessors()) {
-            LockScope predLocks = locksFor(pred);
-            if (curLocks == null) {
-                curLocks = predLocks;
-            } else if (curLocks != predLocks && (!pred.isLoopEnd() || predLocks != null)) {
-                throw new CiBailout("unbalanced monitors: predecessor blocks have different monitor states");
-            }
-        }
-
-        if (block == lir.cfg.getStartBlock()) {
+        if (block == lir.startBlock()) {
             assert block.getPredecessors().size() == 0;
             emitPrologue();
+            curLocks = null;
 
         } else {
             assert block.getPredecessors().size() > 0;
             FrameState fs = null;
+            curLocks = locksFor(block.predAt(0));
 
-            for (Block pred : block.getPredecessors()) {
+            for (Block p : block.getPredecessors()) {
+                LIRBlock pred = (LIRBlock) p;
                 if (fs == null) {
-                    fs = pred.lastState;
-                } else if (fs != pred.lastState) {
+                    fs = pred.lastState();
+                } else if (fs != pred.lastState()) {
                     fs = null;
                     break;
+                }
+                if (curLocks != locksFor(pred)) {
+                    throw new CiBailout("unbalanced monitors: predecessor blocks have different monitor states");
                 }
             }
             if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
@@ -345,18 +341,17 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             lastState = fs;
         }
 
-        if (GraalOptions.AllocSSA && block.getBeginNode() instanceof MergeNode) {
+        if (GraalOptions.AllocSSA && block.firstNode() instanceof MergeNode) {
             block.phis = new LIRPhiMapping(block, this);
         }
 
-        List<Node> nodes = lir.nodesFor(block);
-        for (int i = 0; i < nodes.size(); i++) {
-            Node instr = nodes.get(i);
+        for (int i = 0; i < block.getInstructions().size(); ++i) {
+            Node instr = block.getInstructions().get(i);
 
             if (GraalOptions.OptImplicitNullChecks) {
                 Node nextInstr = null;
-                if (i < nodes.size() - 1) {
-                    nextInstr = nodes.get(i + 1);
+                if (i < block.getInstructions().size() - 1) {
+                    nextInstr = block.getInstructions().get(i + 1);
                 }
 
                 if (instr instanceof GuardNode) {
@@ -395,36 +390,24 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                 }
             }
         }
-        if (block.numberOfSux() >= 1 && !endsWithJump(block)) {
-            NodeSuccessorsIterable successors = block.getEndNode().successors();
-            assert successors.count() >= 1 : "should have at least one successor : " + block.getEndNode();
+        if (block.numberOfSux() >= 1 && !block.endsWithJump()) {
+            NodeSuccessorsIterable successors = block.lastNode().successors();
+            assert successors.count() >= 1 : "should have at least one successor : " + block.lastNode();
 
             emitJump(getLIRBlock((FixedNode) successors.first()), null);
         }
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
-            TTY.println("END Generating LIR for block B" + block.getId());
+            TTY.println("END Generating LIR for block B" + block.blockID());
         }
 
         setLocksFor(currentBlock, curLocks);
-        block.lastState = lastState;
+        block.setLastState(lastState);
         currentBlock = null;
 
         if (GraalOptions.PrintIRWithLIR) {
             TTY.println();
         }
-    }
-
-    private static boolean endsWithJump(Block block) {
-        if (block.lir.size() == 0) {
-            return false;
-        }
-        LIRInstruction lirInstruction = block.lir.get(block.lir.size() - 1);
-        if (lirInstruction instanceof LIRXirInstruction) {
-            LIRXirInstruction lirXirInstruction = (LIRXirInstruction) lirInstruction;
-            return (lirXirInstruction.falseSuccessor != null) && (lirXirInstruction.trueSuccessor != null);
-        }
-        return lirInstruction instanceof StandardOp.JumpOp;
     }
 
     private void doRoot(ValueNode instr) {
@@ -777,8 +760,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     public Variable emitConditional(BooleanNode node, CiValue trueValue, CiValue falseValue) {
-        assert trueValue instanceof CiConstant && (trueValue.kind.stackKind() == CiKind.Int || trueValue.kind == CiKind.Long);
-        assert falseValue instanceof CiConstant && (falseValue.kind.stackKind() == CiKind.Int || trueValue.kind == CiKind.Long);
+        assert trueValue instanceof CiConstant && trueValue.kind.stackKind() == CiKind.Int;
+        assert falseValue instanceof CiConstant && falseValue.kind.stackKind() == CiKind.Int;
 
         if (node instanceof NullCheckNode) {
             return emitNullCheckConditional((NullCheckNode) node, trueValue, falseValue);
