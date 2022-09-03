@@ -37,6 +37,7 @@ import javax.xml.bind.DatatypeConverter;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.llvm.runtime.LLVMPerformance;
 
 @ValueType
 public final class LLVM80BitFloat {
@@ -136,6 +137,7 @@ public final class LLVM80BitFloat {
     }
 
     private static LLVM80BitFloat fromLong(long val, boolean sign) {
+        LLVMPerformance.warn(null, "LLVM80BitFloat:fromLong");
         int leadingOnePosition = Long.SIZE - Long.numberOfLeadingZeros(val);
         int exponent = EXPONENT_BIAS + (leadingOnePosition - 1);
         long fractionMask;
@@ -196,30 +198,6 @@ public final class LLVM80BitFloat {
 
     private boolean isNegativeZero() {
         return equals(NEGATIVE_ZERO);
-    }
-
-    public static LLVM80BitFloat fromFloat(float val) {
-        boolean sign = val < 0;
-        if (FloatHelper.isPositiveZero(val)) {
-            return new LLVM80BitFloat(POSITIVE_ZERO);
-        } else if (FloatHelper.isNegativeZero(val)) {
-            return new LLVM80BitFloat(NEGATIVE_ZERO);
-        } else if (FloatHelper.isPositiveInfinty(val)) {
-            return new LLVM80BitFloat(DOUBLE_INFINITY_CONVERSION_NUMBER);
-        } else if (FloatHelper.isNegativeInfinity(val)) {
-            return new LLVM80BitFloat(DOUBLE_MINUS_INFINITY_CONVERSION_NUMBER);
-        } else if (FloatHelper.isNaN(val)) {
-            return new LLVM80BitFloat(DOUBLE_NAN_CONVERSION_NUMBER);
-        } else {
-            int rawValue = Float.floatToRawIntBits(val);
-            int floatExponent = FloatHelper.getUnbiasedExponent(val);
-            int biasedExponent = floatExponent + EXPONENT_BIAS;
-            long leadingOne = (long) EXPLICIT_LEADING_ONE_BITS << (FRACTION_BIT_WIDTH - 1);
-            long floatFraction = rawValue & FloatHelper.FRACTION_MASK;
-            long shiftedFloatFraction = floatFraction << (FRACTION_BIT_WIDTH - FloatHelper.FLOAT_FRACTION_BIT_WIDTH - EXPLICIT_LEADING_ONE_BITS);
-            long fraction = shiftedFloatFraction | leadingOne;
-            return LLVM80BitFloat.fromRawValues(sign, biasedExponent, fraction);
-        }
     }
 
     public static LLVM80BitFloat fromDouble(double val) {

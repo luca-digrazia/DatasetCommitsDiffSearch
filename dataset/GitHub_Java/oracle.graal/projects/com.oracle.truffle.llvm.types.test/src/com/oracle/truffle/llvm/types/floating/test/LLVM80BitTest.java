@@ -31,7 +31,7 @@ package com.oracle.truffle.llvm.types.floating.test;
 
 import org.junit.Assert;
 
-import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 
 public abstract class LLVM80BitTest {
 
@@ -60,11 +60,11 @@ public abstract class LLVM80BitTest {
     }
 
     protected static LLVM80BitFloat negativeInfinity() {
-        return LLVM80BitFloat.RealLLVM80BitFloat.NEGATIVE_INFINITY;
+        return new LLVM80BitFloat(true, LLVM80BitFloat.ALL_ONE_EXPONENT, LLVM80BitFloat.bit(63L));
     }
 
     protected static LLVM80BitFloat positiveInfinity() {
-        return LLVM80BitFloat.RealLLVM80BitFloat.POSITIVE_INFINITY;
+        return new LLVM80BitFloat(false, LLVM80BitFloat.ALL_ONE_EXPONENT, LLVM80BitFloat.bit(63L));
     }
 
     protected static LLVM80BitFloat nan() {

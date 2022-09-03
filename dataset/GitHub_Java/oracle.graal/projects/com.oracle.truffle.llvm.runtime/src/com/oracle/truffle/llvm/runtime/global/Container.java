@@ -283,10 +283,6 @@ abstract class Container {
             LLVMMemory.free(address);
         }
 
-        public long getAddress() {
-            return address;
-        }
-
         @Override
         LLVMAddress getNativeLocation(LLVMGlobalVariable global) {
             return LLVMAddress.fromLong(address);
@@ -400,9 +396,7 @@ abstract class Container {
 
         @Override
         void putGlobal(LLVMGlobalVariable global, LLVMGlobalVariable value) {
-            // this is specially handeled in the LLVMGlobalVariableAccess node
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException();
+            LLVMMemory.putAddress(address, value.getNativeLocation());
         }
     }
 
@@ -720,7 +714,7 @@ abstract class Container {
             } else if (managedValue instanceof LLVMAddress) {
                 LLVMMemory.putAddress(address, (LLVMAddress) managedValue);
             } else if (managedValue instanceof LLVMGlobalVariable) {
-                LLVMMemory.putAddress(address, ((LLVMGlobalVariable) managedValue).getContainer().getNativeLocation((LLVMGlobalVariable) managedValue));
+                LLVMMemory.putAddress(address, ((LLVMGlobalVariable) managedValue).getNativeLocation());
             } else if (managedValue instanceof TruffleObject || managedValue instanceof LLVMTruffleObject) {
                 throw new IllegalStateException("Cannot resolve address of a foreign TruffleObject: " + managedValue);
             } else if (managedValue == null) {
@@ -914,7 +908,7 @@ abstract class Container {
             } else if (managedValue instanceof LLVMAddress) {
                 LLVMMemory.putAddress(address, (LLVMAddress) managedValue);
             } else if (managedValue instanceof LLVMGlobalVariable) {
-                LLVMMemory.putAddress(address, ((LLVMGlobalVariable) managedValue).getContainer().getNativeLocation((LLVMGlobalVariable) managedValue));
+                LLVMMemory.putAddress(address, ((LLVMGlobalVariable) managedValue).getNativeLocation());
             } else if (managedValue instanceof TruffleObject || managedValue instanceof LLVMTruffleObject) {
                 throw new IllegalStateException("Cannot resolve address of a foreign TruffleObject: " + managedValue);
             } else if (managedValue == null) {

@@ -65,25 +65,11 @@ public abstract class LLVMMemory {
     /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMProfiledMemSet} instead. */
     @Deprecated
     public static void memset(LLVMAddress address, long size, byte value) {
-        try {
-            UNSAFE.setMemory(address.getVal(), size, value);
-        } catch (Throwable e) {
-            // this avoids unnecessary exception edges in the compiled code
-            CompilerDirectives.transferToInterpreter();
-            throw e;
-        }
+        UNSAFE.setMemory(address.getVal(), size, value);
     }
 
-    /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMProfiledMemSet} instead. */
-    @Deprecated
     public static void memset(long address, long size, byte value) {
-        try {
-            UNSAFE.setMemory(address, size, value);
-        } catch (Throwable e) {
-            // this avoids unnecessary exception edges in the compiled code
-            CompilerDirectives.transferToInterpreter();
-            throw e;
-        }
+        UNSAFE.setMemory(address, size, value);
     }
 
     public static void free(LLVMAddress address) {
@@ -91,34 +77,16 @@ public abstract class LLVMMemory {
     }
 
     public static void free(long address) {
-        try {
-            UNSAFE.freeMemory(address);
-        } catch (Throwable e) {
-            // this avoids unnecessary exception edges in the compiled code
-            CompilerDirectives.transferToInterpreter();
-            throw e;
-        }
+        UNSAFE.freeMemory(address);
     }
 
     public static LLVMAddress allocateMemory(long size) {
-        try {
-            return LLVMAddress.fromLong(UNSAFE.allocateMemory(size));
-        } catch (Throwable e) {
-            // this avoids unnecessary exception edges in the compiled code
-            CompilerDirectives.transferToInterpreter();
-            throw e;
-        }
+        return LLVMAddress.fromLong(UNSAFE.allocateMemory(size));
     }
 
     public static LLVMAddress reallocateMemory(LLVMAddress addr, long size) {
         // a null pointer is a valid argument
-        try {
-            return LLVMAddress.fromLong(UNSAFE.reallocateMemory(addr.getVal(), size));
-        } catch (Throwable e) {
-            // this avoids unnecessary exception edges in the compiled code
-            CompilerDirectives.transferToInterpreter();
-            throw e;
-        }
+        return LLVMAddress.fromLong(UNSAFE.reallocateMemory(addr.getVal(), size));
     }
 
     public static boolean getI1(LLVMAddress addr) {

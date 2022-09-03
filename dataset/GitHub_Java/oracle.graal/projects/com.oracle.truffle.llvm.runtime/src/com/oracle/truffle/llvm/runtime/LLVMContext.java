@@ -46,6 +46,7 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableRegistry;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
@@ -54,7 +55,7 @@ import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-public final class LLVMContext {
+public class LLVMContext {
 
     private final List<RootCallTarget> globalVarInits = new ArrayList<>();
     private final List<RootCallTarget> globalVarDeallocs = new ArrayList<>();
@@ -64,7 +65,6 @@ public final class LLVMContext {
     private final List<LLVMThread> runningThreads = new ArrayList<>();
 
     private final LLVMGlobalVariableRegistry globalVariableRegistry = new LLVMGlobalVariableRegistry();
-    private final LLVMTypeRegistry typeRegistry = new LLVMTypeRegistry();
 
     private final NativeLookup nativeLookup;
 
@@ -239,10 +239,6 @@ public final class LLVMContext {
 
     public LLVMGlobalVariableRegistry getGlobalVariableRegistry() {
         return globalVariableRegistry;
-    }
-
-    public LLVMTypeRegistry getTypeRegistry() {
-        return typeRegistry;
     }
 
     public void addLibraryToNativeLookup(String library) {
