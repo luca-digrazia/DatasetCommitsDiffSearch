@@ -26,11 +26,6 @@ import static com.oracle.graal.compiler.common.GraalOptions.OptAssumptions;
 import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
 import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.util.Formattable;
-import java.util.Formatter;
-
 import com.oracle.graal.api.runtime.GraalJVMCICompiler;
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.GraalCompiler;
@@ -41,7 +36,6 @@ import com.oracle.graal.debug.TTY;
 import com.oracle.graal.debug.TopLevelDebugConfig;
 import com.oracle.graal.debug.internal.DebugScope;
 import com.oracle.graal.debug.internal.method.MethodMetricsRootScopeInfo;
-import com.oracle.graal.hotspot.CompilationCounters.Options;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.phases.OnStackReplacementPhase;
 import com.oracle.graal.java.GraphBuilderPhase;
@@ -63,10 +57,8 @@ import jdk.vm.ci.code.CompilationRequest;
 import jdk.vm.ci.code.CompilationRequestResult;
 import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
 import jdk.vm.ci.hotspot.HotSpotCompilationRequest;
-import jdk.vm.ci.hotspot.HotSpotCompilationRequestResult;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
-import jdk.vm.ci.meta.JavaMethod;
 import jdk.vm.ci.meta.ProfilingInfo;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.SpeculationLog;
@@ -78,14 +70,20 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
     private final HotSpotJVMCIRuntimeProvider jvmciRuntime;
     private final HotSpotGraalRuntimeProvider graalRuntime;
     private final CompilationCounters compilationCounters;
-    private final BootstrapWatchDog bootstrapWatchDog;
+    private static final ThreadLocal<CompilationWatchDogThread> watchdogs = CompilationWatchDogThread.Options.MonitorCompilerThreads.getValue() ? new ThreadLocal<>() : null;
 
     HotSpotGraalCompiler(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalRuntimeProvider graalRuntime) {
         this.jvmciRuntime = jvmciRuntime;
         this.graalRuntime = graalRuntime;
-        // It is sufficient to have one compilation counter object per Graal compiler object.
-        this.compilationCounters = Options.CompilationCountLimit.getValue() > 0 ? new CompilationCounters() : null;
-        this.bootstrapWatchDog = graalRuntime.isBootstrapping() ? BootstrapWatchDog.maybeCreate() : null;
+        /*
+         * It is sufficient to have one compilation counter object per Graal compiler object.
+         */
+        if (CompilationCounters.compilationCountersEnabled()) {
+            TTY.println("Warning: Compilation counters enabled, excessive recompilation of a method will cause a failure!");
+            compilationCounters = new CompilationCounters();
+        } else {
+            compilationCounters = null;
+        }
     }
 
     @Override
@@ -96,34 +94,47 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
     @Override
     @SuppressWarnings("try")
     public CompilationRequestResult compileMethod(CompilationRequest request) {
-        if (bootstrapWatchDog != null && graalRuntime.isBootstrapping()) {
-            if (bootstrapWatchDog.hitCriticalCompilationRate()) {
-                // Drain the compilation queue to expedite completion of the bootstrap
-                return HotSpotCompilationRequestResult.failure("hit critical bootstrap compilation rate", true);
+        if (CompilationWatchDogThread.Options.MonitorCompilerThreads.getValue()) {
+            /*
+             * lazily get a watch dog thread for the current compiler thread
+             */
+            CompilationWatchDogThread watchDog = watchdogs.get();
+            if (watchDog == null) {
+                watchDog = new CompilationWatchDogThread(Thread.currentThread());
+                TTY.printf("Warning: Compiler thread watchdog enabled. Creating watchdog %s for compiler thread %s!\n", watchDog, Thread.currentThread());
+                watchdogs.set(watchDog);
+                watchDog.start();
+            }
+            watchDog.startCompilation(request.getMethod());
+        }
+        if (CompilationCounters.compilationCountersEnabled()) {
+            if (!compilationCounters.countCompilation(request)) {
+                TTY.printf("Error. Method %s was compiled too many times. Number of compilations = %d\n", request.getMethod().format("%H.%n(%p)"),
+                                CompilationCounters.Options.CompilationCountLimit.getValue());
+                TTY.println("==================================== Compilation Counters ====================================");
+                compilationCounters.dumpCounters(TTY.out);
+                TTY.flush();
+                System.exit(-1);
             }
         }
-        ResolvedJavaMethod method = request.getMethod();
-        try (CompilationWatchDog compilationWatchDog = CompilationWatchDog.startingCompilation(method)) {
-            if (compilationCounters != null) {
-                compilationCounters.countCompilation(method);
-            }
-            // Ensure a debug configuration for this thread is initialized
-            if (Debug.isEnabled() && DebugScope.getConfig() == null) {
-                DebugEnvironment.initialize(TTY.out);
-            }
-            CompilationTask task = new CompilationTask(jvmciRuntime, this, (HotSpotCompilationRequest) request, true, true);
-            CompilationRequestResult r = null;
-            try (DebugConfigScope dcs = Debug.setConfig(new TopLevelDebugConfig());
-                            Debug.Scope s = Debug.methodMetricsScope("HotSpotGraalCompiler", MethodMetricsRootScopeInfo.create(method), true, method)) {
-                r = task.runCompilation();
-            }
-            assert r != null;
-            return r;
-        } finally {
-            if (bootstrapWatchDog != null) {
-                bootstrapWatchDog.notifyCompilationFinished();
-            }
+        // Ensure a debug configuration for this thread is initialized
+        if (Debug.isEnabled() && DebugScope.getConfig() == null) {
+            DebugEnvironment.initialize(TTY.out);
         }
+        CompilationTask task = new CompilationTask(jvmciRuntime, this, (HotSpotCompilationRequest) request, true, true);
+        CompilationRequestResult r = null;
+        try (DebugConfigScope dcs = Debug.setConfig(new TopLevelDebugConfig());
+                        Debug.Scope s = Debug.methodMetricsScope("HotSpotGraalCompiler", MethodMetricsRootScopeInfo.create(request.getMethod()), true, request.getMethod())) {
+            r = task.runCompilation();
+        }
+        assert r != null;
+        if (CompilationWatchDogThread.Options.MonitorCompilerThreads.getValue()) {
+            assert watchdogs != null;
+            CompilationWatchDogThread watchdog = watchdogs.get();
+            assert watchdog != null;
+            watchdog.stopCompilation();
+        }
+        return r;
     }
 
     public void compileTheWorld() throws Throwable {
@@ -190,7 +201,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
             StructuredGraph graph = new StructuredGraph(substMethod, AllowAssumptions.YES, NO_PROFILING_INFO);
             Plugins plugins = new Plugins(providers.getGraphBuilderPlugins());
             GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
-            IntrinsicContext initialReplacementContext = new IntrinsicContext(method, substMethod, replacements.getReplacementBytecodeProvider(), ROOT_COMPILATION);
+            IntrinsicContext initialReplacementContext = new IntrinsicContext(method, substMethod, ROOT_COMPILATION);
             new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), providers.getConstantFieldProvider(), config,
                             OptimisticOptimizations.NONE, initialReplacementContext).apply(graph);
             assert !graph.isFrozen();
@@ -239,37 +250,5 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
             return newGbs;
         }
         return suite;
-    }
-
-    /**
-     * Converts {@code method} to a String with {@link JavaMethod#format(String)} and the format
-     * string {@code "%H.%n(%p)"}.
-     */
-    static String str(JavaMethod method) {
-        return method.format("%H.%n(%p)");
-    }
-
-    /**
-     * Wraps {@code obj} in a {@link Formatter} that standardizes formatting for certain objects.
-     */
-    static Formattable fmt(Object obj) {
-        return new Formattable() {
-            @Override
-            public void formatTo(Formatter buf, int flags, int width, int precision) {
-                if (obj instanceof Throwable) {
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    ((Throwable) obj).printStackTrace(new PrintStream(baos));
-                    buf.format("%s", baos.toString());
-                } else if (obj instanceof StackTraceElement[]) {
-                    for (StackTraceElement e : (StackTraceElement[]) obj) {
-                        buf.format("\t%s%n", e);
-                    }
-                } else if (obj instanceof JavaMethod) {
-                    buf.format("%s", str((JavaMethod) obj));
-                } else {
-                    buf.format("%s", obj);
-                }
-            }
-        };
     }
 }
