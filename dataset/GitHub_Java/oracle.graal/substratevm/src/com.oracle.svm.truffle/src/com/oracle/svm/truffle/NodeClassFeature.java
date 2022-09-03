@@ -63,7 +63,7 @@ public class NodeClassFeature implements Feature {
 
     @Override
     public List<Class<? extends Feature>> getRequiredFeatures() {
-        return Arrays.asList(TruffleFeature.class, GraalFeature.class);
+        return Arrays.asList(GraalFeature.class);
     }
 
     @Override
@@ -142,7 +142,7 @@ public class NodeClassFeature implements Feature {
                  * Unsafe in the NodeClass, e.g. when making changes in the graph.
                  */
                 // TODO register unsafe accessed Truffle nodes in a separate partition?
-                access.registerAsUnsafeAccessed(field);
+                access.registerAsUnsafeWritten(field);
             }
 
             if (accessor.getKind() == com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind.DATA) {
