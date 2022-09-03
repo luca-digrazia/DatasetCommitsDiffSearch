@@ -27,7 +27,6 @@ import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionalit
 
 import java.util.Set;
 
-import com.oracle.graal.compiler.common.util.CompilationAlarm;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.Graph.NodeEventScope;
@@ -76,7 +75,7 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
     public boolean runAnalysis(final StructuredGraph graph, final PhaseContextT context) {
         boolean changed = false;
         boolean stop = false;
-        for (int iteration = 0; !stop && iteration < maxIterations && !CompilationAlarm.hasExpired(); iteration++) {
+        for (int iteration = 0; !stop && iteration < maxIterations; iteration++) {
             try (Scope s = Debug.scope(isEnabled() ? "iteration " + iteration : null)) {
                 ScheduleResult schedule;
                 ControlFlowGraph cfg;
