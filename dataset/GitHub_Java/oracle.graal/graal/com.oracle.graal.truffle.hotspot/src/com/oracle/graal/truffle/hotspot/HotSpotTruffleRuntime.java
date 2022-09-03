@@ -70,6 +70,9 @@ import com.oracle.truffle.api.nodes.*;
 public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
     public static TruffleRuntime makeInstance() {
+        if (GraalTruffleRuntime.alternateRuntime != null) {
+            return GraalTruffleRuntime.alternateRuntime;
+        }
         return new HotSpotTruffleRuntime();
     }
 
@@ -148,7 +151,6 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         return createCallTargetImpl(source, root);
     }
 
-    @SuppressWarnings("try")
     public static void installOptimizedCallTargetCallMethod() {
         Providers providers = getGraalProviders();
         MetaAccessProvider metaAccess = providers.getMetaAccess();
