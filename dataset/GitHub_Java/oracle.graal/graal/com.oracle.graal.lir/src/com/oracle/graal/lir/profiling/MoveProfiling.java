@@ -59,7 +59,7 @@ public class MoveProfiling extends PostAllocationOptimizationPhase {
         new Analyzer(target, lirGenRes.getLIR(), counterFactory).run();
     }
 
-    private enum MoveType {
+    private static enum MoveType {
         REG2REG("Reg", "Reg"),
         STACK2REG("Reg", "Stack"),
         CONST2REG("Reg", "Const"),
@@ -114,7 +114,7 @@ public class MoveProfiling extends PostAllocationOptimizationPhase {
         private final LIRInsertionBuffer buffer;
         private final int[] cnt;
 
-        Analyzer(TargetDescription target, LIR lir, BenchmarkCounterFactory counterFactory) {
+        public Analyzer(TargetDescription target, LIR lir, BenchmarkCounterFactory counterFactory) {
             this.target = target;
             this.lir = lir;
             this.counterFactory = counterFactory;
@@ -155,11 +155,10 @@ public class MoveProfiling extends PostAllocationOptimizationPhase {
                     increments.add(new ConstantValue(target.getLIRKind(JavaKind.Int), JavaConstant.forInt(i)));
                 }
             }
-            int size = names.size();
-            if (size > 0) { // Don't pollute LIR when nothing has to be done
-                String[] groups = new String[size];
-                Arrays.fill(groups, "MoveOperations");
-                LIRInstruction inst = counterFactory.createMultiBenchmarkCounter(names.toArray(new String[size]), groups, increments.toArray(new Value[size]));
+            String[] groups = new String[names.size()];
+            Arrays.fill(groups, "MoveOperations");
+            if (names.size() > 0) { // Don't pollute LIR when nothing has to be done
+                LIRInstruction inst = counterFactory.createMultiBenchmarkCounter(names.toArray(new String[0]), groups, increments.toArray(new Value[0]));
                 assert inst != null;
                 buffer.init(instructions);
                 buffer.append(1, inst);
