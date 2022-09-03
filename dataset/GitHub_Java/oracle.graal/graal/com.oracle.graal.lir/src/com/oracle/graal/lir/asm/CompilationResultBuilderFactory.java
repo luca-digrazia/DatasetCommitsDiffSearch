@@ -20,31 +20,33 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot.sparc;
+package com.oracle.graal.lir.asm;
 
 import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
 
+import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.spi.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.lir.framemap.*;
 
-public class SPARCHotSpotLoweringProvider extends DefaultHotSpotLoweringProvider {
+/**
+ * Factory class for creating {@link CompilationResultBuilder}s.
+ */
+public interface CompilationResultBuilderFactory {
 
-    public SPARCHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
-                    TargetDescription target) {
-        super(runtime, metaAccess, foreignCalls, registers, target);
-    }
+    /**
+     * Creates a new {@link CompilationResultBuilder}.
+     */
+    CompilationResultBuilder createBuilder(CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, FrameMap frameMap, Assembler asm, FrameContext frameContext,
+                    CompilationResult compilationResult);
 
-    @Override
-    public void lower(Node n, LoweringTool tool) {
-        if (n instanceof FloatConvertNode) {
-            // FloatConvertNodes are handled in SPARCLIRGenerator.emitConvert
-        } else {
-            super.lower(n, tool);
+    /**
+     * The default factory creates a standard {@link CompilationResultBuilder}.
+     */
+    CompilationResultBuilderFactory Default = new CompilationResultBuilderFactory() {
+
+        public CompilationResultBuilder createBuilder(CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, FrameMap frameMap, Assembler asm, FrameContext frameContext,
+                        CompilationResult compilationResult) {
+            return new CompilationResultBuilder(codeCache, foreignCalls, frameMap, asm, frameContext, compilationResult);
         }
-    }
+    };
 }

@@ -22,92 +22,45 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.compiler.common.GraalOptions.SnippetCounters;
-import static com.oracle.graal.hotspot.nodes.BeginLockScopeNode.beginLockScope;
-import static com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode.compareAndSwap;
-import static com.oracle.graal.hotspot.nodes.EndLockScopeNode.endLockScope;
-import static com.oracle.graal.hotspot.nodes.VMErrorNode.vmError;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.DISPLACED_MARK_WORD_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.MARK_WORD_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.PROTOTYPE_MARK_WORD_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.ageMaskInPlace;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.biasedLockMaskInPlace;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.biasedLockPattern;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.config;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.epochMaskInPlace;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.lockDisplacedMarkOffset;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.pageSize;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.prototypeMarkWordOffset;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.registerAsWord;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.unlockedMask;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.useBiasedLocking;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.verifyOop;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.wordSize;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.FREQUENT_PROBABILITY;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.VERY_FAST_PATH_PROBABILITY;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.VERY_SLOW_PATH_PROBABILITY;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
-import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.hotspot.nodes.BeginLockScopeNode.*;
+import static com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode.*;
+import static com.oracle.graal.hotspot.nodes.EndLockScopeNode.*;
+import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+import static com.oracle.graal.replacements.SnippetTemplate.*;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.options.Option;
-import jdk.vm.ci.options.OptionType;
-import jdk.vm.ci.options.OptionValue;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
 
-import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
-import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
-import com.oracle.graal.hotspot.nodes.CurrentLockNode;
-import com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode;
-import com.oracle.graal.hotspot.nodes.MonitorCounterNode;
-import com.oracle.graal.hotspot.word.KlassPointer;
-import com.oracle.graal.nodes.BreakpointNode;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.debug.DynamicCounterNode;
-import com.oracle.graal.nodes.extended.ForeignCallNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.java.MonitorExitNode;
-import com.oracle.graal.nodes.java.RawMonitorEnterNode;
-import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.phases.common.inlining.InliningUtil;
-import com.oracle.graal.replacements.Log;
-import com.oracle.graal.replacements.Snippet;
+import com.oracle.graal.nodes.debug.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.replacements.SnippetCounter;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.replacements.Snippets;
-import com.oracle.graal.word.Word;
-import com.oracle.graal.word.WordBase;
+import com.oracle.graal.word.*;
 
 /**
  * Snippets used for implementing the monitorenter and monitorexit instructions.
@@ -157,7 +110,7 @@ public class MonitorSnippets implements Snippets {
 
         final Word lock = beginLockScope(lockDepth);
 
-        trace(trace, "           object: 0x%016lx\n", Word.objectToTrackedPointer(object));
+        trace(trace, "           object: 0x%016lx\n", Word.fromObject(object));
         trace(trace, "             lock: 0x%016lx\n", lock);
         trace(trace, "             mark: 0x%016lx\n", mark);
 
@@ -343,7 +296,7 @@ public class MonitorSnippets implements Snippets {
 
     @Snippet
     public static void monitorexit(Object object, @ConstantParameter int lockDepth, @ConstantParameter boolean trace) {
-        trace(trace, "           object: 0x%016lx\n", Word.objectToTrackedPointer(object));
+        trace(trace, "           object: 0x%016lx\n", Word.fromObject(object));
         if (useBiasedLocking()) {
             // Check for biased locking unlock case, which is a no-op
             // Note: we do not have to check the thread ID for two reasons.
@@ -406,7 +359,7 @@ public class MonitorSnippets implements Snippets {
         decCounter();
     }
 
-    public static void traceObject(boolean enabled, String action, Object object, boolean enter) {
+    private static void traceObject(boolean enabled, String action, Object object, boolean enter) {
         if (doProfile()) {
             DynamicCounterNode.counter(action, enter ? "number of monitor enters" : "number of monitor exits", 1, PROFILE_CONTEXT);
         }
@@ -417,7 +370,7 @@ public class MonitorSnippets implements Snippets {
         }
     }
 
-    public static void trace(boolean enabled, String format, WordBase value) {
+    private static void trace(boolean enabled, String format, WordBase value) {
         if (enabled) {
             Log.printf(format, value.rawValue());
         }
@@ -434,7 +387,7 @@ public class MonitorSnippets implements Snippets {
     @NodeIntrinsic(BreakpointNode.class)
     static native void bkpt(Object object, Word mark, Word tmp, Word value);
 
-    public static void incCounter() {
+    private static void incCounter() {
         if (CHECK_BALANCED_MONITORS) {
             final Word counter = MonitorCounterNode.counter();
             final int count = counter.readInt(0, MONITOR_COUNTER_LOCATION);
@@ -442,7 +395,7 @@ public class MonitorSnippets implements Snippets {
         }
     }
 
-    public static void decCounter() {
+    private static void decCounter() {
         if (CHECK_BALANCED_MONITORS) {
             final Word counter = MonitorCounterNode.counter();
             final int count = counter.readInt(0, MONITOR_COUNTER_LOCATION);
@@ -519,7 +472,7 @@ public class MonitorSnippets implements Snippets {
             template(args).instantiate(providers.getMetaAccess(), monitorexitNode, DEFAULT_REPLACER, args);
         }
 
-        public static boolean isTracingEnabledForType(ValueNode object) {
+        static boolean isTracingEnabledForType(ValueNode object) {
             ResolvedJavaType type = StampTool.typeOrNull(object.stamp());
             if (TRACE_TYPE_FILTER == null) {
                 return false;
@@ -534,7 +487,7 @@ public class MonitorSnippets implements Snippets {
             }
         }
 
-        public static boolean isTracingEnabledForMethod(ResolvedJavaMethod method) {
+        static boolean isTracingEnabledForMethod(ResolvedJavaMethod method) {
             if (TRACE_METHOD_FILTER == null) {
                 return false;
             } else {
@@ -603,26 +556,26 @@ public class MonitorSnippets implements Snippets {
      * {@code "lock"} are mutually exclusive. The other counters are for paths that may be shared.
      */
     private static final SnippetCounter.Group lockCounters = SnippetCounters.getValue() ? new SnippetCounter.Group("MonitorEnters") : null;
-    public static final SnippetCounter lockBiasExisting = new SnippetCounter(lockCounters, "lock{bias:existing}", "bias-locked previously biased object");
-    public static final SnippetCounter lockBiasAcquired = new SnippetCounter(lockCounters, "lock{bias:acquired}", "bias-locked newly biased object");
-    public static final SnippetCounter lockBiasTransfer = new SnippetCounter(lockCounters, "lock{bias:transfer}", "bias-locked, biased transferred");
-    public static final SnippetCounter lockCas = new SnippetCounter(lockCounters, "lock{cas}", "cas-locked an object");
-    public static final SnippetCounter lockCasRecursive = new SnippetCounter(lockCounters, "lock{cas:recursive}", "cas-locked, recursive");
-    public static final SnippetCounter lockStubEpochExpired = new SnippetCounter(lockCounters, "lock{stub:epoch-expired}", "stub-locked, epoch expired");
-    public static final SnippetCounter lockStubRevoke = new SnippetCounter(lockCounters, "lock{stub:revoke}", "stub-locked, biased revoked");
-    public static final SnippetCounter lockStubFailedCas = new SnippetCounter(lockCounters, "lock{stub:failed-cas}", "stub-locked, failed cas");
+    static final SnippetCounter lockBiasExisting = new SnippetCounter(lockCounters, "lock{bias:existing}", "bias-locked previously biased object");
+    static final SnippetCounter lockBiasAcquired = new SnippetCounter(lockCounters, "lock{bias:acquired}", "bias-locked newly biased object");
+    static final SnippetCounter lockBiasTransfer = new SnippetCounter(lockCounters, "lock{bias:transfer}", "bias-locked, biased transferred");
+    static final SnippetCounter lockCas = new SnippetCounter(lockCounters, "lock{cas}", "cas-locked an object");
+    static final SnippetCounter lockCasRecursive = new SnippetCounter(lockCounters, "lock{cas:recursive}", "cas-locked, recursive");
+    static final SnippetCounter lockStubEpochExpired = new SnippetCounter(lockCounters, "lock{stub:epoch-expired}", "stub-locked, epoch expired");
+    static final SnippetCounter lockStubRevoke = new SnippetCounter(lockCounters, "lock{stub:revoke}", "stub-locked, biased revoked");
+    static final SnippetCounter lockStubFailedCas = new SnippetCounter(lockCounters, "lock{stub:failed-cas}", "stub-locked, failed cas");
 
-    public static final SnippetCounter unbiasable = new SnippetCounter(lockCounters, "unbiasable", "object with unbiasable type");
-    public static final SnippetCounter revokeBias = new SnippetCounter(lockCounters, "revokeBias", "object had bias revoked");
+    static final SnippetCounter unbiasable = new SnippetCounter(lockCounters, "unbiasable", "object with unbiasable type");
+    static final SnippetCounter revokeBias = new SnippetCounter(lockCounters, "revokeBias", "object had bias revoked");
 
     /**
      * Counters for the various paths for releasing a lock. The counters whose names start with
      * {@code "unlock"} are mutually exclusive. The other counters are for paths that may be shared.
      */
     private static final SnippetCounter.Group unlockCounters = SnippetCounters.getValue() ? new SnippetCounter.Group("MonitorExits") : null;
-    public static final SnippetCounter unlockBias = new SnippetCounter(unlockCounters, "unlock{bias}", "bias-unlocked an object");
-    public static final SnippetCounter unlockCas = new SnippetCounter(unlockCounters, "unlock{cas}", "cas-unlocked an object");
-    public static final SnippetCounter unlockCasRecursive = new SnippetCounter(unlockCounters, "unlock{cas:recursive}", "cas-unlocked an object, recursive");
-    public static final SnippetCounter unlockStub = new SnippetCounter(unlockCounters, "unlock{stub}", "stub-unlocked an object");
+    static final SnippetCounter unlockBias = new SnippetCounter(unlockCounters, "unlock{bias}", "bias-unlocked an object");
+    static final SnippetCounter unlockCas = new SnippetCounter(unlockCounters, "unlock{cas}", "cas-unlocked an object");
+    static final SnippetCounter unlockCasRecursive = new SnippetCounter(unlockCounters, "unlock{cas:recursive}", "cas-unlocked an object, recursive");
+    static final SnippetCounter unlockStub = new SnippetCounter(unlockCounters, "unlock{stub}", "stub-unlocked an object");
 
 }

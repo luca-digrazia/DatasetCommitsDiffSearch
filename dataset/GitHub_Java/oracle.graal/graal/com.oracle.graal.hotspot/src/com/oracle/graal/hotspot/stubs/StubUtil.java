@@ -77,7 +77,7 @@ public class StubUtil {
         }
         assert found != null : "could not find foreign call named " + name + " in " + stubClass;
         List<Class<?>> paramList = Arrays.asList(found.getParameterTypes());
-        Class<?>[] cCallTypes = paramList.subList(1, paramList.size()).toArray(new Class<?>[paramList.size() - 1]);
+        Class<?>[] cCallTypes = paramList.subList(1, paramList.size()).toArray(new Class[paramList.size() - 1]);
         return new ForeignCallDescriptor(name, found.getReturnType(), cCallTypes);
     }
 
@@ -224,7 +224,7 @@ public class StubUtil {
             Word verifyOopCounter = Word.unsigned(verifyOopCounterAddress());
             verifyOopCounter.writeInt(0, verifyOopCounter.readInt(0) + 1);
 
-            Pointer oop = Word.objectToTrackedPointer(object);
+            Pointer oop = Word.fromObject(object);
             if (object != null) {
                 GuardingNode anchorNode = SnippetAnchorNode.anchor();
                 // make sure object is 'reasonable'

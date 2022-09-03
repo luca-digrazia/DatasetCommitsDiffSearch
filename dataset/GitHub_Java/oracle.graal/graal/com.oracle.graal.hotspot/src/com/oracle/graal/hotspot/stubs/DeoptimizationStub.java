@@ -22,37 +22,26 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.HotSpotBackend.UNPACK_FRAMES;
-import static com.oracle.graal.hotspot.HotSpotBackend.Options.PreferGraalStubs;
-import static com.oracle.graal.hotspot.nodes.DeoptimizationFetchUnrollInfoCallNode.fetchUnrollInfo;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.config;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.pageSize;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.registerAsWord;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.wordSize;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.writeRegisterAsWord;
-import static com.oracle.graal.hotspot.stubs.UncommonTrapStub.STACK_BANG_LOCATION;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.hotspot.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.Options.*;
+import static com.oracle.graal.hotspot.nodes.DeoptimizationFetchUnrollInfoCallNode.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.stubs.UncommonTrapStub.*;
 
-import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.nodes.EnterUnpackFramesStackFrameNode;
-import com.oracle.graal.hotspot.nodes.LeaveCurrentStackFrameNode;
-import com.oracle.graal.hotspot.nodes.LeaveDeoptimizedStackFrameNode;
-import com.oracle.graal.hotspot.nodes.LeaveUnpackFramesStackFrameNode;
-import com.oracle.graal.hotspot.nodes.PushInterpreterFrameNode;
-import com.oracle.graal.hotspot.nodes.SaveAllRegistersNode;
-import com.oracle.graal.hotspot.nodes.StubForeignCallNode;
-import com.oracle.graal.replacements.Snippet;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.word.*;
 
 /**
  * Deoptimization stub.
@@ -129,10 +118,6 @@ public class DeoptimizationStub extends SnippetStub {
 
         final Word unrollBlock = fetchUnrollInfo(registerSaver);
 
-        deoptimizationCommon(stackPointerRegister, thread, registerSaver, unrollBlock, deoptimizationUnpackDeopt());
-    }
-
-    static void deoptimizationCommon(Register stackPointerRegister, final Word thread, final long registerSaver, final Word unrollBlock, final int mode) {
         // Pop all the frames we must move/replace.
         //
         // Frame picture (youngest to oldest)
@@ -205,6 +190,8 @@ public class DeoptimizationStub extends SnippetStub {
         final Word senderFp = initialInfo;
         EnterUnpackFramesStackFrameNode.enterUnpackFramesStackFrame(framePc, senderSp, senderFp, registerSaver);
 
+        // Pass unpack deopt mode to unpack frames.
+        final int mode = deoptimizationUnpackDeopt();
         unpackFrames(UNPACK_FRAMES, thread, mode);
 
         LeaveUnpackFramesStackFrameNode.leaveUnpackFramesStackFrame(registerSaver);

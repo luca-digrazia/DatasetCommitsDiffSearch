@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,19 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.hotspot.HotSpotBackend.FETCH_UNROLL_INFO;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.word.*;
 
 /**
  * A call to the runtime code {@code Deoptimization::fetch_unroll_info}.
@@ -49,13 +44,11 @@ public final class DeoptimizationFetchUnrollInfoCallNode extends FixedWithNextNo
 
     public static final NodeClass<DeoptimizationFetchUnrollInfoCallNode> TYPE = NodeClass.create(DeoptimizationFetchUnrollInfoCallNode.class);
     @Input SaveAllRegistersNode registerSaver;
-    @Input ValueNode mode;
     protected final ForeignCallsProvider foreignCalls;
 
-    public DeoptimizationFetchUnrollInfoCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode registerSaver, ValueNode mode) {
-        super(TYPE, StampFactory.forKind(JavaKind.fromJavaClass(FETCH_UNROLL_INFO.getResultType())));
+    public DeoptimizationFetchUnrollInfoCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode registerSaver) {
+        super(TYPE, StampFactory.forKind(Kind.fromJavaClass(FETCH_UNROLL_INFO.getResultType())));
         this.registerSaver = (SaveAllRegistersNode) registerSaver;
-        this.mode = mode;
         this.foreignCalls = foreignCalls;
     }
 
@@ -68,20 +61,12 @@ public final class DeoptimizationFetchUnrollInfoCallNode extends FixedWithNextNo
         return registerSaver.getSaveRegistersOp();
     }
 
-    /**
-     * Returns the node representing the exec_mode/unpack_kind used during this fetch_unroll_info
-     * call.
-     */
-    public ValueNode getMode() {
-        return mode;
-    }
-
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        Value result = ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitDeoptimizationFetchUnrollInfoCall(gen.operand(getMode()), getSaveRegistersOp());
+        Value result = ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitDeoptimizationFetchUnrollInfoCall(getSaveRegistersOp());
         gen.setResult(this, result);
     }
 
     @NodeIntrinsic
-    public static native Word fetchUnrollInfo(long registerSaver, int mode);
+    public static native Word fetchUnrollInfo(long registerSaver);
 }

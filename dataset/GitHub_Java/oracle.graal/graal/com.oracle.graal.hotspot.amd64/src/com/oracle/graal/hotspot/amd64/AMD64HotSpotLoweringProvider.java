@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,29 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
-import com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
-import com.oracle.graal.nodes.calc.FloatConvertNode;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.replacements.amd64.AMD64ConvertSnippets;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.hotspot.HotSpotConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.amd64.*;
 
 public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider {
 
     private AMD64ConvertSnippets.Templates convertSnippets;
 
     public AMD64HotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
-                    HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
-        super(runtime, metaAccess, foreignCalls, registers, constantReflection, target);
+                    TargetDescription target) {
+        super(runtime, metaAccess, foreignCalls, registers, target);
     }
 
     @Override
-    public void initialize(HotSpotProviders providers, GraalHotSpotVMConfig config) {
+    public void initialize(HotSpotProviders providers, HotSpotVMConfig config) {
         convertSnippets = new AMD64ConvertSnippets.Templates(providers, providers.getSnippetReflection(), providers.getCodeCache().getTarget());
         super.initialize(providers, config);
     }

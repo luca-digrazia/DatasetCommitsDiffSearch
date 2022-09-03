@@ -22,26 +22,19 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.sparc.SPARC.o7;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.InvokeTarget;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Value;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import static jdk.internal.jvmci.sparc.SPARC.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.sparc.SPARCAddress;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
-import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Sethix;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
 
 public class SPARCCall {
 
@@ -201,7 +194,7 @@ public class SPARCCall {
             // offset might not fit a 30-bit displacement, generate an
             // indirect call with a 64-bit immediate
             before = masm.position();
-            masm.sethix(0L, scratch, true);
+            new Sethix(0L, scratch, true).emit(masm);
             masm.jmpl(scratch, 0, o7);
         } else {
             before = masm.call(0);
@@ -215,7 +208,7 @@ public class SPARCCall {
 
     public static void indirectJmp(CompilationResultBuilder crb, SPARCMacroAssembler masm, Register dst, InvokeTarget target) {
         int before = masm.position();
-        masm.sethix(0L, dst, true);
+        new Sethix(0L, dst, true).emit(masm);
         masm.jmp(new SPARCAddress(dst, 0));
         masm.nop();  // delay slot
         int after = masm.position();

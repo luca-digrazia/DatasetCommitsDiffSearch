@@ -62,9 +62,6 @@ final class RegStackValueSet extends ValueSet<RegStackValueSet> {
 
     @Override
     public void put(Value v) {
-        if (!shouldProcessValue(v)) {
-            return;
-        }
         if (isRegister(v)) {
             int index = asRegister(v).getReferenceMapIndex();
             registers.put(index, v);
@@ -96,9 +93,6 @@ final class RegStackValueSet extends ValueSet<RegStackValueSet> {
 
     @Override
     public void remove(Value v) {
-        if (!shouldProcessValue(v)) {
-            return;
-        }
         if (isRegister(v)) {
             int index = asRegister(v).getReferenceMapIndex();
             registers.put(index, null);
@@ -126,14 +120,6 @@ final class RegStackValueSet extends ValueSet<RegStackValueSet> {
     @Override
     public int hashCode() {
         throw new UnsupportedOperationException();
-    }
-
-    private static boolean shouldProcessValue(Value v) {
-        /*
-         * We always process registers because we have to track the largest register size that is
-         * alive across safepoints in order to save and restore them.
-         */
-        return isRegister(v) || !v.getLIRKind().isValue();
     }
 
     public void addLiveValues(ReferenceMapBuilder refMap) {

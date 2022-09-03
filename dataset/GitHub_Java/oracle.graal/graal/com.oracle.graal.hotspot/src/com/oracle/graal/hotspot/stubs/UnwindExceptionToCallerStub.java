@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,23 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.nodes.JumpToExceptionHandlerInCallerNode.jumpToExceptionHandlerInCaller;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.registerAsWord;
-import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.checkExceptionNotNull;
-import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.checkNoExceptionInThread;
-import static com.oracle.graal.hotspot.stubs.StubUtil.cAssertionsEnabled;
-import static com.oracle.graal.hotspot.stubs.StubUtil.decipher;
-import static com.oracle.graal.hotspot.stubs.StubUtil.newDescriptor;
-import static com.oracle.graal.hotspot.stubs.StubUtil.printf;
+import jdk.internal.jvmci.code.*;
+import static com.oracle.graal.hotspot.nodes.JumpToExceptionHandlerInCallerNode.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.*;
+import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
-import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.api.replacements.Fold.InjectedParameter;
-import com.oracle.graal.api.replacements.Snippet;
-import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
-import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.nodes.StubForeignCallNode;
-import com.oracle.graal.nodes.UnwindNode;
-import com.oracle.graal.word.Pointer;
-import com.oracle.graal.word.Word;
-
-import jdk.vm.ci.code.Register;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.word.*;
 
 /**
  * Stub called by an {@link UnwindNode}. This stub executes in the frame of the method throwing an
@@ -75,7 +67,7 @@ public class UnwindExceptionToCallerStub extends SnippetStub {
 
     @Snippet
     private static void unwindExceptionToCaller(Object exception, Word returnAddress, @ConstantParameter Register threadRegister) {
-        Pointer exceptionOop = Word.objectToTrackedPointer(exception);
+        Pointer exceptionOop = Word.fromObject(exception);
         if (logging()) {
             printf("unwinding exception %p (", exceptionOop.rawValue());
             decipher(exceptionOop.rawValue());
@@ -84,8 +76,8 @@ public class UnwindExceptionToCallerStub extends SnippetStub {
             printf(")\n");
         }
         Word thread = registerAsWord(threadRegister);
-        checkNoExceptionInThread(thread, assertionsEnabled(null));
-        checkExceptionNotNull(assertionsEnabled(null), exception);
+        checkNoExceptionInThread(thread, assertionsEnabled());
+        checkExceptionNotNull(assertionsEnabled(), exception);
 
         Word handlerInCallerPc = exceptionHandlerForReturnAddress(EXCEPTION_HANDLER_FOR_RETURN_ADDRESS, thread, returnAddress);
 
@@ -99,8 +91,8 @@ public class UnwindExceptionToCallerStub extends SnippetStub {
     }
 
     @Fold
-    static boolean logging() {
-        return StubOptions.TraceUnwindStub.getValue();
+    private static boolean logging() {
+        return Boolean.getBoolean("graal.logUnwindExceptionToCallerStub");
     }
 
     /**
@@ -112,10 +104,10 @@ public class UnwindExceptionToCallerStub extends SnippetStub {
      */
     @Fold
     @SuppressWarnings("all")
-    static boolean assertionsEnabled(@InjectedParameter GraalHotSpotVMConfig config) {
+    private static boolean assertionsEnabled() {
         boolean enabled = false;
         assert enabled = true;
-        return enabled || cAssertionsEnabled(config);
+        return enabled || cAssertionsEnabled();
     }
 
     public static final ForeignCallDescriptor EXCEPTION_HANDLER_FOR_RETURN_ADDRESS = newDescriptor(UnwindExceptionToCallerStub.class, "exceptionHandlerForReturnAddress", Word.class, Word.class,

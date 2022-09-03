@@ -22,16 +22,16 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static jdk.internal.jvmci.inittimer.InitTimer.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.inittimer.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.service.*;
-
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.Debug.*;
+
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.service.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static jdk.internal.jvmci.hotspot.InitTimer.*;
+
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.nodes.spi.*;
@@ -66,7 +66,6 @@ public abstract class HotSpotHostBackend extends HotSpotBackend {
     }
 
     @Override
-    @SuppressWarnings("try")
     public void completeInitialization() {
         final HotSpotProviders providers = getProviders();
         HotSpotVMConfig config = getRuntime().getConfig();

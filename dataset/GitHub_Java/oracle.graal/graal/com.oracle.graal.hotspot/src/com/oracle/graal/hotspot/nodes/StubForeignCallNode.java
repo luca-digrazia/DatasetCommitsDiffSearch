@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,18 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import java.util.Arrays;
+import java.util.*;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
-import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Node for a {@linkplain ForeignCallDescriptor foreign} call from within a stub.
@@ -57,7 +48,7 @@ public final class StubForeignCallNode extends FixedWithNextNode implements LIRL
     protected final ForeignCallDescriptor descriptor;
 
     public StubForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, ValueNode... arguments) {
-        super(TYPE, StampFactory.forKind(JavaKind.fromJavaClass(descriptor.getResultType())));
+        super(TYPE, StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())));
         this.arguments = new NodeInputList<>(this, arguments);
         this.descriptor = descriptor;
         this.foreignCalls = foreignCalls;

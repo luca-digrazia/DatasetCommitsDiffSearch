@@ -24,10 +24,12 @@ package com.oracle.graal.replacements;
 
 import java.io.*;
 
-import com.oracle.graal.api.meta.*;
+import jdk.internal.jvmci.meta.*;
+
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.compiler.common.spi.*;
 
 //JaCoCo Exclude
 
@@ -36,22 +38,22 @@ import com.oracle.graal.nodes.extended.*;
  */
 public final class Log {
 
-    public static final ForeignCallDescriptor LOG_PRIMITIVE = new ForeignCallDescriptor("logPrimitive", false, void.class, int.class, long.class, boolean.class);
-    public static final ForeignCallDescriptor LOG_OBJECT = new ForeignCallDescriptor("logObject", false, void.class, Object.class, int.class);
-    public static final ForeignCallDescriptor LOG_PRINTF = new ForeignCallDescriptor("logPrintf", false, void.class, Object.class, long.class, long.class, long.class);
+    public static final ForeignCallDescriptor LOG_PRIMITIVE = new ForeignCallDescriptor("logPrimitive", void.class, int.class, long.class, boolean.class);
+    public static final ForeignCallDescriptor LOG_OBJECT = new ForeignCallDescriptor("logObject", void.class, Object.class, int.class);
+    public static final ForeignCallDescriptor LOG_PRINTF = new ForeignCallDescriptor("logPrintf", void.class, Object.class, long.class, long.class, long.class);
 
-    // Note: Must be kept in sync with constants in graalRuntime.hpp
+    // Note: Must be kept in sync with constants in jvmciRuntime.hpp
     private static final int LOG_OBJECT_NEWLINE = 0x01;
     private static final int LOG_OBJECT_STRING = 0x02;
     private static final int LOG_OBJECT_ADDRESS = 0x04;
 
-    @NodeIntrinsic(RuntimeCallNode.class)
+    @NodeIntrinsic(ForeignCallNode.class)
     private static native void log(@ConstantNodeParameter ForeignCallDescriptor logObject, Object object, int flags);
 
-    @NodeIntrinsic(RuntimeCallNode.class)
+    @NodeIntrinsic(ForeignCallNode.class)
     private static native void log(@ConstantNodeParameter ForeignCallDescriptor logPrimitive, int typeChar, long value, boolean newline);
 
-    @NodeIntrinsic(RuntimeCallNode.class)
+    @NodeIntrinsic(ForeignCallNode.class)
     private static native void printf(@ConstantNodeParameter ForeignCallDescriptor logPrintf, String format, long v1, long v2, long v3);
 
     public static void print(boolean value) {
@@ -80,7 +82,7 @@ public final class Log {
 
     /**
      * Prints a formatted string to the log stream.
-     * 
+     *
      * @param format a C style printf format value that can contain at most one conversion specifier
      *            (i.e., a sequence of characters starting with '%').
      * @param value the value associated with the conversion specifier

@@ -22,31 +22,21 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.DESTROYS_REGISTERS;
-import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.runtime;
+import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
-import java.util.Set;
+import java.util.*;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CallingConvention.Type;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.hotspot.HotSpotForeignCallTarget;
-import jdk.vm.ci.hotspot.HotSpotProxified;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.CallingConvention.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
-import com.oracle.graal.compiler.target.Backend;
-import com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider;
-import com.oracle.graal.hotspot.stubs.Stub;
-import com.oracle.graal.word.WordBase;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.word.*;
 
 /**
  * The details required to link a HotSpot runtime or stub call.
@@ -134,7 +124,7 @@ public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget impl
 
     private static JavaType asJavaType(Class<?> type, MetaAccessProvider metaAccess, CodeCacheProvider codeCache) {
         if (WordBase.class.isAssignableFrom(type)) {
-            return metaAccess.lookupJavaType(codeCache.getTarget().wordJavaKind.toJavaClass());
+            return metaAccess.lookupJavaType(codeCache.getTarget().wordKind.toJavaClass());
         } else {
             return metaAccess.lookupJavaType(type);
         }
@@ -172,10 +162,6 @@ public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget impl
         return reexecutable;
     }
 
-    public boolean isGuaranteedSafepoint() {
-        return transition == Transition.SAFEPOINT;
-    }
-
     public LocationIdentity[] getKilledLocations() {
         return killedLocations;
     }
@@ -196,7 +182,7 @@ public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget impl
     }
 
     public long getMaxCallTargetOffset() {
-        return runtime().getHostJVMCIBackend().getCodeCache().getMaxCallTargetOffset(address);
+        return runtime().getCompilerToVM().getMaxCallTargetOffset(address);
     }
 
     public ForeignCallDescriptor getDescriptor() {
@@ -245,7 +231,7 @@ public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget impl
 
     @Override
     public boolean needsDebugInfo() {
-        return transition == Transition.SAFEPOINT;
+        return transition == Transition.NOT_LEAF;
     }
 
     public boolean mayContainFP() {
@@ -253,7 +239,7 @@ public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget impl
     }
 
     public boolean needsJavaFrameAnchor() {
-        if (transition == Transition.SAFEPOINT || transition == Transition.STACK_INSPECTABLE_LEAF) {
+        if (transition == Transition.NOT_LEAF || transition == Transition.STACK_INSPECTABLE_LEAF) {
             if (stub != null) {
                 // The stub will do the JavaFrameAnchor management
                 // around the runtime call(s) it makes

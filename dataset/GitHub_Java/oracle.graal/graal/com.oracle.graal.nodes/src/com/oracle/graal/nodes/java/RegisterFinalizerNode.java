@@ -33,7 +33,6 @@ import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * This node is used to perform the finalizer registration at the end of the java.lang.Object
@@ -95,8 +94,8 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements C
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(getValue());
-        if (alias instanceof VirtualObjectNode && !((VirtualObjectNode) alias).type().hasFinalizer()) {
+        State state = tool.getObjectState(getValue());
+        if (state != null && !state.getVirtualObject().type().hasFinalizer()) {
             tool.delete();
         }
     }

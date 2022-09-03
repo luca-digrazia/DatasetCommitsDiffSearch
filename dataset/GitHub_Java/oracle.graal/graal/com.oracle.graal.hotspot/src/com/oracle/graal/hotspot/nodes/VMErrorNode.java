@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,24 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.hotspot.HotSpotBackend.VM_ERROR;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNKNOWN;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
+import static com.oracle.graal.hotspot.nodes.CStringNode.*;
 
-import com.oracle.graal.compiler.common.LIRKind;
-import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.replacements.Log;
-import com.oracle.graal.replacements.nodes.CStringConstant;
-
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.MetaUtil;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.*;
 
 /**
  * Causes the VM to exit with a description of the current Java location and an optional
  * {@linkplain Log#printf(String, long) formatted} error message specified.
  */
-@NodeInfo(cycles = CYCLES_UNKNOWN, size = SIZE_UNKNOWN)
+@NodeInfo
 public final class VMErrorNode extends DeoptimizingStubCall implements LIRLowerable {
 
     public static final NodeClass<VMErrorNode> TYPE = NodeClass.create(VMErrorNode.class);
@@ -76,10 +68,8 @@ public final class VMErrorNode extends DeoptimizingStubCall implements LIRLowera
             ResolvedJavaMethod method = graph().method();
             whereString = "in compiled code for " + (method == null ? graph().toString() : method.format("%H.%n(%p)"));
         }
-
-        LIRKind wordKind = gen.getLIRGeneratorTool().getLIRKind(StampFactory.pointer());
-        Value whereArg = gen.getLIRGeneratorTool().emitConstant(wordKind, new CStringConstant(whereString));
-        Value formatArg = gen.getLIRGeneratorTool().emitConstant(wordKind, new CStringConstant(format));
+        Value whereArg = emitCString(gen, whereString);
+        Value formatArg = emitCString(gen, format);
 
         ForeignCallLinkage linkage = gen.getLIRGeneratorTool().getForeignCalls().lookupForeignCall(VM_ERROR);
         gen.getLIRGeneratorTool().emitForeignCall(linkage, null, whereArg, formatArg, gen.operand(value));

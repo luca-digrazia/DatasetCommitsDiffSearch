@@ -22,50 +22,30 @@
  */
 package com.oracle.graal.replacements.sparc;
 
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_COS;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_EXP;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_LOG;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_LOG10;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_POW;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_SIN;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_TAN;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.compiler.target.Backend.*;
 
-import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.graphbuilderconf.ForeignCallPlugin;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.graphbuilderconf.InvocationPlugins.Registration;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.replacements.IntegerSubstitutions;
-import com.oracle.graal.replacements.LongSubstitutions;
-import com.oracle.graal.replacements.nodes.BitCountNode;
+import com.oracle.graal.replacements.*;
 
 public class SPARCGraphBuilderPlugins {
 
     public static void register(Plugins plugins, ForeignCallsProvider foreignCalls) {
         InvocationPlugins invocationPlugins = plugins.getInvocationPlugins();
-        registerIntegerLongPlugins(invocationPlugins, IntegerSubstitutions.class, JavaKind.Int);
-        registerIntegerLongPlugins(invocationPlugins, LongSubstitutions.class, JavaKind.Long);
+        registerIntegerLongPlugins(invocationPlugins, IntegerSubstitutions.class, Kind.Int);
+        registerIntegerLongPlugins(invocationPlugins, LongSubstitutions.class, Kind.Long);
         registerMathPlugins(invocationPlugins, foreignCalls);
     }
 
-    private static void registerIntegerLongPlugins(InvocationPlugins plugins, Class<?> substituteDeclaringClass, JavaKind kind) {
+    private static void registerIntegerLongPlugins(InvocationPlugins plugins, Class<?> substituteDeclaringClass, Kind kind) {
         Class<?> declaringClass = kind.toBoxedJavaClass();
         Class<?> type = kind.toJavaClass();
         Registration r = new Registration(plugins, declaringClass);
         r.registerMethodSubstitution(substituteDeclaringClass, "numberOfLeadingZeros", type);
         r.registerMethodSubstitution(substituteDeclaringClass, "numberOfTrailingZeros", type);
-
-        r.register1("bitCount", type, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
-                b.push(JavaKind.Int, b.recursiveAppend(new BitCountNode(value).canonical(null, value)));
-                return true;
-            }
-        });
     }
 
     private static void registerMathPlugins(InvocationPlugins plugins, ForeignCallsProvider foreignCalls) {

@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.hotspot;
 
-import jdk.vm.ci.meta.InvokeTarget;
-import jdk.vm.ci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.compiler.target.Backend;
-import com.oracle.graal.hotspot.stubs.Stub;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.stubs.*;
 
 /**
  * The details required to link a HotSpot runtime or stub call.
@@ -77,7 +76,7 @@ public interface HotSpotForeignCallLinkage extends ForeignCallLinkage, InvokeTar
          * in the called function. That is, {@code JavaFrameAnchor} management code around the call
          * is required.
          */
-        SAFEPOINT,
+        NOT_LEAF;
     }
 
     /**
@@ -115,9 +114,4 @@ public interface HotSpotForeignCallLinkage extends ForeignCallLinkage, InvokeTar
      * Gets the VM symbol associated with the target {@linkplain #getAddress() address} of the call.
      */
     String getSymbol();
-
-    /**
-     * Identifies foreign calls which are guaranteed to include a safepoint check.
-     */
-    boolean isGuaranteedSafepoint();
 }

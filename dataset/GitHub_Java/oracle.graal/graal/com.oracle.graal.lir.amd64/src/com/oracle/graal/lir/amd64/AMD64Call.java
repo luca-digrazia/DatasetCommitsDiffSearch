@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,17 @@
  */
 package com.oracle.graal.lir.amd64;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
-import static com.oracle.graal.lir.LIRValueUtil.differentRegisters;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
+import jdk.internal.jvmci.amd64.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
-import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.compiler.common.LIRKind;
-import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.gen.DiagnosticLIRGeneratorTool.ZapRegistersAfterInstruction;
-
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.amd64.AMD64Kind;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.InvokeTarget;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.asm.amd64.AMD64Assembler.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
 
 public class AMD64Call {
 
@@ -131,7 +117,7 @@ public class AMD64Call {
         }
     }
 
-    public abstract static class ForeignCallOp extends CallOp implements ZapRegistersAfterInstruction {
+    public abstract static class ForeignCallOp extends CallOp {
         public static final LIRInstructionClass<ForeignCallOp> TYPE = LIRInstructionClass.create(ForeignCallOp.class);
 
         protected final ForeignCallLinkage callTarget;
@@ -173,8 +159,8 @@ public class AMD64Call {
              * The register allocator does not support virtual registers that are used at the call
              * site, so use a fixed register.
              */
-            callTemp = AMD64.rax.asValue(LIRKind.value(AMD64Kind.QWORD));
-            assert differentRegisters(parameters, callTemp);
+            callTemp = AMD64.rax.asValue(LIRKind.value(Kind.Long));
+            assert ValueUtil.differentRegisters(parameters, callTemp);
         }
 
         @Override

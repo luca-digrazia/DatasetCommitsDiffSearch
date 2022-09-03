@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,15 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * A node that represents an exception thrown implicitly by a Java bytecode. It can be lowered to
@@ -50,7 +44,7 @@ public final class BytecodeExceptionNode extends AbstractMemoryCheckpoint implem
     @Input NodeInputList<ValueNode> arguments;
 
     public BytecodeExceptionNode(MetaAccessProvider metaAccess, Class<? extends Throwable> exceptionClass, ValueNode... arguments) {
-        super(TYPE, StampFactory.objectNonNull(TypeReference.createExactTrusted(metaAccess.lookupJavaType(exceptionClass))));
+        super(TYPE, StampFactory.exactNonNull(metaAccess.lookupJavaType(exceptionClass)));
         this.exceptionClass = exceptionClass;
         this.arguments = new NodeInputList<>(this, arguments);
     }
@@ -67,12 +61,10 @@ public final class BytecodeExceptionNode extends AbstractMemoryCheckpoint implem
         return super.toString(verbosity);
     }
 
-    @Override
     public LocationIdentity getLocationIdentity() {
         return LocationIdentity.any();
     }
 
-    @Override
     public void lower(LoweringTool tool) {
         tool.getLowerer().lower(this, tool);
     }

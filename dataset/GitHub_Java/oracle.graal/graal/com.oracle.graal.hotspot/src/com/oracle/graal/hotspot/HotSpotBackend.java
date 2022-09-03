@@ -22,54 +22,33 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.hotspot.stubs.StubUtil.newDescriptor;
+import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import jdk.vm.ci.code.DebugInfo;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterSaveLayout;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.ValueUtil;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.options.Option;
-import jdk.vm.ci.options.OptionType;
-import jdk.vm.ci.options.OptionValue;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.stack.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
-import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.compiler.target.Backend;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.nodes.DeoptimizationFetchUnrollInfoCallNode;
-import com.oracle.graal.hotspot.nodes.UncommonTrapCallNode;
-import com.oracle.graal.hotspot.nodes.VMErrorNode;
-import com.oracle.graal.hotspot.replacements.AESCryptSubstitutions;
-import com.oracle.graal.hotspot.replacements.CipherBlockChainingSubstitutions;
-import com.oracle.graal.hotspot.stubs.DeoptimizationStub;
-import com.oracle.graal.hotspot.stubs.ExceptionHandlerStub;
-import com.oracle.graal.hotspot.stubs.Stub;
-import com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.lir.ValueConsumer;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.framemap.FrameMap;
-import com.oracle.graal.lir.framemap.ReferenceMapBuilder;
-import com.oracle.graal.nodes.UnwindNode;
-import com.oracle.graal.phases.tiers.SuitesProvider;
-import com.oracle.graal.word.Pointer;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.word.*;
 
 /**
  * HotSpot specific backend.
@@ -114,7 +93,7 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
     /**
      * @see DeoptimizationFetchUnrollInfoCallNode
      */
-    public static final ForeignCallDescriptor FETCH_UNROLL_INFO = new ForeignCallDescriptor("fetchUnrollInfo", Word.class, long.class, int.class);
+    public static final ForeignCallDescriptor FETCH_UNROLL_INFO = new ForeignCallDescriptor("fetchUnrollInfo", Word.class, long.class);
 
     /**
      * @see DeoptimizationStub#unpackFrames(ForeignCallDescriptor, Word, int)
@@ -122,24 +101,24 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
     public static final ForeignCallDescriptor UNPACK_FRAMES = newDescriptor(DeoptimizationStub.class, "unpackFrames", int.class, Word.class, int.class);
 
     /**
-     * @see AESCryptSubstitutions#encryptBlockStub(ForeignCallDescriptor, Word, Word, Pointer)
+     * @see AESCryptSubstitutions#encryptBlockStub(ForeignCallDescriptor, Word, Word, Word)
      */
-    public static final ForeignCallDescriptor ENCRYPT_BLOCK = new ForeignCallDescriptor("encrypt_block", void.class, Word.class, Word.class, Pointer.class);
+    public static final ForeignCallDescriptor ENCRYPT_BLOCK = new ForeignCallDescriptor("encrypt_block", void.class, Word.class, Word.class, Word.class);
 
     /**
-     * @see AESCryptSubstitutions#decryptBlockStub(ForeignCallDescriptor, Word, Word, Pointer)
+     * @see AESCryptSubstitutions#decryptBlockStub(ForeignCallDescriptor, Word, Word, Word)
      */
-    public static final ForeignCallDescriptor DECRYPT_BLOCK = new ForeignCallDescriptor("decrypt_block", void.class, Word.class, Word.class, Pointer.class);
-
-    /**
-     * @see CipherBlockChainingSubstitutions#crypt
-     */
-    public static final ForeignCallDescriptor ENCRYPT = new ForeignCallDescriptor("encrypt", void.class, Word.class, Word.class, Pointer.class, Pointer.class, int.class);
+    public static final ForeignCallDescriptor DECRYPT_BLOCK = new ForeignCallDescriptor("decrypt_block", void.class, Word.class, Word.class, Word.class);
 
     /**
      * @see CipherBlockChainingSubstitutions#crypt
      */
-    public static final ForeignCallDescriptor DECRYPT = new ForeignCallDescriptor("decrypt", void.class, Word.class, Word.class, Pointer.class, Pointer.class, int.class);
+    public static final ForeignCallDescriptor ENCRYPT = new ForeignCallDescriptor("encrypt", void.class, Word.class, Word.class, Word.class, Word.class, int.class);
+
+    /**
+     * @see CipherBlockChainingSubstitutions#crypt
+     */
+    public static final ForeignCallDescriptor DECRYPT = new ForeignCallDescriptor("decrypt", void.class, Word.class, Word.class, Word.class, Word.class, int.class);
 
     /**
      * @see VMErrorNode
@@ -154,7 +133,7 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
     /**
      * New array stub.
      */
-    public static final ForeignCallDescriptor NEW_ARRAY = new ForeignCallDescriptor("new_array", Object.class, Word.class, int.class, boolean.class);
+    public static final ForeignCallDescriptor NEW_ARRAY = new ForeignCallDescriptor("new_array", Object.class, Word.class, int.class);
 
     /**
      * New insstance stub.
@@ -164,7 +143,7 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
     /**
      * @see UncommonTrapCallNode
      */
-    public static final ForeignCallDescriptor UNCOMMON_TRAP = new ForeignCallDescriptor("uncommonTrap", Word.class, Word.class, int.class, int.class);
+    public static final ForeignCallDescriptor UNCOMMON_TRAP = new ForeignCallDescriptor("uncommonTrap", Word.class, Word.class, int.class);
 
     public HotSpotBackend(HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
         super(providers);
@@ -178,10 +157,8 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
     /**
      * Performs any remaining initialization that was deferred until the {@linkplain #getRuntime()
      * runtime} object was initialized and this backend was registered with it.
-     *
-     * @param jvmciRuntime
      */
-    public void completeInitialization(HotSpotJVMCIRuntime jvmciRuntime) {
+    public void completeInitialization() {
     }
 
     /**
@@ -247,6 +224,11 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
     }
 
     @Override
+    public StackIntrospection getStackIntrospection() {
+        return runtime;
+    }
+
+    @Override
     public HotSpotProviders getProviders() {
         return (HotSpotProviders) super.getProviders();
     }
@@ -264,6 +246,6 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
 
     @Override
     public ReferenceMapBuilder newReferenceMapBuilder(int totalFrameSize) {
-        return new HotSpotReferenceMapBuilder(totalFrameSize);
+        return new HotSpotReferenceMapBuilder(getTarget(), totalFrameSize);
     }
 }

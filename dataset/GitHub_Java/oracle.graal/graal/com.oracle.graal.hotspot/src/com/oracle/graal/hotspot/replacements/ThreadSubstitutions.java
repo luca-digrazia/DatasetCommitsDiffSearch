@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,26 +22,20 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.compiler.common.LocationIdentity.any;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.JAVA_THREAD_OSTHREAD_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.JAVA_THREAD_THREAD_OBJECT_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.osThreadInterruptedOffset;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.osThreadOffset;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.threadObjectOffset;
-
-import com.oracle.graal.api.replacements.ClassSubstitution;
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static jdk.internal.jvmci.meta.LocationIdentity.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.nodes.CurrentJavaThreadNode;
-import com.oracle.graal.nodes.extended.ForeignCallNode;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.word.*;
 
 /**
  * Substitutions for {@link java.lang.Thread} methods.
  */
-@ClassSubstitution(Thread.class)
+@ClassSubstitution(java.lang.Thread.class)
 public class ThreadSubstitutions {
 
     @MethodSubstitution(isStatic = false)

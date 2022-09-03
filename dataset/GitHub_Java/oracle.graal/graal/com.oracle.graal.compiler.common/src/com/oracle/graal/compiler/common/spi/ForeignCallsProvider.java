@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.compiler.common.spi;
 
-import jdk.vm.ci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.*;
 
 /**
  * Details about a set of supported {@link ForeignCallDescriptor foreign calls}.
@@ -46,11 +46,6 @@ public interface ForeignCallsProvider {
      * Determines if deoptimization can occur during a given foreign call.
      */
     boolean canDeoptimize(ForeignCallDescriptor descriptor);
-
-    /**
-     * Identifies foreign calls which are guaranteed to include a safepoint check.
-     */
-    boolean isGuaranteedSafepoint(ForeignCallDescriptor descriptor);
 
     /**
      * Gets the linkage for a foreign call.

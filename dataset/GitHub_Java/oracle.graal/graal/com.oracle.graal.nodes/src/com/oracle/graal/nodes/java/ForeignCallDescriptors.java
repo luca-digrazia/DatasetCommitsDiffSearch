@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,31 +20,21 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot.sparc;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
+package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.compiler.common.spi.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
 
-public class SPARCHotSpotLoweringProvider extends DefaultHotSpotLoweringProvider {
+/**
+ * The foreign call descriptors used by nodes in this package.
+ * <p>
+ * Using a separate class for such descriptors prevents an access from triggering unwanted class
+ * initialization during runtime initialization.
+ */
+public class ForeignCallDescriptors {
 
-    public SPARCHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
-                    TargetDescription target) {
-        super(runtime, metaAccess, foreignCalls, registers, target);
-    }
+    /**
+     * @see RegisterFinalizerNode
+     */
+    public static final ForeignCallDescriptor REGISTER_FINALIZER = new ForeignCallDescriptor("registerFinalizer", void.class, Object.class);
 
-    @Override
-    public void lower(Node n, LoweringTool tool) {
-        if (n instanceof FloatConvertNode) {
-            // FloatConvertNodes are handled in SPARCLIRGenerator.emitConvert
-        } else {
-            super.lower(n, tool);
-        }
-    }
 }

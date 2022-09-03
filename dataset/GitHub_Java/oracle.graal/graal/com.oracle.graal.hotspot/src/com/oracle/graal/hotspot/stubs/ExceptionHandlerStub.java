@@ -22,41 +22,29 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
-import static com.oracle.graal.hotspot.nodes.JumpToExceptionHandlerNode.jumpToExceptionHandler;
-import static com.oracle.graal.hotspot.nodes.PatchReturnAddressNode.patchReturnAddress;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.readExceptionOop;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.readExceptionPc;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.registerAsWord;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.writeExceptionOop;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.writeExceptionPc;
-import static com.oracle.graal.hotspot.stubs.StubUtil.cAssertionsEnabled;
-import static com.oracle.graal.hotspot.stubs.StubUtil.decipher;
-import static com.oracle.graal.hotspot.stubs.StubUtil.fatal;
-import static com.oracle.graal.hotspot.stubs.StubUtil.newDescriptor;
-import static com.oracle.graal.hotspot.stubs.StubUtil.printf;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.hotspot.*;
+import static com.oracle.graal.hotspot.nodes.JumpToExceptionHandlerNode.*;
+import static com.oracle.graal.hotspot.nodes.PatchReturnAddressNode.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
-import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.api.replacements.Fold.InjectedParameter;
-import com.oracle.graal.api.replacements.Snippet;
-import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
-import com.oracle.graal.hotspot.HotSpotBackend;
-import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.nodes.StubForeignCallNode;
-import com.oracle.graal.word.Word;
-
-import jdk.vm.ci.code.Register;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.word.*;
 
 /**
- * Stub called by the {@linkplain GraalHotSpotVMConfig#MARKID_EXCEPTION_HANDLER_ENTRY exception
- * handler entry point} in a compiled method. This entry point is used when returning to a method to
- * handle an exception thrown by a callee. It is not used for routing implicit exceptions.
- * Therefore, it does not need to save any registers as HotSpot uses a caller save convention.
+ * Stub called by the {@linkplain HotSpotVMConfig#MARKID_EXCEPTION_HANDLER_ENTRY exception handler
+ * entry point} in a compiled method. This entry point is used when returning to a method to handle
+ * an exception thrown by a callee. It is not used for routing implicit exceptions. Therefore, it
+ * does not need to save any registers as HotSpot uses a caller save convention.
  * <p>
  * The descriptor for a call to this stub is {@link HotSpotBackend#EXCEPTION_HANDLER}.
  */
@@ -85,13 +73,13 @@ public class ExceptionHandlerStub extends SnippetStub {
     @Snippet
     private static void exceptionHandler(Object exception, Word exceptionPc, @ConstantParameter Register threadRegister) {
         Word thread = registerAsWord(threadRegister);
-        checkNoExceptionInThread(thread, assertionsEnabled(INJECTED_VMCONFIG));
-        checkExceptionNotNull(assertionsEnabled(INJECTED_VMCONFIG), exception);
+        checkNoExceptionInThread(thread, assertionsEnabled());
+        checkExceptionNotNull(assertionsEnabled(), exception);
         writeExceptionOop(thread, exception);
         writeExceptionPc(thread, exceptionPc);
         if (logging()) {
-            printf("handling exception %p (", Word.objectToTrackedPointer(exception).rawValue());
-            decipher(Word.objectToTrackedPointer(exception).rawValue());
+            printf("handling exception %p (", Word.fromObject(exception).rawValue());
+            decipher(Word.fromObject(exception).rawValue());
             printf(") at %p (", exceptionPc.rawValue());
             decipher(exceptionPc.rawValue());
             printf(")\n");
@@ -103,7 +91,7 @@ public class ExceptionHandlerStub extends SnippetStub {
         Word handlerPc = exceptionHandlerForPc(EXCEPTION_HANDLER_FOR_PC, thread);
 
         if (logging()) {
-            printf("handler for exception %p at %p is at %p (", Word.objectToTrackedPointer(exception).rawValue(), exceptionPc.rawValue(), handlerPc.rawValue());
+            printf("handler for exception %p at %p is at %p (", Word.fromObject(exception).rawValue(), exceptionPc.rawValue(), handlerPc.rawValue());
             decipher(handlerPc.rawValue());
             printf(")\n");
         }
@@ -116,9 +104,9 @@ public class ExceptionHandlerStub extends SnippetStub {
         if (enabled) {
             Object currentException = readExceptionOop(thread);
             if (currentException != null) {
-                fatal("exception object in thread must be null, not %p", Word.objectToTrackedPointer(currentException).rawValue());
+                fatal("exception object in thread must be null, not %p", Word.fromObject(currentException).rawValue());
             }
-            if (cAssertionsEnabled(INJECTED_VMCONFIG)) {
+            if (cAssertionsEnabled()) {
                 // This thread-local is only cleared in DEBUG builds of the VM
                 // (see OptoRuntime::generate_exception_blob)
                 Word currentExceptionPc = readExceptionPc(thread);
@@ -136,8 +124,8 @@ public class ExceptionHandlerStub extends SnippetStub {
     }
 
     @Fold
-    static boolean logging() {
-        return StubOptions.TraceExceptionHandlerStub.getValue();
+    private static boolean logging() {
+        return Boolean.getBoolean("graal.logExceptionHandlerStub");
     }
 
     /**
@@ -149,10 +137,10 @@ public class ExceptionHandlerStub extends SnippetStub {
      */
     @Fold
     @SuppressWarnings("all")
-    static boolean assertionsEnabled(@InjectedParameter GraalHotSpotVMConfig config) {
+    private static boolean assertionsEnabled() {
         boolean enabled = false;
         assert enabled = true;
-        return enabled || cAssertionsEnabled(config);
+        return enabled || cAssertionsEnabled();
     }
 
     public static final ForeignCallDescriptor EXCEPTION_HANDLER_FOR_PC = newDescriptor(ExceptionHandlerStub.class, "exceptionHandlerForPc", Word.class, Word.class);

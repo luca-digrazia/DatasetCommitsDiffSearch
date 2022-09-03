@@ -22,15 +22,10 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
-import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
-
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
-import com.oracle.graal.graph.Node.ConstantNodeParameter;
-import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.ClassSubstitution.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.spi.*;
 
 /**
  * Substitutions for {@link java.lang.System} methods.
@@ -38,32 +33,15 @@ import com.oracle.graal.replacements.ClassSubstitution.*;
 @ClassSubstitution(java.lang.System.class)
 public class SystemSubstitutions {
 
-    public static final Descriptor JAVA_TIME_MILLIS = new Descriptor("javaTimeMillis", false, long.class);
-    public static final Descriptor JAVA_TIME_NANOS = new Descriptor("javaTimeNanos", false, long.class);
-
-    @MacroSubstitution(macro = ArrayCopyNode.class)
-    public static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length);
-
-    @MethodSubstitution
-    public static long currentTimeMillis() {
-        return callLong(JAVA_TIME_MILLIS);
-    }
-
-    @MethodSubstitution
-    public static long nanoTime() {
-        return callLong(JAVA_TIME_NANOS);
-    }
+    public static final ForeignCallDescriptor JAVA_TIME_MILLIS = new ForeignCallDescriptor("javaTimeMillis", long.class);
+    public static final ForeignCallDescriptor JAVA_TIME_NANOS = new ForeignCallDescriptor("javaTimeNanos", long.class);
 
     @MethodSubstitution
     public static int identityHashCode(Object x) {
-        if (x == null) {
-            probability(NOT_FREQUENT_PROBABILITY);
+        if (probability(NOT_FREQUENT_PROBABILITY, x == null)) {
             return 0;
         }
 
         return computeHashCode(x);
     }
-
-    @NodeIntrinsic(value = RuntimeCallNode.class, setStampFromReturnType = true)
-    public static native long callLong(@ConstantNodeParameter Descriptor descriptor);
 }

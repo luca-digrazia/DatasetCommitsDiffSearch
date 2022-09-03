@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,41 +22,48 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.junit.*;
 
-import org.junit.Test;
-
-import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.hotspot.meta.HotSpotForeignCallsProviderImpl;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.ForeignCallNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.graph.Node.ConstantNodeParameter;
+import com.oracle.graal.graph.Node.NodeIntrinsic;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.runtime.*;
 
 /**
  * Tests that deoptimization upon exception handling works.
  */
 public class ForeignCallDeoptimizeTest extends GraalCompilerTest {
 
-    @Override
-    protected Plugins getDefaultGraphBuilderPlugins() {
-        ForeignCallsProvider foreignCalls = ((HotSpotProviders) getProviders()).getForeignCalls();
+    private static boolean substitutionsInstalled;
 
-        Plugins ret = super.getDefaultGraphBuilderPlugins();
-        ret.getInvocationPlugins().register(new InvocationPlugin() {
-
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg) {
-                ForeignCallNode node = new ForeignCallNode(foreignCalls, HotSpotForeignCallsProviderImpl.TEST_DEOPTIMIZE_CALL_INT, arg);
-                b.addPush(JavaKind.Int, node);
-                return true;
-            }
-        }, ForeignCallDeoptimizeTest.class, "testCallInt", int.class);
-        return ret;
+    public ForeignCallDeoptimizeTest() {
+        if (!substitutionsInstalled) {
+            Replacements replacements = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders().getReplacements();
+            replacements.registerSubstitutions(ForeignCallDeoptimizeTest.class, Substitutions.class);
+            substitutionsInstalled = true;
+        }
     }
+
+    @ClassSubstitution(ForeignCallDeoptimizeTest.class)
+    static class Substitutions {
+
+        @MethodSubstitution(isStatic = true)
+        static int testCallInt(int value) {
+            return testDeoptimizeCallInt(HotSpotForeignCallsProviderImpl.TEST_DEOPTIMIZE_CALL_INT, value);
+        }
+    }
+
+    /**
+     * Exercise deoptimization inside of a non leaf runtime call.
+     */
+    @NodeIntrinsic(ForeignCallNode.class)
+    static native int testDeoptimizeCallInt(@ConstantNodeParameter ForeignCallDescriptor descriptor, int value);
 
     public static int testCallInt(int value) {
         return value;

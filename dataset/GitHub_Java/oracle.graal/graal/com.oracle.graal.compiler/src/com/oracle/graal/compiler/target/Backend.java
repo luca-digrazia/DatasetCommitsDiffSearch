@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,36 +22,28 @@
  */
 package com.oracle.graal.compiler.target;
 
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.CompiledCode;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.stack.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.Assembler;
-import com.oracle.graal.code.CompilationResult;
-import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
-import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
-import com.oracle.graal.lir.framemap.FrameMap;
-import com.oracle.graal.lir.framemap.FrameMapBuilder;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.phases.tiers.SuitesProvider;
-import com.oracle.graal.phases.tiers.TargetProvider;
-import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.phases.util.*;
 
 /**
  * Represents a compiler backend for Graal.
  */
-public abstract class Backend implements TargetProvider {
+public abstract class Backend {
 
     private final Providers providers;
 
@@ -103,11 +95,19 @@ public abstract class Backend implements TargetProvider {
 
     public abstract FrameMap newFrameMap(RegisterConfig registerConfig);
 
-    public abstract LIRGeneratorTool newLIRGenerator(LIRGenerationResult lirGenRes);
+    public abstract LIRGeneratorTool newLIRGenerator(CallingConvention cc, LIRGenerationResult lirGenRes);
 
-    public abstract LIRGenerationResult newLIRGenerationResult(String compilationUnitName, LIR lir, FrameMapBuilder frameMapBuilder, StructuredGraph graph, Object stub);
+    public abstract LIRGenerationResult newLIRGenerationResult(String compilationUnitName, LIR lir, FrameMapBuilder frameMapBuilder, ResolvedJavaMethod method, Object stub);
 
     public abstract NodeLIRBuilderTool newNodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool lirGen);
+
+    /**
+     * @param gen the LIRGenerator the BytecodeLIRBuilder should use
+     * @param parser the bytecode parser the BytecodeLIRBuilder should use
+     */
+    public BytecodeLIRBuilder newBytecodeLIRBuilder(LIRGeneratorTool gen, BytecodeParserTool parser) {
+        throw JVMCIError.unimplemented("Baseline compilation is not available for this Backend!");
+    }
 
     /**
      * Creates the assembler used to emit the machine code.
@@ -120,11 +120,7 @@ public abstract class Backend implements TargetProvider {
     public abstract CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGenResult, FrameMap frameMap, CompilationResult compilationResult,
                     CompilationResultBuilderFactory factory);
 
-    /**
-     * Turns a Graal {@link CompilationResult} into a {@link CompiledCode} object that can be passed
-     * to the VM for code installation.
-     */
-    public abstract CompiledCode createCompiledCode(ResolvedJavaMethod method, CompilationResult compilationResult);
+    public abstract StackIntrospection getStackIntrospection();
 
     /**
      * Emits the code for a given graph.

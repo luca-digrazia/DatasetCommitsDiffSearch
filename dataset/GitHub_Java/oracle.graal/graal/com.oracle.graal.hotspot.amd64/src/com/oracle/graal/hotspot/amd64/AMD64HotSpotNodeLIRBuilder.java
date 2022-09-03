@@ -22,54 +22,40 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.hotspot.HotSpotBackend.EXCEPTION_HANDLER_IN_CALLER;
-import static jdk.internal.jvmci.amd64.AMD64.rbp;
-import static jdk.internal.jvmci.code.ValueUtil.isStackSlot;
-import static jdk.internal.jvmci.hotspot.HotSpotVMConfig.config;
-import jdk.internal.jvmci.amd64.AMD64;
-import jdk.internal.jvmci.amd64.AMD64Kind;
-import jdk.internal.jvmci.code.BytecodeFrame;
-import jdk.internal.jvmci.code.CallingConvention;
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.code.RegisterValue;
-import jdk.internal.jvmci.code.StackSlot;
-import jdk.internal.jvmci.code.ValueUtil;
-import jdk.internal.jvmci.hotspot.HotSpotResolvedJavaMethod;
-import jdk.internal.jvmci.meta.AllocatableValue;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.Value;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
+import static jdk.internal.jvmci.amd64.AMD64.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import com.oracle.graal.compiler.amd64.AMD64NodeLIRBuilder;
-import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.compiler.gen.DebugInfoBuilder;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.hotspot.HotSpotDebugInfoBuilder;
-import com.oracle.graal.hotspot.HotSpotLockStack;
-import com.oracle.graal.hotspot.HotSpotNodeLIRBuilder;
-import com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode;
-import com.oracle.graal.hotspot.nodes.HotSpotDirectCallTargetNode;
-import com.oracle.graal.hotspot.nodes.HotSpotIndirectCallTargetNode;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.DirectCallTargetNode;
-import com.oracle.graal.nodes.FullInfopointNode;
-import com.oracle.graal.nodes.IndirectCallTargetNode;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.SafepointNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.NodeValueMap;
+import com.oracle.graal.compiler.amd64.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.amd64.AMD64Move.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.CallTargetNode.*;
+import com.oracle.graal.nodes.spi.*;
+
+import jdk.internal.jvmci.amd64.*;
+import jdk.internal.jvmci.code.*;
+
+import com.oracle.graal.debug.*;
+
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
 /**
  * LIR generator specialized for AMD64 HotSpot.
  */
 public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements HotSpotNodeLIRBuilder {
 
-    public AMD64HotSpotNodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool gen) {
+    private final HotSpotGraalRuntimeProvider runtime;
+
+    public AMD64HotSpotNodeLIRBuilder(HotSpotGraalRuntimeProvider runtime, StructuredGraph graph, LIRGeneratorTool gen) {
         super(graph, gen);
+        this.runtime = runtime;
         assert gen instanceof AMD64HotSpotLIRGenerator;
         assert getDebugInfoBuilder() instanceof HotSpotDebugInfoBuilder;
         ((AMD64HotSpotLIRGenerator) gen).setLockStack(((HotSpotDebugInfoBuilder) getDebugInfoBuilder()).lockStack());
@@ -81,7 +67,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
 
     @Override
     protected DebugInfoBuilder createDebugInfoBuilder(StructuredGraph graph, NodeValueMap nodeValueMap) {
-        HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMapBuilder(), LIRKind.value(AMD64Kind.QWORD));
+        HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMapBuilder(), LIRKind.value(Kind.Long));
         return new HotSpotDebugInfoBuilder(nodeValueMap, lockStack);
     }
 
@@ -92,7 +78,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
 
         Value[] params = new Value[incomingArguments.getArgumentCount() + 1];
         for (int i = 0; i < params.length - 1; i++) {
-            params[i] = incomingArguments.getArgument(i);
+            params[i] = LIRGenerator.toStackKind(incomingArguments.getArgument(i));
             if (isStackSlot(params[i])) {
                 StackSlot slot = ValueUtil.asStackSlot(params[i]);
                 if (slot.isInCallerFrame() && !gen.getResult().getLIR().hasArgInCallerFrame()) {
@@ -100,7 +86,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
                 }
             }
         }
-        params[params.length - 1] = rbp.asValue(LIRKind.value(AMD64Kind.QWORD));
+        params[params.length - 1] = rbp.asValue(LIRKind.value(Kind.Long));
 
         gen.emitIncomingValues(params);
 
@@ -110,7 +96,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
 
         for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
             Value paramValue = params[param.index()];
-            assert paramValue.getLIRKind().equals(getLIRGeneratorTool().getLIRKind(param.stamp())) : paramValue.getLIRKind() + " != " + param.stamp();
+            assert paramValue.getLIRKind().equals(getLIRGeneratorTool().getLIRKind(param.stamp()));
             setResult(param, gen.emitMove(paramValue));
         }
     }
@@ -125,12 +111,12 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
     protected void emitDirectCall(DirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
         InvokeKind invokeKind = ((HotSpotDirectCallTargetNode) callTarget).invokeKind();
         if (invokeKind.isIndirect()) {
-            append(new AMD64HotspotDirectVirtualCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind, config()));
+            append(new AMD64HotspotDirectVirtualCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind, runtime.getConfig()));
         } else {
             assert invokeKind.isDirect();
             HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
             assert resolvedMethod.isConcrete() : "Cannot make direct call to abstract method.";
-            append(new AMD64HotSpotDirectStaticCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind, config()));
+            append(new AMD64HotSpotDirectStaticCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind, runtime.getConfig()));
         }
     }
 
@@ -143,7 +129,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
             AllocatableValue targetAddressDst = AMD64.rax.asValue(targetAddressSrc.getLIRKind());
             gen.emitMove(metaspaceMethodDst, metaspaceMethodSrc);
             gen.emitMove(targetAddressDst, targetAddressSrc);
-            append(new AMD64IndirectCallOp(callTarget.targetMethod(), result, parameters, temps, metaspaceMethodDst, targetAddressDst, callState, config()));
+            append(new AMD64IndirectCallOp(callTarget.targetMethod(), result, parameters, temps, metaspaceMethodDst, targetAddressDst, callState, runtime.getConfig()));
         } else {
             super.emitIndirectCall(callTarget, result, parameters, temps, callState);
         }
@@ -166,7 +152,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
         gen.emitMove(exceptionPcFixed, operand(exceptionPc));
         Register thread = getGen().getProviders().getRegisters().getThreadRegister();
         AMD64HotSpotJumpToExceptionHandlerInCallerOp op = new AMD64HotSpotJumpToExceptionHandlerInCallerOp(handler, exceptionFixed, exceptionPcFixed, getGen().config.threadIsMethodHandleReturnOffset,
-                        thread);
+                        thread, getGen().getSaveRbp().getRbpRescueSlot());
         append(op);
     }
 
@@ -187,7 +173,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
 
         RegisterValue raxLocal = AMD64.rax.asValue(expected.getLIRKind());
         gen.emitMove(raxLocal, expected);
-        append(new CompareAndSwapOp((AMD64Kind) expected.getPlatformKind(), raxLocal, getGen().asAddressValue(operand(x.getAddress())), raxLocal, newVal));
+        append(new CompareAndSwapOp(expected.getKind(), raxLocal, getGen().asAddressValue(operand(x.getAddress())), raxLocal, newVal));
 
         setResult(x, gen.emitMove(raxLocal));
     }
