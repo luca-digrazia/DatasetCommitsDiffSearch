@@ -59,7 +59,7 @@ public abstract class Word implements Signed, Unsigned, Pointer {
          COMPARISON,
          NOT,
          READ,
-         READ_HEAP,
+         READ_COMPRESSED,
          WRITE,
          INITIALIZE,
          ZERO,
@@ -880,8 +880,9 @@ public abstract class Word implements Signed, Unsigned, Pointer {
     @Operation(opcode = Opcode.READ)
     public native Object readObject(WordBase offset);
 
-    @Operation(opcode = Opcode.READ_HEAP)
-    public native Object readObject(WordBase offset, int barrierType, boolean compress);
+    @Override
+    @Operation(opcode = Opcode.READ_COMPRESSED)
+    public native Object readObjectCompressed(WordBase offset);
 
     @Override
     @Operation(opcode = Opcode.READ)
@@ -937,9 +938,10 @@ public abstract class Word implements Signed, Unsigned, Pointer {
         return readObject(signed(offset));
     }
 
-    @Operation(opcode = Opcode.READ_HEAP)
-    public Object readObject(int offset, int barrierType, boolean compress) {
-        return readObject(signed(offset), barrierType, compress);
+    @Override
+    @Operation(opcode = Opcode.READ_COMPRESSED)
+    public Object readObjectCompressed(int offset) {
+        return readObjectCompressed(signed(offset));
     }
 
     @Override

@@ -610,19 +610,17 @@ public interface Pointer extends Unsigned {
     Object readObject(WordBase offset);
 
     /**
-     * Reads the memory at address {@code (this + offset)}. This particular access can allow
-     * decompression and read barriers (G1 referent field).
+     * Reads the memory at address {@code (this + offset)} and uncompresses it. Both the base
+     * address and offset are in bytes.
      * <p>
      * The offset is always treated as a {@link Signed} value. However, the static type is
      * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      * 
      * @param offset the signed offset for the memory access
-     * @param barrierType the type of the read barrier to be added
-     * @param compress whether or not the object is a decompression candidate
      * @return the result of the memory access
      */
-    Object readObject(WordBase offset, int barrierType, boolean compress);
+    Object readObjectCompressed(WordBase offset);
 
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
@@ -706,15 +704,13 @@ public interface Pointer extends Unsigned {
     Object readObject(int offset);
 
     /**
-     * Reads the memory at address {@code (this + offset)}. This particular access can be
-     * parameterized to allow decompression and read barriers (G1 referent field).
+     * Reads the memory at address {@code (this + offset)} and decompressed it. Both the base
+     * address and offset are in bytes.
      * 
      * @param offset the signed offset for the memory access
-     * @param barrierType the type of the read barrier to be added
-     * @param compress whether or not the object is a decompression candidate
      * @return the result of the memory access
      */
-    Object readObject(int offset, int barrierType, boolean compress);
+    Object readObjectCompressed(int offset);
 
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
