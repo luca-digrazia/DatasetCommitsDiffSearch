@@ -40,11 +40,9 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
@@ -63,7 +61,6 @@ public final class InteropProcessor extends AbstractProcessor {
 
     private static final List<Message> KNOWN_MESSAGES = Arrays.asList(new Message[]{Message.READ, Message.WRITE, Message.IS_NULL, Message.IS_EXECUTABLE, Message.IS_BOXED, Message.HAS_SIZE,
                     Message.GET_SIZE, Message.UNBOX, Message.createExecute(0), Message.createInvoke(0), Message.createNew(0)});
-    private final Map<String, FactoryGenerator> factoryGenerators = new HashMap<>();
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
@@ -80,12 +77,10 @@ public final class InteropProcessor extends AbstractProcessor {
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         if (roundEnv.processingOver()) {
-            for (FactoryGenerator fg : factoryGenerators.values()) {
-                fg.generate();
-            }
             return false;
         }
 
+        Map<String, FactoryGenerator> factoryGenerators = new HashMap<>();
         List<String> generatedClasses = new LinkedList<>();
 
         top: for (Element e : roundEnv.getElementsAnnotatedWith(AcceptMessage.class)) {
@@ -113,13 +108,6 @@ public final class InteropProcessor extends AbstractProcessor {
             final String clazzName = extending.toString();
             String fqn = pkg + "." + clazzName;
             String messageName = message.value();
-
-            // receiver type as inner class not supported
-            if (isInner(message)) {
-                generateErrorClass(e, pkg, fqn, clazzName, null);
-                emitError(receiverTypeFullClassName + " must not be a nested class", e);
-                continue;
-            }
 
             MessageGenerator currentGenerator = null;
             Object currentMessage = null;
@@ -216,6 +204,10 @@ public final class InteropProcessor extends AbstractProcessor {
             factoryGenerator.addMessageHandler(currentMessage, currentGenerator.getRootNodeFactoryInvokation());
         }
 
+        for (FactoryGenerator fg : factoryGenerators.values()) {
+            fg.generate();
+        }
+
         return true;
     }
 
@@ -239,19 +231,6 @@ public final class InteropProcessor extends AbstractProcessor {
         }
     }
 
-    private static boolean isInner(AcceptMessage message) {
-        try {
-            Class<?> receiverType = message.receiverType();
-            return receiverType.isMemberClass();
-        } catch (MirroredTypeException mte) {
-            // This exception is thrown most of the time: use the mirrors to inspect the class
-            DeclaredType type = (DeclaredType) mte.getTypeMirror();
-            TypeElement element = (TypeElement) type.asElement();
-            boolean isInner = element.getNestingKind() == NestingKind.LOCAL || element.getNestingKind() == NestingKind.MEMBER;
-            return isInner;
-        }
-    }
-
     private boolean isInstanceMissing(String receiverTypeFullClassName) {
         for (Element elem : this.processingEnv.getElementUtils().getTypeElement(receiverTypeFullClassName).getEnclosedElements()) {
             if (elem.getKind().equals(ElementKind.METHOD)) {
@@ -270,7 +249,7 @@ public final class InteropProcessor extends AbstractProcessor {
         try {
             receiverTypeFullClassName = message.receiverType().getName();
         } catch (MirroredTypeException mte) {
-            // This exception is thrown most of the time: use the mirrors to inspect the class
+            // wow, annotations processors are strange
             receiverTypeFullClassName = mte.getTypeMirror().toString();
         }
         return receiverTypeFullClassName;
