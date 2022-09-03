@@ -51,10 +51,16 @@ import com.oracle.jvmci.meta.*;
  * Constant folding of field loads.
  */
 public final class HotSpotNodePlugin implements NodePlugin, ParameterPlugin {
+    private final MetaAccessProvider metaAccess;
+    private final ConstantReflectionProvider constantReflection;
+
     protected final WordOperationPlugin wordOperationPlugin;
     protected final NodeIntrinsificationPlugin nodeIntrinsificationPlugin;
 
-    public HotSpotNodePlugin(WordOperationPlugin wordOperationPlugin, NodeIntrinsificationPlugin nodeIntrinsificationPlugin) {
+    public HotSpotNodePlugin(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, WordOperationPlugin wordOperationPlugin,
+                    NodeIntrinsificationPlugin nodeIntrinsificationPlugin) {
+        this.metaAccess = metaAccess;
+        this.constantReflection = constantReflection;
         this.wordOperationPlugin = wordOperationPlugin;
         this.nodeIntrinsificationPlugin = nodeIntrinsificationPlugin;
     }
@@ -115,7 +121,7 @@ public final class HotSpotNodePlugin implements NodePlugin, ParameterPlugin {
         return false;
     }
 
-    private static boolean tryReadField(GraphBuilderContext b, ResolvedJavaField field, JavaConstant object) {
+    private boolean tryReadField(GraphBuilderContext b, ResolvedJavaField field, JavaConstant object) {
         // FieldReadEnabledInImmutableCode is non null only if assertions are enabled
         if (FieldReadEnabledInImmutableCode != null && ImmutableCode.getValue()) {
             FieldReadEnabledInImmutableCode.set(Boolean.TRUE);
@@ -129,10 +135,10 @@ public final class HotSpotNodePlugin implements NodePlugin, ParameterPlugin {
         }
     }
 
-    private static boolean tryConstantFold(GraphBuilderContext b, ResolvedJavaField field, JavaConstant object) {
-        JavaConstant result = b.getConstantReflection().readConstantFieldValue(field, object);
+    private boolean tryConstantFold(GraphBuilderContext b, ResolvedJavaField field, JavaConstant object) {
+        JavaConstant result = constantReflection.readConstantFieldValue(field, object);
         if (result != null) {
-            ConstantNode constantNode = ConstantNode.forConstant(result, b.getMetaAccess(), b.getGraph());
+            ConstantNode constantNode = ConstantNode.forConstant(result, metaAccess, b.getGraph());
             b.push(field.getKind(), constantNode);
             return true;
         }

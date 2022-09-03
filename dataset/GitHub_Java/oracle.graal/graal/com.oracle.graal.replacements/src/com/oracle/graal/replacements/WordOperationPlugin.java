@@ -23,12 +23,9 @@
 package com.oracle.graal.replacements;
 
 import static com.oracle.graal.nodes.ConstantNode.*;
-import static jdk.internal.jvmci.meta.LocationIdentity.*;
+import static com.oracle.jvmci.meta.LocationIdentity.*;
 
 import java.lang.reflect.*;
-
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.calc.*;
@@ -39,12 +36,13 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
-import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.word.*;
 import com.oracle.graal.word.Word.Opcode;
 import com.oracle.graal.word.Word.Operation;
 import com.oracle.graal.word.nodes.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * A plugin for calls to {@linkplain Operation word operations}, as well as all other nodes that
@@ -138,13 +136,13 @@ public class WordOperationPlugin implements NodePlugin, ParameterPlugin, InlineI
         ResolvedJavaType arrayType = StampTool.typeOrNull(array);
         if (arrayType != null && wordTypes.isWord(arrayType.getComponentType())) {
             assert elementKind == Kind.Object;
-            if (value.getStackKind() != wordTypes.getWordKind()) {
+            if (value.getKind() != wordTypes.getWordKind()) {
                 throw b.bailout("Cannot store a non-word value into a word array: " + arrayType.toJavaName(true));
             }
             b.add(createStoreIndexedNode(array, index, value));
             return true;
         }
-        if (elementKind == Kind.Object && value.getStackKind() == wordTypes.getWordKind()) {
+        if (elementKind == Kind.Object && value.getKind() == wordTypes.getWordKind()) {
             throw b.bailout("Cannot store a word value into a non-word array: " + arrayType.toJavaName(true));
         }
         return false;
@@ -157,13 +155,13 @@ public class WordOperationPlugin implements NodePlugin, ParameterPlugin, InlineI
     @Override
     public boolean handleCheckCast(GraphBuilderContext b, ValueNode object, ResolvedJavaType type, JavaTypeProfile profile) {
         if (!wordTypes.isWord(type)) {
-            if (object.getStackKind() != Kind.Object) {
+            if (object.getKind() != Kind.Object) {
                 throw b.bailout("Cannot cast a word value to a non-word type: " + type.toJavaName(true));
             }
             return false;
         }
 
-        if (object.getStackKind() != wordTypes.getWordKind()) {
+        if (object.getKind() != wordTypes.getWordKind()) {
             throw b.bailout("Cannot cast a non-word value to a word type: " + type.toJavaName(true));
         }
         b.push(Kind.Object, object);
@@ -174,7 +172,7 @@ public class WordOperationPlugin implements NodePlugin, ParameterPlugin, InlineI
     public boolean handleInstanceOf(GraphBuilderContext b, ValueNode object, ResolvedJavaType type, JavaTypeProfile profile) {
         if (wordTypes.isWord(type)) {
             throw b.bailout("Cannot use instanceof for word a type: " + type.toJavaName(true));
-        } else if (object.getStackKind() != Kind.Object) {
+        } else if (object.getKind() != Kind.Object) {
             throw b.bailout("Cannot use instanceof on a word value: " + type.toJavaName(true));
         }
         return false;
@@ -207,23 +205,21 @@ public class WordOperationPlugin implements NodePlugin, ParameterPlugin, InlineI
             case READ_BARRIERED: {
                 assert args.length == 2 || args.length == 3;
                 Kind readKind = wordTypes.asKind(wordMethod.getSignature().getReturnType(wordMethod.getDeclaringClass()));
-                AddressNode address = makeAddress(b, args[0], args[1]);
-                LocationIdentity location;
+                LocationNode location;
                 if (args.length == 2) {
-                    location = any();
+                    location = makeLocation(b, args[1], any());
                 } else {
-                    assert args[2].isConstant();
-                    location = snippetReflection.asObject(LocationIdentity.class, args[2].asJavaConstant());
+                    location = makeLocation(b, args[1], args[2]);
                 }
-                b.push(returnKind, readOp(b, readKind, address, location, operation.opcode()));
+                b.push(returnKind, readOp(b, readKind, args[0], location, operation.opcode()));
                 break;
             }
             case READ_HEAP: {
                 assert args.length == 3;
                 Kind readKind = wordTypes.asKind(wordMethod.getSignature().getReturnType(wordMethod.getDeclaringClass()));
-                AddressNode address = makeAddress(b, args[0], args[1]);
+                LocationNode location = makeLocation(b, args[1], any());
                 BarrierType barrierType = snippetReflection.asObject(BarrierType.class, args[2].asJavaConstant());
-                b.push(returnKind, readOp(b, readKind, address, any(), barrierType, true));
+                b.push(returnKind, readOp(b, readKind, args[0], location, barrierType, true));
                 break;
             }
             case WRITE_POINTER:
@@ -232,15 +228,13 @@ public class WordOperationPlugin implements NodePlugin, ParameterPlugin, InlineI
             case INITIALIZE: {
                 assert args.length == 3 || args.length == 4;
                 Kind writeKind = wordTypes.asKind(wordMethod.getSignature().getParameterType(wordMethod.isStatic() ? 2 : 1, wordMethod.getDeclaringClass()));
-                AddressNode address = makeAddress(b, args[0], args[1]);
-                LocationIdentity location;
+                LocationNode location;
                 if (args.length == 3) {
-                    location = any();
+                    location = makeLocation(b, args[1], LocationIdentity.any());
                 } else {
-                    assert args[3].isConstant();
-                    location = snippetReflection.asObject(LocationIdentity.class, args[3].asJavaConstant());
+                    location = makeLocation(b, args[1], args[3]);
                 }
-                writeOp(b, writeKind, address, location, args[2], operation.opcode());
+                writeOp(b, writeKind, args[0], args[2], location, operation.opcode());
                 break;
             }
             case ZERO:
@@ -263,22 +257,20 @@ public class WordOperationPlugin implements NodePlugin, ParameterPlugin, InlineI
                 b.push(returnKind, toUnsigned(b, args[0], Kind.Long));
                 break;
 
-            case OBJECT_TO_TRACKED:
+            case FROM_WORDBASE:
                 assert args.length == 1;
-                WordCastNode objectToTracked = b.add(WordCastNode.objectToTrackedPointer(args[0], wordKind));
-                b.push(returnKind, objectToTracked);
+                b.push(returnKind, args[0]);
                 break;
 
-            case OBJECT_TO_UNTRACKED:
+            case FROM_OBJECT:
                 assert args.length == 1;
-                WordCastNode objectToUntracked = b.add(WordCastNode.objectToUntrackedPointer(args[0], wordKind));
-                b.push(returnKind, objectToUntracked);
+                WordCastNode objectToWord = b.add(WordCastNode.objectToWord(args[0], wordKind));
+                b.push(returnKind, objectToWord);
                 break;
 
-            case FROM_ADDRESS:
-                assert args.length == 1;
-                WordCastNode addressToWord = b.add(WordCastNode.addressToWord(args[0], wordKind));
-                b.push(returnKind, addressToWord);
+            case FROM_ARRAY:
+                assert args.length == 2;
+                b.addPush(returnKind, new ComputeAddressNode(args[0], args[1], StampFactory.forKind(wordKind)));
                 break;
 
             case TO_OBJECT:
@@ -307,7 +299,7 @@ public class WordOperationPlugin implements NodePlugin, ParameterPlugin, InlineI
     }
 
     private ValueNode comparisonOp(GraphBuilderContext graph, Condition condition, ValueNode left, ValueNode right) {
-        assert left.getStackKind() == wordKind && right.getStackKind() == wordKind;
+        assert left.getKind() == wordKind && right.getKind() == wordKind;
 
         // mirroring gets the condition into canonical form
         boolean mirror = condition.canonicalMirror();
@@ -336,34 +328,41 @@ public class WordOperationPlugin implements NodePlugin, ParameterPlugin, InlineI
         return materialize;
     }
 
-    protected ValueNode readOp(GraphBuilderContext b, Kind readKind, AddressNode address, LocationIdentity location, Opcode op) {
+    protected ValueNode readOp(GraphBuilderContext b, Kind readKind, ValueNode base, LocationNode location, Opcode op) {
         assert op == Opcode.READ_POINTER || op == Opcode.READ_OBJECT || op == Opcode.READ_BARRIERED;
         final BarrierType barrier = (op == Opcode.READ_BARRIERED ? BarrierType.PRECISE : BarrierType.NONE);
         final boolean compressible = (op == Opcode.READ_OBJECT || op == Opcode.READ_BARRIERED);
 
-        return readOp(b, readKind, address, location, barrier, compressible);
+        return readOp(b, readKind, base, location, barrier, compressible);
     }
 
-    public static ValueNode readOp(GraphBuilderContext b, Kind readKind, AddressNode address, LocationIdentity location, BarrierType barrierType, boolean compressible) {
+    public static ValueNode readOp(GraphBuilderContext b, Kind readKind, ValueNode base, LocationNode location, BarrierType barrierType, boolean compressible) {
         /*
          * A JavaReadNode lowered to a ReadNode that will not float. This means it cannot float
          * above an explicit zero check on its base address or any other test that ensures the read
          * is safe.
          */
-        JavaReadNode read = b.add(new JavaReadNode(readKind, address, location, barrierType, compressible));
+        JavaReadNode read = b.add(new JavaReadNode(readKind, base, location, barrierType, compressible));
         return read;
     }
 
-    protected void writeOp(GraphBuilderContext b, Kind writeKind, AddressNode address, LocationIdentity location, ValueNode value, Opcode op) {
+    protected void writeOp(GraphBuilderContext b, Kind writeKind, ValueNode base, ValueNode value, LocationNode location, Opcode op) {
         assert op == Opcode.WRITE_POINTER || op == Opcode.WRITE_OBJECT || op == Opcode.WRITE_BARRIERED || op == Opcode.INITIALIZE;
         final BarrierType barrier = (op == Opcode.WRITE_BARRIERED ? BarrierType.PRECISE : BarrierType.NONE);
         final boolean compressible = (op == Opcode.WRITE_OBJECT || op == Opcode.WRITE_BARRIERED);
         final boolean initialize = (op == Opcode.INITIALIZE);
-        b.add(new JavaWriteNode(writeKind, address, location, value, barrier, compressible, initialize));
+        b.add(new JavaWriteNode(writeKind, base, value, location, barrier, compressible, initialize));
     }
 
-    public AddressNode makeAddress(GraphBuilderContext b, ValueNode base, ValueNode offset) {
-        return b.add(new OffsetAddressNode(base, fromSigned(b, offset)));
+    public LocationNode makeLocation(GraphBuilderContext b, ValueNode offset, LocationIdentity locationIdentity) {
+        return b.add(new IndexedLocationNode(locationIdentity, 0, fromSigned(b, offset), 1));
+    }
+
+    public LocationNode makeLocation(GraphBuilderContext b, ValueNode offset, ValueNode locationIdentity) {
+        if (locationIdentity.isConstant()) {
+            return makeLocation(b, offset, snippetReflection.asObject(LocationIdentity.class, locationIdentity.asJavaConstant()));
+        }
+        return b.add(new SnippetLocationNode(snippetReflection, locationIdentity, b.add(ConstantNode.forLong(0)), fromSigned(b, offset), b.add(ConstantNode.forInt(1))));
     }
 
     public ValueNode fromUnsigned(GraphBuilderContext b, ValueNode value) {
@@ -379,16 +378,16 @@ public class WordOperationPlugin implements NodePlugin, ParameterPlugin, InlineI
     }
 
     public ValueNode convert(GraphBuilderContext b, ValueNode value, Kind toKind, boolean unsigned) {
-        if (value.getStackKind() == toKind) {
+        if (value.getKind() == toKind) {
             return value;
         }
 
         if (toKind == Kind.Int) {
-            assert value.getStackKind() == Kind.Long;
+            assert value.getKind() == Kind.Long;
             return b.add(new NarrowNode(value, 32));
         } else {
             assert toKind == Kind.Long;
-            assert value.getStackKind() == Kind.Int;
+            assert value.getKind().getStackKind() == Kind.Int;
             if (unsigned) {
                 return b.add(new ZeroExtendNode(value, 64));
             } else {

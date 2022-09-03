@@ -1476,11 +1476,11 @@ public class BytecodeParser implements GraphBuilderContext {
             }
             if (inlinedMethod.hasBytecodes()) {
                 for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
-                    plugin.notifyBeforeInline(inlinedMethod);
+                    plugin.notifyBeforeInline(targetMethod);
                 }
                 parseAndInlineCallee(inlinedMethod, args, intrinsic);
                 for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
-                    plugin.notifyAfterInline(inlinedMethod);
+                    plugin.notifyAfterInline(targetMethod);
                 }
             } else {
                 return false;

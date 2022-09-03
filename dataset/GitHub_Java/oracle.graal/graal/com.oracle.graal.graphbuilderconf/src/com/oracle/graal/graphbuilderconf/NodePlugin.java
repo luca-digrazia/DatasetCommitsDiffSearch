@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.graphbuilderconf;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.jvmci.meta.*;
 import com.oracle.graal.nodes.*;
 
 public interface NodePlugin extends GraphBuilderPlugin {
@@ -151,47 +150,6 @@ public interface NodePlugin extends GraphBuilderPlugin {
      * @return true if the plugin handles the instanceof, false otherwise
      */
     default boolean handleInstanceOf(GraphBuilderContext b, ValueNode object, ResolvedJavaType type, JavaTypeProfile profile) {
-        return false;
-    }
-
-    /**
-     * Handle the parsing of a NEW bytecode. If the method returns true, it must
-     * {@link GraphBuilderContext#push push} a value with the result of the allocation using
-     * {@link Kind#Object}.
-     *
-     * @param b the context
-     * @param type the type to be instantiated
-     * @return true if the plugin handles the bytecode, false otherwise
-     */
-    default boolean handleNewInstance(GraphBuilderContext b, ResolvedJavaType type) {
-        return false;
-    }
-
-    /**
-     * Handle the parsing of a NEWARRAY and ANEWARRAY bytecode. If the method returns true, it must
-     * {@link GraphBuilderContext#push push} a value with the result of the allocation using
-     * {@link Kind#Object}.
-     *
-     * @param b the context
-     * @param elementType the element type of the array to be instantiated
-     * @param length the length of the new array
-     * @return true if the plugin handles the bytecode, false otherwise
-     */
-    default boolean handleNewArray(GraphBuilderContext b, ResolvedJavaType elementType, ValueNode length) {
-        return false;
-    }
-
-    /**
-     * Handle the parsing of a MULTIANEWARRAY bytecode. If the method returns true, it must
-     * {@link GraphBuilderContext#push push} a value with the result of the allocation using
-     * {@link Kind#Object}.
-     *
-     * @param b the context
-     * @param type the type of the outermost array to be instantiated
-     * @param dimensions the array of lengths for all the dimensions to be instantiated
-     * @return true if the plugin handles the bytecode, false otherwise
-     */
-    default boolean handleNewMultiArray(GraphBuilderContext b, ResolvedJavaType type, ValueNode[] dimensions) {
         return false;
     }
 
