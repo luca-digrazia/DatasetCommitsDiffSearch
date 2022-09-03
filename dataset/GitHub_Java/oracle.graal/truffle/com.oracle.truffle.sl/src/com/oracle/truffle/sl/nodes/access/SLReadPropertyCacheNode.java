@@ -93,7 +93,7 @@ public abstract class SLReadPropertyCacheNode extends SLPropertyCacheNode {
         Property property = shape.getProperty(name);
         if (property == null) {
             /* Property does not exist. */
-            throw SLUndefinedNameException.undefinedProperty(name);
+            throw new SLUndefinedNameException("property", name);
         }
 
         return property.getLocation();
@@ -104,13 +104,13 @@ public abstract class SLReadPropertyCacheNode extends SLPropertyCacheNode {
      * polymorphic inline cache.
      */
     @TruffleBoundary
-    @Specialization(contains = {"readCached"}, guards = {"isValidSLObject(receiver)"})
+    @Specialization(contains = {"readCached"}, guards = {"isValidSimpleLanguageObject(receiver)"})
     protected static Object readUncached(DynamicObject receiver, Object name) {
 
         Object result = receiver.get(name);
         if (result == null) {
             /* Property does not exist. */
-            throw SLUndefinedNameException.undefinedProperty(name);
+            throw new SLUndefinedNameException("property", name);
         }
         return result;
     }
@@ -129,7 +129,7 @@ public abstract class SLReadPropertyCacheNode extends SLPropertyCacheNode {
 
         if (!(r instanceof DynamicObject)) {
             /* Non-object types do not have properties. */
-            throw SLUndefinedNameException.undefinedProperty(name);
+            throw new SLUndefinedNameException("property", name);
         }
         DynamicObject receiver = (DynamicObject) r;
         receiver.updateShape();
@@ -156,7 +156,7 @@ public abstract class SLReadPropertyCacheNode extends SLPropertyCacheNode {
 
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
             /* Foreign access was not successful. */
-            throw SLUndefinedNameException.undefinedProperty(name);
+            throw new SLUndefinedNameException("property", name);
         }
     }
 

@@ -41,8 +41,9 @@
 package com.oracle.truffle.sl.nodes.call;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
@@ -63,7 +64,7 @@ public abstract class SLDispatchNode extends Node {
 
     protected static final int INLINE_CACHE_SIZE = 2;
 
-    public abstract Object executeDispatch(VirtualFrame frame, Object function, Object[] arguments);
+    public abstract Object executeDispatch(VirtualFrame frame, TruffleObject function, Object[] arguments);
 
     /**
      * Inline cached specialization of the dispatch.
@@ -91,7 +92,8 @@ public abstract class SLDispatchNode extends Node {
      * object is change. To avoid a check for that, we use an Assumption that is invalidated by the
      * SLFunction when the change is performed. Since checking an assumption is a no-op in compiled
      * code, the assumption check performed by the DSL does not add any overhead during optimized
-     * execution.
+     * execution. The assumption check also covers the check for undefined functions: As long as a
+     * function is undefined, it has an always invalid assumption.
      * </p>
      *
      * @see Cached
@@ -125,15 +127,17 @@ public abstract class SLDispatchNode extends Node {
          * SL has a quite simple call lookup: just ask the function for the current call target, and
          * call it.
          */
-        return callNode.call(frame, function.getCallTarget(), arguments);
-    }
+        RootCallTarget callTarget = function.getCallTarget();
+        if (callTarget == null) {
+            /*
+             * Undefined function. This is a slow-path code (since we are actually aborting
+             * execution), no need to compile it.
+             */
+            CompilerDirectives.transferToInterpreter();
+            throw new SLUndefinedNameException("function", function.getName());
+        }
 
-    /**
-     * When no specialization fits, the receiver is not an object (which is a type error).
-     */
-    @Fallback
-    protected static Object unknownFunction(Object function, @SuppressWarnings("unused") Object[] arguments) {
-        throw SLUndefinedNameException.undefinedFunction(function);
+        return callNode.call(frame, callTarget, arguments);
     }
 
     /**
@@ -141,7 +145,7 @@ public abstract class SLDispatchNode extends Node {
      * Truffle's interop API to execute the foreign function.
      */
     @Specialization(guards = "isForeignFunction(function)")
-    protected static Object doForeign(VirtualFrame frame, TruffleObject function, Object[] arguments,
+    protected Object doForeign(VirtualFrame frame, TruffleObject function, Object[] arguments,
                     // The child node to call the foreign function
                     @Cached("createCrossLanguageCallNode(arguments)") Node crossLanguageCallNode,
                     // The child node to convert the result of the foreign call to a SL value
@@ -155,7 +159,7 @@ public abstract class SLDispatchNode extends Node {
 
         } catch (ArityException | UnsupportedTypeException | UnsupportedMessageException e) {
             /* Foreign access was not successful. */
-            throw SLUndefinedNameException.undefinedFunction(function);
+            throw new SLUndefinedNameException("function", function);
         }
     }
 

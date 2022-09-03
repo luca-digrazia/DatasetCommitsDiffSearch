@@ -76,7 +76,7 @@ public abstract class SLWritePropertyCacheNode extends SLPropertyCacheNode {
                                     "cachedName.equals(name)",
                                     "shapeCheck(shape, receiver)",
                                     "location != null",
-                                    "canSet(location, value)"
+                                    "canSet(location, receiver, value)"
                     }, //
                     assumptions = {
                                     "shape.getValidAssumption()"
@@ -163,8 +163,8 @@ public abstract class SLWritePropertyCacheNode extends SLPropertyCacheNode {
      * shape transition, i.e., we are not actually setting the value of the new location - we only
      * transition to this location as part of the shape change.
      */
-    protected static boolean canSet(Location location, Object value) {
-        return location.canSet(value);
+    protected static boolean canSet(Location location, DynamicObject receiver, Object value) {
+        return location.canSet(receiver, value);
     }
 
     /** See {@link #canSet} for the difference between the two methods. */
@@ -196,7 +196,7 @@ public abstract class SLWritePropertyCacheNode extends SLPropertyCacheNode {
 
         if (!(r instanceof DynamicObject)) {
             /* Non-object types do not have properties. */
-            throw SLUndefinedNameException.undefinedProperty(name);
+            throw new SLUndefinedNameException("property", name);
         }
         DynamicObject receiver = (DynamicObject) r;
         receiver.updateShape();
@@ -218,7 +218,7 @@ public abstract class SLWritePropertyCacheNode extends SLPropertyCacheNode {
 
         } catch (UnknownIdentifierException | UnsupportedTypeException | UnsupportedMessageException e) {
             /* Foreign access was not successful. */
-            throw SLUndefinedNameException.undefinedProperty(name);
+            throw new SLUndefinedNameException("property", name);
         }
     }
 
