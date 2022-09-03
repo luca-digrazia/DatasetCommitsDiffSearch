@@ -24,12 +24,16 @@
  */
 package com.oracle.truffle.api.impl;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.source.Source;
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
 import java.util.Objects;
 
 final class ExecutionImpl extends Accessor.ExecSupport {
@@ -38,6 +42,8 @@ final class ExecutionImpl extends Accessor.ExecSupport {
     //
 
     private static final ContextStoreProfile CURRENT_VM = new ContextStoreProfile(null);
+    private static Reference<Object> previousVM = new WeakReference<>(null);
+    private static Assumption oneVM = Truffle.getRuntime().createAssumption();
 
     @Override
     public ContextStore createStore(Object vm) {
@@ -53,6 +59,12 @@ final class ExecutionImpl extends Accessor.ExecSupport {
         final ContextStore prev = CURRENT_VM.get();
         Accessor.DebugSupport debug = Accessor.debugAccess();
         final Closeable debugClose = debug == null ? null : debug.executionStart(vm, prev == null ? 0 : -1, debuggerHolder, s);
+        if (!(vm == previousVM.get())) {
+            previousVM = new WeakReference<>(vm);
+            oneVM.invalidate();
+            oneVM = Truffle.getRuntime().createAssumption();
+
+        }
         CURRENT_VM.enter(context);
         class ContextCloseable implements Closeable {
 
@@ -66,6 +78,10 @@ final class ExecutionImpl extends Accessor.ExecSupport {
             }
         }
         return new ContextCloseable();
+    }
+
+    static Assumption oneVMAssumption() {
+        return oneVM;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
