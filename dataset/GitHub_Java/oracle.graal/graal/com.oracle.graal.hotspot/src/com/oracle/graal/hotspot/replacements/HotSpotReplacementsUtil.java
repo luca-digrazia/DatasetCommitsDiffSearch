@@ -434,11 +434,6 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
-    public static boolean useCompressedOops() {
-        return config().useCompressedOops;
-    }
-
-    @Fold
     static int uninitializedIdentityHashCodeValue() {
         return config().uninitializedIdentityHashCodeValue;
     }
