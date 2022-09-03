@@ -214,8 +214,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
         private int indent(Node n) {
             if (n instanceof RootNode) {
-                List<CallNode> inlinedParents = ((RootNode) n).getParentInlinedCalls();
-                CallNode inlinedParent = inlinedParents.isEmpty() ? null : inlinedParents.get(0);
+                CallNode inlinedParent = ((RootNode) n).getParentInlinedCall();
                 if (inlinedParent != null) {
                     return indent(inlinedParent) + 1;
                 }
