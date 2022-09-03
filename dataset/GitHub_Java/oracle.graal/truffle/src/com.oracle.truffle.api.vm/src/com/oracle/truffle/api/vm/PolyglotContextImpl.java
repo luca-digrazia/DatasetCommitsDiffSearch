@@ -43,7 +43,6 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Value;
@@ -62,7 +61,7 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
 
     private static final PolyglotContextProfile CURRENT_CONTEXT = new PolyglotContextProfile();
 
-    final AtomicReference<Thread> boundThread = new AtomicReference<>(null);
+    volatile Thread boundThread;
     volatile boolean closed;
     volatile CountDownLatch closingLatch;
     final AtomicInteger enteredCount = new AtomicInteger();
@@ -144,10 +143,10 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
     }
 
     void leave(Object prev) {
-        assert boundThread.get() == Thread.currentThread();
+        assert boundThread == Thread.currentThread();
         int result = enteredCount.decrementAndGet();
         if (result <= 0) {
-            boundThread.set(null);
+            boundThread = null;
             if (closingLatch != null) {
                 close(false);
             }
@@ -156,14 +155,14 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
     }
 
     private void enterThread() {
-        Thread current = Thread.currentThread();
-        if (boundThread.get() != current) {
-            if (!boundThread.compareAndSet(null, current)) {
-                throw new IllegalStateException(
-                                String.format("The context was accessed from thread %s but is currently accessed form thread %s. " +
-                                                "The context cannot be accessed from multiple threads at the same time. ",
-                                                boundThread.get(), Thread.currentThread()));
-            }
+        Thread thread = boundThread;
+        if (thread == null) {
+            boundThread = Thread.currentThread();
+        } else if (thread != Thread.currentThread()) {
+            throw new IllegalStateException(
+                            String.format("The context was accessed from thread %s but is currently accessed form thread %s. " +
+                                            "The context cannot be accessed from multiple threads at the same time. ",
+                                            boundThread, Thread.currentThread()));
         }
     }
 
@@ -311,7 +310,7 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
     }
 
     private PolyglotLanguageContextImpl getLanguageContextImpl(Class<? extends TruffleLanguage<?>> languageClass) {
-        assert boundThread.get() == null || boundThread.get() == Thread.currentThread() : "not designed for thread-safety";
+        assert boundThread == null || boundThread == Thread.currentThread() : "not designed for thread-safety";
         int indexValue = languageIndexMap.get(languageClass);
         if (indexValue == -1) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -382,7 +381,7 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
     }
 
     void waitForClose() {
-        assert boundThread.get() == null || boundThread.get() != Thread.currentThread() : "cannot wait on current thread";
+        assert boundThread == null || boundThread != Thread.currentThread() : "cannot wait on current thread";
         while (!closed) {
             CountDownLatch closing = closingLatch;
             if (closing == null) {
@@ -401,7 +400,7 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
         if (!closed) {
             synchronized (this) {
                 if (!closed) {
-                    Thread thread = boundThread.get();
+                    Thread thread = boundThread;
                     if (cancelIfExecuting) {
                         if (thread != null && Thread.currentThread() != thread) {
                             if (closingLatch == null) {
