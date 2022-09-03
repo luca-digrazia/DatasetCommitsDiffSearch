@@ -22,17 +22,9 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import java.util.Objects;
-
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.impl.Klass;
-import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
-
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveKlassCount;
+import com.oracle.truffle.espresso.runtime.Klass;
+import com.oracle.truffle.espresso.types.TypeDescriptor;
 
 /**
  * Interface denoting a class entry in a constant pool.
@@ -48,70 +40,61 @@ public interface ClassConstant extends PoolConstant {
      * Gets the type descriptor of the class represented by this constant.
      *
      * @param pool container of this constant
+     * @param thisIndex index of this constant in {@code pool}
      */
-    Symbol<Name> getName(ConstantPool pool);
+    TypeDescriptor getTypeDescriptor(ConstantPool pool, int thisIndex);
 
     @Override
-    default String toString(ConstantPool pool) {
-        return getName(pool).toString();
+    default String toString(ConstantPool pool, int thisIndex) {
+        return getTypeDescriptor(pool, thisIndex).toString();
     }
 
-    final class Index implements ClassConstant, Resolvable {
-        private final char classNameIndex;
+    /**
+     * Resolves this entry to a {@link Klass}.
+     *
+     * @param pool container of this constant
+     * @param index index of this constant in {@code pool}
+     */
+    Klass resolve(ConstantPool pool, int index);
 
-        Index(int classNameIndex) {
-            this.classNameIndex = PoolConstant.u2(classNameIndex);
+    public static final class Resolved implements ClassConstant {
+
+        final Klass klass;
+
+        public Resolved(Klass klass) {
+            this.klass = klass;
         }
 
-        @Override
-        public Symbol<Name> getName(ConstantPool pool) {
-            return pool.utf8At(classNameIndex);
+        public TypeDescriptor getTypeDescriptor(ConstantPool pool, int index) {
+            return klass.getName();
         }
 
-        /**
-         * <h3>5.4.3.1. Class and Interface Resolution</h3>
-         *
-         * To resolve an unresolved symbolic reference from D to a class or interface C denoted by
-         * N, the following steps are performed:
-         * <ol>
-         * <li>The defining class loader of D is used to create a class or interface denoted by N.
-         * This class or interface is C. The details of the process are given in §5.3. <b>Any
-         * exception that can be thrown as a result of failure of class or interface creation can
-         * thus be thrown as a result of failure of class and interface resolution.</b>
-         * <li>If C is an array class and its element type is a reference type, then a symbolic
-         * reference to the class or interface representing the element type is resolved by invoking
-         * the algorithm in §5.4.3.1 recursively.
-         * <li>Finally, access permissions to C are checked.
-         * <ul>
-         * <li><b>If C is not accessible (§5.4.4) to D, class or interface resolution throws an
-         * IllegalAccessError.</b> This condition can occur, for example, if C is a class that was
-         * originally declared to be public but was changed to be non-public after D was compiled.
-         * </ul>
-         * </ol>
-         * If steps 1 and 2 succeed but step 3 fails, C is still valid and usable. Nevertheless,
-         * resolution fails, and D is prohibited from accessing C.
-         */
-        private static void pepe() {
+        public Klass resolve(ConstantPool pool, int index) {
+            return klass;
+        }
+    }
 
+    public static class Unresolved implements ClassConstant {
+
+        private final TypeDescriptor typeDescriptor;
+
+        Unresolved(TypeDescriptor typeDescriptor) {
+            this.typeDescriptor = typeDescriptor;
         }
 
-        @Override
-        public Resolved resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
-            resolveKlassCount.inc();
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            Symbol<Name> name = getName(pool);
+        public TypeDescriptor getTypeDescriptor(ConstantPool pool, int index) {
+            return typeDescriptor;
+        }
+
+        public Klass resolve(ConstantPool pool, int index) {
             try {
-                EspressoContext context = pool.getContext();
-                Klass klass = context.getRegistries().loadKlass(
-                                context.getTypes().fromName(name), accessingKlass.getDefiningClassLoader());
-
-                if (!checkAccess(klass, accessingKlass)) {
-                    Meta meta = context.getMeta();
-                    throw meta.throwEx(meta.IllegalAccessError, meta.toGuestString(name));
+                try {
+                    Klass klass = typeDescriptor.resolveType(pool.getContext(), pool.classLoader());
+                    pool.updateAt(index, new Resolved(klass));
+                    return klass;
+                } catch (RuntimeException e) {
+                    throw (NoClassDefFoundError) new NoClassDefFoundError(typeDescriptor.toString()).initCause(e);
                 }
-
-                return new Resolved(klass);
-
             } catch (VirtualMachineError e) {
                 // Comment from Hotspot:
                 // Just throw the exception and don't prevent these classes from
@@ -122,34 +105,32 @@ public interface ClassConstant extends PoolConstant {
             }
         }
 
-        /**
-         * A class or interface C is accessible to a class or interface D if and only if either of
-         * the following is true:
-         * <ul>
-         * <li>C is public.
-         * <li>C and D are members of the same run-time package (§5.3).
-         * </ul>
-         */
-        private static boolean checkAccess(Klass klass, Klass accessingKlass) {
-            return klass.isPublic() || klass.getRuntimePackage().equals(accessingKlass.getRuntimePackage());
-        }
     }
 
-    final class Resolved implements ClassConstant, Resolvable.ResolvedConstant {
-        private final Klass resolved;
+    public static class Index implements ClassConstant {
 
-        Resolved(Klass resolved) {
-            this.resolved = Objects.requireNonNull(resolved);
+        private final char classNameIndex;
+
+        Index(int classNameIndex) {
+            this.classNameIndex = PoolConstant.u2(classNameIndex);
         }
 
-        @Override
-        public Symbol<Name> getName(ConstantPool pool) {
-            return resolved.getName();
+        private ClassConstant replace(ConstantPool pool, int index) {
+            Utf8Constant className = pool.utf8At(classNameIndex);
+            Unresolved replacement = new Unresolved(pool.getContext().getLanguage().getTypeDescriptors().make('L' + className.toString() + ';'));
+            return (ClassConstant) pool.updateAt(index, replacement);
         }
 
-        @Override
-        public Klass value() {
-            return resolved;
+        public boolean isResolved() {
+            return false;
+        }
+
+        public TypeDescriptor getTypeDescriptor(ConstantPool pool, int index) {
+            return replace(pool, index).getTypeDescriptor(pool, index);
+        }
+
+        public Klass resolve(ConstantPool pool, int index) {
+            return replace(pool, index).resolve(pool, index);
         }
     }
 }

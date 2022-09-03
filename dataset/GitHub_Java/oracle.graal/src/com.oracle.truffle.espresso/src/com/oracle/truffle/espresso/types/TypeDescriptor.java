@@ -50,8 +50,7 @@ public final class TypeDescriptor extends Descriptor {
             case 'S': return "short";
             case 'V': return "void";
             case 'Z': return "boolean";
-            default:
-                throw new InternalError("invalid type descriptor: " + "\"" + string + "\"");
+            default: throw new InternalError("invalid type descriptor: " + "\"" + string + "\"");
             // @formatter: on
         }
     }
