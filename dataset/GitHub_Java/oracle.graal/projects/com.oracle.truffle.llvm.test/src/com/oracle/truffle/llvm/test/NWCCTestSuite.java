@@ -40,7 +40,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.tools.util.ProcessUtil.ProcessResult;
 
 @RunWith(Parameterized.class)
@@ -63,7 +63,9 @@ public class NWCCTestSuite extends RemoteTestSuiteBase {
 
     @Test
     public void test() throws Throwable {
-        LLVMLogger.info("original file: " + tuple.getOriginalFile());
+        if (LLVMOptions.debugEnabled()) {
+            System.out.println("original file: " + tuple.getOriginalFile());
+        }
         try {
             List<String> launchRemote = launchRemote(tuple);
             int sulongRetValue = parseAndRemoveReturnValue(launchRemote);

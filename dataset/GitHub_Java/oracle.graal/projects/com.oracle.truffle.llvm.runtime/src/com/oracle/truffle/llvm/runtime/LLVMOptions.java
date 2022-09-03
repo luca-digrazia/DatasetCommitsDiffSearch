@@ -55,7 +55,6 @@ public class LLVMOptions {
 
     private static final String PATH_DELIMITER = ":";
     private static final String OPTION_PREFIX = "sulong.";
-    private static final String OBSOLETE_OPTION_PREFIX = "llvm.";
 
     @FunctionalInterface
     interface OptionParser {
@@ -204,7 +203,6 @@ public class LLVMOptions {
     static {
         parseOptions();
         checkForInvalidOptionNames();
-        checkForObsoleteOptionPrefix();
     }
 
     private static void checkForInvalidOptionNames() {
@@ -224,23 +222,8 @@ public class LLVMOptions {
             // Checkstyle: stop
             System.err.println("\nvalid options:");
             // Checkstyle: resume
-            printOptions();
+            LLVMOptions.main(new String[0]);
             System.exit(-1);
-        }
-    }
-
-    private static void printOptions() {
-        LLVMOptions.main(new String[0]);
-    }
-
-    private static void checkForObsoleteOptionPrefix() {
-        Properties allProperties = System.getProperties();
-        for (String key : allProperties.stringPropertyNames()) {
-            if (key.startsWith(OBSOLETE_OPTION_PREFIX)) {
-                System.err.println("The prefix '" + OBSOLETE_OPTION_PREFIX + "' in option '" + key + "' is an obsolete option prefix and has been replaced by the prefix '" + OPTION_PREFIX + "':");
-                printOptions();
-                System.exit(-1);
-            }
         }
     }
 
