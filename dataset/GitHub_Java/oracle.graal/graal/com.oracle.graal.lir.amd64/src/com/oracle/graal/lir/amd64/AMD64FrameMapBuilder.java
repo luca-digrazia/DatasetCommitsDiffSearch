@@ -36,14 +36,14 @@ public class AMD64FrameMapBuilder extends FrameMapBuilderImpl {
      * runtime for walking/inspecting frames of such methods.
      */
     public StackSlot allocateRBPSpillSlot() {
-        return ((AMD64FrameMap) getFrameMap()).allocateRBPSpillSlot();
+        return ((AMD64FrameMap) frameMap).allocateRBPSpillSlot();
     }
 
     public void freeRBPSpillSlot() {
-        ((AMD64FrameMap) getFrameMap()).freeRBPSpillSlot();
+        ((AMD64FrameMap) frameMap).freeRBPSpillSlot();
     }
 
     public StackSlot allocateDeoptimizationRescueSlot() {
-        return ((AMD64FrameMap) getFrameMap()).allocateDeoptimizationRescueSlot();
+        return ((AMD64FrameMap) frameMap).allocateDeoptimizationRescueSlot();
     }
 }

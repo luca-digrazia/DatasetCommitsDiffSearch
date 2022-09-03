@@ -42,10 +42,11 @@ import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.FrameMapBuilder.FrameMappable;
+import com.oracle.graal.lir.FrameMapBuilder.FrameMappingTool;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.options.*;
@@ -66,7 +67,7 @@ public final class LinearScan {
     final RegisterAttributes[] registerAttributes;
     final Register[] registers;
 
-    final boolean callKillsRegisters;
+    boolean callKillsRegisters;
 
     public static final int DOMINATOR_SPILL_MOVE_ID = -2;
     private static final int SPLIT_INTERVALS_CAPACITY_RIGHT_SHIFT = 1;
@@ -173,10 +174,6 @@ public final class LinearScan {
         this.registers = target.arch.getRegisters();
         this.firstVariableNumber = registers.length;
         this.blockData = new BlockMap<>(ir.getControlFlowGraph());
-
-        // If all allocatable registers are caller saved, then no registers are live across a call
-        // site. The register allocator can save time not trying to find a register at a call site.
-        this.callKillsRegisters = this.frameMapBuilder.getRegisterConfig().areAllAllocatableRegistersCallerSaved();
     }
 
     public int getFirstLirInstructionId(AbstractBlock<?> block) {

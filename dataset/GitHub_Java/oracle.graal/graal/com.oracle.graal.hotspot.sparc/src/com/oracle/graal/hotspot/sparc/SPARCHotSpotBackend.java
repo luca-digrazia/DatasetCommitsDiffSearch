@@ -63,7 +63,7 @@ import com.oracle.graal.sparc.*;
  */
 public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
-    public SPARCHotSpotBackend(HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
+    public SPARCHotSpotBackend(HotSpotGraalRuntime runtime, HotSpotProviders providers) {
         super(runtime, providers);
     }
 
@@ -75,7 +75,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     @Override
     public FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        return new SPARCFrameMapBuilder(newFrameMap(registerConfigNonNull), getCodeCache(), registerConfigNonNull);
+        return new FrameMapBuilderImpl(newFrameMap(registerConfigNonNull), getCodeCache(), registerConfigNonNull);
     }
 
     @Override

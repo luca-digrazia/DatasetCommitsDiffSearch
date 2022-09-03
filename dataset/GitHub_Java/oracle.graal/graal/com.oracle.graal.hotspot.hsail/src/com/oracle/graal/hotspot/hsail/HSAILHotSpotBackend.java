@@ -27,7 +27,6 @@ import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.hsail.HSAILHotSpotBackend.Options.*;
 import static com.oracle.graal.hotspot.hsail.replacements.HSAILNewObjectSnippets.Options.*;
 
@@ -683,7 +682,7 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         // Emit object array load prologue here.
         if (isObjectLambda) {
             boolean useCompressedOops = config.useCompressedOops;
-            final int arrayElementsOffset = runtime().getArrayBaseOffset(wordKind);
+            final int arrayElementsOffset = HotSpotGraalRuntime.getArrayBaseOffset(wordKind);
             String iterationObjArgReg = HSAIL.mapRegister(cc.getArgument(nonConstantParamCount - 1));
             /*
              * iterationObjArgReg will be the highest $d register in use (it is the last parameter)

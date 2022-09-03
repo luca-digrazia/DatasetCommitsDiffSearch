@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,40 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 
 /**
- * Extends {@link LIRFrameState} to handle {@link MonitorValue}s correctly.
+ * Extends {@link LIRFrameState} to handle {@link HotSpotMonitorValue}s correctly.
  */
 class HotSpotLIRFrameState extends LIRFrameState {
 
-    public HotSpotLIRFrameState(BytecodeFrame topFrame, VirtualObject[] virtualObjects, LabelRef exceptionEdge, short deoptimizationReason) {
-        super(topFrame, virtualObjects, exceptionEdge, deoptimizationReason);
+    public HotSpotLIRFrameState(BytecodeFrame topFrame, VirtualObject[] virtualObjects, LabelRef exceptionEdge) {
+        super(topFrame, virtualObjects, exceptionEdge);
     }
 
     @Override
-    protected Value processValue(ValueProcedure proc, Value value) {
-        if (value instanceof MonitorValue) {
-            MonitorValue monitor = (MonitorValue) value;
-            if (processed(monitor.getOwner())) {
-                monitor.setOwner(proc.doValue(monitor.getOwner(), OperandMode.ALIVE, STATE_FLAGS));
+    protected Value processValue(LIRInstruction inst, InstructionValueProcedure proc, Value value) {
+        if (value instanceof HotSpotMonitorValue) {
+            HotSpotMonitorValue monitor = (HotSpotMonitorValue) value;
+            if (monitor.getOwner() instanceof Value) {
+                Value owner = (Value) monitor.getOwner();
+                if (processed(owner)) {
+                    monitor.setOwner((JavaValue) proc.doValue(inst, owner, OperandMode.ALIVE, STATE_FLAGS));
+                }
+            }
+            Value slot = monitor.getSlot();
+            if (isVirtualStackSlot(slot) && processed(slot)) {
+                monitor.setSlot(asStackSlotValue(proc.doValue(inst, slot, OperandMode.ALIVE, STATE_FLAGS)));
             }
             return value;
         } else {
-            return super.processValue(proc, value);
+            return super.processValue(inst, proc, value);
         }
     }
 }
