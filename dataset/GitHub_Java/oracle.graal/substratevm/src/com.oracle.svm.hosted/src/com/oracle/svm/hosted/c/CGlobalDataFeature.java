@@ -90,7 +90,11 @@ public class CGlobalDataFeature implements GraalFeature {
         });
     }
 
-    public CGlobalDataInfo registerAsAccessedOrGet(CGlobalData<?> obj) {
+    public CGlobalDataInfo getCGlobalDataInfo(CGlobalDataImpl<?> data) {
+        return map.get(data);
+    }
+
+    public CGlobalDataInfo registerAsAccessed(CGlobalData<?> obj) {
         CGlobalDataImpl<?> data = (CGlobalDataImpl<?>) obj;
         assert !isLayouted() || map.containsKey(data) : "CGlobalData instance must have been discovered/registered before or during analysis";
         return map.computeIfAbsent((CGlobalDataImpl<?>) obj, o -> new CGlobalDataInfo(data));
@@ -98,7 +102,7 @@ public class CGlobalDataFeature implements GraalFeature {
 
     private Object replaceObject(Object obj) {
         if (obj instanceof CGlobalDataImpl<?>) {
-            registerAsAccessedOrGet((CGlobalData<?>) obj);
+            registerAsAccessed((CGlobalData<?>) obj);
         }
         return obj;
     }
