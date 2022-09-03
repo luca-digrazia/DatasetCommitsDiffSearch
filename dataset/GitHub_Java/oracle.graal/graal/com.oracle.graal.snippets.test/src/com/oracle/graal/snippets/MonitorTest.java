@@ -24,21 +24,19 @@ package com.oracle.graal.snippets;
 
 import org.junit.*;
 
-import com.oracle.graal.compiler.phases.ea.*;
+import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.test.*;
 
 public class MonitorTest extends GraalCompilerTest {
 
     @Test
     public void test0() {
-        test("lockObjectSimple", new Object(), new Object());
-        test("lockObjectSimple", new Object(), null);
+        test("lockObjectSimple", new Object(), "test1");
     }
 
     @Test
     public void test0_1() {
-        test("lockThisSimple", "test1", new Object());
-        test("lockThisSimple", "test1", null);
+        test("lockThisSimple", "test1");
     }
 
     @Test
@@ -62,7 +60,7 @@ public class MonitorTest extends GraalCompilerTest {
     }
 
     /**
-     * Tests monitor operations on {@link PartialEscapeAnalysisPhase virtual objects}.
+     * Tests monitor operations on {@link EscapeAnalysisPhase virtual objects}.
      */
     @Test
     public void test3() {
@@ -125,19 +123,15 @@ public class MonitorTest extends GraalCompilerTest {
         return box[0];
     }
 
-    public static Object lockObjectSimple(Object o, Object value) {
+    public static String lockObjectSimple(Object o, String value) {
         synchronized (o) {
-            value.hashCode();
             return value;
         }
     }
 
-    public String lockThisSimple(String value, Object o) {
+    public String lockThisSimple(String value) {
         synchronized (this) {
-            synchronized (value) {
-                o.hashCode();
-                return value;
-            }
+            return value;
         }
     }
 
