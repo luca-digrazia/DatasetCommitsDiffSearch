@@ -56,7 +56,7 @@ import com.oracle.truffle.llvm.nodes.impl.others.LLVMUnsupportedInlineAssemblerN
 import com.oracle.truffle.llvm.nodes.impl.vars.StructLiteralNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMBitcodeFunctionVisitor;
-import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
+import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.parser.factories.LLVMArithmeticFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMCastsFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMComparisonFactory;
@@ -74,35 +74,35 @@ import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionParameter;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalValueSymbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.Symbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.ArrayConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.integer.BigIntegerConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.BinaryOperationConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.BlockAddressConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.CastConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.CompareConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.floatingpoint.FloatingPointConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.GetElementPointerConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.InlineAsmConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.integer.IntegerConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.MetadataConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.NullConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.StructureConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.UndefinedConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.aggregate.VectorConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ValueInstruction;
-import com.oracle.truffle.llvm.parser.base.model.enums.AsmDialect;
-import com.oracle.truffle.llvm.parser.base.model.enums.BinaryOperator;
-import com.oracle.truffle.llvm.parser.base.model.enums.CompareOperator;
-import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
-import com.oracle.truffle.llvm.parser.base.model.types.IntegerType;
-import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
-import com.oracle.truffle.llvm.parser.base.model.types.Type;
+import uk.ac.man.cs.llvm.ir.model.FunctionDeclaration;
+import uk.ac.man.cs.llvm.ir.model.FunctionDefinition;
+import uk.ac.man.cs.llvm.ir.model.FunctionParameter;
+import uk.ac.man.cs.llvm.ir.model.GlobalValueSymbol;
+import uk.ac.man.cs.llvm.ir.model.Symbol;
+import uk.ac.man.cs.llvm.ir.model.ValueSymbol;
+import uk.ac.man.cs.llvm.ir.model.constants.ArrayConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.BigIntegerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.BinaryOperationConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.BlockAddressConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.CastConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.CompareConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.FloatingPointConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.GetElementPointerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.InlineAsmConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.MetadataConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.NullConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.StructureConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.UndefinedConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.VectorConstant;
+import uk.ac.man.cs.llvm.ir.model.elements.ValueInstruction;
+import uk.ac.man.cs.llvm.ir.model.enums.AsmDialect;
+import uk.ac.man.cs.llvm.ir.model.enums.BinaryOperator;
+import uk.ac.man.cs.llvm.ir.model.enums.CompareOperator;
+import uk.ac.man.cs.llvm.ir.types.FunctionType;
+import uk.ac.man.cs.llvm.ir.types.IntegerType;
+import uk.ac.man.cs.llvm.ir.types.StructureType;
+import uk.ac.man.cs.llvm.ir.types.Type;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -226,7 +226,7 @@ public final class LLVMNodeGenerator {
     }
 
     public static LLVMExpressionNode toCompareVectorNode(CompareOperator operator, Type type, LLVMAddressNode target, LLVMExpressionNode lhs, LLVMExpressionNode rhs) {
-        final LLVMBaseType llvmtype = type.getLLVMBaseType();
+        final LLVMBaseType llvmtype = LLVMBitcodeTypeHelper.getLLVMBaseType(type);
 
         switch (operator) {
             case FP_FALSE:
@@ -322,14 +322,14 @@ public final class LLVMNodeGenerator {
                 final int indexedTypeLength = typeHelper.goIntoTypeGetLength(currentType, 1);
                 currentType = LLVMBitcodeTypeHelper.goIntoType(currentType, 1);
                 final LLVMExpressionNode valueref = resolve(symbol);
-                currentAddress = LLVMGetElementPtrFactory.create(type.getLLVMBaseType(), (LLVMAddressNode) currentAddress, valueref, indexedTypeLength);
+                currentAddress = LLVMGetElementPtrFactory.create(LLVMBitcodeTypeHelper.getLLVMBaseType(type), (LLVMAddressNode) currentAddress, valueref, indexedTypeLength);
 
             } else {
                 final int indexedTypeLength = typeHelper.goIntoTypeGetLength(currentType, constantIndex);
                 currentType = LLVMBitcodeTypeHelper.goIntoType(currentType, constantIndex);
                 if (indexedTypeLength != 0) {
                     final LLVMExpressionNode constantNode;
-                    switch (type.getLLVMBaseType()) {
+                    switch (LLVMBitcodeTypeHelper.getLLVMBaseType(type)) {
                         case I32:
                             constantNode = new LLVMSimpleLiteralNode.LLVMI32LiteralNode(1);
                             break;
@@ -339,7 +339,7 @@ public final class LLVMNodeGenerator {
                         default:
                             throw new AssertionError();
                     }
-                    currentAddress = LLVMGetElementPtrFactory.create(type.getLLVMBaseType(), (LLVMAddressNode) currentAddress, constantNode, indexedTypeLength);
+                    currentAddress = LLVMGetElementPtrFactory.create(LLVMBitcodeTypeHelper.getLLVMBaseType(type), (LLVMAddressNode) currentAddress, constantNode, indexedTypeLength);
                 }
             }
         }
@@ -350,7 +350,7 @@ public final class LLVMNodeGenerator {
     public LLVMExpressionNode resolve(Symbol symbol) {
         if (symbol instanceof ValueInstruction || symbol instanceof FunctionParameter) {
             final FrameSlot slot = method.getFrame().findFrameSlot(((ValueSymbol) symbol).getName());
-            return LLVMFrameReadWriteFactory.createFrameRead(symbol.getType().getLLVMBaseType(), slot);
+            return LLVMFrameReadWriteFactory.createFrameRead(LLVMBitcodeTypeHelper.getLLVMBaseType(symbol.getType()), slot);
 
         } else if (symbol instanceof GlobalValueSymbol) {
             return method.global((GlobalValueSymbol) symbol);
@@ -413,7 +413,7 @@ public final class LLVMNodeGenerator {
             arrayValues.add(resolve(constant.getElement(i)));
         }
 
-        switch (constant.getType().getElementType().getLLVMBaseType()) {
+        switch (LLVMBitcodeTypeHelper.getLLVMBaseType(constant.getType().getElementType())) {
             case I8:
                 return LLVMStoreNodeFactory.LLVMI8ArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMI8Node[constant.getElementCount()]), baseTypeSize, arrayAlloc);
             case I16:
@@ -464,7 +464,7 @@ public final class LLVMNodeGenerator {
     }
 
     private LLVMStructWriteNode createStructWriteNode(LLVMExpressionNode parsedConstant, Type type) {
-        final LLVMBaseType llvmType = type.getLLVMBaseType();
+        final LLVMBaseType llvmType = LLVMBitcodeTypeHelper.getLLVMBaseType(type);
         switch (llvmType) {
             case I1:
                 return new StructLiteralNode.LLVMI1StructWriteNode((LLVMI1Node) parsedConstant);
@@ -502,7 +502,7 @@ public final class LLVMNodeGenerator {
     private LLVMExpressionNode resolveBinaryOperationConstant(BinaryOperationConstant constant) {
         final LLVMExpressionNode lhs = resolve(constant.getLHS());
         final LLVMExpressionNode rhs = resolve(constant.getRHS());
-        final LLVMBaseType type = constant.getType().getLLVMBaseType();
+        final LLVMBaseType type = LLVMBitcodeTypeHelper.getLLVMBaseType(constant.getType());
         return generateBinaryOperatorNode(constant.getOperator(), type, lhs, rhs);
     }
 
@@ -514,8 +514,8 @@ public final class LLVMNodeGenerator {
     private LLVMExpressionNode resolveCastConstant(CastConstant constant) {
         final LLVMConversionType type = LLVMBitcodeTypeHelper.toConversionType(constant.getOperator());
         final LLVMExpressionNode fromNode = resolve(constant.getValue());
-        final LLVMBaseType from = constant.getValue().getType().getLLVMBaseType();
-        final LLVMBaseType to = constant.getType().getLLVMBaseType();
+        final LLVMBaseType from = LLVMBitcodeTypeHelper.getLLVMBaseType(constant.getValue().getType());
+        final LLVMBaseType to = LLVMBitcodeTypeHelper.getLLVMBaseType(constant.getType());
         return LLVMCastsFactory.cast(fromNode, to, from, type);
     }
 
@@ -572,6 +572,6 @@ public final class LLVMNodeGenerator {
                         method.getContext(),
                         method.getStackSlot());
 
-        return LLVMLiteralFactory.createVectorLiteralNode(values, target, constant.getType().getLLVMBaseType());
+        return LLVMLiteralFactory.createVectorLiteralNode(values, target, LLVMBitcodeTypeHelper.getLLVMBaseType(constant.getType()));
     }
 }
