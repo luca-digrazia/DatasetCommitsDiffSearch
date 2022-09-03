@@ -141,8 +141,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             cfgPrinter.target = cfgPrinter.lirGenerator.target();
         }
         if (cfgPrinter.lir != null) {
-            assert cfgPrinter.lir.getControlFlowGraph() instanceof ControlFlowGraph;
-            cfgPrinter.cfg = (ControlFlowGraph) cfgPrinter.lir.getControlFlowGraph();
+            cfgPrinter.cfg = cfgPrinter.lir.getControlFlowGraph();
         }
 
         CodeCacheProvider codeCache = Debug.contextLookup(CodeCacheProvider.class);
