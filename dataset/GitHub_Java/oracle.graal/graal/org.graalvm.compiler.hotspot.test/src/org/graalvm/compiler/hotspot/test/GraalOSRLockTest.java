@@ -22,8 +22,6 @@
  */
 package org.graalvm.compiler.hotspot.test;
 
-import static org.graalvm.compiler.options.OptionValues.GLOBAL;
-
 import java.lang.management.ManagementFactory;
 import java.lang.management.MonitorInfo;
 import java.lang.management.ThreadInfo;
@@ -31,6 +29,7 @@ import java.lang.management.ThreadMXBean;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.core.phases.HighTier;
@@ -38,9 +37,8 @@ import org.graalvm.compiler.debug.DebugEnvironment;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.hotspot.phases.OnStackReplacementPhase;
-import org.graalvm.compiler.options.OptionKey;
-import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.util.EconomicMap;
+import org.graalvm.compiler.options.OptionValue;
+import org.graalvm.compiler.options.OptionValue.OverrideScope;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -103,15 +101,15 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
         return isMonitorLockHeld(lock) || isMonitorLockHeld(lock1);
     }
 
-    protected static EconomicMap<OptionKey<?>, Object> osrLockNoDeopt() {
-        EconomicMap<OptionKey<?>, Object> overrides = OptionValues.newOptionMap();
+    protected static Map<OptionValue<?>, Object> osrLockNoDeopt() {
+        HashMap<OptionValue<?>, Object> overrides = new HashMap<>();
         overrides.put(OnStackReplacementPhase.Options.DeoptAfterOSR, false);
         overrides.put(OnStackReplacementPhase.Options.SupportOSRWithLocks, true);
         return overrides;
     }
 
-    protected static EconomicMap<OptionKey<?>, Object> osrLockDeopt() {
-        EconomicMap<OptionKey<?>, Object> overrides = OptionValues.newOptionMap();
+    protected static Map<OptionValue<?>, Object> osrLockDeopt() {
+        HashMap<OptionValue<?>, Object> overrides = new HashMap<>();
         overrides.put(OnStackReplacementPhase.Options.SupportOSRWithLocks, true);
         return overrides;
     }
@@ -153,15 +151,16 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
 
     @BeforeClass
     public static void init() {
-        DebugEnvironment.ensureInitialized(GLOBAL);
+        DebugEnvironment.ensureInitialized();
     }
 
     // @Test
     @SuppressWarnings("try")
     public void testLockOSROuterImmediateDeoptAfter() {
         run(() -> {
-            OptionValues options = new OptionValues(GLOBAL, osrLockDeopt());
-            testOSR(options, "testOuterLockImmediateDeoptAfter");
+            try (OverrideScope o = OptionValue.override(osrLockDeopt())) {
+                testOSR("testOuterLockImmediateDeoptAfter");
+            }
         });
     }
 
@@ -198,7 +197,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
         for (int i = 0; i < 100000; i++) {
             instance.listeners.put("hello" + i, null);
         }
-        testOSR(GLOBAL, "synchronizedSnippet", instance);
+        testOSR("synchronizedSnippet", instance);
         Assert.assertFalse(isMonitorLockHeld(instance));
     }
 
@@ -206,9 +205,8 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
     @SuppressWarnings("try")
     public void testOSRTrivialLoop() {
         run(() -> {
-            OptionValues options = new OptionValues(GLOBAL, osrLockDeopt());
-            try {
-                testOSR(options, "testReduceOSRTrivialLoop");
+            try (OverrideScope o = OptionValue.override(osrLockDeopt())) {
+                testOSR("testReduceOSRTrivialLoop");
             } catch (Throwable t) {
                 Assert.assertEquals("OSR compilation without OSR entry loop.", t.getMessage());
             }
@@ -219,8 +217,9 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
     @SuppressWarnings("try")
     public void testLockOSROuterInnerImmediateDeoptAfter() {
         run(() -> {
-            OptionValues options = new OptionValues(GLOBAL, osrLockDeopt());
-            testOSR(options, "testOuterInnerLockImmediateDeoptAfter");
+            try (OverrideScope o = OptionValue.override(osrLockDeopt())) {
+                testOSR("testOuterInnerLockImmediateDeoptAfter");
+            }
         });
     }
 
@@ -228,10 +227,11 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
     @SuppressWarnings("try")
     public void testLockOSROuterCompileRestOfMethod() {
         run(() -> {
-            EconomicMap<OptionKey<?>, Object> overrides = osrLockNoDeopt();
-            overrides.put(HighTier.Options.Inline, false);
-            OptionValues options = new OptionValues(GLOBAL, overrides);
-            testOSR(options, "testOuterLockCompileRestOfMethod");
+            try (OverrideScope o = OptionValue.override(osrLockNoDeopt());
+                            OverrideScope o2 = OptionValue.override(HighTier.Options.Inline, false)) {
+                testOSR("testOuterLockCompileRestOfMethod");
+            }
+
         });
     }
 
@@ -239,8 +239,9 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
     @SuppressWarnings("try")
     public void testLockOSROuterInnerCompileRestOfMethod() {
         run(() -> {
-            OptionValues options = new OptionValues(GLOBAL, osrLockNoDeopt());
-            testOSR(options, "testOuterInnerLockCompileRestOfMethod");
+            try (OverrideScope o = OptionValue.override(osrLockNoDeopt())) {
+                testOSR("testOuterInnerLockCompileRestOfMethod");
+            }
         });
     }
 
@@ -248,10 +249,10 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
     @SuppressWarnings("try")
     public void testLockOSROuterInnerLockDepthCompileRestOfMethod() {
         run(() -> {
-            EconomicMap<OptionKey<?>, Object> overrides = osrLockNoDeopt();
-            overrides.put(HighTier.Options.Inline, false);
-            OptionValues options = new OptionValues(GLOBAL, overrides);
-            testOSR(options, "testOuterInnerLockDepth1CompileRestOfMethod");
+            try (OverrideScope o = OptionValue.override(osrLockNoDeopt());
+                            OverrideScope o2 = OptionValue.override(HighTier.Options.Inline, false)) {
+                testOSR("testOuterInnerLockDepth1CompileRestOfMethod");
+            }
         });
     }
 
@@ -259,10 +260,10 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
     @SuppressWarnings("try")
     public void testLockOSROuterInnerLockDepthDeopt() {
         run(() -> {
-            EconomicMap<OptionKey<?>, Object> overrides = osrLockNoDeopt();
-            overrides.put(HighTier.Options.Inline, false);
-            OptionValues options = new OptionValues(GLOBAL, overrides);
-            testOSR(options, "testOuterInnerLockDepth1DeoptAfter");
+            try (OverrideScope o = OptionValue.override(osrLockNoDeopt());
+                            OverrideScope o2 = OptionValue.override(HighTier.Options.Inline, false)) {
+                testOSR("testOuterInnerLockDepth1DeoptAfter");
+            }
         });
     }
 
@@ -270,8 +271,9 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
     @SuppressWarnings("try")
     public void testLockOSROuterInnerLockDepthRecursiveCompileRestOfMethod0() {
         run(() -> {
-            OptionValues options = new OptionValues(GLOBAL, osrLockNoDeopt());
-            testOSR(options, "testOuterInnerLockDepth1RecursiveCompileRestOfMethod1");
+            try (OverrideScope o = OptionValue.override(osrLockNoDeopt())) {
+                testOSR("testOuterInnerLockDepth1RecursiveCompileRestOfMethod1");
+            }
         });
     }
 
@@ -279,8 +281,9 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
     @SuppressWarnings("try")
     public void testLockOSROuterInnerLockDepthRecursiveCompileRestOfMethod1() {
         run(() -> {
-            OptionValues options = new OptionValues(GLOBAL, osrLockNoDeopt());
-            testOSR(options, "testOuterInnerLockDepth1RecursiveCompileRestOfMethod2");
+            try (OverrideScope o = OptionValue.override(osrLockNoDeopt())) {
+                testOSR("testOuterInnerLockDepth1RecursiveCompileRestOfMethod2");
+            }
         });
     }
 
@@ -288,8 +291,9 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
     @SuppressWarnings("try")
     public void testLockOSROuterCompileRestOfMethodSubsequentLock() {
         run(() -> {
-            OptionValues options = new OptionValues(GLOBAL, osrLockNoDeopt());
-            testOSR(options, "testOuterLockCompileRestOfMethodSubsequentLock");
+            try (OverrideScope o = OptionValue.override(osrLockNoDeopt())) {
+                testOSR("testOuterLockCompileRestOfMethodSubsequentLock");
+            }
         });
     }
 
@@ -297,8 +301,9 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
     @SuppressWarnings("try")
     public void testLockOSROuterInnerSameLockCompileRestOfMethod() {
         run(() -> {
-            OptionValues options = new OptionValues(GLOBAL, osrLockNoDeopt());
-            testOSR(options, "testOuterInnerSameLockCompileRestOfMethod");
+            try (OverrideScope o = OptionValue.override(osrLockNoDeopt())) {
+                testOSR("testOuterInnerSameLockCompileRestOfMethod");
+            }
         });
     }
 
@@ -312,11 +317,11 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
             // profile it
             leaf.reprofile();
             testRecursiveLockingLeaf();
-            EconomicMap<OptionKey<?>, Object> overrides = osrLockNoDeopt();
-            overrides.put(HighTier.Options.Inline, false);
-            OptionValues options = new OptionValues(GLOBAL, overrides);
-            compile(options, leaf, -1);
-            testOSR(options, "testRecursiveLockingRoot");
+            try (OverrideScope o = OptionValue.override(osrLockNoDeopt());
+                            OverrideScope o2 = OptionValue.override(HighTier.Options.Inline, false)) {
+                compile(leaf, -1);
+                testOSR("testRecursiveLockingRoot");
+            }
         });
     }
 
@@ -326,16 +331,15 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
         run(() -> {
             testRecursiveRootNoOSR();
             ResolvedJavaMethod root = getResolvedJavaMethod("testRecursiveRootNoOSR");
-            EconomicMap<OptionKey<?>, Object> overrides = osrLockNoDeopt();
-            overrides.put(HighTier.Options.Inline, false);
-            OptionValues options = new OptionValues(GLOBAL, overrides);
-            compile(options, root, -1);
-            testOSR(options, "testRecursiveLeafOSR");
-            // force a safepoint and hope the inflated locks are deflated
-            System.gc();
-            // call the root to call into the leaf and enter the osr-ed code
-            testRecursiveRootNoOSR();
-
+            try (OverrideScope o = OptionValue.override(osrLockNoDeopt());
+                            OverrideScope o2 = OptionValue.override(HighTier.Options.Inline, false)) {
+                compile(root, -1);
+                testOSR("testRecursiveLeafOSR");
+                // force a safepoint and hope the inflated locks are deflated
+                System.gc();
+                // call the root to call into the leaf and enter the osr-ed code
+                testRecursiveRootNoOSR();
+            }
         });
     }
 
@@ -372,7 +376,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                 if (i % 33 == 0) {
                     ret = ReturnValue.SUCCESS;
                     if (GraalDirectives.inCompiledCode() && i + 33 > (10 * limit)) {
-                        GraalDirectives.blackhole(ret);
+                        System.out.println("DoneBeforeDeopting");
                     }
                 }
             }
@@ -393,7 +397,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                     if (i % 33 == 0) {
                         ret = ReturnValue.SUCCESS;
                         if (GraalDirectives.inCompiledCode() && i + 33 > (10 * limit)) {
-                            GraalDirectives.blackhole(ret);
+                            System.out.println("DoneBeforeDeopting");
                         }
                     }
                 }
@@ -411,6 +415,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                 GraalDirectives.blackhole(i);
                 if (i % 1001 == 0) {
                     ret = ReturnValue.SUCCESS;
+                    System.out.println("Doing a gc");
                     System.gc();
                 }
             }
@@ -427,7 +432,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                     if (i % 33 == 0) {
                         ret = ReturnValue.SUCCESS;
                         if (GraalDirectives.inCompiledCode() && i + 33 > (10 * limit)) {
-                            GraalDirectives.blackhole(ret);
+                            System.out.println("DoneBeforeNotDeopting");
                             System.gc();
                         }
                     }
@@ -451,7 +456,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                     if (i % 1001 == 0) {
                         ret = ReturnValue.SUCCESS;
                         if (GraalDirectives.inCompiledCode() && i + 33 > (limit)) {
-                            GraalDirectives.blackhole(ret);
+                            System.out.println("DoneBeforeNotDeopting");
                             System.gc();
                         }
                     }
@@ -485,7 +490,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                     if (i % 33 == 0) {
                         ret = ReturnValue.SUCCESS;
                         if (GraalDirectives.inCompiledCode() && i + 33 > (10 * limit)) {
-                            GraalDirectives.blackhole(ret);
+                            System.out.println("DoneBeforeNotDeopting");
                         }
                     }
                 }
@@ -509,7 +514,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                     if (i % 33 == 0) {
                         ret = ReturnValue.SUCCESS;
                         if (GraalDirectives.inCompiledCode() && i + 33 > (10 * limit)) {
-                            GraalDirectives.blackhole(ret);
+                            System.out.println("DoneBeforeNotDeopting");
                         }
                     }
                 }
@@ -533,7 +538,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                     if (i % 33 == 0) {
                         ret = ReturnValue.SUCCESS;
                         if (GraalDirectives.inCompiledCode() && i + 33 > (10 * limit)) {
-                            GraalDirectives.blackhole(ret);
+                            System.out.println("DoneBeforeNotDeopting");
                         }
                     }
                 }
@@ -558,7 +563,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                     if (i % 33 == 0) {
                         ret = ReturnValue.SUCCESS;
                         if (GraalDirectives.inCompiledCode() && i + 33 > (10 * limit)) {
-                            GraalDirectives.blackhole(ret);
+                            System.out.println("DoneBeforeNotDeopting");
                         }
                     }
                 }
@@ -616,7 +621,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                 if (i % 33 == 0) {
                     ret = ReturnValue.SUCCESS;
                     if (GraalDirectives.inCompiledCode() && i + 33 > (10 * limit)) {
-                        GraalDirectives.blackhole(ret);
+                        System.out.println("DoneBeforeNotDeopting");
                     }
                 }
             }
@@ -635,7 +640,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                 if (i % 33 == 0) {
                     ret = ReturnValue.SUCCESS;
                     if (GraalDirectives.inCompiledCode() && i + 33 > (10 * limit)) {
-                        GraalDirectives.blackhole(ret);
+                        System.out.println("DoneBeforeNotDeopting");
                     }
                 }
             }
@@ -660,7 +665,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
                     if (i % 33 == 0) {
                         ret = ReturnValue.SUCCESS;
                         if (GraalDirectives.inCompiledCode() && i + 33 > (10 * limit)) {
-                            GraalDirectives.blackhole(ret);
+                            System.out.println("DoneBeforeNotDeopting");
                         }
                     }
                 }

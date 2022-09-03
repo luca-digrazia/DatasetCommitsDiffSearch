@@ -24,7 +24,7 @@ package org.graalvm.compiler.hotspot.phases;
 
 import static org.graalvm.compiler.phases.common.DeadCodeEliminationPhase.Optionality.Required;
 
-import org.graalvm.compiler.core.common.PermanentBailoutException;
+import org.graalvm.compiler.common.PermanentBailoutException;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.Debug;
@@ -58,9 +58,8 @@ import org.graalvm.compiler.nodes.java.MonitorExitNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.options.OptionValue;
 import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
 
@@ -72,18 +71,18 @@ public class OnStackReplacementPhase extends Phase {
         // @formatter:off
         @Option(help = "Deoptimize OSR compiled code when the OSR entry loop is finished " +
                        "if there is no mature profile available for the rest of the method.", type = OptionType.Debug)
-        public static final OptionKey<Boolean> DeoptAfterOSR = new OptionKey<>(true);
+        public static final OptionValue<Boolean> DeoptAfterOSR = new OptionValue<>(true);
         @Option(help = "Support OSR compilations with locks. If DeoptAfterOSR is true we can per definition not have " +
                        "unbalaced enter/extis mappings. If DeoptAfterOSR is false insert artificial monitor enters after " +
                        "the OSRStart to have balanced enter/exits in the graph.", type = OptionType.Debug)
-        public static final OptionKey<Boolean> SupportOSRWithLocks = new OptionKey<>(true);
+        public static final OptionValue<Boolean> SupportOSRWithLocks = new OptionValue<>(true);
         // @formatter:on
     }
 
     private static final DebugCounter OsrWithLocksCount = Debug.counter("OSRWithLocks");
 
-    private static boolean supportOSRWithLocks(OptionValues options) {
-        return Options.SupportOSRWithLocks.getValue(options);
+    private static boolean supportOSRWithLocks() {
+        return Options.SupportOSRWithLocks.getValue();
     }
 
     @Override
@@ -94,7 +93,7 @@ public class OnStackReplacementPhase extends Phase {
             assert graph.getNodes(EntryMarkerNode.TYPE).isEmpty();
             return;
         }
-        Debug.dump(Debug.DETAILED_LOG_LEVEL, graph, "OnStackReplacement initial at bci %d", graph.getEntryBCI());
+        Debug.dump(Debug.INFO_LOG_LEVEL, graph, "OnStackReplacement initial at bci %d", graph.getEntryBCI());
 
         EntryMarkerNode osr;
         int maxIterations = -1;
@@ -113,7 +112,7 @@ public class OnStackReplacementPhase extends Phase {
             throw new PermanentBailoutException("OSR compilation without OSR entry loop.");
         }
 
-        if (!supportOSRWithLocks(graph.getOptions()) && currentOSRWithLocks) {
+        if (!supportOSRWithLocks() && currentOSRWithLocks) {
             throw new PermanentBailoutException("OSR with locks disabled.");
         }
 
@@ -144,7 +143,7 @@ public class OnStackReplacementPhase extends Phase {
                 proxy.replaceAndDelete(proxy.value());
             }
             GraphUtil.removeFixedWithUnusedInputs(osr);
-            Debug.dump(Debug.DETAILED_LOG_LEVEL, graph, "OnStackReplacement loop peeling result");
+            Debug.dump(Debug.INFO_LOG_LEVEL, graph, "OnStackReplacement loop peeling result");
         } while (true);
 
         FrameState osrState = osr.stateAfter();
@@ -157,7 +156,7 @@ public class OnStackReplacementPhase extends Phase {
         graph.setStart(osrStart);
         osrStart.setStateAfter(osrState);
 
-        Debug.dump(Debug.DETAILED_LOG_LEVEL, graph, "OnStackReplacement after setting OSR start");
+        Debug.dump(Debug.INFO_LOG_LEVEL, graph, "OnStackReplacement after setting OSR start");
         final int localsSize = osrState.localsSize();
         final int locksSize = osrState.locksSize();
 
@@ -188,9 +187,9 @@ public class OnStackReplacementPhase extends Phase {
         }
 
         osr.replaceAtUsages(InputType.Guard, osrStart);
-        Debug.dump(Debug.DETAILED_LOG_LEVEL, graph, "OnStackReplacement after replacing entry proxies");
+        Debug.dump(Debug.INFO_LOG_LEVEL, graph, "OnStackReplacement after replacing entry proxies");
         GraphUtil.killCFG(start);
-        Debug.dump(Debug.DETAILED_LOG_LEVEL, graph, "OnStackReplacement result");
+        Debug.dump(Debug.INFO_LOG_LEVEL, graph, "OnStackReplacement result");
         new DeadCodeEliminationPhase(Required).apply(graph);
 
         if (currentOSRWithLocks) {
@@ -210,7 +209,7 @@ public class OnStackReplacementPhase extends Phase {
                 osrMonitorEnter.setNext(oldNext);
                 osrStart.setNext(osrMonitorEnter);
             }
-            Debug.dump(Debug.DETAILED_LOG_LEVEL, graph, "After inserting OSR monitor enters");
+            Debug.dump(Debug.INFO_LOG_LEVEL, graph, "After inserting OSR monitor enters");
             /*
              * Ensure balanced monitorenter - monitorexit
              *
@@ -226,7 +225,7 @@ public class OnStackReplacementPhase extends Phase {
                 }
             }
         }
-        Debug.dump(Debug.DETAILED_LOG_LEVEL, graph, "OnStackReplacement result");
+        Debug.dump(Debug.INFO_LOG_LEVEL, graph, "OnStackReplacement result");
         new DeadCodeEliminationPhase(Required).apply(graph);
         /*
          * There must not be any parameter nodes left after OSR compilation.
