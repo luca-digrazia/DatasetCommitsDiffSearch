@@ -507,12 +507,8 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             if (value != null) {
                 return context.getAPIAccess().getReceiver(value);
             } else {
-                value = context.context.findLegacyExportedSymbol(symbolName);
-                if (value != null) {
-                    return context.getAPIAccess().getReceiver(value);
-                }
+                return null;
             }
-            return null;
         }
 
         @Override

@@ -75,7 +75,7 @@ final class PolyglotLanguageContext implements VMObject {
     volatile boolean initialized;
     volatile boolean finalized;
     private volatile Object guestBindings;
-    @CompilationFinal private volatile Object polyglotGuestBindings;
+    private volatile Object polyglotGuestBindings;
     private volatile Value hostBindings;
     @CompilationFinal volatile Env env;
     private final Node keyInfoNode = Message.KEY_INFO.createNode();
@@ -105,14 +105,7 @@ final class PolyglotLanguageContext implements VMObject {
     Value getHostBindings() {
         Value bindings = this.hostBindings;
         if (bindings == null) {
-            Object prev = enter();
-            try {
-                initializeLanguageBindings();
-            } catch (Throwable e) {
-                throw PolyglotImpl.wrapGuestException(this, e);
-            } finally {
-                leave(prev);
-            }
+            initializeLanguageBindings();
             bindings = hostBindings;
             assert bindings != null;
         }
@@ -122,7 +115,6 @@ final class PolyglotLanguageContext implements VMObject {
     Object getPolyglotGuestBindings() {
         Object bindings = this.polyglotGuestBindings;
         if (bindings == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             initializeLanguageBindings();
             bindings = polyglotGuestBindings;
             assert bindings != null;
@@ -131,11 +123,18 @@ final class PolyglotLanguageContext implements VMObject {
     }
 
     private void initializeLanguageBindings() {
-        ensureInitialized(null);
-        Iterable<Scope> scopes = LANGUAGE.findTopScopes(env);
-        this.guestBindings = new PolyglotLanguageBindings(scopes);
-        this.polyglotGuestBindings = new PolyglotBindings(this, context.polyglotBindings);
-        this.hostBindings = this.toHostValue(guestBindings);
+        Object prev = enter();
+        try {
+            ensureInitialized(null);
+            Iterable<Scope> scopes = LANGUAGE.findTopScopes(env);
+            this.guestBindings = new PolyglotLanguageBindings(scopes);
+            this.polyglotGuestBindings = new PolyglotBindings(this, context.polyglotBindings);
+            this.hostBindings = this.toHostValue(guestBindings);
+        } catch (Throwable e) {
+            throw PolyglotImpl.wrapGuestException(this, e);
+        } finally {
+            leave(prev);
+        }
     }
 
     boolean isInitialized() {

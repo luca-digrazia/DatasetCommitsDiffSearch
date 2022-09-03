@@ -213,22 +213,19 @@ public final class AllocationReporter {
      */
     public void onEnter(Object valueToReallocate, long oldSize, long newSizeEstimate) {
         if (valueCheck != null) {
-            onEnterCheck(valueToReallocate, oldSize, newSizeEstimate);
+            enterSizeCheck(valueToReallocate, oldSize, newSizeEstimate);
+            if (valueToReallocate != null) {
+                allocateValueCheck(valueToReallocate);
+            }
         }
         notifyAllocateOrReallocate(valueToReallocate, oldSize, newSizeEstimate);
     }
 
-    @TruffleBoundary
-    private void onEnterCheck(Object valueToReallocate, long oldSize, long newSizeEstimate) {
-        enterSizeCheck(valueToReallocate, oldSize, newSizeEstimate);
-        if (valueToReallocate != null) {
-            allocateValueCheck(valueToReallocate);
-        }
-        setValueCheck(valueToReallocate);
-    }
-
     @ExplodeLoop
     private void notifyAllocateOrReallocate(Object value, long oldSize, long newSizeEstimate) {
+        if (valueCheck != null) {
+            setValueCheck(value);
+        }
         CompilerAsserts.partialEvaluationConstant(this);
         if (!listenersNotChangedAssumption.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -268,15 +265,10 @@ public final class AllocationReporter {
      */
     public void onReturnValue(Object value, long oldSize, long newSize) {
         if (valueCheck != null) {
-            onReturnValueCheck(value, oldSize, newSize);
+            allocateValueCheck(value);
+            allocatedCheck(value, oldSize, newSize);
         }
         notifyAllocated(value, oldSize, newSize);
-    }
-
-    @TruffleBoundary
-    private void onReturnValueCheck(Object value, long oldSize, long newSize) {
-        allocateValueCheck(value);
-        allocatedCheck(value, oldSize, newSize);
     }
 
     @ExplodeLoop
@@ -294,15 +286,15 @@ public final class AllocationReporter {
         }
     }
 
+    @TruffleBoundary
     private static void enterSizeCheck(Object valueToReallocate, long oldSize, long newSizeEstimate) {
-        CompilerAsserts.neverPartOfCompilation();
         assert (newSizeEstimate == SIZE_UNKNOWN || newSizeEstimate > 0) : "Wrong new size estimate = " + newSizeEstimate;
         assert valueToReallocate != null || oldSize == 0 : "Old size must be 0 for new allocations. Was: " + oldSize;
         assert valueToReallocate == null || (oldSize > 0 || oldSize == SIZE_UNKNOWN) : "Old size of a re-allocated value must be positive or unknown. Was: " + oldSize;
     }
 
+    @TruffleBoundary
     private boolean setValueCheck(Object value) {
-        CompilerAsserts.neverPartOfCompilation();
         LinkedList<Reference<Object>> list = valueCheck.get();
         if (list == null) {
             list = new LinkedList<>();
@@ -312,8 +304,8 @@ public final class AllocationReporter {
         return true;
     }
 
+    @TruffleBoundary
     private static void allocateValueCheck(Object value) {
-        CompilerAsserts.neverPartOfCompilation();
         if (value == null) {
             throw new NullPointerException("No allocated value.");
         }
@@ -332,8 +324,8 @@ public final class AllocationReporter {
         assert isTO : "Wrong value class, TruffleObject is required. Was: " + value.getClass().getName();
     }
 
+    @TruffleBoundary
     private void allocatedCheck(Object value, long oldSize, long newSize) {
-        CompilerAsserts.neverPartOfCompilation();
         assert value != null : "Allocated value must not be null.";
         LinkedList<Reference<Object>> list = valueCheck.get();
         assert list != null && !list.isEmpty() : "onEnter() was not called";

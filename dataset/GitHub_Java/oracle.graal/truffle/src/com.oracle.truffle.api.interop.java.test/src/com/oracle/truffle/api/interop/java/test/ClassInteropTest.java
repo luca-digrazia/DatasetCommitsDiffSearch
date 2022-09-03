@@ -25,22 +25,26 @@
 package com.oracle.truffle.api.interop.java.test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 import java.util.Arrays;
 
+import org.graalvm.polyglot.Context;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 
-public class ClassInteropTest extends ProxyLanguageEnvTest {
+public class ClassInteropTest {
     private TruffleObject obj;
     private XYPlus xyp;
 
@@ -49,15 +53,28 @@ public class ClassInteropTest extends ProxyLanguageEnvTest {
     public static final int CONST = 42;
     public int value = CONST;
 
+    private Context context;
+
+    @Before
+    public void enterContext() {
+        context = Context.create();
+        context.enter();
+    }
+
+    @After
+    public void leaveContext() {
+        context.leave();
+        context.close();
+    }
+
     public static double plus(double a, double b) {
         return a + b;
     }
 
-    @Override
-    public void before() {
-        super.before();
-        obj = asTruffleHostSymbol(ClassInteropTest.class);
-        xyp = asJavaObject(XYPlus.class, obj);
+    @Before
+    public void initObjects() {
+        obj = JavaInterop.asTruffleObject(ClassInteropTest.class);
+        xyp = JavaInterop.asJavaObject(XYPlus.class, obj);
     }
 
     @Test
@@ -82,7 +99,7 @@ public class ClassInteropTest extends ProxyLanguageEnvTest {
     public void canReadValueAfterCreatingNewInstance() throws Exception {
         Object objInst = JavaInteropTest.message(Message.createNew(0), obj);
         assertTrue("It is truffle object", objInst instanceof TruffleObject);
-        XYPlus inst = asJavaObject(XYPlus.class, (TruffleObject) objInst);
+        XYPlus inst = JavaInterop.asJavaObject(XYPlus.class, (TruffleObject) objInst);
         assertEquals("Field read", 42, inst.value());
     }
 
@@ -96,7 +113,7 @@ public class ClassInteropTest extends ProxyLanguageEnvTest {
     public void canAccessStaticMemberTypes() {
         Object res = JavaInteropTest.message(Message.READ, obj, "XYPlus");
         assertTrue("It is truffle object", res instanceof TruffleObject);
-        Class<?> c = asJavaObject(Class.class, (TruffleObject) res);
+        Class<?> c = JavaInterop.asJavaObject(Class.class, (TruffleObject) res);
         assertSame(XYPlus.class, c);
     }
 
@@ -107,7 +124,7 @@ public class ClassInteropTest extends ProxyLanguageEnvTest {
         TruffleObject truffleType = (TruffleObject) type;
         Object objInst = JavaInteropTest.message(Message.createNew(1), truffleType, 22);
         assertTrue("Created instance is a truffle object", objInst instanceof TruffleObject);
-        Object res = asJavaObject(Object.class, (TruffleObject) objInst);
+        Object res = JavaInterop.asJavaObject(Object.class, (TruffleObject) objInst);
         assertTrue("Instance is of correct type", res instanceof Zed);
         assertEquals("Constructor was invoked", 22, ((Zed) res).val);
     }
@@ -116,7 +133,7 @@ public class ClassInteropTest extends ProxyLanguageEnvTest {
     public void canListStaticTypes() {
         Object type = JavaInteropTest.message(Message.KEYS, obj);
         assertTrue("Type is a truffle object", type instanceof TruffleObject);
-        String[] names = asJavaObject(String[].class, (TruffleObject) type);
+        String[] names = JavaInterop.asJavaObject(String[].class, (TruffleObject) type);
         int zed = 0;
         int xy = 0;
         int eman = 0;
@@ -165,7 +182,7 @@ public class ClassInteropTest extends ProxyLanguageEnvTest {
 
         type = JavaInteropTest.message(Message.KEYS, obj);
         assertTrue("Type is a truffle object", type instanceof TruffleObject);
-        String[] names = asJavaObject(String[].class, (TruffleObject) type);
+        String[] names = JavaInterop.asJavaObject(String[].class, (TruffleObject) type);
         assertEquals("Non-public member type not enumerated", -1, Arrays.asList(names).indexOf("NonStaticInterface"));
 
         JavaInteropTest.message(Message.READ, obj, "NonStaticInterface");

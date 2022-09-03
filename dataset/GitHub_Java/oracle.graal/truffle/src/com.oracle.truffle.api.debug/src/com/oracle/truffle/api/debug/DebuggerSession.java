@@ -25,12 +25,11 @@
 package com.oracle.truffle.api.debug;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -47,9 +46,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.debug.Breakpoint.BreakpointConditionFailure;
-import com.oracle.truffle.api.debug.DebuggerNode.InputValuesProvider;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
@@ -63,24 +60,24 @@ import com.oracle.truffle.api.instrumentation.ExecutionEventNode;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
 import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
-import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter.Builder;
 import com.oracle.truffle.api.instrumentation.StandardTags.CallTag;
 import com.oracle.truffle.api.instrumentation.StandardTags.RootTag;
-import com.oracle.truffle.api.nodes.ExecutableNode;
+import com.oracle.truffle.api.instrumentation.StandardTags.StatementTag;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
 
 /**
- * Represents a single debugging session of a Debugger.
+ * Client access to {@link PolyglotEngine} {@linkplain Debugger debugging services}.
  *
  * <h4>Session lifetime</h4>
  * <p>
  * <ul>
- * <li>A debugging client {@linkplain Debugger#startSession(SuspendedCallback) requests} a new
- * {@linkplain DebuggerSession session} from the {@linkplain Debugger Debugger}.</li>
+ * <li>A {@link PolyglotEngine} debugging client
+ * {@linkplain Debugger#startSession(SuspendedCallback) requests} a new {@linkplain DebuggerSession
+ * session} from the {@linkplain Debugger#find(PolyglotEngine) engine's Debugger}.</li>
  *
  * <li>A client uses a session to request suspension of guest language execution threads, for
  * example by setting breakpoints or stepping.</li>
@@ -164,20 +161,19 @@ public final class DebuggerSession implements Closeable {
 
     private static final AtomicInteger SESSIONS = new AtomicInteger(0);
 
-    static final Set<SuspendAnchor> ANCHOR_SET_BEFORE = Collections.singleton(SuspendAnchor.BEFORE);
-    static final Set<SuspendAnchor> ANCHOR_SET_AFTER = Collections.singleton(SuspendAnchor.AFTER);
-    static final Set<SuspendAnchor> ANCHOR_SET_ALL = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(SuspendAnchor.BEFORE, SuspendAnchor.AFTER)));
+    enum SteppingLocation {
+        AFTER_CALL,
+        AFTER_STATEMENT,
+        BEFORE_STATEMENT
+    }
 
     private final Debugger debugger;
     private final SuspendedCallback callback;
-    private final Set<SourceElement> sourceElements;
-    private final boolean hasExpressionElement;
     private final List<Breakpoint> breakpoints = Collections.synchronizedList(new ArrayList<>());
 
     private EventBinding<? extends ExecutionEventNodeFactory> callBinding;
-    private EventBinding<? extends ExecutionEventNodeFactory> syntaxElementsBinding;
+    private EventBinding<? extends ExecutionEventNodeFactory> statementBinding;
     private EventBinding<? extends ExecutionEventNodeFactory> rootBinding;
-    final Set<EventBinding<? extends ExecutionEventNodeFactory>> allBindings = Collections.synchronizedSet(new HashSet<>());
 
     private final ConcurrentHashMap<Thread, SuspendedEvent> currentSuspendedEventMap = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Thread, SteppingStrategy> strategyMap = new ConcurrentHashMap<>();
@@ -187,9 +183,7 @@ public final class DebuggerSession implements Closeable {
     private final StableBoolean ignoreLanguageContextInitialization = new StableBoolean(false);
     private boolean includeInternal = false;
     private Predicate<Source> sourceFilter;
-    private final StableBoolean alwaysHaltBreakpointsActive = new StableBoolean(true);
-    private final StableBoolean locationBreakpointsActive = new StableBoolean(true);
-    private final StableBoolean exceptionBreakpointsActive = new StableBoolean(true);
+    private final StableBoolean breakpointsActive = new StableBoolean(true);
     private final DebuggerExecutionLifecycle executionLifecycle;
     final ThreadLocal<ThreadSuspension> threadSuspensions = new ThreadLocal<>();
 
@@ -197,22 +191,10 @@ public final class DebuggerSession implements Closeable {
 
     private volatile boolean closed;
 
-    DebuggerSession(Debugger debugger, SuspendedCallback callback, SourceElement... sourceElements) {
+    DebuggerSession(Debugger debugger, SuspendedCallback callback) {
         this.sessionId = SESSIONS.incrementAndGet();
         this.debugger = debugger;
         this.callback = callback;
-        switch (sourceElements.length) {
-            case 0:
-                this.sourceElements = Collections.emptySet();
-                break;
-            case 1:
-                this.sourceElements = Collections.singleton(sourceElements[0]);
-                break;
-            default:
-                this.sourceElements = Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList(sourceElements)));
-                break;
-        }
-        this.hasExpressionElement = this.sourceElements.contains(SourceElement.EXPRESSION);
         if (Debugger.TRACE) {
             trace("open with callback %s", callback);
         }
@@ -296,7 +278,7 @@ public final class DebuggerSession implements Closeable {
     }
 
     /**
-     * Set a stepping suspension filter. Prepared steps skip code that does not match this filter.
+     * Set a stepping suspension filter. Prepared steps skip code that match this filter.
      *
      * @since 0.26
      */
@@ -467,42 +449,31 @@ public final class DebuggerSession implements Closeable {
     }
 
     private void addBindings(boolean includeInternalCode, Predicate<Source> sFilter) {
-        if (syntaxElementsBinding == null && !sourceElements.isEmpty()) {
+        if (statementBinding == null) {
             // The order of registered instrumentations matters.
             // It's important to instrument root nodes first to intercept stack changes,
             // then instrument statements, and
             // call bindings need to be called after statements.
-            this.rootBinding = createBinding(includeInternalCode, sFilter, new ExecutionEventNodeFactory() {
-                @Override
+            this.rootBinding = createBinding(RootTag.class, includeInternalCode, sFilter, new ExecutionEventNodeFactory() {
                 public ExecutionEventNode create(EventContext context) {
                     return new RootSteppingDepthNode();
                 }
-            }, false, RootTag.class);
-            Class<?>[] syntaxTags = new Class<?>[this.sourceElements.size()];
-            Iterator<SourceElement> elementsIterator = this.sourceElements.iterator();
-            for (int i = 0; i < syntaxTags.length; i++) {
-                syntaxTags[i] = elementsIterator.next().getTag();
-            }
-            this.syntaxElementsBinding = createBinding(includeInternalCode, sFilter, new ExecutionEventNodeFactory() {
-                @Override
+            });
+            this.statementBinding = createBinding(StatementTag.class, includeInternalCode, sFilter, new ExecutionEventNodeFactory() {
                 public ExecutionEventNode create(EventContext context) {
-                    return new SteppingNode(context);
+                    return new StatementSteppingNode(context);
                 }
-            }, hasExpressionElement, syntaxTags);
-            this.callBinding = createBinding(includeInternalCode, sFilter, new ExecutionEventNodeFactory() {
-                @Override
+            });
+            this.callBinding = createBinding(CallTag.class, includeInternalCode, sFilter, new ExecutionEventNodeFactory() {
                 public ExecutionEventNode create(EventContext context) {
                     return new CallSteppingNode(context);
                 }
-            }, false, CallTag.class);
-            allBindings.add(syntaxElementsBinding);
-            allBindings.add(callBinding);
+            });
         }
     }
 
-    private EventBinding<? extends ExecutionEventNodeFactory> createBinding(boolean includeInternalCode, Predicate<Source> sFilter, ExecutionEventNodeFactory factory, boolean onInput,
-                    Class<?>... tags) {
-        Builder builder = SourceSectionFilter.newBuilder().tagIs(tags);
+    private EventBinding<? extends ExecutionEventNodeFactory> createBinding(Class<?> tag, boolean includeInternalCode, Predicate<Source> sFilter, ExecutionEventNodeFactory factory) {
+        Builder builder = SourceSectionFilter.newBuilder().tagIs(tag);
         builder.includeInternal(includeInternalCode);
         if (sFilter != null) {
             builder.sourceIs(new SourceSectionFilter.SourcePredicate() {
@@ -512,33 +483,22 @@ public final class DebuggerSession implements Closeable {
                 }
             });
         }
-        SourceSectionFilter ssf = builder.build();
-        if (onInput) {
-            return debugger.getInstrumenter().attachExecutionEventFactory(ssf, ssf, factory);
-        } else {
-            return debugger.getInstrumenter().attachExecutionEventFactory(ssf, factory);
-        }
+        return debugger.getInstrumenter().attachExecutionEventFactory(builder.build(), factory);
     }
 
     private void removeBindings() {
         assert Thread.holdsLock(this);
-        if (syntaxElementsBinding != null) {
-            allBindings.remove(callBinding);
-            allBindings.remove(syntaxElementsBinding);
+        if (statementBinding != null) {
             callBinding.dispose();
-            syntaxElementsBinding.dispose();
+            statementBinding.dispose();
             callBinding = null;
             rootBinding.dispose();
             rootBinding = null;
-            syntaxElementsBinding = null;
+            statementBinding = null;
             if (Debugger.TRACE) {
                 trace("disabled stepping");
             }
         }
-    }
-
-    Set<SourceElement> getSourceElements() {
-        return sourceElements;
     }
 
     /**
@@ -560,7 +520,6 @@ public final class DebuggerSession implements Closeable {
             breakpoint.sessionClosed(this);
         }
         currentSuspendedEventMap.clear();
-        allBindings.clear();
         debugger.disposedSession(this);
         closed = true;
     }
@@ -597,40 +556,9 @@ public final class DebuggerSession implements Closeable {
      * @param active <code>true</code> to make all breakpoints active, <code>false</code> to make
      *            all breakpoints inactive.
      * @since 0.24
-     * @deprecated Use {@link #setBreakpointsActive(Breakpoint.Kind, boolean)} instead.
      */
-    @Deprecated
     public void setBreakpointsActive(boolean active) {
-        for (Breakpoint.Kind kind : Breakpoint.Kind.values()) {
-            setBreakpointsActive(kind, active);
-        }
-    }
-
-    /**
-     * Set whether breakpoints of the given kind are active in this session. This has no effect on
-     * breakpoints enabled/disabled state. Breakpoints need to be active to actually break the
-     * execution. The breakpoints are active by default.
-     *
-     * @param breakpointKind the kind of breakpoints to activate/deactivate
-     * @param active <code>true</code> to make breakpoints active, <code>false</code> to make
-     *            breakpoints inactive.
-     * @since 1.0
-     */
-    public void setBreakpointsActive(Breakpoint.Kind breakpointKind, boolean active) {
-        switch (breakpointKind) {
-            case SOURCE_LOCATION:
-                locationBreakpointsActive.set(active);
-                break;
-            case EXCEPTION:
-                exceptionBreakpointsActive.set(active);
-                break;
-            case HALT_INSTRUCTION:
-                alwaysHaltBreakpointsActive.set(active);
-                break;
-            default:
-                CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException("Unhandled breakpoint kind: " + breakpointKind);
-        }
+        breakpointsActive.set(active);
     }
 
     /**
@@ -638,37 +566,9 @@ public final class DebuggerSession implements Closeable {
      * not active.
      *
      * @since 0.24
-     * @deprecated Use {@link #isBreakpointsActive(Breakpoint.Kind)} instead.
      */
-    @Deprecated
     public boolean isBreakpointsActive() {
-        for (Breakpoint.Kind kind : Breakpoint.Kind.values()) {
-            if (isBreakpointsActive(kind)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Test whether breakpoints of the given kind are active in this session. Breakpoints do not
-     * break execution when not active.
-     *
-     * @param breakpointKind the kind of breakpoints to test
-     * @since 1.0
-     */
-    public boolean isBreakpointsActive(Breakpoint.Kind breakpointKind) {
-        switch (breakpointKind) {
-            case SOURCE_LOCATION:
-                return locationBreakpointsActive.get();
-            case EXCEPTION:
-                return exceptionBreakpointsActive.get();
-            case HALT_INSTRUCTION:
-                return alwaysHaltBreakpointsActive.get();
-            default:
-                CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException("Unhandled breakpoint kind: " + breakpointKind);
-        }
+        return breakpointsActive.get();
     }
 
     /**
@@ -744,9 +644,7 @@ public final class DebuggerSession implements Closeable {
     }
 
     @TruffleBoundary
-    void notifyCallback(DebuggerNode source, MaterializedFrame frame, SuspendAnchor suspendAnchor,
-                    InputValuesProvider inputValuesProvider, Object returnValue, DebugException exception,
-                    BreakpointConditionFailure conditionFailure) {
+    void notifyCallback(DebuggerNode source, MaterializedFrame frame, Object returnValue, BreakpointConditionFailure conditionFailure) {
         ThreadSuspension suspensionDisabled = threadSuspensions.get();
         if (suspensionDisabled != null && !suspensionDisabled.enabled) {
             return;
@@ -761,15 +659,15 @@ public final class DebuggerSession implements Closeable {
         SuspendedEvent event = currentSuspendedEventMap.get(currentThread);
         if (event != null) {
             if (Debugger.TRACE) {
-                trace("ignored suspended reason: recursive from source:%s context:%s location:%s", source, source.getContext(), source.getSuspendAnchors());
+                trace("ignored suspended reason: recursive from source:%s context:%s location:%s", source, source.getContext(), source.getSteppingLocation());
             }
             // avoid recursive suspensions in non legacy mode.
             return;
         }
 
-        if (source.consumeIsDuplicate(this)) {
+        if (source.consumeIsDuplicate()) {
             if (Debugger.TRACE) {
-                trace("ignored suspended reason: duplicate from source:%s context:%s location:%s", source, source.getContext(), source.getSuspendAnchors());
+                trace("ignored suspended reason: duplicate from source:%s context:%s location:%s", source, source.getContext(), source.getSteppingLocation());
             }
             return;
         }
@@ -777,13 +675,13 @@ public final class DebuggerSession implements Closeable {
         // only the first DebuggerNode for a source location and thread will reach here.
 
         // mark all other nodes at this source location as duplicates
-        List<DebuggerNode> nodes = collectDebuggerNodes(source, suspendAnchor);
+        List<DebuggerNode> nodes = collectDebuggerNodes(source);
         for (DebuggerNode node : nodes) {
             if (node == source) {
                 // for the current one we won't call isDuplicate
                 continue;
             }
-            node.markAsDuplicate(this);
+            node.markAsDuplicate();
         }
 
         SteppingStrategy s = getSteppingStrategy(currentThread);
@@ -806,23 +704,19 @@ public final class DebuggerSession implements Closeable {
         Map<Breakpoint, Throwable> breakpointFailures = null;
         if (conditionFailure != null) {
             breakpointFailures = new HashMap<>();
-            Breakpoint fb = conditionFailure.getBreakpoint();
-            if (fb.isGlobal()) {
-                fb = fb.getROWrapper();
-            }
-            breakpointFailures.put(fb, conditionFailure.getConditionFailure());
+            breakpointFailures.put(conditionFailure.getBreakpoint(), conditionFailure.getConditionFailure());
         }
 
         List<Breakpoint> breaks = null;
         for (DebuggerNode node : nodes) {
             Breakpoint breakpoint = node.getBreakpoint();
-            if (breakpoint == null || !isBreakpointsActive(breakpoint.getKind())) {
+            if (breakpoint == null || !isBreakpointsActive()) {
                 continue; // not a breakpoint node
             }
             boolean hit = true;
             BreakpointConditionFailure failure = null;
             try {
-                hit = breakpoint.notifyIndirectHit(source, node, frame, exception);
+                hit = breakpoint.notifyIndirectHit(source, node, frame);
             } catch (BreakpointConditionFailure e) {
                 failure = e;
             }
@@ -844,14 +738,14 @@ public final class DebuggerSession implements Closeable {
             }
         }
 
-        boolean hitStepping = s.step(this, source.getContext(), suspendAnchor);
+        boolean hitStepping = s.step(this, source.getContext(), source.getSteppingLocation());
         boolean hitBreakpoint = breaks != null && !breaks.isEmpty();
         if (hitStepping || hitBreakpoint) {
             s.consume();
-            doSuspend(SuspendedContext.create(source.getContext()), suspendAnchor, frame, source, inputValuesProvider, returnValue, exception, breaks, breakpointFailures);
+            doSuspend(SuspendedContext.create(source.getContext()), source.getSteppingLocation(), frame, returnValue, breaks, breakpointFailures);
         } else {
             if (Debugger.TRACE) {
-                trace("ignored suspended reason: strategy(%s) from source:%s context:%s location:%s", s, source, source.getContext(), source.getSuspendAnchors());
+                trace("ignored suspended reason: strategy(%s) from source:%s context:%s location:%s", s, source, source.getContext(), source.getSteppingLocation());
             }
         }
         if (s.isKill()) {   // ComposedStrategy can become kill
@@ -867,7 +761,7 @@ public final class DebuggerSession implements Closeable {
         }
     }
 
-    private void notifyUnwindCallback(MaterializedFrame frame, InsertableNode insertableNode) {
+    private void notifyUnwindCallback(MaterializedFrame frame) {
         Thread currentThread = Thread.currentThread();
         SteppingStrategy s = getSteppingStrategy(currentThread);
         // We must have an active stepping strategy on this thread when unwind finished
@@ -899,21 +793,17 @@ public final class DebuggerSession implements Closeable {
             }
         });
         SuspendedContext context = SuspendedContext.create(caller.node, ((SteppingStrategy.Unwind) s).unwind);
-        doSuspend(context, SuspendAnchor.AFTER, caller.frame, insertableNode, null, null, null, Collections.emptyList(), Collections.emptyMap());
+        doSuspend(context, SteppingLocation.AFTER_CALL, caller.frame, null, Collections.emptyList(), Collections.emptyMap());
     }
 
-    private void doSuspend(SuspendedContext context, SuspendAnchor suspendAnchor, MaterializedFrame frame,
-                    InsertableNode insertableNode, InputValuesProvider inputValuesProvider, Object returnValue, DebugException exception,
-                    List<Breakpoint> breaks, Map<Breakpoint, Throwable> conditionFailures) {
+    private void doSuspend(SuspendedContext context, SteppingLocation steppingLocation, MaterializedFrame frame, Object returnValue, List<Breakpoint> breaks,
+                    Map<Breakpoint, Throwable> conditionFailures) {
         CompilerAsserts.neverPartOfCompilation();
         Thread currentThread = Thread.currentThread();
 
         SuspendedEvent suspendedEvent;
         try {
-            suspendedEvent = new SuspendedEvent(this, currentThread, context, frame, suspendAnchor, insertableNode, inputValuesProvider, returnValue, exception, breaks, conditionFailures);
-            if (exception != null) {
-                exception.setSuspendedEvent(suspendedEvent);
-            }
+            suspendedEvent = new SuspendedEvent(this, currentThread, context, frame, steppingLocation, returnValue, breaks, conditionFailures);
             currentSuspendedEventMap.put(currentThread, suspendedEvent);
             try {
                 callback.onSuspend(suspendedEvent);
@@ -943,10 +833,10 @@ public final class DebuggerSession implements Closeable {
                 strategy = currentStrategy;
             }
         }
-        strategy.initialize(context, suspendAnchor);
+        strategy.initialize();
 
         if (Debugger.TRACE) {
-            trace("end suspend with strategy %s at %s location %s", strategy, context, suspendAnchor);
+            trace("end suspend with strategy %s at %s location %s", strategy, context, steppingLocation);
         }
 
         setSteppingStrategy(currentThread, strategy, true);
@@ -959,33 +849,55 @@ public final class DebuggerSession implements Closeable {
         }
     }
 
-    private List<DebuggerNode> collectDebuggerNodes(DebuggerNode source, SuspendAnchor suspendAnchor) {
-        EventContext context = source.getContext();
+    private List<DebuggerNode> collectDebuggerNodes(DebuggerNode source) {
         List<DebuggerNode> nodes = new ArrayList<>();
-        nodes.add(source);
-        Iterator<ExecutionEventNode> nodesIterator = context.lookupExecutionEventNodes(allBindings);
-        if (SuspendAnchor.BEFORE.equals(suspendAnchor)) {
-            // We collect nodes following the source (these nodes remain to be executed)
-            boolean after = false;
-            while (nodesIterator.hasNext()) {
-                DebuggerNode node = (DebuggerNode) nodesIterator.next();
-                if (after) {
-                    if (node.isActiveAt(suspendAnchor)) {
+        SuspendAnchor suspendAnchor = (source.getSteppingLocation() == SteppingLocation.BEFORE_STATEMENT) ? SuspendAnchor.BEFORE : SuspendAnchor.AFTER;
+        EventContext context = source.getContext();
+        synchronized (breakpoints) {
+            for (Breakpoint b : breakpoints) {
+                if (suspendAnchor == b.getSuspendAnchor()) {
+                    DebuggerNode node = b.lookupNode(context);
+                    if (node != null) {
                         nodes.add(node);
                     }
-                } else {
-                    after = node == source;
                 }
             }
-        } else {
-            // We collect nodes preceding the source (these nodes remain to be executed)
-            while (nodesIterator.hasNext()) {
-                DebuggerNode node = (DebuggerNode) nodesIterator.next();
-                if (node == source) {
-                    break;
+        }
+        synchronized (debugger) {
+            for (Breakpoint b : debugger.getRawBreakpoints()) {
+                if (suspendAnchor == b.getSuspendAnchor()) {
+                    DebuggerNode node = b.lookupNode(context);
+                    if (node != null) {
+                        nodes.add(node);
+                    }
                 }
-                if (node.isActiveAt(suspendAnchor)) {
-                    nodes.add(node);
+            }
+        }
+        if (suspendAnchor == SuspendAnchor.BEFORE) {
+            if (stepping.get()) {
+                EventBinding<? extends ExecutionEventNodeFactory> localStatementBinding = statementBinding;
+                if (localStatementBinding != null) {
+                    DebuggerNode node = (DebuggerNode) context.lookupExecutionEventNode(localStatementBinding);
+                    if (node != null) {
+                        nodes.add(node);
+                    }
+                }
+            }
+            DebuggerNode node = debugger.alwaysHaltBreakpoint.lookupNode(context);
+            if (node != null) {
+                nodes.add(node);
+            }
+        } else {
+            assert source.getSteppingLocation() == SteppingLocation.AFTER_CALL ||
+                            source.getSteppingLocation() == SteppingLocation.AFTER_STATEMENT;
+            // there is only one binding that can lead to an after event
+            if (stepping.get()) {
+                EventBinding<? extends ExecutionEventNodeFactory> localCallBinding = callBinding;
+                if (localCallBinding != null) {
+                    DebuggerNode node = (DebuggerNode) context.lookupExecutionEventNode(localCallBinding);
+                    if (node != null) {
+                        nodes.add(node);
+                    }
                 }
             }
         }
@@ -1017,54 +929,23 @@ public final class DebuggerSession implements Closeable {
      * @param ev event notification where execution is halted
      * @param code text of the code to be executed
      * @param frameInstance frame where execution is halted
-     * @throws DebugException
+     * @return
+     * @throws IOException
      */
-    static Object evalInContext(SuspendedEvent ev, String code, FrameInstance frameInstance) throws DebugException {
-        Node node;
-        MaterializedFrame frame;
-        if (frameInstance == null) {
-            node = ev.getContext().getInstrumentedNode();
-            frame = ev.getMaterializedFrame();
-        } else {
-            node = frameInstance.getCallNode();
-            frame = frameInstance.getFrame(FrameAccess.MATERIALIZE).materialize();
-        }
+    static Object evalInContext(SuspendedEvent ev, String code, FrameInstance frameInstance) throws IOException {
         try {
-            return evalInContext(ev, node, frame, code);
-        } catch (KillException kex) {
-            throw new DebugException(ev.getSession().getDebugger(), "Evaluation was killed.", null, true, null);
-        } catch (Throwable ex) {
-            if (ex instanceof TruffleException) {
-                LanguageInfo language = null;
-                RootNode root = node.getRootNode();
-                if (root != null) {
-                    language = root.getLanguageInfo();
-                }
-                throw new DebugException(ev.getSession().getDebugger(), (TruffleException) ex, language, null, true, null);
+            Node node;
+            MaterializedFrame frame;
+            if (frameInstance == null) {
+                node = ev.getContext().getInstrumentedNode();
+                frame = ev.getMaterializedFrame();
             } else {
-                throw ex;
+                node = frameInstance.getCallNode();
+                frame = frameInstance.getFrame(FrameAccess.MATERIALIZE).materialize();
             }
-        }
-    }
-
-    private static Object evalInContext(SuspendedEvent ev, Node node, MaterializedFrame frame, String code) {
-        RootNode rootNode = node.getRootNode();
-        if (rootNode == null) {
-            throw new IllegalArgumentException("Cannot evaluate in context using a node that is not yet adopated using a RootNode.");
-        }
-
-        LanguageInfo info = rootNode.getLanguageInfo();
-        if (info == null) {
-            throw new IllegalArgumentException("Cannot evaluate in context using a without an associated TruffleLanguage.");
-        }
-
-        final Source source = Source.newBuilder(code).name("eval in context").language(info.getId()).mimeType("content/unknown").build();
-        ExecutableNode fragment = ev.getSession().getDebugger().getEnv().parseInline(source, node, frame);
-        if (fragment != null) {
-            ev.getInsertableNode().setParentOf(fragment);
-            return fragment.execute(frame);
-        } else {
-            return Debugger.ACCESSOR.evalInContext(source, node, frame);
+            return Debugger.ACCESSOR.evalInContext(node, frame, code);
+        } catch (KillException kex) {
+            throw new IOException("Evaluation was killed.", kex);
         }
     }
 
@@ -1080,15 +961,15 @@ public final class DebuggerSession implements Closeable {
         }
     }
 
-    private final class SteppingNode extends DebuggerNode implements InputValuesProvider {
+    private final class StatementSteppingNode extends DebuggerNode {
 
-        SteppingNode(EventContext context) {
+        StatementSteppingNode(EventContext context) {
             super(context);
         }
 
         @Override
         EventBinding<?> getBinding() {
-            return syntaxElementsBinding;
+            return statementBinding;
         }
 
         @Override
@@ -1099,72 +980,22 @@ public final class DebuggerSession implements Closeable {
         @Override
         protected void onEnter(VirtualFrame frame) {
             if (stepping.get()) {
-                doStepBefore(frame.materialize());
-            }
-        }
-
-        @Override
-        protected void onReturnValue(VirtualFrame frame, Object result) {
-            if (stepping.get()) {
-                doStepAfter(frame.materialize(), result);
-            }
-        }
-
-        @Override
-        protected void onReturnExceptional(VirtualFrame frame, Throwable exception) {
-            if (stepping.get()) {
-                doStepAfter(frame.materialize(), exception);
-            }
-        }
-
-        @Override
-        protected void onInputValue(VirtualFrame frame, EventContext inputContext, int inputIndex, Object inputValue) {
-            if (stepping.get() && hasExpressionElement) {
-                SteppingStrategy steppingStrategy = getSteppingStrategy(Thread.currentThread());
-                if (steppingStrategy != null && steppingStrategy.isCollectingInputValues()) {
-                    saveInputValue(frame, inputIndex, inputValue);
-                }
+                doEnter(frame.materialize());
             }
         }
 
         @TruffleBoundary
-        private void doStepBefore(MaterializedFrame frame) {
-            SuspendAnchor anchor = SuspendAnchor.BEFORE;
+        private void doEnter(MaterializedFrame frame) {
             SteppingStrategy steppingStrategy;
-            if (suspendNext || suspendAll || (steppingStrategy = getSteppingStrategy(Thread.currentThread())) != null && steppingStrategy.isActiveOnStepTo(context, anchor)) {
-                notifyCallback(this, frame, anchor, null, null, null, null);
-            }
-        }
-
-        @TruffleBoundary
-        private void doStepAfter(MaterializedFrame frame, Object result) {
-            SuspendAnchor anchor = SuspendAnchor.AFTER;
-            SteppingStrategy steppingStrategy = getSteppingStrategy(Thread.currentThread());
-            if (steppingStrategy != null && steppingStrategy.isActiveOnStepTo(context, anchor)) {
-                notifyCallback(this, frame, anchor, this, result, null, null);
+            if (suspendNext || suspendAll || (steppingStrategy = getSteppingStrategy(Thread.currentThread())) != null && steppingStrategy.isActive()) {
+                notifyCallback(this, frame, null, null);
             }
         }
 
         @Override
-        public Object[] getDebugInputValues(MaterializedFrame frame) {
-            return getSavedInputValues(frame);
+        SteppingLocation getSteppingLocation() {
+            return SteppingLocation.BEFORE_STATEMENT;
         }
-
-        @Override
-        Set<SuspendAnchor> getSuspendAnchors() {
-            return DebuggerSession.ANCHOR_SET_ALL;
-        }
-
-        @Override
-        boolean isActiveAt(SuspendAnchor anchor) {
-            SteppingStrategy steppingStrategy = getSteppingStrategy(Thread.currentThread());
-            if (steppingStrategy != null) {
-                return steppingStrategy.isActive(context, anchor);
-            } else {
-                return false;
-            }
-        }
-
     }
 
     private final class CallSteppingNode extends DebuggerNode {
@@ -1201,23 +1032,18 @@ public final class DebuggerSession implements Closeable {
         private void doReturn(MaterializedFrame frame, Object result) {
             SteppingStrategy steppingStrategy = strategyMap.get(Thread.currentThread());
             if (steppingStrategy != null && steppingStrategy.isStopAfterCall()) {
-                notifyCallback(this, frame, SuspendAnchor.AFTER, null, result, null, null);
+                notifyCallback(this, frame, result, null);
             }
         }
 
         @Override
-        Set<SuspendAnchor> getSuspendAnchors() {
-            return DebuggerSession.ANCHOR_SET_AFTER;
-        }
-
-        @Override
-        boolean isActiveAt(SuspendAnchor anchor) {
-            return SuspendAnchor.AFTER == anchor;
+        SteppingLocation getSteppingLocation() {
+            return SteppingLocation.AFTER_CALL;
         }
 
     }
 
-    private final class RootSteppingDepthNode extends ExecutionEventNode implements InsertableNode {
+    private final class RootSteppingDepthNode extends ExecutionEventNode {
 
         @Override
         protected void onEnter(VirtualFrame frame) {
@@ -1249,11 +1075,6 @@ public final class DebuggerSession implements Closeable {
             }
         }
 
-        @Override
-        public void setParentOf(Node child) {
-            insert(child);
-        }
-
         @TruffleBoundary
         private void doEnter() {
             SteppingStrategy steppingStrategy = strategyMap.get(Thread.currentThread());
@@ -1276,7 +1097,7 @@ public final class DebuggerSession implements Closeable {
             if (steppingStrategy != null) {
                 Object info = steppingStrategy.notifyOnUnwind();
                 if (info == ProbeNode.UNWIND_ACTION_REENTER) {
-                    notifyUnwindCallback(frame, this);
+                    notifyUnwindCallback(frame);
                 }
                 return info;
             } else {
@@ -1289,7 +1110,7 @@ public final class DebuggerSession implements Closeable {
      * Helper class that uses an assumption to switch between stepping mode and non-stepping mode
      * efficiently.
      */
-    static final class StableBoolean {
+    private static final class StableBoolean {
 
         @CompilationFinal private volatile Assumption unchanged;
         @CompilationFinal private volatile boolean value;
@@ -1322,12 +1143,12 @@ public final class DebuggerSession implements Closeable {
 
 class DebuggerSessionSnippets {
 
-    @SuppressFBWarnings("")
     public void example() {
         // @formatter:off
-        TruffleInstrument.Env instrumentEnv = null;
         // BEGIN: DebuggerSessionSnippets#example
-        try (DebuggerSession session = Debugger.find(instrumentEnv).
+        PolyglotEngine engine = PolyglotEngine.newBuilder().build();
+
+        try (DebuggerSession session = Debugger.find(engine).
                         startSession(new SuspendedCallback() {
             public void onSuspend(SuspendedEvent event) {
                 // step into the next event
@@ -1340,7 +1161,11 @@ class DebuggerSessionSnippets {
 
             // install line breakpoint
             session.install(Breakpoint.newBuilder(someCode).lineIs(3).build());
+
+            // should print suspended at for each debugger step.
+            engine.eval(someCode);
         }
+
         // END: DebuggerSessionSnippets#example
         // @formatter:on
     }

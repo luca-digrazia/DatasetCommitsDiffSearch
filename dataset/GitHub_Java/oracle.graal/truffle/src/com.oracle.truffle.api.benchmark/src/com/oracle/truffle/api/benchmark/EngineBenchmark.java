@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -57,6 +55,7 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
@@ -268,7 +267,7 @@ public class EngineBenchmark extends TruffleBenchmark {
         final Context context = Context.create(TEST_LANGUAGE);
         final Value hostValue = context.getBindings(TEST_LANGUAGE).getMember("context");
         final BenchmarkContext internalContext = hostValue.asHostObject();
-        final Node executeNode = Message.EXECUTE.createNode();
+        final Node executeNode = Message.createExecute(0).createNode();
         final Integer intValue = 42;
         final CallTarget callTarget = Truffle.getRuntime().createCallTarget(new RootNode(null) {
 
@@ -371,7 +370,7 @@ public class EngineBenchmark extends TruffleBenchmark {
 
         @Override
         protected void initializeContext(BenchmarkContext context) throws Exception {
-            ForeignAccess.sendWrite(Message.WRITE.createNode(), (TruffleObject) context.env.getPolyglotBindings(), "context", context.env.asGuestValue(context));
+            ForeignAccess.sendWrite(Message.WRITE.createNode(), (TruffleObject) context.env.getPolyglotBindings(), "context", JavaInterop.asTruffleValue(context));
         }
 
         @Override
@@ -476,9 +475,9 @@ public class EngineBenchmark extends TruffleBenchmark {
                 @TruffleBoundary
                 public Object access(TopScopeObject ts, String name) {
                     if ("context".equals(name)) {
-                        return ts.context.env.asGuestValue(ts.context);
+                        return JavaInterop.asTruffleObject(ts.context);
                     } else {
-                        return ts.context.env.asGuestValue(ts.context.object);
+                        return JavaInterop.asTruffleObject(ts.context.object);
                     }
                 }
             }

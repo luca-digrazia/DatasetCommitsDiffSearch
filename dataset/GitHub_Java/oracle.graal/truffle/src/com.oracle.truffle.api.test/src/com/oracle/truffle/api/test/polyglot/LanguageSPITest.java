@@ -66,7 +66,6 @@ import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
@@ -76,12 +75,11 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.test.polyglot.LanguageSPITestLanguage.LanguageContext;
-import java.util.Objects;
 
 public class LanguageSPITest {
 
@@ -244,35 +242,6 @@ public class LanguageSPITest {
 
         public Node getLocation() {
             return null;
-        }
-    }
-
-    @SuppressWarnings("serial")
-    private static final class ParseException extends RuntimeException implements TruffleException {
-        private final Source source;
-        private final int start;
-        private final int length;
-
-        ParseException(final Source source, final int start, final int length) {
-            Objects.requireNonNull(source, "Source must be non null");
-            this.source = source;
-            this.start = start;
-            this.length = length;
-        }
-
-        @Override
-        public boolean isSyntaxError() {
-            return true;
-        }
-
-        @Override
-        public Node getLocation() {
-            return null;
-        }
-
-        @Override
-        public SourceSection getSourceLocation() {
-            return source.createSection(start, length);
         }
     }
 
@@ -670,12 +639,6 @@ public class LanguageSPITest {
 
     @Test
     public void testErrorInFindMetaObject() {
-        final TruffleObject testObject = new TruffleObject() {
-            @Override
-            public ForeignAccess getForeignAccess() {
-                return null;
-            }
-        };
         ProxyLanguage.setDelegate(new ProxyLanguage() {
 
             @Override
@@ -685,12 +648,7 @@ public class LanguageSPITest {
 
             @Override
             protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
-                return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(testObject));
-            }
-
-            @Override
-            protected boolean isObjectOfLanguage(Object object) {
-                return object == testObject;
+                return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(42));
             }
         });
         Context c = Context.create();
@@ -800,7 +758,7 @@ public class LanguageSPITest {
         ProxyLanguage.setDelegate(new ProxyLanguage() {
             @Override
             protected LanguageContext createContext(com.oracle.truffle.api.TruffleLanguage.Env env) {
-                env.exportSymbol("symbol", env.asGuestValue(env));
+                env.exportSymbol("symbol", JavaInterop.asTruffleObject(env));
                 return super.createContext(env);
             }
 
@@ -899,43 +857,6 @@ public class LanguageSPITest {
         // clean up the context
         contextOnDispose.set(false);
         c.close();
-    }
-
-    @Test
-    public void testNullContext() {
-        ProxyLanguage.setDelegate(new ProxyLanguage() {
-            @Override
-            protected LanguageContext createContext(TruffleLanguage.Env env) {
-                return null;
-            }
-        });
-        try (Engine engine = Engine.create()) {
-            for (int i = 0; i < 2; i++) {
-                try (Context context = Context.newBuilder(ProxyLanguage.ID).engine(engine).build()) {
-                    context.initialize(ProxyLanguage.ID);
-                }
-            }
-        }
-    }
-
-    @Test
-    public void testExceptionGetSourceLocation() {
-        try (Context context = Context.create(LanguageSPITestLanguage.ID)) {
-            final String text = "0123456789";
-            LanguageSPITestLanguage.runinside = (env) -> {
-                Source src = Source.newBuilder(text).mimeType(LanguageSPITestLanguage.ID).name("test.txt").build();
-                throw new ParseException(src, 1, 2);
-            };
-            try {
-                context.eval(LanguageSPITestLanguage.ID, text);
-                Assert.fail("PolyglotException expected.");
-            } catch (PolyglotException pe) {
-                Assert.assertTrue(pe.isSyntaxError());
-                Assert.assertEquals("12", pe.getSourceLocation().getCharacters().toString());
-            } finally {
-                LanguageSPITestLanguage.runinside = null;
-            }
-        }
     }
 
     private static void testFails(Runnable consumer) {
@@ -1303,89 +1224,4 @@ public class LanguageSPITest {
         assertEquals("Make sure language specific toString was invoked.", "myStringToString", c.getPolyglotBindings().getMember("exportedValue").toString());
     }
 
-    @Test
-    public void testFindSourceLocation() {
-        ProxyLanguage.setDelegate(new ProxyLanguage() {
-            @Override
-            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(new SourceHolder(request.getSource())));
-            }
-
-            @Override
-            protected SourceSection findSourceLocation(ProxyLanguage.LanguageContext context, Object value) {
-                if (value instanceof SourceHolder) {
-                    final Source src = ((SourceHolder) value).source;
-                    return src.createSection(0, src.getLength());
-                }
-                return super.findSourceLocation(context, value);
-            }
-
-            @Override
-            protected boolean isObjectOfLanguage(Object object) {
-                return object instanceof SourceHolder;
-            }
-        });
-
-        try (Context context = Context.create(ProxyLanguage.ID)) {
-            String text = "01234567";
-            Value res = context.eval(ProxyLanguage.ID, text);
-            assertNotNull(res);
-            org.graalvm.polyglot.SourceSection sourceSection = res.getSourceLocation();
-            assertNotNull(sourceSection);
-            assertTrue(text.contentEquals(sourceSection.getCharacters()));
-            res = context.asValue(new SourceHolder(Source.newBuilder(text).name("test").mimeType(ProxyLanguage.ID).build()));
-            sourceSection = res.getSourceLocation();
-            assertNotNull(sourceSection);
-            assertTrue(text.contentEquals(sourceSection.getCharacters()));
-        }
-    }
-
-    @Test
-    public void testToString() {
-        ProxyLanguage.setDelegate(new ProxyLanguage() {
-            @Override
-            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(new SourceHolder(request.getSource())));
-            }
-
-            @Override
-            protected String toString(ProxyLanguage.LanguageContext context, Object value) {
-                if (value instanceof SourceHolder) {
-                    final Source src = ((SourceHolder) value).source;
-                    return src.getCharacters().toString();
-                }
-                return super.toString(context, value);
-            }
-
-            @Override
-            protected boolean isObjectOfLanguage(Object object) {
-                return object instanceof SourceHolder;
-            }
-        });
-
-        try (Context context = Context.create(ProxyLanguage.ID)) {
-            String text = "01234567";
-            Value res = context.eval(ProxyLanguage.ID, text);
-            assertNotNull(res);
-            String toString = res.toString();
-            assertEquals(text, toString);
-            res = context.asValue(new SourceHolder(Source.newBuilder(text).name("test").mimeType(ProxyLanguage.ID).build()));
-            toString = res.toString();
-            assertEquals(text, toString);
-        }
-    }
-
-    private static class SourceHolder implements TruffleObject {
-        final Source source;
-
-        SourceHolder(final Source source) {
-            Objects.requireNonNull(source, "The source must be non null.");
-            this.source = source;
-        }
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return null;
-        }
-    }
 }
