@@ -40,6 +40,7 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
+import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -1432,7 +1433,12 @@ public class InliningUtil {
             if (returnNode.result() instanceof LocalNode) {
                 returnValue = localReplacement.replacement(returnNode.result());
             } else if (returnNode.result() != null) {
-                returnValue = duplicates.get(returnNode.result());
+                returnValue = returnNode.result();
+                if (!returnValue.isExternal()) {
+                    returnValue = duplicates.get(returnValue);
+                } else if (returnValue instanceof ValueNumberable) {
+                    returnValue = graph.uniqueExternal(returnValue);
+                }
             }
             invoke.asNode().replaceAtUsages(returnValue);
             Node returnDuplicate = duplicates.get(returnNode);
