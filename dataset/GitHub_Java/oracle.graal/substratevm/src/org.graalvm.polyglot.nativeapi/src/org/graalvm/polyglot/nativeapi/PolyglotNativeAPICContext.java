@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,46 +22,21 @@
  */
 package org.graalvm.polyglot.nativeapi;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.c.CContext.Directives;
-
-import com.oracle.svm.core.c.function.GraalIsolateHeader;
-import com.oracle.svm.hosted.c.codegen.CCompilerInvoker;
 
 public class PolyglotNativeAPICContext implements Directives {
 
     @Override
     public List<String> getHeaderFiles() {
-        return Collections.singletonList("<polyglot_types.h>");
+        return Arrays.asList("<polyglot_types.h>");
     }
 
     @Override
     public List<String> getOptions() {
         return Collections.singletonList("-I" + System.getProperty("org.graalvm.polyglot.nativeapi.libraryPath"));
-    }
-
-    @Override
-    public List<String> getHeaderSnippet() {
-        List<String> lines = new ArrayList<>();
-
-        /* Workaround for missing bool-type Header file inclusions. */
-        if (Platform.includedIn(Platform.WINDOWS.class) &&
-                        ImageSingletons.lookup(CCompilerInvoker.class).compilerInfo.versionMajor <= 16) {
-            lines.add("#ifndef bool");
-            lines.add("#define bool char");
-            lines.add("#define false ((bool)0)");
-            lines.add("#define true  ((bool)1)");
-            lines.add("#endif");
-            lines.add("");
-        }
-
-        lines.addAll(GraalIsolateHeader.getGraalIsolatePreamble());
-
-        return lines;
     }
 }

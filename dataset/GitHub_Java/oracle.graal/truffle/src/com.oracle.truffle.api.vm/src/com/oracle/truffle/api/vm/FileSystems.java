@@ -359,12 +359,12 @@ final class FileSystems {
 
         @Override
         public void checkAccess(Path path, Set<? extends AccessMode> modes, LinkOption... linkOptions) throws IOException {
-            Path absolutePath = toAbsolutePath(path);
-            if (inLanguageHome(absolutePath)) {
-                fullIO.checkAccess(absolutePath, modes, linkOptions);
+            path = toAbsolutePath(path);
+            if (inLanguageHome(path)) {
+                fullIO.checkAccess(path, modes, linkOptions);
                 return;
             }
-            throw forbidden(absolutePath);
+            throw forbidden(path);
         }
 
         @Override
@@ -388,7 +388,7 @@ final class FileSystems {
         }
 
         @Override
-        public SeekableByteChannel newByteChannel(Path inPath, Set<? extends OpenOption> options, FileAttribute<?>... attrs) throws IOException {
+        public SeekableByteChannel newByteChannel(Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs) throws IOException {
             boolean read = options.contains(StandardOpenOption.READ);
             boolean write = options.contains(StandardOpenOption.WRITE) || options.contains(StandardOpenOption.DELETE_ON_CLOSE);
             if (!read && !write) {
@@ -399,32 +399,32 @@ final class FileSystems {
                 }
             }
             if (write) {
-                throw forbidden(inPath);
+                throw forbidden(path);
             }
             assert read;
-            Path absolutePath = toAbsolutePath(inPath);
-            if (inLanguageHome(absolutePath)) {
-                return fullIO.newByteChannel(absolutePath, options, attrs);
+            path = toAbsolutePath(path);
+            if (inLanguageHome(path)) {
+                return fullIO.newByteChannel(path, options, attrs);
             }
-            throw forbidden(absolutePath);
+            throw forbidden(path);
         }
 
         @Override
         public DirectoryStream<Path> newDirectoryStream(Path dir, DirectoryStream.Filter<? super Path> filter) throws IOException {
-            Path absoluteDir = toAbsolutePath(dir);
-            if (inLanguageHome(absoluteDir)) {
-                return fullIO.newDirectoryStream(absoluteDir, filter);
+            dir = toAbsolutePath(dir);
+            if (inLanguageHome(dir)) {
+                return fullIO.newDirectoryStream(dir, filter);
             }
-            throw forbidden(absoluteDir);
+            throw forbidden(dir);
         }
 
         @Override
         public Map<String, Object> readAttributes(Path path, String attributes, LinkOption... options) throws IOException {
-            Path absolutePath = toAbsolutePath(path);
-            if (inLanguageHome(absolutePath)) {
-                return fullIO.readAttributes(absolutePath, attributes, options);
+            path = toAbsolutePath(path);
+            if (inLanguageHome(path)) {
+                return fullIO.readAttributes(path, attributes, options);
             }
-            throw forbidden(absolutePath);
+            throw forbidden(path);
         }
 
         @Override
@@ -449,11 +449,11 @@ final class FileSystems {
 
         @Override
         public Path toRealPath(Path path, LinkOption... linkOptions) throws IOException {
-            Path absoluetPath = toAbsolutePath(path);
-            if (inLanguageHome(absoluetPath)) {
-                return fullIO.toRealPath(absoluetPath, linkOptions);
+            path = toAbsolutePath(path);
+            if (inLanguageHome(path)) {
+                return fullIO.toRealPath(path, linkOptions);
             }
-            throw forbidden(absoluetPath);
+            throw forbidden(path);
         }
 
         private boolean inLanguageHome(final Path path) {
