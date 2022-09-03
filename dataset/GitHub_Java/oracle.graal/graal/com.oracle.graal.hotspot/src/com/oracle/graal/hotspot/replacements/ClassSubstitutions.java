@@ -23,7 +23,7 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.nodes.PiNode.*;
+import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 
 import java.lang.reflect.*;
 
@@ -71,7 +71,7 @@ public class ClassSubstitutions {
         if (klass.equal(0)) {
             return false;
         } else {
-            return klassIsArray(klass);
+            return (readLayoutHelper(klass) & arrayKlassLayoutHelperIdentifier()) != 0;
         }
     }
 
@@ -89,14 +89,14 @@ public class ClassSubstitutions {
         if (klass.notEqual(0)) {
             int accessFlags = klass.readInt(klassAccessFlagsOffset(), LocationIdentity.FINAL_LOCATION);
             if ((accessFlags & Modifier.INTERFACE) == 0) {
-                if (klassIsArray(klass)) {
+                if ((readLayoutHelper(klass) & arrayKlassLayoutHelperIdentifier()) != 0) {
                     return Object.class;
                 } else {
                     Word superKlass = klass.readWord(klassSuperKlassOffset(), LocationIdentity.FINAL_LOCATION);
                     if (superKlass.equal(0)) {
                         return null;
                     } else {
-                        return piCast(superKlass.readObject(classMirrorOffset(), LocationIdentity.FINAL_LOCATION), Class.class, true, true);
+                        return unsafeCast(superKlass.readObject(classMirrorOffset(), LocationIdentity.FINAL_LOCATION), Class.class, true, true);
                     }
                 }
             }
@@ -109,8 +109,8 @@ public class ClassSubstitutions {
     public static Class<?> getComponentType(final Class<?> thisObj) {
         Word klass = loadWordFromObject(thisObj, klassOffset());
         if (klass.notEqual(0)) {
-            if (klassIsArray(klass)) {
-                return piCast(klass.readObject(arrayKlassComponentMirrorOffset(), LocationIdentity.FINAL_LOCATION), Class.class, true, true);
+            if ((readLayoutHelper(klass) & arrayKlassLayoutHelperIdentifier()) != 0) {
+                return unsafeCast(klass.readObject(arrayKlassComponentMirrorOffset(), LocationIdentity.FINAL_LOCATION), Class.class, true, true);
             }
         }
         return null;
@@ -118,8 +118,8 @@ public class ClassSubstitutions {
 
     @MacroSubstitution(macro = ClassIsInstanceNode.class, isStatic = false)
     @MethodSubstitution(isStatic = false)
-    public static boolean isInstance(Class<?> thisObj, Object obj) {
-        return ConditionalNode.materializeIsInstance(thisObj, obj);
+    public static boolean isInstance(final Class<?> thisObj, Object obj) {
+        return !isPrimitive(thisObj) && ConditionalNode.materializeIsInstance(thisObj, obj);
     }
 
     @MacroSubstitution(macro = ClassCastNode.class, isStatic = false)
