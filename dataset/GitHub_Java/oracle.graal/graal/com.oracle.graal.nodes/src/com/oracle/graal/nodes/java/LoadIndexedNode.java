@@ -27,6 +27,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code LoadIndexedNode} represents a read from an element of an array.
@@ -53,12 +54,18 @@ public final class LoadIndexedNode extends AccessIndexedNode implements Node.Ite
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        State arrayState = tool.getObjectState(array());
-        if (arrayState != null && arrayState.getState() == EscapeState.Virtual) {
+        VirtualObjectNode virtualArray = tool.getVirtualState(array());
+        if (virtualArray != null) {
             ValueNode indexValue = tool.getReplacedValue(index());
             int index = indexValue.isConstant() ? indexValue.asConstant().asInt() : -1;
-            if (index >= 0 && index < arrayState.getVirtualObject().entryCount()) {
-                tool.replaceWith(arrayState.getEntry(index));
+            if (index >= 0 && index < virtualArray.entryCount()) {
+                ValueNode result = tool.getVirtualEntry(virtualArray, index);
+                VirtualObjectNode virtualResult = tool.getVirtualState(result);
+                if (virtualResult != null) {
+                    tool.replaceWithVirtual(virtualResult);
+                } else {
+                    tool.replaceWithValue(result);
+                }
             }
         }
     }

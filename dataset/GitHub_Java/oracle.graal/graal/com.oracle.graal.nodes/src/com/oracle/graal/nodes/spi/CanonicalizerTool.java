@@ -24,15 +24,10 @@ package com.oracle.graal.nodes.spi;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
+
 
 public interface CanonicalizerTool {
-
     TargetDescription target();
-
     Assumptions assumptions();
-
     MetaAccessProvider runtime();
-
-    void removeIfUnused(Node node);
 }

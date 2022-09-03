@@ -185,17 +185,12 @@ public class SnippetTemplate {
         protected final Cache cache;
         protected final MetaAccessProvider runtime;
         protected final Assumptions assumptions;
-        protected Class<?> snippetsClass;
+        protected Class<T> snippetsClass;
 
         public AbstractTemplates(MetaAccessProvider runtime, Assumptions assumptions, TargetDescription target, Class<T> snippetsClass) {
             this.runtime = runtime;
             this.assumptions = assumptions;
-            if (snippetsClass == null) {
-                assert this instanceof SnippetsInterface;
-                this.snippetsClass = getClass();
-            } else {
-                this.snippetsClass = snippetsClass;
-            }
+            this.snippetsClass = snippetsClass;
             this.cache = new Cache(runtime, target);
         }
 
@@ -208,9 +203,7 @@ public class SnippetTemplate {
                 throw new GraalInternalError(e);
             }
         }
-    }
-
-    private static final Object UNUSED_PARAMETER = "DEAD PARAMETER";
+}
 
     /**
      * Determines if any parameter of a given method is annotated with {@link ConstantParameter}.
@@ -250,13 +243,7 @@ public class SnippetTemplate {
                 String name = c.value();
                 Object arg = key.get(name);
                 Kind kind = signature.getParameterKind(i);
-                Constant constantArg;
-                if (arg instanceof Constant) {
-                    constantArg = (Constant) arg;
-                } else {
-                    constantArg = Constant.forBoxed(kind, arg);
-                }
-                replacements.put(snippetGraph.getLocal(i), ConstantNode.forConstant(constantArg, runtime, snippetCopy));
+                replacements.put(snippetGraph.getLocal(i), ConstantNode.forConstant(Constant.forBoxed(kind, arg), runtime, snippetCopy));
             } else {
                 VarargsParameter vp = MetaUtil.getParameterAnnotation(VarargsParameter.class, i, method);
                 if (vp != null) {
@@ -317,12 +304,8 @@ public class SnippetTemplate {
                 Parameter p = parameterAnnotations[i];
                 if (p != null) {
                     LocalNode local = snippetCopy.getLocal(i);
-                    if (local == null) {
-                        // Parameter value was eliminated
-                        parameters.put(p.value(), UNUSED_PARAMETER);
-                    } else {
-                        parameters.put(p.value(), local);
-                    }
+                    assert local != null;
+                    parameters.put(p.value(), local);
                 }
             }
         }
@@ -407,12 +390,8 @@ public class SnippetTemplate {
     }
 
     private static boolean checkConstantArgument(final ResolvedJavaMethod method, Signature signature, int i, String name, Object arg, Kind kind) {
-        ResolvedJavaType type = signature.getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass());
-        if (WordTypeRewriterPhase.isWord(type)) {
-            assert arg instanceof Constant : method + ": word constant parameters must be passed boxed in a Constant value: " + arg;
-            return true;
-        }
         if (kind == Kind.Object) {
+            ResolvedJavaType type = signature.getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass());
             assert arg == null || type.isInstance(Constant.forObject(arg)) :
                 method + ": wrong value type for " + name + ": expected " + type.getName() + ", got " + arg.getClass().getName();
         } else {
@@ -437,9 +416,7 @@ public class SnippetTemplate {
 
     /**
      * The named parameters of this template that must be bound to values during instantiation.
-     * For a parameter that is still live after specialization, the value in this map is either
-     * a {@link LocalNode} instance or a {@link LocalNode} array. For an eliminated parameter,
-     * the value is identical to the key.
+     * Each value in this map is either a {@link LocalNode} instance or a {@link LocalNode} array.
      */
     private final Map<String, Object> parameters;
 
@@ -485,7 +462,8 @@ public class SnippetTemplate {
                     Constant constant = Constant.forBoxed(kind, argument);
                     replacements.put((LocalNode) parameter, ConstantNode.forConstant(constant, runtime, replaceeGraph));
                 }
-            } else if (parameter instanceof LocalNode[]) {
+            } else {
+                assert parameter instanceof LocalNode[];
                 LocalNode[] locals = (LocalNode[]) parameter;
                 Object array = argument;
                 assert array != null && array.getClass().isArray();
@@ -503,8 +481,6 @@ public class SnippetTemplate {
                         replacements.put(local, element);
                     }
                 }
-            } else {
-                assert parameter == UNUSED_PARAMETER : "unexpected entry for parameter: " + name + " -> " + parameter;
             }
         }
         return replacements;
@@ -605,13 +581,6 @@ public class SnippetTemplate {
     }
 
     /**
-     * Gets a copy of the specialized graph.
-     */
-    public StructuredGraph copySpecializedGraph() {
-        return snippet.copy();
-    }
-
-    /**
      * Replaces a given floating node with this specialized snippet.
      *
      * @param runtime
@@ -682,9 +651,7 @@ public class SnippetTemplate {
             Object value = e.getValue();
             buf.append(sep);
             sep = ", ";
-            if (value == UNUSED_PARAMETER)  {
-                buf.append("<unused> ").append(name);
-            } else if (value instanceof LocalNode) {
+            if (value instanceof LocalNode) {
                 LocalNode local = (LocalNode) value;
                 buf.append(local.kind().getJavaName()).append(' ').append(name);
             } else {
