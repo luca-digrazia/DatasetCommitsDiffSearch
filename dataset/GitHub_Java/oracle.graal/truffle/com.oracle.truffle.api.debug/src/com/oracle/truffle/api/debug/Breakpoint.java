@@ -184,6 +184,7 @@ public final class Breakpoint {
 
     /* We use long instead of int in the implementation to avoid not hitting again on overflows. */
     private final AtomicLong hitCount = new AtomicLong();
+    private volatile SourceSection resolvedSourceSection;
     private volatile Assumption conditionUnchanged;
 
     private EventBinding<? extends ExecutionEventNodeFactory> breakpointBinding;
@@ -296,15 +297,31 @@ public final class Breakpoint {
         }
     }
 
-    /**
-     * Returns the expression used to create the current breakpoint condition, null if no condition
-     * set.
-     *
-     * @since 0.20
+    /*
+     * CHumer Deprecation Note: Deprecated because of wrong return type.
      */
-    @SuppressFBWarnings("UG")
-    public String getCondition() {
-        return condition;
+    /**
+     * Returns the resolved object that is executed for debugger conditions. If the breakpoint is
+     * {@link #isResolved() unresolved} and the debugger was created based on an {@link URI} then
+     * the condition might not yet have been resolved.
+     *
+     * @since 0.9
+     * @deprecated in 0.16, unreliable implementation. no replacement
+     */
+    @Deprecated
+    public synchronized Source getCondition() {
+        if (condition != null) {
+            Source source = null;
+            if (isResolved()) {
+                source = resolvedSourceSection.getSource();
+            } else if (locationKey.getKey() instanceof Source) {
+                source = (Source) locationKey.getKey();
+            }
+            if (source != null) {
+                return Source.newBuilder(condition).mimeType(source.getMimeType()).name("Condition for breakpoint " + toString()).build();
+            }
+        }
+        return null;
     }
 
     /**
@@ -471,18 +488,19 @@ public final class Breakpoint {
         Thread.holdsLock(this);
         sourceBinding = session.getDebugger().getInstrumenter().attachLoadSourceSectionListener(filter, new LoadSourceSectionListener() {
             public void onLoad(LoadSourceSectionEvent event) {
-                resolveBreakpoint();
+                resolveBreakpoint(event.getSourceSection());
             }
         }, true);
         breakpointBinding = session.getDebugger().getInstrumenter().attachFactory(filter, new BreakpointNodeFactory());
     }
 
-    private synchronized void resolveBreakpoint() {
+    private synchronized void resolveBreakpoint(SourceSection sourceSection) {
         if (disposed) {
             // cannot resolve disposed breakpoint
             return;
         }
         if (!isResolved()) {
+            resolvedSourceSection = sourceSection;
             if (sourceBinding != null) {
                 sourceBinding.dispose();
                 sourceBinding = null;
@@ -666,7 +684,7 @@ public final class Breakpoint {
          */
         public Breakpoint build() {
             SourceSectionFilter f = buildFilter();
-            BreakpointLocation location = new BreakpointLocation(key, line);
+            BreakpointLocation location = new BreakpointLocation(key, line, -1);
             Breakpoint breakpoint = new Breakpoint(location, f, oneShot);
             breakpoint.setIgnoreCount(ignoreCount);
             return breakpoint;
@@ -709,7 +727,7 @@ public final class Breakpoint {
 
         public ExecutionEventNode create(EventContext context) {
             if (!isResolved()) {
-                resolveBreakpoint();
+                resolveBreakpoint(context.getInstrumentedSourceSection());
             }
             return new BreakpointNode(Breakpoint.this, context);
         }
