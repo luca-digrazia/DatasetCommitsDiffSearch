@@ -195,20 +195,18 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
 
     private static final class PhiInfoElement {
 
-        private EconomicMap<EndNode, InfoElement> infoElements;
+        private InfoElement[] infoElements;
 
-        public void set(EndNode end, InfoElement infoElement) {
-            if (infoElements == null) {
-                infoElements = EconomicMap.create(Equivalence.IDENTITY);
-            }
-            infoElements.put(end, infoElement);
+        private PhiInfoElement(ValuePhiNode phiNode) {
+            infoElements = new InfoElement[phiNode.valueCount()];
         }
 
-        public InfoElement get(EndNode end) {
-            if (infoElements == null) {
-                return null;
-            }
-            return infoElements.get(end);
+        public void set(int endIndex, InfoElement infoElement) {
+            infoElements[endIndex] = infoElement;
+        }
+
+        public InfoElement[] getInfoElements() {
+            return infoElements;
         }
     }
 
@@ -372,14 +370,13 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
                 MapCursor<ValuePhiNode, PhiInfoElement> entries = mergeMap.getEntries();
                 while (entries.advance()) {
                     ValuePhiNode phi = entries.getKey();
-                    PhiInfoElement phiInfoElements = entries.getValue();
+                    InfoElement[] infoElements = entries.getValue().getInfoElements();
                     Stamp bestPossibleStamp = null;
                     for (int i = 0; i < phi.valueCount(); ++i) {
                         ValueNode valueAt = phi.valueAt(i);
                         Stamp curBestStamp = valueAt.stamp();
-                        InfoElement infoElement = phiInfoElements.get(merge.forwardEndAt(i));
-                        if (infoElement != null) {
-                            curBestStamp = curBestStamp.join(infoElement.getStamp());
+                        if (infoElements[i] != null) {
+                            curBestStamp = curBestStamp.join(infoElements[i].getStamp());
                         }
 
                         if (bestPossibleStamp == null) {
@@ -411,7 +408,7 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
                                 allow = true;
                             } else if (integerStamp.asConstant() != null) {
                                 allow = true;
-                            } else if (oldStamp.isUnrestricted()) {
+                            } else if (oldStamp.unrestricted().equals(oldStamp)) {
                                 allow = true;
                             }
                         } else {
@@ -425,14 +422,13 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
                                 if (bestPossibleStamp.meet(valueAt.stamp()).equals(bestPossibleStamp)) {
                                     // Pi not required here.
                                 } else {
-                                    InfoElement infoElement = phiInfoElements.get(merge.forwardEndAt(i));
-                                    assert infoElement != null;
-                                    Stamp curBestStamp = infoElement.getStamp();
-                                    ValueNode input = infoElement.getProxifiedInput();
+                                    assert infoElements[i] != null;
+                                    Stamp curBestStamp = infoElements[i].getStamp();
+                                    ValueNode input = infoElements[i].getProxifiedInput();
                                     if (input == null) {
                                         input = valueAt;
                                     }
-                                    PiNode piNode = graph.unique(new PiNode(input, curBestStamp, (ValueNode) infoElement.guard));
+                                    PiNode piNode = graph.unique(new PiNode(input, curBestStamp, (ValueNode) infoElements[i].guard));
                                     valueAt = piNode;
                                 }
                                 newPhi.addInput(valueAt);
@@ -449,6 +445,7 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
             AbstractMergeNode abstractMerge = end.merge();
             if (abstractMerge instanceof MergeNode) {
                 MergeNode merge = (MergeNode) abstractMerge;
+                int endIndex = merge.forwardEndIndex(end);
 
                 EconomicMap<ValuePhiNode, PhiInfoElement> mergeMap = this.mergeMaps.get(merge);
                 for (ValuePhiNode phi : merge.valuePhis()) {
@@ -464,11 +461,11 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
 
                             PhiInfoElement phiInfoElement = mergeMap.get(phi);
                             if (phiInfoElement == null) {
-                                phiInfoElement = new PhiInfoElement();
+                                phiInfoElement = new PhiInfoElement(phi);
                                 mergeMap.put(phi, phiInfoElement);
                             }
 
-                            phiInfoElement.set(end, infoElement);
+                            phiInfoElement.set(endIndex, infoElement);
                             break;
                         }
                         infoElement = nextElement(infoElement);

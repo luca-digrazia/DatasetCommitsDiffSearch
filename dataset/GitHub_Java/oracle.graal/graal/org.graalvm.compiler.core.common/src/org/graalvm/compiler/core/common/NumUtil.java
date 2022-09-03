@@ -220,8 +220,4 @@ public class NumUtil {
         }
         return b;
     }
-
-    public static boolean sameSign(long a, long b) {
-        return a < 0 == b < 0;
-    }
 }

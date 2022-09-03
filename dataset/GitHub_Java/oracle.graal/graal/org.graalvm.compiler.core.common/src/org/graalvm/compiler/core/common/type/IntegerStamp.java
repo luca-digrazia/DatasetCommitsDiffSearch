@@ -367,21 +367,17 @@ public final class IntegerStamp extends PrimitiveStamp {
     }
 
     public long unsignedUpperBound() {
-        if (sameSignBounds()) {
+        if (lowerBound < 0 == upperBound < 0) {
             return CodeUtil.zeroExtend(upperBound(), getBits());
         }
         return NumUtil.maxValueUnsigned(getBits());
     }
 
     public long unsignedLowerBound() {
-        if (sameSignBounds()) {
+        if (lowerBound < 0 == upperBound < 0) {
             return CodeUtil.zeroExtend(lowerBound(), getBits());
         }
         return 0;
-    }
-
-    private boolean sameSignBounds() {
-        return NumUtil.sameSign(lowerBound, upperBound);
     }
 
     @Override

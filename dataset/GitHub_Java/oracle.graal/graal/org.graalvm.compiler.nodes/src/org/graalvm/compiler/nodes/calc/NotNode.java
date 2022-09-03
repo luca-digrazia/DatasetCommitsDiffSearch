@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,31 @@
  */
 package org.graalvm.compiler.nodes.calc;
 
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
+import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
 
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
-import org.graalvm.compiler.core.common.type.ArithmeticOpTable.UnaryOp.Neg;
-import org.graalvm.compiler.core.common.type.FloatStamp;
+import org.graalvm.compiler.core.common.type.ArithmeticOpTable.UnaryOp.Not;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.spi.ArithmeticLIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.compiler.nodes.spi.StampInverter;
 
 /**
- * The {@code NegateNode} node negates its operand.
+ * Binary negation of long or integer values.
  */
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
-public final class NegateNode extends UnaryArithmeticNode<Neg> implements NarrowableArithmeticNode, StampInverter {
+@NodeInfo(cycles = CYCLES_1, size = SIZE_1)
+public final class NotNode extends UnaryArithmeticNode<Not> implements ArithmeticLIRLowerable, NarrowableArithmeticNode, StampInverter {
 
-    public static final NodeClass<NegateNode> TYPE = NodeClass.create(NegateNode.class);
+    public static final NodeClass<NotNode> TYPE = NodeClass.create(NotNode.class);
 
-    public NegateNode(ValueNode value) {
-        super(TYPE, ArithmeticOpTable::getNeg, value);
+    public NotNode(ValueNode x) {
+        super(TYPE, ArithmeticOpTable::getNot, x);
     }
 
     @Override
@@ -55,19 +55,15 @@ public final class NegateNode extends UnaryArithmeticNode<Neg> implements Narrow
         if (ret != this) {
             return ret;
         }
-        if (forValue instanceof NegateNode) {
-            return ((NegateNode) forValue).getValue();
-        }
-        if (forValue instanceof SubNode && !(forValue.stamp() instanceof FloatStamp)) {
-            SubNode sub = (SubNode) forValue;
-            return new SubNode(sub.getY(), sub.getX());
+        if (forValue instanceof NotNode) {
+            return ((NotNode) forValue).getValue();
         }
         return this;
     }
 
     @Override
     public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
-        nodeValueMap.setResult(this, gen.emitNegate(nodeValueMap.operand(getValue())));
+        nodeValueMap.setResult(this, gen.emitNot(nodeValueMap.operand(getValue())));
     }
 
     @Override
