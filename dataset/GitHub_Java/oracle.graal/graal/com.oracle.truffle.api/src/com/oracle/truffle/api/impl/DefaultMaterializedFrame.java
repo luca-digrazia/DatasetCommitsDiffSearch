@@ -117,9 +117,4 @@ final class DefaultMaterializedFrame implements MaterializedFrame, PackedFrame {
     public Frame unpack() {
         return this;
     }
-
-    @Override
-    public FrameDescriptor getFrameDescriptor() {
-        return wrapped.getFrameDescriptor();
-    }
 }

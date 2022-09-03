@@ -31,11 +31,6 @@ import com.oracle.truffle.api.*;
 public interface Frame {
 
     /**
-     * @return the object describing the layout of this frame
-     */
-    FrameDescriptor getFrameDescriptor();
-
-    /**
      * @return the arguments used when calling this method
      */
     Arguments getArguments();
