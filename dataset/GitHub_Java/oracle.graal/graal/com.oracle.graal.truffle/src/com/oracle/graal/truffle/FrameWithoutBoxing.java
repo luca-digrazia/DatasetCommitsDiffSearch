@@ -50,14 +50,13 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         this.caller = caller;
         this.arguments = arguments;
         this.locals = new Object[descriptor.getSize()];
-        Arrays.fill(locals, descriptor.getTypeConversion().getDefaultValue());
         this.primitiveLocals = new long[descriptor.getSize()];
         this.tags = new byte[descriptor.getSize()];
     }
 
     @Override
     public <T extends Arguments> T getArguments(Class<T> clazz) {
-        return CompilerDirectives.unsafeCast(arguments, clazz, true);
+        return CompilerDirectives.unsafeCast(arguments, clazz);
     }
 
     @Override
@@ -91,8 +90,8 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     @Override
-    public void setObject(FrameSlot slot, Object value) {
-        verifySetObject(slot);
+    public void setObject(FrameSlot slot, Object value) throws FrameSlotTypeException {
+        verifySet(slot, FrameSlotKind.Object);
         setObjectUnsafe(slot, value);
     }
 
@@ -243,50 +242,43 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         tags[slotIndex] = (byte) accessKind.ordinal();
     }
 
-    private void verifySetObject(FrameSlot slot) {
-        if (slot.getKind() != FrameSlotKind.Object) {
-            CompilerDirectives.transferToInterpreter();
-            slot.setKind(FrameSlotKind.Object);
-        }
-        int slotIndex = slot.getIndex();
-        if (slotIndex >= tags.length) {
-            CompilerDirectives.transferToInterpreter();
-            resize();
-        }
-        tags[slotIndex] = (byte) FrameSlotKind.Object.ordinal();
-    }
-
     private void verifyGet(FrameSlot slot, FrameSlotKind accessKind) throws FrameSlotTypeException {
+        FrameSlotKind slotKind = slot.getKind();
+        if (slotKind != accessKind) {
+            CompilerDirectives.transferToInterpreter();
+            if (slotKind == FrameSlotKind.Illegal && accessKind == FrameSlotKind.Object) {
+                slot.setKind(FrameSlotKind.Object);
+                this.setObject(slot, descriptor.getTypeConversion().getDefaultValue());
+            } else {
+                throw new FrameSlotTypeException();
+            }
+        }
         int slotIndex = slot.getIndex();
         if (slotIndex >= tags.length) {
             CompilerDirectives.transferToInterpreter();
             resize();
         }
-        byte tag = tags[slotIndex];
-        if (accessKind == FrameSlotKind.Object ? (tag & 0xfe) != 0 : tag != accessKind.ordinal()) {
+        if (tags[slotIndex] != accessKind.ordinal()) {
             CompilerDirectives.transferToInterpreter();
-            if (slot.getKind() == accessKind || tag == 0) {
-                descriptor.getTypeConversion().updateFrameSlot(this, slot, getValue(slot));
-                if (tags[slotIndex] == accessKind.ordinal()) {
-                    return;
-                }
+            descriptor.getTypeConversion().updateFrameSlot(this, slot, getValue(slot));
+            if (tags[slotIndex] != accessKind.ordinal()) {
+                throw new FrameSlotTypeException();
             }
-            throw new FrameSlotTypeException();
         }
     }
 
     @Override
     public Object getValue(FrameSlot slot) {
-        int slotIndex = slot.getIndex();
-        if (slotIndex >= tags.length) {
-            CompilerDirectives.transferToInterpreter();
-            resize();
+        int index = slot.getIndex();
+        if (index >= tags.length) {
+            assert index >= 0 && index < descriptor.getSize();
+            return descriptor.getTypeConversion().getDefaultValue();
         }
-        byte tag = tags[slotIndex];
-        if (tag == FrameSlotKind.Boolean.ordinal()) {
+        byte tag = tags[index];
+        if (tag == FrameSlotKind.Illegal.ordinal()) {
+            return descriptor.getTypeConversion().getDefaultValue();
+        } else if (tag == FrameSlotKind.Boolean.ordinal()) {
             return getBooleanUnsafe(slot);
-        } else if (tag == FrameSlotKind.Byte.ordinal()) {
-            return getByteUnsafe(slot);
         } else if (tag == FrameSlotKind.Int.ordinal()) {
             return getIntUnsafe(slot);
         } else if (tag == FrameSlotKind.Double.ordinal()) {
@@ -296,17 +288,14 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         } else if (tag == FrameSlotKind.Float.ordinal()) {
             return getFloatUnsafe(slot);
         } else {
-            assert tag == FrameSlotKind.Object.ordinal() || tag == FrameSlotKind.Illegal.ordinal();
             return getObjectUnsafe(slot);
         }
     }
 
     private void resize() {
-        int oldSize = tags.length;
         int newSize = descriptor.getSize();
-        if (newSize > oldSize) {
+        if (newSize > tags.length) {
             locals = Arrays.copyOf(locals, newSize);
-            Arrays.fill(locals, oldSize, newSize, descriptor.getTypeConversion().getDefaultValue());
             primitiveLocals = Arrays.copyOf(primitiveLocals, newSize);
             tags = Arrays.copyOf(tags, newSize);
         }
@@ -314,11 +303,14 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     @Override
     public boolean isInitialized(FrameSlot slot) {
-        int slotIndex = slot.getIndex();
-        if (slotIndex >= tags.length) {
+        try {
+            return tags[slot.getIndex()] != 0;
+        } catch (ArrayIndexOutOfBoundsException ex) {
             CompilerDirectives.transferToInterpreter();
-            resize();
+            if (slot.getIndex() >= 0 && slot.getIndex() < descriptor.getSize()) {
+                return false;
+            }
+            throw ex;
         }
-        return tags[slotIndex] != 0;
     }
 }
