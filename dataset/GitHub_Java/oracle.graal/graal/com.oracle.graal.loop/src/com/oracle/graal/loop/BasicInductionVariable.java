@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.loop;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.type.*;
 
 public class BasicInductionVariable extends InductionVariable {
 
@@ -124,12 +124,12 @@ public class BasicInductionVariable extends InductionVariable {
         ValueNode stride = strideNode();
         ValueNode initNode = this.initNode();
         if (!fromStamp.isCompatible(stamp)) {
-            stride = IntegerConvertNode.convert(stride, stamp, graph());
-            initNode = IntegerConvertNode.convert(initNode, stamp, graph());
+            stride = IntegerConvertNode.convert(stride, stamp);
+            initNode = IntegerConvertNode.convert(initNode, stamp);
         }
         ValueNode maxTripCount = loop.counted().maxTripCountNode(assumePositiveTripCount);
         if (!maxTripCount.stamp().isCompatible(stamp)) {
-            maxTripCount = IntegerConvertNode.convert(maxTripCount, stamp, graph());
+            maxTripCount = IntegerConvertNode.convert(maxTripCount, stamp);
         }
         return IntegerArithmeticNode.add(graph, IntegerArithmeticNode.mul(graph, stride, IntegerArithmeticNode.sub(graph, maxTripCount, ConstantNode.forIntegerStamp(stamp, 1, graph))), initNode);
     }
@@ -139,7 +139,7 @@ public class BasicInductionVariable extends InductionVariable {
         Stamp stamp = phi.stamp();
         ValueNode maxTripCount = loop.counted().maxTripCountNode(false);
         if (!maxTripCount.stamp().isCompatible(stamp)) {
-            maxTripCount = IntegerConvertNode.convert(maxTripCount, stamp, graph());
+            maxTripCount = IntegerConvertNode.convert(maxTripCount, stamp);
         }
         return IntegerArithmeticNode.add(graph(), IntegerArithmeticNode.mul(graph(), strideNode(), maxTripCount), initNode());
     }
@@ -152,9 +152,5 @@ public class BasicInductionVariable extends InductionVariable {
     @Override
     public long constantExtremum() {
         return constantStride() * (loop.counted().constantMaxTripCount() - 1) + constantInit();
-    }
-
-    @Override
-    public void deleteUnusedNodes() {
     }
 }

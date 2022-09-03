@@ -25,10 +25,9 @@ package com.oracle.graal.phases.common;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
@@ -62,7 +61,7 @@ public class DeoptimizationGroupingPhase extends BasePhase<MidTierContext> {
                         merge.addForwardEnd(firstEnd);
                         reasonActionPhi.addInput(((AbstractDeoptimizeNode) target).getActionAndReason(context.getMetaAccess()));
                         speculationPhi.addInput(((AbstractDeoptimizeNode) target).getSpeculation(context.getMetaAccess()));
-                        target.replaceAtPredecessor(firstEnd);
+                        target.predecessor().replaceFirstSuccessor(target, firstEnd);
 
                         exitLoops((AbstractDeoptimizeNode) target, firstEnd, cfg);
 
@@ -77,7 +76,7 @@ public class DeoptimizationGroupingPhase extends BasePhase<MidTierContext> {
                     merge.addForwardEnd(newEnd);
                     reasonActionPhi.addInput(deopt.getActionAndReason(context.getMetaAccess()));
                     speculationPhi.addInput(deopt.getSpeculation(context.getMetaAccess()));
-                    deopt.replaceAtPredecessor(newEnd);
+                    deopt.predecessor().replaceFirstSuccessor(deopt, newEnd);
                     exitLoops(deopt, newEnd, cfg);
                     obsoletes.add(deopt);
                 }
@@ -93,10 +92,10 @@ public class DeoptimizationGroupingPhase extends BasePhase<MidTierContext> {
 
     private static void exitLoops(AbstractDeoptimizeNode deopt, EndNode end, ControlFlowGraph cfg) {
         Block block = cfg.blockFor(deopt);
-        Loop<Block> loop = block.getLoop();
+        Loop loop = block.getLoop();
         while (loop != null) {
-            end.graph().addBeforeFixed(end, end.graph().add(new LoopExitNode((LoopBeginNode) loop.getHeader().getBeginNode())));
-            loop = loop.getParent();
+            end.graph().addBeforeFixed(end, end.graph().add(new LoopExitNode(loop.loopBegin())));
+            loop = loop.parent;
         }
     }
 }

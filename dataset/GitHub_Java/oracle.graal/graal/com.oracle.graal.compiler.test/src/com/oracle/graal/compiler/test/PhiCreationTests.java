@@ -40,7 +40,7 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test1() {
-        StructuredGraph graph = parseEager("test1Snippet");
+        StructuredGraph graph = parse("test1Snippet");
         Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }
 
@@ -53,7 +53,7 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test2() {
-        StructuredGraph graph = parseEager("test2Snippet");
+        StructuredGraph graph = parse("test2Snippet");
         Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }
 
@@ -66,7 +66,7 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test3() {
-        StructuredGraph graph = parseEager("test3Snippet");
+        StructuredGraph graph = parse("test3Snippet");
         Debug.dump(graph, "Graph");
         Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }
@@ -82,7 +82,7 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test4() {
-        StructuredGraph graph = parseEager("test4Snippet");
+        StructuredGraph graph = parse("test4Snippet");
         Debug.dump(graph, "Graph");
         Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }

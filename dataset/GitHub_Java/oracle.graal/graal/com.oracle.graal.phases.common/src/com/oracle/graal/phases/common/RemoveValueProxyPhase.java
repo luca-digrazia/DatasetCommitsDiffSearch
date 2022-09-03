@@ -23,7 +23,6 @@
 package com.oracle.graal.phases.common;
 
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 
 public class RemoveValueProxyPhase extends Phase {
@@ -39,11 +38,10 @@ public class RemoveValueProxyPhase extends Phase {
             FrameState stateAfter = exit.stateAfter();
             if (stateAfter != null) {
                 exit.setStateAfter(null);
-                if (stateAfter.hasNoUsages()) {
-                    GraphUtil.killWithUnusedFloatingInputs(stateAfter);
+                if (stateAfter.usages().isEmpty()) {
+                    stateAfter.safeDelete();
                 }
             }
         }
-        graph.setHasValueProxies(false);
     }
 }

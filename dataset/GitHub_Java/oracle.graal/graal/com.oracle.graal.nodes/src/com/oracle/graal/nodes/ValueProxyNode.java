@@ -26,7 +26,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.spi.*;
 
-public class ValueProxyNode extends ProxyNode implements Canonicalizable, Virtualizable, ValueAndStampProxy {
+public class ValueProxyNode extends ProxyNode implements Canonicalizable, Virtualizable {
 
     @Input private ValueNode value;
 
@@ -59,10 +59,5 @@ public class ValueProxyNode extends ProxyNode implements Canonicalizable, Virtua
         if (state != null && state.getState() == EscapeState.Virtual) {
             tool.replaceWithVirtual(state.getVirtualObject());
         }
-    }
-
-    @Override
-    public ValueNode getOriginalNode() {
-        return value();
     }
 }

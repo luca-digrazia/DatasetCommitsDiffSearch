@@ -27,21 +27,22 @@ import static com.oracle.graal.api.meta.LocationIdentity.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.virtual.phases.ea.ReadEliminationBlockState.CacheEntry;
 import com.oracle.graal.virtual.phases.ea.ReadEliminationBlockState.LoadCacheEntry;
 import com.oracle.graal.virtual.phases.ea.ReadEliminationBlockState.ReadCacheEntry;
 
 public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockState> {
 
-    public ReadEliminationClosure(ControlFlowGraph cfg) {
-        super(null, cfg);
+    public ReadEliminationClosure(SchedulePhase schedule) {
+        super(schedule);
     }
 
     @Override
@@ -52,33 +53,38 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
     @Override
     protected boolean processNode(Node node, ReadEliminationBlockState state, GraphEffectList effects, FixedWithNextNode lastFixedNode) {
         boolean deleted = false;
-        if (node instanceof AccessFieldNode) {
-            AccessFieldNode access = (AccessFieldNode) node;
-            if (access.isVolatile()) {
-                processIdentity(state, ANY_LOCATION);
-            } else {
-                ValueNode object = GraphUtil.unproxify(access.object());
-                LoadCacheEntry identifier = new LoadCacheEntry(object, access.field());
+        if (node instanceof LoadFieldNode) {
+            LoadFieldNode load = (LoadFieldNode) node;
+            if (!load.isVolatile()) {
+                ValueNode object = GraphUtil.unproxify(load.object());
+                LoadCacheEntry identifier = new LoadCacheEntry(object, load.field());
                 ValueNode cachedValue = state.getCacheEntry(identifier);
-                if (node instanceof LoadFieldNode) {
-                    if (cachedValue != null) {
-                        effects.replaceAtUsages(access, cachedValue);
-                        addScalarAlias(access, cachedValue);
-                        deleted = true;
-                    } else {
-                        state.addCacheEntry(identifier, access);
-                    }
+                if (cachedValue != null) {
+                    effects.replaceAtUsages(load, cachedValue);
+                    addScalarAlias(load, cachedValue);
+                    deleted = true;
                 } else {
-                    assert node instanceof StoreFieldNode;
-                    StoreFieldNode store = (StoreFieldNode) node;
-                    ValueNode value = getScalarAlias(store.value());
-                    if (GraphUtil.unproxify(value) == GraphUtil.unproxify(cachedValue)) {
-                        effects.deleteFixedNode(store);
-                        deleted = true;
-                    }
-                    state.killReadCache(store.field());
-                    state.addCacheEntry(identifier, value);
+                    state.addCacheEntry(identifier, load);
                 }
+            } else {
+                processIdentity(state, ANY_LOCATION);
+            }
+        } else if (node instanceof StoreFieldNode) {
+            StoreFieldNode store = (StoreFieldNode) node;
+            if (!store.isVolatile()) {
+                ValueNode object = GraphUtil.unproxify(store.object());
+                LoadCacheEntry identifier = new LoadCacheEntry(object, store.field());
+                ValueNode cachedValue = state.getCacheEntry(identifier);
+
+                ValueNode value = getScalarAlias(store.value());
+                if (GraphUtil.unproxify(value) == GraphUtil.unproxify(cachedValue)) {
+                    effects.deleteFixedNode(store);
+                    deleted = true;
+                }
+                state.killReadCache(store.field());
+                state.addCacheEntry(identifier, value);
+            } else {
+                processIdentity(state, ANY_LOCATION);
             }
         } else if (node instanceof ReadNode) {
             ReadNode read = (ReadNode) node;

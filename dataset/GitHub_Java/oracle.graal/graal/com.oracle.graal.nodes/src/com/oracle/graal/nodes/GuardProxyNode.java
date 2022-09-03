@@ -22,16 +22,15 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.type.*;
 
 public class GuardProxyNode extends ProxyNode implements GuardingNode {
 
-    @Input(InputType.Guard) private ValueNode value;
+    @Input private ValueNode value;
 
     public GuardProxyNode(ValueNode value, AbstractBeginNode proxyPoint) {
-        super(StampFactory.forVoid(), proxyPoint);
+        super(StampFactory.dependency(), proxyPoint);
         this.value = value;
     }
 

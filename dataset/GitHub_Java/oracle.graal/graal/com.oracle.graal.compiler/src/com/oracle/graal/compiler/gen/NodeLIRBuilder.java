@@ -336,7 +336,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
                                 continue;
                             } else if (node instanceof UnsafeCastNode) {
                                 UnsafeCastNode cast = (UnsafeCastNode) node;
-                                if (cast.getOriginalNode() == access) {
+                                if (cast.getOriginalValue() == access) {
                                     continue;
                                 }
                             }

@@ -485,7 +485,7 @@ public class InliningUtil {
         private void createGuard(StructuredGraph graph, MetaAccessProvider metaAccess) {
             ValueNode nonNullReceiver = InliningUtil.nonNullReceiver(invoke);
             ConstantNode typeHub = ConstantNode.forConstant(type.getEncoding(Representation.ObjectHub), metaAccess, graph);
-            LoadHubNode receiverHub = graph.unique(new LoadHubNode(nonNullReceiver, typeHub.getKind()));
+            LoadHubNode receiverHub = graph.unique(new LoadHubNode(nonNullReceiver, typeHub.getKind(), null));
 
             CompareNode typeCheck = CompareNode.createCompareNode(graph, Condition.EQ, receiverHub, typeHub);
             FixedGuardNode guard = graph.add(new FixedGuardNode(typeCheck, DeoptimizationReason.TypeCheckedInliningViolated, DeoptimizationAction.InvalidateReprofile));
@@ -785,7 +785,7 @@ public class InliningUtil {
             assert ptypes.size() >= 1;
             ValueNode nonNullReceiver = nonNullReceiver(invoke);
             Kind hubKind = ((MethodCallTargetNode) invoke.callTarget()).targetMethod().getDeclaringClass().getEncoding(Representation.ObjectHub).getKind();
-            LoadHubNode hub = graph.unique(new LoadHubNode(nonNullReceiver, hubKind));
+            LoadHubNode hub = graph.unique(new LoadHubNode(nonNullReceiver, hubKind, null));
 
             if (!invokeIsOnlySuccessor && chooseMethodDispatch()) {
                 assert successors.length == concretes.size() + 1;

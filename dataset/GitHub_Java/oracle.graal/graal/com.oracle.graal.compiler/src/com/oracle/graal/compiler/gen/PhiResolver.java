@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.compiler.gen;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.api.meta.Value.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
 
@@ -31,18 +32,19 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 
 /**
- * Converts {@link PhiNode} instructions into moves.
- *
+ * Converts {@link ValuePhiNode} instructions into moves.
+ * 
  * Resolves cycles:
+ * 
  * <pre>
- *
+ * 
  *  r1 := r2  becomes  temp := r1
  *  r2 := r1           r1 := r2
  *                     r2 := temp
  * </pre>
- *
+ * 
  * and orders moves:
- *
+ * 
  * <pre>
  *  r2 := r3  becomes  r1 := r2
  *  r1 := r2           r2 := r3
@@ -51,12 +53,14 @@ import com.oracle.graal.nodes.*;
 public class PhiResolver {
 
     /**
-     * Tracks a data flow dependency between a source operand and any number of the destination operands.
+     * Tracks a data flow dependency between a source operand and any number of the destination
+     * operands.
      */
     static class PhiResolverNode {
 
         /**
-         * A source operand whose value flows into the {@linkplain #destinations destination} operands.
+         * A source operand whose value flows into the {@linkplain #destinations destination}
+         * operands.
          */
         final Value operand;
 
@@ -66,7 +70,8 @@ public class PhiResolver {
         final ArrayList<PhiResolverNode> destinations;
 
         /**
-         * Denotes if a move instruction has already been emitted to initialize the value of {@link #operand}.
+         * Denotes if a move instruction has already been emitted to initialize the value of
+         * {@link #operand}.
          */
         boolean assigned;
 
@@ -117,7 +122,7 @@ public class PhiResolver {
 
     public PhiResolver(LIRGenerator gen) {
         this.gen = gen;
-        temp = IllegalValue;
+        temp = ILLEGAL;
     }
 
     public void dispose() {
@@ -126,7 +131,7 @@ public class PhiResolver {
             PhiResolverNode node = variableOperands.get(i);
             if (!node.visited) {
                 loop = null;
-                move(null, node);
+                move(node, null);
                 node.startNode = true;
                 assert isIllegal(temp) : "moveTempTo() call missing";
             }
@@ -136,12 +141,12 @@ public class PhiResolver {
         for (int i = otherOperands.size() - 1; i >= 0; i--) {
             PhiResolverNode node = otherOperands.get(i);
             for (int j = node.destinations.size() - 1; j >= 0; j--) {
-                emitMove(node.operand, node.destinations.get(j).operand);
+                emitMove(node.destinations.get(j).operand, node.operand);
             }
         }
     }
 
-    public void move(Value src, Value dest) {
+    public void move(Value dest, Value src) {
         assert isVariable(dest) : "destination must be virtual";
         // tty.print("move "); src.print(); tty.print(" to "); dest.print(); tty.cr();
         assert isLegal(src) : "source for phi move is illegal";
@@ -149,7 +154,7 @@ public class PhiResolver {
         PhiResolverNode srcNode = sourceNode(src);
         PhiResolverNode destNode = destinationNode(dest);
         srcNode.destinations.add(destNode);
-      }
+    }
 
     private PhiResolverNode createNode(Value operand, boolean source) {
         PhiResolverNode node;
@@ -179,24 +184,24 @@ public class PhiResolver {
         return createNode(opr, false);
     }
 
-    private void emitMove(Value src, Value dest) {
+    private void emitMove(Value dest, Value src) {
         assert isLegal(src);
         assert isLegal(dest);
-        gen.emitMove(src, dest);
+        gen.emitMove((AllocatableValue) dest, src);
     }
 
     // Traverse assignment graph in depth first order and generate moves in post order
     // ie. two assignments: b := c, a := b start with node c:
-    // Call graph: move(NULL, c) -> move(c, b) -> move(b, a)
+    // Call graph: move(c, NULL) -> move(b, c) -> move(a, b)
     // Generates moves in this order: move b to a and move c to b
     // ie. cycle a := b, b := a start with node a
-    // Call graph: move(NULL, a) -> move(a, b) -> move(b, a)
+    // Call graph: move(a, NULL) -> move(b, a) -> move(a, b)
     // Generates moves in this order: move b to temp, move a to b, move temp to a
-    private void move(PhiResolverNode src, PhiResolverNode dest) {
+    private void move(PhiResolverNode dest, PhiResolverNode src) {
         if (!dest.visited) {
             dest.visited = true;
             for (int i = dest.destinations.size() - 1; i >= 0; i--) {
-                move(dest, dest.destinations.get(i));
+                move(dest.destinations.get(i), dest);
             }
         } else if (!dest.startNode) {
             // cycle in graph detected
@@ -211,7 +216,7 @@ public class PhiResolver {
                 moveTempTo(dest.operand);
                 dest.assigned = true;
             } else if (src != null) {
-                emitMove(src.operand, dest.operand);
+                emitMove(dest.operand, src.operand);
                 dest.assigned = true;
             }
         }
@@ -219,14 +224,14 @@ public class PhiResolver {
 
     private void moveTempTo(Value dest) {
         assert isLegal(temp);
-        emitMove(temp, dest);
-        temp = IllegalValue;
+        emitMove(dest, temp);
+        temp = ILLEGAL;
     }
 
     private void moveToTemp(Value src) {
         assert isIllegal(temp);
-        temp = gen.newVariable(src.kind);
-        emitMove(src, temp);
+        temp = gen.newVariable(src.getPlatformKind());
+        emitMove(temp, src);
     }
 
     private PhiResolverNode sourceNode(Value opr) {

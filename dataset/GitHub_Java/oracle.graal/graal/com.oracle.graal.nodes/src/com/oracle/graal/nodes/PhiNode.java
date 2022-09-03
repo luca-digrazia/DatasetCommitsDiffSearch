@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.type.*;
 
 public abstract class PhiNode extends FloatingNode {
 
-    @Input(InputType.Association) private MergeNode merge;
+    @Input(notDataflow = true) private MergeNode merge;
 
     protected PhiNode(Stamp stamp, MergeNode merge) {
         super(stamp);
@@ -171,5 +171,4 @@ public abstract class PhiNode extends FloatingNode {
     public boolean isLoopPhi() {
         return merge() instanceof LoopBeginNode;
     }
-
 }

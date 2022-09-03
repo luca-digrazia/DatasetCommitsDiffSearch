@@ -36,10 +36,9 @@ import com.oracle.graal.nodes.util.*;
 /**
  * Denotes the merging of multiple control-flow paths.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Association})
 public class MergeNode extends BeginStateSplitNode implements IterableNodeType, LIRLowerable {
 
-    @Input(InputType.Association) private final NodeInputList<AbstractEndNode> ends = new NodeInputList<>(this);
+    @Input(notDataflow = true) private final NodeInputList<AbstractEndNode> ends = new NodeInputList<>(this);
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
@@ -69,7 +68,7 @@ public class MergeNode extends BeginStateSplitNode implements IterableNodeType, 
 
     /**
      * Determines if a given node is a phi whose {@linkplain PhiNode#merge() merge} is this node.
-     *
+     * 
      * @param value the instruction to test
      * @return {@code true} if {@code value} is a phi and its merge is {@code this}
      */
@@ -80,7 +79,7 @@ public class MergeNode extends BeginStateSplitNode implements IterableNodeType, 
     /**
      * Removes the given end from the merge, along with the entries corresponding to this end in the
      * phis connected to the merge.
-     *
+     * 
      * @param pred the end to remove
      */
     public void removeEnd(AbstractEndNode pred) {
@@ -124,12 +123,24 @@ public class MergeNode extends BeginStateSplitNode implements IterableNodeType, 
     }
 
     public NodeIterable<PhiNode> phis() {
-        return this.usages().filter(PhiNode.class).filter(this::isPhiAtMerge);
+        return this.usages().filter(PhiNode.class).filter(new NodePredicate() {
+
+            @Override
+            public boolean apply(Node n) {
+                return ((PhiNode) n).merge() == MergeNode.this;
+            }
+        });
     }
 
     @Override
     public NodeIterable<Node> anchored() {
-        return super.anchored().filter(n -> !isPhiAtMerge(n));
+        return super.anchored().filter(isNotA(PhiNode.class).or(new NodePredicate() {
+
+            @Override
+            public boolean apply(Node n) {
+                return ((PhiNode) n).merge() != MergeNode.this;
+            }
+        }));
     }
 
     @Override
@@ -151,8 +162,10 @@ public class MergeNode extends BeginStateSplitNode implements IterableNodeType, 
                 return;
             }
             for (PhiNode phi : phis()) {
-                if (phi.usages().filter(isNotA(FrameState.class)).and(node -> !merge.isPhiAtMerge(node)).isNotEmpty()) {
-                    return;
+                for (Node usage : phi.usages().filter(isNotA(FrameState.class))) {
+                    if (!merge.isPhiAtMerge(usage)) {
+                        return;
+                    }
                 }
             }
             Debug.log("Split %s into ends for %s.", this, merge);

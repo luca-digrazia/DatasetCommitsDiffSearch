@@ -31,7 +31,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.VirtualState.VirtualClosure;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 
 public abstract class LoopFragment {
@@ -286,7 +285,6 @@ public abstract class LoopFragment {
             if (newEarlyExit == null) {
                 continue;
             }
-            boolean newEarlyExitIsBegin = newEarlyExit instanceof BeginNode;
             MergeNode merge = graph.add(new MergeNode());
             AbstractEndNode originalEnd = graph.add(new EndNode());
             AbstractEndNode newEnd = graph.add(new EndNode());
@@ -342,7 +340,7 @@ public abstract class LoopFragment {
                         throw GraalInternalError.shouldNotReachHere();
                     }
                     phi.addInput(vpn);
-                    phi.addInput(newEarlyExitIsBegin ? newVpn.value() : newVpn);
+                    phi.addInput(newVpn);
                     replaceWith = phi;
                 } else {
                     replaceWith = vpn.value();
@@ -357,16 +355,6 @@ public abstract class LoopFragment {
                         }
                         usage.replaceFirstInput(vpn, replaceWith);
                     }
-                }
-            }
-            if (newEarlyExitIsBegin) {
-                FrameState stateAtNewEarlyExit = newEarlyExit.stateAfter();
-                if (stateAtNewEarlyExit != null) {
-                    newEarlyExit.setStateAfter(null);
-                    GraphUtil.killWithUnusedFloatingInputs(stateAtNewEarlyExit);
-                }
-                for (ProxyNode proxy : newEarlyExit.proxies().snapshot()) {
-                    GraphUtil.killWithUnusedFloatingInputs(proxy);
                 }
             }
         }

@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -54,6 +53,10 @@ public class ValuePhiNode extends PhiNode implements Canonicalizable {
 
     @Override
     public boolean inferStamp() {
+        return inferPhiStamp();
+    }
+
+    public boolean inferPhiStamp() {
         return updateStamp(StampTool.meet(values()));
     }
 }

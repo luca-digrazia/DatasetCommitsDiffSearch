@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.word.phases;
 
+import java.lang.reflect.*;
+
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.*;
@@ -44,8 +44,8 @@ public class WordTypeVerificationPhase extends Phase {
 
     private final WordTypeRewriterPhase wordAccess;
 
-    public WordTypeVerificationPhase(MetaAccessProvider metaAccess, SnippetReflectionProvider snippetReflection, Kind wordKind) {
-        this.wordAccess = new WordTypeRewriterPhase(metaAccess, snippetReflection, wordKind);
+    public WordTypeVerificationPhase(MetaAccessProvider metaAccess, Kind wordKind) {
+        this.wordAccess = new WordTypeRewriterPhase(metaAccess, wordKind);
     }
 
     @Override
@@ -108,12 +108,12 @@ public class WordTypeVerificationPhase extends Phase {
         if (method.getAnnotation(NodeIntrinsic.class) == null) {
             Invoke invoke = (Invoke) callTarget.usages().first();
             NodeInputList<ValueNode> arguments = callTarget.arguments();
-            boolean isStatic = method.isStatic();
+            boolean isStatic = Modifier.isStatic(method.getModifiers());
             int argc = 0;
             if (!isStatic) {
                 ValueNode receiver = arguments.get(argc);
                 if (receiver == node && isWord(node)) {
-                    ResolvedJavaMethod resolvedMethod = wordAccess.wordImplType.resolveMethod(method, invoke.getContextType());
+                    ResolvedJavaMethod resolvedMethod = wordAccess.wordImplType.resolveMethod(method);
                     verify(resolvedMethod != null, node, invoke.asNode(), "cannot resolve method on Word class: " + MetaUtil.format("%H.%n(%P) %r", method));
                     Operation operation = resolvedMethod.getAnnotation(Word.Operation.class);
                     verify(operation != null, node, invoke.asNode(), "cannot dispatch on word value to non @Operation annotated method " + resolvedMethod);

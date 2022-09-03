@@ -23,19 +23,17 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
 public class MemoryProxyNode extends ProxyNode implements MemoryProxy, LIRLowerable {
 
-    @Input(InputType.Memory) private ValueNode value;
+    @Input private ValueNode value;
     private final LocationIdentity identity;
 
     public MemoryProxyNode(ValueNode value, AbstractBeginNode exit, LocationIdentity identity) {
-        super(StampFactory.forVoid(), exit);
+        super(StampFactory.dependency(), exit);
         this.value = value;
         assert value instanceof MemoryNode;
         this.identity = identity;

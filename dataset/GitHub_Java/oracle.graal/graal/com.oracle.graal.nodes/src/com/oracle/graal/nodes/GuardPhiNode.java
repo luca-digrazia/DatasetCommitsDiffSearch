@@ -29,10 +29,10 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo(nameTemplate = "GuardPhi({i#values})")
 public class GuardPhiNode extends PhiNode implements GuardingNode {
 
-    @Input(InputType.Guard) final NodeInputList<ValueNode> values = new NodeInputList<>(this);
+    @Input final NodeInputList<ValueNode> values = new NodeInputList<>(this);
 
     public GuardPhiNode(MergeNode merge) {
-        super(StampFactory.forVoid(), merge);
+        super(StampFactory.dependency(), merge);
     }
 
     @Override
