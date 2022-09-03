@@ -958,7 +958,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         return frameMap;
     }
 
-    public abstract void emitBitCount(Variable result, Value operand);
     public abstract void emitBitScanForward(Variable result, Value operand);
     public abstract void emitBitScanReverse(Variable result, Value operand);
 

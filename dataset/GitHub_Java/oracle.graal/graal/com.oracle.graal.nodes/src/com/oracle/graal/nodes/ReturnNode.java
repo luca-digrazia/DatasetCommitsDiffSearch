@@ -36,9 +36,8 @@ public final class ReturnNode extends FixedNode implements LIRLowerable, Node.It
 
     /**
      * Constructs a new Return instruction.
-     * 
-     * @param result the instruction producing the result for this return; {@code null} if this is a
-     *            void return
+     *
+     * @param result the instruction producing the result for this return; {@code null} if this is a void return
      */
     public ReturnNode(ValueNode result) {
         super(StampFactory.forVoid());
