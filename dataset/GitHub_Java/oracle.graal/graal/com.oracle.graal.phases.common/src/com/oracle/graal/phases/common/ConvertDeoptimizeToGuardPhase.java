@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,11 +26,15 @@ import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionalit
 
 import java.util.List;
 
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
+
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.spi.SimplifierTool;
 import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodes.AbstractBeginNode;
 import com.oracle.graal.nodes.AbstractEndNode;
 import com.oracle.graal.nodes.AbstractMergeNode;
@@ -54,17 +58,13 @@ import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.tiers.PhaseContext;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-
 /**
  * This phase will find branches which always end with a {@link DeoptimizeNode} and replace their
  * {@link ControlSplitNode ControlSplitNodes} with {@link FixedGuardNode FixedGuardNodes}.
  *
- * This is useful because {@link FixedGuardNode FixedGuardNodes} will be lowered to {@link GuardNode
- * GuardNodes} which can later be optimized more aggressively than control-flow constructs.
+ * This is useful because {@link FixedGuardNode FixedGuardNodes} will be lowered to
+ * {@link GuardNode GuardNodes} which can later be optimized more aggressively than control-flow
+ * constructs.
  *
  * This is currently only done for branches that start from a {@link IfNode}. If it encounters a
  * branch starting at an other kind of {@link ControlSplitNode}, it will only bring the
@@ -72,6 +72,8 @@ import jdk.vm.ci.meta.JavaConstant;
  *
  */
 public class ConvertDeoptimizeToGuardPhase extends BasePhase<PhaseContext> {
+    private SimplifierTool simplifierTool = GraphUtil.getDefaultSimplifier(null, null, false);
+
     private static AbstractBeginNode findBeginNode(FixedNode startNode) {
         return GraphUtil.predecessorIterable(startNode).filter(AbstractBeginNode.class).first();
     }
@@ -94,15 +96,6 @@ public class ConvertDeoptimizeToGuardPhase extends BasePhase<PhaseContext> {
         }
 
         new DeadCodeEliminationPhase(Optional).apply(graph);
-    }
-
-    @Override
-    public float codeSizeIncrease() {
-        /*
-         * We can introduce new deoptimization nodes that heavily increase code size as they come
-         * with all their required meta data.
-         */
-        return NodeSize.IGNORE_SIZE_CONTRACT_FACTOR;
     }
 
     private void trySplitFixedGuard(FixedGuardNode fixedGuard, PhaseContext context) {
@@ -136,8 +129,7 @@ public class ConvertDeoptimizeToGuardPhase extends BasePhase<PhaseContext> {
         }
     }
 
-    private void processFixedGuardAndMerge(FixedGuardNode fixedGuard, PhaseContext context, CompareNode compare, ValueNode x, ValuePhiNode xPhi, ValueNode y, ValuePhiNode yPhi,
-                    AbstractMergeNode merge) {
+    private void processFixedGuardAndMerge(FixedGuardNode fixedGuard, PhaseContext context, CompareNode compare, ValueNode x, ValuePhiNode xPhi, ValueNode y, ValuePhiNode yPhi, AbstractMergeNode merge) {
         List<EndNode> mergePredecessors = merge.cfgPredecessors().snapshot();
         for (int i = 0; i < mergePredecessors.size(); ++i) {
             AbstractEndNode mergePredecessor = mergePredecessors.get(i);
@@ -164,9 +156,7 @@ public class ConvertDeoptimizeToGuardPhase extends BasePhase<PhaseContext> {
 
     private void visitDeoptBegin(AbstractBeginNode deoptBegin, DeoptimizationAction deoptAction, DeoptimizationReason deoptReason, JavaConstant speculation, StructuredGraph graph) {
         if (deoptBegin.predecessor() instanceof AbstractBeginNode) {
-            /*
-             * Walk up chains of LoopExitNodes to the "real" BeginNode that leads to deoptimization.
-             */
+            /* Walk up chains of LoopExitNodes to the "real" BeginNode that leads to deoptimization. */
             visitDeoptBegin((AbstractBeginNode) deoptBegin.predecessor(), deoptAction, deoptReason, speculation, graph);
             return;
         }
@@ -208,7 +198,6 @@ public class ConvertDeoptimizeToGuardPhase extends BasePhase<PhaseContext> {
             FixedNode next = pred.next();
             pred.setNext(guard);
             guard.setNext(next);
-            SimplifierTool simplifierTool = GraphUtil.getDefaultSimplifier(null, null, null, false, graph.getAssumptions());
             survivingSuccessor.simplify(simplifierTool);
             return;
         }
