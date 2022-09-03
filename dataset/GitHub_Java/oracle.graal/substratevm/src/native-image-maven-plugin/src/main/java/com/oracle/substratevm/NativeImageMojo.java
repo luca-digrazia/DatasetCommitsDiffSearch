@@ -40,9 +40,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.model.ConfigurationContainer;
 import org.apache.maven.model.Plugin;
-import org.apache.maven.model.PluginExecution;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.descriptor.PluginDescriptor;
@@ -186,11 +184,9 @@ public class NativeImageMojo extends AbstractMojo {
                 processBuilder.command().addAll(getBuildArgs());
                 processBuilder.inheritIO();
 
-                String commandString = String.join(" ", processBuilder.command());
-                getLog().info("Executing: " + commandString);
                 Process imageBuildProcess = processBuilder.start();
                 if (imageBuildProcess.waitFor() != 0) {
-                    throw new MojoExecutionException("Execution of " + commandString + " returned non-zero result");
+                    throw new MojoExecutionException("Execution of " + String.join(" ", processBuilder.command()) + " returned non-zero result");
                 }
             } catch (IOException | InterruptedException e) {
                 throw new MojoExecutionException("Building image with " + nativeImageExecutable + " failed", e);
@@ -237,28 +233,8 @@ public class NativeImageMojo extends AbstractMojo {
 
     private boolean consumeConfigurationNodeValue(Consumer<String> consumer, String pluginKey, String... nodeNames) {
         Plugin selectedPlugin = project.getPlugin(pluginKey);
-        if (selectedPlugin == null) {
-            return false;
-        }
-        return consumeConfigurationNodeValue(consumer, selectedPlugin, nodeNames);
-    }
-
-    private boolean consumeExecutionsNodeValue(Consumer<String> consumer, String pluginKey, String... nodeNames) {
-        Plugin selectedPlugin = project.getPlugin(pluginKey);
-        if (selectedPlugin == null) {
-            return false;
-        }
-        for (PluginExecution execution : selectedPlugin.getExecutions()) {
-            if (consumeConfigurationNodeValue(consumer, execution, nodeNames)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean consumeConfigurationNodeValue(Consumer<String> consumer, ConfigurationContainer container, String... nodeNames) {
-        if (container != null && container.getConfiguration() instanceof Xpp3Dom) {
-            Xpp3Dom node = (Xpp3Dom) container.getConfiguration();
+        if (selectedPlugin != null && selectedPlugin.getConfiguration() instanceof Xpp3Dom) {
+            Xpp3Dom node = (Xpp3Dom) selectedPlugin.getConfiguration();
             for (String nodeName : nodeNames) {
                 node = node.getChild(nodeName);
                 if (node == null) {
@@ -281,7 +257,7 @@ public class NativeImageMojo extends AbstractMojo {
         } else {
             boolean consumed = false;
             if (!consumed) {
-                consumed = consumeExecutionsNodeValue(list::add, "org.apache.maven.plugins:maven-shade-plugin", "transformers", "transformer", "mainClass");
+                consumed = consumeConfigurationNodeValue(list::add, "org.apache.maven.plugins:maven-shade-plugin", "transformers", "transformer", "mainClass");
             }
             if (!consumed) {
                 consumed = consumeConfigurationNodeValue(list::add, "org.apache.maven.plugins:maven-assembly-plugin", "archive", "manifest", "mainClass");
