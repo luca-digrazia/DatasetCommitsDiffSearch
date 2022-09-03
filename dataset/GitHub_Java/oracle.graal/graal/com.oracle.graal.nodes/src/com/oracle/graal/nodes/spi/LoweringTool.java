@@ -65,9 +65,7 @@ public interface LoweringTool {
      * every tier of compilation.
      */
     enum StandardLoweringStage implements LoweringStage {
-        HIGH_TIER,
-        MID_TIER,
-        LOW_TIER
+        HIGH_TIER, MID_TIER, LOW_TIER
     }
 
     /**
