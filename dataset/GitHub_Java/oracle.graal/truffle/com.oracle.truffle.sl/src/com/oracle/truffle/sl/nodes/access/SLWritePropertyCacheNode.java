@@ -40,8 +40,10 @@
  */
 package com.oracle.truffle.sl.nodes.access;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
@@ -63,7 +65,7 @@ public abstract class SLWritePropertyCacheNode extends Node {
 
     public abstract void executeObject(DynamicObject receiver, Object value);
 
-    @Specialization(guards = {"location != null", "shape.check(receiver)", "canSet(location, receiver, value)"}, assumptions = "shape.getValidAssumption()", limit = "CACHE_LIMIT")
+    @Specialization(guards = {"location != null", "shape.check(receiver)", "canSet(location, receiver, value)"}, assumptions = {"shape.getValidAssumption()"}, limit = "CACHE_LIMIT")
     public void writeExistingPropertyCached(DynamicObject receiver, Object value, //
                     @Cached("lookupLocation(receiver, value)") Location location, //
                     @Cached("receiver.getShape()") Shape shape) {
@@ -74,33 +76,36 @@ public abstract class SLWritePropertyCacheNode extends Node {
         }
     }
 
-    @Specialization(guards = {"existingLocation == null", "oldShape.check(receiver)", "canSet(newLocation, receiver, value)"}, assumptions = {"oldShape.getValidAssumption()",
-                    "newShape.getValidAssumption()"}, limit = "CACHE_LIMIT")
+    @Specialization(guards = {"existing == null", "shapeBefore.check(receiver)", "canSet(newLocation, receiver, value)"}, assumptions = {"shapeBefore.getValidAssumption()",
+                    "shapeAfter.getValidAssumption()"}, limit = "CACHE_LIMIT")
     public void writeNewPropertyCached(DynamicObject receiver, Object value, //
-                    @Cached("lookupLocation(receiver, value)") @SuppressWarnings("unused") Location existingLocation, //
-                    @Cached("receiver.getShape()") Shape oldShape, //
-                    @Cached("defineProperty(oldShape, value)") Shape newShape, //
-                    @Cached("getLocation(newShape)") Location newLocation) {
+                    @Cached("lookupLocation(receiver, value)") @SuppressWarnings("unused") Location existing, //
+                    @Cached("receiver.getShape()") Shape shapeBefore, //
+                    @Cached("defineProperty(receiver, value)") Shape shapeAfter, //
+                    @Cached("getLocation(shapeAfter)") Location newLocation) {
         try {
-            newLocation.set(receiver, value, oldShape, newShape);
+            newLocation.set(receiver, value, shapeBefore, shapeAfter);
         } catch (IncompatibleLocationException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    @Specialization(guards = "updateShape(receiver)")
-    public void updateShape(DynamicObject receiver, Object value) {
-        executeObject(receiver, value);
+    @Specialization(guards = {"updateShape(object)"}, assumptions = {"assumption"})
+    public void updateShape(DynamicObject object, Object value, @Cached("createAssumption()") Assumption assumption) {
+        CompilerDirectives.transferToInterpreter();
+        assumption.invalidate();
+        executeObject(object, value);
     }
 
+    @Specialization(contains = {"writeExistingPropertyCached", "writeNewPropertyCached"})
     @TruffleBoundary
-    @Specialization(contains = {"writeExistingPropertyCached", "writeNewPropertyCached", "updateShape"})
     public void writeUncached(DynamicObject receiver, Object value) {
         receiver.define(propertyName, value);
     }
 
     protected final Location lookupLocation(DynamicObject object, Object value) {
-        final Property property = object.getShape().getProperty(propertyName);
+        final Shape oldShape = object.getShape();
+        final Property property = oldShape.getProperty(propertyName);
 
         if (property != null && property.getLocation().canSet(object, value)) {
             return property.getLocation();
@@ -109,8 +114,10 @@ public abstract class SLWritePropertyCacheNode extends Node {
         }
     }
 
-    protected final Shape defineProperty(Shape oldShape, Object value) {
-        return oldShape.defineProperty(propertyName, value, 0);
+    protected final Shape defineProperty(DynamicObject receiver, Object value) {
+        Shape oldShape = receiver.getShape();
+        Shape newShape = oldShape.defineProperty(propertyName, value, 0);
+        return newShape;
     }
 
     protected final Location getLocation(Shape newShape) {
@@ -121,9 +128,12 @@ public abstract class SLWritePropertyCacheNode extends Node {
         return location.canSet(receiver, value);
     }
 
+    protected static Assumption createAssumption() {
+        return Truffle.getRuntime().createAssumption("temporary cache node");
+    }
+
     protected static boolean updateShape(DynamicObject object) {
         CompilerDirectives.transferToInterpreter();
         return object.updateShape();
     }
-
 }
