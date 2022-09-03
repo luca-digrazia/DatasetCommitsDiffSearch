@@ -24,16 +24,14 @@
  */
 package com.oracle.truffle.api.nodes.serial;
 
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeClass;
-import com.oracle.truffle.api.nodes.NodeFieldAccessor;
+import java.lang.reflect.*;
+import java.util.*;
+
+import sun.misc.*;
+
+import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind;
-import com.oracle.truffle.api.source.SourceSection;
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-import sun.misc.Unsafe;
+import com.oracle.truffle.api.source.*;
 
 /**
  * Experimental API. May change without notice.
