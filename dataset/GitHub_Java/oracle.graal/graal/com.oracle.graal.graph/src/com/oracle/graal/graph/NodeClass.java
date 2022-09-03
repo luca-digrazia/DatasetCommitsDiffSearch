@@ -1189,7 +1189,6 @@ public final class NodeClass extends FieldIntrospection {
                 return new Iterator<NodeClass.Position>() {
                     int i = 0;
 
-                    @Override
                     public void remove() {
                         throw new UnsupportedOperationException();
                     }
@@ -1220,7 +1219,6 @@ public final class NodeClass extends FieldIntrospection {
                 return new Iterator<NodeClass.Position>() {
                     int i = 0;
 
-                    @Override
                     public void remove() {
                         throw new UnsupportedOperationException();
                     }
