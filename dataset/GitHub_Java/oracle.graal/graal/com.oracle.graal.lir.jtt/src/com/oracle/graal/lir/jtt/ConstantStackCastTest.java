@@ -22,41 +22,29 @@
  */
 package com.oracle.graal.lir.jtt;
 
-import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
-import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
-import jdk.internal.jvmci.code.StackSlotValue;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.meta.JavaConstant;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.PlatformKind;
-import jdk.internal.jvmci.meta.Value;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.lir.ConstantValue;
-import com.oracle.graal.lir.framemap.FrameMapBuilder;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.gen.*;
 
 /**
  * Tests move from a constant to a wider stack slot (e.g. byte constant to integer stack slot).
  */
 public class ConstantStackCastTest extends LIRTest {
-    private static PlatformKind byteKind;
-    private static final LoadConstantStackSpec stackCopyByte = new LoadConstantStackSpec();
-
-    @Before
-    public void setup() {
-        // Necessary to get the PlatformKind on which we're currently running on
-        byteKind = getBackend().getTarget().arch.getPlatformKind(JavaKind.Byte);
-        stackCopyByte.dstKind = getBackend().getTarget().getLIRKind(JavaKind.Int);
-        stackCopyByte.srcKind = getBackend().getTarget().getLIRKind(JavaKind.Byte);
-    }
 
     private static class LoadConstantStackSpec extends LIRTestSpecification {
-        LIRKind dstKind;
-        LIRKind srcKind;
+        protected final LIRKind dstKind;
+        protected final LIRKind srcKind;
+
+        public LoadConstantStackSpec(LIRKind dstKind, LIRKind srcKind) {
+            this.dstKind = dstKind;
+            this.srcKind = srcKind;
+        }
 
         @Override
         public void generate(LIRGeneratorTool gen, Value value) {
@@ -64,27 +52,24 @@ public class ConstantStackCastTest extends LIRTest {
             // create slots
             StackSlotValue s1 = frameMapBuilder.allocateSpillSlot(dstKind);
             // move stuff around
-            Value srcValue;
-            if (isJavaConstant(value)) {
-                srcValue = getConstant(srcKind, asJavaConstant(value));
-            } else {
-                srcValue = value;
-            }
+            Value srcValue = isConstant(value) ? getConstant(srcKind, value) : value;
             gen.emitMove(s1, srcValue);
             gen.emitBlackhole(s1);
             setResult(gen.emitMove(s1));
         }
 
-        private static ConstantValue getConstant(LIRKind srcKind, JavaConstant c) {
-            if (srcKind.getPlatformKind() == byteKind) {
-                JavaConstant byteConst = JavaConstant.forByte((byte) c.asInt());
-                return new ConstantValue(srcKind, byteConst);
-            } else {
-                throw JVMCIError.shouldNotReachHere("Kind not supported: " + srcKind);
+        private static PrimitiveConstant getConstant(LIRKind srcKind, Value value) {
+
+            switch ((Kind) srcKind.getPlatformKind()) {
+                case Byte:
+                    return JavaConstant.forByte((byte) asConstant(value).asInt());
+                default:
+                    throw JVMCIError.shouldNotReachHere("Kind not supported: " + srcKind);
             }
         }
-
     }
+
+    private static final LoadConstantStackSpec stackCopyByte = new LoadConstantStackSpec(LIRKind.value(Kind.Int), LIRKind.value(Kind.Byte));
 
     @LIRIntrinsic
     public static byte testCopyByte(@SuppressWarnings("unused") LoadConstantStackSpec spec, byte value) {
