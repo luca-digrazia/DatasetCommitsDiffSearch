@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.truffle.hotspot;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 import static com.oracle.graal.truffle.OptimizedCallTargetLog.*;
 
@@ -87,16 +86,6 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
     }
 
     @Override
-    public void invalidate() {
-        runtime().getCompilerToVM().invalidateInstalledCode(this);
-    }
-
-    @Override
-    public Object executeVarargs(Object... args) throws InvalidInstalledCodeException {
-        return runtime().getCompilerToVM().executeCompiledMethodVarargs(args, this);
-    }
-
-    @Override
     protected void invalidate(Node oldNode, Node newNode, CharSequence reason) {
         if (isValid()) {
             CompilerAsserts.neverPartOfCompilation();
@@ -139,7 +128,7 @@ public final class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
     private boolean isCompiling() {
         Future<InstalledCode> codeTask = this.installedCodeTask;
         if (codeTask != null) {
-            if (codeTask.isCancelled() || codeTask.isDone()) {
+            if (codeTask.isCancelled()) {
                 installedCodeTask = null;
                 return false;
             }

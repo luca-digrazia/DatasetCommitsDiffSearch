@@ -118,12 +118,11 @@ public class TruffleCompilerImpl implements TruffleCompiler {
     public Future<InstalledCode> compile(final OptimizedCallTarget compilable) {
         return compileQueue.submit(new Callable<InstalledCode>() {
             @Override
-            public InstalledCode call() {
+            public InstalledCode call() throws Exception {
                 try (Scope s = Debug.scope("Truffle", new TruffleDebugJavaMethod(compilable))) {
                     return compileMethodImpl(compilable);
                 } catch (Throwable e) {
-                    compilable.exceptionWhileCompiling(e);
-                    return null;
+                    throw Debug.handle(e);
                 }
             }
         });

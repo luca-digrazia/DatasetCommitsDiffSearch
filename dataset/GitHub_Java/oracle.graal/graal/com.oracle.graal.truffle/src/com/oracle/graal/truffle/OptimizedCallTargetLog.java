@@ -53,7 +53,7 @@ public final class OptimizedCallTargetLog {
     private OptimizedCallTargetLog() {
     }
 
-    public static void logInliningDecision(TruffleInliningDecision result) {
+    public static void logInliningDecision(TruffleInliningResult result) {
         if (!TraceTruffleInlining.getValue()) {
             return;
         }
@@ -63,7 +63,7 @@ public final class OptimizedCallTargetLog {
         logInliningDone(result.getCallTarget());
     }
 
-    private static void logInliningDecisionRecursive(TruffleInliningDecision result, int depth) {
+    private static void logInliningDecisionRecursive(TruffleInliningResult result, int depth) {
         List<OptimizedDirectCallNode> callNodes = searchCallNodes(result.getCallTarget());
         for (OptimizedDirectCallNode callNode : callNodes) {
             TruffleInliningProfile profile = result.getProfiles().get(callNode);
@@ -171,7 +171,7 @@ public final class OptimizedCallTargetLog {
                     }
                     if (node instanceof DirectCallNode) {
                         DirectCallNode callNode = (DirectCallNode) node;
-                        if (callNode.isInlined()) {
+                        if (callNode.isInliningForced()) {
                             callNode.getCurrentRootNode().accept(this);
                         }
                     }
@@ -267,6 +267,7 @@ public final class OptimizedCallTargetLog {
 
             int nodeCount = OptimizedCallUtils.countNonTrivialNodes(callTarget, true);
             String comment = callTarget.isValid() ? "" : " int";
+            comment += callTarget.compilationEnabled ? "" : " fail";
             OUT.printf("%-50s | %10d | %15d | %10d | %3d%s\n", callTarget.getRootNode(), callTarget.callCount, nodeCount, nodeCount, callTarget.getCompilationProfile().getInvalidationCount(), comment);
 
             totalCallCount += callTarget.callCount;
