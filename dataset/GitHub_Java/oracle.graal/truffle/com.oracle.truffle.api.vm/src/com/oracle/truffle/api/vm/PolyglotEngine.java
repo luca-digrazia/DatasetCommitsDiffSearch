@@ -113,7 +113,7 @@ public class PolyglotEngine {
     private final EventConsumer<?>[] handlers;
     private final Map<String, Object> globals;
     private final Instrumenter instrumenter;
-    private final List<Object[]> config;
+    private final Map<String, Map<String, Object>> config;
     private final Debugger debugger;
     private boolean disposed;
 
@@ -137,7 +137,7 @@ public class PolyglotEngine {
     /**
      * Real constructor used from the builder.
      */
-    PolyglotEngine(Executor executor, Map<String, Object> globals, OutputStream out, OutputStream err, InputStream in, EventConsumer<?>[] handlers, List<Object[]> config) {
+    PolyglotEngine(Executor executor, Map<String, Object> globals, OutputStream out, OutputStream err, InputStream in, EventConsumer<?>[] handlers, Map<String, Map<String, Object>> config) {
         this.executor = executor;
         this.out = out;
         this.err = err;
@@ -214,7 +214,7 @@ public class PolyglotEngine {
         private final List<EventConsumer<?>> handlers = new ArrayList<>();
         private final Map<String, Object> globals = new HashMap<>();
         private Executor executor;
-        private List<Object[]> arguments;
+        private Map<String, Map<String, Object>> arguments;
 
         Builder() {
         }
@@ -284,10 +284,16 @@ public class PolyglotEngine {
          * @return instance of this builder
          */
         public Builder config(String mimeType, String key, Object value) {
-            if (this.arguments == null) {
-                this.arguments = new ArrayList<>();
+            if (arguments == null) {
+                arguments = new HashMap<>();
             }
-            this.arguments.add(new Object[]{mimeType, key, value});
+            Map<String, Object> configs = arguments.get(mimeType);
+            if (configs == null) {
+                configs = new HashMap<>();
+                arguments.put(mimeType, configs);
+            }
+
+            configs.put(key, value);
             return this;
         }
 
@@ -841,14 +847,15 @@ public class PolyglotEngine {
         }
 
         private Map<String, Object> getArgumentsForLanguage() {
-            if (config == null) {
+            if (config == null || Collections.disjoint(config.keySet(), info.getMimeTypes())) {
                 return null;
             }
 
             Map<String, Object> forLanguage = new HashMap<>();
-            for (Object[] mimeKeyValue : config) {
-                if (getMimeTypes().contains(mimeKeyValue[0])) {
-                    forLanguage.put((String) mimeKeyValue[1], mimeKeyValue[2]);
+            for (String mimeType : info.getMimeTypes()) {
+                Map<String, Object> args = config.get(mimeType);
+                if (args != null) {
+                    forLanguage.putAll(args);
                 }
             }
             return Collections.unmodifiableMap(forLanguage);
