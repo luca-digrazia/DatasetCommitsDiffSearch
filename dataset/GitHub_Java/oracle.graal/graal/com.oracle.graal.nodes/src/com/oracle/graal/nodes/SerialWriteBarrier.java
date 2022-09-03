@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,38 +22,18 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
-public final class SerialWriteBarrier extends FixedWithNextNode implements Lowerable {
+public class SerialWriteBarrier extends WriteBarrier {
 
-    @Input private ValueNode object;
-    @Input private LocationNode location;
-    private final boolean precise;
+    @Input private ValueNode value;
 
-    public ValueNode getObject() {
-        return object;
+    public ValueNode getValue() {
+        return value;
     }
 
-    public LocationNode getLocation() {
-        return location;
-    }
-
-    public boolean usePrecise() {
-        return precise;
-    }
-
-    public SerialWriteBarrier(ValueNode object, LocationNode location, boolean precise) {
-        super(StampFactory.forVoid());
-        this.object = object;
-        this.location = location;
-        this.precise = precise;
-    }
-
-    @Override
-    public void lower(LoweringTool generator) {
-        generator.getRuntime().lower(this, generator);
+    public SerialWriteBarrier(ValueNode object, ValueNode value, LocationNode location, boolean precise) {
+        super(object, location, precise);
+        this.value = value;
     }
 }
