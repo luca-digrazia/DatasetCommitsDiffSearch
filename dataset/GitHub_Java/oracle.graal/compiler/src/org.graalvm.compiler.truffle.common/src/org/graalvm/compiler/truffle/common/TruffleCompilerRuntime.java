@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -145,16 +145,6 @@ public interface TruffleCompilerRuntime {
          */
         FULL_UNROLL,
         /**
-         * Like {@link #FULL_UNROLL}, but in addition loop unrolling duplicates loop exits in every
-         * iteration instead of merging them. Code after a loop exit is duplicated for every loop
-         * exit and every loop iteration. For example, a loop with 4 iterations and 2 loop exits
-         * (exit1 and exit2, where exit1 is an early return inside a loop) leads to 4 copies of the
-         * loop body and 4 copies of exit1 and 1 copy if exit2. After each exit all code until a
-         * return is duplicated per iteration. Beware of break statements inside loop since they
-         * cause additional loop exits leading to code duplication along exit2.
-         */
-        FULL_UNROL_UNTIL_RETURN,
-        /**
          * Fully explode all loops. The loops must have a known finite number of iterations. If a
          * loop has multiple loop ends, they are not merged so that subsequent loop iterations are
          * processed multiple times. For example, a loop with 4 iterations and 2 loop ends leads to
@@ -204,13 +194,7 @@ public interface TruffleCompilerRuntime {
          * Denotes a call site must not be inlined and the execution should be transferred to
          * interpreter in case of an exception.
          */
-        DO_NOT_INLINE_DEOPTIMIZE_ON_EXCEPTION(false),
-
-        /**
-         * Denotes a call site must not be inlined and the execution should be speculatively
-         * transferred to interpreter in case of an exception, unless the speculation has failed.
-         */
-        DO_NOT_INLINE_WITH_SPECULATIVE_EXCEPTION(false);
+        DO_NOT_INLINE_DEOPTIMIZE_ON_EXCEPTION(false);
 
         private final boolean allowsInlining;
 
