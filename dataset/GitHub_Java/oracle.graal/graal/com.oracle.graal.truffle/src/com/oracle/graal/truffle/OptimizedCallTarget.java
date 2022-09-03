@@ -430,19 +430,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             if (!initialized) {
                 initialize();
             }
-
-            Future<?> submitted = null;
-            // Do not try to compile this target concurrently,
-            // but do not block other threads if compilation is not asynchronous.
-            synchronized (this) {
-                if (!isCompiling()) {
-                    compilationTask = submitted = runtime().submitForCompilation(this);
-                }
-            }
-            if (submitted != null) {
-                boolean mayBeAsynchronous = TruffleBackgroundCompilation.getValue() && !TruffleCompilationExceptionsAreThrown.getValue();
-                runtime().finishCompilation(this, submitted, mayBeAsynchronous);
-            }
+            runtime().compile(this, TruffleBackgroundCompilation.getValue() && !TruffleCompilationExceptionsAreThrown.getValue());
         }
     }
 
