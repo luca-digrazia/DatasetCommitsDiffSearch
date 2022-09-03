@@ -85,11 +85,6 @@ abstract class OptimizedCallNode extends DefaultCallNode {
         return new DefaultOptimizedCallNode(target);
     }
 
-    @Override
-    public boolean isInlinable() {
-        return true;
-    }
-
     private static final class DefaultOptimizedCallNode extends OptimizedCallNode {
 
         private boolean trySplit = true;
@@ -145,6 +140,11 @@ abstract class OptimizedCallNode extends DefaultCallNode {
 
         @Override
         public void nodeReplaced(Node oldNode, Node newNode, String reason) {
+            trySplit = true;
+        }
+
+        @Override
+        protected void notifyCallNodeAdded() {
             trySplit = true;
         }
 
