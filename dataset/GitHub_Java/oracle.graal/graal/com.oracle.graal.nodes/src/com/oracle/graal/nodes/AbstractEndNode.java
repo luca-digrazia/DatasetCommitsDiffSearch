@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
-
 import java.util.Arrays;
 import java.util.Collections;
 
@@ -36,7 +33,7 @@ import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.spi.LIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public abstract class AbstractEndNode extends FixedNode implements IterableNodeType, LIRLowerable {
 
     public static final NodeClass<AbstractEndNode> TYPE = NodeClass.create(AbstractEndNode.class);
