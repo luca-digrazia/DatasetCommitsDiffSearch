@@ -35,8 +35,6 @@ public interface TruffleCache {
      */
     StructuredGraph createRootGraph(String name);
 
-    StructuredGraph createInlineGraph(String name);
-
     /**
      * Returns a cached graph for a method with given arguments.
      */
