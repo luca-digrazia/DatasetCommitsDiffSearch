@@ -45,8 +45,7 @@ public abstract class TRegexDFAExecutorEntryNode extends Node {
     private static final long coderFieldOffset;
 
     static {
-        String javaVersion = System.getProperty("java.specification.version");
-        if (javaVersion != null && javaVersion.compareTo("1.9") < 0) {
+        if (System.getProperty("java.specification.version").compareTo("1.9") < 0) {
             // UNSAFE is needed for detecting compact strings, which are not implemented prior to
             // java9
             UNSAFE = null;

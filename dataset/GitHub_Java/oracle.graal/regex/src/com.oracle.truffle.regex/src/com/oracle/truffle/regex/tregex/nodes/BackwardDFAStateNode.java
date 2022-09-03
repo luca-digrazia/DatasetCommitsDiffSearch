@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -49,14 +49,30 @@ public class BackwardDFAStateNode extends DFAStateNode {
     }
 
     @Override
-    int prevIndex(VirtualFrame frame, TRegexDFAExecutorNode executor) {
+    protected int prevIndex(VirtualFrame frame, TRegexDFAExecutorNode executor) {
         return executor.getIndex(frame) + 1;
     }
 
     @Override
-    int atEnd(VirtualFrame frame, TRegexDFAExecutorNode executor) {
-        super.atEnd(frame, executor);
-        if (hasBackwardPrefixState() && executor.getIndex(frame) == executor.getFromIndex(frame) - 1 && executor.getFromIndex(frame) - 1 > executor.getMaxIndex(frame)) {
+    protected int atEnd1(VirtualFrame frame, TRegexDFAExecutorNode executor) {
+        super.atEnd1(frame, executor);
+        return switchToPrefixState(executor, frame);
+    }
+
+    @Override
+    protected int atEnd2(VirtualFrame frame, TRegexDFAExecutorNode executor) {
+        super.atEnd2(frame, executor);
+        return switchToPrefixState(executor, frame);
+    }
+
+    @Override
+    protected int atEnd3(VirtualFrame frame, TRegexDFAExecutorNode executor, int preLoopIndex) {
+        super.atEnd3(frame, executor, preLoopIndex);
+        return switchToPrefixState(executor, frame);
+    }
+
+    private int switchToPrefixState(TRegexDFAExecutorNode executor, VirtualFrame frame) {
+        if (executor.getIndex(frame) == executor.getFromIndex(frame) - 1 && executor.getFromIndex(frame) - 1 > executor.getMaxIndex(frame) && hasBackwardPrefixState()) {
             executor.setCurMaxIndex(frame, executor.getMaxIndex(frame));
             return getBackwardPrefixStateIndex();
         }

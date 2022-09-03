@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,10 +24,11 @@
  */
 package com.oracle.truffle.regex.tregex.nodes;
 
+import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+
 import java.util.Arrays;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 
@@ -44,7 +45,7 @@ public class DFAInitialStateNode extends DFAAbstractStateNode {
     private final boolean trackCaptureGroups;
 
     public DFAInitialStateNode(short[] successors, boolean searching, boolean trackCaptureGroups) {
-        super((short) 0, successors);
+        super(successors);
         this.searching = searching;
         this.trackCaptureGroups = trackCaptureGroups;
     }
@@ -65,7 +66,7 @@ public class DFAInitialStateNode extends DFAAbstractStateNode {
      * Creates a node split copy of this initial state as described in {@link DFAAbstractStateNode},
      * but ignores copyID, since having two initial states in a DFA is not supported. Therefore,
      * this method should be used for replacing the original initial state with the copy.
-     *
+     * 
      * @param copyID new ID for the copy.
      * @return a node split copy of this initial state as described in {@link DFAAbstractStateNode},
      *         ignoring copyID.
@@ -76,21 +77,22 @@ public class DFAInitialStateNode extends DFAAbstractStateNode {
     }
 
     @Override
-    public void executeFindSuccessor(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor, boolean compactString) {
+    public short getId() {
+        return 0;
+    }
+
+    @Override
+    public void executeFindSuccessor(VirtualFrame frame, TRegexDFAExecutorNode executor, boolean compactString) {
         if (searching) {
-            locals.setSuccessorIndex(executor.rewindUpTo(locals, getPrefixLength()));
+            executor.setSuccessorIndex(frame, executor.rewindUpTo(frame, getPrefixLength()));
         } else {
-            locals.setSuccessorIndex(Math.max(0, Math.min(getPrefixLength(), locals.getFromIndex() - locals.getIndex())));
+            executor.setSuccessorIndex(frame, Math.max(0, Math.min(getPrefixLength(), executor.getFromIndex(frame) - executor.getIndex(frame))));
         }
-        if (!executor.atBegin(locals)) {
-            locals.setSuccessorIndex(locals.getSuccessorIndex() + (successors.length / 2));
+        if (!executor.atBegin(frame)) {
+            executor.setSuccessorIndex(frame, executor.getSuccessorIndex(frame) + (successors.length / 2));
         }
         if (trackCaptureGroups) {
-            locals.setLastTransition((short) 0);
-        }
-        if (executor.recordExecution()) {
-            CompilerAsserts.neverPartOfCompilation();
-            executor.getDebugRecorder().setInitialIndex(locals.getIndex());
+            executor.setLastTransition(frame, (short) 0);
         }
     }
 

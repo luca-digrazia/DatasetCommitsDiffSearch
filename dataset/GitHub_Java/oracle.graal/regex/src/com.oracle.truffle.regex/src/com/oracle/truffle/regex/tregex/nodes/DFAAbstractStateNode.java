@@ -53,7 +53,7 @@ public abstract class DFAAbstractStateNode extends Node implements JsonConvertib
 
     public abstract short getId();
 
-    public final short[] getSuccessors() {
+    public short[] getSuccessors() {
         return successors;
     }
 

@@ -25,6 +25,7 @@
 
 package com.oracle.truffle.regex.tregex.matchers;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.dsl.Specialization;
 
 public abstract class ProfilingCharMatcher extends CharMatcher {
@@ -41,23 +42,19 @@ public abstract class ProfilingCharMatcher extends CharMatcher {
         return ProfilingCharMatcherNodeGen.create(byteMatcher, charMatcher);
     }
 
-    @Specialization(guards = "compactString")
-    boolean matchCompactString(char c, boolean compactString) {
-        return byteMatcher.execute(c, compactString);
-    }
-
-    @Specialization(guards = {"!compactString", "isByte(c)"})
+    @Specialization(guards = "isByte(c, compactString)")
     boolean matchByte(char c, boolean compactString) {
         return byteMatcher.execute(c, compactString);
     }
 
-    @Specialization(guards = "!compactString", replaces = "matchByte")
+    @Specialization(replaces = "matchByte")
     boolean matchChar(char c, boolean compactString) {
         return charMatcher.execute(c, compactString);
     }
 
-    static boolean isByte(char c) {
-        return c < 256;
+    static boolean isByte(char c, boolean compactString) {
+        CompilerAsserts.partialEvaluationConstant(compactString);
+        return compactString || c < 256;
     }
 
     @Override
