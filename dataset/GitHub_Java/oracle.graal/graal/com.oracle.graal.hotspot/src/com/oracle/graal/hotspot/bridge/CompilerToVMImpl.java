@@ -63,9 +63,8 @@ public class CompilerToVMImpl implements CompilerToVM {
     @Override
     public native long lookupType(String name, Class<?> accessingClass, boolean eagerResolve);
 
-    public native Object resolveConstantInPool(long metaspaceConstantPool, int cpi);
-
-    public native Object resolvePossiblyCachedConstantInPool(long metaspaceConstantPool, int cpi);
+    @Override
+    public native Object lookupConstantInPool(long metaspaceConstantPool, int cpi);
 
     @Override
     public native int lookupNameAndTypeRefIndexInPool(long metaspaceConstantPool, int cpi);
@@ -124,6 +123,9 @@ public class CompilerToVMImpl implements CompilerToVM {
 
     @Override
     public native Object executeCompiledMethodVarargs(Object[] args, HotSpotInstalledCode hotspotInstalledCode);
+
+    @Override
+    public native long[] getDeoptedLeafGraphIds();
 
     @Override
     public native long[] getLineNumberTable(long metaspaceMethod);

@@ -59,7 +59,7 @@ public interface CompilerToVM {
      * Determines if a given metaspace Method can be inlined. A method may not be inlinable for a
      * number of reasons such as:
      * <ul>
-     * <li>a CompileOracle directive may prevent inlining or compilation of methods</li>
+     * <li>a CompileOracle directive may prevent inlining or compilation of this methods</li>
      * <li>the method may have a bytecode breakpoint set</li>
      * <li>the method may have other bytecode features that require special handling by the VM</li>
      * </ul>
@@ -274,6 +274,8 @@ public interface CompilerToVM {
     Object executeCompiledMethod(Object arg1, Object arg2, Object arg3, HotSpotInstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException;
 
     Object executeCompiledMethodVarargs(Object[] args, HotSpotInstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException;
+
+    long[] getDeoptedLeafGraphIds();
 
     long[] getLineNumberTable(long metaspaceMethod);
 
