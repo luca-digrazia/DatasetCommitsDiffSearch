@@ -94,7 +94,7 @@ public abstract class LLVMReadNode extends LLVMExpressionNode {
 
         @Specialization
         protected Object readGeneric(VirtualFrame frame) {
-            if (frame.getFrameDescriptor().getFrameSlotKind(getSlot()) == FrameSlotKind.Long) {
+            if (getSlot().getKind() == FrameSlotKind.Long) {
                 return FrameUtil.getLongSafe(frame, getSlot());
             } else {
                 return FrameUtil.getObjectSafe(frame, getSlot());
