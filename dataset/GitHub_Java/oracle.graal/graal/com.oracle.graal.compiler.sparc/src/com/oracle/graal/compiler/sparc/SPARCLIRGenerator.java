@@ -411,7 +411,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public Value emitMathAbs(Value input) {
         Variable result = newVariable(LIRKind.derive(input));
-        append(new SPARCMathIntrinsicOp(ABS, result, asAllocatable(input)));
+        AllocatableValue mask = newVariable(LIRKind.value(Kind.Double));
+        emitMove(mask, Constant.forDouble(Double.longBitsToDouble(0x7FFFFFFFFFFFFFFFL)));
+        append(new BinaryRegReg(DAND, result, asAllocatable(input), mask));
         return result;
     }
 
