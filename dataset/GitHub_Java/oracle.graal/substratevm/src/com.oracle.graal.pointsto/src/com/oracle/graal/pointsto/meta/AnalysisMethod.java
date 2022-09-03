@@ -55,7 +55,6 @@ import com.oracle.graal.pointsto.results.StaticAnalysisResults;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.ExceptionHandler;
-import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.LineNumberTable;
 import jdk.vm.ci.meta.Local;
 import jdk.vm.ci.meta.LocalVariableTable;
@@ -102,7 +101,7 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
         exceptionHandlers = new ExceptionHandler[original.length];
         for (int i = 0; i < original.length; i++) {
             ExceptionHandler h = original[i];
-            JavaType catchType = getCatchType(h);
+            AnalysisType catchType = h.getCatchType() == null ? null : universe.lookup(h.getCatchType().resolve(wrapped.getDeclaringClass()));
             exceptionHandlers[i] = new ExceptionHandler(h.getStartBCI(), h.getEndBCI(), h.getHandlerBCI(), h.catchTypeCPI(), catchType);
         }
 
@@ -145,25 +144,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
                 throw GraalError.shouldNotReachHere(ex);
             }
         }
-    }
-
-    private JavaType getCatchType(ExceptionHandler handler) {
-        JavaType catchType = handler.getCatchType();
-        if (catchType == null) {
-            return null;
-        }
-        ResolvedJavaType resolvedCatchType;
-        try {
-            resolvedCatchType = catchType.resolve(wrapped.getDeclaringClass());
-        } catch (NoClassDefFoundError e) {
-            /*
-             * Type resolution fails if the catch type is missing. Just return the unresolved type.
-             * The analysis doesn't model unresolved types, but we can reuse the JVMCI type; the
-             * UniverseBuilder and the BytecodeParser know how to deal with that.
-             */
-            return catchType;
-        }
-        return universe.lookup(resolvedCatchType);
     }
 
     public void cleanupAfterAnalysis() {

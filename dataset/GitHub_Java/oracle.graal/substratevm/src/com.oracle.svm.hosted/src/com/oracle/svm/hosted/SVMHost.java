@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.hosted;
 
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -270,7 +271,8 @@ public final class SVMHost implements HostVM {
             componentHub = dynamicHub(type.getComponentType());
         }
         Class<?> javaClass = type.getJavaClass();
-        int modifiers = javaClass.getModifiers();
+        boolean isStatic = Modifier.isStatic(javaClass.getModifiers());
+        boolean isSynthetic = javaClass.isSynthetic();
 
         Target_java_lang_ClassLoader hubClassLoader = ClassLoaderSupport.getInstance().getOrCreate(javaClass.getClassLoader());
 
@@ -282,7 +284,7 @@ public final class SVMHost implements HostVM {
          */
         String sourceFileName = stringTable.deduplicate(type.getSourceFileName(), true);
 
-        return new DynamicHub(className, type.isLocal(), superHub, componentHub, sourceFileName, modifiers, hubClassLoader);
+        return new DynamicHub(className, type.isLocal(), superHub, componentHub, sourceFileName, isStatic, isSynthetic, hubClassLoader);
     }
 
     public static boolean isUnknownClass(ResolvedJavaType resolvedJavaType) {
