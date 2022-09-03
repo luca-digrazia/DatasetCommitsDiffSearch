@@ -113,7 +113,7 @@ public class FrameInfoEncoder {
              * DynamicHub.name already contains the class name as an interned string. Interning here
              * avoids duplication.
              */
-            resultFrameInfo.sourceClassName = method.getDeclaringClass().toClassName().intern();
+            resultFrameInfo.sourceClassName = source.getClassName().intern();
             /*
              * There is no need to have method names and file names as interned strings. But at
              * least sometimes the StackTraceElement contains interned strings, so we un-intern

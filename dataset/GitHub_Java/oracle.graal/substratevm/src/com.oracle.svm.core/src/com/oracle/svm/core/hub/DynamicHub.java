@@ -59,6 +59,7 @@ import org.graalvm.nativeimage.c.function.CFunctionPointer;
 
 import com.oracle.svm.core.HostedIdentityHashCodeProvider;
 import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Hybrid;
 import com.oracle.svm.core.annotate.KeepOriginal;
 import com.oracle.svm.core.annotate.Substitute;
@@ -74,7 +75,6 @@ import com.oracle.svm.core.jdk.Target_java_lang_Module;
 import com.oracle.svm.core.meta.SharedType;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
-import java.lang.reflect.Array;
 
 import jdk.vm.ci.meta.JavaKind;
 import sun.reflect.ReflectionFactory;
@@ -260,7 +260,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private GenericInfo genericInfo;
     private AnnotatedSuperInfo annotatedSuperInfo;
 
-    private static java.security.ProtectionDomain allPermDomain;
+    @Alias private static java.security.ProtectionDomain allPermDomain;
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public DynamicHub(String name, boolean isLocalClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName, boolean isStatic, boolean isSynthetic,
@@ -732,24 +732,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Override
     public Annotation[] getAnnotations() {
         return AnnotationsEncoding.getAnnotations(annotationsEncoding);
-    }
-
-    @Substitute
-    @Override
-    @SuppressWarnings("unchecked")
-    public <T extends Annotation> T[] getAnnotationsByType(Class<T> annotationClass) {
-        if (sun.reflect.annotation.AnnotationType.getInstance(annotationClass) == null) {
-            // Not repeatable annotation or repeatable annotation is unused
-            T annotation = getAnnotation(annotationClass);
-            if (annotation != null) {
-                T[] result = (T[]) Array.newInstance(annotationClass, 1);
-                result[0] = annotation;
-                return result;
-            } else {
-                return (T[]) Array.newInstance(annotationClass, 0);
-            }
-        }
-        return GenericDeclaration.super.getAnnotationsByType(annotationClass);
     }
 
     @Substitute

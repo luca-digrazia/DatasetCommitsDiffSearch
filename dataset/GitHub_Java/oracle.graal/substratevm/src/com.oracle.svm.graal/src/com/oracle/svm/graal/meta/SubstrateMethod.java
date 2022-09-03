@@ -39,7 +39,6 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.UnknownObjectField;
-import com.oracle.svm.core.annotate.UnknownPrimitiveField;
 import com.oracle.svm.core.deopt.Deoptimizer;
 import com.oracle.svm.core.graal.meta.SharedRuntimeMethod;
 import com.oracle.svm.core.hub.AnnotationsEncoding;
@@ -67,21 +66,21 @@ public class SubstrateMethod implements SharedRuntimeMethod, Replaced {
     private final int hashCode;
     private SubstrateType declaringClass;
     private int encodedGraphStartOffset;
-    @UnknownPrimitiveField private int vTableIndex;
+    private int vTableIndex;
     private Object annotationsEncoding;
 
     /**
      * A pointer to the compiled code of the corresponding method in the native image. Used as
      * destination address if this method is called in a direct call.
      */
-    @UnknownPrimitiveField private int codeOffsetInImage;
+    private int codeOffsetInImage;
 
     /**
      * A pointer to the deoptimization target code in the native image. Used as destination address
      * for deoptimization. This is only != 0, if there _is_ a deoptimization target method in the
      * image for this method.
      */
-    @UnknownPrimitiveField private int deoptOffsetInImage;
+    private int deoptOffsetInImage;
 
     @UnknownObjectField(types = {SubstrateMethod[].class, SubstrateMethod.class}, canBeNull = true)//
     protected Object implementations;
@@ -301,7 +300,7 @@ public class SubstrateMethod implements SharedRuntimeMethod, Replaced {
     @Override
     public StackTraceElement asStackTraceElement(int bci) {
         int lineNumber = EncodedLineNumberTable.getLineNumber(bci, encodedLineNumberTable);
-        return new StackTraceElement(getDeclaringClass().toClassName(), getName(), getDeclaringClass().getSourceFileName(), lineNumber);
+        return new StackTraceElement(getDeclaringClass().toJavaName(true), getName(), getDeclaringClass().getSourceFileName(), lineNumber);
     }
 
     @Override
@@ -321,7 +320,7 @@ public class SubstrateMethod implements SharedRuntimeMethod, Replaced {
 
     @Override
     public Annotation[] getAnnotations() {
-        return AnnotationsEncoding.decodeAnnotations(annotationsEncoding);
+        return AnnotationsEncoding.getAnnotations(annotationsEncoding);
     }
 
     @Override
@@ -331,7 +330,7 @@ public class SubstrateMethod implements SharedRuntimeMethod, Replaced {
 
     @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
-        return AnnotationsEncoding.decodeAnnotation(annotationsEncoding, annotationClass);
+        return AnnotationsEncoding.getAnnotation(annotationsEncoding, annotationClass);
     }
 
     @Override
