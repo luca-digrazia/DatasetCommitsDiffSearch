@@ -371,15 +371,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         return false;
     }
 
-    public boolean isDefault() {
-        if (isConstructor()) {
-            return false;
-        }
-        // Copied from java.lang.Method.isDefault()
-        int mask = Modifier.ABSTRACT | Modifier.PUBLIC | Modifier.STATIC;
-        return ((getModifiers() & mask) == Modifier.PUBLIC) && getDeclaringClass().isInterface();
-    }
-
     @Override
     public Type[] getGenericParameterTypes() {
         if (isConstructor()) {
