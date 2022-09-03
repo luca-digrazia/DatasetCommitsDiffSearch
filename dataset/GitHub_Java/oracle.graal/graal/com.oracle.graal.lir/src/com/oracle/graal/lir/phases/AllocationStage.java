@@ -22,26 +22,15 @@
  */
 package com.oracle.graal.lir.phases;
 
-import static com.oracle.graal.compiler.common.BackendOptions.UserOptions.TraceRA;
-
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.lir.alloc.AllocationStageVerifier;
-import com.oracle.graal.lir.alloc.lsra.LinearScanPhase;
-import com.oracle.graal.lir.alloc.trace.TraceRegisterAllocationPhase;
-import com.oracle.graal.lir.dfa.LocationMarkerPhase;
-import com.oracle.graal.lir.dfa.MarkBasePointersPhase;
+import com.oracle.graal.lir.alloc.lsra.*;
+import com.oracle.graal.lir.dfa.*;
 import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
-import com.oracle.graal.lir.stackslotalloc.LSStackSlotAllocator;
-import com.oracle.graal.lir.stackslotalloc.SimpleStackSlotAllocator;
+import com.oracle.graal.lir.stackslotalloc.*;
 
 public class AllocationStage extends LIRPhaseSuite<AllocationContext> {
     public AllocationStage() {
         appendPhase(new MarkBasePointersPhase());
-        if (TraceRA.getValue()) {
-            appendPhase(new TraceRegisterAllocationPhase());
-        } else {
-            appendPhase(new LinearScanPhase());
-        }
+        appendPhase(new LinearScanPhase());
 
         // build frame map
         if (LSStackSlotAllocator.Options.LIROptLSStackSlotAllocator.getValue()) {
@@ -51,9 +40,5 @@ public class AllocationStage extends LIRPhaseSuite<AllocationContext> {
         }
         // currently we mark locations only if we do register allocation
         appendPhase(new LocationMarkerPhase());
-
-        if (GraalOptions.DetailedAsserts.getValue()) {
-            appendPhase(new AllocationStageVerifier());
-        }
     }
 }

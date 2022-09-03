@@ -25,7 +25,6 @@ package com.oracle.graal.compiler.sparc;
 
 import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.nodeinfo.*;
@@ -34,35 +33,33 @@ import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
- * Represents an address of the form [base + simm13].
+ * Represents an address of the form [base + index].
  */
 @NodeInfo
-public class SPARCImmediateAddressNode extends AddressNode implements LIRLowerable {
+public class SPARCIndexedAddressNode extends AddressNode implements LIRLowerable {
 
-    public static final NodeClass<SPARCImmediateAddressNode> TYPE = NodeClass.create(SPARCImmediateAddressNode.class);
+    public static final NodeClass<SPARCIndexedAddressNode> TYPE = NodeClass.create(SPARCIndexedAddressNode.class);
 
     @Input private ValueNode base;
-    private int displacement;
+    @Input private ValueNode index;
 
-    public SPARCImmediateAddressNode(ValueNode base, int displacement) {
+    public SPARCIndexedAddressNode(ValueNode base, ValueNode index) {
         super(TYPE);
-        assert SPARCAssembler.isSimm13(displacement);
         this.base = base;
-        this.displacement = displacement;
+        this.index = index;
     }
 
     public void generate(NodeLIRBuilderTool gen) {
         SPARCLIRGenerator tool = (SPARCLIRGenerator) gen.getLIRGeneratorTool();
 
         AllocatableValue baseValue = tool.asAllocatable(gen.operand(base));
+        AllocatableValue indexValue = tool.asAllocatable(gen.operand(index));
 
-        LIRKind kind = tool.getLIRKind(stamp());
         AllocatableValue baseReference = LIRKind.derivedBaseFromValue(baseValue);
-        if (baseReference != null) {
-            kind = kind.makeDerivedReference(baseReference);
-        }
+        AllocatableValue indexReference = LIRKind.derivedBaseFromValue(indexValue);
 
-        gen.setResult(this, new SPARCImmediateAddressValue(kind, baseValue, displacement));
+        LIRKind kind = LIRKind.combineDerived(tool.getLIRKind(stamp()), baseReference, indexReference);
+        gen.setResult(this, new SPARCIndexedAddressValue(kind, baseValue, indexValue));
     }
 
     public ValueNode getBase() {
@@ -74,11 +71,12 @@ public class SPARCImmediateAddressNode extends AddressNode implements LIRLowerab
         this.base = base;
     }
 
-    public int getDisplacement() {
-        return displacement;
+    public ValueNode getIndex() {
+        return index;
     }
 
-    public void setDisplacement(int displacement) {
-        this.displacement = displacement;
+    public void setIndex(ValueNode index) {
+        updateUsages(this.index, index);
+        this.index = index;
     }
 }

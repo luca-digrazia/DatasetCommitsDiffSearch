@@ -34,7 +34,6 @@ import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.*;
-import com.oracle.graal.lir.util.*;
 
 /**
  * Record all derived reference base pointers in a frame state.
@@ -49,16 +48,16 @@ public final class MarkBasePointersPhase extends AllocationPhase {
 
     private static final class Marker<T extends AbstractBlockBase<T>> extends LocationMarker<T, Marker<T>.BasePointersSet> {
 
-        private final class BasePointersSet extends ValueSet<Marker<T>.BasePointersSet> {
+        private final class BasePointersSet extends LiveValueSet<Marker<T>.BasePointersSet> {
 
-            private final IntValueMap variables;
+            private final ValueSet variables;
 
             public BasePointersSet() {
-                variables = new IntValueMap();
+                variables = new ValueSet();
             }
 
             private BasePointersSet(BasePointersSet s) {
-                variables = new IntValueMap(s.variables);
+                variables = new ValueSet(s.variables);
             }
 
             @Override
@@ -116,7 +115,7 @@ public final class MarkBasePointersPhase extends AllocationPhase {
 
         @Override
         protected void processState(LIRInstruction op, LIRFrameState info, BasePointersSet values) {
-            info.setLiveBasePointers(new IntValueMap(values.variables));
+            info.setLiveBasePointers(new ValueSet(values.variables));
         }
     }
 }

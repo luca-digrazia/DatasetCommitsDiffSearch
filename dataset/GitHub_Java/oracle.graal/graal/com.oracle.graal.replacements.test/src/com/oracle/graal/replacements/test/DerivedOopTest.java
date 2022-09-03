@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,21 @@
  */
 package com.oracle.graal.replacements.test;
 
-import java.util.Objects;
+import java.util.*;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.*;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.api.directives.GraalDirectives;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
-import com.oracle.graal.replacements.Snippets;
-import com.oracle.graal.word.Word;
-import com.oracle.graal.word.nodes.WordCastNode;
+import com.oracle.graal.api.directives.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.graphbuilderconf.InvocationPlugins.Registration;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.word.*;
+import com.oracle.graal.word.nodes.*;
 
 /**
  * Tests for derived oops in reference maps.
@@ -74,7 +71,7 @@ public class DerivedOopTest extends GraalCompilerTest implements Snippets {
         public Pointers beforeGC;
         public Pointers afterGC;
 
-        Result() {
+        public Result() {
             beforeGC = new Pointers();
             afterGC = new Pointers();
         }
@@ -100,13 +97,10 @@ public class DerivedOopTest extends GraalCompilerTest implements Snippets {
 
     @Test
     public void testFieldOffset() {
-        // Run a couple times to encourage objects to move
-        for (int i = 0; i < 4; i++) {
-            Result r = new Result();
-            test("fieldOffsetSnippet", r, 16L);
+        Result r = new Result();
+        test("fieldOffsetSnippet", r, 16L);
 
-            Assert.assertEquals(r.beforeGC.delta(), r.afterGC.delta());
-        }
+        Assert.assertEquals(r.beforeGC.delta(), r.afterGC.delta());
     }
 
     static long getRawPointer(Object obj) {
@@ -115,7 +109,7 @@ public class DerivedOopTest extends GraalCompilerTest implements Snippets {
     }
 
     static long getRawPointerIntrinsic(Object obj) {
-        return Word.objectToTrackedPointer(obj).rawValue();
+        return Word.fromObject(obj).rawValue();
     }
 
     public static Result fieldOffsetSnippet(Result obj, long offset) {

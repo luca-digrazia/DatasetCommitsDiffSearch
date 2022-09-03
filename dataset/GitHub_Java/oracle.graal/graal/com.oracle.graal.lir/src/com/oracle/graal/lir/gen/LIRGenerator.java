@@ -29,6 +29,7 @@ import java.util.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.debug.*;
 import jdk.internal.jvmci.meta.*;
 import jdk.internal.jvmci.options.*;
 
@@ -37,7 +38,6 @@ import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
@@ -54,15 +54,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         @Option(help = "The trace level for the LIR generator", type = OptionType.Debug)
         public static final OptionValue<Integer> TraceLIRGeneratorLevel = new OptionValue<>(0);
         // @formatter:on
-    }
-
-    protected static LIRKind toStackKind(LIRKind kind) {
-        if (kind.getPlatformKind() instanceof JavaKind) {
-            JavaKind stackKind = ((JavaKind) kind.getPlatformKind()).getStackKind();
-            return kind.changeType(stackKind);
-        } else {
-            return kind;
-        }
     }
 
     private final LIRKindTool lirKindTool;
@@ -128,31 +119,18 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     }
 
     @Override
-    public Value emitConstant(LIRKind kind, Constant constant) {
-        if (constant instanceof JavaConstant && canInlineConstant((JavaConstant) constant)) {
-            return new ConstantValue(kind, constant);
+    public Value emitLoadConstant(LIRKind kind, Constant constant) {
+        JavaConstant javaConstant = (JavaConstant) constant;
+        if (canInlineConstant(javaConstant)) {
+            return javaConstant;
         } else {
-            return emitLoadConstant(kind, constant);
+            return emitMove(javaConstant);
         }
-    }
-
-    @Override
-    public Value emitJavaConstant(JavaConstant constant) {
-        return emitConstant(target().getLIRKind(constant.getJavaKind()), constant);
-    }
-
-    @Override
-    public AllocatableValue emitLoadConstant(LIRKind kind, Constant constant) {
-        Variable result = newVariable(kind);
-        emitMoveConstant(result, constant);
-        return result;
     }
 
     public AllocatableValue asAllocatable(Value value) {
         if (isAllocatableValue(value)) {
             return asAllocatableValue(value);
-        } else if (isConstantValue(value)) {
-            return emitLoadConstant(value.getLIRKind(), asConstant(value));
         } else {
             return emitMove(value);
         }
@@ -176,7 +154,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     protected abstract boolean canInlineConstant(JavaConstant c);
 
     public Value loadNonConst(Value value) {
-        if (isJavaConstant(value) && !canInlineConstant(asJavaConstant(value))) {
+        if (isConstant(value) && !canInlineConstant((JavaConstant) value)) {
             return emitMove(value);
         }
         return value;
@@ -197,7 +175,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
      *         {@code kind}
      */
     public AllocatableValue resultOperandFor(LIRKind kind) {
-        return res.getFrameMapBuilder().getRegisterConfig().getReturnRegister((JavaKind) kind.getPlatformKind()).asValue(kind);
+        return res.getFrameMapBuilder().getRegisterConfig().getReturnRegister((Kind) kind.getPlatformKind()).asValue(kind);
     }
 
     public <I extends LIRInstruction> I append(I op) {
@@ -292,6 +270,22 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
      */
     protected abstract void emitForeignCallOp(ForeignCallLinkage linkage, Value result, Value[] arguments, Value[] temps, LIRFrameState info);
 
+    public static AllocatableValue toStackKind(AllocatableValue value) {
+        if (value.getKind().getStackKind() != value.getKind()) {
+            // We only have stack-kinds in the LIR, so convert the operand kind for values from the
+            // calling convention.
+            LIRKind stackKind = value.getLIRKind().changeType(value.getKind().getStackKind());
+            if (isRegister(value)) {
+                return asRegister(value).asValue(stackKind);
+            } else if (isStackSlot(value)) {
+                return StackSlot.get(stackKind, asStackSlot(value).getRawOffset(), asStackSlot(value).getRawAddFrameSize());
+            } else {
+                throw JVMCIError.shouldNotReachHere();
+            }
+        }
+        return value;
+    }
+
     @Override
     public Variable emitForeignCall(ForeignCallLinkage linkage, LIRFrameState frameState, Value... args) {
         LIRFrameState state = null;
@@ -369,7 +363,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
      */
     protected JavaConstant zapValueForKind(PlatformKind kind) {
         long dead = 0xDEADDEADDEADDEADL;
-        switch ((JavaKind) kind) {
+        switch ((Kind) kind) {
             case Boolean:
                 return JavaConstant.FALSE;
             case Byte:
@@ -429,10 +423,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     // automatic derived reference handling
 
-    protected boolean isNumericInteger(PlatformKind kind) {
-        return ((JavaKind) kind).isNumericInteger();
-    }
-
     protected abstract Variable emitAdd(LIRKind resultKind, Value a, Value b, boolean setFlags);
 
     public final Variable emitAdd(Value aVal, Value bVal, boolean setFlags) {
@@ -440,7 +430,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         Value a = aVal;
         Value b = bVal;
 
-        if (isNumericInteger(a.getPlatformKind())) {
+        if (a.getKind().isNumericInteger()) {
             LIRKind aKind = a.getLIRKind();
             LIRKind bKind = b.getLIRKind();
             assert a.getPlatformKind() == b.getPlatformKind();
@@ -484,7 +474,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         Value a = aVal;
         Value b = bVal;
 
-        if (isNumericInteger(a.getPlatformKind())) {
+        if (a.getKind().isNumericInteger()) {
             LIRKind aKind = a.getLIRKind();
             LIRKind bKind = b.getLIRKind();
             assert a.getPlatformKind() == b.getPlatformKind();

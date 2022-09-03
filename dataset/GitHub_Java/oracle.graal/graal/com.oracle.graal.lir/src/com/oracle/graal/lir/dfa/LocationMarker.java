@@ -27,9 +27,7 @@ import static jdk.internal.jvmci.code.ValueUtil.*;
 import java.util.*;
 
 import jdk.internal.jvmci.code.*;
-
-import com.oracle.graal.debug.*;
-
+import jdk.internal.jvmci.debug.*;
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.cfg.*;
@@ -37,9 +35,8 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.framemap.*;
-import com.oracle.graal.lir.util.*;
 
-public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends ValueSet<S>> {
+public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends LiveValueSet<S>> {
 
     private final LIR lir;
     private final BlockMap<S> liveInMap;
