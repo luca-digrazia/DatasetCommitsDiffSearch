@@ -23,6 +23,7 @@
 package org.graalvm.compiler.core;
 
 import static org.graalvm.compiler.core.GraalCompilerOptions.EmitLIRRepeatCount;
+import static org.graalvm.compiler.core.common.GraalOptions.UseGraalInstrumentation;
 import static org.graalvm.compiler.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 
 import java.util.Collection;
@@ -62,6 +63,7 @@ import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
+import org.graalvm.compiler.phases.common.instrumentation.ExtractInstrumentationPhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.tiers.LowTierContext;
@@ -69,7 +71,6 @@ import org.graalvm.compiler.phases.tiers.MidTierContext;
 import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.phases.tiers.TargetProvider;
 import org.graalvm.compiler.phases.util.Providers;
-import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.TargetDescription;
@@ -197,6 +198,9 @@ public class GraalCompiler {
             } else {
                 Debug.dump(Debug.INFO_LOG_LEVEL, graph, "initial state");
             }
+            if (UseGraalInstrumentation.getValue(graph.getOptions())) {
+                new ExtractInstrumentationPhase().apply(graph, highTierContext);
+            }
 
             suites.getHighTier().apply(graph, highTierContext);
             graph.maybeCompress();
@@ -211,8 +215,6 @@ public class GraalCompiler {
             Debug.dump(Debug.BASIC_LOG_LEVEL, graph.getLastSchedule(), "Final HIR schedule");
         } catch (Throwable e) {
             throw Debug.handle(e);
-        } finally {
-            graph.checkCancellation();
         }
     }
 
@@ -238,8 +240,6 @@ public class GraalCompiler {
             }
         } catch (Throwable e) {
             throw Debug.handle(e);
-        } finally {
-            graph.checkCancellation();
         }
     }
 
@@ -256,8 +256,6 @@ public class GraalCompiler {
             }
             /* If the re-execution fails we convert the exception into a "hard" failure */
             throw new GraalError(e);
-        } finally {
-            graph.checkCancellation();
         }
     }
 
@@ -302,8 +300,6 @@ public class GraalCompiler {
             }
         } catch (Throwable e) {
             throw Debug.handle(e);
-        } finally {
-            graph.checkCancellation();
         }
     }
 
@@ -333,7 +329,7 @@ public class GraalCompiler {
     }
 
     @SuppressWarnings("try")
-    public static void emitCode(Backend backend, Assumptions assumptions, ResolvedJavaMethod rootMethod, Collection<ResolvedJavaMethod> inlinedMethods, EconomicSet<ResolvedJavaField> accessedFields,
+    public static void emitCode(Backend backend, Assumptions assumptions, ResolvedJavaMethod rootMethod, Collection<ResolvedJavaMethod> inlinedMethods, Collection<ResolvedJavaField> accessedFields,
                     int bytecodeSize, LIRGenerationResult lirGenRes,
                     CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner, CompilationResultBuilderFactory factory) {
         try (DebugCloseable a = EmitCode.start()) {

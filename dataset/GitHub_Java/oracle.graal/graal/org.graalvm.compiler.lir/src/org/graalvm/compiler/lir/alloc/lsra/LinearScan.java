@@ -22,19 +22,19 @@
  */
 package org.graalvm.compiler.lir.alloc.lsra;
 
+import static org.graalvm.compiler.core.common.GraalOptions.DetailedAsserts;
+import static org.graalvm.compiler.lir.LIRValueUtil.isVariable;
+import static org.graalvm.compiler.lir.phases.LIRPhase.Options.LIROptimization;
 import static jdk.vm.ci.code.CodeUtil.isEven;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isIllegal;
 import static jdk.vm.ci.code.ValueUtil.isLegal;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static org.graalvm.compiler.core.common.GraalOptions.DetailedAsserts;
-import static org.graalvm.compiler.lir.LIRValueUtil.isVariable;
-import static org.graalvm.compiler.lir.phases.LIRPhase.Options.LIROptimization;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.EnumSet;
+import java.util.List;
 
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
@@ -56,10 +56,11 @@ import org.graalvm.compiler.lir.framemap.FrameMapBuilder;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool.MoveFactory;
 import org.graalvm.compiler.lir.phases.AllocationPhase.AllocationContext;
-import org.graalvm.compiler.options.NestedBooleanOptionValue;
+import org.graalvm.compiler.options.NestedBooleanOptionKey;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.options.OptionValue;
+import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.options.OptionKey;
 
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterArray;
@@ -79,7 +80,7 @@ public class LinearScan {
     public static class Options {
         // @formatter:off
         @Option(help = "Enable spill position optimization", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LIROptLSRAOptimizeSpillPosition = new NestedBooleanOptionValue(LIROptimization, true);
+        public static final OptionKey<Boolean> LIROptLSRAOptimizeSpillPosition = new NestedBooleanOptionKey(LIROptimization, true);
         // @formatter:on
     }
 
@@ -177,12 +178,6 @@ public class LinearScan {
     private int numVariables;
     private final boolean neverSpillConstants;
 
-    /**
-     * Sentinel interval to denote the end of an interval list.
-     */
-    protected final Interval intervalEndMarker;
-    public final Range rangeEndMarker;
-
     protected LinearScan(TargetDescription target, LIRGenerationResult res, MoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig, AbstractBlockBase<?>[] sortedBlocks,
                     boolean neverSpillConstants) {
         this.ir = res.getLIR();
@@ -197,13 +192,10 @@ public class LinearScan {
         this.numVariables = ir.numVariables();
         this.blockData = new BlockMap<>(ir.getControlFlowGraph());
         this.neverSpillConstants = neverSpillConstants;
-        this.rangeEndMarker = new Range(Integer.MAX_VALUE, Integer.MAX_VALUE, null);
-        this.intervalEndMarker = new Interval(Value.ILLEGAL, Interval.END_MARKER_OPERAND_NUMBER, null, rangeEndMarker);
-        this.intervalEndMarker.next = intervalEndMarker;
     }
 
-    public Interval intervalEndMarker() {
-        return intervalEndMarker;
+    public OptionValues getOptions() {
+        return ir.getOptions();
     }
 
     public int getFirstLirInstructionId(AbstractBlockBase<?> block) {
@@ -213,7 +205,7 @@ public class LinearScan {
     }
 
     public int getLastLirInstructionId(AbstractBlockBase<?> block) {
-        ArrayList<LIRInstruction> instructions = ir.getLIRforBlock(block);
+        List<LIRInstruction> instructions = ir.getLIRforBlock(block);
         int result = instructions.get(instructions.size() - 1).id();
         assert result >= 0;
         return result;
@@ -339,7 +331,7 @@ public class LinearScan {
     Interval createInterval(AllocatableValue operand) {
         assert isLegal(operand);
         int operandNumber = operandNumber(operand);
-        Interval interval = new Interval(operand, operandNumber, intervalEndMarker, rangeEndMarker);
+        Interval interval = new Interval(operand, operandNumber);
         assert operandNumber < intervalsSize;
         assert intervals[operandNumber] == null;
         intervals[operandNumber] = interval;
@@ -518,8 +510,8 @@ public class LinearScan {
     Interval.Pair createUnhandledLists(IntervalPredicate isList1, IntervalPredicate isList2) {
         assert isSorted(sortedIntervals) : "interval list is not sorted";
 
-        Interval list1 = intervalEndMarker;
-        Interval list2 = intervalEndMarker;
+        Interval list1 = Interval.EndMarker;
+        Interval list2 = Interval.EndMarker;
 
         Interval list1Prev = null;
         Interval list2Prev = null;
@@ -542,14 +534,14 @@ public class LinearScan {
         }
 
         if (list1Prev != null) {
-            list1Prev.next = intervalEndMarker;
+            list1Prev.next = Interval.EndMarker;
         }
         if (list2Prev != null) {
-            list2Prev.next = intervalEndMarker;
+            list2Prev.next = Interval.EndMarker;
         }
 
-        assert list1Prev == null || list1Prev.next.isEndMarker() : "linear list ends not with sentinel";
-        assert list2Prev == null || list2Prev.next.isEndMarker() : "linear list ends not with sentinel";
+        assert list1Prev == null || list1Prev.next == Interval.EndMarker : "linear list ends not with sentinel";
+        assert list2Prev == null || list2Prev.next == Interval.EndMarker : "linear list ends not with sentinel";
 
         return new Interval.Pair(list1, list2);
     }
@@ -661,13 +653,11 @@ public class LinearScan {
     }
 
     @SuppressWarnings("try")
-    protected void allocate(TargetDescription target, LIRGenerationResult lirGenRes, MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig) {
-
+    protected void allocate(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
         /*
          * This is the point to enable debug logging for the whole register allocation.
          */
         try (Indent indent = Debug.logAndIndent("LinearScan allocate")) {
-            AllocationContext context = new AllocationContext(spillMoveFactory, registerAllocationConfig);
 
             createLifetimeAnalysisPhase().apply(target, lirGenRes, context);
 
@@ -676,21 +666,21 @@ public class LinearScan {
 
                 createRegisterAllocationPhase().apply(target, lirGenRes, context);
 
-                if (LinearScan.Options.LIROptLSRAOptimizeSpillPosition.getValue()) {
+                if (LinearScan.Options.LIROptLSRAOptimizeSpillPosition.getValue(getOptions())) {
                     createOptimizeSpillPositionPhase().apply(target, lirGenRes, context);
                 }
                 createResolveDataFlowPhase().apply(target, lirGenRes, context);
 
                 sortIntervalsAfterAllocation();
 
-                if (DetailedAsserts.getValue()) {
+                if (DetailedAsserts.getValue(getOptions())) {
                     verify();
                 }
                 beforeSpillMoveElimination();
                 createSpillMoveEliminationPhase().apply(target, lirGenRes, context);
                 createAssignLocationsPhase().apply(target, lirGenRes, context);
 
-                if (DetailedAsserts.getValue()) {
+                if (DetailedAsserts.getValue(getOptions())) {
                     verifyIntervals();
                 }
             } catch (Throwable e) {
@@ -802,13 +792,13 @@ public class LinearScan {
                     throw new GraalError("");
                 }
 
-                if (i1.first().isEndMarker()) {
+                if (i1.first() == Range.EndMarker) {
                     Debug.log("Interval %d has no Range", i1.operandNumber);
                     Debug.log(i1.logString(this));
                     throw new GraalError("");
                 }
 
-                for (Range r = i1.first(); !r.isEndMarker(); r = r.next) {
+                for (Range r = i1.first(); r != Range.EndMarker; r = r.next) {
                     if (r.from >= r.to) {
                         Debug.log("Interval %d has zero length range", i1.operandNumber);
                         Debug.log(i1.logString(this));
@@ -866,12 +856,12 @@ public class LinearScan {
             fixedIntervals = createUnhandledLists(IS_PRECOLORED_INTERVAL, null).first;
             // to ensure a walking until the last instruction id, add a dummy interval
             // with a high operation id
-            otherIntervals = new Interval(Value.ILLEGAL, -1, intervalEndMarker, rangeEndMarker);
+            otherIntervals = new Interval(Value.ILLEGAL, -1);
             otherIntervals.addRange(Integer.MAX_VALUE - 2, Integer.MAX_VALUE - 1);
             IntervalWalker iw = new IntervalWalker(this, fixedIntervals, otherIntervals);
 
             for (AbstractBlockBase<?> block : sortedBlocks) {
-                ArrayList<LIRInstruction> instructions = ir.getLIRforBlock(block);
+                List<LIRInstruction> instructions = ir.getLIRforBlock(block);
 
                 for (int j = 0; j < instructions.size(); j++) {
                     LIRInstruction op = instructions.get(j);
@@ -885,7 +875,7 @@ public class LinearScan {
                          * can't handle that correctly.
                          */
                         if (checkLive) {
-                            for (Interval interval = iw.activeLists.get(RegisterBinding.Fixed); !interval.isEndMarker(); interval = interval.next) {
+                            for (Interval interval = iw.activeLists.get(RegisterBinding.Fixed); interval != Interval.EndMarker; interval = interval.next) {
                                 if (interval.currentTo() > op.id() + 1) {
                                     /*
                                      * This interval is live out of this op so make sure that this
