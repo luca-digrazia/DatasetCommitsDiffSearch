@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,23 +29,22 @@ import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import java.util.BitSet;
 import java.util.List;
-import java.util.ListIterator;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.Value;
-
-import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
+import com.oracle.graal.compiler.common.alloc.Trace;
+import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
+import com.oracle.graal.debug.DebugCounter;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.StandardOp;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
 import com.oracle.graal.lir.ssi.SSIUtil;
+
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.Value;
 
 /**
  * Phase 6: resolve data flow
@@ -55,18 +54,17 @@ import com.oracle.graal.lir.ssi.SSIUtil;
 final class TraceLinearScanResolveDataFlowPhase extends TraceLinearScanAllocationPhase {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
-                    TraceLinearScanAllocationContext context) {
-        TraceBuilderResult<?> traceBuilderResult = context.traceBuilderResult;
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, TraceLinearScanAllocationContext context) {
+        TraceBuilderResult traceBuilderResult = context.resultTraces;
         TraceLinearScan allocator = context.allocator;
-        new Resolver(allocator, traceBuilderResult).resolveDataFlow(allocator.sortedBlocks());
+        new Resolver(allocator, traceBuilderResult).resolveDataFlow(trace, allocator.sortedBlocks());
     }
 
     private static final class Resolver {
         private final TraceLinearScan allocator;
-        private final TraceBuilderResult<?> traceBuilderResult;
+        private final TraceBuilderResult traceBuilderResult;
 
-        private Resolver(TraceLinearScan allocator, TraceBuilderResult<?> traceBuilderResult) {
+        private Resolver(TraceLinearScan allocator, TraceBuilderResult traceBuilderResult) {
             this.allocator = allocator;
             this.traceBuilderResult = traceBuilderResult;
         }
@@ -114,27 +112,27 @@ final class TraceLinearScanResolveDataFlowPhase extends TraceLinearScanAllocatio
          * that have been split.
          */
         @SuppressWarnings("try")
-        private void resolveDataFlow(List<? extends AbstractBlockBase<?>> blocks) {
-            if (blocks.size() < 2) {
+        private void resolveDataFlow(Trace currentTrace, AbstractBlockBase<?>[] blocks) {
+            if (blocks.length < 2) {
                 // no resolution necessary
                 return;
             }
             try (Indent indent = Debug.logAndIndent("resolve data flow")) {
 
                 TraceLocalMoveResolver moveResolver = allocator.createMoveResolver();
-                ListIterator<? extends AbstractBlockBase<?>> it = blocks.listIterator();
                 AbstractBlockBase<?> toBlock = null;
-                for (AbstractBlockBase<?> fromBlock = it.next(); it.hasNext(); fromBlock = toBlock) {
-                    toBlock = it.next();
-                    assert containedInTrace(fromBlock) : "Not in Trace: " + fromBlock;
-                    assert containedInTrace(toBlock) : "Not in Trace: " + toBlock;
+                for (int i = 0; i < blocks.length - 1; i++) {
+                    AbstractBlockBase<?> fromBlock = blocks[i];
+                    toBlock = blocks[i + 1];
+                    assert containedInTrace(currentTrace, fromBlock) : "Not in Trace: " + fromBlock;
+                    assert containedInTrace(currentTrace, toBlock) : "Not in Trace: " + toBlock;
                     resolveCollectMappings(fromBlock, toBlock, moveResolver);
                 }
-                assert blocks.get(blocks.size() - 1).equals(toBlock);
+                assert blocks[blocks.length - 1].equals(toBlock);
                 if (toBlock.isLoopEnd()) {
                     assert toBlock.getSuccessorCount() == 1;
-                    AbstractBlockBase<?> loopHeader = toBlock.getSuccessors().get(0);
-                    if (containedInTrace(loopHeader)) {
+                    AbstractBlockBase<?> loopHeader = toBlock.getSuccessors()[0];
+                    if (containedInTrace(currentTrace, loopHeader)) {
                         resolveCollectMappings(toBlock, loopHeader, moveResolver);
                     }
                 }
@@ -145,67 +143,36 @@ final class TraceLinearScanResolveDataFlowPhase extends TraceLinearScanAllocatio
         @SuppressWarnings("try")
         private void resolveCollectMappings(AbstractBlockBase<?> fromBlock, AbstractBlockBase<?> toBlock, TraceLocalMoveResolver moveResolver) {
             try (Indent indent0 = Debug.logAndIndent("Edge %s -> %s", fromBlock, toBlock)) {
-                collectLSRAMappings(fromBlock, toBlock, moveResolver);
-                collectSSIMappings(fromBlock, toBlock, moveResolver);
-            }
-        }
-
-        protected void collectLSRAMappings(AbstractBlockBase<?> fromBlock, AbstractBlockBase<?> toBlock, TraceLocalMoveResolver moveResolver) {
-            assert moveResolver.checkEmpty();
-
-            int toBlockFirstInstructionId = allocator.getFirstLirInstructionId(toBlock);
-            int fromBlockLastInstructionId = allocator.getLastLirInstructionId(fromBlock) + 1;
-            int numOperands = allocator.operandSize();
-            BitSet liveAtEdge = allocator.getBlockData(toBlock).liveIn;
-
-            // visit all variables for which the liveAtEdge bit is set
-            for (int operandNum = liveAtEdge.nextSetBit(0); operandNum >= 0; operandNum = liveAtEdge.nextSetBit(operandNum + 1)) {
-                assert operandNum < numOperands : "live information set for not exisiting interval";
-                assert allocator.getBlockData(fromBlock).liveOut.get(operandNum) && allocator.getBlockData(toBlock).liveIn.get(operandNum) : "interval not live at this edge";
-
-                TraceInterval fromInterval = allocator.splitChildAtOpId(allocator.intervalFor(operandNum), fromBlockLastInstructionId, LIRInstruction.OperandMode.DEF);
-                TraceInterval toInterval = allocator.splitChildAtOpId(allocator.intervalFor(operandNum), toBlockFirstInstructionId, LIRInstruction.OperandMode.DEF);
-
-                if (fromInterval != toInterval && !fromInterval.location().equals(toInterval.location())) {
-                    // need to insert move instruction
-                    moveResolver.addMapping(fromInterval, toInterval);
+                // collect all intervals that have been split between
+                // fromBlock and toBlock
+                SSIUtil.forEachValuePair(allocator.getLIR(), toBlock, fromBlock, new MappingCollector(moveResolver, toBlock, fromBlock));
+                if (moveResolver.hasMappings()) {
+                    resolveFindInsertPos(fromBlock, toBlock, moveResolver);
+                    moveResolver.resolveAndAppendMoves();
                 }
             }
         }
 
-        protected void collectSSIMappings(AbstractBlockBase<?> fromBlock, AbstractBlockBase<?> toBlock, TraceLocalMoveResolver moveResolver) {
-            // collect all intervals that have been split between
-            // fromBlock and toBlock
-            SSIUtil.forEachValuePair(allocator.getLIR(), toBlock, fromBlock, new MyPhiValueVisitor(moveResolver, toBlock, fromBlock));
-            if (moveResolver.hasMappings()) {
-                resolveFindInsertPos(fromBlock, toBlock, moveResolver);
-                moveResolver.resolveAndAppendMoves();
-            }
+        private boolean containedInTrace(Trace currentTrace, AbstractBlockBase<?> block) {
+            return currentTrace.getId() == traceBuilderResult.getTraceForBlock(block).getId();
         }
 
-        private boolean containedInTrace(AbstractBlockBase<?> block) {
-            return currentTrace() == traceBuilderResult.getTraceForBlock(block);
-        }
+        private static final DebugCounter numSSIResolutionMoves = Debug.counter("SSI LSRA[numSSIResolutionMoves]");
+        private static final DebugCounter numStackToStackMoves = Debug.counter("SSI LSRA[numStackToStackMoves]");
 
-        private int currentTrace() {
-            return traceBuilderResult.getTraceForBlock(allocator.sortedBlocks().get(0));
-        }
-
-        private static final DebugMetric numSSIResolutionMoves = Debug.metric("SSI LSRA[numSSIResolutionMoves]");
-        private static final DebugMetric numStackToStackMoves = Debug.metric("SSI LSRA[numStackToStackMoves]");
-
-        private class MyPhiValueVisitor implements PhiValueVisitor {
+        private class MappingCollector implements PhiValueVisitor {
             final TraceLocalMoveResolver moveResolver;
             final int toId;
             final int fromId;
 
-            public MyPhiValueVisitor(TraceLocalMoveResolver moveResolver, AbstractBlockBase<?> toBlock, AbstractBlockBase<?> fromBlock) {
+            MappingCollector(TraceLocalMoveResolver moveResolver, AbstractBlockBase<?> toBlock, AbstractBlockBase<?> fromBlock) {
                 this.moveResolver = moveResolver;
                 toId = allocator.getFirstLirInstructionId(toBlock);
                 fromId = allocator.getLastLirInstructionId(fromBlock);
                 assert fromId >= 0;
             }
 
+            @Override
             public void visit(Value phiIn, Value phiOut) {
                 assert !isRegister(phiOut) : "Out is a register: " + phiOut;
                 assert !isRegister(phiIn) : "In is a register: " + phiIn;
