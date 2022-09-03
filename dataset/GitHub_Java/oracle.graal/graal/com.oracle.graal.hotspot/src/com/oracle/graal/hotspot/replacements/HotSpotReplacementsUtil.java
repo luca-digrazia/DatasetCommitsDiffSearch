@@ -290,11 +290,6 @@ public class HotSpotReplacementsUtil {
         return config().klassAccessFlagsOffset;
     }
 
-    @Fold
-    public static int jvmAccWrittenFlags() {
-        return config().jvmAccWrittenFlags;
-    }
-
     public static final LocationIdentity KLASS_LAYOUT_HELPER_LOCATION = NamedLocationIdentity.immutable("Klass::_layout_helper");
 
     @Fold
@@ -808,16 +803,6 @@ public class HotSpotReplacementsUtil {
 
     @NodeIntrinsic(ForeignCallNode.class)
     public static native int identityHashCode(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object);
-
-    @Fold
-    public static boolean isImmutableCode() {
-        return GraalOptions.ImmutableCode.getValue();
-    }
-
-    @Fold
-    public static boolean generatePIC() {
-        return GraalOptions.GeneratePIC.getValue();
-    }
 
     @Fold
     public static int verifiedEntryPointOffset() {
