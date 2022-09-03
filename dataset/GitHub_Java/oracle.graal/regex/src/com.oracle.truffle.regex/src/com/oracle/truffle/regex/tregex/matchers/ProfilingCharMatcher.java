@@ -25,7 +25,6 @@
 
 package com.oracle.truffle.regex.tregex.matchers;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Specialization;
 
 public abstract class ProfilingCharMatcher extends CharMatcher {
@@ -64,11 +63,5 @@ public abstract class ProfilingCharMatcher extends CharMatcher {
     @Override
     public int estimatedCost() {
         return charMatcher.estimatedCost();
-    }
-
-    @TruffleBoundary
-    @Override
-    public String toString() {
-        return charMatcher.toString();
     }
 }
