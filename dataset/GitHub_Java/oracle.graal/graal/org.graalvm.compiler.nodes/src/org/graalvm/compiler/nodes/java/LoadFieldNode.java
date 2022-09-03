@@ -24,8 +24,6 @@ package org.graalvm.compiler.nodes.java;
 
 import static org.graalvm.compiler.graph.iterators.NodePredicates.isNotA;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
@@ -53,7 +51,6 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
-import org.graalvm.compiler.options.OptionValues;
 
 /**
  * The {@code LoadFieldNode} represents a read of a static or instance field.
@@ -74,12 +71,6 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
         return new LoadFieldNode(StampFactory.forDeclaredType(assumptions, field.getType(), false), object, field);
     }
 
-    public static ValueNode create(ConstantFieldProvider constantFields, ConstantReflectionProvider constanteReflection, MetaAccessProvider metaAccess,
-                    OptionValues options, Assumptions assumptions, ValueNode object, ResolvedJavaField field, boolean canonicalizeReads, boolean allUsagesAvailable) {
-        return canonical(null, StampFactory.forDeclaredType(assumptions, field.getType(), false), object,
-                        field, constantFields, constanteReflection, options, metaAccess, canonicalizeReads, allUsagesAvailable);
-    }
-
     public static LoadFieldNode createOverrideStamp(StampPair stamp, ValueNode object, ResolvedJavaField field) {
         return new LoadFieldNode(stamp, object, field);
     }
@@ -94,50 +85,33 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
         if (tool.allUsagesAvailable() && hasNoUsages() && !isVolatile() && (isStatic() || StampTool.isPointerNonNull(forObject.stamp()))) {
             return null;
         }
-        return canonical(this, StampPair.create(stamp, uncheckedStamp), forObject, field, tool.getConstantFieldProvider(),
-                        tool.getConstantReflection(), tool.getOptions(), tool.getMetaAccess(), tool.canonicalizeReads(), tool.allUsagesAvailable());
-    }
-
-    private static ValueNode canonical(LoadFieldNode loadFieldNode, StampPair stamp, ValueNode forObject, ResolvedJavaField field,
-                    ConstantFieldProvider constantFields, ConstantReflectionProvider constantReflection,
-                    OptionValues options, MetaAccessProvider metaAccess, boolean canonicalizeReads, boolean allUsagesAvailable) {
-        LoadFieldNode self = loadFieldNode;
-        if (canonicalizeReads && metaAccess != null) {
-            ConstantNode constant = asConstant(constantFields, constantReflection, metaAccess, options, forObject, field);
+        MetaAccessProvider metaAccess = tool.getMetaAccess();
+        if (tool.canonicalizeReads() && metaAccess != null) {
+            ConstantNode constant = asConstant(tool, forObject);
             if (constant != null) {
                 return constant;
             }
-            if (allUsagesAvailable) {
-                PhiNode phi = asPhi(constantFields, constantReflection, metaAccess, options, forObject,
-                                field, stamp.getTrustedStamp());
+            if (tool.allUsagesAvailable()) {
+                PhiNode phi = asPhi(tool, forObject);
                 if (phi != null) {
                     return phi;
                 }
             }
         }
-        if (self != null && !field.isStatic() && forObject.isNullConstant()) {
+        if (!isStatic() && forObject.isNullConstant()) {
             return new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException);
         }
-        if (self == null) {
-            self = new LoadFieldNode(stamp, forObject, field);
-        }
-        return self;
+        return this;
     }
 
     /**
      * Gets a constant value for this load if possible.
      */
     public ConstantNode asConstant(CanonicalizerTool tool, ValueNode forObject) {
-        return asConstant(tool.getConstantFieldProvider(), tool.getConstantReflection(),
-                        tool.getMetaAccess(), tool.getOptions(), forObject, field);
-    }
-
-    private static ConstantNode asConstant(ConstantFieldProvider constantFields, ConstantReflectionProvider constantReflection,
-                    MetaAccessProvider metaAccess, OptionValues options, ValueNode forObject, ResolvedJavaField field) {
-        if (field.isStatic()) {
-            return ConstantFoldUtil.tryConstantFold(constantFields, constantReflection, metaAccess, field, null, options);
+        if (isStatic()) {
+            return ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), null, getOptions());
         } else if (forObject.isConstant() && !forObject.isNullConstant()) {
-            return ConstantFoldUtil.tryConstantFold(constantFields, constantReflection, metaAccess, field, forObject.asJavaConstant(), options);
+            return ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), forObject.asJavaConstant(), getOptions());
         }
         return null;
     }
@@ -146,20 +120,19 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
         return ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), constant, getOptions());
     }
 
-    private static PhiNode asPhi(ConstantFieldProvider constantFields, ConstantReflectionProvider constantReflection,
-                    MetaAccessProvider metaAcccess, OptionValues options, ValueNode forObject, ResolvedJavaField field, Stamp stamp) {
-        if (!field.isStatic() && field.isFinal() && forObject instanceof ValuePhiNode && ((ValuePhiNode) forObject).values().filter(isNotA(ConstantNode.class)).isEmpty()) {
+    private PhiNode asPhi(CanonicalizerTool tool, ValueNode forObject) {
+        if (!isStatic() && field.isFinal() && forObject instanceof ValuePhiNode && ((ValuePhiNode) forObject).values().filter(isNotA(ConstantNode.class)).isEmpty()) {
             PhiNode phi = (PhiNode) forObject;
             ConstantNode[] constantNodes = new ConstantNode[phi.valueCount()];
             for (int i = 0; i < phi.valueCount(); i++) {
-                ConstantNode constant = ConstantFoldUtil.tryConstantFold(constantFields, constantReflection, metaAcccess, field, phi.valueAt(i).asJavaConstant(),
-                                options);
+                ConstantNode constant = ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), phi.valueAt(i).asJavaConstant(),
+                                getOptions());
                 if (constant == null) {
                     return null;
                 }
                 constantNodes[i] = constant;
             }
-            return new ValuePhiNode(stamp, phi.merge(), constantNodes);
+            return new ValuePhiNode(stamp(), phi.merge(), constantNodes);
         }
         return null;
     }
