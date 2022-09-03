@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.type.*;
 public final class AnchorNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable {
 
     public AnchorNode() {
-        super(StampFactory.dependency());
+        super(StampFactory.illegal());
     }
 
     @Override

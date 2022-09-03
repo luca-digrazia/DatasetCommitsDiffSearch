@@ -28,76 +28,64 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.max.cri.ri.*;
 
-public final class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, LIRLowerable, Node.IterableNodeType, Negatable {
+public final class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, LIRLowerable, Node.IterableNodeType {
 
-    @Input private BooleanNode condition;
+    @Input private final NodeInputList<BooleanNode> conditions;
     private final RiDeoptReason deoptReason;
     private final RiDeoptAction action;
-    private boolean negated;
     private final long leafGraphId;
 
-    public BooleanNode condition() {
-        return condition;
-    }
-
-    public void setCondition(BooleanNode x) {
-        updateUsages(condition, x);
-        condition = x;
-    }
-
     public FixedGuardNode(BooleanNode condition, RiDeoptReason deoptReason, RiDeoptAction action, long leafGraphId) {
-        this(condition, deoptReason, action, false, leafGraphId);
-    }
-
-    public FixedGuardNode(BooleanNode condition, RiDeoptReason deoptReason, RiDeoptAction action, boolean negated, long leafGraphId) {
         super(StampFactory.illegal());
         this.action = action;
-        this.negated = negated;
         this.leafGraphId = leafGraphId;
-        this.condition = condition;
+        this.conditions = new NodeInputList<>(this, new BooleanNode[] {condition});
         this.deoptReason = deoptReason;
     }
 
     @Override
-    public String toString(Verbosity verbosity) {
-        if (verbosity == Verbosity.Name && negated) {
-            return "!" + super.toString(verbosity);
-        } else {
-            return super.toString(verbosity);
+    public void generate(LIRGeneratorTool gen) {
+        for (BooleanNode condition : conditions()) {
+            gen.emitGuardCheck(condition, deoptReason, action, leafGraphId);
         }
     }
 
-    @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.emitGuardCheck(condition, deoptReason, action, negated, leafGraphId);
+    public void addCondition(BooleanNode x) {
+        conditions.add(x);
+    }
+
+    public NodeInputList<BooleanNode> conditions() {
+        return conditions;
     }
 
     @Override
     public void simplify(SimplifierTool tool) {
-        if (condition instanceof ConstantNode) {
-            ConstantNode c = (ConstantNode) condition;
-            if (c.asConstant().asBoolean() != negated) {
-                ((StructuredGraph) graph()).removeFixed(this);
-            } else {
-                FixedNode next = this.next();
-                if (next != null) {
-                    tool.deleteBranch(next);
+        for (BooleanNode n : conditions.snapshot()) {
+            if (n instanceof ConstantNode) {
+                ConstantNode c = (ConstantNode) n;
+                if (c.asConstant().asBoolean()) {
+                    conditions.remove(n);
+                } else {
+                    FixedNode next = this.next();
+                    if (next != null) {
+                        tool.deleteBranch(next);
+                    }
+                    setNext(graph().add(new DeoptimizeNode(RiDeoptAction.InvalidateRecompile, deoptReason, leafGraphId)));
+                    return;
                 }
-                setNext(graph().add(new DeoptimizeNode(RiDeoptAction.InvalidateRecompile, deoptReason, leafGraphId)));
-                return;
             }
+        }
+        if (conditions.isEmpty()) {
+            ((StructuredGraph) graph()).removeFixed(this);
         }
     }
 
     @Override
     public void lower(CiLoweringTool tool) {
         AnchorNode newAnchor = graph().add(new AnchorNode());
-        newAnchor.dependencies().add(tool.createGuard(condition, deoptReason, action, negated, leafGraphId));
+        for (BooleanNode b : conditions) {
+            newAnchor.dependencies().add(tool.createGuard(b, deoptReason, action, leafGraphId));
+        }
         ((StructuredGraph) graph()).replaceFixedWithFixed(this, newAnchor);
-    }
-
-    @Override
-    public void negate() {
-        negated = !negated;
     }
 }

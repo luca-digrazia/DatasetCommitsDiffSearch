@@ -36,12 +36,12 @@ public final class FloatingReadNode extends FloatingAccessNode implements Node.I
 
     @Input private Node lastLocationAccess;
 
-    public FloatingReadNode(ValueNode object, LocationNode location, Node lastLocationAccess, Stamp stamp, ValueNode... dependencies) {
+    public FloatingReadNode(ValueNode object, LocationNode location, Node lastLocationAccess, Stamp stamp, Node... dependencies) {
         super(object, location, stamp, dependencies);
         this.lastLocationAccess = lastLocationAccess;
     }
 
-    public FloatingReadNode(ValueNode object, LocationNode location, Node lastLocationAccess, Stamp stamp, List<ValueNode> dependencies) {
+    public FloatingReadNode(ValueNode object, LocationNode location, Node lastLocationAccess, Stamp stamp, List<Node> dependencies) {
         super(object, location, stamp, dependencies);
         this.lastLocationAccess = lastLocationAccess;
     }
