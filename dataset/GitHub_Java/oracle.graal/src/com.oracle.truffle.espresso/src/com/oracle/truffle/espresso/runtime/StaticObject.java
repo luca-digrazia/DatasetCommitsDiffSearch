@@ -26,34 +26,27 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.espresso.impl.Klass;
 
-public abstract class StaticObject implements TruffleObject {
+public interface StaticObject extends TruffleObject {
     // Context-less objects.
-    public static final StaticObject NULL = new Null();
-    public static final StaticObject VOID = new Void();
+    StaticObject NULL = new Null();
+    StaticObject VOID = new Void();
 
-    private final Klass klass;
+    Klass getKlass();
 
-    protected StaticObject(Klass klass) {
-        this.klass = klass;
-    }
-
-    public final Klass getKlass() {
-        return klass;
-    }
-
-    public static boolean isNull(StaticObject object) {
+    static boolean isNull(Object object) {
         assert object != null;
         return object == StaticObject.NULL;
     }
 
-    public static boolean notNull(StaticObject object) {
+    static boolean notNull(Object object) {
         return !isNull(object);
     }
 }
 
-final class Void extends StaticObject {
-    Void() {
-        super(null);
+class Void implements StaticObject {
+    @Override
+    public Klass getKlass() {
+        return null;
     }
 
     @Override
@@ -67,9 +60,11 @@ final class Void extends StaticObject {
     }
 }
 
-final class Null extends StaticObject {
-    protected Null() {
-        super(null);
+class Null implements StaticObject {
+
+    @Override
+    public Klass getKlass() {
+        return null;
     }
 
     @Override
