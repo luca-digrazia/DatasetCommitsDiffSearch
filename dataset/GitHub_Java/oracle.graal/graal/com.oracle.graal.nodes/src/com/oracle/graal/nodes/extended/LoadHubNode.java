@@ -89,18 +89,10 @@ public final class LoadHubNode extends FloatingGuardedNode implements Lowerable,
         return this;
     }
 
-    public static ValueNode findSynonym(ValueNode curValue, Stamp stamp, StructuredGraph graph, MetaAccessProvider metaAccess) {
-        ResolvedJavaType exactType = findSynonymType(graph, metaAccess, curValue);
-        if (exactType != null) {
-            return ConstantNode.forConstant(stamp, exactType.getObjectHub(), metaAccess);
-        }
-        return null;
-    }
-
-    public static ResolvedJavaType findSynonymType(StructuredGraph graph, MetaAccessProvider metaAccess, ValueNode curValue) {
-        ResolvedJavaType exactType = null;
+    private static ValueNode findSynonym(ValueNode curValue, Stamp stamp, StructuredGraph graph, MetaAccessProvider metaAccess) {
         if (metaAccess != null && curValue.stamp() instanceof ObjectStamp) {
             ObjectStamp objectStamp = (ObjectStamp) curValue.stamp();
+            ResolvedJavaType exactType = null;
             if (objectStamp.isExactType()) {
                 exactType = objectStamp.type();
             } else if (objectStamp.type() != null && graph != null && graph.getAssumptions() != null) {
@@ -110,8 +102,12 @@ public final class LoadHubNode extends FloatingGuardedNode implements Lowerable,
                     graph.getAssumptions().record(leafConcreteSubtype);
                 }
             }
+
+            if (exactType != null) {
+                return ConstantNode.forConstant(stamp, exactType.getObjectHub(), metaAccess);
+            }
         }
-        return exactType;
+        return null;
     }
 
     @Override

@@ -35,7 +35,6 @@ import jdk.internal.jvmci.common.*;
 import jdk.internal.jvmci.hotspot.*;
 import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
