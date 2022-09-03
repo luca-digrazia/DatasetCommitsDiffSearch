@@ -38,12 +38,10 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 abstract class SingleMethodDesc implements JavaMethodDesc {
     private final boolean varArgs;
     @CompilationFinal(dimensions = 1) private final Class<?>[] parameterTypes;
-    @CompilationFinal(dimensions = 1) private final Type[] genericParameterTypes;
 
     protected SingleMethodDesc(Executable executable) {
         this.varArgs = executable.isVarArgs();
         this.parameterTypes = executable.getParameterTypes();
-        this.genericParameterTypes = executable.getGenericParameterTypes();
     }
 
     public abstract Executable getReflectionMethod();
@@ -63,7 +61,7 @@ abstract class SingleMethodDesc implements JavaMethodDesc {
     }
 
     public Type[] getGenericParameterTypes() {
-        return genericParameterTypes;
+        return getReflectionMethod().getGenericParameterTypes();
     }
 
     @Override
