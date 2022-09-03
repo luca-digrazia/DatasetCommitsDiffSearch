@@ -1,64 +1,47 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.exception.AbstractTruffleException;
-import com.oracle.truffle.api.interop.ExceptionType;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.nodes.Node;
 
 /**
- * Controls breaking out of an execution context, such as a shell or eval. This exception is marked
- * as an {@code unwind} as it is not supposed to be ever caught. The re-throwing is important aspect
- * of the <code>KillException</code>. For code that needs to distinguish between other unwind
- * exceptions and {@link KillException}, is still OK to catch the exception and not propagate it any
- * further.
+ * Controls breaking out of an execution context, such as a shell or eval. This exception now
+ * extends {@link ThreadDeath} as that is the error that is supposed to not be ever caught. As its
+ * Javadoc puts it: <em> An application should catch instances of this class only if it must clean
+ * up after being terminated asynchronously. If {@code ThreadDeath} is caught by a method, it is
+ * important that it be re-thrown so that the thread actually dies. </em> The re-throwing is
+ * important aspect of <code>KillException</code> and as such it piggy-backs on this aspect of
+ * {@link ThreadDeath}. For code that can distinguish between classical {@link ThreadDeath} and
+ * {@link KillException}, is still OK to catch the exception and not propagate it any further.
  *
  * @since 0.12
  */
-@ExportLibrary(InteropLibrary.class)
-final class KillException extends AbstractTruffleException {
+final class KillException extends ThreadDeath implements TruffleException {
     private static final long serialVersionUID = -8638020836970813894L;
+    private final Node node;
 
     /**
      * Default constructor.
@@ -66,18 +49,19 @@ final class KillException extends AbstractTruffleException {
      * @since 0.12
      */
     KillException(Node node) {
-        super("Execution cancelled by a debugging session.", node);
+        this.node = node;
     }
 
-    @ExportMessage
-    @SuppressWarnings("static-method")
-    boolean isExceptionUnwind() {
+    @Override
+    public String getMessage() {
+        return "Execution cancelled by a debugging session.";
+    }
+
+    public Node getLocation() {
+        return node;
+    }
+
+    public boolean isCancelled() {
         return true;
-    }
-
-    @ExportMessage
-    @SuppressWarnings("static-method")
-    ExceptionType getExceptionType() {
-        return ExceptionType.CANCEL;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -72,14 +72,13 @@ import com.oracle.truffle.api.debug.DebugStackFrame;
 import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
-import com.oracle.truffle.api.debug.SourceElement;
 import com.oracle.truffle.api.debug.StepConfig;
 import com.oracle.truffle.api.debug.SuspendAnchor;
 import com.oracle.truffle.api.debug.SuspendedCallback;
 import com.oracle.truffle.api.debug.SuspendedEvent;
+import com.oracle.truffle.api.debug.SourceElement;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.tck.DebuggerTester;
-import org.graalvm.polyglot.HostAccess;
 
 public class SLDebugTest {
 
@@ -568,7 +567,7 @@ public class SLDebugTest {
 
                 DebugScope scope = frame.getScope();
                 DebugValue v = scope.getDeclaredValue("a");
-                assertEquals("NULL", v.getMetaObject().as(String.class));
+                assertEquals("Null", v.getMetaObject().as(String.class));
                 v = scope.getDeclaredValue("b");
                 assertEquals("Boolean", v.getMetaObject().as(String.class));
                 v = scope.getDeclaredValue("c");
@@ -1097,7 +1096,7 @@ public class SLDebugTest {
                         "<11:25 - 11:25> () 3\n" +
                         "<11:21 - 11:25> (4,3) 7\n" +
                         "<11:10 - 11:26> () 14\n" +
-                        "<6:13 - 6:27> (transform,4,3) 14\n" +
+                        "<6:13 - 6:27> 14\n" +
                         "<6:9 - 6:27> (2,14) -12\n" +
                         "<6:5 - 6:27> (-12) -12\n" +
                         "<3:10 - 3:25> <none>\n" +
@@ -1216,7 +1215,6 @@ public class SLDebugTest {
     }
 
     public static class Multiply {
-        @HostAccess.Export
         public long multiply(long n, Fac fce, long i) {
             return n * fce.fac(i, this);
         }
@@ -1224,7 +1222,6 @@ public class SLDebugTest {
 
     @FunctionalInterface
     public interface Fac {
-        @HostAccess.Export
         long fac(long n, Multiply multiply);
     }
 }
