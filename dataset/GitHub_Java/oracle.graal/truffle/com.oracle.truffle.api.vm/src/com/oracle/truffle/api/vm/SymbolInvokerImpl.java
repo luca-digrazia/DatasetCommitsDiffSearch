@@ -24,10 +24,8 @@
  */
 package com.oracle.truffle.api.vm;
 
-import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -41,7 +39,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.ConditionProfile;
-import com.oracle.truffle.api.profiles.ValueProfile;
 
 final class SymbolInvokerImpl {
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -70,7 +67,6 @@ final class SymbolInvokerImpl {
         @Child private Node foreignAccess;
         @Child private ConvertNode convert;
         private final TruffleObject function;
-        private final ValueProfile typeProfile = ValueProfile.createClassProfile();
 
         @SuppressWarnings("rawtypes")
         TemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function) {
@@ -85,9 +81,8 @@ final class SymbolInvokerImpl {
             final Object[] args = frame.getArguments();
             try {
                 Object tmp = ForeignAccess.send(foreignAccess, frame, function, args);
-                return convert.convert(frame, typeProfile.profile(tmp));
+                return convert.convert(frame, tmp);
             } catch (InteropException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw new AssertionError(e);
             }
         }
@@ -100,42 +95,29 @@ final class SymbolInvokerImpl {
         @Child private ConvertNode convert;
         @Child private Node foreignAccess;
 
-        private final Assumption debuggingDisabled = PolyglotEngine.Access.DEBUG.assumeNoDebugger();
-        private final ContextStore store;
-
         @SuppressWarnings("rawtypes")
         ExecuteRoot(Class<? extends TruffleLanguage> lang, PolyglotEngine engine, TruffleObject function) {
             super(lang, null, null);
             this.function = function;
             this.engine = engine;
             this.convert = new ConvertNode();
-            this.store = engine.context();
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
-            ContextStore prev = PolyglotEngine.Access.EXEC.executionStarted(store);
+            ContextStore prev = PolyglotEngine.Access.EXEC.executionStarted(engine.context());
+            boolean noDebugger = PolyglotEngine.Access.DEBUG.assumeNoDebugger().isValid();
             try {
-                if (!debuggingDisabled.isValid()) {
-                    debugExecutionStarted();
+                if (!noDebugger) {
+                    PolyglotEngine.Access.DEBUG.executionStarted(engine, -1, engine.debugger(), null);
                 }
                 return executeImpl(frame);
             } finally {
                 PolyglotEngine.Access.EXEC.executionEnded(prev);
-                if (!debuggingDisabled.isValid()) {
-                    debugExecutionEnded();
+                if (!noDebugger) {
+                    PolyglotEngine.Access.DEBUG.executionEnded(engine, engine.debugger());
                 }
             }
-        }
-
-        @TruffleBoundary
-        private void debugExecutionEnded() {
-            PolyglotEngine.Access.DEBUG.executionEnded(engine, engine.debugger());
-        }
-
-        @TruffleBoundary
-        private void debugExecutionStarted() {
-            PolyglotEngine.Access.DEBUG.executionStarted(engine, -1, engine.debugger(), null);
         }
 
         private Object executeImpl(VirtualFrame frame) {

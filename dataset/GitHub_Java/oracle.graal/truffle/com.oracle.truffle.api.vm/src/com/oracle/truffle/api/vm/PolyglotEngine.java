@@ -514,7 +514,7 @@ public class PolyglotEngine {
         final TruffleLanguage[] lang = {null};
         if (executor == null) {
             Object value = evalImpl(lang, s, l);
-            return new DirectValue(lang, value);
+            return new Value(lang, value);
         }
 
         ComputeInExecutor<Object> compute = new ComputeInExecutor<Object>(executor) {
@@ -524,7 +524,7 @@ public class PolyglotEngine {
             }
         };
         compute.perform();
-        return new ExecutorValue(lang, compute);
+        return new Value(lang, compute);
     }
 
     Language createLanguage(Map.Entry<String, LanguageCache> en) {
@@ -668,7 +668,7 @@ public class PolyglotEngine {
         } catch (IOException ex) {
             // OK, go on
         }
-        return new ExecutorValue(lang, compute);
+        return new Value(lang, compute);
     }
 
     private void checkThread() {
@@ -730,20 +730,23 @@ public class PolyglotEngine {
      *
      * @since 0.9
      */
-    public abstract class Value {
+    public class Value {
         private final TruffleLanguage<?>[] language;
+        private final ComputeInExecutor<Object> compute;
+        private final Object value;
         private CallTarget target;
 
-        Value(TruffleLanguage<?>[] language) {
+        Value(TruffleLanguage<?>[] language, ComputeInExecutor<Object> compute) {
             this.language = language;
+            this.compute = compute;
+            this.value = null;
         }
 
         Value(TruffleLanguage<?>[] language, final Object value) {
             this.language = language;
+            this.compute = null;
+            this.value = value;
         }
-
-        abstract boolean isDirect();
-        abstract Object value() throws IOException;
 
         /**
          * Obtains the object represented by this symbol. The <em>raw</em> object can either be a
@@ -845,11 +848,11 @@ public class PolyglotEngine {
          * @since 0.9
          */
         public Value execute(final Object... args) throws IOException {
-            if (isDirect()) {
-                Object ret = executeDirect(args);
-                return new DirectValue(language, ret);
-            }
             assertNoTruffle();
+            if (executor == null) {
+                Object ret = executeDirect(args);
+                return new Value(language, ret);
+            }
 
             get();
             ComputeInExecutor<Object> invokeCompute = new ComputeInExecutor<Object>(executor) {
@@ -860,13 +863,13 @@ public class PolyglotEngine {
                 }
             };
             invokeCompute.perform();
-            return new ExecutorValue(language, invokeCompute);
+            return new Value(language, invokeCompute);
         }
 
         @SuppressWarnings("try")
         private Object executeDirect(Object[] args) throws IOException {
             if (target == null) {
-                target = SymbolInvokerImpl.createCallTarget(language[0], PolyglotEngine.this, value());
+                target = SymbolInvokerImpl.createCallTarget(language[0], PolyglotEngine.this, compute == null ? value : compute.get());
             }
             return target.call(args);
         }
@@ -874,54 +877,17 @@ public class PolyglotEngine {
         private Object waitForSymbol() throws IOException {
             assertNoTruffle();
             checkThread();
-            return value();
-        }
-    }
-
-    private class DirectValue extends Value {
-        private final Object value;
-        public DirectValue(TruffleLanguage<?>[] language, Object value) {
-            super(language);
-            this.value = value;
+            return compute == null ? value : compute.get();
         }
 
-        @Override
-        boolean isDirect() {
-            return true;
-        }
-
-        @Override
-        Object value() {
-            return value;
-        }
-
+        /** @since 0.9 */
         @Override
         public String toString() {
-            return "PolyglotEngine.Value[value=" + value + ",computed=true,exception=null]";
-        }
-    }
-
-    private class ExecutorValue extends Value {
-        private final ComputeInExecutor<Object> compute;
-
-        public ExecutorValue(TruffleLanguage<?>[] language, ComputeInExecutor<Object> compute) {
-            super(language);
-            this.compute = compute;
-        }
-
-        @Override
-        boolean isDirect() {
-            return false;
-        }
-
-        @Override
-        Object value() throws IOException {
-            return compute.get();
-        }
-
-        @Override
-        public String toString() {
-            return "PolyglotEngine.Value[" + compute + "]";
+            if (compute != null) {
+                return "PolyglotEngine.Value[" + compute + "]";
+            } else {
+                return "PolyglotEngine.Value[value=" + value + ",computed=true,exception=null]";
+            }
         }
     }
 
@@ -1121,10 +1087,7 @@ public class PolyglotEngine {
             ContextStore prev = Access.EXEC.executionStarted(context);
             try {
                 Object res = Access.LANGS.languageGlobal(getEnv(true));
-                if (res == null) {
-                    return null;
-                }
-                return new DirectValue(new TruffleLanguage[]{info.getImpl(true)}, res);
+                return res == null ? null : new Value(new TruffleLanguage[]{info.getImpl(true)}, res);
             } finally {
                 Access.EXEC.executionEnded(prev);
             }

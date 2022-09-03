@@ -24,16 +24,7 @@
  */
 package com.oracle.truffle.api.impl;
 
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.source.Source;
-import java.io.Closeable;
-import java.io.IOException;
-import java.lang.ref.Reference;
-import java.lang.ref.WeakReference;
 import java.util.Objects;
 
 final class ExecutionImpl extends Accessor.ExecSupport {
@@ -41,52 +32,44 @@ final class ExecutionImpl extends Accessor.ExecSupport {
     // execution
     //
 
-    private static final ThreadLocal<Object> CURRENT_VM = new ThreadLocal<>();
-    private static Reference<Object> previousVM = new WeakReference<>(null);
-    private static Assumption oneVM = Truffle.getRuntime().createAssumption();
+    private static final ContextStoreProfile CURRENT_VM = new ContextStoreProfile(null);
 
-    @Override
-    @CompilerDirectives.TruffleBoundary
-    public Closeable executionStart(Object vm, int currentDepth, Object[] debuggerHolder, Source s) {
-        CompilerAsserts.neverPartOfCompilation("do not call Accessor.executionStart from compiled code");
-        Objects.requireNonNull(vm);
-        final Object prev = CURRENT_VM.get();
-        Accessor.DebugSupport debug = Accessor.debugAccess();
-        final Closeable debugClose = debug == null ? null : debug.executionStart(vm, prev == null ? 0 : -1, debuggerHolder, s);
-        if (!(vm == previousVM.get())) {
-            previousVM = new WeakReference<>(vm);
-            oneVM.invalidate();
-            oneVM = Truffle.getRuntime().createAssumption();
-
-        }
-        CURRENT_VM.set(vm);
-        class ContextCloseable implements Closeable {
-
-            @CompilerDirectives.TruffleBoundary
-            @Override
-            public void close() throws IOException {
-                CURRENT_VM.set(prev);
-                if (debugClose != null) {
-                    debugClose.close();
-                }
-            }
-        }
-        return new ContextCloseable();
+    static ContextStoreProfile sharedProfile() {
+        return CURRENT_VM;
     }
 
-    static Assumption oneVMAssumption() {
-        return oneVM;
+    @Override
+    public ContextStore createStore(Object vm) {
+        return new ContextStore(vm, 4);
+    }
+
+    @Override
+    public ContextStore executionStarted(ContextStore context) {
+        Object vm = context.vm;
+        Objects.requireNonNull(vm);
+        final ContextStore prev = CURRENT_VM.get();
+        CURRENT_VM.enter(context);
+        return prev;
+    }
+
+    @Override
+    public void executionEnded(ContextStore prev) {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    static <C> C findContext(Class<? extends TruffleLanguage> type) {
-        TruffleLanguage.Env env = Accessor.engineAccess().findEnv(CURRENT_VM.get(), type);
+    static <C> C findContext(Object currentVM, Class<? extends TruffleLanguage> type) {
+        TruffleLanguage.Env env = Accessor.engineAccess().findEnv(currentVM, type);
         return (C) Accessor.languageAccess().findContext(env);
     }
 
     @Override
     public Object findVM() {
-        return CURRENT_VM.get();
+        return currentVM();
+    }
+
+    private static Object currentVM() {
+        ContextStore current = CURRENT_VM.get();
+        return current == null ? null : current.vm;
     }
 
 }
