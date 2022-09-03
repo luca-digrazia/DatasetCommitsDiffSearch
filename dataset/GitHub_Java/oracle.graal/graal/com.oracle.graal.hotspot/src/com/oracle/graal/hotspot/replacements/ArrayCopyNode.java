@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.compiler.GraalCompiler.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
@@ -93,7 +93,7 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
 
     @Override
     protected StructuredGraph getSnippetGraph(LoweringTool tool) {
-        if (!shouldIntrinsify(getTargetMethod())) {
+        if (!IntrinsifyArrayCopy.getValue()) {
             return null;
         }
 
