@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,6 +44,7 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
@@ -67,8 +68,7 @@ import com.oracle.truffle.sl.runtime.SLUndefinedNameException;
  * </ol>
  */
 @NodeInfo(shortName = ".")
-@NodeChild("receiverNode")
-@NodeChild("nameNode")
+@NodeChildren({@NodeChild("receiverNode"), @NodeChild("nameNode")})
 @ImportStatic({SLContext.class, Message.class})
 public abstract class SLReadPropertyNode extends SLExpressionNode {
 
