@@ -45,7 +45,6 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.interop.LLVMFunctionMessageResolutionForeign;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
@@ -54,7 +53,7 @@ import com.oracle.truffle.llvm.runtime.types.FunctionType;
 public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<LLVMFunctionDescriptor>, LLVMObjectNativeLibrary.Provider {
 
     private final String functionName;
-    private final ExternalLibrary library;
+    private final String libraryName;
     private final FunctionType type;
     private final LLVMContext context;
 
@@ -279,17 +278,17 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         this.functionAssumption = Truffle.getRuntime().createAssumption();
     }
 
-    public Function getFunction() {
+    private Function getFunction() {
         if (!functionAssumption.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
         }
         return function;
     }
 
-    private LLVMFunctionDescriptor(LLVMContext context, ExternalLibrary library, String name, FunctionType type, int functionId, Function function) {
+    private LLVMFunctionDescriptor(LLVMContext context, String libraryName, String name, FunctionType type, int functionId, Function function) {
         CompilerAsserts.neverPartOfCompilation();
         this.context = context;
-        this.library = library;
+        this.libraryName = libraryName;
         this.functionName = name;
         this.type = type;
         this.functionId = functionId;
@@ -297,8 +296,8 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         this.function = function;
     }
 
-    public static LLVMFunctionDescriptor createDescriptor(LLVMContext context, ExternalLibrary library, String name, FunctionType type, int functionId) {
-        return new LLVMFunctionDescriptor(context, library, name, type, functionId, new UnresolvedFunction());
+    public static LLVMFunctionDescriptor createDescriptor(LLVMContext context, String libraryName, String name, FunctionType type, int functionId) {
+        return new LLVMFunctionDescriptor(context, libraryName, name, type, functionId, new UnresolvedFunction());
     }
 
     public interface LazyToTruffleConverter {
@@ -319,9 +318,9 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         return getFunction() instanceof NativeFunction;
     }
 
-    public void declareInSulong(Function newFunction, boolean replaceExistingFunction) {
-        if (function.weak || replaceExistingFunction) {
-            // existing function is weak, undefined, or we are allowed to replace it
+    private void declareInSulong(Function newFunction) {
+        if (function.weak) {
+            // existing function is weak (or undefined)
             setFunction(newFunction);
         } else {
             // existing function is strong
@@ -331,12 +330,12 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         }
     }
 
-    public void declareInSulong(LazyToTruffleConverter converter, boolean weak, boolean replaceExistingFunction) {
-        declareInSulong(new LazyLLVMIRFunction(converter, weak), replaceExistingFunction);
+    public void declareInSulong(LazyToTruffleConverter converter, boolean weak) {
+        declareInSulong(new LazyLLVMIRFunction(converter, weak));
     }
 
     public void declareInSulong(RootCallTarget callTarget, boolean weak) {
-        declareInSulong(new LLVMIRFunction(callTarget, weak), false);
+        declareInSulong(new LLVMIRFunction(callTarget, weak));
     }
 
     public RootCallTarget getLLVMIRFunction() {
@@ -366,8 +365,8 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         return functionName;
     }
 
-    public ExternalLibrary getLibrary() {
-        return library;
+    public String getLibraryName() {
+        return libraryName;
     }
 
     public FunctionType getType() {

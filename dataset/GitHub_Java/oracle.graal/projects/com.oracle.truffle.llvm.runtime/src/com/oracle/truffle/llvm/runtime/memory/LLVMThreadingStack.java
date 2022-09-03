@@ -34,9 +34,6 @@ import java.util.Map;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
-/**
- * Holds the (lazily allocated) stacks of all threads that are active in one particular LLVMContext.
- */
 public final class LLVMThreadingStack {
 
     private final Map<Thread, LLVMStack> threadMap;

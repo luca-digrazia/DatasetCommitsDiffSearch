@@ -33,19 +33,20 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionParameter;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInstruction;
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
-import com.oracle.truffle.llvm.parser.model.visitors.ReducedInstructionVisitor;
-import com.oracle.truffle.llvm.parser.util.LLVMFrameIDs;
-import com.oracle.truffle.llvm.runtime.types.MetaType;
+import com.oracle.truffle.llvm.parser.model.visitors.ValueInstructionVisitor;
+import com.oracle.truffle.llvm.runtime.LLVMException;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 public final class StackAllocation {
 
@@ -56,7 +57,7 @@ public final class StackAllocation {
     private StackAllocation(Map<String, FrameDescriptor> frameDescriptors) {
         this.frameDescriptors = frameDescriptors;
         rootFrame = new FrameDescriptor();
-        rootFrame.addFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID);
+        rootFrame.addFrameSlot(LLVMStack.FRAME_ID, new PointerType(VoidType.INSTANCE), FrameSlotKind.Object);
     }
 
     public FrameDescriptor getFrame(String functionName) {
@@ -65,10 +66,6 @@ public final class StackAllocation {
 
     public FrameDescriptor getRootFrame() {
         return rootFrame;
-    }
-
-    public FrameSlot getRootStackSlot() {
-        return rootFrame.findFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID);
     }
 
     static StackAllocation generate(ModelModule model) {
@@ -88,23 +85,24 @@ public final class StackAllocation {
         @Override
         public void visit(FunctionDefinition functionDefinition) {
             final FrameDescriptor frame = new FrameDescriptor();
-            if (functionDefinition.getReturnType() != MetaType.VOID) {
-                frame.addFrameSlot(LLVMFrameIDs.FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
-            }
-            frame.addFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID, FrameSlotKind.Object);
-
+            frame.addFrameSlot(LLVMException.FRAME_SLOT_ID, null, FrameSlotKind.Object);
+            frame.addFrameSlot(LLVMStack.FRAME_ID, new PointerType(VoidType.INSTANCE), FrameSlotKind.Object);
             for (FunctionParameter parameter : functionDefinition.getParameters()) {
-                frame.addFrameSlot(parameter.getName(), parameter.getType().getFrameSlotKind());
+                Type type = parameter.getType();
+                if (parameter.isSourceVariable()) {
+                    type = type.shallowCopy();
+                }
+                frame.addFrameSlot(parameter.getName(), type, Type.getFrameSlotKind(type));
             }
 
             final StackAllocationFunctionVisitor functionVisitor = new StackAllocationFunctionVisitor(frame);
-            functionDefinition.accept(functionVisitor);
+            functionDefinition.accept((FunctionVisitor) functionVisitor);
 
             frames.put(functionDefinition.getName(), frame);
         }
     }
 
-    private static final class StackAllocationFunctionVisitor extends ReducedInstructionVisitor implements FunctionVisitor {
+    private static final class StackAllocationFunctionVisitor extends ValueInstructionVisitor implements FunctionVisitor {
 
         private final FrameDescriptor frame;
 
@@ -115,12 +113,16 @@ public final class StackAllocation {
         @Override
         public void visitValueInstruction(ValueInstruction valueInstruction) {
             final String slotName = valueInstruction.getName();
-            final FrameSlotKind slotKind = valueInstruction.getType().getFrameSlotKind();
-            frame.addFrameSlot(slotName, slotKind);
-        }
 
-        @Override
-        public void visitVoidInstruction(VoidInstruction voidInstruction) {
+            Type type = valueInstruction.getType();
+            final FrameSlotKind slotKind = Type.getFrameSlotKind(type);
+
+            if (valueInstruction.isSourceVariable()) {
+                // when we set the sourcetype at runtime this type needs to be distinct
+                type = type.shallowCopy();
+            }
+
+            frame.addFrameSlot(slotName, type, slotKind);
         }
 
         @Override

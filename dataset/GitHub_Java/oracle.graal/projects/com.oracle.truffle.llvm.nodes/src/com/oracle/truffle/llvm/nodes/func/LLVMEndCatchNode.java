@@ -46,6 +46,7 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 public final class LLVMEndCatchNode extends LLVMExpressionNode {
+
     @Child private LLVMExpressionNode stackPointer;
     @Child private LLVMLookupDispatchNode dispatch;
     @Child private LLVMNativeFunctions.SulongDecrementHandlerCountNode decHandlerCount;

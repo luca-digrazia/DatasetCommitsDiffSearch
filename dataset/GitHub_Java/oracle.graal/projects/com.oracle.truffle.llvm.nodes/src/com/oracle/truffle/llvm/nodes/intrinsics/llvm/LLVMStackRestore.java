@@ -29,28 +29,35 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeField;
-import com.oracle.truffle.api.dsl.NodeFields;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.context.LLVMContext;
-import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@NodeChild(type = LLVMAddressNode.class)
-@NodeFields({@NodeField(type = LLVMContext.class, name = "context"), @NodeField(type = FrameSlot.class, name = "stackPointerSlot")})
-public abstract class LLVMStackRestore extends LLVMNode {
+@NodeChild(type = LLVMExpressionNode.class)
+public abstract class LLVMStackRestore extends LLVMBuiltin {
 
-    abstract LLVMContext getContext();
+    @CompilationFinal private FrameSlot stackPointer;
 
-    abstract FrameSlot getStackPointerSlot();
-
-    @Specialization
-    public void executeVoid(VirtualFrame frame, LLVMAddress addr) {
-        frame.setObject(getStackPointerSlot(), addr);
+    private FrameSlot getStackPointerSlot() {
+        if (stackPointer == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            stackPointer = getRootNode().getFrameDescriptor().findFrameSlot(LLVMStack.FRAME_ID);
+        }
+        return stackPointer;
     }
 
+    @Specialization
+    protected Object doVoid(VirtualFrame frame, LLVMAddress addr) {
+        StackPointer pointer = (StackPointer) FrameUtil.getObjectSafe(frame, getStackPointerSlot());
+        pointer.set(addr.getVal());
+        return null;
+    }
 }
