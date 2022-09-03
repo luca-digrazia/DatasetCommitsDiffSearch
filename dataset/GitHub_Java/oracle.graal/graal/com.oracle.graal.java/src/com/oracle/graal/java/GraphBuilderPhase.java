@@ -662,7 +662,7 @@ public final class GraphBuilderPhase extends Phase {
 
     void genNewInstance(int cpi) {
         JavaType type = lookupType(cpi, NEW);
-        if (type instanceof ResolvedJavaType && ((ResolvedJavaType) type).isInitialized()) {
+        if (type instanceof ResolvedJavaType) {
             NewInstanceNode n = currentGraph.add(new NewInstanceNode((ResolvedJavaType) type));
             frameState.apush(append(n));
         } else {
