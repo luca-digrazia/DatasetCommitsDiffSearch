@@ -24,11 +24,10 @@
  */
 package org.graalvm.compiler.nodes.cfg;
 
-import static org.graalvm.compiler.core.common.cfg.AbstractBlockBase.BLOCK_ID_COMPARATOR;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -627,7 +626,6 @@ public final class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                             }
                         }
                     }
-                    loop.getNaturalExits().sort(BLOCK_ID_COMPARATOR);
 
                     if (!graph.getGuardsStage().areFrameStatesAtDeopts()) {
                         for (LoopExitNode exit : loopBegin.loopExits()) {
@@ -636,7 +634,6 @@ public final class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                             computeLoopBlocks(exitBlock.getFirstPredecessor(), loop, stack, true);
                             loop.getLoopExits().add(exitBlock);
                         }
-                        loop.getLoopExits().sort(BLOCK_ID_COMPARATOR);
 
                         // The following loop can add new blocks to the end of the loop's block
                         // list.
@@ -712,7 +709,8 @@ public final class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
             for (Map.Entry<Loop<Block>, List<Block>> e : cfgBlocks.entrySet()) {
                 ArrayList<Block> firstMethod = e.getKey().getNaturalExits();
                 List<Block> secondMethod = e.getValue();
-                secondMethod.sort(BLOCK_ID_COMPARATOR);
+                firstMethod.sort(Comparator.comparing(Block::getId));
+                secondMethod.sort(Comparator.comparing(Block::getId));
                 assert secondMethod.equals(firstMethod) : secondMethod + " vs " + firstMethod;
             }
         }
