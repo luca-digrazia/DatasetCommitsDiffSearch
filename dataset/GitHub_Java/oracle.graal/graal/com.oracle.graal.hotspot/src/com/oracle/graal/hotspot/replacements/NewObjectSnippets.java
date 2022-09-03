@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.compiler.common.GraalOptions.SnippetCounters;
-import static com.oracle.graal.compiler.common.calc.UnsignedMath.belowThan;
 import static com.oracle.graal.hotspot.nodes.CStringNode.cstring;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.CLASS_ARRAY_KLASS_LOCATION;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.HUB_WRITE_LOCATION;
@@ -63,6 +62,7 @@ import static com.oracle.graal.replacements.ReplacementsUtil.REPLACEMENTS_ASSERT
 import static com.oracle.graal.replacements.ReplacementsUtil.staticAssert;
 import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
 import static com.oracle.graal.replacements.nodes.ExplodeLoopNode.explodeLoop;
+import static jdk.internal.jvmci.code.UnsignedMath.belowThan;
 import static jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
 import static jdk.internal.jvmci.hotspot.HotSpotMetaAccessProvider.computeArrayAllocationSize;
 import jdk.internal.jvmci.code.CodeUtil;
@@ -86,6 +86,7 @@ import com.oracle.graal.debug.Debug;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.HotSpotBackend;
+import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.meta.HotSpotLoweringProvider;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
@@ -615,8 +616,8 @@ public class NewObjectSnippets implements Snippets {
             return size;
         }
 
-        public void lower(VerifyHeapNode verifyHeapNode, HotSpotRegistersProvider registers, LoweringTool tool) {
-            if (config().cAssertions) {
+        public void lower(VerifyHeapNode verifyHeapNode, HotSpotRegistersProvider registers, HotSpotGraalRuntimeProvider runtime, LoweringTool tool) {
+            if (runtime.getConfig().cAssertions) {
                 Arguments args = new Arguments(verifyHeap, verifyHeapNode.graph().getGuardsStage(), tool.getLoweringStage());
                 args.addConst("threadRegister", registers.getThreadRegister());
 

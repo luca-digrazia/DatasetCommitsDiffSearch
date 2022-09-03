@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,12 +23,12 @@
 //JaCoCo Exclude
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
-import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaKind;
+import static jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
+import static jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
+import jdk.internal.jvmci.code.CodeUtil;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.LocationIdentity;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.NodeClass;
@@ -124,8 +124,8 @@ public final class CheckcastArrayCopyCallNode extends AbstractMemoryCheckpoint i
             ValueNode srcAddr = computeBase(getSource(), getSourcePosition());
             ValueNode destAddr = computeBase(getDestination(), getDestinationPosition());
             ValueNode len = getLength();
-            if (len.stamp().getStackKind() != runtime.getTarget().wordJavaKind) {
-                len = IntegerConvertNode.convert(len, StampFactory.forKind(runtime.getTarget().wordJavaKind), graph());
+            if (len.stamp().getStackKind() != runtime.getTarget().wordKind) {
+                len = IntegerConvertNode.convert(len, StampFactory.forKind(runtime.getTarget().wordKind), graph());
             }
             ForeignCallNode call = graph.add(new ForeignCallNode(runtime.getHostBackend().getForeignCalls(), desc, srcAddr, destAddr, len, superCheckOffset, destElemKlass));
             call.setStateAfter(stateAfter());

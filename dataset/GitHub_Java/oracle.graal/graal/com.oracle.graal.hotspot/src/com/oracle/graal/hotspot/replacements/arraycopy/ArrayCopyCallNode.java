@@ -23,15 +23,15 @@
 //JaCoCo Exclude
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
-import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
-import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.PrimitiveConstant;
+import static jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
+import static jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
+import jdk.internal.jvmci.code.CodeUtil;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.PrimitiveConstant;
 
+import com.oracle.graal.api.runtime.Graal;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
@@ -60,6 +60,7 @@ import com.oracle.graal.nodes.memory.MemoryNode;
 import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
 import com.oracle.graal.nodes.spi.Lowerable;
 import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.runtime.RuntimeProvider;
 
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public final class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single, MemoryAccess, Canonicalizable {
@@ -139,7 +140,7 @@ public final class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements
     private ValueNode computeBase(ValueNode base, ValueNode pos) {
         FixedWithNextNode basePtr = graph().add(new GetObjectAddressNode(base));
         graph().addBeforeFixed(this, basePtr);
-        Stamp wordStamp = StampFactory.forKind(runtime.getTarget().wordJavaKind);
+        Stamp wordStamp = StampFactory.forKind(runtime.getTarget().wordKind);
         ValueNode wordPos = IntegerConvertNode.convert(pos, wordStamp, graph());
         int shift = CodeUtil.log2(getArrayIndexScale(elementKind));
         ValueNode scaledIndex = graph().unique(new LeftShiftNode(wordPos, ConstantNode.forInt(shift, graph())));
@@ -160,7 +161,7 @@ public final class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements
             if (len.stamp().getStackKind() != JavaKind.Long) {
                 len = IntegerConvertNode.convert(len, StampFactory.forKind(JavaKind.Long), graph());
             }
-            ForeignCallNode call = graph.add(new ForeignCallNode(runtime.getHostBackend().getForeignCalls(), desc, srcAddr, destAddr, len));
+            ForeignCallNode call = graph.add(new ForeignCallNode(Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getForeignCalls(), desc, srcAddr, destAddr, len));
             call.setStateAfter(stateAfter());
             graph.replaceFixedWithFixed(this, call);
         }
@@ -217,8 +218,8 @@ public final class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements
         return uninitialized;
     }
 
-    static boolean isHeapWordAligned(JavaConstant value, JavaKind kind) {
-        return (getArrayBaseOffset(kind) + (long) value.asInt() * getArrayIndexScale(kind)) % config().heapWordSize == 0;
+    boolean isHeapWordAligned(JavaConstant value, JavaKind kind) {
+        return (getArrayBaseOffset(kind) + (long) value.asInt() * getArrayIndexScale(kind)) % runtime.getConfig().heapWordSize == 0;
     }
 
     public void updateAlignedDisjoint() {
