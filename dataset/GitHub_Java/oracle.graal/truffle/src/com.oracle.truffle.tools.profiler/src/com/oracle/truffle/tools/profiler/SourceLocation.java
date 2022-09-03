@@ -36,7 +36,7 @@ import java.util.Set;
 /**
  * Source information of a particular source location in the profiler.
  * 
- * @since 0.30
+ * @since 0.29
  */
 final class SourceLocation {
 
@@ -61,15 +61,15 @@ final class SourceLocation {
         }
     }
 
-    public SourceSection getSourceSection() {
+    SourceSection getSourceSection() {
         return sourceSection;
     }
 
-    public String getRootName() {
+    String getRootName() {
         return rootName;
     }
 
-    public Set<Class<?>> getTags() {
+    Set<Class<?>> getTags() {
         return tags;
     }
 
