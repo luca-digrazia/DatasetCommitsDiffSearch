@@ -542,8 +542,8 @@ public final class Source {
         }
 
         /**
-         * Uses configuration of this builder to create new {@link Source} object. The method throws
-         * an {@link IOException} if an error loading the source occured.
+         * Uses configuration of this builder to create new {@link Source} object. This method
+         * throws can throw an {@link IOException} independent of whether
          *
          * @return the source object
          * @since 1.0
@@ -553,10 +553,7 @@ public final class Source {
         }
 
         /**
-         * Uses configuration of this builder to create new {@link Source} object. This method can
-         * only be used if the builder was created as
-         * {@link Source#newBuilder(String, CharSequence, String) string literal} builder and
-         * otherwise throws an {@link UnsupportedOperationException}.
+         * Uses configuration of this builder to create new {@link Source} object.
          *
          * @return the source object
          * @since 1.0
