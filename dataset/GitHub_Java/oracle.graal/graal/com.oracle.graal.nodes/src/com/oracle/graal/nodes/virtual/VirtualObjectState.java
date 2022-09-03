@@ -31,23 +31,28 @@ import com.oracle.graal.nodes.spi.*;
 /**
  * This class encapsulated the virtual state of an escape analyzed object.
  */
-public final class VirtualObjectState extends EscapeObjectState implements Node.IterableNodeType, LIRLowerable {
+public final class VirtualObjectState extends VirtualState implements Node.IterableNodeType, LIRLowerable {
 
+    @Input private VirtualObjectNode object;
     @Input private NodeInputList<ValueNode> fieldValues;
+
+    public VirtualObjectNode object() {
+        return object;
+    }
 
     public NodeInputList<ValueNode> fieldValues() {
         return fieldValues;
     }
 
     public VirtualObjectState(VirtualObjectNode object, ValueNode[] fieldValues) {
-        super(object);
         assert object.fieldsCount() == fieldValues.length;
+        this.object = object;
         this.fieldValues = new NodeInputList<>(this, fieldValues);
     }
 
     private VirtualObjectState(VirtualObjectNode object, List<ValueNode> fieldValues) {
-        super(object);
         assert object.fieldsCount() == fieldValues.size();
+        this.object = object;
         this.fieldValues = new NodeInputList<>(this, fieldValues);
     }
 
@@ -58,7 +63,7 @@ public final class VirtualObjectState extends EscapeObjectState implements Node.
 
     @Override
     public VirtualObjectState duplicateWithVirtualState() {
-        return graph().add(new VirtualObjectState(object(), fieldValues));
+        return graph().add(new VirtualObjectState(object, fieldValues));
     }
 
     @Override
@@ -66,5 +71,15 @@ public final class VirtualObjectState extends EscapeObjectState implements Node.
         for (ValueNode value : fieldValues) {
             closure.apply(this, value);
         }
+    }
+
+    @Override
+    public boolean isPartOfThisState(VirtualState state) {
+        return this == state;
+    }
+
+    @Override
+    public void applyToVirtual(VirtualClosure closure) {
+        closure.apply(this);
     }
 }

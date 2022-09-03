@@ -30,8 +30,7 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
-import com.oracle.graal.nodes.VirtualState.NodeClosure;
-import com.oracle.graal.nodes.VirtualState.VirtualClosure;
+import com.oracle.graal.nodes.VirtualState.*;
 
 
 public abstract class LoopFragment {
@@ -89,13 +88,7 @@ public abstract class LoopFragment {
     public abstract NodeIterable<Node> nodes();
 
     public StructuredGraph graph() {
-        LoopEx l;
-        if (isDuplicate()) {
-            l = original().loop();
-        } else {
-            l = loop();
-        }
-        return (StructuredGraph) l.loopBegin().graph();
+        return (StructuredGraph) loop.loopBegin().graph();
     }
 
     protected abstract DuplicationReplacement getDuplicationReplacement();
@@ -105,13 +98,11 @@ public abstract class LoopFragment {
     protected void patchNodes(final DuplicationReplacement dataFix) {
         if (isDuplicate() && !nodesReady) {
             assert !original.isDuplicate();
-            final DuplicationReplacement cfgFix = original().getDuplicationReplacement();
+            final DuplicationReplacement cfgFix = getDuplicationReplacement();
             DuplicationReplacement dr;
-            if (cfgFix == null && dataFix != null) {
+            if (cfgFix == null) {
                 dr = dataFix;
-            } else if (cfgFix != null && dataFix == null) {
-                dr = cfgFix;
-            } else if (cfgFix != null && dataFix != null) {
+            } else {
                 dr = new DuplicationReplacement() {
                     @Override
                     public Node replacement(Node o) {
@@ -127,20 +118,21 @@ public abstract class LoopFragment {
                         return o;
                     }
                 };
-            } else {
-                dr = new DuplicationReplacement() {
-                    @Override
-                    public Node replacement(Node o) {
-                        return o;
-                    }
-                };
             }
-            duplicationMap = graph().addDuplicates(original().nodes(), dr);
+            duplicationMap = graph().addDuplicates(nodes(), dr);
             finishDuplication();
             nodesReady = true;
         } else {
             //TODO (gd) apply fix ?
         }
+    }
+
+    public static Collection<BeginNode> toHirBlocks(Collection<Block> blocks) {
+        List<BeginNode> hir = new ArrayList<>(blocks.size());
+        for (Block b : blocks) {
+            hir.add(b.getBeginNode());
+        }
+        return hir;
     }
 
     protected static NodeBitMap computeNodes(Graph graph, Collection<BeginNode> blocks) {
@@ -220,29 +212,19 @@ public abstract class LoopFragment {
         return false;
     }
 
-    public static Collection<BeginNode> toHirBlocks(Collection<Block> blocks) {
-        List<BeginNode> hir = new ArrayList<>(blocks.size());
-        for (Block b : blocks) {
-            hir.add(b.getBeginNode());
-        }
-        return hir;
-    }
-
     /**
      * Merges the early exits (i.e. loop exits) that were duplicated as part of this fragment, with the original fragment's exits.
      */
     protected void mergeEarlyExits() {
         assert isDuplicate();
         StructuredGraph graph = graph();
-        for (BeginNode earlyExit : LoopFragment.toHirBlocks(original().loop().lirLoop().exits)) {
+        for (BeginNode earlyExit : toHirBlocks(original().loop().lirLoop().exits)) {
             FixedNode next = earlyExit.next();
-            if (earlyExit.isDeleted() || !this.original().contains(earlyExit)) {
+            if (earlyExit.isDeleted() || !this.contains(earlyExit)) {
                 continue;
             }
             BeginNode newEarlyExit = getDuplicatedNode(earlyExit);
-            if (newEarlyExit == null) {
-                continue;
-            }
+            assert newEarlyExit != null;
             MergeNode merge = graph.add(new MergeNode());
             merge.setProbability(next.probability());
             EndNode originalEnd = graph.add(new EndNode());
