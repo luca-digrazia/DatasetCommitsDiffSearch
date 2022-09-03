@@ -22,7 +22,6 @@
  */
 package com.oracle.svm.driver;
 
-import static com.oracle.svm.core.posix.headers.Signal.SignalEnum.SIGKILL;
 import static com.oracle.svm.core.posix.headers.Signal.SignalEnum.SIGTERM;
 
 import java.io.ByteArrayOutputStream;
@@ -224,35 +223,20 @@ final class NativeImageServer extends NativeImage {
         }
 
         synchronized void shutdown() {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            sendRequest(byteStreamToByteConsumer(baos), byteStreamToByteConsumer(baos), ServerCommand.STOP_SERVER);
-            showVerboseMessage(verboseServer, "Server stop response:" + new String(baos.toByteArray()));
-            long terminationTimeout = System.currentTimeMillis() + 20_000;
-            long killTimeout = terminationTimeout + 40_000;
-            long killedTimeout = killTimeout + 2_000;
-            showVerboseMessage(verboseServer, "Waiting for " + this + " to shutdown");
+            Signal.kill(pid, SIGTERM.getCValue());
             /* Release port only after server stops responding to it */
-            boolean sentSIGTERM = false;
-            boolean sentSIGKILL = false;
-            do {
+            long timeout = System.currentTimeMillis() + 60_000;
+            showVerboseMessage(verboseServer, "Waiting for " + this + " to die");
+            while (isAlive()) {
                 try {
                     Thread.sleep(500);
                 } catch (InterruptedException e) {
-                    throw showError("Woke up from waiting for " + this + " to shutdown", e);
+                    throw showError("Woke up from waiting for " + this + " to die", e);
                 }
-                long now = System.currentTimeMillis();
-                if (!sentSIGTERM && terminationTimeout < now) {
-                    showWarning(this + " keeps responding to port " + port + " even after sending STOP_SERVER");
-                    Signal.kill(pid, SIGTERM.getCValue());
-                    sentSIGTERM = true;
-                } else if (!sentSIGKILL && killTimeout < now) {
-                    showWarning(this + " keeps responding to port " + port + " even after killing with SIGTERM");
-                    Signal.kill(pid, SIGKILL.getCValue());
-                    sentSIGKILL = true;
-                } else if (killedTimeout < now) {
-                    throw showError(this + " keeps responding to port " + port + " even after killing with SIGKILL");
+                if (timeout < System.currentTimeMillis()) {
+                    throw showError(this + " keeps responding to port " + port + " even after shutdown");
                 }
-            } while (isAlive());
+            }
             deleteAllFiles(serverDir);
             releasePortNumber(port);
         }
