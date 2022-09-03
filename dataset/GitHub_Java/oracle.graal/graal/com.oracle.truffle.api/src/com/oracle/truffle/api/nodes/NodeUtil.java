@@ -37,7 +37,7 @@ import com.oracle.truffle.api.nodes.Node.Children;
 /**
  * Utility class that manages the special access methods for node instances.
  */
-public final class NodeUtil {
+public class NodeUtil {
 
     /**
      * Interface that allows the customization of field offsets used for {@link Unsafe} field
@@ -274,7 +274,7 @@ public final class NodeUtil {
         return array;
     }
 
-    private static final Unsafe unsafe = getUnsafe();
+    protected static final Unsafe unsafe = getUnsafe();
 
     private static Unsafe getUnsafe() {
         try {
@@ -292,8 +292,12 @@ public final class NodeUtil {
 
     @SuppressWarnings("unchecked")
     public static <T extends Node> T cloneNode(T orig) {
-        final Node clone = orig.copy();
-        NodeClass nodeClass = NodeClass.get(clone.getClass());
+        Class<? extends Node> clazz = orig.getClass();
+        NodeClass nodeClass = NodeClass.get(clazz);
+        Node clone = orig.copy();
+        if (clone == null) {
+            return null;
+        }
 
         unsafe.putObject(clone, nodeClass.parentOffset, null);
 
@@ -301,6 +305,10 @@ public final class NodeUtil {
             Node child = (Node) unsafe.getObject(orig, fieldOffset);
             if (child != null) {
                 Node clonedChild = cloneNode(child);
+                if (clonedChild == null) {
+                    return null;
+                }
+
                 unsafe.putObject(clonedChild, nodeClass.parentOffset, clone);
                 unsafe.putObject(clone, fieldOffset, clonedChild);
             }
@@ -308,13 +316,16 @@ public final class NodeUtil {
         for (long fieldOffset : nodeClass.childrenOffsets) {
             Node[] children = (Node[]) unsafe.getObject(orig, fieldOffset);
             if (children != null) {
-                Node[] clonedChildren = (Node[]) Array.newInstance(children.getClass().getComponentType(), children.length);
+                Node[] clonedChildren = children.clone();
+                Arrays.fill(clonedChildren, null);
                 for (int i = 0; i < children.length; i++) {
-                    if (children[i] != null) {
-                        Node clonedChild = cloneNode(children[i]);
-                        clonedChildren[i] = clonedChild;
-                        unsafe.putObject(clonedChild, nodeClass.parentOffset, clone);
+                    Node clonedChild = cloneNode(children[i]);
+                    if (clonedChild == null) {
+                        return null;
                     }
+
+                    clonedChildren[i] = clonedChild;
+                    unsafe.putObject(clonedChild, nodeClass.parentOffset, clone);
                 }
                 unsafe.putObject(clone, fieldOffset, clonedChildren);
             }
