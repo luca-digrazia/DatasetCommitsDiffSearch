@@ -46,29 +46,24 @@ import com.oracle.graal.phases.tiers.*;
  */
 public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
 
-    private final int classMirrorOffset;
-
-    public LoadJavaMirrorWithKlassPhase(int classMirrorOffset) {
-        this.classMirrorOffset = classMirrorOffset;
-    }
-
     @Override
     protected void run(StructuredGraph graph, PhaseContext context) {
         for (ConstantNode node : graph.getNodes().filter(ConstantNode.class)) {
             Constant constant = node.asConstant();
             if (constant.getKind() == Kind.Object && constant.asObject() instanceof Class<?>) {
-                MetaAccessProvider metaAccess = context.getMetaAccess();
-                ResolvedJavaType type = metaAccess.lookupJavaType((Class<?>) constant.asObject());
+                ResolvedJavaType type = context.getRuntime().lookupJavaType((Class<?>) constant.asObject());
                 assert type instanceof HotSpotResolvedObjectType;
 
-                Constant klass = ((HotSpotResolvedObjectType) type).klass();
-                ConstantNode klassNode = ConstantNode.forConstant(klass, metaAccess, graph);
+                HotSpotRuntime runtime = (HotSpotRuntime) context.getRuntime();
 
-                Stamp stamp = StampFactory.exactNonNull(metaAccess.lookupJavaType(Class.class));
-                LocationNode location = graph.unique(ConstantLocationNode.create(FINAL_LOCATION, stamp.kind(), classMirrorOffset, graph));
+                Constant klass = ((HotSpotResolvedObjectType) type).klass();
+                ConstantNode klassNode = ConstantNode.forConstant(klass, runtime, graph);
+
+                Stamp stamp = StampFactory.exactNonNull(runtime.lookupJavaType(Class.class));
+                LocationNode location = graph.unique(ConstantLocationNode.create(FINAL_LOCATION, stamp.kind(), runtime.config.classMirrorOffset, graph));
                 FloatingReadNode freadNode = graph.unique(new FloatingReadNode(klassNode, location, null, stamp));
 
-                node.replace(freadNode);
+                graph.replaceFloating(node, freadNode);
             }
         }
     }
