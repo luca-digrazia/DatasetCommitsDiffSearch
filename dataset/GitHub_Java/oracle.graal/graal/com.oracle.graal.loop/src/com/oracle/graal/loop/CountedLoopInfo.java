@@ -53,7 +53,7 @@ public class CountedLoopInfo {
     }
 
     public ValueNode maxTripCountNode(boolean assumePositive) {
-        StructuredGraph graph = iv.valueNode().graph();
+        StructuredGraph graph = (StructuredGraph) iv.valueNode().graph();
         Kind kind = iv.valueNode().kind();
         IntegerArithmeticNode range = IntegerArithmeticNode.sub(end, iv.initNode());
         if (oneOff) {
