@@ -115,6 +115,22 @@ public final class CPUSampler implements Closeable {
         }
 
         /**
+         * @return When was the element first found on the stack
+         * @since 0.29
+         */
+        public long getFirstHitTime() {
+            return firstHitTime;
+        }
+
+        /**
+         * @return When was the element last found on the stack
+         * @since 0.29
+         */
+        public long getLastHitTime() {
+            return lastHitTime;
+        }
+
+        /**
          * @return Total number of times the element was found on the top of the shadow stack
          * @since 0.29
          */
