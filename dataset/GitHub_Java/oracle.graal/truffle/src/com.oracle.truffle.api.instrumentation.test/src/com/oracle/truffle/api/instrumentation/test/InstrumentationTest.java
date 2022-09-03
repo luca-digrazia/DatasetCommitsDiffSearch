@@ -69,11 +69,11 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.PolyglotRuntime;
+import com.oracle.truffle.api.vm.PolyglotRuntime.Instrument;
 import com.oracle.truffle.api.instrumentation.AllocationListener;
-import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.Instrument;
-import org.graalvm.polyglot.PolyglotException;
-import org.graalvm.polyglot.Source;
 
 public class InstrumentationTest extends AbstractInstrumentationTest {
 
@@ -82,13 +82,12 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
      */
     @Test
     public void testMetadata() {
-        Instrument instrumentHandle1 = engine.getInstruments().get("testMetadataType1");
+        PolyglotRuntime.Instrument instrumentHandle1 = engine.getRuntime().getInstruments().get("testMetadataType1");
 
         Assert.assertEquals("name", instrumentHandle1.getName());
         Assert.assertEquals("version", instrumentHandle1.getVersion());
         Assert.assertEquals("testMetadataType1", instrumentHandle1.getId());
-        Assert.assertFalse(isInitialized(instrumentHandle1));
-        Assert.assertFalse(isCreated(instrumentHandle1));
+        Assert.assertFalse(instrumentHandle1.isEnabled());
     }
 
     @Registration(name = "name", version = "version", id = "testMetadataType1")
@@ -107,8 +106,9 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     @Test
     public void forgetsToRegisterADeclaredService() throws Exception {
-        Instrument handle = engine.getInstruments().get("testBrokenRegistration");
+        PolyglotRuntime.Instrument handle = engine.getRuntime().getInstruments().get("testBrokenRegistration");
         assertNotNull(handle);
+        handle.setEnabled(true);
         Runnable r = handle.lookup(Runnable.class);
         assertNull("The service isn't there", r);
         if (!err.toString().contains("declares service java.lang.Runnable but doesn't register it")) {
@@ -128,7 +128,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
         @Override
         public void run() {
-            LanguageInfo info = env.getLanguages().get(InstrumentationTestLanguage.ID);
+            LanguageInfo info = env.getLanguages().get(InstrumentationTestLanguage.MIME_TYPE);
             SpecialService ss = env.lookup(info, SpecialService.class);
             assertNotNull("Service found", ss);
             assertEquals("The right extension", ss.fileExtension(), InstrumentationTestLanguage.FILENAME_EXTENSION);
@@ -141,34 +141,36 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     @Test
     public void queryInstrumentsBeforeUseAndObtainSpecialService() throws Exception {
-        engine = Engine.newBuilder().err(err).build();
+        final PolyglotRuntime runtime = PolyglotRuntime.newBuilder().setErr(err).build();
         Runnable start = null;
-        for (Instrument instr : engine.getInstruments().values()) {
+        for (PolyglotRuntime.Instrument instr : runtime.getInstruments().values()) {
             Runnable r = instr.lookup(Runnable.class);
             if (r != null) {
                 start = r;
                 start.run();
-                assertTrue("Now enabled: " + instr, isCreated(instr));
+                assertTrue("Now enabled: " + instr, instr.isEnabled());
             }
         }
         assertNotNull("At least one Runnable found", start);
     }
 
-    @Test(expected = IllegalStateException.class) // IllegalStateException: Engine is already closed
+    @Test
     public void queryInstrumentsAfterDisposeDoesnotEnable() throws Exception {
-        engine = Engine.newBuilder().err(err).build();
-        engine.close();
+        final PolyglotRuntime runtime = PolyglotRuntime.newBuilder().build();
+        runtime.dispose();
         Runnable start = null;
-        for (Instrument instr : engine.getInstruments().values()) {
-            assertFalse("Instrument is disabled", isInitialized(instr));
+        for (PolyglotRuntime.Instrument instr : runtime.getInstruments().values()) {
+            assertFalse("Instrument is disabled", instr.isEnabled());
+            instr.setEnabled(true);
+            assertFalse("Instrument cannot be enabled", instr.isEnabled());
 
             Runnable r = instr.lookup(Runnable.class);
             if (r != null) {
                 start = r;
                 start.run();
-                assertTrue("Now enabled: " + instr, isCreated(instr));
+                assertTrue("Now enabled: " + instr, instr.isEnabled());
             }
-            assertFalse("Instrument left disabled", isInitialized(instr));
+            assertFalse("Instrument left disabled", instr.isEnabled());
         }
         assertNull("No Runnable found", start);
     }
@@ -178,11 +180,11 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
      */
     @Test
     public void testDefaultId() {
-        Instrument descriptor1 = engine.getInstruments().get(MetadataInstrument2.class.getSimpleName());
+        PolyglotRuntime.Instrument descriptor1 = engine.getRuntime().getInstruments().get(MetadataInstrument2.class.getSimpleName());
         Assert.assertEquals("", descriptor1.getName());
         Assert.assertEquals("", descriptor1.getVersion());
         Assert.assertEquals(MetadataInstrument2.class.getSimpleName(), descriptor1.getId());
-        Assert.assertFalse(isInitialized(descriptor1));
+        Assert.assertFalse(descriptor1.isEnabled());
     }
 
     @Registration
@@ -202,26 +204,35 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         MultipleInstanceInstrument.onCreateCounter = 0;
         MultipleInstanceInstrument.onDisposeCounter = 0;
         MultipleInstanceInstrument.constructor = 0;
-        Instrument instrument1 = engine.getInstruments().get("testMultipleInstruments");
-        instrument1.lookup(Object.class); // enabled
+        PolyglotRuntime.Instrument instrument1 = engine.getRuntime().getInstruments().get("testMultipleInstruments");
+        instrument1.setEnabled(true);
         Assert.assertEquals(1, MultipleInstanceInstrument.constructor);
         Assert.assertEquals(1, MultipleInstanceInstrument.onCreateCounter);
         Assert.assertEquals(0, MultipleInstanceInstrument.onDisposeCounter);
 
-        Instrument instrument2 = engine.getInstruments().get("testMultipleInstruments");
-        instrument2.lookup(Object.class); // the same enabled
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testMultipleInstruments");
+        instrument.setEnabled(true);
         Assert.assertEquals(1, MultipleInstanceInstrument.constructor);
         Assert.assertEquals(1, MultipleInstanceInstrument.onCreateCounter);
         Assert.assertEquals(0, MultipleInstanceInstrument.onDisposeCounter);
 
-        engine.close();
-        engine = null;
+        instrument.setEnabled(false);
         Assert.assertEquals(1, MultipleInstanceInstrument.constructor);
         Assert.assertEquals(1, MultipleInstanceInstrument.onCreateCounter);
         Assert.assertEquals(1, MultipleInstanceInstrument.onDisposeCounter);
+
+        instrument.setEnabled(true);
+        Assert.assertEquals(2, MultipleInstanceInstrument.constructor);
+        Assert.assertEquals(2, MultipleInstanceInstrument.onCreateCounter);
+        Assert.assertEquals(1, MultipleInstanceInstrument.onDisposeCounter);
+
+        instrument.setEnabled(false);
+        Assert.assertEquals(2, MultipleInstanceInstrument.constructor);
+        Assert.assertEquals(2, MultipleInstanceInstrument.onCreateCounter);
+        Assert.assertEquals(2, MultipleInstanceInstrument.onDisposeCounter);
     }
 
-    @Registration(id = "testMultipleInstruments", services = Object.class)
+    @Registration(id = "testMultipleInstruments")
     public static class MultipleInstanceInstrument extends TruffleInstrument {
 
         private static int onCreateCounter = 0;
@@ -234,8 +245,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(Env env) {
-            // Not to get error: declares service, but doesn't register it
-            env.registerService(new Object());
             onCreateCounter++;
         }
 
@@ -254,11 +263,10 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         TestLanguageInstrumentationLanguage.installInstrumentsCounter = 0;
         TestLanguageInstrumentationLanguage.createContextCounter = 0;
         try {
-            context.eval(Source.create("test-language-instrumentation-language", "ROOT(EXPRESSION)"));
+            engine.eval(Source.newBuilder("ROOT(EXPRESSION)").name("unknown").mimeType("testLanguageInstrumentation").build());
             Assert.fail("expected exception");
-        } catch (PolyglotException ex) {
+        } catch (MyLanguageException e) {
             // we assert that MyLanguageException is not wrapped
-            assertEquals(MyLanguageException.class.getName(), ex.getMessage());
         }
         Assert.assertEquals(1, TestLanguageInstrumentationLanguage.installInstrumentsCounter);
         Assert.assertEquals(1, TestLanguageInstrumentationLanguage.createContextCounter);
@@ -272,7 +280,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     }
 
-    @TruffleLanguage.Registration(id = "test-language-instrumentation-language", name = "", version = "", mimeType = "testLanguageInstrumentation")
+    @TruffleLanguage.Registration(name = "", version = "", mimeType = "testLanguageInstrumentation")
     @ProvidedTags({InstrumentationTestLanguage.ExpressionNode.class, StandardTags.StatementTag.class})
     public static class TestLanguageInstrumentationLanguage extends InstrumentationTestLanguage {
 
@@ -344,12 +352,12 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     @Test
     public void testInstrumentException1() {
-        assureEnabled(engine.getInstruments().get("testInstrumentException1"));
+        engine.getRuntime().getInstruments().get("testInstrumentException1").setEnabled(true);
 
         Assert.assertTrue(getErr().contains("MyLanguageException"));
     }
 
-    @Registration(name = "", version = "", id = "testInstrumentException1", services = Object.class)
+    @Registration(name = "", version = "", id = "testInstrumentException1")
     public static class TestInstrumentException1 extends TruffleInstrument {
 
         @Override
@@ -370,7 +378,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     public void testInstrumentException2() throws IOException {
         TestInstrumentException2.returnedExceptional = 0;
         TestInstrumentException2.returnedValue = 0;
-        assureEnabled(engine.getInstruments().get("testInstrumentException2"));
+        engine.getRuntime().getInstruments().get("testInstrumentException2").setEnabled(true);
         run("ROOT(EXPRESSION)");
         Assert.assertTrue(getErr().contains("MyLanguageException"));
 
@@ -378,7 +386,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         Assert.assertEquals(1, TestInstrumentException2.returnedValue);
     }
 
-    @Registration(name = "", version = "", id = "testInstrumentException2", services = Object.class)
+    @Registration(name = "", version = "", id = "testInstrumentException2")
     public static class TestInstrumentException2 extends TruffleInstrument {
 
         static int returnedExceptional = 0;
@@ -386,8 +394,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(Env env) {
-            // Not to get error: declares service, but doesn't register it
-            env.registerService(new Object());
             env.getInstrumenter().attachListener(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION).build(), new ExecutionEventListener() {
 
                 public void onReturnValue(EventContext context, VirtualFrame frame, Object result) {
@@ -417,14 +423,14 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     public void testInstrumentException3() throws IOException {
         TestInstrumentException3.returnedExceptional = 0;
         TestInstrumentException3.onEnter = 0;
-        assureEnabled(engine.getInstruments().get("testInstrumentException3"));
+        engine.getRuntime().getInstruments().get("testInstrumentException3").setEnabled(true);
         run("ROOT(EXPRESSION)");
         Assert.assertTrue(getErr().contains("MyLanguageException"));
         Assert.assertEquals(0, TestInstrumentException3.returnedExceptional);
         Assert.assertEquals(1, TestInstrumentException3.onEnter);
     }
 
-    @Registration(name = "", version = "", id = "testInstrumentException3", services = Object.class)
+    @Registration(name = "", version = "", id = "testInstrumentException3")
     public static class TestInstrumentException3 extends TruffleInstrument {
 
         static int returnedExceptional = 0;
@@ -432,8 +438,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(Env env) {
-            // Not to get error: declares service, but doesn't register it
-            env.registerService(new Object());
             env.getInstrumenter().attachListener(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION).build(), new ExecutionEventListener() {
 
                 public void onReturnValue(EventContext context, VirtualFrame frame, Object result) {
@@ -462,7 +466,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         TestLazyProbe1.onReturnValue = 0;
         TestLazyProbe1.onReturnExceptional = 0;
 
-        assureEnabled(engine.getInstruments().get("testLazyProbe1"));
+        engine.getRuntime().getInstruments().get("testLazyProbe1").setEnabled(true);
         run("ROOT(DEFINE(foo, EXPRESSION))");
         run("ROOT(DEFINE(bar, ROOT(EXPRESSION,EXPRESSION)))");
 
@@ -501,7 +505,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     }
 
-    @Registration(name = "", version = "", id = "testLazyProbe1", services = Object.class)
+    @Registration(name = "", version = "", id = "testLazyProbe1")
     public static class TestLazyProbe1 extends TruffleInstrument {
 
         static int createCalls = 0;
@@ -511,8 +515,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(Env env) {
-            // Not to get error: declares service, but doesn't register it
-            env.registerService(new Object());
             env.getInstrumenter().attachFactory(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION).build(), new ExecutionEventNodeFactory() {
                 public ExecutionEventNode create(EventContext context) {
                     createCalls++;
@@ -545,7 +547,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         TestEnvParse1.onExpression = 0;
         TestEnvParse1.onStatement = 0;
 
-        assureEnabled(engine.getInstruments().get("testEnvParse1"));
+        engine.getRuntime().getInstruments().get("testEnvParse1").setEnabled(true);
         run("STATEMENT");
 
         Assert.assertEquals(1, TestEnvParse1.onExpression);
@@ -557,7 +559,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         Assert.assertEquals(2, TestEnvParse1.onStatement);
     }
 
-    @Registration(name = "", version = "", id = "testEnvParse1", services = Object.class)
+    @Registration(name = "", version = "", id = "testEnvParse1")
     public static class TestEnvParse1 extends TruffleInstrument {
 
         static int onExpression = 0;
@@ -565,14 +567,12 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(final Env env) {
-            // Not to get error: declares service, but doesn't register it
-            env.registerService(new Object());
             env.getInstrumenter().attachFactory(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.STATEMENT).build(), new ExecutionEventNodeFactory() {
                 public ExecutionEventNode create(EventContext context) {
 
                     final CallTarget target;
                     try {
-                        target = env.parse(com.oracle.truffle.api.source.Source.newBuilder("EXPRESSION").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build());
+                        target = env.parse(Source.newBuilder("EXPRESSION").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build());
                     } catch (Exception e) {
                         throw new AssertionError();
                     }
@@ -614,7 +614,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         TestEnvParse2.onExpression = 0;
         TestEnvParse2.onStatement = 0;
 
-        assureEnabled(engine.getInstruments().get("testEnvParse2"));
+        engine.getRuntime().getInstruments().get("testEnvParse2").setEnabled(true);
         run("STATEMENT");
 
         Assert.assertEquals(1, TestEnvParse2.onExpression);
@@ -626,7 +626,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         Assert.assertEquals(2, TestEnvParse2.onStatement);
     }
 
-    @Registration(name = "", version = "", id = "testEnvParse2", services = Object.class)
+    @Registration(name = "", version = "", id = "testEnvParse2")
     public static class TestEnvParse2 extends TruffleInstrument {
 
         static int onExpression = 0;
@@ -634,14 +634,12 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(final Env env) {
-            // Not to get error: declares service, but doesn't register it
-            env.registerService(new Object());
             env.getInstrumenter().attachFactory(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.STATEMENT).build(), new ExecutionEventNodeFactory() {
                 public ExecutionEventNode create(EventContext context) {
 
                     final CallTarget target;
                     try {
-                        target = context.parseInContext(com.oracle.truffle.api.source.Source.newBuilder("EXPRESSION").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build());
+                        target = context.parseInContext(Source.newBuilder("EXPRESSION").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build());
                     } catch (IOException e) {
                         throw new AssertionError();
                     }
@@ -682,21 +680,19 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     public void testInstrumentAll() throws IOException {
         TestInstrumentAll1.onStatement = 0;
 
-        assureEnabled(engine.getInstruments().get("testInstrumentAll"));
+        engine.getRuntime().getInstruments().get("testInstrumentAll").setEnabled(true);
         run("STATEMENT");
 
         Assert.assertEquals(1, TestInstrumentAll1.onStatement);
     }
 
-    @Registration(id = "testInstrumentAll", services = Object.class)
+    @Registration(id = "testInstrumentAll")
     public static class TestInstrumentAll1 extends TruffleInstrument {
 
         static int onStatement = 0;
 
         @Override
         protected void onCreate(final Env env) {
-            // Not to get error: declares service, but doesn't register it
-            env.registerService(new Object());
             env.getInstrumenter().attachListener(SourceSectionFilter.ANY, new ExecutionEventListener() {
                 public void onEnter(EventContext context, VirtualFrame frame) {
                     onStatement++;
@@ -718,13 +714,13 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     public void testInstrumentNonInstrumentable() throws IOException {
         TestInstrumentNonInstrumentable1.onStatement = 0;
 
-        assureEnabled(engine.getInstruments().get("testInstrumentNonInstrumentable"));
+        engine.getRuntime().getInstruments().get("testInstrumentNonInstrumentable").setEnabled(true);
         run("DEFINE(foo, ROOT())");
 
         Assert.assertEquals(0, TestInstrumentNonInstrumentable1.onStatement);
     }
 
-    @Registration(id = "testInstrumentNonInstrumentable", services = Object.class)
+    @Registration(id = "testInstrumentNonInstrumentable")
     public static class TestInstrumentNonInstrumentable1 extends TruffleInstrument {
 
         static int onStatement = 0;
@@ -755,10 +751,10 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         err.reset();
 
         // turn instruments on
-        assureEnabled(engine.getInstruments().get("testOutputConsumerArray"));
-        assureEnabled(engine.getInstruments().get("testOutputConsumerPiped"));
-        context.eval(lines("PRINT(OUT, OutputToStdOut)"));
-        context.eval(lines("PRINT(ERR, OutputToStdErr)"));
+        engine.getRuntime().getInstruments().get("testOutputConsumerArray").setEnabled(true);
+        engine.getRuntime().getInstruments().get("testOutputConsumerPiped").setEnabled(true);
+        engine.eval(lines("PRINT(OUT, OutputToStdOut)"));
+        engine.eval(lines("PRINT(ERR, OutputToStdErr)"));
         // test that the output goes eveywhere
         Assert.assertEquals("OutputToStdOut", getOut());
         Assert.assertEquals("OutputToStdOut", TestOutputConsumerArray.getOut());
@@ -776,8 +772,8 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
         // close piped err stream and test that print still works
         TestOutputConsumerPiped.fromErr.close();
-        context.eval(lines("PRINT(OUT, MoreOutputToStdOut)"));
-        context.eval(lines("PRINT(ERR, MoreOutputToStdErr)"));
+        engine.eval(lines("PRINT(OUT, MoreOutputToStdOut)"));
+        engine.eval(lines("PRINT(ERR, MoreOutputToStdErr)"));
         Assert.assertEquals("OutputToStdOutMoreOutputToStdOut", out.toString());
         Assert.assertEquals("OutputToStdOutMoreOutputToStdOut", TestOutputConsumerArray.getOut());
         String errorMsg = "java.lang.Exception: Output operation write(B[II) failed for java.io.PipedOutputStream";
@@ -792,18 +788,17 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         err.reset();
 
         // the I/O error is not printed again
-        context.eval(lines("PRINT(ERR, EvenMoreOutputToStdErr)"));
+        engine.eval(lines("PRINT(ERR, EvenMoreOutputToStdErr)"));
         Assert.assertEquals("EvenMoreOutputToStdErr", err.toString());
         Assert.assertEquals("OutputToStdErrMoreOutputToStdErrEvenMoreOutputToStdErr", TestOutputConsumerArray.getErr());
 
         // instruments disabled
-        engine.close();
-        engine = null;
+        engine.getRuntime().getInstruments().get("testOutputConsumerArray").setEnabled(false);
+        engine.getRuntime().getInstruments().get("testOutputConsumerPiped").setEnabled(false);
         out.reset();
         err.reset();
-        engine = getEngine();
-        context.eval(lines("PRINT(OUT, FinalOutputToStdOut)"));
-        context.eval(lines("PRINT(ERR, FinalOutputToStdErr)"));
+        engine.eval(lines("PRINT(OUT, FinalOutputToStdOut)"));
+        engine.eval(lines("PRINT(ERR, FinalOutputToStdErr)"));
         Assert.assertEquals("FinalOutputToStdOut", out.toString());
         Assert.assertEquals("FinalOutputToStdErr", err.toString());
         // nothing more printed to the disabled instrument
@@ -811,7 +806,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         Assert.assertEquals("OutputToStdErrMoreOutputToStdErrEvenMoreOutputToStdErr", TestOutputConsumerArray.getErr());
     }
 
-    @Registration(id = "testOutputConsumerArray", services = Object.class)
+    @Registration(id = "testOutputConsumerArray")
     public static class TestOutputConsumerArray extends TruffleInstrument {
 
         static ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -821,8 +816,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         protected void onCreate(Env env) {
             env.getInstrumenter().attachOutConsumer(out);
             env.getInstrumenter().attachErrConsumer(err);
-            // Not to get error: declares service, but doesn't register it
-            env.registerService(new Object());
         }
 
         static String getOut() {
@@ -834,7 +827,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         }
     }
 
-    @Registration(id = "testOutputConsumerPiped", services = Object.class)
+    @Registration(id = "testOutputConsumerPiped")
     public static class TestOutputConsumerPiped extends TruffleInstrument {
 
         static PipedOutputStream out = new PipedOutputStream();
@@ -851,8 +844,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         protected void onCreate(Env env) {
             env.getInstrumenter().attachOutConsumer(out);
             env.getInstrumenter().attachErrConsumer(err);
-            // Not to get error: declares service, but doesn't register it
-            env.registerService(new Object());
         }
 
         Reader fromOut() {
@@ -870,35 +861,33 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     @Test
     public void testKillExceptionOnEnter() throws IOException {
-        assureEnabled(engine.getInstruments().get("testKillQuitException"));
+        engine.getRuntime().getInstruments().get("testKillQuitException").setEnabled(true);
         TestKillQuitException.exceptionOnEnter = new MyKillException();
         TestKillQuitException.exceptionOnReturnValue = null;
         TestKillQuitException.returnExceptionalCount = 0;
         try {
             run("STATEMENT");
             Assert.fail("KillException in onEnter() cancels engine execution");
-        } catch (PolyglotException ex) {
-            assertTrue(ex.getMessage(), ex.getMessage().contains(MyKillException.class.getName()));
+        } catch (MyKillException ex) {
         }
         Assert.assertEquals("KillException is not an execution event", 0, TestKillQuitException.returnExceptionalCount);
     }
 
     @Test
     public void testKillExceptionOnReturnValue() throws IOException {
-        assureEnabled(engine.getInstruments().get("testKillQuitException"));
+        engine.getRuntime().getInstruments().get("testKillQuitException").setEnabled(true);
         TestKillQuitException.exceptionOnEnter = null;
         TestKillQuitException.exceptionOnReturnValue = new MyKillException();
         TestKillQuitException.returnExceptionalCount = 0;
         try {
             run("STATEMENT");
             Assert.fail("KillException in onReturnValue() cancels engine execution");
-        } catch (PolyglotException ex) {
-            assertTrue(ex.getMessage(), ex.getMessage().contains(MyKillException.class.getName()));
+        } catch (MyKillException ex) {
         }
         Assert.assertEquals("KillException is not an execution event", 0, TestKillQuitException.returnExceptionalCount);
     }
 
-    @Registration(id = "testKillQuitException", services = Object.class)
+    @Registration(id = "testKillQuitException")
     public static class TestKillQuitException extends TruffleInstrument {
 
         static Error exceptionOnEnter = null;
@@ -934,13 +923,13 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     public void testUsedTagNotRequired1() throws IOException {
         TestInstrumentNonInstrumentable1.onStatement = 0;
 
-        assureEnabled(engine.getInstruments().get("testUsedTagNotRequired1"));
+        engine.getRuntime().getInstruments().get("testUsedTagNotRequired1").setEnabled(true);
         run("ROOT()");
 
         Assert.assertEquals(0, TestInstrumentNonInstrumentable1.onStatement);
     }
 
-    @Registration(id = "testUsedTagNotRequired1", services = Object.class)
+    @Registration(id = "testUsedTagNotRequired1")
     public static class TestUsedTagNotRequired1 extends TruffleInstrument {
 
         private static class Foobar {
@@ -977,7 +966,8 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
      */
     @Test
     public void testQueryTags1() throws IOException {
-        Instrument instrument = engine.getInstruments().get("testIsNodeTaggedWith1");
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testIsNodeTaggedWith1");
+        instrument.setEnabled(true);
         Instrumenter instrumenter = instrument.lookup(Instrumenter.class);
 
         TestIsNodeTaggedWith1.expressionNode = null;
@@ -1010,13 +1000,13 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
      */
     @Test
     public void testQueryTags2() throws IOException {
-        Instrument instrument = engine.getInstruments().get("testIsNodeTaggedWith1");
-        assureEnabled(instrument);
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testIsNodeTaggedWith1");
+        instrument.setEnabled(true);
         TestIsNodeTaggedWith1.expressionNode = null;
         TestIsNodeTaggedWith1.statementNode = null;
         TestIsNodeTaggedWith1Language.instrumenter = null;
 
-        Source otherLanguageSource = Source.create("testIsNodeTaggedWith1-lang", "STATEMENT(EXPRESSION)");
+        Source otherLanguageSource = Source.newBuilder("STATEMENT(EXPRESSION)").name("unknown").mimeType("testIsNodeTaggedWith1").build();
         run(otherLanguageSource);
 
         Instrumenter instrumenter = TestIsNodeTaggedWith1Language.instrumenter;
@@ -1044,37 +1034,38 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     @Test
     public void testInstrumentsWhenForked() throws IOException {
-        Instrument instrument = engine.getInstruments().get("testIsNodeTaggedWith1");
-        assureEnabled(instrument);
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testIsNodeTaggedWith1");
+        instrument.setEnabled(true);
         TestIsNodeTaggedWith1 service = instrument.lookup(TestIsNodeTaggedWith1.class);
 
         assertEquals(1, service.onCreateCalls);
 
-        Source otherLanguageSource = Source.create("testIsNodeTaggedWith1-lang", "STATEMENT(EXPRESSION)");
+        Source otherLanguageSource = Source.newBuilder("STATEMENT(EXPRESSION)").name("unknown").mimeType("testIsNodeTaggedWith1").build();
         run(otherLanguageSource);
 
-        org.graalvm.polyglot.Context forked = newContext();
+        PolyglotEngine forked = createEngine(langMimeType);
         assertEquals(1, service.onCreateCalls);
 
-        final Map<String, ? extends Instrument> instruments = forked.getEngine().getInstruments();
+        final Map<String, ? extends PolyglotRuntime.Instrument> instruments = forked.getRuntime().getInstruments();
         assertSame(instrument, instruments.get("testIsNodeTaggedWith1"));
         assertSame(service, instruments.get("testIsNodeTaggedWith1").lookup(TestIsNodeTaggedWith1.class));
 
-        assertEquals(instruments.size(), engine.getInstruments().size());
+        assertEquals(instruments.size(), engine.getRuntime().getInstruments().size());
         for (String key : instruments.keySet()) {
-            assertSame(engine.getInstruments().get(key), instruments.get(key));
+            assertSame(engine.getRuntime().getInstruments().get(key), instruments.get(key));
         }
 
         assertEquals(0, service.onDisposeCalls);
-        context.close();
+        engine.dispose();
         assertEquals(0, service.onDisposeCalls);
-        forked.getEngine().close();
-        // test if all engines are disposed
+        forked.dispose();
+        forked.getRuntime().dispose();
+        // dispose if all engines are disposed
         assertEquals(1, service.onDisposeCalls);
-        engine = null; // avoid a second disposal in @After event
+        engine = null; // avoid disposal in @After event
     }
 
-    @TruffleLanguage.Registration(id = "testIsNodeTaggedWith1-lang", name = "", version = "", mimeType = "testIsNodeTaggedWith1")
+    @TruffleLanguage.Registration(name = "", version = "", mimeType = "testIsNodeTaggedWith1")
     @ProvidedTags({InstrumentationTestLanguage.ExpressionNode.class, StandardTags.StatementTag.class})
     public static class TestIsNodeTaggedWith1Language extends InstrumentationTestLanguage {
 
@@ -1109,7 +1100,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     }
 
-    @Registration(id = "testIsNodeTaggedWith1", services = {Instrumenter.class, TestIsNodeTaggedWith1.class, Object.class})
+    @Registration(id = "testIsNodeTaggedWith1")
     public static class TestIsNodeTaggedWith1 extends TruffleInstrument {
 
         static Node expressionNode;
@@ -1149,14 +1140,17 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     }
 
-    private static void setupEngine(Source initSource, boolean runInitAfterExec) {
-        InstrumentationTestLanguage.envConfig.put("initSource", initSource);
-        InstrumentationTestLanguage.envConfig.put("runInitAfterExec", runInitAfterExec);
+    private void setupEngine(Source initSource, boolean runInitAfterExec) {
+        PolyglotEngine.Builder builder = PolyglotEngine.newBuilder();
+        builder.runtime(getRuntime());
+        builder.config(InstrumentationTestLanguage.MIME_TYPE, "initSource", initSource);
+        builder.config(InstrumentationTestLanguage.MIME_TYPE, "runInitAfterExec", runInitAfterExec);
+        engine = builder.build();
     }
 
     @Test
     public void testAccessInstruments() {
-        Instrument instrument = engine.getInstruments().get("testAccessInstruments");
+        Instrument instrument = engine.getRuntime().getInstruments().get("testAccessInstruments");
         TestAccessInstruments access = instrument.lookup(TestAccessInstruments.class);
 
         InstrumentInfo info = access.env.getInstruments().get("testAccessInstruments");
@@ -1193,10 +1187,10 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     @Test
     public void testAccessLanguages() {
-        Instrument instrument = engine.getInstruments().get("testAccessInstruments");
+        Instrument instrument = engine.getRuntime().getInstruments().get("testAccessInstruments");
         TestAccessInstruments access = instrument.lookup(TestAccessInstruments.class);
 
-        LanguageInfo info = access.env.getLanguages().get(InstrumentationTestLanguage.ID);
+        LanguageInfo info = access.env.getLanguages().get(InstrumentationTestLanguage.MIME_TYPE);
         assertNotNull(info);
         assertTrue(info.getMimeTypes().contains(InstrumentationTestLanguage.MIME_TYPE));
         assertEquals("InstrumentTestLang", info.getName());
@@ -1252,12 +1246,12 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     @Test
     public void testAccessInstrumentFromLanguage() {
         ReturnLanguageEnv envReturner = new ReturnLanguageEnv();
-        InstrumentationTestLanguage.envConfig.put(ReturnLanguageEnv.KEY, envReturner);
-        context.eval(Source.create(InstrumentationTestLanguage.ID, ""));
+        PolyglotEngine e = PolyglotEngine.newBuilder().setErr(err).config(InstrumentationTestLanguage.MIME_TYPE, ReturnLanguageEnv.KEY, envReturner).build();
+        e.eval(Source.newBuilder("").mimeType(InstrumentationTestLanguage.MIME_TYPE).name("").build());
         assertNotNull(envReturner.env);
 
         TruffleLanguage.Env env = envReturner.env;
-        LanguageInfo langInfo = env.getLanguages().get(InstrumentationTestLanguage.ID);
+        LanguageInfo langInfo = env.getLanguages().get(InstrumentationTestLanguage.MIME_TYPE);
         assertNotNull(langInfo);
         assertTrue(langInfo.getMimeTypes().contains(InstrumentationTestLanguage.MIME_TYPE));
         assertEquals("InstrumentTestLang", langInfo.getName());
@@ -1283,68 +1277,68 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     @Test
     public void testLanguageInitializedOrNot() throws Exception {
-        Source initSource = Source.create(InstrumentationTestLanguage.ID, "STATEMENT(EXPRESSION, EXPRESSION)");
+        Source initSource = Source.newBuilder("STATEMENT(EXPRESSION, EXPRESSION)").name("<init>").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         setupEngine(initSource, false);
 
-        Instrument instrument = engine.getInstruments().get("testLangInitialized");
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testLangInitialized");
 
         // Events during language initialization phase are included:
         TestLangInitialized.initializationEvents = true;
+        instrument.setEnabled(true);
         TestLangInitialized service = instrument.lookup(TestLangInitialized.class);
         run("LOOP(2, STATEMENT())");
         assertEquals("[StatementNode, false, ExpressionNode, false, ExpressionNode, false, LoopNode, true, StatementNode, true, StatementNode, true]", service.getEnteredNodes());
-        engine.close();
-        engine = null;
+        instrument.setEnabled(false);
     }
 
     @Test
     public void testLanguageInitializedOnly() throws Exception {
-        Source initSource = Source.create(InstrumentationTestLanguage.ID, "STATEMENT(EXPRESSION, EXPRESSION)");
+        Source initSource = Source.newBuilder("STATEMENT(EXPRESSION, EXPRESSION)").name("<init>").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         setupEngine(initSource, false);
-        Instrument instrument = engine.getInstruments().get("testLangInitialized");
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testLangInitialized");
 
         // Events during language initialization phase are excluded:
         TestLangInitialized.initializationEvents = false;
+        instrument.setEnabled(true);
         TestLangInitialized service = instrument.lookup(TestLangInitialized.class);
         run("LOOP(2, STATEMENT())");
         assertEquals("[LoopNode, true, StatementNode, true, StatementNode, true]", service.getEnteredNodes());
-        engine.close();
-        engine = null;
+        instrument.setEnabled(false);
     }
 
     @Test
     public void testLanguageInitializedOrNotAppend() throws Exception {
-        Source initSource = Source.create(InstrumentationTestLanguage.ID, "STATEMENT(EXPRESSION, EXPRESSION)");
+        Source initSource = Source.newBuilder("STATEMENT(EXPRESSION, EXPRESSION)").name("<init>").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         setupEngine(initSource, true);
-        Instrument instrument = engine.getInstruments().get("testLangInitialized");
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testLangInitialized");
 
         // Events during language initialization phase are prepended and appended:
         TestLangInitialized.initializationEvents = true;
+        instrument.setEnabled(true);
         TestLangInitialized service = instrument.lookup(TestLangInitialized.class);
         run("LOOP(2, STATEMENT())");
         assertEquals("[StatementNode, false, ExpressionNode, false, ExpressionNode, false, LoopNode, true, StatementNode, true, StatementNode, true, StatementNode, true, ExpressionNode, true, ExpressionNode, true]",
                         service.getEnteredNodes());
-        engine.close();
-        engine = null;
+        instrument.setEnabled(false);
     }
 
     @Test
     public void testLanguageInitializedOnlyAppend() throws Exception {
-        Source initSource = Source.create(InstrumentationTestLanguage.ID, "STATEMENT(EXPRESSION, EXPRESSION)");
+        Source initSource = Source.newBuilder("STATEMENT(EXPRESSION, EXPRESSION)").name("<init>").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
         setupEngine(initSource, true);
-        Instrument instrument = engine.getInstruments().get("testLangInitialized");
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testLangInitialized");
 
         // Events during language initialization phase are excluded,
         // but events from the same nodes used for initialization are appended:
         TestLangInitialized.initializationEvents = false;
+        instrument.setEnabled(true);
         TestLangInitialized service = instrument.lookup(TestLangInitialized.class);
         run("LOOP(2, STATEMENT())");
         assertEquals("[LoopNode, true, StatementNode, true, StatementNode, true, StatementNode, true, ExpressionNode, true, ExpressionNode, true]", service.getEnteredNodes());
-        engine.close();
-        engine = null;
+        instrument.setEnabled(false);
     }
 
-    @Registration(id = "testLangInitialized", services = TestLangInitialized.class)
+    @Registration(id = "testLangInitialized")
     public static class TestLangInitialized extends TruffleInstrument implements ExecutionEventListener {
 
         static boolean initializationEvents;
@@ -1381,17 +1375,16 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
     @Test
     public void testAllocation() throws Exception {
-        Instrument instrument = engine.getInstruments().get("testAllocation");
-        assureEnabled(instrument);
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testAllocation");
+        instrument.setEnabled(true);
         TestAllocation allocation = instrument.lookup(TestAllocation.class);
         run("LOOP(3, VARIABLE(a, 10))");
-        engine.close();
-        engine = null;
+        instrument.setEnabled(false);
         assertEquals("[W 4 null, A 4 10, W 4 null, A 4 10, W 4 null, A 4 10]", allocation.getAllocations());
 
     }
 
-    @Registration(id = "testAllocation", services = {TestAllocation.class, Object.class})
+    @Registration(id = "testAllocation")
     public static class TestAllocation extends TruffleInstrument implements AllocationListener {
 
         private final List<String> allocations = new ArrayList<>();
@@ -1399,7 +1392,7 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         @Override
         protected void onCreate(Env env) {
             env.registerService(this);
-            LanguageInfo testLanguage = env.getLanguages().get(InstrumentationTestLanguage.ID);
+            LanguageInfo testLanguage = env.getLanguages().get(InstrumentationTestLanguage.MIME_TYPE);
             env.getInstrumenter().attachAllocationListener(AllocationEventFilter.newBuilder().languages(testLanguage).build(), this);
         }
 
