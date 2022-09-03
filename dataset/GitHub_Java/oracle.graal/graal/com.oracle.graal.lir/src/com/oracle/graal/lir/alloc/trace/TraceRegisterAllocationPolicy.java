@@ -55,10 +55,6 @@ public final class TraceRegisterAllocationPolicy {
             return lirGenRes.getLIR();
         }
 
-        protected final LIRGenerationResult getLIRGenerationResult() {
-            return lirGenRes;
-        }
-
         protected final TraceBuilderResult getTraceBuilderResult() {
             return resultTraces;
         }
