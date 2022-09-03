@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,11 @@ public class DynamicDeoptimizeNode extends AbstractDeoptimizeNode implements LIR
     @Input ValueNode actionAndReason;
     @Input ValueNode speculation;
 
-    public DynamicDeoptimizeNode(ValueNode actionAndReason, ValueNode speculation) {
+    public static DynamicDeoptimizeNode create(ValueNode actionAndReason, ValueNode speculation) {
+        return USE_GENERATED_NODES ? new DynamicDeoptimizeNodeGen(actionAndReason, speculation) : new DynamicDeoptimizeNode(actionAndReason, speculation);
+    }
+
+    protected DynamicDeoptimizeNode(ValueNode actionAndReason, ValueNode speculation) {
         this.actionAndReason = actionAndReason;
         this.speculation = speculation;
     }
@@ -68,10 +72,10 @@ public class DynamicDeoptimizeNode extends AbstractDeoptimizeNode implements LIR
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (actionAndReason.isConstant() && speculation.isConstant()) {
-            JavaConstant constant = actionAndReason.asJavaConstant();
-            JavaConstant speculationConstant = speculation.asJavaConstant();
-            DeoptimizeNode newDeopt = new DeoptimizeNode(tool.getMetaAccess().decodeDeoptAction(constant), tool.getMetaAccess().decodeDeoptReason(constant), tool.getMetaAccess().decodeDebugId(
-                            constant), speculationConstant, stateBefore());
+            Constant constant = actionAndReason.asConstant();
+            Constant speculationConstant = speculation.asConstant();
+            DeoptimizeNode newDeopt = DeoptimizeNode.create(tool.getMetaAccess().decodeDeoptAction(constant), tool.getMetaAccess().decodeDeoptReason(constant),
+                            tool.getMetaAccess().decodeDebugId(constant), speculationConstant, stateBefore());
             return newDeopt;
         }
         return this;
