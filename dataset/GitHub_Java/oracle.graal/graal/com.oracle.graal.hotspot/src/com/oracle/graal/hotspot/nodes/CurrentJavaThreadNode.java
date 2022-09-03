@@ -26,7 +26,6 @@ import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
@@ -42,7 +41,7 @@ public final class CurrentJavaThreadNode extends FloatingNode implements LIRLowe
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        Register rawThread = ((HotSpotLIRGenerator) gen).getProviders().getRegisters().getThreadRegister();
+        Register rawThread = runtime().getProviders().getRegisters().getThreadRegister();
         gen.setResult(this, rawThread.asValue(this.kind()));
     }
 

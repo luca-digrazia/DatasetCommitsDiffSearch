@@ -49,7 +49,6 @@ import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.PlaceholderOp;
-import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.amd64.AMD64ControlFlow.CondMoveOp;
 import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
@@ -181,24 +180,9 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         }
     }
 
-    private Register findPollOnReturnScratchRegister() {
-        RegisterConfig regConfig = getProviders().getCodeCache().getRegisterConfig();
-        for (Register r : regConfig.getAllocatableRegisters(Kind.Long)) {
-            if (r != regConfig.getReturnRegister(Kind.Long) && r != AMD64.rbp) {
-                return r;
-            }
-        }
-        throw GraalInternalError.shouldNotReachHere();
-    }
-
-    private Register pollOnReturnScratchRegister;
-
     @Override
     protected void emitReturn(Value input) {
-        if (pollOnReturnScratchRegister == null) {
-            pollOnReturnScratchRegister = findPollOnReturnScratchRegister();
-        }
-        append(new AMD64HotSpotReturnOp(input, getStub() != null, pollOnReturnScratchRegister));
+        append(new AMD64HotSpotReturnOp(input, getStub() != null));
     }
 
     @Override
@@ -211,7 +195,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
      * Map from debug infos that need to be updated with callee save information to the operations
      * that provide the information.
      */
-    Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = new HashMap<>();
+    Map<LIRFrameState, AMD64RegistersPreservationOp> calleeSaveInfo = new HashMap<>();
 
     private LIRFrameState currentRuntimeCallInfo;
 
@@ -222,7 +206,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     protected AMD64SaveRegistersOp emitSaveRegisters(Register[] savedRegisters, StackSlot[] savedRegisterLocations) {
-        AMD64SaveRegistersOp save = new AMD64SaveRegistersOp(savedRegisters, savedRegisterLocations, true);
+        AMD64SaveRegistersOp save = new AMD64SaveRegistersOp(savedRegisters, savedRegisterLocations);
         append(save);
         return save;
     }
@@ -265,12 +249,11 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
         if (linkage.canDeoptimize()) {
             assert info != null || stub != null;
-            Register thread = getProviders().getRegisters().getThreadRegister();
-            append(new AMD64HotSpotCRuntimeCallPrologueOp(config.threadLastJavaSpOffset(), thread));
+            append(new AMD64HotSpotCRuntimeCallPrologueOp());
             result = super.emitForeignCall(linkage, info, args);
-            append(new AMD64HotSpotCRuntimeCallEpilogueOp(config.threadLastJavaSpOffset(), config.threadLastJavaFpOffset(), thread));
+            append(new AMD64HotSpotCRuntimeCallEpilogueOp());
         } else {
-            result = super.emitForeignCall(linkage, info, args);
+            result = super.emitForeignCall(linkage, null, args);
         }
 
         if (destroysRegisters) {
@@ -406,7 +389,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     public void emitDeoptimizeCaller(DeoptimizationAction action, DeoptimizationReason reason) {
-        moveDeoptimizationActionAndReasonToThread(getMetaAccess().encodeDeoptActionAndReason(action, reason, (short) 0));
+        moveDeoptimizationActionAndReasonToThread(getMetaAccess().encodeDeoptActionAndReason(action, reason));
         append(new AMD64HotSpotDeoptimizeCallerOp());
     }
 
@@ -425,8 +408,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         RegisterValue exceptionPcFixed = (RegisterValue) outgoingCc.getArgument(1);
         emitMove(exceptionFixed, operand(exception));
         emitMove(exceptionPcFixed, operand(exceptionPc));
-        Register thread = getProviders().getRegisters().getThreadRegister();
-        AMD64HotSpotJumpToExceptionHandlerInCallerOp op = new AMD64HotSpotJumpToExceptionHandlerInCallerOp(handler, exceptionFixed, exceptionPcFixed, config.threadIsMethodHandleReturnOffset, thread);
+        AMD64HotSpotJumpToExceptionHandlerInCallerOp op = new AMD64HotSpotJumpToExceptionHandlerInCallerOp(handler, exceptionFixed, exceptionPcFixed);
         append(op);
     }
 
@@ -522,7 +504,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     private int getLogMinObjectAlignment() {
-        return config.logMinObjAlignment();
+        return config.logMinObjAlignment;
     }
 
     private int getNarrowOopShift() {

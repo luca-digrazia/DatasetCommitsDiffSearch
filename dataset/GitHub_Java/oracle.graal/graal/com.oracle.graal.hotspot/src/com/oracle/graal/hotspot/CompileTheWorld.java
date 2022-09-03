@@ -89,12 +89,8 @@ public final class CompileTheWorld {
         this.startAt = startAt;
         this.stopAt = stopAt;
 
-        // We don't want the VM to exit when a method fails to compile...
+        // We don't want the VM to exit when a method fails to compile.
         ExitVMOnException.setValue(false);
-
-        // ...but we want to see exceptions.
-        PrintBailout.setValue(true);
-        PrintStackTraceOnException.setValue(true);
     }
 
     /**
@@ -186,7 +182,7 @@ public final class CompileTheWorld {
                     }
 
                     // Are we compiling this class?
-                    HotSpotMetaAccessProvider metaAccess = runtime.getHostProviders().getMetaAccess();
+                    HotSpotMetaAccessProvider metaAccess = runtime.getProviders().getMetaAccess();
                     if (classFileCounter >= startAt) {
                         TTY.println("CompileTheWorld (%d) : %s", classFileCounter, className);
 

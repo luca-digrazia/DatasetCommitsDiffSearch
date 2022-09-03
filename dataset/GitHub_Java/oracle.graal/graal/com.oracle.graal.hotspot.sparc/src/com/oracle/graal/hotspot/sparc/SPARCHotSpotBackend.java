@@ -51,7 +51,7 @@ import static java.lang.reflect.Modifier.*;
 /**
  * HotSpot SPARC specific backend.
  */
-public class SPARCHotSpotBackend extends HotSpotHostBackend {
+public class SPARCHotSpotBackend extends HotSpotBackend {
 
     private static final Unsafe unsafe = Unsafe.getUnsafe();
 

@@ -41,17 +41,17 @@ public class PTXHotSpotGraalRuntime extends HotSpotGraalRuntime {
      * Called from C++ code to retrieve the singleton instance, creating it first if necessary.
      */
     public static HotSpotGraalRuntime makeInstance() {
-        HotSpotGraalRuntime graalRuntime = graalRuntime();
-        if (graalRuntime == null) {
+        HotSpotGraalRuntime runtime = runtime();
+        if (runtime == null) {
             HotSpotGraalRuntimeFactory factory = findFactory("PTX");
             if (factory != null) {
-                graalRuntime = factory.createRuntime();
+                runtime = factory.createRuntime();
             } else {
-                graalRuntime = new PTXHotSpotGraalRuntime();
+                runtime = new PTXHotSpotGraalRuntime();
             }
-            graalRuntime.completeInitialization();
+            runtime.completeInitialization();
         }
-        return graalRuntime;
+        return runtime;
     }
 
     @Override
@@ -68,7 +68,7 @@ public class PTXHotSpotGraalRuntime extends HotSpotGraalRuntime {
         HotSpotReplacementsImpl replacements = new HotSpotReplacementsImpl(p, getConfig(), assumptions);
         HotSpotDisassemblerProvider disassembler = new HotSpotDisassemblerProvider(this);
         HotSpotSuitesProvider suites = new HotSpotSuitesProvider(this);
-        HotSpotRegisters registers = new HotSpotRegisters(PTX.tid, Register.None, Register.None);
+        HotSpotRegistersProvider registers = new HotSpotRegisters(PTX.tid, Register.None, Register.None);
         return new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers);
     }
 

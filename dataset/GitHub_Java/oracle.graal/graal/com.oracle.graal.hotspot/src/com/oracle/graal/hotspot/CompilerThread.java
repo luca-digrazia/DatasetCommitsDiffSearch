@@ -22,11 +22,14 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+
+import java.io.*;
 import java.util.concurrent.*;
 
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
-
+import com.oracle.graal.printer.*;
 
 public final class CompilerThread extends Thread {
 
@@ -37,29 +40,33 @@ public final class CompilerThread extends Thread {
             return new CompilerThread(r);
         }
     };
-    public static final ThreadFactory LOW_PRIORITY_FACTORY = new ThreadFactory() {
-
-        @Override
-        public Thread newThread(Runnable r) {
-            CompilerThread thread = new CompilerThread(r);
-            thread.setPriority(MIN_PRIORITY);
-            return thread;
-        }
-    };
 
     private CompilerThread(Runnable r) {
         super(r);
         this.setName("GraalCompilerThread-" + this.getId());
+        this.setPriority(MAX_PRIORITY);
         this.setDaemon(true);
     }
 
     @Override
     public void run() {
-        if (GraalOptions.Debug) {
-            Debug.enable();
-            HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter);
-            Debug.setConfig(hotspotDebugConfig);
+        GraalDebugConfig hotspotDebugConfig = null;
+        if (Debug.isEnabled()) {
+            PrintStream log = runtime().getVMToCompiler().log();
+            DebugEnvironment.initialize(log);
         }
-        super.run();
+        try {
+            super.run();
+        } finally {
+            if (hotspotDebugConfig != null) {
+                for (DebugDumpHandler dumpHandler : hotspotDebugConfig.dumpHandlers()) {
+                    try {
+                        dumpHandler.close();
+                    } catch (Throwable t) {
+
+                    }
+                }
+            }
+        }
     }
 }

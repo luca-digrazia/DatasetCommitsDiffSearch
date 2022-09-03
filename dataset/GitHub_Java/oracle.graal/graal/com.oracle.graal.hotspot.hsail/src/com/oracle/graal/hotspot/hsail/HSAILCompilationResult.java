@@ -23,8 +23,6 @@
 
 package com.oracle.graal.hotspot.hsail;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-
 import java.lang.reflect.*;
 import java.util.logging.*;
 
@@ -33,9 +31,9 @@ import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
@@ -48,10 +46,9 @@ import com.oracle.graal.phases.util.*;
 /**
  * Class that represents a HSAIL compilation result. Includes the compiled HSAIL code.
  */
-public class HSAILCompilationResult extends CompilationResult {
+public class HSAILCompilationResult {
 
-    private static final long serialVersionUID = -4178700465275724625L;
-
+    private CompilationResult compResult;
     private static final String propPkgName = HSAILCompilationResult.class.getPackage().getName();
     private static Level logLevel;
     private static ConsoleHandler consoleHandler;
@@ -76,26 +73,17 @@ public class HSAILCompilationResult extends CompilationResult {
         consoleHandler.setLevel(logLevel);
     }
 
-    static final HSAILHotSpotBackend backend;
-    static {
-        // Look for installed HSAIL backend
-        HSAILHotSpotBackend b = (HSAILHotSpotBackend) Graal.getRuntime().getCapability(Backend.class, "HSAIL");
-        if (b == null) {
-            // Fall back to a new instance
-            b = new HSAILHotSpotBackendFactory().createBackend(runtime(), runtime().getHostBackend());
-        }
-        backend = b;
-    }
+    private static final HotSpotGraalRuntime runtime = new HSAILHotSpotGraalRuntime();
 
     public static HSAILCompilationResult getHSAILCompilationResult(Method meth) {
-        HotSpotMetaAccessProvider metaAccess = backend.getProviders().getMetaAccess();
+        HotSpotMetaAccessProvider metaAccess = runtime.getProviders().getMetaAccess();
         ResolvedJavaMethod javaMethod = metaAccess.lookupJavaMethod(meth);
         return getHSAILCompilationResult(javaMethod);
     }
 
     public static HSAILCompilationResult getHSAILCompilationResult(ResolvedJavaMethod javaMethod) {
-        HotSpotMetaAccessProvider metaAccess = backend.getProviders().getMetaAccess();
-        ForeignCallsProvider foreignCalls = backend.getProviders().getForeignCalls();
+        HotSpotMetaAccessProvider metaAccess = runtime.getProviders().getMetaAccess();
+        ForeignCallsProvider foreignCalls = runtime.getProviders().getForeignCalls();
         StructuredGraph graph = new StructuredGraph(javaMethod);
         new GraphBuilderPhase(metaAccess, foreignCalls, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
         return getHSAILCompilationResult(graph);
@@ -124,14 +112,15 @@ public class HSAILCompilationResult extends CompilationResult {
             argTypes[argIndex++] = sig.getParameterType(i, null);
         }
 
-        RegisterConfig registerConfig = backend.getProviders().getCodeCache().getRegisterConfig();
+        RegisterConfig registerConfig = runtime.getProviders().getCodeCache().getRegisterConfig();
         return registerConfig.getCallingConvention(type, retType, argTypes, target, stackOnly);
     }
 
     public static HSAILCompilationResult getHSAILCompilationResult(StructuredGraph graph) {
         Debug.dump(graph, "Graph");
-        Providers providers = backend.getProviders();
+        Providers providers = runtime.getProviders();
         TargetDescription target = providers.getCodeCache().getTarget();
+        HSAILHotSpotBackend hsailBackend = (HSAILHotSpotBackend) runtime.getBackend();
         PhasePlan phasePlan = new PhasePlan();
         GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(providers.getMetaAccess(), providers.getForeignCalls(), GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.NONE);
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
@@ -140,11 +129,11 @@ public class HSAILCompilationResult extends CompilationResult {
         CallingConvention cc = getHSAILCallingConvention(Type.JavaCallee, target, graph.method(), false);
         SuitesProvider suitesProvider = Graal.getRequiredCapability(SuitesProvider.class);
         try {
-            HSAILCompilationResult compResult = GraalCompiler.compileGraph(graph, cc, graph.method(), providers, backend, target, null, phasePlan, OptimisticOptimizations.NONE, new SpeculationLog(),
-                            suitesProvider.getDefaultSuites(), new HSAILCompilationResult());
-            return compResult;
+            CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, graph.method(), providers, hsailBackend, target, null, phasePlan, OptimisticOptimizations.NONE, new SpeculationLog(),
+                            suitesProvider.getDefaultSuites(), new CompilationResult());
+            return new HSAILCompilationResult(compResult);
         } catch (GraalInternalError e) {
-            String partialCode = backend.getPartialCodeString();
+            String partialCode = hsailBackend.getPartialCodeString();
             if (partialCode != null && !partialCode.equals("")) {
                 logger.fine("-------------------\nPartial Code Generation:\n--------------------");
                 logger.fine(partialCode);
@@ -166,15 +155,20 @@ public class HSAILCompilationResult extends CompilationResult {
         }
     }
 
-    protected HSAILCompilationResult() {
+    protected HSAILCompilationResult(CompilationResult compResultInput) {
+        compResult = compResultInput;
+    }
+
+    public CompilationResult getCompilationResult() {
+        return compResult;
     }
 
     public String getHSAILCode() {
-        return new String(getTargetCode(), 0, getTargetCodeSize());
+        return new String(compResult.getTargetCode(), 0, compResult.getTargetCodeSize());
     }
 
     public void dumpCompilationResult() {
-        logger.fine("targetCodeSize=" + getTargetCodeSize());
+        logger.fine("targetCodeSize=" + compResult.getTargetCodeSize());
         logger.fine(getHSAILCode());
     }
 

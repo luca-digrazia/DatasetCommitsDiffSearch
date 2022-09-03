@@ -30,15 +30,15 @@ import com.oracle.graal.hotspot.*;
  */
 public class HotSpotDisassemblerProvider implements DisassemblerProvider {
 
-    protected final HotSpotGraalRuntimeProvider runtime;
+    protected final HotSpotGraalRuntime runtime;
 
-    public HotSpotDisassemblerProvider(HotSpotGraalRuntimeProvider runtime) {
+    public HotSpotDisassemblerProvider(HotSpotGraalRuntime runtime) {
         this.runtime = runtime;
     }
 
     public String disassemble(InstalledCode code) {
         if (code.isValid()) {
-            long codeBlob = ((HotSpotInstalledCode) code).getAddress();
+            long codeBlob = ((HotSpotInstalledCode) code).getCodeBlob();
             return runtime.getCompilerToVM().disassembleCodeBlob(codeBlob);
         }
         return null;

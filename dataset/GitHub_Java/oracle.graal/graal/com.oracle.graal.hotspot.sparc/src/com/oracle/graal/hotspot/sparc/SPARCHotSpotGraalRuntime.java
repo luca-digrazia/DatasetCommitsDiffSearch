@@ -23,8 +23,11 @@
 package com.oracle.graal.hotspot.sparc;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.sparc.*;
 
 /**
  * SPARC specific implementation of {@link HotSpotGraalRuntime}.
@@ -38,25 +41,39 @@ final class SPARCHotSpotGraalRuntime extends HotSpotGraalRuntime {
      * Called from C++ code to retrieve the singleton instance, creating it first if necessary.
      */
     public static HotSpotGraalRuntime makeInstance() {
-        if (getInstance() == null) {
-            setInstance(new SPARCHotSpotGraalRuntime());
+        HotSpotGraalRuntime runtime = runtime();
+        if (runtime == null) {
+            runtime = new SPARCHotSpotGraalRuntime();
+            runtime.completeInitialization();
         }
-        return getInstance();
+        return runtime;
+    }
+
+    @Override
+    protected HotSpotProviders createProviders() {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    protected static Architecture createArchitecture() {
+        return new SPARC();
     }
 
     @Override
     protected TargetDescription createTarget() {
-        // SPARC: Create target description.
-        return null;
+        final int stackFrameAlignment = 16;
+        final int implicitNullCheckLimit = 4096;
+        final boolean inlineObjects = true;
+        return new TargetDescription(createArchitecture(), true, stackFrameAlignment, implicitNullCheckLimit, inlineObjects);
     }
 
     @Override
     protected HotSpotBackend createBackend() {
-        return new SPARCHotSpotBackend(getRuntime(), getTarget());
+        return new SPARCHotSpotBackend(this, getProviders());
     }
 
     @Override
-    protected HotSpotRuntime createRuntime() {
-        return new SPARCHotSpotRuntime(config, this);
+    protected Value[] getNativeABICallerSaveRegisters() {
+        throw GraalInternalError.unimplemented();
     }
 }

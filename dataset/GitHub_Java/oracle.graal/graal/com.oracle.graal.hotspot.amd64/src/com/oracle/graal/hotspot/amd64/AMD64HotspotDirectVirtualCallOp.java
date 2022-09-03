@@ -22,15 +22,18 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
+import static com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind.*;
+
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.HotSpotCodeCacheProvider.MarkId;
+import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.amd64.AMD64Call.DirectCallOp;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 
 /**
  * A direct call that complies with the conventions for such calls in HotSpot. In particular, for
@@ -40,22 +43,19 @@ import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 final class AMD64HotspotDirectVirtualCallOp extends DirectCallOp {
 
     private final InvokeKind invokeKind;
-    private final HotSpotVMConfig config;
 
-    AMD64HotspotDirectVirtualCallOp(ResolvedJavaMethod target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind, HotSpotVMConfig config) {
+    AMD64HotspotDirectVirtualCallOp(ResolvedJavaMethod target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind) {
         super(target, result, parameters, temps, state);
         this.invokeKind = invokeKind;
-        this.config = config;
         assert invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual;
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
         // The mark for an invocation that uses an inline cache must be placed at the
         // instruction that loads the Klass from the inline cache.
-        MarkId.recordMark(crb, invokeKind == InvokeKind.Virtual ? MarkId.INVOKEVIRTUAL : MarkId.INVOKEINTERFACE);
-        // This must be emitted exactly like this to ensure it's patchable
-        masm.movq(AMD64.rax, config.nonOopBits);
-        super.emitCode(crb, masm);
+        tasm.recordMark(invokeKind == Virtual ? Marks.MARK_INVOKEVIRTUAL : Marks.MARK_INVOKEINTERFACE);
+        AMD64Move.move(tasm, masm, AMD64.rax.asValue(Kind.Long), Constant.forLong(HotSpotGraalRuntime.runtime().getConfig().nonOopBits));
+        super.emitCode(tasm, masm);
     }
 }

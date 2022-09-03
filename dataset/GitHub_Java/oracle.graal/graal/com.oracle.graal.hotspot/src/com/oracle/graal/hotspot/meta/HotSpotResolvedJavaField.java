@@ -52,32 +52,31 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
     private final String name;
     private final JavaType type;
     private final int offset;
-    private final int modifiers;
+    private final int flags;
     private Constant constant;
 
-    public HotSpotResolvedJavaField(HotSpotResolvedObjectType holder, String name, JavaType type, long offset, int modifiers, boolean internal) {
-        assert (modifiers & FIELD_INTERNAL_FLAG) == 0;
+    public HotSpotResolvedJavaField(HotSpotResolvedObjectType holder, String name, JavaType type, int offset, int flags, boolean internal) {
+        assert (flags & FIELD_INTERNAL_FLAG) == 0;
         this.holder = holder;
         this.name = name;
         this.type = type;
         assert offset != -1;
-        assert offset == (int) offset : "offset larger than int";
-        this.offset = (int) offset;
+        this.offset = offset;
         if (internal) {
-            this.modifiers = modifiers | FIELD_INTERNAL_FLAG;
+            this.flags = flags | FIELD_INTERNAL_FLAG;
         } else {
-            this.modifiers = modifiers;
+            this.flags = flags;
         }
     }
 
     @Override
     public int getModifiers() {
-        return modifiers & Modifier.fieldModifiers();
+        return flags & Modifier.fieldModifiers();
     }
 
     @Override
     public boolean isInternal() {
-        return (modifiers & FIELD_INTERNAL_FLAG) != 0;
+        return (flags & FIELD_INTERNAL_FLAG) != 0;
     }
 
     /**
@@ -93,7 +92,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
      * only called for snippets or replacements.
      */
     private static boolean isCalledForSnippets() {
-        MetaAccessProvider metaAccess = runtime().getHostProviders().getMetaAccess();
+        MetaAccessProvider metaAccess = runtime().getProviders().getMetaAccess();
         ResolvedJavaMethod makeGraphMethod = null;
         ResolvedJavaMethod initMethod = null;
         try {
@@ -120,7 +119,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
     private static final Set<ResolvedJavaField> notEmbeddable = new HashSet<>();
 
     private static void addResolvedToSet(Field field) {
-        MetaAccessProvider metaAccess = runtime().getHostProviders().getMetaAccess();
+        MetaAccessProvider metaAccess = runtime().getProviders().getMetaAccess();
         notEmbeddable.add(metaAccess.lookupJavaField(field));
     }
 
@@ -179,7 +178,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         assert !AOTCompilation.getValue() || isCalledForSnippets() : receiver;
 
         if (receiver == null) {
-            assert Modifier.isStatic(modifiers);
+            assert Modifier.isStatic(flags);
             if (constant == null) {
                 if (holder.isInitialized() && !holder.getName().equals(SystemClassName) && isEmbeddable()) {
                     if (Modifier.isFinal(getModifiers())) {
@@ -193,75 +192,41 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
              * for non-static final fields, we must assume that they are only initialized if they
              * have a non-default value.
              */
-            assert !Modifier.isStatic(modifiers);
+            assert !Modifier.isStatic(flags);
             Object object = receiver.asObject();
-
-            // Canonicalization may attempt to process an unsafe read before
-            // processing a guard (e.g. a type check) for this read
-            // so we need to type check the object being read
-            if (isInObject(object)) {
-                if (Modifier.isFinal(getModifiers())) {
-                    Constant value = readValue(receiver);
-                    if (assumeNonStaticFinalFieldsAsFinal(object.getClass()) || !value.isDefaultForKind()) {
-                        return value;
-                    }
-                } else if (isStable()) {
-                    Constant value = readValue(receiver);
-                    if (assumeDefaultStableFieldsAsFinal(object.getClass()) || !value.isDefaultForKind()) {
-                        return value;
-                    }
-                } else {
-                    Class<?> clazz = object.getClass();
-                    if (StableOptionValue.class.isAssignableFrom(clazz)) {
-                        assert getName().equals("value") : "Unexpected field in " + StableOptionValue.class.getName() + " hierarchy:" + this;
-                        StableOptionValue<?> option = (StableOptionValue<?>) object;
-                        return Constant.forObject(option.getValue());
-                    }
+            if (Modifier.isFinal(getModifiers())) {
+                Constant value = readValue(receiver);
+                if (assumeNonStaticFinalFieldsAsFinal(object.getClass()) || !value.isDefaultForKind()) {
+                    return value;
+                }
+            } else {
+                Class<?> clazz = object.getClass();
+                if (StableOptionValue.class.isAssignableFrom(clazz)) {
+                    assert getName().equals("value") : "Unexpected field in " + StableOptionValue.class.getName() + " hierarchy:" + this;
+                    StableOptionValue<?> option = (StableOptionValue<?>) object;
+                    return Constant.forObject(option.getValue());
                 }
             }
         }
         return null;
     }
 
-    /**
-     * Determines if a given object contains this field.
-     */
-    public boolean isInObject(Object object) {
-        return getDeclaringClass().isAssignableFrom(HotSpotResolvedObjectType.fromClass(object.getClass()));
-    }
-
     @Override
     public Constant readValue(Constant receiver) {
         if (receiver == null) {
-            assert Modifier.isStatic(modifiers);
+            assert Modifier.isStatic(flags);
             if (holder.isInitialized()) {
-                return runtime().getHostProviders().getConstantReflection().readUnsafeConstant(getKind(), holder.mirror(), offset, getKind() == Kind.Object);
+                return runtime().getProviders().getConstantReflection().readUnsafeConstant(getKind(), holder.mirror(), offset, getKind() == Kind.Object);
             }
             return null;
         } else {
-            assert !Modifier.isStatic(modifiers);
-            Object object = receiver.asObject();
-            assert object != null && isInObject(object);
-            return runtime().getHostProviders().getConstantReflection().readUnsafeConstant(getKind(), object, offset, getKind() == Kind.Object);
+            assert !Modifier.isStatic(flags);
+            return runtime().getProviders().getConstantReflection().readUnsafeConstant(getKind(), receiver.asObject(), offset, getKind() == Kind.Object);
         }
     }
 
     private static boolean assumeNonStaticFinalFieldsAsFinal(Class<?> clazz) {
         return clazz == SnippetCounter.class;
-    }
-
-    /**
-     * Usually {@link Stable} fields are not considered constant if the value is the
-     * {@link Constant#isDefaultForKind default value}. For some special classes we want to override
-     * this behavior.
-     */
-    private static boolean assumeDefaultStableFieldsAsFinal(Class<?> clazz) {
-        // HotSpotVMConfig has a lot of zero-value fields which we know are stable and want to be
-        // considered as constants.
-        if (clazz == HotSpotVMConfig.class) {
-            return true;
-        }
-        return false;
     }
 
     @Override
@@ -300,16 +265,6 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
             return javaField.isSynthetic();
         }
         return false;
-    }
-
-    /**
-     * Checks if this field has the {@link Stable} annotation.
-     * 
-     * @return true if field has {@link Stable} annotation, false otherwise
-     */
-    public boolean isStable() {
-        Annotation annotation = getAnnotation(Stable.class);
-        return annotation != null;
     }
 
     @Override

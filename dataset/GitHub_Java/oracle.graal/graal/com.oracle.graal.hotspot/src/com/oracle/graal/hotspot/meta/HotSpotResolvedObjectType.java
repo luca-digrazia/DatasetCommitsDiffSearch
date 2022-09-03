@@ -82,6 +82,8 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     private HotSpotResolvedJavaField[] instanceFields;
     private ResolvedJavaType[] interfaces;
     private ConstantPool constantPool;
+    private boolean isInitialized;
+    private boolean isLinked;
     private ResolvedJavaType arrayOfType;
 
     /**
@@ -103,7 +105,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
      */
     public static ResolvedJavaType fromMetaspaceKlass(long metaspaceKlass) {
         assert metaspaceKlass != 0;
-        Class javaClass = (Class) runtime().getCompilerToVM().readUnsafeUncompressedPointer(null, metaspaceKlass + runtime().getConfig().classMirrorOffset);
+        Class javaClass = (Class) unsafe.getObject(null, metaspaceKlass + runtime().getConfig().classMirrorOffset);
         assert javaClass != null;
         return fromClass(javaClass);
     }
@@ -284,24 +286,27 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     @Override
     public boolean isInitialized() {
-        HotSpotVMConfig config = runtime().getConfig();
-        byte state = unsafe.getByte(metaspaceKlass + config.klassStateOffset);
-        return state == config.klassStateFullyInitialized;
+        if (!isInitialized) {
+            isInitialized = runtime().getCompilerToVM().isTypeInitialized(this);
+        }
+        return isInitialized;
     }
 
     @Override
     public boolean isLinked() {
-        HotSpotVMConfig config = runtime().getConfig();
-        byte state = unsafe.getByte(metaspaceKlass + config.klassStateOffset);
-        return state >= config.klassStateLinked;
+        if (!isLinked) {
+            isLinked = runtime().getCompilerToVM().isTypeLinked(this);
+        }
+        return isLinked;
     }
 
     @Override
     public void initialize() {
-        if (!isInitialized()) {
+        if (!isInitialized) {
             runtime().getCompilerToVM().initializeType(this);
-            assert isInitialized();
+            assert runtime().getCompilerToVM().isTypeInitialized(this);
         }
+        isInitialized = true;
     }
 
     @Override
@@ -463,12 +468,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     @Override
     public String getSourceFileName() {
-        HotSpotVMConfig config = runtime().getConfig();
-        final int sourceFileNameIndex = unsafe.getChar(metaspaceKlass + config.klassSourceFileNameIndexOffset);
-        if (sourceFileNameIndex == 0) {
-            return null;
-        }
-        return constantPool().lookupUtf8(sourceFileNameIndex);
+        return runtime().getCompilerToVM().getFileName(this);
     }
 
     @Override
@@ -488,13 +488,6 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         return Constant.forIntegerKind(runtime().getTarget().wordKind, metaspaceKlass, this);
     }
 
-    /**
-     * Gets the address of the C++ Klass object for this type.
-     */
-    public long metaspaceKlass() {
-        return metaspaceKlass;
-    }
-
     public boolean isPrimaryType() {
         return runtime().getConfig().secondarySuperCacheOffset != superCheckOffset();
     }
@@ -507,7 +500,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     public long prototypeMarkWord() {
         HotSpotVMConfig config = runtime().getConfig();
         if (isArray()) {
-            return config.arrayPrototypeMarkWord();
+            return config.arrayPrototypeMarkWord;
         } else {
             return unsafeReadWord(metaspaceKlass + config.prototypeMarkWordOffset);
         }
@@ -551,7 +544,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         Constructor[] constructors = javaMirror.getDeclaredConstructors();
         ResolvedJavaMethod[] result = new ResolvedJavaMethod[constructors.length];
         for (int i = 0; i < constructors.length; i++) {
-            result[i] = runtime().getHostProviders().getMetaAccess().lookupJavaConstructor(constructors[i]);
+            result[i] = runtime().getProviders().getMetaAccess().lookupJavaConstructor(constructors[i]);
             assert result[i].isConstructor();
         }
         return result;
@@ -562,7 +555,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         Method[] methods = javaMirror.getDeclaredMethods();
         ResolvedJavaMethod[] result = new ResolvedJavaMethod[methods.length];
         for (int i = 0; i < methods.length; i++) {
-            result[i] = runtime().getHostProviders().getMetaAccess().lookupJavaMethod(methods[i]);
+            result[i] = runtime().getProviders().getMetaAccess().lookupJavaMethod(methods[i]);
             assert !result[i].isConstructor();
         }
         return result;

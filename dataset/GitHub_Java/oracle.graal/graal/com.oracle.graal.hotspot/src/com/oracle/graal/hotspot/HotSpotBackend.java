@@ -22,14 +22,12 @@
  */
 package com.oracle.graal.hotspot;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.word.*;
 
 /**
@@ -83,15 +81,5 @@ public abstract class HotSpotBackend extends Backend {
     @Override
     public HotSpotProviders getProviders() {
         return (HotSpotProviders) super.getProviders();
-    }
-
-    @Override
-    public SuitesProvider getSuites() {
-        return getProviders().getSuites();
-    }
-
-    @Override
-    public DisassemblerProvider getDisassembler() {
-        return getProviders().getDisassembler();
     }
 }

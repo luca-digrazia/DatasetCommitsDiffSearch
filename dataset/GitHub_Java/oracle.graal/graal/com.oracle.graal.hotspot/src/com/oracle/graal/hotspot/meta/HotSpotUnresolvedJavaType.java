@@ -42,26 +42,6 @@ public class HotSpotUnresolvedJavaType extends HotSpotJavaType {
         this.dimensions = dimensions;
     }
 
-    /**
-     * Creates an unresolved type for a valid {@link JavaType#getName() type name}.
-     */
-    public static HotSpotUnresolvedJavaType create(String name) {
-        int dims = 0;
-        int startIndex = 0;
-        while (name.charAt(startIndex) == '[') {
-            startIndex++;
-            dims++;
-        }
-
-        // Decode name if necessary.
-        if (name.charAt(name.length() - 1) == ';') {
-            assert name.charAt(startIndex) == 'L';
-            return new HotSpotUnresolvedJavaType(name, name.substring(startIndex + 1, name.length() - 1), dims);
-        } else {
-            return new HotSpotUnresolvedJavaType(HotSpotUnresolvedJavaType.getFullName(name, dims), name, dims);
-        }
-    }
-
     public static String getFullName(String name, int dimensions) {
         StringBuilder str = new StringBuilder(name.length() + dimensions + 2);
         for (int i = 0; i < dimensions; i++) {
@@ -95,15 +75,8 @@ public class HotSpotUnresolvedJavaType extends HotSpotJavaType {
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null || !(obj instanceof HotSpotUnresolvedJavaType)) {
-            return false;
-        }
-        HotSpotUnresolvedJavaType that = (HotSpotUnresolvedJavaType) obj;
-        return this.simpleName.equals(that.simpleName) && this.dimensions == that.dimensions;
+    public boolean equals(Object o) {
+        return o == this;
     }
 
     @Override

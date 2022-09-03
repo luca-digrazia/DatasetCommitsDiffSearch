@@ -38,14 +38,8 @@ import com.oracle.graal.word.*;
 /**
  * Substitutions for {@link CRC32}.
  */
-@ClassSubstitution(value = CRC32.class, defaultGuard = CRC32Substitutions.Guard.class)
+@ClassSubstitution(value = CRC32.class)
 public class CRC32Substitutions {
-
-    public static class Guard implements SubstitutionGuard {
-        public boolean execute() {
-            return runtime().getConfig().useCRC32Intrinsics;
-        }
-    }
 
     /**
      * Gets the address of {@code StubRoutines::x86::_crc_table} in {@code stubRoutines_x86.hpp}.

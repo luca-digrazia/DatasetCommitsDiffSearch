@@ -22,22 +22,15 @@
  */
 package com.oracle.graal.hotspot.ptx;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 
 public class PTXHotSpotCodeCacheProvider extends HotSpotCodeCacheProvider {
 
-    public PTXHotSpotCodeCacheProvider(HotSpotGraalRuntime runtime, TargetDescription target) {
-        super(runtime, target);
-    }
+    public PTXHotSpotCodeCacheProvider(HotSpotGraalRuntime runtime) {
+        super(runtime);
 
-    @Override
-    public String disassemble(CompilationResult compResult, InstalledCode installedCode) {
-        byte[] code = installedCode == null ? Arrays.copyOf(compResult.getTargetCode(), compResult.getTargetCodeSize()) : installedCode.getCode();
-        return new String(code);
     }
 
     @Override

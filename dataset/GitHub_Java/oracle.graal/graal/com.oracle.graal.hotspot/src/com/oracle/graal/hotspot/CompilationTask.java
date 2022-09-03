@@ -42,6 +42,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.phases.util.*;
 
 public final class CompilationTask implements Runnable {
 
@@ -57,8 +58,9 @@ public final class CompilationTask implements Runnable {
         Queued, Running
     }
 
-    private final HotSpotBackend backend;
+    private final HotSpotGraalRuntime runtime;
     private final PhasePlan plan;
+    private final SuitesProvider suitesProvider;
     private final OptimisticOptimizations optimisticOpts;
     private final HotSpotResolvedJavaMethod method;
     private final int entryBCI;
@@ -67,14 +69,15 @@ public final class CompilationTask implements Runnable {
 
     private StructuredGraph graph;
 
-    public static CompilationTask create(HotSpotBackend backend, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id) {
-        return new CompilationTask(backend, plan, optimisticOpts, method, entryBCI, id);
+    public static CompilationTask create(HotSpotGraalRuntime runtime, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id) {
+        return new CompilationTask(runtime, plan, optimisticOpts, method, entryBCI, id);
     }
 
-    private CompilationTask(HotSpotBackend backend, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id) {
+    private CompilationTask(HotSpotGraalRuntime runtime, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id) {
         assert id >= 0;
-        this.backend = backend;
+        this.runtime = runtime;
         this.plan = plan;
+        this.suitesProvider = runtime.getCapability(SuitesProvider.class);
         this.method = method;
         this.optimisticOpts = optimisticOpts;
         this.entryBCI = entryBCI;
@@ -140,12 +143,8 @@ public final class CompilationTask implements Runnable {
 
                     @Override
                     public CompilationResult call() throws Exception {
-                        GraphCache graphCache = backend.getRuntime().getGraphCache();
-                        if (graphCache != null) {
-                            graphCache.removeStaleGraphs();
-                        }
-
-                        HotSpotProviders providers = backend.getProviders();
+                        runtime.evictDeoptedGraphs();
+                        Providers providers = runtime.getProviders();
                         Replacements replacements = providers.getReplacements();
                         graph = replacements.getMethodSubstitution(method);
                         if (graph == null || entryBCI != INVOCATION_ENTRY_BCI) {
@@ -156,9 +155,8 @@ public final class CompilationTask implements Runnable {
                         }
                         InliningUtil.InlinedBytecodes.add(method.getCodeSize());
                         CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
-                        Suites suites = providers.getSuites().getDefaultSuites();
-                        return GraalCompiler.compileGraph(graph, cc, method, providers, backend, backend.getTarget(), graphCache, plan, optimisticOpts, method.getSpeculationLog(), suites,
-                                        new CompilationResult());
+                        return GraalCompiler.compileGraph(graph, cc, method, providers, runtime.getBackend(), runtime.getTarget(), runtime.getCache(), plan, optimisticOpts,
+                                        method.getSpeculationLog(), suitesProvider.getDefaultSuites(), new CompilationResult());
                     }
                 });
             } finally {
@@ -214,7 +212,7 @@ public final class CompilationTask implements Runnable {
     }
 
     private void installMethod(final CompilationResult compResult) {
-        final HotSpotCodeCacheProvider codeCache = backend.getProviders().getCodeCache();
+        final HotSpotCodeCacheProvider codeCache = runtime.getProviders().getCodeCache();
         Debug.scope("CodeInstall", new Object[]{new DebugDumpScope(String.valueOf(id), true), codeCache, method}, new Runnable() {
 
             @Override
@@ -224,7 +222,7 @@ public final class CompilationTask implements Runnable {
                     Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
                 }
                 if (Debug.isLogEnabled()) {
-                    Debug.log("%s", backend.getProviders().getDisassembler().disassemble(installedCode));
+                    Debug.log("%s", runtime.getProviders().getDisassembler().disassemble(installedCode));
                 }
             }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,40 +22,33 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static com.oracle.graal.sparc.SPARC.*;
+import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Add;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Stx;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
+import com.oracle.graal.lir.asm.*;
 
 @Opcode("CRUNTIME_CALL_PROLOGUE")
 final class SPARCHotSpotCRuntimeCallPrologueOp extends SPARCLIRInstruction {
 
-    private final int threadLastJavaSpOffset;
-    private final Register thread;
-    private final Register stackPointer;
-    @Def({REG, STACK}) protected Value threadTemp;
-
-    public SPARCHotSpotCRuntimeCallPrologueOp(int threadLastJavaSpOffset, Register thread, Register stackPointer, Value threadTemp) {
-        this.threadLastJavaSpOffset = threadLastJavaSpOffset;
-        this.thread = thread;
-        this.stackPointer = stackPointer;
-        this.threadTemp = threadTemp;
-    }
-
     @Override
-    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+        HotSpotRegistersProvider registers = runtime().getProviders().getRegisters();
+        HotSpotVMConfig config = runtime().getConfig();
+        Register thread = registers.getThreadRegister();
+        Register stackPointer = registers.getStackPointerRegister();
+
         // Save last Java frame.
-        new Add(stackPointer, STACK_BIAS, g4).emit(masm);
-        new Stx(g4, new SPARCAddress(thread, threadLastJavaSpOffset)).emit(masm);
+        new Add(stackPointer, new SPARCAddress(stackPointer, 0).getDisplacement(), g4).emit(masm);
+        new Stx(g4, new SPARCAddress(thread, config.threadLastJavaSpOffset)).emit(masm);
 
         // Save the thread register when calling out to the runtime.
-        SPARCMove.move(crb, masm, threadTemp, thread.asValue(LIRKind.value(Kind.Long)));
+        new Mov(thread, l7).emit(masm);
     }
 }

@@ -39,7 +39,6 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -240,19 +239,6 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         Label verifiedStub = new Label();
 
         // Emit the prefix
-        emitCodePrefix(installedCodeOwner, tasm, asm, regConfig, config, verifiedStub);
-
-        // Emit code for the LIR
-        emitCodeBody(installedCodeOwner, tasm, lirGen);
-
-        // Emit the suffix
-        emitCodeSuffix(installedCodeOwner, tasm, lirGen, asm, frameMap);
-    }
-
-    /**
-     * @param installedCodeOwner see {@link Backend#emitCode}
-     */
-    protected void emitCodePrefix(ResolvedJavaMethod installedCodeOwner, TargetMethodAssembler tasm, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotVMConfig config, Label verifiedStub) {
         HotSpotProviders providers = getProviders();
         if (installedCodeOwner != null && !isStatic(installedCodeOwner.getModifiers())) {
             tasm.recordMark(Marks.MARK_UNVERIFIED_ENTRY);
@@ -277,20 +263,10 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         tasm.recordMark(Marks.MARK_OSR_ENTRY);
         asm.bind(verifiedStub);
         tasm.recordMark(Marks.MARK_VERIFIED_ENTRY);
-    }
 
-    /**
-     * @param installedCodeOwner see {@link Backend#emitCode}
-     */
-    protected void emitCodeBody(ResolvedJavaMethod installedCodeOwner, TargetMethodAssembler tasm, LIRGenerator lirGen) {
+        // Emit code for the LIR
         lirGen.lir.emitCode(tasm);
-    }
 
-    /**
-     * @param installedCodeOwner see {@link Backend#emitCode}
-     */
-    protected void emitCodeSuffix(ResolvedJavaMethod installedCodeOwner, TargetMethodAssembler tasm, LIRGenerator lirGen, AMD64MacroAssembler asm, FrameMap frameMap) {
-        HotSpotProviders providers = getProviders();
         HotSpotFrameContext frameContext = (HotSpotFrameContext) tasm.frameContext;
         if (frameContext != null && !frameContext.isStub) {
             HotSpotForeignCallsProvider foreignCalls = providers.getForeignCalls();
