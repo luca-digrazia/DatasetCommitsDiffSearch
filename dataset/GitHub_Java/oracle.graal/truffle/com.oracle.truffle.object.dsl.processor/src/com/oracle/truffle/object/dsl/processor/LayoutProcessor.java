@@ -27,7 +27,6 @@ import java.io.PrintStream;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.lang.model.SourceVersion;
@@ -54,10 +53,6 @@ public class LayoutProcessor extends AbstractProcessor {
     @Override
     public SourceVersion getSupportedSourceVersion() {
         return SourceVersion.latest();
-    }
-
-    public ProcessingEnvironment getProcessingEnv() {
-        return processingEnv;
     }
 
     private void processLayout(TypeElement layoutElement) {
