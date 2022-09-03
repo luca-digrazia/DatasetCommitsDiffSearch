@@ -240,6 +240,13 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, R
     }
 
     /**
+     * Reads a word value from a given address.
+     */
+    public static long unsafeReadWord(long address) {
+        return unsafe.getAddress(address);
+    }
+
+    /**
      * Reads a klass pointer from a constant object.
      */
     public static long unsafeReadKlassPointer(Object object) {
