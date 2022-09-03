@@ -58,11 +58,6 @@ public final class CompilationPrinter {
      */
     public static CompilationPrinter begin(OptionValues options, CompilationIdentifier id, JavaMethod method, int entryBCI) {
         if (PrintCompilation.getValue(options) && !TTY.isSuppressed()) {
-            try {
-                Class.forName("java.lang.management.ThreadMXBean");
-            } catch (ClassNotFoundException ex) {
-                throw new IllegalArgumentException("PrintCompilation option requires java.management JDK9 module");
-            }
             return new CompilationPrinter(id, method, entryBCI);
         }
         return DISABLED;

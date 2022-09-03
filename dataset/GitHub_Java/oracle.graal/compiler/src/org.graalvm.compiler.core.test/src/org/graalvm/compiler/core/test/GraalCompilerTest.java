@@ -926,7 +926,7 @@ public abstract class GraalCompilerTest extends GraalTest {
      */
     @SuppressWarnings("try")
     protected InstalledCode getCode(final ResolvedJavaMethod installedCodeOwner, StructuredGraph graph, boolean forceCompile, boolean installAsDefault, OptionValues options) {
-        if (!forceCompile && graph == null) {
+        if (!forceCompile) {
             InstalledCode cached = cache.get(installedCodeOwner);
             if (cached != null) {
                 if (cached.isValid()) {

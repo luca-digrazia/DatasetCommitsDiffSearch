@@ -287,7 +287,7 @@ public abstract class TruffleCompiler {
         public void postProcess(InstalledCode installedCode) {
             if (installedCode instanceof OptimizedCallTarget) {
                 for (AssumptionValidAssumption assumption : validAssumptions) {
-                    snippetReflection.asObject(OptimizedAssumption.class, assumption.getAssumption()).registerInstalledCode(installedCode);
+                    assumption.getAssumption().registerInstalledCode(installedCode);
                 }
             }
         }
