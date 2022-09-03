@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved. This
+ * Copyright (c) 2013, 2014 Oracle and/or its affiliates. All rights reserved. This
  * code is released under a tri EPL/GPL/LGPL license. You can use it,
  * redistribute it and/or modify it under the terms of the:
  *
@@ -22,7 +22,6 @@ import com.oracle.truffle.ruby.nodes.cast.*;
 import com.oracle.truffle.ruby.nodes.constants.*;
 import com.oracle.truffle.ruby.nodes.control.*;
 import com.oracle.truffle.ruby.nodes.core.*;
-import com.oracle.truffle.ruby.nodes.debug.*;
 import com.oracle.truffle.ruby.nodes.literal.*;
 import com.oracle.truffle.ruby.nodes.literal.array.*;
 import com.oracle.truffle.ruby.nodes.methods.*;
@@ -33,7 +32,6 @@ import com.oracle.truffle.ruby.nodes.yield.*;
 import com.oracle.truffle.ruby.runtime.*;
 import com.oracle.truffle.ruby.runtime.core.*;
 import com.oracle.truffle.ruby.runtime.core.range.*;
-import com.oracle.truffle.ruby.runtime.debug.*;
 import com.oracle.truffle.ruby.runtime.methods.*;
 
 /**
@@ -48,6 +46,7 @@ public class Translator implements org.jrubyparser.NodeVisitor {
     protected final RubyContext context;
     protected final TranslatorEnvironment environment;
     protected final Source source;
+    protected final RubyNodeInstrumenter instrumenter;
 
     private boolean translatingForStatement = false;
 
@@ -97,6 +96,7 @@ public class Translator implements org.jrubyparser.NodeVisitor {
         this.parent = parent;
         this.environment = environment;
         this.source = source;
+        this.instrumenter = environment.getNodeInstrumenter();
     }
 
     @Override
@@ -289,7 +289,9 @@ public class Translator implements org.jrubyparser.NodeVisitor {
 
         final ArgumentsAndBlockTranslation argumentsAndBlock = translateArgumentsAndBlock(sourceSection, block, args, extraArgument);
 
-        return new CallNode(context, sourceSection, node.getName(), receiverTranslated, argumentsAndBlock.getBlock(), argumentsAndBlock.isSplatted(), argumentsAndBlock.getArguments());
+        RubyNode translated = new CallNode(context, sourceSection, node.getName(), receiverTranslated, argumentsAndBlock.getBlock(), argumentsAndBlock.isSplatted(), argumentsAndBlock.getArguments());
+
+        return instrumenter.instrumentAsCall(translated, node.getName());
     }
 
     protected class ArgumentsAndBlockTranslation {
@@ -1138,21 +1140,9 @@ public class Translator implements org.jrubyparser.NodeVisitor {
 
         RubyNode translated = ((ReadNode) lhs).makeWriteNode(rhs);
 
-        if (context.getConfiguration().getDebug()) {
-            final UniqueMethodIdentifier methodIdentifier = environment.findMethodForLocalVar(node.getName());
+        final UniqueMethodIdentifier methodIdentifier = environment.findMethodForLocalVar(node.getName());
 
-            RubyProxyNode proxy;
-            if (translated instanceof RubyProxyNode) {
-                proxy = (RubyProxyNode) translated;
-            } else {
-                proxy = new RubyProxyNode(context, translated);
-            }
-            context.getDebugManager().registerLocalDebugProxy(methodIdentifier, node.getName(), proxy.getProbeChain());
-
-            translated = proxy;
-        }
-
-        return translated;
+        return instrumenter.instrumentAsLocalAssignment(translated, methodIdentifier, node.getName());
     }
 
     @Override
@@ -1451,40 +1441,22 @@ public class Translator implements org.jrubyparser.NodeVisitor {
     @Override
     public Object visitNewlineNode(org.jrubyparser.ast.NewlineNode node) {
         RubyNode translated = (RubyNode) node.getNextNode().accept(this);
-
-        if (context.getConfiguration().getDebug()) {
-
-            RubyProxyNode proxy;
-            SourceSection sourceSection;
-            if (translated instanceof RubyProxyNode) {
-                proxy = (RubyProxyNode) translated;
-                sourceSection = proxy.getChild().getSourceSection();
-            } else {
-                proxy = new RubyProxyNode(context, translated);
-                sourceSection = translated.getSourceSection();
-            }
-            context.getDebugManager().registerProbeChain(sourceSection, proxy.getProbeChain());
-            translated = proxy;
-        }
-
-        if (context.getConfiguration().getTrace()) {
-            RubyProxyNode proxy;
-            if (translated instanceof RubyProxyNode) {
-                proxy = (RubyProxyNode) translated;
-            } else {
-                proxy = new RubyProxyNode(context, translated);
-            }
-            proxy.getProbeChain().appendProbe(new RubyTraceProbe(context));
-
-            translated = proxy;
-        }
-
-        return translated;
+        return instrumenter.instrumentAsStatement(translated);
     }
 
     @Override
     public Object visitNextNode(org.jrubyparser.ast.NextNode node) {
-        return new NextNode(context, translate(node.getPosition()));
+        final SourceSection sourceSection = translate(node.getPosition());
+
+        RubyNode resultNode;
+
+        if (node.getValueNode() == null) {
+            resultNode = new NilNode(context, sourceSection);
+        } else {
+            resultNode = (RubyNode) node.getValueNode().accept(this);
+        }
+
+        return new NextNode(context, sourceSection, resultNode);
     }
 
     @Override

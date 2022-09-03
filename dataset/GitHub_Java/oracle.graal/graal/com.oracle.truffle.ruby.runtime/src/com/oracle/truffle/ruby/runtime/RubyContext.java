@@ -16,12 +16,12 @@ import jnr.posix.*;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.ruby.runtime.configuration.*;
 import com.oracle.truffle.ruby.runtime.control.*;
 import com.oracle.truffle.ruby.runtime.core.*;
-import com.oracle.truffle.ruby.runtime.debug.*;
 import com.oracle.truffle.ruby.runtime.methods.*;
 import com.oracle.truffle.ruby.runtime.objects.*;
 import com.oracle.truffle.ruby.runtime.subsystems.*;
@@ -40,7 +40,7 @@ public class RubyContext implements ExecutionContext {
     private final ThreadManager threadManager;
     private final FiberManager fiberManager;
     private final AtExitManager atExitManager;
-    private final RubyDebugManager debugManager;
+    private final DebugManager debugManager;
     private final SourceManager sourceManager;
     private final ASTPrinter astPrinter;
 
@@ -76,24 +76,19 @@ public class RubyContext implements ExecutionContext {
         atExitManager = new AtExitManager();
         sourceManager = new SourceManager();
 
-        debugManager = configuration.getDebug() ? new RubyDebugManager(this) : null;
+        debugManager = new DefaultDebugManager(this);
 
         // Must initialize threads before fibers
 
         threadManager = new ThreadManager(this);
-
-        if (configuration.getRubyVersion().is19OrLater()) {
-            fiberManager = new FiberManager(this);
-        } else {
-            fiberManager = null;
-        }
+        fiberManager = new FiberManager(this);
     }
 
-    public String getLanguageShortName() {
-        return configuration.getRubyVersion().getShortName();
+    public final String getLanguageShortName() {
+        return "Ruby " + CoreLibrary.RUBY_VERSION;
     }
 
-    public RubyDebugManager getDebugManager() {
+    public DebugManager getDebugManager() {
         return debugManager;
     }
 
@@ -174,10 +169,6 @@ public class RubyContext implements ExecutionContext {
     }
 
     public Object execute(RubyContext context, Source source, RubyParser.ParserContext parserContext, Object self, MaterializedFrame parentFrame) {
-        if (configuration.getPrintExecutedFiles()) {
-            implementationMessage("executing: %s", source.getName());
-        }
-
         try {
             final RubyParserResult parseResult = parser.parse(context, source, parserContext, parentFrame);
             final RubyArguments arguments = new RubyArguments(parentFrame, self, null);
@@ -187,11 +178,7 @@ public class RubyContext implements ExecutionContext {
         } catch (RaiseException e) {
             throw e;
         } catch (ThrowException e) {
-            if (context.getConfiguration().getRubyVersion().is18OrEarlier()) {
-                throw new RaiseException(context.getCoreLibrary().nameErrorUncaughtThrow(e.getTag()));
-            } else {
-                throw new RaiseException(context.getCoreLibrary().argumentErrorUncaughtThrow(e.getTag()));
-            }
+            throw new RaiseException(context.getCoreLibrary().argumentErrorUncaughtThrow(e.getTag()));
         } catch (BreakShellException | QuitException e) {
             throw e;
         } catch (Throwable e) {
