@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.util.*;
 
 /**
@@ -77,6 +76,11 @@ public class ComputeProbabilityClosure {
         }
     }
 
+    private static boolean isRelativeProbability(double prob) {
+        // 1.01 to allow for some rounding errors
+        return prob >= 0 && prob <= 1.01;
+    }
+
     public static class LoopInfo {
 
         public final LoopBeginNode loopBegin;
@@ -124,7 +128,6 @@ public class ComputeProbabilityClosure {
         public LoopInfo loopInfo;
 
         public Probability(double probability, HashSet<LoopInfo> loops) {
-            assert probability >= 0.0;
             this.probability = probability;
             this.loops = new HashSet<>(4);
             if (loops != null) {
@@ -168,7 +171,7 @@ public class ComputeProbabilityClosure {
                 }
                 loops = intersection;
                 mergeLoops.put(merge, new HashSet<>(intersection));
-                probability = Math.max(0.0, probability);
+                assert isRelativeProbability(probability) : probability;
             }
             return true;
         }
@@ -202,7 +205,7 @@ public class ComputeProbabilityClosure {
         }
 
         @Override
-        public void afterSplit(AbstractBeginNode node) {
+        public void afterSplit(BeginNode node) {
             assert node.predecessor() != null;
             Node pred = node.predecessor();
             if (pred instanceof Invoke) {
@@ -213,10 +216,7 @@ public class ComputeProbabilityClosure {
             } else {
                 assert pred instanceof ControlSplitNode;
                 ControlSplitNode x = (ControlSplitNode) pred;
-                double nodeProbability = x.probability(node);
-                assert nodeProbability >= 0.0 : "Node " + x + " provided negative probability for begin " + node + ": " + nodeProbability;
-                probability *= nodeProbability;
-                assert probability >= 0.0;
+                probability *= x.probability(node);
             }
         }
     }
@@ -272,7 +272,7 @@ public class ComputeProbabilityClosure {
         }
 
         @Override
-        public void afterSplit(AbstractBeginNode node) {
+        public void afterSplit(BeginNode node) {
             // nothing to do...
         }
     }

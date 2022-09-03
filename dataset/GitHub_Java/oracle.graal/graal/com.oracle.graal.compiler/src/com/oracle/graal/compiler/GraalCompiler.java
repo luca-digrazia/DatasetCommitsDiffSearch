@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.compiler;
 
+import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -41,31 +42,21 @@ import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.InliningPhase.CompiledMethodInfo;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.phases.ea.*;
 
-/**
- * Static methods for orchestrating the compilation of a {@linkplain StructuredGraph graph}.
- */
 public class GraalCompiler {
 
-    /**
-     * Requests compilation of a given graph.
-     * 
-     * @param graph the graph to be compiled
-     * @param cc the calling convention for calls to the code compiled for {@code graph}
-     * @param installedCodeOwner the method the compiled code will be
-     *            {@linkplain InstalledCode#getMethod() associated} with once installed. This
-     *            argument can be null.
-     * @return the result of the compilation
-     */
-    public static CompilationResult compileGraph(final StructuredGraph graph, final CallingConvention cc, final ResolvedJavaMethod installedCodeOwner, final GraalCodeCacheProvider runtime,
-                    final Replacements replacements, final Backend backend, final TargetDescription target, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts,
+    public static CompilationResult compileMethod(final GraalCodeCacheProvider runtime, final Replacements replacements, final Backend backend, final TargetDescription target,
+                    final ResolvedJavaMethod method, final StructuredGraph graph, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts,
                     final SpeculationLog speculationLog) {
+        assert (method.getModifiers() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
+
         final CompilationResult compilationResult = new CompilationResult();
-        Debug.scope("GraalCompiler", new Object[]{graph, runtime}, new Runnable() {
+        Debug.scope("GraalCompiler", new Object[]{graph, method, runtime}, new Runnable() {
 
             public void run() {
                 final Assumptions assumptions = new Assumptions(GraalOptions.OptAssumptions);
@@ -78,13 +69,13 @@ public class GraalCompiler {
                 final LIRGenerator lirGen = Debug.scope("BackEnd", lir, new Callable<LIRGenerator>() {
 
                     public LIRGenerator call() {
-                        return emitLIR(backend, target, lir, graph, cc);
+                        return emitLIR(backend, target, lir, graph, method);
                     }
                 });
                 Debug.scope("CodeGen", lirGen, new Runnable() {
 
                     public void run() {
-                        emitCode(backend, getLeafGraphIdArray(graph), assumptions, lirGen, compilationResult, installedCodeOwner);
+                        emitCode(backend, getLeafGraphIdArray(graph), assumptions, method, lirGen, compilationResult);
                     }
 
                 });
@@ -144,19 +135,24 @@ public class GraalCompiler {
                 }
             }
         }
-        TypeProfileProxyNode.cleanFromGraph(graph);
 
         plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
 
-        Suites.DEFAULT.getHighTier().apply(graph, highTierContext);
+        CompiledMethodInfo info = InliningPhase.compiledMethodInfo(graph.method());
+        analyzeInvokes(graph, info);
 
-        MidTierContext midTierContext = new MidTierContext(runtime, assumptions, replacements, target, optimisticOpts);
+        Suites.DEFAULT.getHighTier().apply(graph, highTierContext);
+        info.setHighLevelNodes(graph.getNodeCount());
+
+        MidTierContext midTierContext = new MidTierContext(runtime, assumptions, replacements, target);
         Suites.DEFAULT.getMidTier().apply(graph, midTierContext);
+        info.setMidLevelNodes(graph.getNodeCount());
 
         plan.runPhases(PhasePosition.LOW_LEVEL, graph);
 
         LowTierContext lowTierContext = new LowTierContext(runtime, assumptions, replacements, target);
         Suites.DEFAULT.getLowTier().apply(graph, lowTierContext);
+        info.setLowLevelNodes(graph.getNodeCount());
 
         final SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);
@@ -184,9 +180,24 @@ public class GraalCompiler {
 
     }
 
-    public static LIRGenerator emitLIR(Backend backend, final TargetDescription target, final LIR lir, StructuredGraph graph, CallingConvention cc) {
+    private static void analyzeInvokes(final StructuredGraph graph, CompiledMethodInfo info) {
+        NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure(graph).apply();
+        double summedUpProbabilityOfRemainingInvokes = 0;
+        double maxProbabilityOfRemainingInvokes = 0;
+        int invokes = 0;
+        for (Invoke invoke : graph.getInvokes()) {
+            summedUpProbabilityOfRemainingInvokes += nodeProbabilities.get(invoke.asNode());
+            maxProbabilityOfRemainingInvokes = Math.max(maxProbabilityOfRemainingInvokes, nodeProbabilities.get(invoke.asNode()));
+            invokes++;
+        }
+        info.setSummedUpProbabilityOfRemainingInvokes(summedUpProbabilityOfRemainingInvokes);
+        info.setMaxProbabilityOfRemainingInvokes(maxProbabilityOfRemainingInvokes);
+        info.setNumberOfRemainingInvokes(invokes);
+    }
+
+    public static LIRGenerator emitLIR(Backend backend, final TargetDescription target, final LIR lir, StructuredGraph graph, final ResolvedJavaMethod method) {
         final FrameMap frameMap = backend.newFrameMap();
-        final LIRGenerator lirGen = backend.newLIRGenerator(graph, frameMap, cc, lir);
+        final LIRGenerator lirGen = backend.newLIRGenerator(graph, frameMap, method, lir);
 
         Debug.scope("LIRGen", lirGen, new Runnable() {
 
@@ -215,16 +226,17 @@ public class GraalCompiler {
         Debug.scope("Allocator", new Runnable() {
 
             public void run() {
-                new LinearScan(target, lir, lirGen, frameMap).allocate();
+                new LinearScan(target, method, lir, lirGen, frameMap).allocate();
             }
         });
         return lirGen;
     }
 
-    public static void emitCode(Backend backend, long[] leafGraphIds, Assumptions assumptions, LIRGenerator lirGen, CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner) {
+    public static void emitCode(Backend backend, long[] leafGraphIds, Assumptions assumptions, ResolvedJavaMethod method, LIRGenerator lirGen, CompilationResult compilationResult) {
         TargetMethodAssembler tasm = backend.newAssembler(lirGen, compilationResult);
-        backend.emitCode(tasm, lirGen, installedCodeOwner);
-        CompilationResult result = tasm.finishTargetMethod(lirGen.getGraph());
+        backend.emitCode(tasm, method, lirGen);
+        CompilationResult result = tasm.finishTargetMethod(method, false);
+        InliningPhase.compiledMethodInfo(method).setCompiledCodeSize(result.getTargetCodeSize());
         if (!assumptions.isEmpty()) {
             result.setAssumptions(assumptions);
         }

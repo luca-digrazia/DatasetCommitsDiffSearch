@@ -35,7 +35,7 @@ import com.oracle.graal.nodes.util.*;
  * A graph that contains at least one distinguished node : the {@link #start() start} node. This
  * node is the start of the control flow of the graph.
  */
-public class StructuredGraph extends Graph {
+public class StructuredGraph extends Graph implements InlineableElement {
 
     public static final int INVOCATION_ENTRY_BCI = -1;
     public static final long INVALID_GRAPH_ID = -1;
@@ -44,22 +44,20 @@ public class StructuredGraph extends Graph {
 
     private final Set<Long> leafGraphIds = new HashSet<>(4);
 
-    private StartNode start;
+    private final StartNode start;
     private final ResolvedJavaMethod method;
     private final long graphId;
     private final int entryBCI;
 
     /**
-     * Creates a new Graph containing a single {@link AbstractBeginNode} as the {@link #start()
-     * start} node.
+     * Creates a new Graph containing a single {@link BeginNode} as the {@link #start() start} node.
      */
     public StructuredGraph() {
         this(null, null);
     }
 
     /**
-     * Creates a new Graph containing a single {@link AbstractBeginNode} as the {@link #start()
-     * start} node.
+     * Creates a new Graph containing a single {@link BeginNode} as the {@link #start() start} node.
      */
     public StructuredGraph(String name, ResolvedJavaMethod method) {
         this(name, method, uniqueGraphIds.incrementAndGet(), INVOCATION_ENTRY_BCI);
@@ -75,7 +73,7 @@ public class StructuredGraph extends Graph {
 
     private StructuredGraph(String name, ResolvedJavaMethod method, long graphId, int entryBCI) {
         super(name);
-        this.setStart(add(new StartNode()));
+        this.start = add(new StartNode());
         this.method = method;
         this.graphId = graphId;
         this.entryBCI = entryBCI;
@@ -106,11 +104,6 @@ public class StructuredGraph extends Graph {
         return start;
     }
 
-    /**
-     * Gets the method from which this graph was built.
-     * 
-     * @return null if this method was not built from a method or the method is not available
-     */
     public ResolvedJavaMethod method() {
         return method;
     }
@@ -119,16 +112,8 @@ public class StructuredGraph extends Graph {
         return entryBCI;
     }
 
-    public boolean isOSR() {
-        return entryBCI != INVOCATION_ENTRY_BCI;
-    }
-
     public long graphId() {
         return graphId;
-    }
-
-    public void setStart(StartNode start) {
-        this.start = start;
     }
 
     /**
@@ -144,17 +129,13 @@ public class StructuredGraph extends Graph {
         return copy(name);
     }
 
-    public StructuredGraph copy(String newName, ResolvedJavaMethod newMethod) {
-        StructuredGraph copy = new StructuredGraph(newName, newMethod, graphId, entryBCI);
+    @Override
+    public StructuredGraph copy(String newName) {
+        StructuredGraph copy = new StructuredGraph(newName, method, graphId, entryBCI);
         HashMap<Node, Node> replacements = new HashMap<>();
         replacements.put(start, copy.start);
         copy.addDuplicates(getNodes(), replacements);
         return copy;
-    }
-
-    @Override
-    public StructuredGraph copy(String newName) {
-        return copy(newName, method);
     }
 
     public LocalNode getLocal(int index) {
@@ -226,15 +207,15 @@ public class StructuredGraph extends Graph {
     }
 
     /**
-     * Unlinks a node from all its control flow neighbors and then removes it from its graph. The
+     * Unlinks a node from all its control flow neighbours and then removes it from its graph. The
      * node must have no {@linkplain Node#usages() usages}.
      * 
      * @param node the node to be unlinked and removed
      */
     public void removeFixed(FixedWithNextNode node) {
         assert node != null;
-        if (node instanceof AbstractBeginNode) {
-            ((AbstractBeginNode) node).prepareDelete();
+        if (node instanceof BeginNode) {
+            ((BeginNode) node).prepareDelete();
         }
         assert node.usages().isEmpty() : node + " " + node.usages();
         FixedNode next = node.next();
@@ -259,9 +240,6 @@ public class StructuredGraph extends Graph {
         node.setNext(null);
         replacement.setNext(next);
         node.replaceAndDelete(replacement);
-        if (node == start) {
-            setStart((StartNode) replacement);
-        }
     }
 
     public void replaceFixedWithFloating(FixedWithNextNode node, FloatingNode replacement) {
@@ -273,7 +251,7 @@ public class StructuredGraph extends Graph {
         node.safeDelete();
     }
 
-    public void removeSplit(ControlSplitNode node, AbstractBeginNode survivingSuccessor) {
+    public void removeSplit(ControlSplitNode node, BeginNode survivingSuccessor) {
         assert node != null;
         assert node.usages().isEmpty();
         assert survivingSuccessor != null;
@@ -282,7 +260,7 @@ public class StructuredGraph extends Graph {
         node.safeDelete();
     }
 
-    public void removeSplitPropagate(ControlSplitNode node, AbstractBeginNode survivingSuccessor) {
+    public void removeSplitPropagate(ControlSplitNode node, BeginNode survivingSuccessor) {
         assert node != null;
         assert node.usages().isEmpty();
         assert survivingSuccessor != null;
@@ -293,13 +271,13 @@ public class StructuredGraph extends Graph {
         for (Node successor : snapshot) {
             if (successor != null && successor.isAlive()) {
                 if (successor != survivingSuccessor) {
-                    GraphUtil.killCFG((AbstractBeginNode) successor);
+                    GraphUtil.killCFG((BeginNode) successor);
                 }
             }
         }
     }
 
-    public void replaceSplit(ControlSplitNode node, Node replacement, AbstractBeginNode survivingSuccessor) {
+    public void replaceSplit(ControlSplitNode node, Node replacement, BeginNode survivingSuccessor) {
         if (replacement instanceof FixedWithNextNode) {
             replaceSplitWithFixed(node, (FixedWithNextNode) replacement, survivingSuccessor);
         } else {
@@ -309,7 +287,7 @@ public class StructuredGraph extends Graph {
         }
     }
 
-    public void replaceSplitWithFixed(ControlSplitNode node, FixedWithNextNode replacement, AbstractBeginNode survivingSuccessor) {
+    public void replaceSplitWithFixed(ControlSplitNode node, FixedWithNextNode replacement, BeginNode survivingSuccessor) {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
         assert survivingSuccessor != null;
         node.clearSuccessors();
@@ -317,7 +295,7 @@ public class StructuredGraph extends Graph {
         node.replaceAndDelete(replacement);
     }
 
-    public void replaceSplitWithFloating(ControlSplitNode node, FloatingNode replacement, AbstractBeginNode survivingSuccessor) {
+    public void replaceSplitWithFloating(ControlSplitNode node, FloatingNode replacement, BeginNode survivingSuccessor) {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
         assert survivingSuccessor != null;
         node.clearSuccessors();
@@ -370,7 +348,7 @@ public class StructuredGraph extends Graph {
         if (merge instanceof LoopBeginNode) {
             ((LoopBeginNode) merge).removeExits();
         }
-        AbstractEndNode singleEnd = merge.forwardEndAt(0);
+        EndNode singleEnd = merge.forwardEndAt(0);
         FixedNode sux = merge.next();
         FrameState stateAfter = merge.stateAfter();
         // evacuateGuards

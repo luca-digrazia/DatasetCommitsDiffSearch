@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
@@ -37,9 +36,8 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo(nameTemplate = "Invoke#{p#targetMethod/s}")
 public final class InvokeNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, Invoke, LIRLowerable, MemoryCheckpoint {
 
-    @Input private CallTargetNode callTarget;
+    @Input private final CallTargetNode callTarget;
     @Input private FrameState deoptState;
-    @Input private GuardingNode guard;
     private final int bci;
     private boolean polymorphic;
     private boolean useForInlining;
@@ -92,8 +90,8 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     }
 
     @Override
-    public LocationIdentity[] getLocationIdentities() {
-        return new LocationIdentity[]{LocationNode.ANY_LOCATION};
+    public Object[] getLocationIdentities() {
+        return new Object[]{LocationNode.ANY_LOCATION};
     }
 
     @Override
@@ -147,14 +145,14 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
             stateSplit.setStateAfter(stateAfter);
         }
         if (node instanceof FixedWithNextNode) {
-            graph().replaceFixedWithFixed(this, (FixedWithNextNode) node);
-        } else if (node instanceof ControlSinkNode) {
+            ((StructuredGraph) graph()).replaceFixedWithFixed(this, (FixedWithNextNode) node);
+        } else if (node instanceof DeoptimizeNode) {
             this.replaceAtPredecessor(node);
             this.replaceAtUsages(null);
             GraphUtil.killCFG(this);
             return;
         } else {
-            graph().replaceFixed(this, node);
+            ((StructuredGraph) graph()).replaceFixed(this, node);
         }
         call.safeDelete();
         if (stateAfter.usages().isEmpty()) {
@@ -190,16 +188,5 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     @Override
     public boolean isCallSiteDeoptimization() {
         return true;
-    }
-
-    @Override
-    public GuardingNode getGuard() {
-        return guard;
-    }
-
-    @Override
-    public void setGuard(GuardingNode guard) {
-        updateUsages(this.guard == null ? null : this.guard.asNode(), guard == null ? null : guard.asNode());
-        this.guard = guard;
     }
 }

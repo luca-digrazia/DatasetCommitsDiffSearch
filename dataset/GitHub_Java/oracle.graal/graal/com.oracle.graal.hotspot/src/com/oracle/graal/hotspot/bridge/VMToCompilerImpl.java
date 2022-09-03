@@ -23,7 +23,6 @@
 
 package com.oracle.graal.hotspot.bridge;
 
-import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.CompilationTask.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
@@ -47,48 +46,16 @@ import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.debug.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.printer.*;
 import com.oracle.graal.replacements.*;
 
 /**
  * Exits from the HotSpot VM into Java code.
  */
 public class VMToCompilerImpl implements VMToCompiler {
-
-    //@formatter:off
-    @Option(help = "File to which compiler logging is sent")
-    private static final OptionValue<String> LogFile = new OptionValue<>(null);
-
-    @Option(help = "Use low priority compilation threads")
-    private static final OptionValue<Boolean> SlowCompileThreads = new OptionValue<>(false);
-
-    @Option(help = "Use priority-based compilation queue")
-    private static final OptionValue<Boolean> PriorityCompileQueue = new OptionValue<>(true);
-
-    @Option(help = "Print compilation queue activity periodically")
-    private static final OptionValue<Boolean> PrintQueue = new OptionValue<>(false);
-
-    @Option(help = "Time limit in milliseconds for bootstrap (-1 for no limit)")
-    private static final OptionValue<Integer> TimedBootstrap = new OptionValue<>(-1);
-
-    @Option(help = "Number of compilation threads to use")
-    private static final OptionValue<Integer> Threads = new OptionValue<Integer>() {
-
-        @Override
-        public Integer initialValue() {
-            return Runtime.getRuntime().availableProcessors();
-        }
-    };
-
-    @Option(help = "")
-    private static final OptionValue<Boolean> GenericDynamicCounters = new OptionValue<>(false);
-
-    @Option(help = "")
-    private static final OptionValue<String> BenchmarkDynamicCounters = new OptionValue<>(null);
-    //@formatter:on
 
     private final HotSpotGraalRuntime graalRuntime;
 
@@ -134,9 +101,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         assert unsafe.getObject(mirror, offset) == type;
     }
 
-    public void startCompiler(boolean bootstrapEnabled) throws Throwable {
-
-        bootstrapRunning = bootstrapEnabled;
+    public void startCompiler() throws Throwable {
 
         HotSpotVMConfig config = graalRuntime.getConfig();
         long offset = config.graalMirrorInClassOffset;
@@ -150,32 +115,35 @@ public class VMToCompilerImpl implements VMToCompiler {
         initMirror(typeLong, offset);
         initMirror(typeVoid, offset);
 
-        if (LogFile.getValue() != null) {
+        if (GraalOptions.LogFile != null) {
             try {
                 final boolean enableAutoflush = true;
-                log = new PrintStream(new FileOutputStream(LogFile.getValue()), enableAutoflush);
+                log = new PrintStream(new FileOutputStream(GraalOptions.LogFile), enableAutoflush);
             } catch (FileNotFoundException e) {
-                throw new RuntimeException("couldn't open log file: " + LogFile.getValue(), e);
+                throw new RuntimeException("couldn't open log file: " + GraalOptions.LogFile, e);
             }
         }
 
         TTY.initialize(log);
 
-        if (Log.getValue() == null && Meter.getValue() == null && Time.getValue() == null && Dump.getValue() == null) {
-            if (MethodFilter.getValue() != null) {
+        if (GraalOptions.Log == null && GraalOptions.Meter == null && GraalOptions.Time == null && GraalOptions.Dump == null) {
+            if (GraalOptions.MethodFilter != null) {
                 TTY.println("WARNING: Ignoring MethodFilter option since Log, Meter, Time and Dump options are all null");
             }
         }
 
         if (config.ciTime) {
-            quietMeterAndTime = (Meter.getValue() == null && Time.getValue() == null);
-            DebugEnabled.setValue(true);
-            Meter.setValue("");
-            Time.setValue("");
+            quietMeterAndTime = (GraalOptions.Meter == null && GraalOptions.Time == null);
+            GraalOptions.Debug = true;
+            GraalOptions.Meter = "";
+            GraalOptions.Time = "";
         }
 
-        if (DebugEnabled.getValue()) {
+        if (GraalOptions.Debug) {
             Debug.enable();
+            if (GraalOptions.DebugReplacements) {
+                DebugEnvironment.initialize(log);
+            }
         }
 
         // Install intrinsics.
@@ -203,17 +171,21 @@ public class VMToCompilerImpl implements VMToCompiler {
 
         }
 
-        // Create compilation queue.
-        BlockingQueue<Runnable> queue = PriorityCompileQueue.getValue() ? new PriorityBlockingQueue<Runnable>() : new LinkedBlockingQueue<Runnable>();
-        compileQueue = new ThreadPoolExecutor(Threads.getValue(), Threads.getValue(), 0L, TimeUnit.MILLISECONDS, queue, CompilerThread.FACTORY);
+        if (GraalOptions.DebugReplacements) {
+            phaseTransition("replacements");
+        }
 
-        if (SlowCompileThreads.getValue()) {
-            BlockingQueue<Runnable> slowQueue = PriorityCompileQueue.getValue() ? new PriorityBlockingQueue<Runnable>() : new LinkedBlockingQueue<Runnable>();
-            slowCompileQueue = new ThreadPoolExecutor(Threads.getValue(), Threads.getValue(), 0L, TimeUnit.MILLISECONDS, slowQueue, CompilerThread.LOW_PRIORITY_FACTORY);
+        // Create compilation queue.
+        BlockingQueue<Runnable> queue = GraalOptions.PriorityCompileQueue ? new PriorityBlockingQueue<Runnable>() : new LinkedBlockingQueue<Runnable>();
+        compileQueue = new ThreadPoolExecutor(GraalOptions.Threads, GraalOptions.Threads, 0L, TimeUnit.MILLISECONDS, queue, CompilerThread.FACTORY);
+
+        if (GraalOptions.SlowCompileThreads) {
+            BlockingQueue<Runnable> slowQueue = GraalOptions.PriorityCompileQueue ? new PriorityBlockingQueue<Runnable>() : new LinkedBlockingQueue<Runnable>();
+            slowCompileQueue = new ThreadPoolExecutor(GraalOptions.Threads, GraalOptions.Threads, 0L, TimeUnit.MILLISECONDS, slowQueue, CompilerThread.LOW_PRIORITY_FACTORY);
         }
 
         // Create queue status printing thread.
-        if (PrintQueue.getValue()) {
+        if (GraalOptions.PrintQueue) {
             Thread t = new Thread() {
 
                 @Override
@@ -235,8 +207,8 @@ public class VMToCompilerImpl implements VMToCompiler {
             t.start();
         }
 
-        if (BenchmarkDynamicCounters.getValue() != null) {
-            String[] arguments = BenchmarkDynamicCounters.getValue().split(",");
+        if (GraalOptions.BenchmarkDynamicCounters != null) {
+            String[] arguments = GraalOptions.BenchmarkDynamicCounters.split(",");
             if (arguments.length == 0 || (arguments.length % 3) != 0) {
                 throw new GraalInternalError("invalid arguments to BenchmarkDynamicCounters: (err|out),start,end,(err|out),start,end,... (~ matches multiple digits)");
             }
@@ -254,7 +226,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             DynamicCounterNode.excludedClassPrefix = "Lcom/oracle/graal/";
             DynamicCounterNode.enabled = true;
         }
-        if (GenericDynamicCounters.getValue()) {
+        if (GraalOptions.GenericDynamicCounters) {
             DynamicCounterNode.enabled = true;
         }
         compilerStartTime = System.nanoTime();
@@ -367,6 +339,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         TTY.flush();
         long startTime = System.currentTimeMillis();
 
+        bootstrapRunning = true;
         boolean firstRun = true;
         do {
             // Initialize compile queue with a selected set of methods.
@@ -408,7 +381,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                     TTY.flush();
                 }
             }
-        } while ((System.currentTimeMillis() - startTime) <= TimedBootstrap.getValue());
+        } while ((System.currentTimeMillis() - startTime) <= GraalOptions.TimedBootstrap);
 
         phaseTransition("bootstrap");
 
@@ -439,7 +412,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     private static void shutdownCompileQueue(ThreadPoolExecutor queue) throws InterruptedException {
         if (queue != null) {
             queue.shutdown();
-            if (Debug.isEnabled() && Dump.getValue() != null) {
+            if (Debug.isEnabled() && GraalOptions.Dump != null) {
                 // Wait 2 seconds to flush out all graph dumps that may be of interest
                 queue.awaitTermination(2, TimeUnit.SECONDS);
             }
@@ -463,9 +436,9 @@ public class VMToCompilerImpl implements VMToCompiler {
                 ArrayList<DebugValue> sortedValues = new ArrayList<>(debugValues);
                 Collections.sort(sortedValues);
 
-                if (SummarizeDebugValues.getValue()) {
+                if (GraalOptions.SummarizeDebugValues) {
                     printSummary(topLevelMaps, sortedValues);
-                } else if (PerThreadDebugValues.getValue()) {
+                } else if (GraalOptions.PerThreadDebugValues) {
                     for (DebugValueMap map : topLevelMaps) {
                         TTY.println("Showing the results for thread: " + map.getName());
                         map.group();
@@ -475,13 +448,13 @@ public class VMToCompilerImpl implements VMToCompiler {
                 } else {
                     DebugValueMap globalMap = new DebugValueMap("Global");
                     for (DebugValueMap map : topLevelMaps) {
-                        if (SummarizePerPhase.getValue()) {
+                        if (GraalOptions.SummarizePerPhase) {
                             flattenChildren(map, globalMap);
                         } else {
                             globalMap.addChild(map);
                         }
                     }
-                    if (!SummarizePerPhase.getValue()) {
+                    if (!GraalOptions.SummarizePerPhase) {
                         globalMap.group();
                     }
                     globalMap.normalize();
@@ -497,7 +470,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         }
 
         SnippetCounter.printGroups(TTY.out().out());
-        if (GenericDynamicCounters.getValue()) {
+        if (GraalOptions.GenericDynamicCounters) {
             DynamicCounterNode.dump(System.out, (System.nanoTime() - compilerStartTime) / 1000000000d);
         }
     }
@@ -607,7 +580,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                         return true;
                     }
                 } else {
-                    if (PriorityCompileQueue.getValue()) {
+                    if (GraalOptions.PriorityCompileQueue) {
                         // normally compilation tasks will only be re-queued when they get a
                         // priority boost, so cancel the old task and add a new one
                         current.cancel();
@@ -630,7 +603,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             } else {
                 try {
                     method.setCurrentTask(task);
-                    if (SlowCompileThreads.getValue() && priority > SlowQueueCutoff.getValue()) {
+                    if (GraalOptions.SlowCompileThreads && priority > GraalOptions.SlowQueueCutoff) {
                         slowCompileQueue.execute(task);
                     } else {
                         compileQueue.execute(task);

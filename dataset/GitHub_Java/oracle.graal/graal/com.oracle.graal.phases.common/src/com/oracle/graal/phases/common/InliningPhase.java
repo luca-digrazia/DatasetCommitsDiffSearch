@@ -31,13 +31,11 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.CanonicalizerPhase.CustomCanonicalizer;
 import com.oracle.graal.phases.common.InliningUtil.InlineInfo;
-import com.oracle.graal.phases.common.InliningUtil.InlineableMacroNode;
 import com.oracle.graal.phases.common.InliningUtil.InliningPolicy;
 import com.oracle.graal.phases.graph.*;
 
@@ -52,6 +50,7 @@ public class InliningPhase extends Phase {
     private final GraphCache cache;
     private final InliningPolicy inliningPolicy;
     private final OptimisticOptimizations optimisticOpts;
+    private final InliningData data;
 
     private CustomCanonicalizer customCanonicalizer;
     private int inliningCount;
@@ -68,6 +67,10 @@ public class InliningPhase extends Phase {
         this(runtime, replacements, assumptions, cache, plan, optimisticOpts, hints);
     }
 
+    public InliningPhase(MetaAccessProvider runtime, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
+        this(runtime, replacements, assumptions, cache, plan, optimisticOpts, null);
+    }
+
     private InliningPhase(MetaAccessProvider runtime, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts,
                     Map<Invoke, Double> hints) {
         this.runtime = runtime;
@@ -77,6 +80,17 @@ public class InliningPhase extends Phase {
         this.plan = plan;
         this.inliningPolicy = new GreedyInliningPolicy(replacements, hints);
         this.optimisticOpts = optimisticOpts;
+
+        this.data = new InliningData();
+    }
+
+    public static synchronized CompiledMethodInfo compiledMethodInfo(ResolvedJavaMethod m) {
+        CompiledMethodInfo info = compiledMethodInfo.get(m);
+        if (info == null) {
+            info = new CompiledMethodInfo();
+            compiledMethodInfo.put(m, info);
+        }
+        return info;
     }
 
     public void setCustomCanonicalizer(CustomCanonicalizer customCanonicalizer) {
@@ -91,75 +105,213 @@ public class InliningPhase extends Phase {
         return inliningCount;
     }
 
-    public static void saveGraphStatistics(StructuredGraph graph) {
-        CompiledMethodInfo info = compiledMethodInfo(graph.method());
-        double summedUpProbabilityOfRemainingInvokes = sumUpInvokeProbabilities(graph);
-        info.setSummedUpProbabilityOfRemainingInvokes(summedUpProbabilityOfRemainingInvokes);
-        info.setHighLevelNodeCount(graph.getNodeCount());
+    static class InliningData {
+
+        private static final GraphInfo DummyGraphInfo = new GraphInfo(null, new Stack<Invoke>(), 1.0, 1.0);
+
+        private final ArrayDeque<GraphInfo> graphQueue;
+        private final ArrayDeque<MethodInvocation> invocationQueue;
+
+        private int maxGraphs = 1;
+
+        public InliningData() {
+            this.graphQueue = new ArrayDeque<>();
+            this.invocationQueue = new ArrayDeque<>();
+        }
+
+        public void pushGraph(StructuredGraph graph, double probability, double relevance) {
+            assert !contains(graph);
+            NodeBitMap visitedFixedNodes = graph.createNodeBitMap();
+            Stack<Invoke> invokes = new InliningIterator(graph.start(), visitedFixedNodes).apply();
+            assert invokes.size() == count(graph.getInvokes());
+            graphQueue.push(new GraphInfo(graph, invokes, probability, relevance));
+            assert graphQueue.size() <= maxGraphs;
+        }
+
+        public void pushGraphDummy() {
+            graphQueue.push(DummyGraphInfo);
+        }
+
+        public boolean hasUnprocessedGraphs() {
+            return !graphQueue.isEmpty();
+        }
+
+        public GraphInfo currentGraph() {
+            return graphQueue.peek();
+        }
+
+        public void popGraph() {
+            graphQueue.pop();
+            assert graphQueue.size() <= maxGraphs;
+        }
+
+        public MethodInvocation currentInvocation() {
+            return invocationQueue.peek();
+        }
+
+        public MethodInvocation pushInvocation(InlineInfo info, Assumptions assumptions, double probability, double relevance) {
+            MethodInvocation methodInvocation = new MethodInvocation(info, new Assumptions(assumptions.useOptimisticAssumptions()), probability, relevance);
+            invocationQueue.push(methodInvocation);
+            maxGraphs += info.numberOfMethods();
+            assert graphQueue.size() <= maxGraphs;
+            return methodInvocation;
+        }
+
+        public void popInvocation() {
+            maxGraphs -= invocationQueue.peek().callee.numberOfMethods();
+            assert graphQueue.size() <= maxGraphs;
+            invocationQueue.pop();
+        }
+
+        public int countRecursiveInlining(ResolvedJavaMethod method) {
+            int count = 0;
+            for (GraphInfo graphInfo : graphQueue) {
+                if (method.equals(graphInfo.graph().method())) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder result = new StringBuilder("Invocations: ");
+
+            for (MethodInvocation invocation : invocationQueue) {
+                result.append(invocation.callee().numberOfMethods());
+                result.append("x ");
+                result.append(invocation.callee().invoke());
+                result.append("; ");
+            }
+
+            result.append("\nGraphs: ");
+            for (GraphInfo graph : graphQueue) {
+                result.append(graph.graph());
+                result.append("; ");
+            }
+
+            return result.toString();
+        }
+
+        private boolean contains(StructuredGraph graph) {
+            for (GraphInfo info : graphQueue) {
+                if (info.graph() == graph) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static int count(Iterable<Invoke> invokes) {
+            int count = 0;
+            Iterator<Invoke> iterator = invokes.iterator();
+            while (iterator.hasNext()) {
+                iterator.next();
+                count++;
+            }
+            return count;
+        }
+
+        public int inliningDepth() {
+            return invocationQueue.size();
+        }
+    }
+
+    private static class MethodInvocation {
+
+        private final InlineInfo callee;
+        private final Assumptions assumptions;
+        private final double probability;
+        private final double relevance;
+
+        private int processedGraphs;
+
+        public MethodInvocation(InlineInfo info, Assumptions assumptions, double probability, double relevance) {
+            this.callee = info;
+            this.assumptions = assumptions;
+            this.probability = probability;
+            this.relevance = relevance;
+        }
+
+        public void incrementProcessedGraphs() {
+            processedGraphs++;
+        }
+
+        public boolean processedAllGraphs() {
+            assert processedGraphs <= callee.numberOfMethods();
+            return processedGraphs == callee.numberOfMethods();
+        }
+
+        public InlineInfo callee() {
+            return callee;
+        }
+
+        public Assumptions assumptions() {
+            return assumptions;
+        }
+
+        public double probability() {
+            return probability;
+        }
+
+        public double relevance() {
+            return relevance;
+        }
     }
 
     @Override
     protected void run(final StructuredGraph graph) {
-        InliningData data = new InliningData();
         data.pushGraph(graph, 1.0, 1.0);
 
         while (data.hasUnprocessedGraphs()) {
             GraphInfo graphInfo = data.currentGraph();
             if (graphInfo.hasRemainingInvokes() && inliningPolicy.continueInlining(data)) {
-                processNextInvoke(data, graphInfo);
+                processNextInvoke(graphInfo);
             } else {
                 data.popGraph();
-                tryToInlineCurrentInvocation(data);
-            }
-        }
-    }
-
-    /**
-     * Process the next invoke and enqueue all its graphs for processing.
-     */
-    private void processNextInvoke(InliningData data, GraphInfo graphInfo) {
-        Invoke invoke = graphInfo.popInvoke();
-        MethodInvocation callerInvocation = data.currentInvocation();
-        Assumptions parentAssumptions = callerInvocation == null ? compilationAssumptions : callerInvocation.assumptions();
-        InlineInfo info = InliningUtil.getInlineInfo(data, invoke, maxMethodPerInlining, replacements, parentAssumptions, optimisticOpts);
-
-        double invokeProbability = graphInfo.getInvokeProbability(invoke);
-        double invokeRelevance = graphInfo.getInvokeRelevance(invoke);
-        if (info != null && inliningPolicy.isWorthInlining(info, invokeProbability, invokeRelevance, false)) {
-            MethodInvocation calleeInvocation = data.pushInvocation(info, parentAssumptions, invokeProbability, invokeRelevance);
-
-            for (int i = 0; i < info.numberOfMethods(); i++) {
-                InlineableElement elem = getInlineableElement(info.methodAt(i), info.invoke(), calleeInvocation.assumptions());
-                info.setInlinableElement(i, elem);
-                if (elem instanceof StructuredGraph) {
-                    data.pushGraph((StructuredGraph) elem, invokeProbability * info.probabilityAt(i), invokeRelevance * info.relevanceAt(i));
-                } else {
-                    assert elem instanceof InlineableMacroNode;
-                    // directly mark one callee as done because we do not have a graph to process
-                    calleeInvocation.incrementProcessedGraphs();
+                MethodInvocation currentInvoke = data.currentInvocation();
+                if (currentInvoke != null) {
+                    assert currentInvoke.callee().invoke().asNode().isAlive();
+                    currentInvoke.incrementProcessedGraphs();
+                    if (currentInvoke.processedAllGraphs()) {
+                        data.popInvocation();
+                        MethodInvocation parentInvoke = data.currentInvocation();
+                        tryToInline(data.currentGraph(), currentInvoke, parentInvoke);
+                    }
                 }
             }
         }
     }
 
-    private void tryToInlineCurrentInvocation(InliningData data) {
-        MethodInvocation currentInvocation = data.currentInvocation();
-        if (currentInvocation != null) {
-            assert currentInvocation.callee().invoke().asNode().isAlive();
-            currentInvocation.incrementProcessedGraphs();
-            if (currentInvocation.processedAllGraphs()) {
-                data.popInvocation();
-                MethodInvocation parentInvoke = data.currentInvocation();
-                tryToInline(data.currentGraph(), currentInvocation, parentInvoke);
+    private void processNextInvoke(GraphInfo graphInfo) {
+        // process the next invoke and enqueue all its graphs for processing
+        Invoke invoke = graphInfo.popInvoke();
+        MethodInvocation callerInvocation = data.currentInvocation();
+        Assumptions parentAssumptions = callerInvocation == null ? compilationAssumptions : callerInvocation.assumptions();
+        InlineInfo info = InliningUtil.getInlineInfo(data, invoke, maxMethodPerInlining, replacements, parentAssumptions, optimisticOpts);
+
+        if (info != null) {
+            double callerProbability = graphInfo.getInvokeProbability(invoke);
+            double callerRelevance = graphInfo.getInvokeRelevance(invoke);
+            MethodInvocation calleeInvocation = data.pushInvocation(info, parentAssumptions, callerProbability, callerRelevance);
+
+            for (int i = 0; i < info.numberOfMethods(); i++) {
+                InlineableElement elem = getInlineableElement(info.methodAt(i), info.invoke(), calleeInvocation.assumptions());
+                info.setInlinableElement(i, elem);
+                if (elem instanceof StructuredGraph) {
+                    data.pushGraph((StructuredGraph) elem, callerProbability * info.probabilityAt(i), callerRelevance * info.relevanceAt(i));
+                } else {
+                    data.pushGraphDummy();
+                }
             }
         }
     }
 
-    private void tryToInline(GraphInfo callerGraphInfo, MethodInvocation calleeInfo, MethodInvocation parentInvocation) {
+    private void tryToInline(GraphInfo callerGraphInfo, MethodInvocation calleeInfo, MethodInvocation parentInvoke) {
         InlineInfo callee = calleeInfo.callee();
-        Assumptions callerAssumptions = parentInvocation == null ? compilationAssumptions : parentInvocation.assumptions();
+        Assumptions callerAssumptions = parentInvoke == null ? compilationAssumptions : parentInvoke.assumptions();
 
-        if (inliningPolicy.isWorthInlining(callee, calleeInfo.probability(), calleeInfo.relevance(), true)) {
+        if (inliningPolicy.isWorthInlining(callee, calleeInfo.probability(), calleeInfo.relevance())) {
             doInline(callerGraphInfo, calleeInfo, callerAssumptions);
         } else if (optimisticOpts.devirtualizeInvokes()) {
             callee.tryToDevirtualizeInvoke(runtime, callerAssumptions);
@@ -169,7 +321,7 @@ public class InliningPhase extends Phase {
 
     private void doInline(GraphInfo callerGraphInfo, MethodInvocation calleeInfo, Assumptions callerAssumptions) {
         StructuredGraph callerGraph = callerGraphInfo.graph();
-        int markBeforeInlining = callerGraph.getMark();
+        int mark = callerGraph.getMark();
         InlineInfo callee = calleeInfo.callee();
         try {
             List<Node> invokeUsages = callee.invoke().asNode().usages().snapshot();
@@ -179,15 +331,12 @@ public class InliningPhase extends Phase {
             Debug.dump(callerGraph, "after %s", callee);
 
             if (GraalOptions.OptCanonicalizer) {
-                int markBeforeCanonicalization = callerGraph.getMark();
-                new CanonicalizerPhase.Instance(runtime, callerAssumptions, invokeUsages, markBeforeInlining, customCanonicalizer).apply(callerGraph);
+                new CanonicalizerPhase.Instance(runtime, callerAssumptions, invokeUsages, mark, customCanonicalizer).apply(callerGraph);
 
-                // process invokes that are possibly created during canonicalization
-                for (Node newNode : callerGraph.getNewNodes(markBeforeCanonicalization)) {
-                    if (newNode instanceof Invoke) {
-                        callerGraphInfo.pushInvoke((Invoke) newNode);
-                    }
-                }
+// if (callerGraph.getNewNodes(mark).contains(Invoke.class)) {
+// // TODO (chaeubl): invoke nodes might be created during canonicalization, which
+// // is bad for the CF ordering of the invokes but we still have to handle it properly...
+// }
             }
 
             callerGraphInfo.computeProbabilities();
@@ -206,7 +355,7 @@ public class InliningPhase extends Phase {
     private InlineableElement getInlineableElement(final ResolvedJavaMethod method, Invoke invoke, Assumptions assumptions) {
         Class<? extends FixedWithNextNode> macroNodeClass = InliningUtil.getMacroNodeClass(replacements, method);
         if (macroNodeClass != null) {
-            return new InlineableMacroNode(macroNodeClass);
+            return new InliningUtil.InlineableMacroNode(macroNodeClass);
         } else {
             return buildGraph(method, invoke, assumptions);
         }
@@ -216,8 +365,7 @@ public class InliningPhase extends Phase {
         final StructuredGraph newGraph;
         final boolean parseBytecodes;
 
-        // TODO (chaeubl): copying the graph is only necessary if it is modified or if it contains
-        // any invokes
+        // TODO (chaeubl): copying the graph is only necessary if it is modified
         StructuredGraph intrinsicGraph = InliningUtil.getIntrinsicGraph(replacements, method);
         if (intrinsicGraph != null) {
             newGraph = intrinsicGraph.copy();
@@ -242,27 +390,17 @@ public class InliningPhase extends Phase {
                 }
 
                 if (GraalOptions.PropagateArgumentsDuringInlining) {
-                    boolean callerHasMoreInformationAboutArguments = false;
+                    // TODO (chaeubl): if args are not more concrete, inlining will not change the
+                    // size of the graph
                     NodeInputList<ValueNode> args = invoke.callTarget().arguments();
                     for (LocalNode localNode : newGraph.getNodes(LocalNode.class).snapshot()) {
                         ValueNode arg = args.get(localNode.index());
                         if (arg.isConstant()) {
                             Constant constant = arg.asConstant();
                             newGraph.replaceFloating(localNode, ConstantNode.forConstant(constant, runtime, newGraph));
-                            callerHasMoreInformationAboutArguments = true;
                         } else {
-                            Stamp joinedStamp = localNode.stamp().join(arg.stamp());
-                            if (!joinedStamp.equals(localNode.stamp())) {
-                                localNode.setStamp(joinedStamp);
-                                callerHasMoreInformationAboutArguments = true;
-                            }
+                            localNode.setStamp(localNode.stamp().join(arg.stamp()));
                         }
-                    }
-
-                    if (!callerHasMoreInformationAboutArguments) {
-                        // TODO (chaeubl): if args are not more concrete, inlining should be avoided
-                        // in most cases or we could at least use the previous graph size + invoke
-                        // probability to check the inlining
                     }
 
                     if (GraalOptions.OptCanonicalizer) {
@@ -306,24 +444,6 @@ public class InliningPhase extends Phase {
         return newGraph;
     }
 
-    private static synchronized CompiledMethodInfo compiledMethodInfo(ResolvedJavaMethod m) {
-        CompiledMethodInfo info = compiledMethodInfo.get(m);
-        if (info == null) {
-            info = new CompiledMethodInfo();
-            compiledMethodInfo.put(m, info);
-        }
-        return info;
-    }
-
-    private static double sumUpInvokeProbabilities(StructuredGraph graph) {
-        NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure(graph).apply();
-        double summedUpProbabilityOfRemainingInvokes = 0;
-        for (Invoke invoke : graph.getInvokes()) {
-            summedUpProbabilityOfRemainingInvokes += nodeProbabilities.get(invoke.asNode());
-        }
-        return summedUpProbabilityOfRemainingInvokes;
-    }
-
     private static class GraphInfo {
 
         private final StructuredGraph graph;
@@ -339,7 +459,9 @@ public class InliningPhase extends Phase {
             this.probability = probability;
             this.relevance = relevance;
 
-            computeProbabilities();
+            if (graph != null) {
+                computeProbabilities();
+            }
         }
 
         public boolean hasRemainingInvokes() {
@@ -352,10 +474,6 @@ public class InliningPhase extends Phase {
 
         public Invoke popInvoke() {
             return remainingInvokes.pop();
-        }
-
-        public void pushInvoke(Invoke invoke) {
-            remainingInvokes.push(invoke);
         }
 
         public void computeProbabilities() {
@@ -422,40 +540,6 @@ public class InliningPhase extends Phase {
             }
             return true;
         }
-
-        protected static int previousHIRSize(InlineInfo info) {
-            int size = 0;
-            for (int i = 0; i < info.numberOfMethods(); i++) {
-                size += compiledMethodInfo(info.methodAt(i)).getHighLevelNodes();
-            }
-            return size;
-        }
-
-        protected static int determineNodeCount(InlineInfo info) {
-            int nodes = 0;
-            for (int i = 0; i < info.numberOfMethods(); i++) {
-                InlineableElement elem = info.inlineableElementAt(i);
-                if (elem != null) {
-                    nodes += elem.getNodeCount();
-                }
-            }
-            return nodes;
-        }
-
-        protected static double determineInvokeProbability(InlineInfo info) {
-            double invokeProbability = 0;
-            for (int i = 0; i < info.numberOfMethods(); i++) {
-                InlineableElement callee = info.inlineableElementAt(i);
-                Iterable<Invoke> invokes = callee.getInvokes();
-                if (invokes.iterator().hasNext()) {
-                    NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure((StructuredGraph) callee).apply();
-                    for (Invoke invoke : invokes) {
-                        invokeProbability += nodeProbabilities.get(invoke.asNode());
-                    }
-                }
-            }
-            return invokeProbability;
-        }
     }
 
     private static class GreedyInliningPolicy extends AbstractInliningPolicy {
@@ -476,13 +560,34 @@ public class InliningPhase extends Phase {
                 return true;
             }
 
-            return isWorthInlining(currentInvocation.callee(), currentInvocation.probability(), currentInvocation.relevance(), false);
+            InlineInfo info = currentInvocation.callee();
+            double inliningBonus = getInliningBonus(info);
+
+            int hirSize = previousHIRSize(info);
+            if (hirSize > GraalOptions.SmallCompiledGraphSize * inliningBonus) {
+                return InliningUtil.logNotInlinedMethod(info, "too large HIR graph: %s", hirSize);
+            }
+
+            int nodes = determineNodeCount(info);
+            if (nodes < GraalOptions.TrivialHighLevelGraphSize * inliningBonus) {
+                return InliningUtil.logInlinedMethod(info, "trivial (nodes=%d)", nodes);
+            }
+
+            double maximumNodes = computeMaximumSize(currentInvocation.relevance(), (int) (GraalOptions.NormalHighLevelGraphSize * inliningBonus));
+            if (nodes < maximumNodes) {
+                return InliningUtil.logInlinedMethod(info, "relevance-based (relevance=%f, nodes=%d)", currentInvocation.relevance(), nodes);
+            }
+
+            // TODO (chaeubl): compute metric that is used to check if this method should be
+            // inlined
+
+            return InliningUtil.logNotInlinedMethod(info, "(relevance=%f, probability=%f, bonus=%f)", currentInvocation.relevance(), currentInvocation.probability(), inliningBonus);
         }
 
         @Override
-        public boolean isWorthInlining(InlineInfo info, double probability, double relevance, boolean fullyProcessed) {
+        public boolean isWorthInlining(InlineInfo info, double probability, double relevance) {
             if (isIntrinsic(info)) {
-                return InliningUtil.logInlinedMethod(info, fullyProcessed, "intrinsic");
+                return InliningUtil.logInlinedMethod(info, "intrinsic");
             }
 
             double inliningBonus = getInliningBonus(info);
@@ -499,22 +604,75 @@ public class InliningPhase extends Phase {
              * also getting queued in the compilation queue concurrently)
              */
 
+            // TODO (chaeubl): we could do a shortcut here, i.e. if it resulted in something simple
+            // before avoid building the graphs
+
+            // @formatter:off
+            // trivial
+            //   few nodes
+            //   linear and no invokes
+            // leaf
+            //   no invokes
+            // normal
+            //   many nodes
+            //   no frequently executed invokes
+            // complex
+            //   many nodes
+            //   frequently executed invokes
+            // @formatter:on
+
             int nodes = determineNodeCount(info);
             if (nodes < GraalOptions.TrivialHighLevelGraphSize * inliningBonus) {
-                return InliningUtil.logInlinedMethod(info, fullyProcessed, "trivial (nodes=%d)", nodes);
+                return InliningUtil.logInlinedMethod(info, "trivial (nodes=%d)", nodes);
             }
 
             double invokes = determineInvokeProbability(info);
-            if (GraalOptions.LimitInlinedInvokes > 0 && fullyProcessed && invokes > GraalOptions.LimitInlinedInvokes * inliningBonus) {
+            if (GraalOptions.LimitInlinedInvokes > 0 && invokes > GraalOptions.LimitInlinedInvokes * inliningBonus) {
                 return InliningUtil.logNotInlinedMethod(info, "invoke probability is too high (%f)", invokes);
             }
 
             double maximumNodes = computeMaximumSize(relevance, (int) (GraalOptions.NormalHighLevelGraphSize * inliningBonus));
             if (nodes < maximumNodes) {
-                return InliningUtil.logInlinedMethod(info, fullyProcessed, "relevance-based (relevance=%f, nodes=%d)", relevance, nodes);
+                return InliningUtil.logInlinedMethod(info, "relevance-based (relevance=%f, nodes=%d)", relevance, nodes);
             }
 
+            // TODO (chaeubl): compute metric that is used to check if this method should be inlined
+
             return InliningUtil.logNotInlinedMethod(info, "(relevance=%f, probability=%f, bonus=%f)", relevance, probability, inliningBonus);
+        }
+
+        private static int previousHIRSize(InlineInfo info) {
+            int size = 0;
+            for (int i = 0; i < info.numberOfMethods(); i++) {
+                size += compiledMethodInfo(info.methodAt(i)).getHighLevelNodes();
+            }
+            return size;
+        }
+
+        private static int determineNodeCount(InlineInfo info) {
+            int nodes = 0;
+            for (int i = 0; i < info.numberOfMethods(); i++) {
+                InlineableElement elem = info.inlineableElementAt(i);
+                if (elem != null) {
+                    nodes += elem.getNodeCount();
+                }
+            }
+            return nodes;
+        }
+
+        private static double determineInvokeProbability(InlineInfo info) {
+            double invokeProbability = 0;
+            for (int i = 0; i < info.numberOfMethods(); i++) {
+                InlineableElement callee = info.inlineableElementAt(i);
+                Iterable<Invoke> invokes = callee.getInvokes();
+                if (invokes.iterator().hasNext()) {
+                    NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure((StructuredGraph) callee).apply();
+                    for (Invoke invoke : invokes) {
+                        invokeProbability += nodeProbabilities.get(invoke.asNode());
+                    }
+                }
+            }
+            return invokeProbability;
         }
     }
 
@@ -611,162 +769,15 @@ public class InliningPhase extends Phase {
         }
     }
 
-    /**
-     * Holds the data for building the callee graphs recursively: graphs and invocations (each
-     * invocation can have multiple graphs).
-     */
-    static class InliningData {
-
-        private final ArrayDeque<GraphInfo> graphQueue;
-        private final ArrayDeque<MethodInvocation> invocationQueue;
-
-        private int maxGraphs = 1;
-
-        public InliningData() {
-            this.graphQueue = new ArrayDeque<>();
-            this.invocationQueue = new ArrayDeque<>();
-        }
-
-        public void pushGraph(StructuredGraph graph, double probability, double relevance) {
-            assert !contains(graph);
-            NodeBitMap visitedFixedNodes = graph.createNodeBitMap();
-            Stack<Invoke> invokes = new InliningIterator(graph.start(), visitedFixedNodes).apply();
-            assert invokes.size() == count(graph.getInvokes());
-            graphQueue.push(new GraphInfo(graph, invokes, probability, relevance));
-            assert graphQueue.size() <= maxGraphs;
-        }
-
-        public boolean hasUnprocessedGraphs() {
-            return !graphQueue.isEmpty();
-        }
-
-        public GraphInfo currentGraph() {
-            return graphQueue.peek();
-        }
-
-        public void popGraph() {
-            graphQueue.pop();
-            assert graphQueue.size() <= maxGraphs;
-        }
-
-        public MethodInvocation currentInvocation() {
-            return invocationQueue.peek();
-        }
-
-        public MethodInvocation pushInvocation(InlineInfo info, Assumptions assumptions, double probability, double relevance) {
-            MethodInvocation methodInvocation = new MethodInvocation(info, new Assumptions(assumptions.useOptimisticAssumptions()), probability, relevance);
-            invocationQueue.push(methodInvocation);
-            maxGraphs += info.numberOfMethods();
-            assert graphQueue.size() <= maxGraphs;
-            return methodInvocation;
-        }
-
-        public void popInvocation() {
-            maxGraphs -= invocationQueue.peek().callee.numberOfMethods();
-            assert graphQueue.size() <= maxGraphs;
-            invocationQueue.pop();
-        }
-
-        public int countRecursiveInlining(ResolvedJavaMethod method) {
-            int count = 0;
-            for (GraphInfo graphInfo : graphQueue) {
-                if (method.equals(graphInfo.graph().method())) {
-                    count++;
-                }
-            }
-            return count;
-        }
-
-        public int inliningDepth() {
-            return invocationQueue.size();
-        }
-
-        @Override
-        public String toString() {
-            StringBuilder result = new StringBuilder("Invocations: ");
-
-            for (MethodInvocation invocation : invocationQueue) {
-                result.append(invocation.callee().numberOfMethods());
-                result.append("x ");
-                result.append(invocation.callee().invoke());
-                result.append("; ");
-            }
-
-            result.append("\nGraphs: ");
-            for (GraphInfo graph : graphQueue) {
-                result.append(graph.graph());
-                result.append("; ");
-            }
-
-            return result.toString();
-        }
-
-        private boolean contains(StructuredGraph graph) {
-            for (GraphInfo info : graphQueue) {
-                if (info.graph() == graph) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private static int count(Iterable<Invoke> invokes) {
-            int count = 0;
-            Iterator<Invoke> iterator = invokes.iterator();
-            while (iterator.hasNext()) {
-                iterator.next();
-                count++;
-            }
-            return count;
-        }
-    }
-
-    private static class MethodInvocation {
-
-        private final InlineInfo callee;
-        private final Assumptions assumptions;
-        private final double probability;
-        private final double relevance;
-
-        private int processedGraphs;
-
-        public MethodInvocation(InlineInfo info, Assumptions assumptions, double probability, double relevance) {
-            this.callee = info;
-            this.assumptions = assumptions;
-            this.probability = probability;
-            this.relevance = relevance;
-        }
-
-        public void incrementProcessedGraphs() {
-            processedGraphs++;
-        }
-
-        public boolean processedAllGraphs() {
-            assert processedGraphs <= callee.numberOfMethods();
-            return processedGraphs == callee.numberOfMethods();
-        }
-
-        public InlineInfo callee() {
-            return callee;
-        }
-
-        public Assumptions assumptions() {
-            return assumptions;
-        }
-
-        public double probability() {
-            return probability;
-        }
-
-        public double relevance() {
-            return relevance;
-        }
-    }
-
-    private static class CompiledMethodInfo {
+    public static class CompiledMethodInfo {
 
         private int highLevelNodes;
+        private int midLevelNodes;
+        private int lowLevelNodes;
+        private int compiledCodeSize;
         private double summedUpProbabilityOfRemainingInvokes;
+        private double maxProbabilityOfRemainingInvokes;
+        private int numberOfRemainingInvokes;
 
         public CompiledMethodInfo() {
         }
@@ -775,16 +786,62 @@ public class InliningPhase extends Phase {
             return highLevelNodes;
         }
 
-        public void setHighLevelNodeCount(int highLevelNodes) {
-            this.highLevelNodes = highLevelNodes;
+        public int getMidLevelNodes() {
+            return midLevelNodes;
+        }
+
+        public int getLowLevelNodes() {
+            return lowLevelNodes;
+        }
+
+        public int getCompiledCodeSize() {
+            return compiledCodeSize;
+        }
+
+        public double getMaxProbabilityOfRemainingInvokes() {
+            return maxProbabilityOfRemainingInvokes;
         }
 
         public double getSummedUpProbabilityOfRemainingInvokes() {
             return summedUpProbabilityOfRemainingInvokes;
         }
 
+        public int getNumberOfRemainingInvokes() {
+            return numberOfRemainingInvokes;
+        }
+
+        public void setHighLevelNodes(int highLevelNodes) {
+            this.highLevelNodes = highLevelNodes;
+        }
+
+        public void setMidLevelNodes(int midLevelNodes) {
+            this.midLevelNodes = midLevelNodes;
+        }
+
+        public void setLowLevelNodes(int lowLevelNodes) {
+            this.lowLevelNodes = lowLevelNodes;
+        }
+
+        public void setMaxProbabilityOfRemainingInvokes(double maxProbabilityOfRemainingInvokes) {
+            this.maxProbabilityOfRemainingInvokes = maxProbabilityOfRemainingInvokes;
+        }
+
         public void setSummedUpProbabilityOfRemainingInvokes(double summedUpProbabilityOfRemainingInvokes) {
             this.summedUpProbabilityOfRemainingInvokes = summedUpProbabilityOfRemainingInvokes;
+        }
+
+        public void setCompiledCodeSize(int compiledCodeSize) {
+            this.compiledCodeSize = compiledCodeSize;
+        }
+
+        public void setNumberOfRemainingInvokes(int numberOfRemainingInvokes) {
+            this.numberOfRemainingInvokes = numberOfRemainingInvokes;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("High: %d, Mid: %d, Low: %d, Compiled: %d, #Invokes: %d, SumOfInvokes: %f, MaxOfInvokes: %f", highLevelNodes, midLevelNodes, lowLevelNodes, compiledCodeSize,
+                            numberOfRemainingInvokes, summedUpProbabilityOfRemainingInvokes, maxProbabilityOfRemainingInvokes);
         }
     }
 }
