@@ -27,27 +27,51 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 
 /**
- * Manages a list of unique deoptimization reasons.
+ * Manages a list of unique deoptimization reasons and returns a unique index for each reason. This
+ * class is not thread safe and assumes that at every point in time there is only a single Graal
+ * compilation accessing this object.
  * 
  */
 public final class SpeculationLog {
-    private Set<Object> failedSpeculations;
-    private Object lastFailed;
 
-    public synchronized void collectFailedSpeculations() {
-        if (lastFailed != null) {
-            if (failedSpeculations == null) {
-                failedSpeculations = new HashSet<>(2);
+    public static final int MAX_CACHE_SIZE = 1 << 15;
+
+    private List<Object> speculations = new ArrayList<>();
+    private boolean[] map = new boolean[10];
+    private Set<Object> snapshot = new HashSet<>();
+
+    private short addSpeculation(Object reason) {
+        short index = (short) speculations.indexOf(reason);
+        if (index != -1) {
+            // Nothing to add, reason already registered.
+            return index;
+        }
+        if (speculations.size() >= MAX_CACHE_SIZE) {
+            throw new BailoutException("Too many deoptimization reasons recorded");
+        }
+        speculations.add(reason);
+        if (map.length < speculations.size()) {
+            map = Arrays.copyOf(map, map.length * 2);
+        }
+        return (short) (speculations.size() - 1);
+    }
+
+    public boolean[] getRawMap() {
+        return map;
+    }
+
+    public void snapshot() {
+        for (int i = 0; i < speculations.size(); ++i) {
+            if (map[i]) {
+                snapshot.add(speculations.get(i));
             }
-            failedSpeculations.add(lastFailed);
-            lastFailed = null;
         }
     }
 
     public Constant maySpeculate(Object reason) {
-        if (failedSpeculations != null && failedSpeculations.contains(reason)) {
+        if (snapshot.contains(reason)) {
             return null;
         }
-        return Constant.forObject(reason);
+        return Constant.forShort(addSpeculation(reason));
     }
 }

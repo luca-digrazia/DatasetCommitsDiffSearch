@@ -87,17 +87,8 @@ public class DebugInfoBuilder {
                             changed = true;
                             VirtualObjectState currentField = (VirtualObjectState) objectStates.get(vobj);
                             assert currentField != null;
-                            int pos = 0;
                             for (int i = 0; i < vobj.entryCount(); i++) {
-                                if (!currentField.fieldValues().get(i).isConstant() || currentField.fieldValues().get(i).asConstant().getKind() != Kind.Illegal) {
-                                    values[pos++] = toValue(currentField.fieldValues().get(i));
-                                } else {
-                                    assert currentField.fieldValues().get(i - 1).kind() == Kind.Double || currentField.fieldValues().get(i - 1).kind() == Kind.Long : vobj + " " + i + " " +
-                                                    currentField.fieldValues().get(i - 1);
-                                }
-                            }
-                            if (pos != vobj.entryCount()) {
-                                values = Arrays.copyOf(values, pos);
+                                values[i] = toValue(currentField.fieldValues().get(i));
                             }
                         }
                         entry.getValue().setValues(values);
@@ -187,7 +178,7 @@ public class DebugInfoBuilder {
             }
         } else if (value instanceof ConstantNode) {
             Debug.metric("StateConstants").increment();
-            return ((ConstantNode) value).getValue();
+            return ((ConstantNode) value).value;
 
         } else if (value != null) {
             Debug.metric("StateVariables").increment();
