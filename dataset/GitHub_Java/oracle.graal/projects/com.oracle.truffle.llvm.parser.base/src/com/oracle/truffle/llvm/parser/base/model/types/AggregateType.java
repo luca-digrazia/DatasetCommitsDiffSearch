@@ -31,7 +31,12 @@ package com.oracle.truffle.llvm.parser.base.model.types;
 
 public interface AggregateType extends Type, MetadataReferenceType {
 
-    int getElementCount();
+    int getLength();
 
     Type getElementType(int index);
+
+    @Override
+    default Type getIndexType(int index) {
+        return getElementType(index);
+    }
 }

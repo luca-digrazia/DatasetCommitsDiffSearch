@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.parser.base.model.types;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
 public interface Type {
 
@@ -49,10 +48,6 @@ public interface Type {
 
     default Type getIndexType(@SuppressWarnings("unused") int index) {
         throw new UnsupportedOperationException("Cannot index Type: " + this);
-    }
-
-    default LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
-        throw new UnsupportedOperationException("Cannot resolve to Runtime Type: " + this);
     }
 
     default Type getType() {

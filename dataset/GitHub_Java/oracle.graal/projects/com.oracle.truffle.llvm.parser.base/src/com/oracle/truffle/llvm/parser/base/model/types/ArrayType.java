@@ -35,7 +35,6 @@ import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock;
 import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock.MetadataReference;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
 public class ArrayType implements AggregateType {
 
@@ -82,11 +81,6 @@ public class ArrayType implements AggregateType {
     @Override
     public LLVMBaseType getLLVMBaseType() {
         return LLVMBaseType.ARRAY;
-    }
-
-    @Override
-    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
-        return LLVMFunctionDescriptor.LLVMRuntimeType.ARRAY;
     }
 
     @Override
