@@ -25,6 +25,9 @@ package org.graalvm.compiler.truffle.substitutions;
 import static java.lang.Character.toUpperCase;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleUseFrameWithoutBoxing;
 
+import java.lang.ref.Reference;
+import java.lang.ref.SoftReference;
+import java.lang.ref.WeakReference;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -39,6 +42,7 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
+import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
@@ -119,12 +123,13 @@ public class TruffleGraphBuilderPlugins {
     }
 
     public static void registerInvocationPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification,
-                             ConstantReflectionProvider constantReflection, KnownTruffleFields knownFields) {
+                             ConstantReflectionProvider constantReflection, SnippetReflectionProvider snippetReflection, KnownTruffleFields knownFields) {
         registerOptimizedAssumptionPlugins(plugins, knownFields);
         registerExactMathPlugins(plugins);
         registerCompilerDirectivesPlugins(plugins, canDelayIntrinsification);
         registerCompilerAssertsPlugins(plugins, canDelayIntrinsification);
         registerOptimizedCallTargetPlugins(plugins, canDelayIntrinsification, knownFields);
+        registerCompilationFinalReferencePlugins(plugins, snippetReflection, canDelayIntrinsification);
 
         if (TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing)) {
             registerFrameWithoutBoxingPlugins(plugins, canDelayIntrinsification, constantReflection, knownFields);
@@ -206,6 +211,29 @@ public class TruffleGraphBuilderPlugins {
                 }
             });
         }
+    }
+
+    public static void registerCompilationFinalReferencePlugins(InvocationPlugins plugins, SnippetReflectionProvider snippetReflection, boolean canDelayIntrinsification) {
+        Registration r = new Registration(plugins, Reference.class);
+        r.register1("get", Receiver.class, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+                if (canDelayIntrinsification) {
+                    return false;
+                }
+                if (receiver.isConstant()) {
+                    JavaConstant constant = (JavaConstant) receiver.get().asConstant();
+                    if (constant.isNonNull()) {
+                        Reference<?> reference = snippetReflection.asObject(Reference.class, constant);
+                        if (reference instanceof WeakReference<?> || reference instanceof SoftReference<?>) {
+                            b.addPush(JavaKind.Object, ConstantNode.forConstant(snippetReflection.forObject(reference.get()), b.getMetaAccess()));
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+        });
     }
 
     public static void registerCompilerDirectivesPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification) {
