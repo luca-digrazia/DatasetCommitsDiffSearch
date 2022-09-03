@@ -22,16 +22,16 @@
  */
 package com.oracle.max.graal.compiler.alloc;
 
-import static com.oracle.max.graal.alloc.util.LocationUtil.*;
+import static com.oracle.max.graal.alloc.util.ValueUtil.*;
 
 import java.util.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.lir.*;
+import com.oracle.max.graal.debug.*;
 
 /**
  * Represents an interval in the {@linkplain LinearScan linear scan register allocator}.
@@ -658,9 +658,12 @@ public final class Interval {
     /**
      * Sentinel interval to denote the end of an interval list.
      */
-    static final Interval EndMarker = new Interval(CiValue.IllegalValue, -1);
+    static final Interval EndMarker = new Interval(null, CiValue.IllegalValue, -1);
 
-    Interval(CiValue operand, int operandNumber) {
+    private static final Debug.Metric instanceMetric = Debug.metric("LSRAIntervalsCreated");
+
+    Interval(GraalContext context, CiValue operand, int operandNumber) {
+        //instanceMetric.increment();
         assert operand != null;
         this.operand = operand;
         this.operandNumber = operandNumber;
@@ -791,7 +794,7 @@ public final class Interval {
                 Interval lastChild = splitChildren.get(splitChildren.size() - 1);
                 msg.append(" (first = ").append(firstChild).append(", last = ").append(lastChild).append(")");
             }
-            throw new GraalInternalError("Linear Scan Error: %s", msg);
+            throw new CiBailout("Linear Scan Error: " + msg);
         }
 
         if (!splitChildren.isEmpty()) {
