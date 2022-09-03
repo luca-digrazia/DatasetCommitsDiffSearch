@@ -41,19 +41,9 @@ public final class Invoke extends AbstractMemoryCheckpointNode implements Except
     private static final int SUCCESSOR_COUNT = 1;
     private static final int SUCCESSOR_EXCEPTION_EDGE = 0;
 
-    private boolean canInline = true;
-
     @Override
     protected int inputCount() {
         return super.inputCount() + argumentCount;
-    }
-
-    public boolean canInline() {
-        return canInline;
-    }
-
-    public void setCanInline(boolean b) {
-        canInline = b;
     }
 
     @Override
@@ -214,7 +204,6 @@ public final class Invoke extends AbstractMemoryCheckpointNode implements Except
     @Override
     public Node copy(Graph into) {
         Invoke x = new Invoke(bci, opcode, kind, new Value[argumentCount], target, returnType, into);
-        x.setCanInline(canInline);
         return x;
     }
 }

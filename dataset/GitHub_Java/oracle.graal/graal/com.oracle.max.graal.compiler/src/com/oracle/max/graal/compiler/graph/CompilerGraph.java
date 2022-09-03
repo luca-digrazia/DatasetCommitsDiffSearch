@@ -24,30 +24,45 @@ package com.oracle.max.graal.compiler.graph;
 
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 
 public class CompilerGraph extends Graph {
 
+    private RiRuntime runtime;
     private Return returnSingleton;
     private Unwind unwindSingleton;
+    private CiAssumptions assumptions = new CiAssumptions();
 
-    public Return createReturn(Value result) {
+
+    public CompilerGraph(RiRuntime runtime) {
+        this.runtime = runtime;
+    }
+
+    public void setReturn(Return returnNode) {
         assert returnSingleton == null;
-        returnSingleton = new Return(result, this);
-        return returnSingleton;
+        returnSingleton = returnNode;
     }
 
     public Return getReturn() {
         return returnSingleton;
     }
 
-    public Unwind createUnwind(Value exception) {
+    public void setUnwind(Unwind unwind) {
         assert unwindSingleton == null;
-        unwindSingleton = new Unwind(exception, this);
-        return unwindSingleton;
+        unwindSingleton = unwind;
     }
 
     public Unwind getUnwind() {
         return unwindSingleton;
+    }
+
+    public RiRuntime runtime() {
+        return runtime;
+    }
+
+    public CiAssumptions assumptions() {
+        return assumptions;
     }
 }

@@ -174,11 +174,7 @@ public final class HotSpotMethodUnresolved extends HotSpotMethod {
         return null;
     }
 
-    public double branchProbability(int bci) {
+    public int branchProbability(int bci) {
         return -1;
-    }
-
-    public double[] switchProbability(int bci) {
-        return null;
     }
 }

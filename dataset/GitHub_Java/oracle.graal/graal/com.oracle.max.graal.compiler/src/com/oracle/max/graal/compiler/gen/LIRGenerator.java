@@ -201,10 +201,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         this.operands = new OperandPool(compilation.target);
     }
 
-    public CiTarget target() {
-        return compilation.target;
-    }
-
     public LIRList lir() {
         return lir;
     }
@@ -742,11 +738,8 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitFixedGuard(FixedGuard fixedGuard) {
-        for (Node n : fixedGuard.inputs()) {
-            if (n != null) {
-                emitGuardComp((BooleanNode) n);
-            }
-        }
+        BooleanNode comp = fixedGuard.node();
+        emitGuardComp(comp);
     }
 
     public void emitGuardComp(BooleanNode comp) {
@@ -1077,7 +1070,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             lastState = fs;
         } else if (block.blockPredecessors().size() == 1) {
             FrameState fs = block.blockPredecessors().get(0).lastState();
-            //assert fs != null : "B" + block.blockID() + ", pred=B" + block.blockPredecessors().get(0).blockID();
+            assert fs != null;
             if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
                 TTY.println("STATE CHANGE (singlePred)");
                 if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
@@ -1464,11 +1457,8 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitEndNode(EndNode end) {
         setNoResult(end);
-        assert end.merge() != null;
         moveToPhi(end.merge(), end);
-        LIRBlock lirBlock = getLIRBlock(end.merge());
-        assert lirBlock != null : end;
-        lir.jump(lirBlock);
+        lir.jump(getLIRBlock(end.merge()));
     }
 
     @Override
