@@ -32,9 +32,7 @@ import static org.graalvm.compiler.core.GraalCompilerOptions.PrintStackTraceOnEx
 import static org.graalvm.compiler.core.phases.HighTier.Options.Inline;
 import static org.graalvm.compiler.java.BytecodeParserOptions.InlineDuringParsing;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.debug.Debug;
@@ -47,7 +45,6 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.Management;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.debug.TimeSource;
-import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.code.BailoutException;
@@ -119,20 +116,11 @@ public class CompilationTask {
          */
         HotSpotGraalRuntimeProvider graalRuntime = compiler.getGraalRuntime();
         GraalHotSpotVMConfig config = graalRuntime.getVMConfig();
-        OptionValues newOptions = options;
-        if (!config.inline) {
-            Map<OptionKey<?>, Object> m = new HashMap<>();
-            if (Inline.getValue(options) && !Inline.hasBeenSet(options)) {
-                m.put(Inline, false);
-            }
-            if (InlineDuringParsing.getValue(options) && !InlineDuringParsing.hasBeenSet(options)) {
-                m.put(InlineDuringParsing, false);
-            }
-            if (!m.isEmpty()) {
-                newOptions = new OptionValues(options, m);
-            }
+        if (Inline.getValue(options) && !config.inline && !Inline.hasBeenSet(options)) {
+            this.options = new OptionValues(options, Inline, false, InlineDuringParsing, false);
+        } else {
+            this.options = options;
         }
-        this.options = newOptions;
     }
 
     public HotSpotResolvedJavaMethod getMethod() {

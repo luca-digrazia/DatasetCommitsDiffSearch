@@ -50,10 +50,10 @@ public interface CanonicalizerTool {
     boolean allUsagesAvailable();
 
     /**
-     * Indicates the smallest width for comparing an integer value on the target platform.
-     * If this method returns null, then there is no known smallest compare width.
+     * Indicates whether the target platform supports comparison of integers of a particular bit
+     * width. This check is used by canonicalizations that might introduce subword compares.
      */
-    Integer smallestCompareWidth();
+    boolean supportSubwordCompare(int bits);
 
     OptionValues getOptions();
 }

@@ -45,6 +45,12 @@ import org.graalvm.compiler.nodes.ValueNode;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 
+/* TODO (thomaswue/gdub) For high-level optimization purpose the compare node should be a boolean *value* (it is currently only a helper node)
+ * But in the back-end the comparison should not always be materialized (for example in x86 the comparison result will not be in a register but in a flag)
+ *
+ * Compare should probably be made a value (so that it can be canonicalized for example) and in later stages some Compare usage should be transformed
+ * into variants that do not materialize the value (CompareIf, CompareGuard...)
+ */
 @NodeInfo(cycles = CYCLES_1)
 public abstract class CompareNode extends BinaryOpLogicNode implements Canonicalizable.Binary<ValueNode> {
 
@@ -200,7 +206,6 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
                 }
             }
         }
-
         return this;
     }
 
@@ -209,7 +214,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
         if (convert.preservesOrder(condition(), constant, constantReflection)) {
             Constant reverseConverted = convert.reverse(constant, constantReflection);
             if (reverseConverted != null && convert.convert(reverseConverted, constantReflection).equals(constant)) {
-                if (GeneratePIC.getValue()) {
+                if (GeneratePIC.getValue(tool.getOptions())) {
                     // We always want uncompressed constants
                     return null;
                 }
@@ -226,7 +231,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
 
     public static LogicNode createCompareNode(Condition condition, ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {
         assert x.getStackKind() == y.getStackKind();
-        assert condition.isCanonical();
+        assert condition.isCanonical() : "condition is not canonical: " + condition;
         assert !x.getStackKind().isNumericFloat();
 
         LogicNode comparison;

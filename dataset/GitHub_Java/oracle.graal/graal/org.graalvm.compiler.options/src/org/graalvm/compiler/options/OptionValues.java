@@ -32,19 +32,13 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.SortedMap;
 import java.util.TreeMap;
-
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.ImmutableEconomicMap;
-import org.graalvm.util.ImmutableMapCursor;
-import org.graalvm.util.MapCursor;
 
 import jdk.vm.ci.common.InitTimer;
 
@@ -98,7 +92,7 @@ public class OptionValues {
 
     @SuppressWarnings("try")
     private static OptionValues initialize() {
-        EconomicMap<OptionKey<?>, Object> values = newOptionMap();
+        Map<OptionKey<?>, Object> values = new HashMap<>();
         try (InitTimer t = timer("InitializeOptions")) {
 
             ServiceLoader<OptionDescriptors> loader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
@@ -111,10 +105,9 @@ public class OptionValues {
                     try (FileReader fr = new FileReader(graalOptions)) {
                         Properties props = new Properties();
                         props.load(fr);
-                        EconomicMap<String, String> optionSettings = CollectionFactory.newMap();
-                        MapCursor<String, String> cursor = optionSettings.getEntries();
-                        while (cursor.advance()) {
-                            optionSettings.put(cursor.getKey(), cursor.getValue());
+                        Map<String, String> optionSettings = new HashMap<>();
+                        for (Map.Entry<Object, Object> e : props.entrySet()) {
+                            optionSettings.put((String) e.getKey(), (String) e.getValue());
                         }
                         try {
                             OptionsParser.parseOptions(optionSettings, values, loader);
@@ -127,7 +120,7 @@ public class OptionValues {
                 }
             }
 
-            EconomicMap<String, String> optionSettings = CollectionFactory.newMap();
+            Map<String, String> optionSettings = new HashMap<>();
             for (Map.Entry<Object, Object> e : savedProps.entrySet()) {
                 String name = (String) e.getKey();
                 if (name.startsWith(GRAAL_OPTION_PROPERTY_PREFIX)) {
@@ -157,12 +150,12 @@ public class OptionValues {
      */
     public static final OptionValues GLOBAL = initialize();
 
-    private final EconomicMap<OptionKey<?>, Object> values = newOptionMap();
+    private final Map<OptionKey<?>, Object> values = new HashMap<>();
 
     /**
      * Used to assert the invariant of stability for {@link StableOptionKey}s.
      */
-    private final EconomicMap<OptionKey<?>, Object> stabilized = newOptionMap();
+    private final Map<StableOptionKey<?>, Object> stabilized = new HashMap<>();
 
     OptionValues set(OptionKey<?> key, Object value) {
         decodeNull(values.put(key, encodeNull(value)));
@@ -179,17 +172,26 @@ public class OptionValues {
         return true;
     }
 
-    boolean containsKey(OptionKey<?> key) {
-        return values.containsKey(key);
+    /**
+     * Determines if the value of {@code key} is {@linkplain #stabilize(StableOptionKey, Object)
+     * stable} in this map.
+     *
+     * Note: Should only be used in an assertion.
+     */
+    synchronized boolean isStabilized(StableOptionKey<?> key) {
+        return key.getDescriptor() == null;
     }
 
-    public OptionValues(OptionValues initialValues, ImmutableEconomicMap<OptionKey<?>, Object> extraPairs) {
+    boolean containsKey(OptionKey<?> key) {
+        return key.getDescriptor() != null && values.containsKey(key);
+    }
+
+    public OptionValues(OptionValues initialValues, Map<OptionKey<?>, Object> extraPairs) {
         if (initialValues != null) {
             values.putAll(initialValues.values);
         }
-        ImmutableMapCursor<OptionKey<?>, Object> cursor = extraPairs.getEntries();
-        while (cursor.advance()) {
-            values.put(cursor.getKey(), encodeNull(cursor.getValue()));
+        for (Map.Entry<OptionKey<?>, Object> e : extraPairs.entrySet()) {
+            values.put(e.getKey(), encodeNull(e.getValue()));
         }
     }
 
@@ -198,17 +200,10 @@ public class OptionValues {
     }
 
     /**
-     * Creates a new map suitable for using {@link OptionKey}s as keys.
-     */
-    public static EconomicMap<OptionKey<?>, Object> newOptionMap() {
-        return CollectionFactory.newMap(Equivalence.IDENTITY);
-    }
-
-    /**
      * Gets an immutable view of the key/value pairs in this object.
      */
-    public ImmutableEconomicMap<OptionKey<?>, Object> getMap() {
-        return values;
+    public Map<OptionKey<?>, Object> getMap() {
+        return Collections.unmodifiableMap(values);
     }
 
     /**
@@ -217,8 +212,8 @@ public class OptionValues {
      * @param extraPairs key/value pairs of the form {@code [key1, value1, key2, value2, ...]}
      * @return a map containing the key/value pairs as entries
      */
-    public static EconomicMap<OptionKey<?>, Object> asMap(OptionKey<?> key1, Object value1, Object... extraPairs) {
-        EconomicMap<OptionKey<?>, Object> map = newOptionMap();
+    public static Map<OptionKey<?>, Object> asMap(OptionKey<?> key1, Object value1, Object... extraPairs) {
+        Map<OptionKey<?>, Object> map = new HashMap<>();
         map.put(key1, value1);
         for (int i = 0; i < extraPairs.length; i += 2) {
             OptionKey<?> key = (OptionKey<?>) extraPairs[i];
@@ -231,20 +226,27 @@ public class OptionValues {
     /**
      * Constructor only for initializing {@link #GLOBAL}.
      */
-    OptionValues(EconomicMap<OptionKey<?>, Object> values) {
-        MapCursor<OptionKey<?>, Object> cursor = values.getEntries();
-        while (cursor.advance()) {
-            this.values.put(cursor.getKey(), encodeNull(cursor.getValue()));
+    OptionValues(Map<OptionKey<?>, Object> values) {
+        for (Map.Entry<OptionKey<?>, Object> e : values.entrySet()) {
+            this.values.put(e.getKey(), encodeNull(e.getValue()));
         }
     }
 
     @SuppressWarnings("unchecked")
     <T> T get(OptionKey<T> key) {
-        Object value = values.get(key);
-        if (value == null) {
+        if (key.getDescriptor() != null) {
+            Object value = values.get(key);
+            if (value == null) {
+                return key.getDefaultValue();
+            }
+            return (T) decodeNull(value);
+        } else {
+            // If a key has no descriptor, it cannot be in the map
+            // since OptionKey.hashCode() will ensure the key has a
+            // descriptor as a result of using OptionKey.getName().
             return key.getDefaultValue();
         }
-        return (T) decodeNull(value);
+
     }
 
     private static final Object NULL = new Object();
@@ -266,10 +268,7 @@ public class OptionValues {
             }
         };
         SortedMap<OptionKey<?>, Object> sorted = new TreeMap<>(comparator);
-        MapCursor<OptionKey<?>, Object> cursor = values.getEntries();
-        while (cursor.advance()) {
-            sorted.put(cursor.getKey(), cursor.getValue());
-        }
+        sorted.putAll(values);
         return sorted.toString();
     }
 
