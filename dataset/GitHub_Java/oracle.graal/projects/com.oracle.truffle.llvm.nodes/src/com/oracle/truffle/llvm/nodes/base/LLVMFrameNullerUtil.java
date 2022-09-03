@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -43,6 +43,7 @@ import com.oracle.truffle.llvm.runtime.types.PrimitiveType.PrimitiveKind;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
+import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
@@ -50,7 +51,6 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
 public final class LLVMFrameNullerUtil {
     private LLVMFrameNullerUtil() {
@@ -98,15 +98,23 @@ public final class LLVMFrameNullerUtil {
         frame.setObject(frameSlot, new LLVM80BitFloat(false, 0, 0));
     }
 
+    private static void nullFunction(VirtualFrame frame, FrameSlot frameSlot) {
+        frame.setObject(frameSlot, LLVMNativePointer.createNull());
+    }
+
     private static void nullObject(VirtualFrame frame, FrameSlot frameSlot) {
         CompilerAsserts.partialEvaluationConstant(frameSlot.getInfo());
         CompilerAsserts.partialEvaluationConstant(frameSlot.getInfo() == null);
         if (frameSlot.getInfo() != null) {
             Type type = (Type) frameSlot.getInfo();
+            CompilerAsserts.partialEvaluationConstant(Type.isFunctionOrFunctionPointer(type));
             CompilerAsserts.partialEvaluationConstant(type instanceof VectorType);
             CompilerAsserts.partialEvaluationConstant(type instanceof VariableBitWidthType);
             CompilerAsserts.partialEvaluationConstant(type instanceof PrimitiveType && ((PrimitiveType) type).getPrimitiveKind() == PrimitiveKind.X86_FP80);
-            if (type instanceof VectorType && ((VectorType) type).getElementType() instanceof PrimitiveType) {
+            if (Type.isFunctionOrFunctionPointer(type)) {
+                nullFunction(frame, frameSlot);
+                return;
+            } else if (type instanceof VectorType && ((VectorType) type).getElementType() instanceof PrimitiveType) {
                 nullVector(frame, frameSlot, ((PrimitiveType) ((VectorType) type).getElementType()).getPrimitiveKind());
                 return;
             } else if (type instanceof VectorType && ((VectorType) type).getElementType() instanceof PointerType) {
