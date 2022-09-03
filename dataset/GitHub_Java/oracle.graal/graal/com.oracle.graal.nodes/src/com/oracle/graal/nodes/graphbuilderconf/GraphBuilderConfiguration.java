@@ -34,7 +34,6 @@ public class GraphBuilderConfiguration {
         private final InvocationPlugins invocationPlugins;
         private NodePlugin[] nodePlugins;
         private ParameterPlugin[] parameterPlugins;
-        private TypePlugin[] typePlugins;
         private InlineInvokePlugin[] inlineInvokePlugins;
         private LoopExplosionPlugin loopExplosionPlugin;
 
@@ -47,7 +46,6 @@ public class GraphBuilderConfiguration {
             this.invocationPlugins = new InvocationPlugins(copyFrom.invocationPlugins);
             this.nodePlugins = copyFrom.nodePlugins;
             this.parameterPlugins = copyFrom.parameterPlugins;
-            this.typePlugins = copyFrom.typePlugins;
             this.inlineInvokePlugins = copyFrom.inlineInvokePlugins;
             this.loopExplosionPlugin = copyFrom.loopExplosionPlugin;
         }
@@ -62,7 +60,6 @@ public class GraphBuilderConfiguration {
             this.invocationPlugins = invocationPlugins;
             this.nodePlugins = new NodePlugin[0];
             this.parameterPlugins = new ParameterPlugin[0];
-            this.typePlugins = new TypePlugin[0];
             this.inlineInvokePlugins = new InlineInvokePlugin[0];
         }
 
@@ -104,22 +101,6 @@ public class GraphBuilderConfiguration {
             System.arraycopy(parameterPlugins, 0, newPlugins, 1, parameterPlugins.length);
             newPlugins[0] = plugin;
             parameterPlugins = newPlugins;
-        }
-
-        public TypePlugin[] getTypePlugins() {
-            return typePlugins;
-        }
-
-        public void appendTypePlugin(TypePlugin plugin) {
-            typePlugins = Arrays.copyOf(typePlugins, typePlugins.length + 1);
-            typePlugins[typePlugins.length - 1] = plugin;
-        }
-
-        public void prependTypePlugin(TypePlugin plugin) {
-            TypePlugin[] newPlugins = new TypePlugin[typePlugins.length + 1];
-            System.arraycopy(typePlugins, 0, newPlugins, 1, typePlugins.length);
-            newPlugins[0] = plugin;
-            typePlugins = newPlugins;
         }
 
         public void clearParameterPlugin() {

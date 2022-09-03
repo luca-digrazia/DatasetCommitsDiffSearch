@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler.test.debug;
 
-import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
-
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
@@ -256,7 +254,7 @@ public class VerifyMethodMetricsTest {
         for (Method m : c.getDeclaredMethods()) {
             if (!Modifier.isNative(m.getModifiers()) && !Modifier.isAbstract(m.getModifiers())) {
                 ResolvedJavaMethod method = metaAccess.lookupJavaMethod(m);
-                StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO, INVALID_COMPILATION_ID);
+                StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO);
                 graphBuilderSuite.apply(graph, context);
                 try (DebugConfigScope s = Debug.disableIntercept()) {
                     new VerifyDebugUsage().apply(graph, context);

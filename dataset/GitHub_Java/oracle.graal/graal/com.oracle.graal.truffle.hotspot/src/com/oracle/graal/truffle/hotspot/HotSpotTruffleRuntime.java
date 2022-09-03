@@ -38,6 +38,21 @@ import java.util.WeakHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.CompiledCode;
+import jdk.vm.ci.code.stack.StackIntrospection;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
+import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.vm.ci.hotspot.HotSpotSpeculationLog;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.runtime.JVMCI;
+import jdk.vm.ci.services.Services;
+
 import com.oracle.graal.api.runtime.GraalRuntime;
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.target.Backend;
@@ -66,7 +81,6 @@ import com.oracle.graal.phases.tiers.Suites;
 import com.oracle.graal.phases.tiers.SuitesProvider;
 import com.oracle.graal.phases.util.Providers;
 import com.oracle.graal.runtime.RuntimeProvider;
-import com.oracle.graal.serviceprovider.GraalServices;
 import com.oracle.graal.truffle.CompilationPolicy;
 import com.oracle.graal.truffle.CounterAndTimeBasedCompilationPolicy;
 import com.oracle.graal.truffle.DefaultTruffleCompiler;
@@ -82,21 +96,6 @@ import com.oracle.nfi.api.NativeFunctionInterface;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.nodes.RootNode;
-
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.CompiledCode;
-import jdk.vm.ci.code.stack.StackIntrospection;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
-import jdk.vm.ci.hotspot.HotSpotSpeculationLog;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.SpeculationLog;
-import jdk.vm.ci.runtime.JVMCI;
 
 /**
  * Implementation of the Truffle runtime when running on top of Graal.
@@ -175,17 +174,17 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
     @Override
     public RootCallTarget createCallTarget(RootNode rootNode) {
-        return createCallTargetImpl(null, rootNode, createSpeculationLog());
+        return createCallTargetImpl(null, rootNode);
     }
 
-    private RootCallTarget createCallTargetImpl(OptimizedCallTarget source, RootNode rootNode, SpeculationLog speculationLog) {
+    private RootCallTarget createCallTargetImpl(OptimizedCallTarget source, RootNode rootNode) {
         CompilationPolicy compilationPolicy;
         if (acceptForCompilation(rootNode)) {
             compilationPolicy = new CounterAndTimeBasedCompilationPolicy();
         } else {
             compilationPolicy = new InterpreterOnlyCompilationPolicy();
         }
-        OptimizedCallTarget target = new OptimizedCallTarget(source, rootNode, compilationPolicy, speculationLog);
+        OptimizedCallTarget target = new OptimizedCallTarget(source, rootNode, compilationPolicy, new HotSpotSpeculationLog());
         rootNode.setCallTarget(target);
         callTargets.put(target, null);
 
@@ -193,18 +192,8 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
-    public RootCallTarget createCallTarget(RootNode root, SpeculationLog speculationLog) {
-        return createCallTargetImpl(null, root, speculationLog);
-    }
-
-    @Override
-    public SpeculationLog createSpeculationLog() {
-        return new HotSpotSpeculationLog();
-    }
-
-    @Override
     public RootCallTarget createClonedCallTarget(OptimizedCallTarget source, RootNode root) {
-        return createCallTargetImpl(source, root, createSpeculationLog());
+        return createCallTargetImpl(source, root);
     }
 
     public static void setDontInlineCallBoundaryMethod() {
@@ -237,7 +226,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     private CompilationResultBuilderFactory getOptimizedCallTargetInstrumentationFactory(String arch) {
-        for (OptimizedCallTargetInstrumentationFactory factory : GraalServices.load(OptimizedCallTargetInstrumentationFactory.class)) {
+        for (OptimizedCallTargetInstrumentationFactory factory : Services.load(OptimizedCallTargetInstrumentationFactory.class)) {
             if (factory.getArchitecture().equals(arch)) {
                 factory.init(config(), getHotSpotProviders().getRegisters());
                 return factory;
@@ -349,7 +338,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     private static RawNativeCallNodeFactory getRawNativeCallNodeFactory(String arch) {
-        for (RawNativeCallNodeFactory factory : GraalServices.load(RawNativeCallNodeFactory.class)) {
+        for (RawNativeCallNodeFactory factory : Services.load(RawNativeCallNodeFactory.class)) {
             if (factory.getArchitecture().equals(arch)) {
                 return factory;
             }
