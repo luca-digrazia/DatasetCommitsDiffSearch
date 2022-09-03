@@ -28,6 +28,7 @@ import static com.oracle.graal.graph.Node.*;
 
 import java.util.*;
 
+import com.oracle.graal.compiler.common.FieldIntrospection.FieldInfo;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.NodeClass.EdgeInfo;
 
@@ -48,7 +49,7 @@ public abstract class Edges extends Fields {
     private final int directCount;
     private final Type type;
 
-    public Edges(Type type, int directCount, ArrayList<? extends FieldsScanner.FieldInfo> edges) {
+    public Edges(Type type, int directCount, ArrayList<? extends FieldInfo> edges) {
         super(edges);
         this.type = type;
         this.directCount = directCount;
