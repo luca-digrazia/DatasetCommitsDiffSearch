@@ -111,7 +111,7 @@ final class BreakpointFactory {
             if (key1 instanceof LineLocation && key2 instanceof LineLocation) {
                 final LineLocation line1 = (LineLocation) key1;
                 final LineLocation line2 = (LineLocation) key2;
-                final int nameOrder = line1.getSource().getName().compareTo(line2.getSource().getName());
+                final int nameOrder = line1.getSource().getShortName().compareTo(line2.getSource().getShortName());
                 if (nameOrder != 0) {
                     return nameOrder;
                 }
@@ -442,7 +442,6 @@ final class BreakpointFactory {
             return conditionSource;
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         public void setCondition(String expr) throws IOException {
             assert getState() != DISPOSED : "disposed breakpoints are unusable";
@@ -589,7 +588,6 @@ final class BreakpointFactory {
             warningLog.addWarning(String.format("Exception in %s:  %s", getShortDescription(), ex.getMessage()));
         }
 
-        @SuppressWarnings("deprecation")
         private void resolve(Source source) {
             int line = ((URILocation) locationKey).line;
             LineLocation lineLocation = source.createLineLocation(line);
