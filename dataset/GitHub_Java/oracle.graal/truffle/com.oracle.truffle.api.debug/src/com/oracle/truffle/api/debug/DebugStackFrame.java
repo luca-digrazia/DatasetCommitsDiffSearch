@@ -53,10 +53,9 @@ import com.oracle.truffle.api.source.SourceSection;
  * Suspended events are valid as long while the originating {@link SuspendedCallback} is still
  * executing. All methods of the frame throw {@link IllegalStateException} if they become invalid.
  * <p>
- * Depending on the method, clients may access the stack frame only on the execution thread where
- * the suspended event of the stack frame was created and the notification was received. For some
- * methods, access from other threads may throw {@link IllegalStateException}. Please see the
- * javadoc of the individual method for details.
+ * Clients may access the stack frame only on the execution thread where the suspended event of the
+ * stack frame was created and notification received; access from other threads may throw
+ * {@link IllegalStateException}. Please see the javadoc of the individual method for details.
  *
  * @see SuspendedEvent#getStackFrames()
  * @see SuspendedEvent#getTopStackFrame()
@@ -91,7 +90,7 @@ public final class DebugStackFrame implements Iterable<DebugValue> {
      * The decision to mark a method as <em>internal</em> is language-specific, reflects judgments
      * about tool usability, and is subject to change.
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.17
      */
@@ -108,7 +107,7 @@ public final class DebugStackFrame implements Iterable<DebugValue> {
      * returned.
      *
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.17
      */
@@ -136,7 +135,7 @@ public final class DebugStackFrame implements Iterable<DebugValue> {
      * source section is <code>null</code> if the source location is not available.
      *
      * <p>
-     * This method is thread-safe.
+     * This method is allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.17
      */
@@ -169,7 +168,7 @@ public final class DebugStackFrame implements Iterable<DebugValue> {
      * the {@link DebugStackFrame debug stack frame} is valid. Debug stack frames are only valid as
      * long as the source {@link SuspendedEvent suspended event} is valid.
      * <p>
-     * This method is thread-safe.
+     * This method is not allowed to be invoked from other threads than the execution thread.
      *
      * @param name the name of the local variable to query.
      * @return the value from the stack
@@ -202,8 +201,7 @@ public final class DebugStackFrame implements Iterable<DebugValue> {
      * stack frame becomes invalid.
      *
      * <p>
-     * This method is not thread-safe and will throw an {@link IllegalStateException} if called on
-     * another thread than it was created with.
+     * This method is not allowed to be invoked from other threads than the execution thread.
      *
      * @param code the code to evaluate
      * @return the return value of the expression
@@ -225,8 +223,7 @@ public final class DebugStackFrame implements Iterable<DebugValue> {
      * returned stack values remain valid as long as the current stack frame remains valid.
      *
      * <p>
-     * This method is not thread-safe and will throw an {@link IllegalStateException} if called on
-     * another thread than it was created with.
+     * This method is not allowed to be invoked from other threads than the execution thread.
      *
      * @since 0.17
      */
