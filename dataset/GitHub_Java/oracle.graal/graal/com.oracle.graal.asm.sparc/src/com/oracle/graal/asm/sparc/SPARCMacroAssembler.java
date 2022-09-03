@@ -27,6 +27,7 @@ import static com.oracle.graal.sparc.SPARC.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.*;
+import com.oracle.graal.sparc.*;
 
 public class SPARCMacroAssembler extends SPARCAssembler {
 

@@ -1998,7 +1998,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Movwtos(Register src, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Impdep1, Opfs.Movwtos, g0, src, dst);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -2013,7 +2012,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Movxtod(Register src, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Impdep1, Opfs.Movxtod, g0, src, dst);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -2021,7 +2019,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Movdtox(Register src, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Impdep1, Opfs.Movdtox, g0, src, dst);
-            assert isDoubleFloatRegister(src);
         }
     }
 
@@ -2029,7 +2026,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Movstosw(Register src, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Impdep1, Opfs.Movstosw, g0, src, dst);
-            assert isSingleFloatRegister(src);
         }
     }
 
@@ -2037,7 +2033,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Movstouw(Register src, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Impdep1, Opfs.Movstouw, g0, src, dst);
-            assert isSingleFloatRegister(src);
         }
     }
 
@@ -2045,8 +2040,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Fdtos(Register src, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fdtos, g0, src, dst);
-            assert isSingleFloatRegister(dst);
-            assert isDoubleFloatRegister(src);
         }
     }
 
@@ -2811,10 +2804,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fmsubs(SPARCAssembler asm, Register src1, Register src2, Register src3, Register dst) {
             super(asm, Ops.ArithOp.getValue(), Op3s.Impdep2.getValue(), Op5s.Fmsubs.getValue(), src1.encoding(), src2.encoding(), src3.encoding(), dst.encoding());
-            assert isSingleFloatRegister(src1);
-            assert isSingleFloatRegister(src2);
-            assert isSingleFloatRegister(src3);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -2822,10 +2811,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fmsubd(SPARCAssembler asm, Register src1, Register src2, Register src3, Register dst) {
             super(asm, Ops.ArithOp.getValue(), Op3s.Impdep2.getValue(), Op5s.Fmsubd.getValue(), src1.encoding(), src2.encoding(), src3.encoding(), dst.encoding());
-            assert isDoubleFloatRegister(src1);
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(src3);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -2833,8 +2818,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fmovs(Register src, Register dst) {
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fmovs, g0, src, dst);
-            assert isSingleFloatRegister(src);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -2842,11 +2825,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fmovd(Register src, Register dst) {
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fmovd, g0, src, dst);
-            // Except for argument register it is not allowed to use f registers for double values
-            // assert !(src == f0 || src == f2 || src == f4 || src == f6) ||
-// isDoubleFloatRegister(src);
-            // When we move return value to d0 we may use f0 for it
-            // assert f0 != dst || isDoubleFloatRegister(dst);
         }
     }
 
@@ -2854,9 +2832,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fmuls(Register src1, Register src2, Register dst) {
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fmuls, src1, src2, dst);
-            assert isSingleFloatRegister(src1);
-            assert isSingleFloatRegister(src2);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -2864,9 +2839,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fmuld(Register src1, Register src2, Register dst) {
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fmuld, src1, src2, dst);
-            assert isDoubleFloatRegister(src1);
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -2874,9 +2846,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fsmuld(Register src1, Register src2, Register dst) {
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fsmuld, src1, src2, dst);
-            assert isSingleFloatRegister(src1);
-            assert isSingleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -2941,9 +2910,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Fnadds(Register src1, Register src2, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fnadds, src1, src2, dst);
-            assert isSingleFloatRegister(src1);
-            assert isSingleFloatRegister(src2);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -2952,9 +2918,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Fnaddd(Register src1, Register src2, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fnaddd, src1, src2, dst);
-            assert isDoubleFloatRegister(src1);
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -2962,8 +2925,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fnegs(Register src2, Register dst) {
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fnegs.getValue(), src2.encoding(), dst.encoding());
-            assert isSingleFloatRegister(src2);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -2971,8 +2932,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fnegd(Register src2, Register dst) {
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fnegd.getValue(), src2.encoding(), dst.encoding());
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -2981,9 +2940,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Fnhadds(Register src1, Register src2, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fnhadds, src1, src2, dst);
-            assert isSingleFloatRegister(src1);
-            assert isSingleFloatRegister(src2);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -2992,9 +2948,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Fnhaddd(Register src1, Register src2, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fnhaddd, src1, src2, dst);
-            assert isDoubleFloatRegister(src1);
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3002,10 +2955,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fnmadds(SPARCAssembler asm, Register src1, Register src2, Register src3, Register dst) {
             super(asm, Ops.ArithOp.getValue(), Op3s.Impdep2.getValue(), Op5s.Fnmadds.getValue(), src1.encoding(), src2.encoding(), src3.encoding(), dst.encoding());
-            assert isSingleFloatRegister(src1);
-            assert isSingleFloatRegister(src2);
-            assert isSingleFloatRegister(src3);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -3013,10 +2962,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fnmaddd(SPARCAssembler asm, Register src1, Register src2, Register src3, Register dst) {
             super(asm, Ops.ArithOp.getValue(), Op3s.Impdep2.getValue(), Op5s.Fnmaddd.getValue(), src1.encoding(), src2.encoding(), src3.encoding(), dst.encoding());
-            assert isDoubleFloatRegister(src1);
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(src3);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3024,10 +2969,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fnmsubs(SPARCAssembler masm, Register src1, Register src2, Register src3, Register dst) {
             super(masm, Ops.ArithOp.getValue(), Op3s.Impdep2.getValue(), Op5s.Fnmsubs.getValue(), src1.encoding(), src2.encoding(), src3.encoding(), dst.encoding());
-            assert isSingleFloatRegister(src1);
-            assert isSingleFloatRegister(src2);
-            assert isSingleFloatRegister(src3);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -3035,10 +2976,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fnmsubd(SPARCAssembler masm, Register src1, Register src2, Register src3, Register dst) {
             super(masm, Ops.ArithOp.getValue(), Op3s.Impdep2.getValue(), Op5s.Fnmsubd.getValue(), src1.encoding(), src2.encoding(), src3.encoding(), dst.encoding());
-            assert isDoubleFloatRegister(src1);
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(src3);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3047,9 +2984,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Fnmuls(Register src1, Register src2, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fnmuls, src1, src2, dst);
-            assert isSingleFloatRegister(src1);
-            assert isSingleFloatRegister(src2);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -3058,9 +2992,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Fnmuld(Register src1, Register src2, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fnmuld, src1, src2, dst);
-            assert isDoubleFloatRegister(src1);
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3069,9 +3000,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Fnsmuld(Register src1, Register src2, Register dst) {
             /* VIS3 only */
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fnsmuld, src1, src2, dst);
-            assert isDoubleFloatRegister(src1);
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3079,8 +3007,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fstoi(Register src2, Register dst) {
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fstoi.getValue(), src2.encoding(), dst.encoding());
-            assert isSingleFloatRegister(dst);
-            assert isSingleFloatRegister(src2);
         }
     }
 
@@ -3088,8 +3014,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fstox(Register src2, Register dst) {
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fstox.getValue(), src2.encoding(), dst.encoding());
-            assert isDoubleFloatRegister(dst);
-            assert isSingleFloatRegister(src2);
         }
     }
 
@@ -3097,8 +3021,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fdtox(Register src2, Register dst) {
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fdtox.getValue(), src2.encoding(), dst.encoding());
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3106,8 +3028,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fstod(Register src2, Register dst) {
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fstod.getValue(), src2.encoding(), dst.encoding());
-            assert isDoubleFloatRegister(dst);
-            assert isSingleFloatRegister(src2);
         }
     }
 
@@ -3118,8 +3038,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fdtoi(Register src2, Register dst) {
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fdtoi.getValue(), src2.encoding(), dst.encoding());
-            assert isDoubleFloatRegister(src2);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -3127,8 +3045,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fitos(Register src2, Register dst) {
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fitos.getValue(), src2.encoding(), dst.encoding());
-            assert isSingleFloatRegister(src2);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -3136,8 +3052,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fitod(Register src2, Register dst) {
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fitod.getValue(), src2.encoding(), dst.encoding());
-            assert isSingleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3145,8 +3059,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fxtod(Register src2, Register dst) {
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fxtod.getValue(), src2.encoding(), dst.encoding());
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3185,10 +3097,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fpmaddx(SPARCAssembler asm, Register src1, Register src2, Register src3, Register dst) {
             super(asm, Ops.ArithOp.getValue(), Op3s.Impdep2.getValue(), 0, src1.encoding(), src2.encoding(), src3.encoding(), dst.encoding());
-            assert isDoubleFloatRegister(src1);
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(src3);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3196,10 +3104,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fpmaddxhi(SPARCAssembler asm, Register src1, Register src2, Register src3, Register dst) {
             super(asm, Ops.ArithOp.getValue(), Op3s.Impdep2.getValue(), 4, src1.encoding(), src2.encoding(), src3.encoding(), dst.encoding());
-            assert isDoubleFloatRegister(src1);
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(src3);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3208,9 +3112,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Fpmerge(Register src1, Register src2, Register dst) {
             /* VIS1 only */
             super(Ops.ArithOp, Op3s.Impdep1, Opfs.Fpmerge, src1, src2, dst);
-            assert isSingleFloatRegister(src1);
-            assert isSingleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3329,9 +3230,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fsubs(Register src1, Register src2, Register dst) {
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fsubs, src1, src2, dst);
-            assert isSingleFloatRegister(src1);
-            assert isSingleFloatRegister(src2);
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -3339,9 +3237,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fsubd(Register src1, Register src2, Register dst) {
             super(Ops.ArithOp, Op3s.Fpop1, Opfs.Fsubd, src1, src2, dst);
-            assert isDoubleFloatRegister(src1);
-            assert isDoubleFloatRegister(src2);
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3357,7 +3252,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Fzeros(Register dst) {
             /* VIS1 only */
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fzeros.getValue(), 0, dst.encoding());
-            assert isSingleFloatRegister(dst);
         }
     }
 
@@ -3366,7 +3260,6 @@ public abstract class SPARCAssembler extends Assembler {
         public Fzerod(Register dst) {
             /* VIS1 only */
             super(Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fzerod.getValue(), 0, dst.encoding());
-            assert isDoubleFloatRegister(dst);
         }
     }
 
@@ -3374,8 +3267,6 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Fcmp(CC cc, Opfs opf, Register r1, Register r2) {
             super(Ops.ArithOp, cc, 0b110101, opf, r1, r2);
-            assert opf != Opfs.Fcmpd || (isDoubleFloatRegister(r1) && isDoubleFloatRegister(r2));
-            assert opf != Opfs.Fcmps || (isSingleFloatRegister(r1) && isSingleFloatRegister(r2));
         }
     }
 
@@ -3561,12 +3452,10 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Lddf(SPARCAddress src, Register dst) {
             super(Op3s.Lddf, src, dst);
-            assert dst == f0 || dst == f2 || dst == f4 || dst == f6 || isDoubleFloatRegister(dst);
         }
 
         public Lddf(Register src, Register dst) {
             super(Op3s.Lddf, src, dst);
-            assert dst == f0 || dst == f2 || dst == f4 || dst == f6 || isDoubleFloatRegister(dst);
         }
     }
 
@@ -3574,12 +3463,10 @@ public abstract class SPARCAssembler extends Assembler {
 
         public Ldf(SPARCAddress src, Register dst) {
             super(Op3s.Ldf, src, dst);
-            assert isSingleFloatRegister(dst);
         }
 
         public Ldf(Register src, Register dst) {
             super(Op3s.Ldf, src, dst);
-            assert isSingleFloatRegister(dst);
         }
     }
 
