@@ -29,12 +29,18 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
 import java.lang.ref.WeakReference;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.file.FileSystemNotFoundException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
-final class URLSourceImpl extends Source implements Cloneable {
+final class URLSourceImpl extends Content {
 
     private static final Map<URL, WeakReference<URLSourceImpl>> urlToSource = new HashMap<>();
 
@@ -49,19 +55,37 @@ final class URLSourceImpl extends Source implements Cloneable {
     }
 
     private final URL url;
+    private final URI uri;
     private final String name;
-    private String code; // A cache of the source contents
 
     URLSourceImpl(URL url, String name) throws IOException {
         this(url, url.openConnection(), name);
     }
 
-    URLSourceImpl(URL url, URLConnection conn, String name) throws IOException {
-        super(conn.getContentType());
+    URLSourceImpl(URL url, URLConnection c, String name) throws IOException {
         this.url = url;
         this.name = name;
-        URLConnection c = url.openConnection();
-        code = read(new InputStreamReader(c.getInputStream()));
+        try {
+            this.uri = url.toURI();
+        } catch (URISyntaxException ex) {
+            throw new IOException("Bad URL: " + url, ex);
+        }
+        this.code = Source.read(new InputStreamReader(c.getInputStream()));
+    }
+
+    URLSourceImpl(URL url, String code, String name) throws IOException {
+        this.url = url;
+        this.name = name;
+        try {
+            this.uri = url.toURI();
+        } catch (URISyntaxException ex) {
+            throw new IOException("Bad URL: " + url, ex);
+        }
+        if (code != null) {
+            this.code = code;
+        } else {
+            this.code = Source.read(new InputStreamReader(url.openStream()));
+        }
     }
 
     @Override
@@ -76,12 +100,17 @@ final class URLSourceImpl extends Source implements Cloneable {
 
     @Override
     public String getPath() {
-        return url.getPath();
+        return url.toExternalForm();
     }
 
     @Override
     public URL getURL() {
         return url;
+    }
+
+    @Override
+    URI getURI() {
+        return uri;
     }
 
     @Override
@@ -95,7 +124,23 @@ final class URLSourceImpl extends Source implements Cloneable {
     }
 
     @Override
-    void reset() {
+    String findMimeType() throws IOException {
+        Path path;
+        try {
+            path = Paths.get(url.toURI());
+            String firstGuess = Files.probeContentType(path);
+            if (firstGuess != null) {
+                return firstGuess;
+            }
+        } catch (URISyntaxException | IllegalArgumentException | FileSystemNotFoundException ex) {
+            // swallow and go on
+        }
+        return url.openConnection().getContentType();
+    }
+
+    @Override
+    Object getHashKey() {
+        return url;
     }
 
 }
