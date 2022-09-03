@@ -81,7 +81,7 @@ public class BranchProbabilityNode extends FloatingNode implements Canonicalizab
                     }
                     if (other.isConstant()) {
                         double probabilityToSet = probabilityValue;
-                        if (other.asConstant().asInt() == 0) {
+                        if (!other.asConstant().asBoolean()) {
                             probabilityToSet = 1.0 - probabilityToSet;
                         }
                         for (IfNode ifNodeUsages : node.usages().filter(IfNode.class)) {

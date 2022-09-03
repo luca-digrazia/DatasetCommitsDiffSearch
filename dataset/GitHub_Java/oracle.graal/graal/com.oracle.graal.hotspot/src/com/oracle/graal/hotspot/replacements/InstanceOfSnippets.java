@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
 import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.*;
 import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
 
@@ -81,7 +81,7 @@ public class InstanceOfSnippets implements Snippets {
             return falseValue;
         }
         Word objectHub = loadHub(object);
-        if (probability(NOT_LIKELY_PROBABILITY, objectHub.readWord(superCheckOffset, LocationIdentity.FINAL_LOCATION).notEqual(hub))) {
+        if (probability(NOT_LIKELY_PROBABILITY, objectHub.readWord(superCheckOffset, FINAL_LOCATION).notEqual(hub))) {
             displayMiss.inc();
             return falseValue;
         }
@@ -171,7 +171,7 @@ public class InstanceOfSnippets implements Snippets {
                     args = new Arguments(instanceofSecondary);
                     args.add("hub", hub);
                     args.add("object", object);
-                    args.addVarargs("hints", Word.class, StampFactory.forKind(getWordKind()), hints.hubs);
+                    args.addVarargs("hints", Word.class, StampFactory.forKind(wordKind()), hints.hubs);
                     args.addVarargs("hintIsPositive", boolean.class, StampFactory.forKind(Kind.Boolean), hints.isPositive);
                 }
                 args.add("trueValue", replacer.trueValue);
