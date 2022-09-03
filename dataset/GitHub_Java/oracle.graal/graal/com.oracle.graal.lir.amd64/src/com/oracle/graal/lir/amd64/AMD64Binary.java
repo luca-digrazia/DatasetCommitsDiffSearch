@@ -105,9 +105,9 @@ public class AMD64Binary {
         @Opcode private final AMD64RRMOp opcode;
         private final OperandSize size;
 
-        @Def({REG}) protected AllocatableValue result;
+        @Def({REG, HINT}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue x;
-        @Use({REG, STACK}) protected AllocatableValue y;
+        @Alive({REG, STACK}) protected AllocatableValue y;
 
         public ThreeOp(AMD64RRMOp opcode, OperandSize size, AllocatableValue result, AllocatableValue x, AllocatableValue y) {
             super(TYPE);
@@ -181,7 +181,7 @@ public class AMD64Binary {
         @Opcode private final AMD64RRMOp opcode;
         private final OperandSize size;
 
-        @Def({REG}) protected AllocatableValue result;
+        @Def({REG, HINT}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue x;
         @Use({REG, STACK}) protected AllocatableValue y;
 
@@ -289,7 +289,7 @@ public class AMD64Binary {
         @Opcode private final AMD64RRMOp opcode;
         private final OperandSize size;
 
-        @Def({REG}) protected AllocatableValue result;
+        @Def({REG, HINT}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue x;
         private final JavaConstant y;
 
@@ -380,9 +380,9 @@ public class AMD64Binary {
         @Opcode private final AMD64RRMOp opcode;
         private final OperandSize size;
 
-        @Def({REG}) protected AllocatableValue result;
+        @Def({REG, HINT}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue x;
-        @Use({COMPOSITE}) protected AMD64AddressValue y;
+        @Alive({COMPOSITE}) protected AMD64AddressValue y;
 
         @State protected LIRFrameState state;
 
