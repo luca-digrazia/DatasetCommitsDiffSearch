@@ -62,6 +62,7 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
             return;
         }
         Node predecessor = deopt.predecessor();
+        assert predecessor instanceof MergeNode;
         if (predecessor instanceof MergeNode) {
             MergeNode merge = (MergeNode) predecessor;
 
