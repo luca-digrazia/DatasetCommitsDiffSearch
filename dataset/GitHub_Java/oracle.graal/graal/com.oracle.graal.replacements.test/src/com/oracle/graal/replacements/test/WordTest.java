@@ -22,20 +22,14 @@
  */
 package com.oracle.graal.replacements.test;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.api.replacements.Snippet;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.replacements.ReplacementsImpl;
-import com.oracle.graal.replacements.Snippets;
-import com.oracle.graal.word.Pointer;
-import com.oracle.graal.word.Unsigned;
-import com.oracle.graal.word.Word;
-import com.oracle.graal.word.WordBase;
-
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.word.*;
 
 /**
  * Tests for the {@link Word} type.

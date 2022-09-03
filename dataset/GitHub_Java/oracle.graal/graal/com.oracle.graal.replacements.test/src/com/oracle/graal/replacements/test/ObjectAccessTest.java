@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,17 @@
  */
 package com.oracle.graal.replacements.test;
 
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.junit.*;
 
-import org.junit.Assert;
-import org.junit.Test;
-
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.calc.SignExtendNode;
-import com.oracle.graal.nodes.extended.JavaReadNode;
-import com.oracle.graal.nodes.extended.JavaWriteNode;
-import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
-import com.oracle.graal.replacements.ReplacementsImpl;
-import com.oracle.graal.replacements.Snippet;
-import com.oracle.graal.replacements.Snippets;
-import com.oracle.graal.word.ObjectAccess;
-import com.oracle.graal.word.Pointer;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.word.*;
 
 /**
  * Tests for the {@link Pointer} read and write operations.
@@ -52,7 +40,7 @@ import com.oracle.graal.word.Word;
 public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
 
     private static final LocationIdentity ID = NamedLocationIdentity.mutable("ObjectAccessTestID");
-    private static final JavaKind[] KINDS = new JavaKind[]{JavaKind.Byte, JavaKind.Char, JavaKind.Short, JavaKind.Int, JavaKind.Long, JavaKind.Float, JavaKind.Double, JavaKind.Object};
+    private static final Kind[] KINDS = new Kind[]{Kind.Byte, Kind.Char, Kind.Short, Kind.Int, Kind.Long, Kind.Float, Kind.Double, Kind.Object};
     private final ReplacementsImpl installer;
 
     public ObjectAccessTest() {
@@ -66,61 +54,62 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
 
     @Test
     public void testRead1() {
-        for (JavaKind kind : KINDS) {
+        for (Kind kind : KINDS) {
             assertRead(parseEager("read" + kind.name() + "1", AllowAssumptions.YES), kind, true, ID);
         }
     }
 
     @Test
     public void testRead2() {
-        for (JavaKind kind : KINDS) {
+        for (Kind kind : KINDS) {
             assertRead(parseEager("read" + kind.name() + "2", AllowAssumptions.YES), kind, true, ID);
         }
     }
 
     @Test
     public void testRead3() {
-        for (JavaKind kind : KINDS) {
+        for (Kind kind : KINDS) {
             assertRead(parseEager("read" + kind.name() + "3", AllowAssumptions.YES), kind, true, LocationIdentity.any());
         }
     }
 
     @Test
     public void testWrite1() {
-        for (JavaKind kind : KINDS) {
+        for (Kind kind : KINDS) {
             assertWrite(parseEager("write" + kind.name() + "1", AllowAssumptions.YES), true, ID);
         }
     }
 
     @Test
     public void testWrite2() {
-        for (JavaKind kind : KINDS) {
+        for (Kind kind : KINDS) {
             assertWrite(parseEager("write" + kind.name() + "2", AllowAssumptions.YES), true, ID);
         }
     }
 
     @Test
     public void testWrite3() {
-        for (JavaKind kind : KINDS) {
+        for (Kind kind : KINDS) {
             assertWrite(parseEager("write" + kind.name() + "3", AllowAssumptions.YES), true, LocationIdentity.any());
         }
     }
 
-    private static void assertRead(StructuredGraph graph, JavaKind kind, boolean indexConvert, LocationIdentity locationIdentity) {
+    private static void assertRead(StructuredGraph graph, Kind kind, boolean indexConvert, LocationIdentity locationIdentity) {
         JavaReadNode read = (JavaReadNode) graph.start().next();
         Assert.assertEquals(kind.getStackKind(), read.stamp().getStackKind());
+        Assert.assertEquals(graph.getParameter(0), read.object());
 
-        OffsetAddressNode address = (OffsetAddressNode) read.getAddress();
-        Assert.assertEquals(graph.getParameter(0), address.getBase());
-        Assert.assertEquals(locationIdentity, read.getLocationIdentity());
+        IndexedLocationNode location = (IndexedLocationNode) read.location();
+        Assert.assertEquals(locationIdentity, location.getLocationIdentity());
+        Assert.assertEquals(1, location.getIndexScaling());
 
         if (indexConvert) {
-            SignExtendNode convert = (SignExtendNode) address.getOffset();
+            SignExtendNode convert = (SignExtendNode) location.getIndex();
             Assert.assertEquals(convert.getInputBits(), 32);
             Assert.assertEquals(convert.getResultBits(), 64);
             Assert.assertEquals(graph.getParameter(1), convert.getValue());
         } else {
-            Assert.assertEquals(graph.getParameter(1), address.getOffset());
+            Assert.assertEquals(graph.getParameter(1), location.getIndex());
         }
 
         ReturnNode ret = (ReturnNode) read.next();
@@ -130,20 +119,20 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
     private static void assertWrite(StructuredGraph graph, boolean indexConvert, LocationIdentity locationIdentity) {
         JavaWriteNode write = (JavaWriteNode) graph.start().next();
         Assert.assertEquals(graph.getParameter(2), write.value());
-
-        OffsetAddressNode address = (OffsetAddressNode) write.getAddress();
-        Assert.assertEquals(graph.getParameter(0), address.getBase());
+        Assert.assertEquals(graph.getParameter(0), write.object());
         Assert.assertEquals(BytecodeFrame.AFTER_BCI, write.stateAfter().bci);
 
-        Assert.assertEquals(locationIdentity, write.getLocationIdentity());
+        IndexedLocationNode location = (IndexedLocationNode) write.location();
+        Assert.assertEquals(locationIdentity, location.getLocationIdentity());
+        Assert.assertEquals(1, location.getIndexScaling());
 
         if (indexConvert) {
-            SignExtendNode convert = (SignExtendNode) address.getOffset();
+            SignExtendNode convert = (SignExtendNode) location.getIndex();
             Assert.assertEquals(convert.getInputBits(), 32);
             Assert.assertEquals(convert.getResultBits(), 64);
             Assert.assertEquals(graph.getParameter(1), convert.getValue());
         } else {
-            Assert.assertEquals(graph.getParameter(1), address.getOffset());
+            Assert.assertEquals(graph.getParameter(1), location.getIndex());
         }
 
         ReturnNode ret = (ReturnNode) write.next();
