@@ -33,6 +33,7 @@ import java.util.Deque;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -45,7 +46,6 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMAbort;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMSignal;
 import com.oracle.truffle.llvm.runtime.GuestLanguageRuntimeException;
@@ -55,7 +55,6 @@ import com.oracle.truffle.llvm.runtime.LLVMExitException;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.SulongRuntimeException;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
@@ -69,50 +68,50 @@ public class LLVMGlobalRootNode extends RootNode {
 
     @Child private LLVMDispatchNode executeDestructor = LLVMDispatchNodeGen.create(new FunctionType(VoidType.INSTANCE, new Type[]{null, new PointerType(null)}, false));
     private final DirectCallNode main;
-    @Child LLVMPrepareArgumentsNode prepareArguments;
+    @CompilationFinal(dimensions = 1) protected final Object[] arguments;
 
-    public LLVMGlobalRootNode(LLVMLanguage language, FrameDescriptor descriptor, Source source, Type[] types, CallTarget main) {
+    public LLVMGlobalRootNode(LLVMLanguage language, FrameDescriptor descriptor, CallTarget main, Object... arguments) {
         super(language, descriptor);
         this.main = Truffle.getRuntime().createDirectCallNode(main);
-        this.prepareArguments = new LLVMPrepareArgumentsNode(source, types);
+        this.arguments = arguments;
     }
 
     @Override
     @ExplodeLoop
     public Object execute(VirtualFrame frame) {
         assert getContext().getThreadingStack().checkThread();
-        try (StackPointer basePointer = getContext().getThreadingStack().getStack().takeStackPointer()) {
-            try {
-                Object result = null;
-                assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
+        long basePointer = getContext().getThreadingStack().getStack().getStackPointer();
+        try {
+            Object result = null;
+            assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
 
-                Object[] arguments = prepareArguments.execute(frame);
-                Object[] realArgs = new Object[arguments.length + LLVMCallNode.USER_ARGUMENT_OFFSET];
-                realArgs[0] = basePointer.get();
-                System.arraycopy(arguments, 0, realArgs, LLVMCallNode.USER_ARGUMENT_OFFSET, arguments.length);
+            Object[] realArgs = new Object[arguments.length + LLVMCallNode.USER_ARGUMENT_OFFSET];
+            realArgs[0] = basePointer;
+            System.arraycopy(arguments, 0, realArgs, LLVMCallNode.USER_ARGUMENT_OFFSET, arguments.length);
 
-                result = executeIteration(realArgs);
+            result = executeIteration(realArgs);
 
-                getContext().awaitThreadTermination();
-                assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
-                return result;
-            } catch (LLVMExitException e) {
-                getContext().awaitThreadTermination();
-                assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
-                return e.getReturnCode();
-            } catch (SulongRuntimeException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw e;
-            } catch (GuestLanguageRuntimeException e) {
-                CompilerDirectives.transferToInterpreter();
-                return e.handleExit();
-            } catch (Throwable e) {
-                throw e;
-            } finally {
-                runDestructors(frame, basePointer.get());
-                // if not done already, we want at least call a shutdown command
-                getContext().shutdownThreads();
-            }
+            getContext().awaitThreadTermination();
+            assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
+            return result;
+        } catch (LLVMExitException e) {
+            getContext().awaitThreadTermination();
+            assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
+            return e.getReturnCode();
+        } catch (SulongRuntimeException e) {
+            CompilerDirectives.transferToInterpreter();
+            e.getCStackTrace().printCStackTrace();
+            throw e;
+        } catch (GuestLanguageRuntimeException e) {
+            CompilerDirectives.transferToInterpreter();
+            return e.handleExit();
+        } catch (Throwable e) {
+            throw e;
+        } finally {
+            getContext().getThreadingStack().getStack().setStackPointer(basePointer);
+            runDestructors(frame, basePointer);
+            // if not done already, we want at least call a shutdown command
+            getContext().shutdownThreads();
         }
     }
 
