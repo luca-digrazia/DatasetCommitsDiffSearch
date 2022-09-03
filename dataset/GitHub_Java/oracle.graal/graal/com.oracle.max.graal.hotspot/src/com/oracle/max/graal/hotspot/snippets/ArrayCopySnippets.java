@@ -21,8 +21,8 @@
  * questions.
  */
 package com.oracle.max.graal.hotspot.snippets;
-
 import com.oracle.max.cri.ci.*;
+import com.oracle.max.graal.cri.*;
 import com.oracle.max.graal.hotspot.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.extended.*;
@@ -225,6 +225,18 @@ public class ArrayCopySnippets implements SnippetsInterface{
         } else {
             copyObjectsUp(src, srcPos * 8L, dest, destPos * 8L, length);
         }
+        if (length > 0) {
+            long header = ArrayHeaderSizeNode.sizeFor(CiKind.Object);
+            int cardShift = CardTableShiftNode.get();
+            long cardStart = CardTableStartNode.get();
+            long dstAddr = GetObjectAddressNode.get(dest);
+            long start = (dstAddr + header + destPos * 8L) >>> cardShift;
+            long end = (dstAddr + header + (destPos + length - 1) * 8L) >>> cardShift;
+            long count = end - start + 1;
+            while (count-- > 0) {
+                DirectStoreNode.store((start + cardStart) + count, false);
+            }
+        }
     }
 
     @Snippet
@@ -247,7 +259,7 @@ public class ArrayCopySnippets implements SnippetsInterface{
 
     @Snippet
     public static void copyIntsDown(Object src, long srcOffset, Object dest, long destOffset, int length)  {
-        long header = ArrayHeaderSizeNode.sizeFor(CiKind.Short);
+        long header = ArrayHeaderSizeNode.sizeFor(CiKind.Int);
         for (long i = (length - 1) * 4; i >= 0; i -= 4) {
             Integer a = UnsafeLoadNode.load(src, i + (srcOffset + header), CiKind.Int);
             UnsafeStoreNode.store(dest, i + (destOffset + header), a.intValue(), CiKind.Int);
@@ -256,7 +268,7 @@ public class ArrayCopySnippets implements SnippetsInterface{
 
     @Snippet
     public static void copyLongsDown(Object src, long srcOffset, Object dest, long destOffset, int length)  {
-        long header = ArrayHeaderSizeNode.sizeFor(CiKind.Short);
+        long header = ArrayHeaderSizeNode.sizeFor(CiKind.Long);
         for (long i = (length - 1) * 8; i >= 0; i -= 8) {
             Long a = UnsafeLoadNode.load(src, i + (srcOffset + header), CiKind.Long);
             UnsafeStoreNode.store(dest, i + (destOffset + header), a.longValue(), CiKind.Long);
@@ -269,10 +281,9 @@ public class ArrayCopySnippets implements SnippetsInterface{
         long header = ArrayHeaderSizeNode.sizeFor(CiKind.Object);
         for (long i = (length - 1) * 8; i >= 0; i -= 8) {
             Object a = UnsafeLoadNode.load(src, i + (srcOffset + header), CiKind.Object);
-            UnsafeStoreNode.store(dest, i + (destOffset + header), a, CiKind.Object);
+            DirectObjectStoreNode.store(dest, i + (destOffset + header), a);
         }
     }
-
     /**
      * Copies {@code length} bytes from {@code src} starting at {@code srcPos} to {@code dest} starting at {@code destPos}.
      * @param src source object
@@ -331,22 +342,9 @@ public class ArrayCopySnippets implements SnippetsInterface{
         long header = ArrayHeaderSizeNode.sizeFor(CiKind.Object);
         for (long i = 0; i < length * 8L; i += 8) {
             Object a = UnsafeLoadNode.load(src, i + (srcOffset + header), CiKind.Object);
-            UnsafeStoreNode.store(dest, i + (destOffset + header), a, CiKind.Object);
+            DirectObjectStoreNode.store(dest, i + (destOffset + header), a);
         }
-        if (length > 0) {
-            long cardShift = CardTableShiftNode.get();
-            long cardStart = CardTableStartNode.get();
-            long dstAddr = GetObjectAddressNode.get(dest);
-            long count = (8 * (length - 1)) >>> cardShift;
-            long start = ((dstAddr + header + destOffset) >>> cardShift) + cardStart;
-
-            while (count-- > 0) {
-                DirectStoreNode.store(start + count, false);
-            }
-        }
-
     }
-
     private static class GetObjectAddressNode extends FixedWithNextNode implements LIRLowerable {
         @Input private ValueNode object;
 
@@ -368,7 +366,6 @@ public class ArrayCopySnippets implements SnippetsInterface{
             gen.setResult(this, obj);
         }
     }
-
     private static class DirectStoreNode extends FixedWithNextNode implements LIRLowerable {
         @Input private ValueNode address;
         @Input private ValueNode value;
@@ -395,6 +392,45 @@ public class ArrayCopySnippets implements SnippetsInterface{
         public void generate(LIRGeneratorTool gen) {
             CiValue v = gen.operand(value);
             gen.emitStore(new CiAddress(v.kind, gen.operand(address)), v, false);
+        }
+    }
+
+    private static class DirectObjectStoreNode extends FixedWithNextNode implements Lowerable {
+        @Input private ValueNode object;
+        @Input private ValueNode value;
+        @Input private ValueNode offset;
+
+        public DirectObjectStoreNode(ValueNode object, ValueNode offset, ValueNode value) {
+            super(StampFactory.illegal());
+            this.object = object;
+            this.value = value;
+            this.offset = offset;
+        }
+
+        @SuppressWarnings("unused")
+        @NodeIntrinsic
+        public static void store(Object obj, long offset, long value) {
+            throw new UnsupportedOperationException();
+        }
+
+        @SuppressWarnings("unused")
+        @NodeIntrinsic
+        public static void store(Object obj, long offset, boolean value) {
+            throw new UnsupportedOperationException();
+        }
+
+        @SuppressWarnings("unused")
+        @NodeIntrinsic
+        public static void store(Object obj, long offset, Object value) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void lower(CiLoweringTool tool) {
+            StructuredGraph graph = (StructuredGraph) this.graph();
+            IndexedLocationNode location = IndexedLocationNode.create(LocationNode.ANY_LOCATION, value.kind(), 0, offset, graph, false);
+            WriteNode write = graph.add(new WriteNode(object, value, location));
+            graph.replaceFixedWithFixed(this, write);
         }
     }
 
