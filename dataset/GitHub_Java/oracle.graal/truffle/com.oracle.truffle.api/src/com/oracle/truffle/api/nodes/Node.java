@@ -69,7 +69,7 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     protected Node() {
-        CompilerAsserts.neverPartOfCompilation("do not create a Node from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
         this.nodeClass = NodeClass.get(getClass());
         if (TruffleOptions.TraceASTJSON) {
             JSONHelper.dumpNewNode(this);
@@ -129,7 +129,7 @@ public abstract class Node implements NodeInterface, Cloneable {
     /**
      * @deprecated if your node provides source section, override {@link #getSourceSection()} to
      *             return it - this method will be removed
-     *
+     * 
      *             Clears any previously assigned guest language source code from this node.
      */
     @Deprecated
@@ -306,7 +306,7 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     final void replaceHelper(Node newNode, CharSequence reason) {
-        CompilerAsserts.neverPartOfCompilation("do not call Node.replaceHelper from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
         assert inAtomicBlock();
         if (this.getParent() == null) {
             throw new IllegalStateException("This node cannot be replaced, because it does not yet have a parent.");
@@ -399,7 +399,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      * @return the new copy
      */
     public Node copy() {
-        CompilerAsserts.neverPartOfCompilation("do not call Node.copy from compiled code");
+        CompilerAsserts.neverPartOfCompilation();
 
         try {
             return (Node) super.clone();
