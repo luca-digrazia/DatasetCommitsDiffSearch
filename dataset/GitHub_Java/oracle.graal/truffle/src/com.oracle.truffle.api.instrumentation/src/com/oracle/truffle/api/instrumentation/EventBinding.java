@@ -59,18 +59,16 @@ import com.oracle.truffle.api.source.SourceSection;
 public final class EventBinding<T> {
 
     private final AbstractInstrumenter instrumenter;
-    private final AllocationEventFilter filterAllocation;
-    private final SourceSectionFilter filterSourceSection;
+    private final SourceSectionFilter filter;
     private final T element;
     private final boolean isExecutionEvent;
 
     /* language bindings needs special treatment. */
     private volatile boolean disposed;
 
-    <F> EventBinding(AbstractInstrumenter instrumenter, F query, T element, boolean isExecutionEvent) {
+    EventBinding(AbstractInstrumenter instrumenter, SourceSectionFilter query, T element, boolean isExecutionEvent) {
         this.instrumenter = instrumenter;
-        this.filterAllocation = (query instanceof AllocationEventFilter) ? (AllocationEventFilter) query : null;
-        this.filterSourceSection = (query instanceof SourceSectionFilter) ? (SourceSectionFilter) query : null;
+        this.filter = query;
         this.element = element;
         this.isExecutionEvent = isExecutionEvent;
     }
@@ -91,11 +89,7 @@ public final class EventBinding<T> {
      * @since 0.12
      */
     public SourceSectionFilter getFilter() {
-        return filterSourceSection;
-    }
-
-    AllocationEventFilter getAllocationFilter() {
-        return filterAllocation;
+        return filter;
     }
 
     /**
