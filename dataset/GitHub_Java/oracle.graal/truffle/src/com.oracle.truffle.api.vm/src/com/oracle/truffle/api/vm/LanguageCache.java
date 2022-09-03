@@ -135,12 +135,8 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
     private String defaultId() {
         String resolvedId;
-        if (name.isEmpty()) {
-            int lastIndex = className.lastIndexOf('$');
-            if (lastIndex == -1) {
-                lastIndex = className.lastIndexOf('.');
-            }
-            resolvedId = className.substring(lastIndex + 1, className.length());
+        if (name.isEmpty() && !mimeTypes.isEmpty()) {
+            resolvedId = mimeTypes.iterator().next();
         } else {
             // TODO remove this hack for single character languages
             if (name.length() == 1) {
