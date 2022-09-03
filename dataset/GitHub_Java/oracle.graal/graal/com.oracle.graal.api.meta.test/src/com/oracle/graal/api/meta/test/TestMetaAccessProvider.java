@@ -69,7 +69,7 @@ public class TestMetaAccessProvider extends TypeUniverse {
             for (Field reflect : c.getDeclaredFields()) {
                 ResolvedJavaField field = metaAccess.lookupJavaField(reflect);
                 assertNotNull(field);
-                int expected = reflect.getModifiers();
+                int expected = reflect.getModifiers() & Modifier.fieldModifiers();
                 int actual = field.getModifiers();
                 assertEquals(String.format("%s: 0x%x != 0x%x", reflect, expected, actual), expected, actual);
                 assertTrue(field.getDeclaringClass().equals(metaAccess.lookupJavaType(reflect.getDeclaringClass())));
@@ -81,12 +81,39 @@ public class TestMetaAccessProvider extends TypeUniverse {
     public void lookupJavaTypeConstantTest() {
         for (Constant c : constants) {
             if (c.getKind() == Kind.Object && !c.isNull()) {
-                Object o = snippetReflection.asObject(c);
+                Object o = c.asObject();
                 ResolvedJavaType type = metaAccess.lookupJavaType(c);
                 assertNotNull(type);
                 assertTrue(type.equals(metaAccess.lookupJavaType(o.getClass())));
             } else {
                 assertEquals(metaAccess.lookupJavaType(c), null);
+            }
+        }
+    }
+
+    @Test
+    public void constantEqualsTest() {
+        for (Constant c1 : constants) {
+            for (Constant c2 : constants) {
+                // test symmetry
+                assertEquals(constantReflection.constantEquals(c1, c2), constantReflection.constantEquals(c2, c1));
+                if (c1.getKind() != Kind.Object && c2.getKind() != Kind.Object) {
+                    assertEquals(c1.equals(c2), constantReflection.constantEquals(c2, c1));
+                }
+            }
+        }
+    }
+
+    @Test
+    public void lookupArrayLengthTest() {
+        for (Constant c : constants) {
+            Integer actual = constantReflection.lookupArrayLength(c);
+            if (c.getKind() != Kind.Object || c.isNull() || !c.asObject().getClass().isArray()) {
+                assertNull(actual);
+            } else {
+                assertNotNull(actual);
+                int actualInt = actual;
+                assertEquals(Array.getLength(c.asObject()), actualInt);
             }
         }
     }

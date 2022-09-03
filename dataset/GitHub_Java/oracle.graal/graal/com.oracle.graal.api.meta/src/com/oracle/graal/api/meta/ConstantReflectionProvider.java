@@ -28,13 +28,12 @@ package com.oracle.graal.api.meta;
 public interface ConstantReflectionProvider {
 
     /**
-     * Compares two constants for equality. The equality relationship is symmetric. If the constants
-     * cannot be compared at this point, the return value is {@code null};
+     * Compares two constants for equality. The equality relationship is symmetric.
      * 
      * @return {@code true} if the two parameters represent the same runtime object, {@code false}
-     *         if they are different, or {@code null} if the parameters cannot be compared.
+     *         otherwise
      */
-    Boolean constantEquals(Constant x, Constant y);
+    boolean constantEquals(Constant x, Constant y);
 
     /**
      * Returns the length of an array that is wrapped in a {@link Constant} object. If {@code array}

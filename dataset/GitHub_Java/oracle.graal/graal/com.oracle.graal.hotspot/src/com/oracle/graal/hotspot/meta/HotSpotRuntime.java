@@ -96,9 +96,9 @@ import com.oracle.graal.replacements.*;
 import com.oracle.graal.word.*;
 
 /**
- * HotSpot implementation of {@link GraalCodeCacheProvider}.
+ * HotSpot implementation of {@link LoweringProvider}.
  */
-public abstract class HotSpotRuntime implements MetaAccessProvider, GraalCodeCacheProvider, DisassemblerProvider, BytecodeDisassemblerProvider, SuitesProvider {
+public abstract class HotSpotRuntime implements MetaAccessProvider, ConstantReflectionProvider, CodeCacheProvider, LoweringProvider, DisassemblerProvider, BytecodeDisassemblerProvider, SuitesProvider {
 
     public static final ForeignCallDescriptor OSR_MIGRATION_END = new ForeignCallDescriptor("OSR_migration_end", void.class, long.class);
     public static final ForeignCallDescriptor IDENTITY_HASHCODE = new ForeignCallDescriptor("identity_hashcode", int.class, Object.class);
@@ -325,16 +325,16 @@ public abstract class HotSpotRuntime implements MetaAccessProvider, GraalCodeCac
         r.registerSubstitutions(CRC32Substitutions.class);
         r.registerSubstitutions(ReflectionSubstitutions.class);
 
-        checkcastDynamicSnippets = new CheckCastDynamicSnippets.Templates(this, this, r, graalRuntime.getTarget());
-        instanceofSnippets = new InstanceOfSnippets.Templates(this, this, r, graalRuntime.getTarget());
-        newObjectSnippets = new NewObjectSnippets.Templates(this, this, r, graalRuntime.getTarget());
-        monitorSnippets = new MonitorSnippets.Templates(this, this, r, graalRuntime.getTarget(), c.useFastLocking);
-        writeBarrierSnippets = new WriteBarrierSnippets.Templates(this, this, r, graalRuntime.getTarget());
-        boxingSnippets = new BoxingSnippets.Templates(this, this, r, graalRuntime.getTarget());
-        exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(this, this, r, graalRuntime.getTarget());
-        unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(this, this, r, graalRuntime.getTarget());
+        checkcastDynamicSnippets = new CheckCastDynamicSnippets.Templates(this, this, this, this, r, graalRuntime.getTarget());
+        instanceofSnippets = new InstanceOfSnippets.Templates(this, this, this, this, r, graalRuntime.getTarget());
+        newObjectSnippets = new NewObjectSnippets.Templates(this, this, this, this, r, graalRuntime.getTarget());
+        monitorSnippets = new MonitorSnippets.Templates(this, this, this, this, r, graalRuntime.getTarget(), c.useFastLocking);
+        writeBarrierSnippets = new WriteBarrierSnippets.Templates(this, this, this, this, r, graalRuntime.getTarget());
+        boxingSnippets = new BoxingSnippets.Templates(this, this, this, this, r, graalRuntime.getTarget());
+        exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(this, this, this, this, r, graalRuntime.getTarget());
+        unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(this, this, this, this, r, graalRuntime.getTarget());
 
-        r.registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(this, this, r, graalRuntime.getTarget()));
+        r.registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(this, this, this, this, r, graalRuntime.getTarget()));
     }
 
     public HotSpotGraalRuntime getGraalRuntime() {
@@ -469,7 +469,7 @@ public abstract class HotSpotRuntime implements MetaAccessProvider, GraalCodeCac
     }
 
     @Override
-    public RegisterConfig lookupRegisterConfig() {
+    public RegisterConfig getRegisterConfig() {
         return regConfig;
     }
 
@@ -491,7 +491,7 @@ public abstract class HotSpotRuntime implements MetaAccessProvider, GraalCodeCac
     }
 
     public boolean useCompressedKlassPointers() {
-        return config.useCompressedClassPointers;
+        return config.useCompressedKlassPointers;
     }
 
     @Override
@@ -1048,7 +1048,7 @@ public abstract class HotSpotRuntime implements MetaAccessProvider, GraalCodeCac
     private GuardingNode createBoundsCheck(AccessIndexedNode n, LoweringTool tool) {
         StructuredGraph g = n.graph();
         ValueNode array = n.array();
-        ValueNode arrayLength = readArrayLength(array, tool.getMetaAccess());
+        ValueNode arrayLength = readArrayLength(array, tool.getConstantReflection());
         if (arrayLength == null) {
             Stamp stamp = StampFactory.positiveInt();
             ReadNode readArrayLength = g.add(new ReadNode(array, ConstantLocationNode.create(FINAL_LOCATION, Kind.Int, config.arrayLengthOffset, g), stamp, BarrierType.NONE, false));
@@ -1095,20 +1095,15 @@ public abstract class HotSpotRuntime implements MetaAccessProvider, GraalCodeCac
     }
 
     public HotSpotInstalledCode installMethod(HotSpotResolvedJavaMethod method, int entryBCI, CompilationResult compResult) {
-        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, true, null);
+        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, true);
         graalRuntime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(method, entryBCI, compResult), installedCode, method.getSpeculationLog());
         return installedCode;
     }
 
     @Override
     public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult) {
-        return addMethod(method, compResult, null);
-    }
-
-    @Override
-    public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, Graph graph) {
         HotSpotResolvedJavaMethod hotspotMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, false, graph);
+        HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, false);
         CodeInstallResult result = graalRuntime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(hotspotMethod, -1, compResult), code, null);
         if (result != CodeInstallResult.OK) {
             return null;
@@ -1116,12 +1111,10 @@ public abstract class HotSpotRuntime implements MetaAccessProvider, GraalCodeCac
         return code;
     }
 
-    public InstalledCode addExternalMethod(ResolvedJavaMethod method, CompilationResult compResult, Graph graph) {
-
-        // compResult.getTargetCode() == assembled PTX method string
+    public InstalledCode addExternalMethod(ResolvedJavaMethod method, CompilationResult compResult) {
 
         HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotInstalledCode icode = new HotSpotNmethod(javaMethod, false, true, graph);
+        HotSpotInstalledCode icode = new HotSpotNmethod(javaMethod, false, true);
         HotSpotCompiledNmethod compiled = new HotSpotCompiledNmethod(javaMethod, -1, compResult);
         CompilerToVM vm = graalRuntime.getCompilerToVM();
         CodeInstallResult result = vm.installCode(compiled, icode, null);

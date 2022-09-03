@@ -29,7 +29,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
 
 /**
@@ -40,18 +39,14 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
 
     private final HotSpotVMConfig config;
 
-    public HotSpotReplacementsImpl(Providers providers, HotSpotVMConfig config, Assumptions assumptions) {
-        super(providers, assumptions);
-        this.config = config;
+    public HotSpotReplacementsImpl(HotSpotRuntime runtime, Assumptions assumptions, TargetDescription target) {
+        super(runtime, runtime, runtime, runtime, assumptions, target);
+        this.config = runtime.config;
     }
 
     @Override
     protected ResolvedJavaMethod registerMethodSubstitution(Member originalMethod, Method substituteMethod) {
-        if (substituteMethod.getDeclaringClass().getDeclaringClass() == BoxingSubstitutions.class) {
-            if (config.useHeapProfiler) {
-                return null;
-            }
-        } else if (substituteMethod.getDeclaringClass() == IntegerSubstitutions.class || substituteMethod.getDeclaringClass() == LongSubstitutions.class) {
+        if (substituteMethod.getDeclaringClass() == IntegerSubstitutions.class || substituteMethod.getDeclaringClass() == LongSubstitutions.class) {
             if (substituteMethod.getName().equals("bitCount")) {
                 if (!config.usePopCountInstruction) {
                     return null;

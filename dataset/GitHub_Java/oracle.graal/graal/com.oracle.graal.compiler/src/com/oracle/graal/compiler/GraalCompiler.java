@@ -32,7 +32,6 @@ import java.util.concurrent.*;
 import com.oracle.graal.alloc.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
@@ -51,7 +50,6 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.phases.util.*;
 
 /**
  * Static methods for orchestrating the compilation of a {@linkplain StructuredGraph graph}.
@@ -133,10 +131,11 @@ public class GraalCompiler {
      *            argument can be null.
      * @return the result of the compilation
      */
-    public static CompilationResult compileGraph(final StructuredGraph graph, final CallingConvention cc, final ResolvedJavaMethod installedCodeOwner, final Providers providers,
-                    final Backend backend, final TargetDescription target, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts,
-                    final SpeculationLog speculationLog, final Suites suites, final CompilationResult compilationResult) {
-        Debug.scope("GraalCompiler", new Object[]{graph, providers.getCodeCache()}, new Runnable() {
+    public static CompilationResult compileGraph(final StructuredGraph graph, final CallingConvention cc, final ResolvedJavaMethod installedCodeOwner, final MetaAccessProvider metaAccess,
+                    final ConstantReflectionProvider constantReflection, final CodeCacheProvider codeCache, final LoweringProvider lowerer, final Replacements replacements, final Backend backend,
+                    final TargetDescription target, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog,
+                    final Suites suites, final CompilationResult compilationResult) {
+        Debug.scope("GraalCompiler", new Object[]{graph, codeCache}, new Runnable() {
 
             public void run() {
                 final Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
@@ -144,7 +143,7 @@ public class GraalCompiler {
 
                     public LIR call() {
                         try (TimerCloseable a = FrontEnd.start()) {
-                            return emitHIR(providers, target, graph, assumptions, cache, plan, optimisticOpts, speculationLog, suites);
+                            return emitHIR(metaAccess, codeCache, constantReflection, lowerer, target, graph, replacements, assumptions, cache, plan, optimisticOpts, speculationLog, suites);
                         }
                     }
                 });
@@ -181,9 +180,14 @@ public class GraalCompiler {
 
     /**
      * Builds the graph, optimizes it.
+     * 
+     * @param metaAccess
+     * @param codeCache
+     * @param target
      */
-    public static LIR emitHIR(Providers providers, TargetDescription target, final StructuredGraph graph, Assumptions assumptions, GraphCache cache, PhasePlan plan,
-                    OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog, final Suites suites) {
+    public static LIR emitHIR(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, LoweringProvider lowerer, TargetDescription target,
+                    final StructuredGraph graph, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts,
+                    final SpeculationLog speculationLog, final Suites suites) {
 
         if (speculationLog != null) {
             speculationLog.snapshot();
@@ -196,13 +200,13 @@ public class GraalCompiler {
             Debug.dump(graph, "initial state");
         }
 
-        HighTierContext highTierContext = new HighTierContext(providers, assumptions, cache, plan, optimisticOpts);
+        HighTierContext highTierContext = new HighTierContext(metaAccess, codeCache, constantReflection, lowerer, assumptions, replacements, cache, plan, optimisticOpts);
         suites.getHighTier().apply(graph, highTierContext);
 
-        MidTierContext midTierContext = new MidTierContext(providers, assumptions, target, optimisticOpts);
+        MidTierContext midTierContext = new MidTierContext(metaAccess, codeCache, constantReflection, lowerer, assumptions, replacements, target, optimisticOpts);
         suites.getMidTier().apply(graph, midTierContext);
 
-        LowTierContext lowTierContext = new LowTierContext(providers, assumptions, target);
+        LowTierContext lowTierContext = new LowTierContext(metaAccess, codeCache, constantReflection, lowerer, assumptions, replacements, target);
         suites.getLowTier().apply(graph, lowTierContext);
 
         // we do not want to store statistics about OSR compilations because it may prevent inlining
@@ -285,17 +289,5 @@ public class GraalCompiler {
         result.setLeafGraphIds(leafGraphIds);
 
         Debug.dump(result, "After code generation");
-    }
-
-    /**
-     * Creates a set of providers via {@link Graal#getRequiredCapability(Class)}.
-     */
-    public static Providers getGraalProviders() {
-        MetaAccessProvider metaAccess = Graal.getRequiredCapability(MetaAccessProvider.class);
-        CodeCacheProvider codeCache = Graal.getRequiredCapability(CodeCacheProvider.class);
-        ConstantReflectionProvider constantReflection = Graal.getRequiredCapability(ConstantReflectionProvider.class);
-        LoweringProvider lowerer = Graal.getRequiredCapability(LoweringProvider.class);
-        Replacements replacements = Graal.getRequiredCapability(Replacements.class);
-        return new Providers(metaAccess, codeCache, constantReflection, lowerer, replacements);
     }
 }

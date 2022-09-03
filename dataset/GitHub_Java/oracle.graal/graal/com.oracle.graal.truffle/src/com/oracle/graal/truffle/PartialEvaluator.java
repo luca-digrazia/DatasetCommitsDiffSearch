@@ -50,7 +50,6 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.CanonicalizerPhase.CustomCanonicalizer;
 import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.phases.util.*;
 import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.graal.truffle.nodes.frame.*;
 import com.oracle.graal.truffle.nodes.frame.NewFrameNode.VirtualOnlyInstanceNode;
@@ -67,24 +66,33 @@ import com.oracle.truffle.api.nodes.*;
  */
 public class PartialEvaluator {
 
-    private final Providers providers;
+    private final MetaAccessProvider metaAccess;
+    private final ConstantReflectionProvider constantReflection;
+    private final CodeCacheProvider codeCache;
+    private final LoweringProvider lowerer;
     private final ResolvedJavaMethod executeHelperMethod;
     private final CanonicalizerPhase canonicalizer;
     private final ResolvedJavaType[] skippedExceptionTypes;
+    private final Replacements replacements;
     private Set<Constant> constantReceivers;
     private final HotSpotGraphCache cache;
     private final TruffleCache truffleCache;
 
-    public PartialEvaluator(Providers providers, TruffleCache truffleCache) {
-        this.providers = providers;
-        CustomCanonicalizer customCanonicalizer = new PartialEvaluatorCanonicalizer(providers.getMetaAccess(), providers.getConstantReflection());
+    public PartialEvaluator(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, LoweringProvider lowerer, Replacements replacements,
+                    TruffleCache truffleCache) {
+        this.metaAccess = metaAccess;
+        this.codeCache = codeCache;
+        this.constantReflection = constantReflection;
+        this.lowerer = lowerer;
+        CustomCanonicalizer customCanonicalizer = new PartialEvaluatorCanonicalizer(metaAccess, constantReflection);
         this.canonicalizer = new CanonicalizerPhase(!AOTCompilation.getValue(), customCanonicalizer);
-        this.skippedExceptionTypes = TruffleCompilerImpl.getSkippedExceptionTypes(providers.getMetaAccess());
+        this.skippedExceptionTypes = TruffleCompilerImpl.getSkippedExceptionTypes(metaAccess);
+        this.replacements = replacements;
         this.cache = HotSpotGraalRuntime.graalRuntime().getCache();
         this.truffleCache = truffleCache;
 
         try {
-            executeHelperMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.class.getDeclaredMethod("executeHelper", PackedFrame.class, Arguments.class));
+            executeHelperMethod = metaAccess.lookupJavaMethod(OptimizedCallTarget.class.getDeclaredMethod("executeHelper", PackedFrame.class, Arguments.class));
         } catch (NoSuchMethodException ex) {
             throw new RuntimeException(ex);
         }
@@ -115,18 +123,18 @@ public class PartialEvaluator {
 
             @Override
             public void run() {
-                new GraphBuilderPhase(providers.getMetaAccess(), config, TruffleCompilerImpl.Optimizations).apply(graph);
+                new GraphBuilderPhase(metaAccess, config, TruffleCompilerImpl.Optimizations).apply(graph);
 
                 // Replace thisNode with constant.
                 LocalNode thisNode = graph.getLocal(0);
-                thisNode.replaceAndDelete(ConstantNode.forObject(node, providers.getMetaAccess(), graph));
+                thisNode.replaceAndDelete(ConstantNode.forObject(node, metaAccess, graph));
 
                 // Canonicalize / constant propagate.
-                PhaseContext baseContext = new PhaseContext(providers, assumptions);
+                PhaseContext baseContext = new PhaseContext(metaAccess, codeCache, constantReflection, lowerer, assumptions, replacements);
                 canonicalizer.apply(graph, baseContext);
 
                 // Intrinsify methods.
-                new ReplaceIntrinsicsPhase(providers.getReplacements()).apply(graph);
+                new ReplaceIntrinsicsPhase(replacements).apply(graph);
 
                 NewFrameNode newFrameNode = graph.getNodes(NewFrameNode.class).first();
                 if (newFrameNode == null) {
@@ -156,7 +164,7 @@ public class PartialEvaluator {
                 // Additional inlining.
                 final PhasePlan plan = new PhasePlan();
                 canonicalizer.apply(graph, baseContext);
-                HighTierContext tierContext = new HighTierContext(providers, assumptions, cache, plan, OptimisticOptimizations.NONE);
+                HighTierContext context = new HighTierContext(metaAccess, codeCache, constantReflection, lowerer, assumptions, replacements, cache, plan, OptimisticOptimizations.NONE);
 
                 for (NeverPartOfCompilationNode neverPartOfCompilationNode : graph.getNodes(NeverPartOfCompilationNode.class)) {
                     Throwable exception = new VerificationError(neverPartOfCompilationNode.getMessage());
@@ -164,7 +172,7 @@ public class PartialEvaluator {
                 }
 
                 // EA frame and clean up.
-                new PartialEscapePhase(false, canonicalizer).apply(graph, tierContext);
+                new PartialEscapePhase(false, canonicalizer).apply(graph, context);
                 new VerifyNoIntrinsicsLeftPhase().apply(graph, false);
                 for (MaterializeFrameNode materializeNode : graph.getNodes(MaterializeFrameNode.class).snapshot()) {
                     materializeNode.replaceAtUsages(materializeNode.getFrame());
@@ -189,7 +197,7 @@ public class PartialEvaluator {
     }
 
     private void expandTree(StructuredGraph graph, Assumptions assumptions) {
-        PhaseContext phaseContext = new PhaseContext(providers, assumptions);
+        PhaseContext context = new PhaseContext(metaAccess, codeCache, constantReflection, lowerer, assumptions, replacements);
         boolean changed;
         do {
             changed = false;
@@ -203,7 +211,6 @@ public class PartialEvaluator {
                         ConstantNode constantNode = (ConstantNode) methodCallTargetNode.arguments().first();
                         constantReceivers.add(constantNode.asConstant());
                     }
-                    Replacements replacements = providers.getReplacements();
                     StructuredGraph inlineGraph = replacements.getMethodSubstitution(methodCallTargetNode.targetMethod());
 
                     if (inlineGraph == null) {
@@ -217,7 +224,7 @@ public class PartialEvaluator {
 
                     if (inlineGraph == null && !Modifier.isNative(methodCallTargetNode.targetMethod().getModifiers()) &&
                                     methodCallTargetNode.targetMethod().getAnnotation(CompilerDirectives.SlowPath.class) == null) {
-                        inlineGraph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, phaseContext);
+                        inlineGraph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, context);
                     }
 
                     if (inlineGraph != null) {
@@ -228,7 +235,7 @@ public class PartialEvaluator {
                             int nodeCountAfter = graph.getNodeCount();
                             Debug.dump(graph, "After inlining %s %+d (%d)", methodCallTargetNode.targetMethod().toString(), nodeCountAfter - nodeCountBefore, nodeCountAfter);
                         }
-                        canonicalizer.applyIncremental(graph, phaseContext, mark);
+                        canonicalizer.applyIncremental(graph, context, mark);
                         changed = true;
                     }
                 }
@@ -240,7 +247,7 @@ public class PartialEvaluator {
         } while (changed);
     }
 
-    private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final PhaseContext phaseContext) {
+    private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final PhaseContext context) {
 
         StructuredGraph graph = truffleCache.lookup(targetMethod, arguments, assumptions, canonicalizer);
 
@@ -252,7 +259,7 @@ public class PartialEvaluator {
                 ValueNode arg = arguments.get(local.index());
                 if (arg.isConstant()) {
                     Constant constant = arg.asConstant();
-                    ConstantNode constantNode = ConstantNode.forConstant(constant, phaseContext.getMetaAccess(), graphCopy);
+                    ConstantNode constantNode = ConstantNode.forConstant(constant, metaAccess, graphCopy);
                     local.replaceAndDelete(constantNode);
                     for (Node usage : constantNode.usages()) {
                         if (usage instanceof Canonicalizable) {
@@ -266,7 +273,7 @@ public class PartialEvaluator {
                 @Override
                 public void run() {
 
-                    canonicalizer.applyIncremental(graphCopy, phaseContext, modifiedNodes);
+                    canonicalizer.applyIncremental(graphCopy, context, modifiedNodes);
                     boolean unrolled;
                     do {
                         unrolled = false;
@@ -275,7 +282,7 @@ public class PartialEvaluator {
                         for (LoopEx ex : innerLoopsFirst(loopsData.countedLoops())) {
                             if (ex.counted().isConstantMaxTripCount()) {
                                 long constant = ex.counted().constantMaxTripCount();
-                                LoopTransformations.fullUnroll(ex, phaseContext, canonicalizer);
+                                LoopTransformations.fullUnroll(ex, context, canonicalizer);
                                 Debug.dump(graphCopy, "After loop unrolling %d times", constant);
                                 unrolled = true;
                                 break;

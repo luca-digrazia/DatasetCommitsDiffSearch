@@ -39,8 +39,6 @@ public interface LoweringTool {
 
     ConstantReflectionProvider getConstantReflection();
 
-    ForeignCallsProvider getForeignCalls();
-
     Replacements getReplacements();
 
     GuardingNode createNullCheckGuard(GuardedNode guardedNode, ValueNode object);
@@ -57,6 +55,4 @@ public interface LoweringTool {
      * Gets the closest fixed node preceding the node currently being lowered.
      */
     FixedWithNextNode lastFixedNode();
-
-    GuardingNode getCurrentGuardAnchor();
 }

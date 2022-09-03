@@ -83,7 +83,7 @@ public class ReadAfterCheckCastTest extends GraphScheduleTest {
             // structure changes significantly
             public void run() {
                 StructuredGraph graph = parse(snippet);
-                PhaseContext context = new PhaseContext(getProviders(), new Assumptions(false));
+                PhaseContext context = new PhaseContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), new Assumptions(false), replacements);
                 new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, context);
                 new FloatingReadPhase().apply(graph);
                 new EliminatePartiallyRedundantGuardsPhase(true, false).apply(graph);

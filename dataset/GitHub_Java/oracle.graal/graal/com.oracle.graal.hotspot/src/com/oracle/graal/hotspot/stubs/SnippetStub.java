@@ -27,9 +27,10 @@ import static com.oracle.graal.api.meta.MetaUtil.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
-import com.oracle.graal.phases.util.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
@@ -42,8 +43,8 @@ public abstract class SnippetStub extends Stub implements Snippets {
 
     static class Template extends AbstractTemplates {
 
-        Template(Providers providers, TargetDescription target, Class<? extends Snippets> declaringClass) {
-            super(providers, target);
+        Template(HotSpotRuntime runtime, Replacements replacements, TargetDescription target, Class<? extends Snippets> declaringClass) {
+            super(runtime, runtime, runtime, runtime, replacements, target);
             this.info = snippet(declaringClass, null);
         }
 
@@ -65,9 +66,9 @@ public abstract class SnippetStub extends Stub implements Snippets {
      * 
      * @param linkage linkage details for a call to the stub
      */
-    public SnippetStub(Providers providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
-        super(providers, linkage);
-        this.snippet = new Template(providers, target, getClass());
+    public SnippetStub(HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotForeignCallLinkage linkage) {
+        super(runtime, replacements, linkage);
+        this.snippet = new Template(runtime, replacements, target, getClass());
     }
 
     @Override

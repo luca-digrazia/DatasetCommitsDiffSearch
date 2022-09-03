@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,19 @@
  */
 package com.oracle.graal.graph.spi;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-
-import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
-import com.oracle.graal.graph.Node;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 
 public interface CanonicalizerTool {
 
-    Assumptions getAssumptions();
+    Assumptions assumptions();
 
     MetaAccessProvider getMetaAccess();
 
     ConstantReflectionProvider getConstantReflection();
 
-    ConstantFieldProvider getConstantFieldProvider();
-
     boolean canonicalizeReads();
 
-    /**
-     * If this method returns false, not all {@link Node#usages() usages of a node} are yet
-     * available. So a node must not be canonicalized base on, e.g., information returned from
-     * {@link Node#hasNoUsages()}.
-     */
-    boolean allUsagesAvailable();
+    void removeIfUnused(Node node);
 }

@@ -47,7 +47,6 @@ import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.FloatingReadPhase.MemoryMapImpl;
 import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.Snippet.VarargsParameter;
 import com.oracle.graal.replacements.nodes.*;
@@ -322,12 +321,21 @@ public class SnippetTemplate {
      */
     public abstract static class AbstractTemplates implements SnippetTemplateCache {
 
-        protected final Providers providers;
+        protected final MetaAccessProvider metaAccess;
+        protected final ConstantReflectionProvider constantReflection;
+        protected final CodeCacheProvider codeCache;
+        protected final LoweringProvider lowerer;
+        protected final Replacements replacements;
         protected final TargetDescription target;
         private final ConcurrentHashMap<CacheKey, SnippetTemplate> templates;
 
-        protected AbstractTemplates(Providers providers, TargetDescription target) {
-            this.providers = providers;
+        protected AbstractTemplates(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, CodeCacheProvider codeCache, LoweringProvider lowerer, Replacements replacements,
+                        TargetDescription target) {
+            this.metaAccess = metaAccess;
+            this.codeCache = codeCache;
+            this.constantReflection = constantReflection;
+            this.lowerer = lowerer;
+            this.replacements = replacements;
             this.target = target;
             this.templates = new ConcurrentHashMap<>();
         }
@@ -346,7 +354,7 @@ public class SnippetTemplate {
                 }
             }
             assert found != null : "did not find @" + Snippet.class.getSimpleName() + " method in " + declaringClass + (methodName == null ? "" : " named " + methodName);
-            return new SnippetInfo(providers.getMetaAccess().lookupJavaMethod(found));
+            return new SnippetInfo(metaAccess.lookupJavaMethod(found));
         }
 
         /**
@@ -360,7 +368,7 @@ public class SnippetTemplate {
 
                         @Override
                         public SnippetTemplate call() throws Exception {
-                            return new SnippetTemplate(providers, args);
+                            return new SnippetTemplate(metaAccess, constantReflection, codeCache, lowerer, replacements, args);
                         }
                     });
                     templates.put(args.cacheKey, template);
@@ -391,21 +399,20 @@ public class SnippetTemplate {
     /**
      * Creates a snippet template.
      */
-    protected SnippetTemplate(final Providers providers, Arguments args) {
-        StructuredGraph snippetGraph = providers.getReplacements().getSnippet(args.info.method);
+    protected SnippetTemplate(final MetaAccessProvider metaAccess, final ConstantReflectionProvider constantReflection, final CodeCacheProvider codeCache, final LoweringProvider lowerer,
+                    final Replacements replacements, Arguments args) {
+        StructuredGraph snippetGraph = replacements.getSnippet(args.info.method);
 
         ResolvedJavaMethod method = snippetGraph.method();
         Signature signature = method.getSignature();
 
-        Assumptions assumptions = providers.getReplacements().getAssumptions();
-        PhaseContext phaseContext = new PhaseContext(providers, assumptions);
+        PhaseContext context = new PhaseContext(metaAccess, codeCache, constantReflection, lowerer, replacements.getAssumptions(), replacements);
 
         // Copy snippet graph, replacing constant parameters with given arguments
         final StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method());
         IdentityHashMap<Node, Node> nodeReplacements = new IdentityHashMap<>();
         nodeReplacements.put(snippetGraph.start(), snippetCopy.start());
 
-        MetaAccessProvider metaAccess = providers.getMetaAccess();
         assert checkTemplate(metaAccess, args, method, signature);
 
         int parameterCount = args.info.getParameterCount();
@@ -436,7 +443,7 @@ public class SnippetTemplate {
         if (!nodeReplacements.isEmpty()) {
             // Do deferred intrinsification of node intrinsics
             new NodeIntrinsificationPhase(metaAccess).apply(snippetCopy);
-            new CanonicalizerPhase(true).apply(snippetCopy, phaseContext);
+            new CanonicalizerPhase(true).apply(snippetCopy, context);
         }
         NodeIntrinsificationVerificationPhase.verify(snippetCopy);
 
@@ -492,8 +499,8 @@ public class SnippetTemplate {
                 if (loopBegin != null) {
                     LoopEx loop = new LoopsData(snippetCopy).loop(loopBegin);
                     int mark = snippetCopy.getMark();
-                    LoopTransformations.fullUnroll(loop, phaseContext, new CanonicalizerPhase(true));
-                    new CanonicalizerPhase(true).applyIncremental(snippetCopy, phaseContext, mark);
+                    LoopTransformations.fullUnroll(loop, context, new CanonicalizerPhase(true));
+                    new CanonicalizerPhase(true).applyIncremental(snippetCopy, context, mark);
                 }
                 FixedNode explodeLoopNext = explodeLoop.next();
                 explodeLoop.clearSuccessors();
@@ -509,7 +516,7 @@ public class SnippetTemplate {
         Debug.scope("LoweringSnippetTemplate", snippetCopy, new Runnable() {
 
             public void run() {
-                PhaseContext c = new PhaseContext(providers, new Assumptions(false));
+                PhaseContext c = new PhaseContext(metaAccess, codeCache, constantReflection, lowerer, new Assumptions(false), replacements);
                 new LoweringPhase(new CanonicalizerPhase(true)).apply(snippetCopy, c);
             }
         });
