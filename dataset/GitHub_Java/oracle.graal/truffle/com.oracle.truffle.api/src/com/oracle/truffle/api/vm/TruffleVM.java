@@ -47,10 +47,10 @@ import com.oracle.truffle.api.source.*;
  * <p>
  * It would not be correct to think of a {@link TruffleVM} as a runtime for a single Truffle
  * language (Ruby, Python, R, C, JavaScript, etc.) either. {@link TruffleVM} can host as many of
- * Truffle languages as {@link Registration registered on a class path} of your <em>JVM</em>
+ * Truffle languages as {@link Registration registered on a classpath} of your <em>JVM</em>
  * application. {@link TruffleVM} orchestrates these languages, manages exchange of objects and
  * calls among them. While it may happen that there is just one activated language inside of a
- * {@link TruffleVM}, the greatest strength of {@link TruffleVM} is in interoperability between all
+ * {@link TruffleVM}, the greatest strength of {@link TruffleVM} is in inter-operability between all
  * Truffle languages. There is 1:N mapping between {@link TruffleVM} and {@link TruffleLanguage
  * Truffle language implementations}.
  * <p>
@@ -453,7 +453,6 @@ public final class TruffleVM {
         private final TruffleLanguage<?> language;
         private final Object obj;
         private final Object global;
-        private CallTarget target;
 
         Symbol(TruffleLanguage<?> language, Object obj, Object global) {
             this.language = language;
@@ -474,7 +473,6 @@ public final class TruffleVM {
          * @throws IOException signals problem during execution
          */
         public Object invoke(Object thiz, Object... args) throws IOException {
-            checkThread();
             Debugger[] fillIn = {debugger};
             try (Closeable c = SPI.executionStart(TruffleVM.this, fillIn, null)) {
                 if (debugger == null) {
@@ -489,16 +487,7 @@ public final class TruffleVM {
                     arr.add(thiz);
                 }
                 arr.addAll(Arrays.asList(args));
-                for (;;) {
-                    if (target == null) {
-                        target = SPI.createCallTarget(language, obj, arr.toArray());
-                    }
-                    try {
-                        return target.call(arr.toArray());
-                    } catch (SymbolInvoker.ArgumentsMishmashException ex) {
-                        target = null;
-                    }
-                }
+                return SPI.invoke(language, obj, arr.toArray());
             }
         }
     }
@@ -669,8 +658,8 @@ public final class TruffleVM {
         }
 
         @Override
-        protected CallTarget createCallTarget(TruffleLanguage<?> lang, Object obj, Object[] args) throws IOException {
-            return super.createCallTarget(lang, obj, args);
+        protected Object invoke(TruffleLanguage<?> lang, Object obj, Object[] args) throws IOException {
+            return super.invoke(lang, obj, args);
         }
 
         @Override
