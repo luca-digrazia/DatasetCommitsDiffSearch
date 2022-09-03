@@ -100,7 +100,7 @@ public class Constants implements ParserListener {
                 return;
             }
             case FLOAT:
-                generator.createFloatingPoint(type, args);
+                generator.createFloatingPoint(type, args[0]);
                 break;
 
             case AGGREGATE: {
@@ -148,12 +148,8 @@ public class Constants implements ParserListener {
                 generator.createFromData(type, args);
                 break;
 
-            case INLINEASM:
-                generator.createInlineASM(type, args);
-                break;
-
             default:
-                throw new UnsupportedOperationException("Unsupported Constant Record: " + record);
+                break;
         }
         symbols.add(type);
     }
