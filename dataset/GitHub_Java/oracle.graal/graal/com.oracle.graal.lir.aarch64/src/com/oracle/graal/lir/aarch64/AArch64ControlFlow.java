@@ -51,9 +51,11 @@ import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.aarch64.AArch64;
 
 public class AArch64ControlFlow {
 
