@@ -33,8 +33,22 @@ import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
 public class LIRInstructionClass<T> extends LIRIntrospection<T> {
 
-    public static final <T extends LIRInstruction> LIRInstructionClass<T> create(Class<T> c) {
-        return new LIRInstructionClass<>(c);
+    @SuppressWarnings("unchecked")
+    public static final <T extends LIRInstruction> LIRInstructionClass<T> get(Class<T> c) {
+        LIRInstructionClass<T> clazz = (LIRInstructionClass<T>) allClasses.get(c);
+        if (clazz != null) {
+            return clazz;
+        }
+
+        // We can have a race of multiple threads creating the LIRInstructionClass at the same time.
+        // However, only one will be put into the map, and this is the one returned by all threads.
+        clazz = new LIRInstructionClass<>(c);
+        LIRInstructionClass<T> oldClazz = (LIRInstructionClass<T>) allClasses.putIfAbsent(c, clazz);
+        if (oldClazz != null) {
+            return oldClazz;
+        } else {
+            return clazz;
+        }
     }
 
     private static final Class<LIRInstruction> INSTRUCTION_CLASS = LIRInstruction.class;
@@ -121,7 +135,7 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
             }
             opcodeField = null;
 
-            super.scan(clazz, LIRInstruction.class, false);
+            super.scan(clazz, LIRInstructionBase.class, false);
 
             if (opcodeConstant == null && opcodeField == null) {
                 opcodeConstant = clazz.getSimpleName();
@@ -189,7 +203,7 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
             return opcodeConstant;
         }
         assert opcodeIndex != -1;
-        return String.valueOf(data.getObject(obj, opcodeIndex));
+        return data.getObject(obj, opcodeIndex).toString();
     }
 
     final boolean hasOperands() {
@@ -203,6 +217,22 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
             }
         }
         return false;
+    }
+
+    final void forEachUsePos(LIRInstruction obj, ValuePositionProcedure proc) {
+        forEach(obj, obj, uses, OperandMode.USE, proc, ValuePosition.ROOT_VALUE_POSITION);
+    }
+
+    final void forEachAlivePos(LIRInstruction obj, ValuePositionProcedure proc) {
+        forEach(obj, obj, alives, OperandMode.ALIVE, proc, ValuePosition.ROOT_VALUE_POSITION);
+    }
+
+    final void forEachTempPos(LIRInstruction obj, ValuePositionProcedure proc) {
+        forEach(obj, obj, temps, OperandMode.TEMP, proc, ValuePosition.ROOT_VALUE_POSITION);
+    }
+
+    final void forEachDefPos(LIRInstruction obj, ValuePositionProcedure proc) {
+        forEach(obj, obj, defs, OperandMode.DEF, proc, ValuePosition.ROOT_VALUE_POSITION);
     }
 
     final void forEachUse(LIRInstruction obj, InstructionValueProcedure proc) {
@@ -221,32 +251,7 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
         forEach(obj, defs, OperandMode.DEF, proc);
     }
 
-    final void forEachUse(LIRInstruction obj, InstructionValueConsumer proc) {
-        forEach(obj, uses, OperandMode.USE, proc);
-    }
-
-    final void forEachAlive(LIRInstruction obj, InstructionValueConsumer proc) {
-        forEach(obj, alives, OperandMode.ALIVE, proc);
-    }
-
-    final void forEachTemp(LIRInstruction obj, InstructionValueConsumer proc) {
-        forEach(obj, temps, OperandMode.TEMP, proc);
-    }
-
-    final void forEachDef(LIRInstruction obj, InstructionValueConsumer proc) {
-        forEach(obj, defs, OperandMode.DEF, proc);
-    }
-
     final void forEachState(LIRInstruction obj, InstructionValueProcedure proc) {
-        for (int i = 0; i < states.getCount(); i++) {
-            LIRFrameState state = (LIRFrameState) states.getObject(obj, i);
-            if (state != null) {
-                state.forEachState(obj, proc);
-            }
-        }
-    }
-
-    final void forEachState(LIRInstruction obj, InstructionValueConsumer proc) {
         for (int i = 0; i < states.getCount(); i++) {
             LIRFrameState state = (LIRFrameState) states.getObject(obj, i);
             if (state != null) {

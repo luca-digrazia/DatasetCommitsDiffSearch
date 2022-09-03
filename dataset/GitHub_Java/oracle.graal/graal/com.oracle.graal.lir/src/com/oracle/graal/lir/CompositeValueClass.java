@@ -22,20 +22,14 @@
  */
 package com.oracle.graal.lir;
 
-import java.lang.reflect.Field;
-import java.util.Arrays;
-import java.util.EnumSet;
+import java.lang.reflect.*;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-
-import com.oracle.graal.compiler.common.FieldIntrospection;
-import com.oracle.graal.compiler.common.Fields;
-import com.oracle.graal.compiler.common.FieldsScanner;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.CompositeValue.Component;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.LIRIntrospection.LIRFieldsScanner;
-import com.oracle.graal.lir.LIRIntrospection.OperandModeAnnotation;
-import com.oracle.graal.lir.LIRIntrospection.Values;
+import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
 /**
  * Lazily associated metadata for every {@link CompositeValue} type. The metadata includes:
@@ -44,34 +38,34 @@ import com.oracle.graal.lir.LIRIntrospection.Values;
  * such fields.</li>
  * </ul>
  */
-public final class CompositeValueClass<T> extends FieldIntrospection<T> {
-
-    /**
-     * The CompositeValueClass is only used for formatting for the most part so cache it as a
-     * ClassValue.
-     */
-    private static final ClassValue<CompositeValueClass<?>> compositeClass = new ClassValue<CompositeValueClass<?>>() {
-
-        @Override
-        protected CompositeValueClass<?> computeValue(Class<?> type) {
-            CompositeValueClass<?> compositeValueClass = new CompositeValueClass<>(type);
-            assert compositeValueClass.values.getDirectCount() == compositeValueClass.values.getCount() : "only direct fields are allowed in composites";
-            return compositeValueClass;
-        }
-
-    };
+public class CompositeValueClass<T> extends LIRIntrospection<T> {
 
     @SuppressWarnings("unchecked")
-    public static <T> CompositeValueClass<T> get(Class<T> type) {
-        return (CompositeValueClass<T>) compositeClass.get(type);
+    public static final <T extends CompositeValue> CompositeValueClass<T> get(Class<T> c) {
+        CompositeValueClass<T> clazz = (CompositeValueClass<T>) allClasses.get(c);
+        if (clazz != null) {
+            return clazz;
+        }
+
+        // We can have a race of multiple threads creating the LIRInstructionClass at the same time.
+        // However, only one will be put into the map, and this is the one returned by all threads.
+        clazz = new CompositeValueClass<>(c);
+        CompositeValueClass<T> oldClazz = (CompositeValueClass<T>) allClasses.putIfAbsent(c, clazz);
+        if (oldClazz != null) {
+            return oldClazz;
+        } else {
+            return clazz;
+        }
     }
 
-    private final Values values;
+    public CompositeValueClass(Class<T> clazz) {
+        this(clazz, new FieldsScanner.DefaultCalcOffset());
+    }
 
-    private CompositeValueClass(Class<T> clazz) {
+    public CompositeValueClass(Class<T> clazz, FieldsScanner.CalcOffset calcOffset) {
         super(clazz);
 
-        CompositeValueFieldsScanner vfs = new CompositeValueFieldsScanner(new FieldsScanner.DefaultCalcOffset());
+        CompositeValueFieldsScanner vfs = new CompositeValueFieldsScanner(calcOffset);
         vfs.scan(clazz, CompositeValue.class, false);
 
         values = new Values(vfs.valueAnnotations.get(CompositeValue.Component.class));
@@ -80,7 +74,7 @@ public final class CompositeValueClass<T> extends FieldIntrospection<T> {
 
     private static class CompositeValueFieldsScanner extends LIRFieldsScanner {
 
-        CompositeValueFieldsScanner(FieldsScanner.CalcOffset calc) {
+        public CompositeValueFieldsScanner(FieldsScanner.CalcOffset calc) {
             super(calc);
             valueAnnotations.put(CompositeValue.Component.class, new OperandModeAnnotation());
         }
@@ -91,15 +85,10 @@ public final class CompositeValueClass<T> extends FieldIntrospection<T> {
             if (field.isAnnotationPresent(CompositeValue.Component.class)) {
                 result.addAll(Arrays.asList(field.getAnnotation(CompositeValue.Component.class).value()));
             } else {
-                JVMCIError.shouldNotReachHere();
+                GraalInternalError.shouldNotReachHere();
             }
             return result;
         }
-    }
-
-    @Override
-    public Fields[] getAllFields() {
-        return new Fields[]{data, values};
     }
 
     @Override
@@ -113,16 +102,31 @@ public final class CompositeValueClass<T> extends FieldIntrospection<T> {
         return str.toString();
     }
 
-    public static String format(CompositeValue obj) {
-        CompositeValueClass<?> valueClass = compositeClass.get(obj.getClass());
+    final CompositeValue forEachComponent(LIRInstruction inst, CompositeValue obj, OperandMode mode, InstructionValueProcedure proc) {
+        return super.forEachComponent(inst, obj, values, mode, proc);
+    }
+
+    final void forEachComponent(LIRInstruction inst, CompositeValue obj, OperandMode mode, ValuePositionProcedure proc, ValuePosition outerPosition) {
+        forEach(inst, obj, values, mode, proc, outerPosition);
+    }
+
+    public String toString(CompositeValue obj) {
         StringBuilder result = new StringBuilder();
 
-        LIRIntrospection.appendValues(result, obj, "", "", "{", "}", new String[]{""}, valueClass.values);
+        appendValues(result, obj, "", "", "{", "}", new String[]{""}, values);
 
-        for (int i = 0; i < valueClass.data.getCount(); i++) {
-            result.append(" ").append(valueClass.data.getName(i)).append(": ").append(LIRIntrospection.getFieldString(obj, i, valueClass.data));
+        for (int i = 0; i < data.getCount(); i++) {
+            result.append(" ").append(data.getName(i)).append(": ").append(getFieldString(obj, i, data));
         }
 
         return result.toString();
+    }
+
+    void copyValueArrays(CompositeValue compositeValue) {
+        for (int i = values.getDirectCount(); i < values.getCount(); i++) {
+            Value[] valueArray = values.getValueArray(compositeValue, i);
+            Value[] newValueArray = Arrays.copyOf(valueArray, valueArray.length);
+            values.setValueArray(compositeValue, i, newValueArray);
+        }
     }
 }
