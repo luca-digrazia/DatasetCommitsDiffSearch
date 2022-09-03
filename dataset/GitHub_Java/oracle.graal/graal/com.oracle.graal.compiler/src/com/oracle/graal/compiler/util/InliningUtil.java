@@ -27,15 +27,12 @@ import java.util.*;
 import java.util.concurrent.*;
 
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.loop.*;
 import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.compiler.phases.CanonicalizerPhase.IsImmutablePredicate;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.Verbosity;
-import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
@@ -280,7 +277,7 @@ public class InliningUtil {
 
             PhiNode returnValuePhi = null;
             if (hasReturnValue) {
-                returnValuePhi = graph.unique(new PhiNode(invoke.node().kind(), returnMerge));
+                returnValuePhi = graph.unique(new PhiNode(invoke.node().kind(), returnMerge, PhiType.Value));
             }
 
             MergeNode exceptionMerge = null;
@@ -295,7 +292,7 @@ public class InliningUtil {
 
                 FixedNode exceptionSux = exceptionObject.next();
                 graph.addBeforeFixed(exceptionSux, exceptionMerge);
-                exceptionObjectPhi = graph.unique(new PhiNode(CiKind.Object, exceptionMerge));
+                exceptionObjectPhi = graph.unique(new PhiNode(CiKind.Object, exceptionMerge, PhiType.Value));
                 exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicateModified(invoke.stateAfter().bci, true, CiKind.Void, exceptionObjectPhi));
             }
 
@@ -574,11 +571,10 @@ public class InliningUtil {
             }
             return null;
         }
-        ObjectStamp receiverStamp = callTarget.receiver().objectStamp();
-        RiResolvedType receiverType = receiverStamp.type();
-        if (receiverStamp.isExactType()) {
-            assert receiverType.isSubtypeOf(targetMethod.holder()) : receiverType + " subtype of " + targetMethod.holder() + " for " + targetMethod;
-            RiResolvedMethod resolved = receiverType.resolveMethodImpl(targetMethod);
+        if (callTarget.receiver().exactType() != null) {
+            RiResolvedType exact = callTarget.receiver().exactType();
+            assert exact.isSubtypeOf(targetMethod.holder()) : exact + " subtype of " + targetMethod.holder() + " for " + targetMethod;
+            RiResolvedMethod resolved = exact.resolveMethodImpl(targetMethod);
             if (checkTargetConditions(invoke, resolved, optimisticOpts)) {
                 double weight = callback == null ? 0 : callback.inliningWeight(parent, resolved, invoke);
                 return new ExactInlineInfo(invoke, weight, level, resolved);
@@ -587,11 +583,12 @@ public class InliningUtil {
         }
         RiResolvedType holder = targetMethod.holder();
 
-        if (receiverStamp.type() != null) {
+        if (callTarget.receiver().declaredType() != null) {
+            RiResolvedType declared = callTarget.receiver().declaredType();
             // the invoke target might be more specific than the holder (happens after inlining: locals lose their declared type...)
             // TODO (lstadler) fix this
-            if (receiverType != null && receiverType.isSubtypeOf(holder)) {
-                holder = receiverType;
+            if (declared != null && declared.isSubtypeOf(holder)) {
+                holder = declared;
             }
         }
         // TODO (thomaswue) fix this
@@ -906,167 +903,13 @@ public class InliningUtil {
         }
     }
 
-    /**
-     * Performs replacement of a node with a snippet graph.
-     * @param replacee the node that will be replaced
-     * @param anchor the control flow replacee
-     * @param snippetGraph the graph that the replacee will be replaced with
-     * @param explodeLoops specifies if all the loops in the snippet graph are counted loops that must be completely unrolled
-     * @param args
-     */
-    public static void inlineSnippet(final RiRuntime runtime,
-                    final Node replacee,
-                    final FixedWithNextNode anchor,
-                    final StructuredGraph snippetGraph,
-                    final boolean explodeLoops,
-                    final IsImmutablePredicate immutabilityPredicate,
-                    final Object... args) {
-        Debug.scope("InliningSnippet", snippetGraph.method(), new Runnable() {
-            @Override
-            public void run() {
-                inlineSnippet0(runtime, replacee, anchor, snippetGraph, explodeLoops, immutabilityPredicate, args);
-            }
-        });
-    }
-    private static void inlineSnippet0(RiRuntime runtime,
-                    Node replacee,
-                    FixedWithNextNode anchor,
-                    StructuredGraph snippetGraph,
-                    boolean explodeLoops,
-                    IsImmutablePredicate immutabilityPredicate,
-                    Object... args) {
-
-        Debug.dump(replacee.graph(), "Before lowering %s", replacee);
-
-        // Copy snippet graph, replacing parameters with given args in the process
-        StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method());
-        IdentityHashMap<Node, Node> replacements = new IdentityHashMap<>();
-        replacements.put(snippetGraph.start(), snippetCopy.start());
-        int localCount = 0;
-        for (LocalNode local : snippetGraph.getNodes(LocalNode.class)) {
-            int index = local.index();
-            if (args[index] instanceof CiConstant) {
-                CiConstant arg = (CiConstant) args[index];
-                assert arg.kind.stackKind() == local.kind() : arg.kind + " != " + local.kind();
-                ConstantNode argNode = ConstantNode.forCiConstant(arg, runtime, snippetCopy);
-                replacements.put(local, argNode);
-                args[index] = null;
-            } else {
-                assert args[index] instanceof ValueNode;
-            }
-            localCount++;
-        }
-        assert localCount == args.length : "snippet argument count mismatch";
-        snippetCopy.addDuplicates(snippetGraph.getNodes(), replacements);
-        if (!replacements.isEmpty()) {
-            new CanonicalizerPhase(null, runtime, null, 0, immutabilityPredicate).apply(snippetCopy);
-        }
-
-        // Explode all loops in the snippet if requested
-        if (explodeLoops && snippetCopy.hasLoops()) {
-            ControlFlowGraph cfg = ControlFlowGraph.compute(snippetCopy, true, true, false, false);
-            for (Loop loop : cfg.getLoops()) {
-                LoopBeginNode loopBegin = loop.loopBegin();
-                SuperBlock wholeLoop = LoopTransformUtil.wholeLoop(loop);
-                Debug.dump(snippetCopy, "Before exploding loop %s", loopBegin);
-                int peel = 0;
-                while (!loopBegin.isDeleted()) {
-                    int mark = snippetCopy.getMark();
-                    LoopTransformUtil.peel(loop, wholeLoop);
-                    Debug.dump(snippetCopy, "After peel %d", peel);
-                    new CanonicalizerPhase(null, runtime, null, mark, immutabilityPredicate).apply(snippetCopy);
-                    peel++;
-                }
-                Debug.dump(snippetCopy, "After exploding loop %s", loopBegin);
-            }
-            new DeadCodeEliminationPhase().apply(snippetCopy);
-        }
-
-        // Gather the nodes in the snippet that are to be inlined
-        ArrayList<Node> nodes = new ArrayList<>();
-        ReturnNode returnNode = null;
-        StartNode entryPointNode = snippetCopy.start();
-        FixedNode firstCFGNode = entryPointNode.next();
-        replacements.clear();
-        for (Node node : snippetCopy.getNodes()) {
-            if (node == entryPointNode || node == entryPointNode.stateAfter()) {
-                // Do nothing.
-            } else if (node instanceof LocalNode) {
-                LocalNode local = (LocalNode) node;
-                int index = local.index();
-                assert args[index] instanceof ValueNode;
-                ValueNode arg = (ValueNode) args[index];
-                assert arg.kind() == local.kind();
-                replacements.put(node, arg);
-                args[index] = null;
-            } else {
-                nodes.add(node);
-                if (node instanceof ReturnNode) {
-                    returnNode = (ReturnNode) node;
-                }
-            }
-        }
-
-        // Inline the gathered snippet nodes
-        StructuredGraph graph = (StructuredGraph) replacee.graph();
-        int mark = graph.getMark();
-        Map<Node, Node> duplicates = graph.addDuplicates(nodes, replacements);
-        Debug.dump(graph, "After inlining snippet %s", snippetCopy.method());
-
-        // Remove all frame states from the inlined snippet graph. Snippets must be atomic (i.e. free
-        // of side-effects that prevent deoptimizing to a point before the snippet).
-        for (Node node : graph.getNewNodes(mark)) {
-            if (node instanceof StateSplit) {
-                StateSplit stateSplit = (StateSplit) node;
-                FrameState frameState = stateSplit.stateAfter();
-                assert !stateSplit.hasSideEffect() : "snippets cannot contain side-effecting node " + node + "\n    " + frameState.toString(Verbosity.Debugger);
-                if (frameState != null) {
-                    stateSplit.setStateAfter(null);
-                }
-            }
-        }
-
-        Debug.dump(graph, "After removing frame states");
-
-        // Rewire the control flow graph around the replacee
-        FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
-        anchor.replaceAtPredecessors(firstCFGNodeDuplicate);
-        FixedNode next = anchor.next();
-        anchor.setNext(null);
-
-        // Replace all usages of the replacee with the value returned by the snippet
-        Node returnValue = null;
-        if (returnNode != null) {
-            if (returnNode.result() instanceof LocalNode) {
-                returnValue = replacements.get(returnNode.result());
-            } else {
-                returnValue = duplicates.get(returnNode.result());
-            }
-            assert returnValue != null || replacee.usages().isEmpty();
-            replacee.replaceAtUsages(returnValue);
-
-            Node returnDuplicate = duplicates.get(returnNode);
-            returnDuplicate.clearInputs();
-            returnDuplicate.replaceAndDelete(next);
-        }
-
-        // Remove the replacee from its graph
-        replacee.clearInputs();
-        replacee.replaceAtUsages(null);
-        if (replacee instanceof FixedNode) {
-            GraphUtil.killCFG((FixedNode) replacee);
-        } else {
-            replacee.safeDelete();
-        }
-    }
-
     public static void receiverNullCheck(Invoke invoke) {
         MethodCallTargetNode callTarget = invoke.callTarget();
         StructuredGraph graph = (StructuredGraph) invoke.graph();
         NodeInputList<ValueNode> parameters = callTarget.arguments();
         ValueNode firstParam = parameters.size() <= 0 ? null : parameters.get(0);
-        if (!callTarget.isStatic() && firstParam.kind() == CiKind.Object && !firstParam.objectStamp().nonNull()) {
-            graph.addBeforeFixed(invoke.node(), graph.add(new FixedGuardNode(graph.unique(new IsNullNode(firstParam)), RiDeoptReason.ClassCastException, RiDeoptAction.InvalidateReprofile, true, invoke.leafGraphId())));
+        if (!callTarget.isStatic() && firstParam.kind() == CiKind.Object && !firstParam.stamp().nonNull()) {
+            graph.addBeforeFixed(invoke.node(), graph.add(new FixedGuardNode(graph.unique(new NullCheckNode(firstParam, false)), RiDeoptReason.ClassCastException, RiDeoptAction.InvalidateReprofile, invoke.leafGraphId())));
         }
     }
 }
