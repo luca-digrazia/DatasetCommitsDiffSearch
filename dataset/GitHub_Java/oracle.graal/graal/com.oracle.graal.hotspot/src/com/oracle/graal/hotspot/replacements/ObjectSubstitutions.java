@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,19 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
-import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
+import com.oracle.graal.api.replacements.ClassSubstitution;
+import com.oracle.graal.api.replacements.MethodSubstitution;
 
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.ClassSubstitution.*;
-import com.oracle.graal.word.*;
+// JaCoCo Exclude
 
 /**
  * Substitutions for {@link java.lang.Object} methods.
  */
-@ClassSubstitution(java.lang.Object.class)
+@ClassSubstitution(Object.class)
 public class ObjectSubstitutions {
 
     @MethodSubstitution(isStatic = false)
-    public static Class<?> getClass(final Object thisObj) {
-        Word hub = loadHub(thisObj);
-        return unsafeCast(hub.readObject(Word.signed(classMirrorOffset()), LocationNode.FINAL_LOCATION), Class.class, true, true);
-    }
-
-    @MethodSubstitution(isStatic = false)
     public static int hashCode(final Object thisObj) {
-        return computeHashCode(thisObj);
+        return IdentityHashCodeNode.identityHashCode(thisObj);
     }
-
-    @MacroSubstitution(macro = ObjectCloneNode.class, isStatic = false)
-    public static native Object clone(Object obj);
 }

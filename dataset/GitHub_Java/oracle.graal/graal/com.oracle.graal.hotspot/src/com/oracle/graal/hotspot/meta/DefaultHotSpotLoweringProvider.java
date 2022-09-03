@@ -70,7 +70,9 @@ import com.oracle.graal.hotspot.nodes.type.MethodPointerStamp;
 import com.oracle.graal.hotspot.nodes.type.NarrowOopStamp;
 import com.oracle.graal.hotspot.replacements.AssertionSnippets;
 import com.oracle.graal.hotspot.replacements.ClassGetHubNode;
+import com.oracle.graal.hotspot.replacements.HashCodeSnippets;
 import com.oracle.graal.hotspot.replacements.HubGetClassNode;
+import com.oracle.graal.hotspot.replacements.IdentityHashCodeNode;
 import com.oracle.graal.hotspot.replacements.InstanceOfSnippets;
 import com.oracle.graal.hotspot.replacements.KlassLayoutHelperNode;
 import com.oracle.graal.hotspot.replacements.LoadExceptionObjectSnippets;
@@ -171,6 +173,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     protected AssertionSnippets.Templates assertionSnippets;
     protected ArrayCopySnippets.Templates arraycopySnippets;
     protected StringToBytesSnippets.Templates stringToBytesSnippets;
+    protected HashCodeSnippets.Templates hashCodeSnippets;
 
     public DefaultHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
                     HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
@@ -194,6 +197,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         assertionSnippets = new AssertionSnippets.Templates(providers, target);
         arraycopySnippets = new ArrayCopySnippets.Templates(providers, target);
         stringToBytesSnippets = new StringToBytesSnippets.Templates(providers, target);
+        hashCodeSnippets = new HashCodeSnippets.Templates(providers, target);
         providers.getReplacements().registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(providers, target));
     }
 
@@ -220,7 +224,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
                 if (instanceOfNode.allowsNull()) {
                     ValueNode object = instanceOfNode.getValue();
                     LogicNode newTypeCheck = graph.addOrUniqueWithInputs(InstanceOfNode.create(instanceOfNode.type(), object, instanceOfNode.profile(), instanceOfNode.getAnchor()));
-                    LogicNode newNode = LogicNode.or(graph.unique(IsNullNode.create(object)), newTypeCheck, GraalDirectives.UNLIKELY_PROBABILITY);
+                    LogicNode newNode = LogicNode.or(graph.unique(new IsNullNode(object)), newTypeCheck, GraalDirectives.UNLIKELY_PROBABILITY);
                     instanceOfNode.replaceAndDelete(newNode);
                 }
             }
@@ -239,7 +243,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
                     ValueNode object = instanceOfDynamicNode.getObject();
                     LogicNode newTypeCheck = graph.addOrUniqueWithInputs(
                                     InstanceOfDynamicNode.create(graph.getAssumptions(), tool.getConstantReflection(), instanceOfDynamicNode.getMirrorOrHub(), object, false));
-                    LogicNode newNode = LogicNode.or(graph.unique(IsNullNode.create(object)), newTypeCheck, GraalDirectives.UNLIKELY_PROBABILITY);
+                    LogicNode newNode = LogicNode.or(graph.unique(new IsNullNode(object)), newTypeCheck, GraalDirectives.UNLIKELY_PROBABILITY);
                     instanceOfDynamicNode.replaceAndDelete(newNode);
                 }
             }
@@ -322,6 +326,8 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 lowerComputeObjectAddressNode((ComputeObjectAddressNode) n);
             }
+        } else if (n instanceof IdentityHashCodeNode) {
+            hashCodeSnippets.lower((IdentityHashCodeNode) n, tool);
         } else {
             super.lower(n, tool);
         }

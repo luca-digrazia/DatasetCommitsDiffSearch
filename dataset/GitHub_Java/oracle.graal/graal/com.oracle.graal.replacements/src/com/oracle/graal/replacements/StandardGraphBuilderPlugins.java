@@ -784,7 +784,7 @@ public class StandardGraphBuilderPlugins {
                     b.add(new DeoptimizeNode(DeoptimizationAction.None, DeoptimizationReason.NullCheckException));
                     return true;
                 }
-                LogicNode isNull = b.add(IsNullNode.create(value));
+                IsNullNode isNull = b.add(new IsNullNode(value));
                 FixedGuardNode fixedGuard = b.add(new FixedGuardNode(isNull, DeoptimizationReason.NullCheckException, DeoptimizationAction.None, true));
                 Stamp newStamp = objectStamp.improveWith(StampFactory.objectNonNull());
                 b.addPush(value.getStackKind(), new PiNode(value, newStamp, fixedGuard));
@@ -871,6 +871,11 @@ public class StandardGraphBuilderPlugins {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode throwable, ValueNode message) {
                 b.add(new VirtualizableInvokeMacroNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnStamp(b.getAssumptions()), throwable, message));
+                return true;
+            }
+
+            @Override
+            public boolean inlineOnly() {
                 return true;
             }
         });
