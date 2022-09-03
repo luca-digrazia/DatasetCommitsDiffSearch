@@ -126,7 +126,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     @Override
-    public FixedNode asNode() {
+    public FixedNode node() {
         return this;
     }
 
@@ -177,7 +177,9 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     @Override
     public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
         Map<Object, Object> debugProperties = super.getDebugProperties(map);
-        debugProperties.put("targetMethod", callTarget.targetName());
+        if (callTarget instanceof MethodCallTargetNode && methodCallTarget().targetMethod() != null) {
+            debugProperties.put("targetMethod", methodCallTarget().targetMethod());
+        }
         return debugProperties;
     }
 
