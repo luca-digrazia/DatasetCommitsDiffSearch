@@ -25,7 +25,6 @@ package com.oracle.graal.truffle.test.nodes;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
-@NodeInfo
 public class BlockTestNode extends AbstractTestNode {
 
     @Children private final AbstractTestNode[] statements;
