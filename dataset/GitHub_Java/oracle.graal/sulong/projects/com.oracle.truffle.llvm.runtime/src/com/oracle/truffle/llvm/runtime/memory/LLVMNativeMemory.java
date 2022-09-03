@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.runtime.memory;
 
 import java.lang.reflect.Field;
+import java.util.function.BinaryOperator;
 import java.util.function.IntBinaryOperator;
 import java.util.function.LongBinaryOperator;
 
@@ -490,7 +491,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
     }
 
     @Override
-    public short getAndOpI16(LLVMNativePointer address, short value, ShortBinaryOperator f) {
+    public short getAndOpI16(LLVMNativePointer address, short value, BinaryOperator<Short> f) {
         short old;
         short nevv;
         do {
@@ -501,7 +502,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
     }
 
     @Override
-    public byte getAndOpI8(LLVMNativePointer address, byte value, ByteBinaryOperator f) {
+    public byte getAndOpI8(LLVMNativePointer address, byte value, BinaryOperator<Byte> f) {
         byte old;
         byte nevv;
         do {
@@ -512,7 +513,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
     }
 
     @Override
-    public boolean getAndOpI1(LLVMNativePointer address, boolean value, BooleanBinaryOperator f) {
+    public boolean getAndOpI1(LLVMNativePointer address, boolean value, BinaryOperator<Boolean> f) {
         byte old;
         boolean nevv;
         do {
