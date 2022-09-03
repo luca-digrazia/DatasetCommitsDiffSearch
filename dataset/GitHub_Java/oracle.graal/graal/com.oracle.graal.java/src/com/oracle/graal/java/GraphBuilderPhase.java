@@ -766,7 +766,8 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void eagerResolvingForSnippets(int cpi, int bytecode) {
-        if (graphBuilderConfig.eagerResolving()) {
+        // (aw) cannot eager-resolve invokedynamic
+        if (graphBuilderConfig.eagerResolving() && bytecode != Bytecodes.INVOKEDYNAMIC) {
             constantPool.loadReferencedType(cpi, bytecode);
         }
     }

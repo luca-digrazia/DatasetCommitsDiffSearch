@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.meta;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.bytecode.*;
 import com.oracle.graal.hotspot.*;
 
 /**
@@ -40,11 +39,6 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     }
 
     @Override
-    public int length() {
-        return HotSpotGraalRuntime.getInstance().getCompilerToVM().constantPoolLength(type);
-    }
-
-    @Override
     public Object lookupConstant(int cpi) {
         assert cpi != 0;
         Object constant = HotSpotGraalRuntime.getInstance().getCompilerToVM().lookupConstantInPool(type, cpi);
@@ -57,9 +51,10 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     }
 
     @Override
-    public Object lookupAppendix(int cpi, int opcode) {
-        assert Bytecodes.isInvoke(opcode);
-        return HotSpotGraalRuntime.getInstance().getCompilerToVM().lookupAppendixInPool(type, cpi, (byte) opcode);
+    public Object lookupAppendix(int cpi) {
+        assert cpi != 0;
+        Object constant = HotSpotGraalRuntime.getInstance().getCompilerToVM().lookupAppendixInPool(type, cpi);
+        return constant;
     }
 
     @Override

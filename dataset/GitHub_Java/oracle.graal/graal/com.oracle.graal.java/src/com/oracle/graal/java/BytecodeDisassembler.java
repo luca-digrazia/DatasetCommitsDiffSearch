@@ -30,7 +30,7 @@ import com.oracle.graal.bytecode.*;
 /**
  * Utility for producing a {@code javap}-like disassembly of bytecode.
  */
-public class BytecodeDisassembler implements BytecodeDisassemblerProvider {
+public class BytecodeDisassembler {
 
     /**
      * Specifies if the disassembly for a single instruction can span multiple lines.
@@ -141,7 +141,7 @@ public class BytecodeDisassembler implements BytecodeDisassemblerProvider {
                             desc = constant.toString();
                         }
                         if (!multiline) {
-                            desc = desc.replaceAll("\\n", "");
+                            desc.replaceAll("\\n", "");
                         }
                         buf.append(String.format("#%-10d // %s", cpi, desc));
                         break;
