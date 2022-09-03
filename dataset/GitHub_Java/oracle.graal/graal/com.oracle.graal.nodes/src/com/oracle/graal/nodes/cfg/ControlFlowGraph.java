@@ -347,7 +347,6 @@ public class ControlFlowGraph {
             Block firstSucc = block.getSuccessors().get(0);
             if (block.getSuccessorCount() == 1) {
                 block.postdominator = block;
-                continue;
             }
             Block postdominator = firstSucc;
             for (Block sux : block.getSuccessors()) {
@@ -357,7 +356,7 @@ public class ControlFlowGraph {
                     continue outer;
                 }
             }
-            assert !block.getSuccessors().contains(postdominator) : "Block " + block + " has a wrong post dominator: " + postdominator;
+            assert !block.getSuccessors().contains(postdominator);
             block.postdominator = postdominator;
         }
     }
