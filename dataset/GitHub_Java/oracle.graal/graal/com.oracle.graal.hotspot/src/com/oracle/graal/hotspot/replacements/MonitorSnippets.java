@@ -347,7 +347,7 @@ public class MonitorSnippets implements Snippets {
 
     private static void traceObject(boolean enabled, String action, Object object, boolean enter) {
         if (doProfile(action)) {
-            DynamicCounterNode.counter(action, enter ? "number of monitor enters" : "number of monitor exits", 1, PROFILE_CONTEXT);
+            DynamicCounterNode.counter(action, enter ? "~monitorenter" : "~monitorexit", 1, PROFILE_CONTEXT);
         }
         if (enabled) {
             Log.print(action);
@@ -415,9 +415,8 @@ public class MonitorSnippets implements Snippets {
 
         private final boolean useFastLocking;
 
-        public Templates(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, CodeCacheProvider codeCache, LoweringProvider lowerer, Replacements replacements,
-                        TargetDescription target, boolean useFastLocking) {
-            super(metaAccess, constantReflection, codeCache, lowerer, replacements, target);
+        public Templates(CodeCacheProvider runtime, Replacements replacements, TargetDescription target, boolean useFastLocking) {
+            super(runtime, replacements, target);
             this.useFastLocking = useFastLocking;
         }
 
@@ -437,7 +436,7 @@ public class MonitorSnippets implements Snippets {
             boolean tracingEnabledForMethod = stateAfter != null && (isTracingEnabledForMethod(stateAfter.method()) || isTracingEnabledForMethod(graph.method()));
             args.addConst("trace", isTracingEnabledForType(monitorenterNode.object()) || tracingEnabledForMethod);
 
-            Map<Node, Node> nodes = template(args).instantiate(metaAccess, monitorenterNode, DEFAULT_REPLACER, args);
+            Map<Node, Node> nodes = template(args).instantiate(runtime, monitorenterNode, DEFAULT_REPLACER, args);
 
             for (Node n : nodes.values()) {
                 if (n instanceof BeginLockScopeNode) {
@@ -461,7 +460,7 @@ public class MonitorSnippets implements Snippets {
             args.addConst("lockDepth", monitorexitNode.getLockDepth());
             args.addConst("trace", isTracingEnabledForType(monitorexitNode.object()) || isTracingEnabledForMethod(stateAfter.method()) || isTracingEnabledForMethod(graph.method()));
 
-            Map<Node, Node> nodes = template(args).instantiate(metaAccess, monitorexitNode, DEFAULT_REPLACER, args);
+            Map<Node, Node> nodes = template(args).instantiate(runtime, monitorexitNode, DEFAULT_REPLACER, args);
 
             for (Node n : nodes.values()) {
                 if (n instanceof EndLockScopeNode) {
@@ -522,7 +521,7 @@ public class MonitorSnippets implements Snippets {
                     for (ReturnNode ret : rets) {
                         returnType = checkCounter.getMethod().getSignature().getReturnType(checkCounter.getMethod().getDeclaringClass());
                         String msg = "unbalanced monitors in " + MetaUtil.format("%H.%n(%p)", graph.method()) + ", count = %d";
-                        ConstantNode errMsg = ConstantNode.forObject(msg, metaAccess, graph);
+                        ConstantNode errMsg = ConstantNode.forObject(msg, runtime, graph);
                         callTarget = graph.add(new MethodCallTargetNode(InvokeKind.Static, checkCounter.getMethod(), new ValueNode[]{errMsg}, returnType));
                         invoke = graph.add(new InvokeNode(callTarget, 0));
                         List<ValueNode> stack = Collections.emptyList();
