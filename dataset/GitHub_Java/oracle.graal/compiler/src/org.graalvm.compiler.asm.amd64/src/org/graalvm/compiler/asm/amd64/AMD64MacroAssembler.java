@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -713,6 +711,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
             jccb(ConditionFlag.Greater, adjustStr);
             // Fall through if matched whole substring.
         } else { // non constant
+            assert intCnt2 == -1 : "should be != 0";
 
             addl(tmp, cnt2);
             // Found result if we matched whole substring.
@@ -771,4 +770,5 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         pop(rsp); // restore SP
 
     }
+
 }
