@@ -676,8 +676,10 @@ public final class SchedulePhase extends Phase {
                 } else {
                     inputEarliest = earliestBlock(input);
                 }
-                if (earliest == null || earliest.getDominatorDepth() < inputEarliest.getDominatorDepth()) {
+                if (earliest == null) {
                     earliest = inputEarliest;
+                } else if (earliest != inputEarliest) {
+                    earliest = findEarlierBlock(earliest, inputEarliest);
                 }
             }
         }
@@ -686,6 +688,23 @@ public final class SchedulePhase extends Phase {
         }
         earliestCache.set(node, earliest);
         return earliest;
+    }
+
+    private static Block findEarlierBlock(Block earliest, Block inputEarliest) {
+        // Find out whether earliest or inputEarliest is earlier.
+        Block a = earliest.getDominator();
+        Block b = inputEarliest;
+        while (true) {
+            if (a == inputEarliest || b == null) {
+                // Nothing to change, the previous earliest block is still earliest.
+                return earliest;
+            } else if (b == earliest || a == null) {
+                // New earliest is the earliest.
+                return inputEarliest;
+            }
+            a = a.getDominator();
+            b = b.getDominator();
+        }
     }
 
     /**
