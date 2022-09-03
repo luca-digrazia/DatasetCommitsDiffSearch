@@ -103,9 +103,8 @@ public class ObjectStampJoinTest extends GraalCompilerTest {
     @Test
     public void testJoin6() {
         Stamp dExactNonNull = StampFactory.exactNonNull(getType(D.class));
-        Stamp alwaysNull = StampFactory.alwaysNull();
-        Stamp join = join(alwaysNull, dExactNonNull);
-        Assert.assertFalse(join.isLegal());
+        Stamp allwaysNull = StampFactory.alwaysNull();
+        Stamp join = join(allwaysNull, dExactNonNull);
         Assert.assertFalse(ObjectStamp.isObjectNonNull(join));
         Assert.assertFalse(ObjectStamp.isObjectAlwaysNull(join));
     }
@@ -152,6 +151,6 @@ public class ObjectStampJoinTest extends GraalCompilerTest {
     }
 
     private ResolvedJavaType getType(Class<?> clazz) {
-        return getMetaAccess().lookupJavaType(clazz);
+        return runtime().lookupJavaType(clazz);
     }
 }
