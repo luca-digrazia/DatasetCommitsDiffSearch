@@ -291,74 +291,12 @@ public class FloatStamp extends PrimitiveStamp {
 
     @Override
     public JavaConstant asConstant() {
-        if (isConstant()) {
+        if (nonNaN && Double.compare(lowerBound, upperBound) == 0) {
             switch (getBits()) {
                 case 32:
                     return JavaConstant.forFloat((float) lowerBound);
                 case 64:
                     return JavaConstant.forDouble(lowerBound);
-            }
-        }
-        return null;
-    }
-
-    private boolean isConstant() {
-        /*
-         * There are many forms of NaNs and any operations on them can silently convert them into
-         * the canonical NaN.
-         */
-        return (Double.compare(lowerBound, upperBound) == 0 && nonNaN);
-    }
-
-    private static FloatStamp stampForConstant(Constant constant) {
-        FloatStamp result;
-        PrimitiveConstant value = (PrimitiveConstant) constant;
-        switch (value.getJavaKind()) {
-            case Float:
-                if (Float.isNaN(value.asFloat())) {
-                    result = new FloatStamp(32, Double.NaN, Double.NaN, false);
-                } else {
-                    result = new FloatStamp(32, value.asFloat(), value.asFloat(), !Float.isNaN(value.asFloat()));
-                }
-                break;
-            case Double:
-                if (Double.isNaN(value.asDouble())) {
-                    result = new FloatStamp(64, Double.NaN, Double.NaN, false);
-                } else {
-                    result = new FloatStamp(64, value.asDouble(), value.asDouble(), !Double.isNaN(value.asDouble()));
-                }
-                break;
-            default:
-                throw GraalError.shouldNotReachHere();
-        }
-        if (result.isConstant()) {
-            return result;
-        }
-        return null;
-    }
-
-    private static Stamp maybeFoldConstant(UnaryOp<?> op, FloatStamp stamp) {
-        if (stamp.isConstant()) {
-            JavaConstant constant = stamp.asConstant();
-            Constant folded = op.foldConstant(constant);
-            if (folded != null) {
-                return FloatStamp.stampForConstant(folded);
-            }
-        }
-        return null;
-    }
-
-    private static Stamp maybeFoldConstant(BinaryOp<?> op, FloatStamp stamp1, FloatStamp stamp2) {
-        if (stamp1.isConstant() && stamp2.isConstant()) {
-            JavaConstant constant1 = stamp1.asConstant();
-            JavaConstant constant2 = stamp2.asConstant();
-            Constant folded = op.foldConstant(constant1, constant2);
-            if (folded != null) {
-                FloatStamp stamp = stampForConstant(folded);
-                if (stamp != null && stamp.isConstant()) {
-                    assert stamp.asConstant().equals(folded);
-                    return stamp;
-                }
             }
         }
         return null;
@@ -384,13 +322,8 @@ public class FloatStamp extends PrimitiveStamp {
                         @Override
                         public Stamp foldStamp(Stamp s) {
                             FloatStamp stamp = (FloatStamp) s;
-                            Stamp folded = maybeFoldConstant(this, stamp);
-                            if (folded != null) {
-                                return folded;
-                            }
                             return new FloatStamp(stamp.getBits(), -stamp.upperBound(), -stamp.lowerBound(), stamp.isNonNaN());
                         }
-
                     },
 
                     new BinaryOp.Add(false, true) {
@@ -411,13 +344,8 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp s1, Stamp s2) {
-                            FloatStamp stamp1 = (FloatStamp) s1;
-                            FloatStamp stamp2 = (FloatStamp) s2;
-                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
-                            if (folded != null) {
-                                return folded;
-                            }
+                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
+                            // TODO
                             return stamp1.unrestricted();
                         }
 
@@ -453,13 +381,8 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp s1, Stamp s2) {
-                            FloatStamp stamp1 = (FloatStamp) s1;
-                            FloatStamp stamp2 = (FloatStamp) s2;
-                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
-                            if (folded != null) {
-                                return folded;
-                            }
+                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
+                            // TODO
                             return stamp1.unrestricted();
                         }
 
@@ -495,14 +418,9 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp s1, Stamp s2) {
-                            FloatStamp stamp1 = (FloatStamp) s1;
-                            FloatStamp stamp2 = (FloatStamp) s2;
-                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
-                            if (folded != null) {
-                                return folded;
-                            }
-                            return stamp1.unrestricted();
+                        public Stamp foldStamp(Stamp a, Stamp b) {
+                            // TODO
+                            return a.unrestricted();
                         }
 
                         @Override
@@ -541,13 +459,8 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp s1, Stamp s2) {
-                            FloatStamp stamp1 = (FloatStamp) s1;
-                            FloatStamp stamp2 = (FloatStamp) s2;
-                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
-                            if (folded != null) {
-                                return folded;
-                            }
+                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
+                            // TODO
                             return stamp1.unrestricted();
                         }
 
@@ -583,13 +496,8 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp s1, Stamp s2) {
-                            FloatStamp stamp1 = (FloatStamp) s1;
-                            FloatStamp stamp2 = (FloatStamp) s2;
-                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
-                            if (folded != null) {
-                                return folded;
-                            }
+                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
+                            // TODO
                             return stamp1.unrestricted();
                         }
                     },
@@ -613,17 +521,6 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp s) {
-                            FloatStamp stamp = (FloatStamp) s;
-                            JavaConstant constant = stamp.asConstant();
-                            if (constant != null) {
-                                Constant folded = foldConstant(constant);
-                                if (folded != null) {
-                                    FloatStamp result = stampForConstant(folded);
-                                    if (result != null && result.isConstant()) {
-                                        return result;
-                                    }
-                                }
-                            }
                             return s.unrestricted();
                         }
                     },
@@ -650,13 +547,7 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp s1, Stamp s2) {
-                            FloatStamp stamp1 = (FloatStamp) s1;
-                            FloatStamp stamp2 = (FloatStamp) s2;
-                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
-                            if (folded != null) {
-                                return folded;
-                            }
+                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
                             return stamp1.unrestricted();
                         }
 
@@ -685,9 +576,7 @@ public class FloatStamp extends PrimitiveStamp {
                                 case Float:
                                     int fa = Float.floatToRawIntBits(a.asFloat());
                                     int fb = Float.floatToRawIntBits(b.asFloat());
-                                    float floatOr = Float.intBitsToFloat(fa | fb);
-                                    assert (fa | fb) == Float.floatToRawIntBits((floatOr));
-                                    return JavaConstant.forFloat(floatOr);
+                                    return JavaConstant.forFloat(Float.intBitsToFloat(fa | fb));
                                 case Double:
                                     long da = Double.doubleToRawLongBits(a.asDouble());
                                     long db = Double.doubleToRawLongBits(b.asDouble());
@@ -698,13 +587,7 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp s1, Stamp s2) {
-                            FloatStamp stamp1 = (FloatStamp) s1;
-                            FloatStamp stamp2 = (FloatStamp) s2;
-                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
-                            if (folded != null) {
-                                return folded;
-                            }
+                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
                             return stamp1.unrestricted();
                         }
 
@@ -744,13 +627,7 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp s1, Stamp s2) {
-                            FloatStamp stamp1 = (FloatStamp) s1;
-                            FloatStamp stamp2 = (FloatStamp) s2;
-                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
-                            if (folded != null) {
-                                return folded;
-                            }
+                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
                             return stamp1.unrestricted();
                         }
 
@@ -788,10 +665,6 @@ public class FloatStamp extends PrimitiveStamp {
                         @Override
                         public Stamp foldStamp(Stamp s) {
                             FloatStamp stamp = (FloatStamp) s;
-                            Stamp folded = maybeFoldConstant(this, stamp);
-                            if (folded != null) {
-                                return folded;
-                            }
                             if (stamp.isNaN()) {
                                 return stamp;
                             }
@@ -816,11 +689,6 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp s) {
-                            FloatStamp stamp = (FloatStamp) s;
-                            Stamp folded = maybeFoldConstant(this, stamp);
-                            if (folded != null) {
-                                return folded;
-                            }
                             return s.unrestricted();
                         }
                     },

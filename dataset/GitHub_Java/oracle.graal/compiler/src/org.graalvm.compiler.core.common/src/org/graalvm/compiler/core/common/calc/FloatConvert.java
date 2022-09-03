@@ -25,23 +25,21 @@ package org.graalvm.compiler.core.common.calc;
 import org.graalvm.compiler.debug.GraalError;
 
 public enum FloatConvert {
-    F2I(FloatConvertCategory.FloatingPointToInteger, 32),
-    D2I(FloatConvertCategory.FloatingPointToInteger, 64),
-    F2L(FloatConvertCategory.FloatingPointToInteger, 32),
-    D2L(FloatConvertCategory.FloatingPointToInteger, 64),
-    I2F(FloatConvertCategory.IntegerToFloatingPoint, 32),
-    L2F(FloatConvertCategory.IntegerToFloatingPoint, 64),
-    D2F(FloatConvertCategory.FloatingPointToFloatingPoint, 64),
-    I2D(FloatConvertCategory.IntegerToFloatingPoint, 32),
-    L2D(FloatConvertCategory.IntegerToFloatingPoint, 64),
-    F2D(FloatConvertCategory.FloatingPointToFloatingPoint, 32);
+    F2I(FloatConvertCategory.FloatingPointToInteger),
+    D2I(FloatConvertCategory.FloatingPointToInteger),
+    F2L(FloatConvertCategory.FloatingPointToInteger),
+    D2L(FloatConvertCategory.FloatingPointToInteger),
+    I2F(FloatConvertCategory.IntegerToFloatingPoint),
+    L2F(FloatConvertCategory.IntegerToFloatingPoint),
+    D2F(FloatConvertCategory.FloatingPointToFloatingPoint),
+    I2D(FloatConvertCategory.IntegerToFloatingPoint),
+    L2D(FloatConvertCategory.IntegerToFloatingPoint),
+    F2D(FloatConvertCategory.FloatingPointToFloatingPoint);
 
-    private final FloatConvertCategory category;
-    private final int inputBits;
+    private FloatConvertCategory category;
 
-    FloatConvert(FloatConvertCategory category, int inputBits) {
+    FloatConvert(FloatConvertCategory category) {
         this.category = category;
-        this.inputBits = inputBits;
     }
 
     public FloatConvertCategory getCategory() {
@@ -73,9 +71,5 @@ public enum FloatConvert {
             default:
                 throw GraalError.shouldNotReachHere();
         }
-    }
-
-    public int getInputBits() {
-        return inputBits;
     }
 }
