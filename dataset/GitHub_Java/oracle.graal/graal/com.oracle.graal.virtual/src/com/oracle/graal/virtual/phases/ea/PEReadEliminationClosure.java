@@ -54,7 +54,6 @@ import com.oracle.graal.nodes.java.LoadIndexedNode;
 import com.oracle.graal.nodes.java.StoreFieldNode;
 import com.oracle.graal.nodes.java.StoreIndexedNode;
 import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.spi.LoweringProvider;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.nodes.virtual.VirtualArrayNode;
@@ -77,9 +76,8 @@ public class PEReadEliminationClosure extends PartialEscapeClosure<PEReadElimina
         }
     }
 
-    public PEReadEliminationClosure(ScheduleResult schedule, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
-                    LoweringProvider loweringProvider) {
-        super(schedule, metaAccess, constantReflection, constantFieldProvider, loweringProvider);
+    public PEReadEliminationClosure(ScheduleResult schedule, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider) {
+        super(schedule, metaAccess, constantReflection, constantFieldProvider);
     }
 
     @Override
