@@ -50,8 +50,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 
-import org.graalvm.collections.EconomicMap;
-
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -59,6 +57,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.impl.TVMCI;
+import org.graalvm.collections.EconomicMap;
 
 /**
  * Descriptor of the slots of frame objects. Multiple frame instances are associated with one such
@@ -297,7 +296,7 @@ public final class FrameDescriptor implements Cloneable {
      *
      * @param frameSlot the slot
      * @return current kind of this slot
-     * @since 19.0
+     * @since 1.0
      */
     public FrameSlotKind getFrameSlotKind(final FrameSlot frameSlot) {
         assert checkFrameSlotOwnership(frameSlot);
@@ -314,7 +313,7 @@ public final class FrameDescriptor implements Cloneable {
      *
      * @param frameSlot the slot
      * @param kind new kind of the slot
-     * @since 19.0
+     * @since 1.0
      */
     public void setFrameSlotKind(final FrameSlot frameSlot, final FrameSlotKind kind) {
         if (frameSlot.kind != kind) {
@@ -605,12 +604,9 @@ public final class FrameDescriptor implements Cloneable {
         }
     }
 
-    private static AccessorFrames initialize() {
-        return new AccessorFrames();
-    }
-
     static {
         // registers into Accessor.FRAMES
-        initialize();
+        @SuppressWarnings("unused")
+        AccessorFrames unused = new AccessorFrames();
     }
 }
