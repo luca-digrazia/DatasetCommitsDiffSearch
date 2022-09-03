@@ -865,12 +865,13 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             @Override
-            protected void genIntegerSwitch(ValueNode value, ArrayList<BciBlock> actualSuccessors, int[] keys, double[] keyProbabilities, int[] keySuccessors) {
-                double[] successorProbabilities = successorProbabilites(actualSuccessors.size(), keySuccessors, keyProbabilities);
-                IntegerSwitchNode switchNode = append(new IntegerSwitchNode(value, actualSuccessors.size(), keys, keyProbabilities, keySuccessors));
-                for (int i = 0; i < actualSuccessors.size(); i++) {
-                    switchNode.setBlockSuccessor(i, createBlockTarget(successorProbabilities[i], actualSuccessors.get(i), frameState));
-                }
+            protected void setBlockSuccessor(ValueNode switchNode, int i, ValueNode createBlockTarget) {
+                ((IntegerSwitchNode) switchNode).setBlockSuccessor(i, (AbstractBeginNode) createBlockTarget);
+            }
+
+            @Override
+            protected ValueNode genIntegerSwitch(ValueNode value, int size, int[] keys, double[] keyProbabilities, int[] keySuccessors) {
+                return new IntegerSwitchNode(value, size, keys, keyProbabilities, keySuccessors);
             }
 
             @Override
