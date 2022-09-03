@@ -196,7 +196,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
                 break;
             case ADD_TO_INDEX:
                 newIndex = allowOverwrite ? index : additionalReg;
-                assert !newIndex.equals(sp) && !newIndex.equals(zr);
+                assert newIndex != sp && newIndex != zr;
                 if (plan.needsScratch) {
                     mov(additionalReg, scaledDisplacement);
                     add(signExtendIndex ? 32 : 64, newIndex, index, additionalReg);
@@ -207,7 +207,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
                 break;
             case ADD_TO_BASE:
                 newBase = allowOverwrite ? base : additionalReg;
-                assert !newBase.equals(sp) && !newBase.equals(zr);
+                assert newBase != sp && newBase != zr;
                 if (plan.needsScratch) {
                     mov(additionalReg, displacement);
                     add(64, newBase, base, additionalReg);
