@@ -135,12 +135,9 @@ public final class DefaultTraceRegisterAllocationPolicy {
 
     public static final class BottomUpAlmostTrivialStrategy extends BottomUpStrategy {
 
-        private final int trivialTraceSize;
-
         public BottomUpAlmostTrivialStrategy(TraceRegisterAllocationPolicy plan) {
             // explicitly specify the enclosing instance for the superclass constructor call
             super(plan);
-            trivialTraceSize = Options.TraceRAalmostTrivialSize.getValue(plan.getOptions());
         }
 
         @Override
@@ -151,7 +148,7 @@ public final class DefaultTraceRegisterAllocationPolicy {
             if (trace.size() != 1) {
                 return false;
             }
-            return getLIR().getLIRforBlock(trace.getBlocks()[0]).size() <= trivialTraceSize;
+            return getLIR().getLIRforBlock(trace.getBlocks()[0]).size() <= Options.TraceRAalmostTrivialSize.getValue(getOptions());
         }
 
     }
@@ -163,7 +160,7 @@ public final class DefaultTraceRegisterAllocationPolicy {
         public BottomUpNumVariablesStrategy(TraceRegisterAllocationPolicy plan) {
             // explicitly specify the enclosing instance for the superclass constructor call
             super(plan);
-            Integer value = Options.TraceRAnumVariables.getValue(plan.getOptions());
+            Integer value = Options.TraceRAnumVariables.getValue(getOptions());
             if (value != null) {
                 numVarLimit = value;
             } else {
@@ -191,12 +188,9 @@ public final class DefaultTraceRegisterAllocationPolicy {
 
     public static final class BottomUpRatioStrategy extends BottomUpStrategy {
 
-        private final double ratio;
-
         public BottomUpRatioStrategy(TraceRegisterAllocationPolicy plan) {
             // explicitly specify the enclosing instance for the superclass constructor call
             super(plan);
-            ratio = Options.TraceRAbottomUpRatio.getValue(plan.getOptions());
         }
 
         @Override
@@ -206,6 +200,7 @@ public final class DefaultTraceRegisterAllocationPolicy {
             }
             double numTraces = getTraceBuilderResult().getTraces().size();
             double traceId = trace.getId();
+            double ratio = Options.TraceRAbottomUpRatio.getValue(getOptions());
             assert ratio >= 0 && ratio <= 1.0 : "Ratio out of range: " + ratio;
             return (traceId / numTraces) >= ratio;
         }
@@ -241,14 +236,12 @@ public final class DefaultTraceRegisterAllocationPolicy {
 
     public static final class BottomUpMaxFrequencyStrategy extends BottomUpStrategy {
 
-        private final double maxMethodProbability;
-        private final double probabilityThreshold;
+        private double maxMethodProbability;
 
         public BottomUpMaxFrequencyStrategy(TraceRegisterAllocationPolicy plan) {
             // explicitly specify the enclosing instance for the superclass constructor call
             super(plan);
-            maxMethodProbability = maxProbabiltiy(getLIR().getControlFlowGraph().getBlocks());
-            probabilityThreshold = Options.TraceRAprobalilityThreshold.getValue(plan.getOptions());
+            this.maxMethodProbability = maxProbabiltiy(getLIR().getControlFlowGraph().getBlocks());
         }
 
         private static double maxProbabiltiy(AbstractBlockBase<?>[] blocks) {
@@ -267,7 +260,7 @@ public final class DefaultTraceRegisterAllocationPolicy {
             if (!super.shouldApplyTo(trace)) {
                 return false;
             }
-            return maxProbabiltiy(trace.getBlocks()) / maxMethodProbability <= probabilityThreshold;
+            return maxProbabiltiy(trace.getBlocks()) / maxMethodProbability <= Options.TraceRAprobalilityThreshold.getValue(getOptions());
         }
 
     }
@@ -277,7 +270,6 @@ public final class DefaultTraceRegisterAllocationPolicy {
         private final double sumMethodProbability;
         private final double[] sumTraceProbability;
         private double budget;
-        private final double sumBudget;
 
         public BottomUpFrequencyBudgetStrategy(TraceRegisterAllocationPolicy plan) {
             // explicitly specify the enclosing instance for the superclass constructor call
@@ -287,7 +279,6 @@ public final class DefaultTraceRegisterAllocationPolicy {
             this.sumMethodProbability = init(traces, sumTraces);
             this.sumTraceProbability = sumTraces;
             this.budget = this.sumMethodProbability;
-            this.sumBudget = Options.TraceRAsumBudget.getValue(plan.getOptions());
         }
 
         private static double init(ArrayList<Trace> traces, double[] sumTraces) {
@@ -315,7 +306,7 @@ public final class DefaultTraceRegisterAllocationPolicy {
             }
             double d = oldBudget / sumMethodProbability;
             Debug.log(1, "Trace%d: ratio %f", (Object) trace.getId(), d);
-            if (d > sumBudget) {
+            if (d > Options.TraceRAsumBudget.getValue(getOptions())) {
                 return false;
             }
             return true;
