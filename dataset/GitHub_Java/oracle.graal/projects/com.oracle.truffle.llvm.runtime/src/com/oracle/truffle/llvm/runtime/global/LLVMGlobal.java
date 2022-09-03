@@ -51,8 +51,6 @@ import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalFactory.GetFrameNodeGen;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalFactory.GetNativePointerNodeGen;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalFactory.GetSlotNodeGen;
@@ -67,23 +65,21 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
     private final String name;
     private final FrameSlot slot;
     private final Type globalType;
-    private final LLVMSourceSymbol sourceSymbol;
 
-    public static LLVMGlobal external(LLVMContext context, Object symbol, String name, Type type, LLVMAddress pointer, LLVMSourceSymbol sourceSymbol) {
-        LLVMGlobal global = new LLVMGlobal(name, context.getGlobalFrameSlot(symbol, type), type, sourceSymbol);
+    public static LLVMGlobal external(LLVMContext context, Object symbol, String name, Type type, LLVMAddress pointer) {
+        LLVMGlobal global = new LLVMGlobal(name, context.getGlobalFrameSlot(symbol, type), type);
         global.setFrame(context, new Native(pointer.getVal()));
         return global;
     }
 
-    public static LLVMGlobal internal(LLVMContext context, Object symbol, String name, Type type, LLVMSourceSymbol sourceSymbol) {
-        return new LLVMGlobal(name, context.getGlobalFrameSlot(symbol, type), type, sourceSymbol);
+    public static LLVMGlobal internal(LLVMContext context, Object symbol, String name, Type type) {
+        return new LLVMGlobal(name, context.getGlobalFrameSlot(symbol, type), type);
     }
 
-    private LLVMGlobal(String name, FrameSlot slot, Type globalType, LLVMSourceSymbol sourceSymbol) {
+    private LLVMGlobal(String name, FrameSlot slot, Type globalType) {
         this.name = name;
         this.slot = slot;
         this.globalType = globalType;
-        this.sourceSymbol = sourceSymbol;
     }
 
     public String getName() {
@@ -92,18 +88,6 @@ public final class LLVMGlobal implements LLVMObjectNativeLibrary.Provider {
 
     public FrameSlot getSlot() {
         return slot;
-    }
-
-    public LLVMSourceSymbol getSourceSymbol() {
-        return sourceSymbol;
-    }
-
-    public LLVMSourceType getSourceType() {
-        return sourceSymbol != null ? sourceSymbol.getType() : null;
-    }
-
-    public String getSourceName() {
-        return sourceSymbol != null ? sourceSymbol.getName() : name;
     }
 
     private void setFrame(LLVMContext context, Object object) {
