@@ -39,7 +39,7 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStackFrameNuller;
 
@@ -85,19 +85,19 @@ public class LLVMFunctionStartNode extends RootNode {
         return debugInformation.sourceSection;
     }
 
-    @CompilationFinal private LLVMThreadingStack threadingStack;
+    @CompilationFinal private LLVMStack stack;
 
-    private LLVMThreadingStack getThreadingStack() {
-        if (threadingStack == null) {
+    private LLVMStack getStack() {
+        if (stack == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            threadingStack = getLanguage(LLVMLanguage.class).getContextReference().get().getThreadingStack();
+            stack = getLanguage(LLVMLanguage.class).getContextReference().get().getStack();
         }
-        return threadingStack;
+        return stack;
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-        long basePointer = getThreadingStack().getStack().getStackPointer();
+        long basePointer = getStack().getStackPointer();
         try {
 
             nullStack(frame);
@@ -107,7 +107,7 @@ public class LLVMFunctionStartNode extends RootNode {
             return result;
         } finally {
             assert assertDestroyStack(basePointer);
-            getThreadingStack().getStack().setStackPointer(basePointer);
+            getStack().setStackPointer(basePointer);
         }
     }
 
@@ -115,7 +115,7 @@ public class LLVMFunctionStartNode extends RootNode {
      * Allows us to find broken stackpointers immediately because old stackregions are destroyed.
      */
     private boolean assertDestroyStack(long basePointer) {
-        long currSp = getThreadingStack().getStack().getStackPointer();
+        long currSp = getStack().getStackPointer();
         long size = basePointer - currSp;
         LLVMMemory.memset(currSp, size, (byte) 0xFF);
         return true;

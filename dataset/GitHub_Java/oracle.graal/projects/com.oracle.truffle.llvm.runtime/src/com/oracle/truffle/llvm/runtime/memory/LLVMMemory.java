@@ -73,11 +73,7 @@ public abstract class LLVMMemory {
     }
 
     public static void free(LLVMAddress address) {
-        free(address.getVal());
-    }
-
-    public static void free(long address) {
-        UNSAFE.freeMemory(address);
+        UNSAFE.freeMemory(address.getVal());
     }
 
     public static LLVMAddress allocateMemory(long size) {
