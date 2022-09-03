@@ -278,6 +278,7 @@ public final class ShortCircuitOrNode extends LogicNode implements IterableNodeT
                 }
             }
         }
+        return null;
     }
 
     private static LogicNode optimizeShortCircuit(ShortCircuitOrNode inner, boolean innerNegated, boolean matchNegated, boolean matchIsInnerX) {
