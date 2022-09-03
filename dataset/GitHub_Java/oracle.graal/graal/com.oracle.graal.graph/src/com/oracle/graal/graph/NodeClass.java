@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.graph;
 
-import static com.oracle.graal.graph.Graph.*;
-
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.Map.Entry;
@@ -31,6 +29,7 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.Node.Input;
+import com.oracle.graal.graph.Node.IterableNodeType;
 import com.oracle.graal.graph.Node.Successor;
 import com.oracle.graal.graph.Node.Verbosity;
 
@@ -39,7 +38,7 @@ import com.oracle.graal.graph.Node.Verbosity;
  * <ul>
  * <li>The offsets of fields annotated with {@link Input} and {@link Successor} as well as methods
  * for iterating over such fields.</li>
- * <li>The identifier for an {@link Node.IterableNodeType} class.</li>
+ * <li>The identifier for an {@link IterableNodeType} class.</li>
  * </ul>
  */
 public final class NodeClass extends FieldIntrospection {
@@ -433,7 +432,7 @@ public final class NodeClass extends FieldIntrospection {
          */
         private NodeClassIterator(Node node, long[] offsets, int directCount) {
             this.node = node;
-            this.modCount = MODIFICATION_COUNTS_ENABLED ? node.modCount() : 0;
+            this.modCount = node.modCount();
             this.offsets = offsets;
             this.directCount = directCount;
             index = NOT_ITERABLE;
