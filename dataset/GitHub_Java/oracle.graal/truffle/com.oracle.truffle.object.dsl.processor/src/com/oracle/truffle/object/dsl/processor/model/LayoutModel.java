@@ -92,11 +92,11 @@ public class LayoutModel {
     }
 
     public boolean hasInstanceProperties() {
-        return !getAllInstanceProperties().isEmpty();
+        return !selectProperties(true, false, false, true, true).isEmpty();
     }
 
     public boolean hasShapeProperties() {
-        return !getAllShapeProperties().isEmpty();
+        return !selectProperties(false, true, false, true, true).isEmpty();
     }
 
     public boolean hasProperty(String propertyName) {

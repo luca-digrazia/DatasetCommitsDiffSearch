@@ -36,8 +36,8 @@ public class IdentifierTest {
     @Layout
     public interface IdentifierTestLayout {
 
-        String A_IDENTIFIER = "a_identifier";
-        Integer B_IDENTIFIER = 14;
+        public static final String A_IDENTIFIER = "a_identifier";
+        public static final Integer B_IDENTIFIER = 14;
 
         DynamicObject createIdentifierTest(int a, int b);
 
