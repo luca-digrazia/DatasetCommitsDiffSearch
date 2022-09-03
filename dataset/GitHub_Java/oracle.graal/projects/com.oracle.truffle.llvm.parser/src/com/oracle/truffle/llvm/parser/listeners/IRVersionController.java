@@ -54,13 +54,13 @@ public final class IRVersionController {
     @FunctionalInterface
     private interface FunctionParser {
 
-        Function instantiate(Types types, List<Type> symbols, FunctionGenerator generator, int mode);
+        Function instantiate(IRVersionController version, Types types, List<Type> symbols, FunctionGenerator generator, int mode);
     }
 
     private enum IRVersion {
         DEFAULT(ModuleV32::new, FunctionV32::new, "3.2", "3.3"),
         LLVM_32(ModuleV32::new, FunctionV32::new, "3.2", "3.3"),
-        LLVM_38(ModuleV38::new, FunctionV38::new, "3.8", "3.9", "4.0");
+        LLVM_38(ModuleV38::new, FunctionV38::new, "3.8", "3.9");
 
         private final String[] versionInformation;
         private final FunctionParser function;
@@ -108,7 +108,7 @@ public final class IRVersionController {
     }
 
     public Function createFunction(Types types, List<Type> symbols, FunctionGenerator generator, int mode) {
-        return version.function.instantiate(types, symbols, generator, mode);
+        return version.function.instantiate(this, types, symbols, generator, mode);
     }
 
     public ModuleVersionHelper createModuleVersionHelper() {

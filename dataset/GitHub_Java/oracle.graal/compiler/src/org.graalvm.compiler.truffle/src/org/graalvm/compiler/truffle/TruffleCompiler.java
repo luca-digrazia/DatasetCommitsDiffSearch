@@ -32,7 +32,6 @@ import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrum
 import java.util.ArrayList;
 import java.util.List;
 
-import jdk.vm.ci.meta.JavaConstant;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
@@ -251,9 +250,5 @@ public abstract class TruffleCompiler {
 
     public PartialEvaluator getPartialEvaluator() {
         return partialEvaluator;
-    }
-
-    public OptimizedCallTarget asOptimizedCallTarget(JavaConstant constant) {
-        return snippetReflection.asObject(OptimizedCallTarget.class, constant);
     }
 }
