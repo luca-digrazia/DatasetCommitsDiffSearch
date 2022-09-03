@@ -68,11 +68,11 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
     public static class Options {
         @APIOption(name = "delay-class-initialization-to-runtime")//
         @Option(help = "A comma-separated list of classes (and implicitly all of their subclasses) that are initialized at runtime and not during image building", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> DelayClassInitialization = new HostedOptionKey<>(new String[0]);
+        public static final HostedOptionKey<String> DelayClassInitialization = new HostedOptionKey<>("");
 
         @APIOption(name = "rerun-class-initialization-at-runtime") //
         @Option(help = "A comma-separated list of classes (and implicitly all of their subclasses) that are initialized both at runtime and during image building", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> RerunClassInitialization = new HostedOptionKey<>(new String[0]);
+        public static final HostedOptionKey<String> RerunClassInitialization = new HostedOptionKey<>("");
     }
 
     /**
@@ -158,8 +158,8 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
         processOption(access, Options.RerunClassInitialization, this::rerunClassInitialization);
     }
 
-    private static void processOption(AfterRegistrationAccess access, HostedOptionKey<String[]> option, Consumer<Class<?>[]> handler) {
-        for (String className : option.getValue()) {
+    private static void processOption(AfterRegistrationAccess access, HostedOptionKey<String> option, Consumer<Class<?>[]> handler) {
+        for (String className : option.getValue().split(",")) {
             if (className.length() > 0) {
                 Class<?> clazz = access.findClassByName(className);
                 if (clazz == null) {
