@@ -62,7 +62,9 @@ public class NodeParser extends TemplateParser<NodeData> {
                 if (node != null) {
                     String dump = parsed.dump();
                     log.message(Kind.ERROR, null, null, null, dump);
+                    // CheckStyle: stop system..print check
                     System.out.println(dump);
+                    // CheckStyle: resume system..print check
                 }
             }
         } finally {
@@ -155,7 +157,21 @@ public class NodeParser extends TemplateParser<NodeData> {
             return nodeData; // error sync point
         }
 
+        if (Utils.typeEquals(nodeType.asType(), type.asType())) {
+            // filter fields if they were not split. (field are accessible anyway)
+            for (ListIterator<NodeFieldData> iterator = nodeData.getFields().listIterator(); iterator.hasNext();) {
+                NodeFieldData field = iterator.next();
+                if (field.getKind() == FieldKind.FIELD) {
+                    iterator.remove();
+                }
+            }
+        }
+
         List<Element> elements = new ArrayList<>(context.getEnvironment().getElementUtils().getAllMembers(type));
+        nodeData.setExtensionElements(getExtensionParser().parseAll(nodeData, elements));
+        if (nodeData.getExtensionElements() != null) {
+            elements.addAll(nodeData.getExtensionElements());
+        }
         parseMethods(nodeData, elements);
 
         if (nodeData.hasErrors()) {
@@ -286,23 +302,23 @@ public class NodeParser extends TemplateParser<NodeData> {
         } else if (node.needsRewrites(context)) {
             SpecializationData specialization = specializations.get(0);
             GenericParser parser = new GenericParser(context, node);
-            MethodSpec specification = parser.createDefaultMethodSpec(specialization.getMethod(), null, true, null);
+            MethodSpec specification = parser.createDefaultMethodSpec(specialization.getMethod(), null, null);
 
             ExecutableTypeData anyGenericReturnType = node.findAnyGenericExecutableType(context);
             assert anyGenericReturnType != null;
 
-            ActualParameter returnType = new ActualParameter(specification.getReturnType(), anyGenericReturnType.getType(), 0, false);
+            ActualParameter returnType = new ActualParameter(specification.getReturnType(), anyGenericReturnType.getType().getPrimitiveType(), 0, false);
             List<ActualParameter> parameters = new ArrayList<>();
             for (ActualParameter specializationParameter : specialization.getParameters()) {
                 ParameterSpec parameterSpec = specification.findParameterSpec(specializationParameter.getSpecification().getName());
                 NodeFieldData field = node.findField(parameterSpec.getName());
-                TypeData actualType;
-                if (field == null || field.getKind() == FieldKind.FINAL_FIELD) {
-                    actualType = specializationParameter.getTypeSystemType();
+                TypeMirror actualType;
+                if (field == null || field.getKind() == FieldKind.FIELD) {
+                    actualType = specializationParameter.getActualType();
                 } else {
                     ExecutableTypeData paramType = field.getNodeData().findAnyGenericExecutableType(context);
                     assert paramType != null;
-                    actualType = paramType.getType();
+                    actualType = paramType.getType().getPrimitiveType();
                 }
                 parameters.add(new ActualParameter(parameterSpec, actualType, specializationParameter.getIndex(), specializationParameter.isImplicit()));
             }
@@ -315,18 +331,18 @@ public class NodeParser extends TemplateParser<NodeData> {
         if (genericSpecialization != null) {
             if (genericSpecialization.isUseSpecializationsForGeneric()) {
                 for (ActualParameter parameter : genericSpecialization.getReturnTypeAndParameters()) {
-                    if (Utils.isObject(parameter.getType())) {
+                    if (Utils.isObject(parameter.getActualType())) {
                         continue;
                     }
                     Set<String> types = new HashSet<>();
                     for (SpecializationData specialization : specializations) {
                         ActualParameter actualParameter = specialization.findParameter(parameter.getLocalName());
                         if (actualParameter != null) {
-                            types.add(Utils.getQualifiedName(actualParameter.getType()));
+                            types.add(Utils.getQualifiedName(actualParameter.getActualType()));
                         }
                     }
                     if (types.size() > 1) {
-                        genericSpecialization.replaceParameter(parameter.getLocalName(), new ActualParameter(parameter, node.getTypeSystem().getGenericTypeData()));
+                        genericSpecialization.replaceParameter(parameter.getLocalName(), new ActualParameter(parameter, node.getTypeSystem().getGenericType()));
                     }
                 }
             }
@@ -351,13 +367,9 @@ public class NodeParser extends TemplateParser<NodeData> {
                 needsId.add(specialization);
             }
         }
-
-        // verify specialization parameter length
-        if (verifySpecializationParameters(node)) {
-            List<String> ids = calculateSpecializationIds(needsId);
-            for (int i = 0; i < ids.size(); i++) {
-                needsId.get(i).setId(ids.get(i));
-            }
+        List<String> ids = calculateSpecializationIds(needsId);
+        for (int i = 0; i < ids.size(); i++) {
+            needsId.get(i).setId(ids.get(i));
         }
     }
 
@@ -394,12 +406,12 @@ public class NodeParser extends TemplateParser<NodeData> {
                 continue;
             }
             List<String> paramIds = new LinkedList<>();
-            paramIds.add(Utils.getTypeId(other.getReturnType().getType()));
+            paramIds.add(Utils.getTypeId(other.getReturnType().getActualType()));
             for (ActualParameter param : other.getParameters()) {
                 if (other.getNode().findField(param.getSpecification().getName()) == null) {
                     continue;
                 }
-                paramIds.add(Utils.getTypeId(param.getType()));
+                paramIds.add(Utils.getTypeId(param.getActualType()));
             }
             assert lastSize == -1 || lastSize == paramIds.size();
             if (lastSize != -1 && lastSize != paramIds.size()) {
@@ -499,6 +511,9 @@ public class NodeParser extends TemplateParser<NodeData> {
     }
 
     private void verifyNode(NodeData nodeData) {
+        // verify specialization parameter length
+        verifySpecializationParameters(nodeData);
+
         // verify order is not ambiguous
         verifySpecializationOrder(nodeData);
 
@@ -507,6 +522,14 @@ public class NodeParser extends TemplateParser<NodeData> {
         assignShortCircuitsToSpecializations(nodeData);
 
         verifyConstructors(nodeData);
+
+// if (!verifyNamingConvention(specializations, "do")) {
+// return null;
+// }
+//
+// if (!verifyNamesUnique(specializations)) {
+// return null;
+// }
 
         verifyNamingConvention(nodeData.getShortCircuits(), "needs");
 
@@ -534,26 +557,17 @@ public class NodeParser extends TemplateParser<NodeData> {
 
         nodeData.setNodeType(nodeType.asType());
         nodeData.setTypeSystem(typeSystem);
-        nodeData.setFields(parseFields(elements, typeHierarchy));
 
-        if (Utils.typeEquals(nodeType.asType(), templateType.asType())) {
-            // filter fields if they were not split. (field are accessible anyway)
-            for (ListIterator<NodeFieldData> iterator = nodeData.getFields().listIterator(); iterator.hasNext();) {
-                NodeFieldData field = iterator.next();
-                if (field.getKind() == FieldKind.FINAL_FIELD) {
-                    iterator.remove();
-                }
-            }
-        }
-
-        nodeData.setExecutableTypes(groupExecutableTypes(new ExecutableTypeMethodParser(context, nodeData).parse(elements)));
-
+        List<ExecutableTypeData> executableTypes = filterExecutableTypes(new ExecutableTypeMethodParser(context, nodeData).parse(elements));
+        nodeData.setExecutableTypes(executableTypes);
         parsedNodes.put(Utils.getQualifiedName(templateType), nodeData);
+
+        nodeData.setFields(parseFields(elements, typeHierarchy));
 
         return nodeData;
     }
 
-    private static boolean verifySpecializationParameters(NodeData nodeData) {
+    private static void verifySpecializationParameters(NodeData nodeData) {
         boolean valid = true;
         int args = -1;
         for (SpecializationData specializationData : nodeData.getSpecializations()) {
@@ -574,7 +588,6 @@ public class NodeParser extends TemplateParser<NodeData> {
                 specialization.addError("All specializations must have the same number of arguments.");
             }
         }
-        return valid;
     }
 
     private void verifyMissingAbstractMethods(NodeData nodeData) {
@@ -628,23 +641,38 @@ public class NodeParser extends TemplateParser<NodeData> {
         nodeData.addError("Specialization constructor '%s(%s previousNode) { this(...); }' is required.", Utils.getSimpleName(type), Utils.getSimpleName(type));
     }
 
-    private static Map<Integer, List<ExecutableTypeData>> groupExecutableTypes(List<ExecutableTypeData> executableTypes) {
-        Map<Integer, List<ExecutableTypeData>> groupedTypes = new HashMap<>();
-        for (ExecutableTypeData type : executableTypes) {
-            int evaluatedCount = type.getEvaluatedCount();
-
-            List<ExecutableTypeData> types = groupedTypes.get(evaluatedCount);
-            if (types == null) {
-                types = new ArrayList<>();
-                groupedTypes.put(evaluatedCount, types);
+    private static List<ExecutableTypeData> filterExecutableTypes(List<ExecutableTypeData> executableTypes) {
+        List<ExecutableTypeData> filteredExecutableTypes = new ArrayList<>();
+        for (ExecutableTypeData t1 : executableTypes) {
+            boolean add = true;
+            for (ExecutableTypeData t2 : executableTypes) {
+                if (t1 == t2) {
+                    continue;
+                }
+                if (Utils.typeEquals(t1.getType().getPrimitiveType(), t2.getType().getPrimitiveType())) {
+                    if (t1.isFinal() && !t2.isFinal()) {
+                        add = false;
+                    }
+                }
             }
-            types.add(type);
+            if (add) {
+                filteredExecutableTypes.add(t1);
+            }
         }
 
-        for (List<ExecutableTypeData> types : groupedTypes.values()) {
-            Collections.sort(types);
-        }
-        return groupedTypes;
+        Collections.sort(filteredExecutableTypes, new Comparator<ExecutableTypeData>() {
+
+            @Override
+            public int compare(ExecutableTypeData o1, ExecutableTypeData o2) {
+                int index1 = o1.getTypeSystem().findType(o1.getType());
+                int index2 = o2.getTypeSystem().findType(o2.getType());
+                if (index1 == -1 || index2 == -1) {
+                    return 0;
+                }
+                return index1 - index2;
+            }
+        });
+        return filteredExecutableTypes;
     }
 
     private AnnotationMirror findFirstAnnotation(List<? extends Element> elements, Class<? extends Annotation> annotation) {
@@ -724,7 +752,7 @@ public class NodeParser extends TemplateParser<NodeData> {
             execution = ExecutionKind.IGNORE;
             type = var.asType();
             mirror = null;
-            kind = FieldKind.FINAL_FIELD;
+            kind = FieldKind.FIELD;
         }
 
         NodeFieldData fieldData = new NodeFieldData(var, findAccessElement(var), mirror, kind, execution);
@@ -893,13 +921,13 @@ public class NodeParser extends TemplateParser<NodeData> {
     private boolean isGenericShortCutMethod(NodeData node, TemplateMethod method) {
         for (ActualParameter parameter : method.getParameters()) {
             NodeFieldData field = node.findField(parameter.getSpecification().getName());
-            if (field == null || field.getKind() == FieldKind.FINAL_FIELD) {
+            if (field == null || field.getKind() == FieldKind.FIELD) {
                 continue;
             }
             ExecutableTypeData found = null;
             List<ExecutableTypeData> executableElements = field.getNodeData().findGenericExecutableTypes(context);
             for (ExecutableTypeData executable : executableElements) {
-                if (executable.getType().equalsType(parameter.getTypeSystemType())) {
+                if (executable.getType().equalsType(parameter.getActualTypeData(node.getTypeSystem()))) {
                     found = executable;
                     break;
                 }

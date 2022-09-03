@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,64 +24,41 @@ package com.oracle.truffle.sl;
 
 import java.io.*;
 
-import javax.script.*;
-
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.sl.runtime.*;
+import com.oracle.truffle.sl.nodes.*;
+import com.oracle.truffle.sl.parser.*;
 
 public class SimpleLanguage {
 
-    private static final Object[] NO_ARGUMENTS = new Object[0];
-
-    public static void main(String[] args) {
-        run(args[0], System.out, 10, true);
+    public static void main(String[] args) throws IOException {
+        run(new FileInputStream(args[0]), System.out, 10, true);
     }
 
-    public static void run(String name, String input, PrintStream printOutput, int repeats, boolean log) {
+    public static void run(InputStream input, PrintStream printOutput, int repeats, boolean log) {
         if (log) {
             // CheckStyle: stop system..print check
             System.out.printf("== running on %s\n", Truffle.getRuntime().getName());
             // CheckStyle: resume system..print check
         }
 
-        final SLContext context = new SLContext(printOutput);
-        final Source source = context.getSourceManager().get(name, input);
+        NodeFactory factory = new NodeFactory(printOutput);
 
-        run(context, source, printOutput, repeats, log);
-    }
+        Parser parser = new Parser(new Scanner(input), factory);
+        parser.Parse();
 
-    public static void run(String fileName, PrintStream printOutput, int repeats, boolean log) {
+        FunctionDefinitionNode rootNode = factory.findFunction("main");
         if (log) {
-            // CheckStyle: stop system..print check
-            System.out.printf("== running on %s\n", Truffle.getRuntime().getName());
-            // CheckStyle: resume system..print check
+            NodeUtil.printTree(System.out, rootNode);
         }
 
-        final SLContext context = new SLContext(printOutput);
-        final Source source = context.getSourceManager().get(fileName);
-
-        run(context, source, printOutput, repeats, log);
-    }
-
-    public static void run(SLContext context, Source source, PrintStream printOutput, int repeats, boolean log) {
-
-        SLScript script;
         try {
-            script = SLScript.create(context, source);
-        } catch (ScriptException e) {
-            // TODO temporary hack
-            throw new RuntimeException(e);
-        }
-
-        if (log) {
-            printScript(script);
-        }
-        try {
+            CallTarget function = Truffle.getRuntime().createCallTarget(rootNode, rootNode.getFrameDescriptor());
             for (int i = 0; i < repeats; i++) {
+                Arguments arguments = new SLArguments(new Object[0]);
+
                 long start = System.nanoTime();
-                Object result = script.run(NO_ARGUMENTS);
+                Object result = function.call(null, arguments);
                 long end = System.nanoTime();
 
                 if (result != null) {
@@ -96,12 +73,8 @@ public class SimpleLanguage {
 
         } finally {
             if (log) {
-                printScript(script);
+                NodeUtil.printTree(System.out, rootNode);
             }
         }
-    }
-
-    private static void printScript(SLScript script) {
-        NodeUtil.printTree(System.out, ((DefaultCallTarget) script.getMain()).getRootNode());
     }
 }
