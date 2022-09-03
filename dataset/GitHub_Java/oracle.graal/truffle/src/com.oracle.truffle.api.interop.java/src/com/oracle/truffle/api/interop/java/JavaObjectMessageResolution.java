@@ -92,21 +92,18 @@ class JavaObjectMessageResolution {
                 throw UnsupportedMessageException.raise(INVOKE);
             }
 
-            boolean isStatic = object.isStaticClass();
-            Class<?> lookupClass = object.getLookupClass();
-
             // (1) look for a method; if found, invoke it on obj.
-            JavaMethodDesc foundMethod = lookupMethod().execute(lookupClass, name, isStatic);
+            JavaMethodDesc foundMethod = lookupMethod(object, name);
             if (foundMethod != null) {
-                if (isApplicableByArity().execute(foundMethod, args.length)) {
-                    return executeMethod().execute(foundMethod, object.obj, args, object.languageContext);
+                if (isApplicableByArity(foundMethod, args.length)) {
+                    return executeMethod(foundMethod, object, args);
                 }
             }
 
             // (2) look for a field; if found, read its value and if that IsExecutable, Execute it.
-            JavaFieldDesc foundField = lookupField().execute(lookupClass, name, isStatic);
+            JavaFieldDesc foundField = lookupField(object, name);
             if (foundField != null) {
-                Object fieldValue = readField().execute(foundField, object);
+                Object fieldValue = readField(foundField, object);
                 if (fieldValue instanceof TruffleObject) {
                     TruffleObject fieldObject = (TruffleObject) fieldValue;
                     if (sendIsExecutableNode == null) {
@@ -131,44 +128,44 @@ class JavaObjectMessageResolution {
             throw UnknownIdentifierException.raise(name);
         }
 
-        private LookupMethodNode lookupMethod() {
+        private JavaMethodDesc lookupMethod(JavaObject object, String name) {
             if (lookupMethod == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 lookupMethod = insert(LookupMethodNode.create());
             }
-            return lookupMethod;
+            return lookupMethod.execute(object.getLookupClass(), name, object.isClass());
         }
 
-        private ExecuteMethodNode executeMethod() {
+        private Object executeMethod(JavaMethodDesc foundMethod, JavaObject object, Object[] args) {
             if (executeMethod == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 executeMethod = insert(ExecuteMethodNode.create());
             }
-            return executeMethod;
+            return executeMethod.execute(foundMethod, object.obj, args, object.languageContext);
         }
 
-        private IsApplicableByArityNode isApplicableByArity() {
+        private boolean isApplicableByArity(JavaMethodDesc foundMethod, int argsLength) {
             if (isApplicableByArityNode == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 isApplicableByArityNode = insert(IsApplicableByArityNode.create());
             }
-            return isApplicableByArityNode;
+            return isApplicableByArityNode.execute(foundMethod, argsLength);
         }
 
-        private LookupFieldNode lookupField() {
+        private JavaFieldDesc lookupField(JavaObject object, String name) {
             if (lookupField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 lookupField = insert(LookupFieldNode.create());
             }
-            return lookupField;
+            return lookupField.execute(object.getLookupClass(), name, object.isClass());
         }
 
-        private ReadFieldNode readField() {
+        private Object readField(JavaFieldDesc field, JavaObject object) {
             if (readField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 readField = insert(ReadFieldNode.create());
             }
-            return readField;
+            return readField.execute(field, object);
         }
     }
 
@@ -180,15 +177,15 @@ class JavaObjectMessageResolution {
             if (TruffleOptions.AOT) {
                 return false;
             }
-            return receiver.isClass() && lookupConstructor().execute(receiver.asClass()) != null;
+            return receiver.isClass() && lookupConstructor(receiver) != null;
         }
 
-        private LookupConstructorNode lookupConstructor() {
+        private JavaMethodDesc lookupConstructor(JavaObject receiver) {
             if (lookupConstructor == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 lookupConstructor = insert(LookupConstructorNode.create());
             }
-            return lookupConstructor;
+            return lookupConstructor.execute(receiver.getLookupClass());
         }
     }
 
@@ -196,7 +193,7 @@ class JavaObjectMessageResolution {
     abstract static class NewNode extends Node {
         private static final Message NEW = Message.createNew(0);
         @Child private LookupConstructorNode lookupConstructor;
-        @Child private ExecuteMethodNode executeMethod;
+        @Child private ExecuteMethodNode doExecute;
         @Child private ToJavaNode toJava;
 
         public Object access(JavaObject receiver, Object[] args) {
@@ -205,14 +202,17 @@ class JavaObjectMessageResolution {
             }
 
             if (receiver.isClass()) {
-                Class<?> javaClass = receiver.asClass();
-                if (javaClass.isArray()) {
+                if (receiver.getLookupClass().isArray()) {
                     return newArray(receiver, args);
                 }
 
-                JavaMethodDesc constructor = lookupConstructor().execute(javaClass);
+                JavaMethodDesc constructor = lookupConstructor(receiver);
                 if (constructor != null) {
-                    return executeMethod().execute(constructor, null, args, receiver.languageContext);
+                    if (doExecute == null) {
+                        CompilerDirectives.transferToInterpreterAndInvalidate();
+                        doExecute = insert(ExecuteMethodNode.create());
+                    }
+                    return doExecute.execute(constructor, null, args, receiver.languageContext);
                 }
             }
             throw UnsupportedMessageException.raise(NEW);
@@ -233,24 +233,15 @@ class JavaObjectMessageResolution {
                 // conversion failed by ToJavaNode
                 throw UnsupportedTypeException.raise(e, args);
             }
-            Object array = Array.newInstance(receiver.asClass().getComponentType(), length);
-            return JavaObject.forObject(array, receiver.languageContext);
+            return JavaInterop.asTruffleObject(Array.newInstance(receiver.getLookupClass().getComponentType(), length), receiver.languageContext);
         }
 
-        private LookupConstructorNode lookupConstructor() {
+        private JavaMethodDesc lookupConstructor(JavaObject receiver) {
             if (lookupConstructor == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 lookupConstructor = insert(LookupConstructorNode.create());
             }
-            return lookupConstructor;
-        }
-
-        private ExecuteMethodNode executeMethod() {
-            if (executeMethod == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                executeMethod = insert(ExecuteMethodNode.create());
-            }
-            return executeMethod;
+            return lookupConstructor.execute(receiver.getLookupClass());
         }
     }
 
@@ -307,59 +298,53 @@ class JavaObjectMessageResolution {
             if (TruffleOptions.AOT || object.isNull()) {
                 throw UnsupportedMessageException.raise(Message.READ);
             }
-            boolean isStatic = object.isStaticClass();
-            Class<?> lookupClass = object.getLookupClass();
-            JavaFieldDesc foundField = lookupField().execute(lookupClass, name, isStatic);
+            JavaFieldDesc foundField = lookupField(object, name);
             if (foundField != null) {
-                return readField().execute(foundField, object);
+                return readField(foundField, object);
             }
-            JavaMethodDesc foundMethod = lookupMethod().execute(lookupClass, name, isStatic);
+            JavaMethodDesc foundMethod = lookupMethod(object, name);
             if (foundMethod != null) {
                 return new JavaFunctionObject(foundMethod, object.obj, object.languageContext);
             }
-            if (isStatic) {
-                LookupInnerClassNode lookupInnerClassNode = lookupInnerClass();
-                if ("class".equals(name)) {
-                    return JavaObject.forClass(lookupClass, object.languageContext);
-                }
-                Class<?> innerclass = lookupInnerClassNode.execute(lookupClass, name);
+            if (object.isClass()) {
+                Class<?> innerclass = lookupInnerClass(object, name);
                 if (innerclass != null) {
-                    return JavaObject.forStaticClass(innerclass, object.languageContext);
+                    return JavaObject.forClass(innerclass, object.languageContext);
                 }
             }
             throw UnknownIdentifierException.raise(name);
         }
 
-        private ReadFieldNode readField() {
+        private Object readField(JavaFieldDesc field, JavaObject object) {
             if (readField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 readField = insert(ReadFieldNode.create());
             }
-            return readField;
+            return readField.execute(field, object);
         }
 
-        private LookupFieldNode lookupField() {
+        private JavaFieldDesc lookupField(JavaObject object, String name) {
             if (lookupField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 lookupField = insert(LookupFieldNode.create());
             }
-            return lookupField;
+            return lookupField.execute(object.getLookupClass(), name, object.isClass());
         }
 
-        private LookupMethodNode lookupMethod() {
+        private JavaMethodDesc lookupMethod(JavaObject object, String name) {
             if (lookupMethod == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 lookupMethod = insert(LookupMethodNode.create());
             }
-            return lookupMethod;
+            return lookupMethod.execute(object.getLookupClass(), name, object.isClass());
         }
 
-        private LookupInnerClassNode lookupInnerClass() {
+        private Class<?> lookupInnerClass(JavaObject object, String name) {
             if (lookupInnerClass == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 lookupInnerClass = insert(LookupInnerClassNode.create());
             }
-            return lookupInnerClass;
+            return lookupInnerClass.execute(object.getLookupClass(), name);
         }
     }
 
@@ -386,12 +371,12 @@ class JavaObjectMessageResolution {
             if (TruffleOptions.AOT || receiver.isNull()) {
                 throw UnsupportedMessageException.raise(Message.WRITE);
             }
-            JavaFieldDesc f = lookupField().execute(receiver.getLookupClass(), name, receiver.isStaticClass());
+            JavaFieldDesc f = lookupField(receiver, name);
             if (f == null) {
                 throw UnknownIdentifierException.raise(name);
             }
             try {
-                writeField().execute(f, receiver, value);
+                writeField(f, receiver, value);
             } catch (ClassCastException | NullPointerException e) {
                 // conversion failed by ToJavaNode
                 throw UnsupportedTypeException.raise(e, new Object[]{value});
@@ -399,20 +384,20 @@ class JavaObjectMessageResolution {
             return JavaObject.NULL;
         }
 
-        private LookupFieldNode lookupField() {
+        private JavaFieldDesc lookupField(JavaObject object, String name) {
             if (lookupField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 lookupField = insert(LookupFieldNode.create());
             }
-            return lookupField;
+            return lookupField.execute(object.getLookupClass(), name, object.isClass());
         }
 
-        private WriteFieldNode writeField() {
+        private void writeField(JavaFieldDesc field, JavaObject object, Object value) {
             if (writeField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 writeField = insert(WriteFieldNode.create());
             }
-            return writeField;
+            writeField.execute(field, object, value);
         }
     }
 
@@ -453,8 +438,8 @@ class JavaObjectMessageResolution {
             if (receiver.isNull()) {
                 throw UnsupportedMessageException.raise(Message.KEYS);
             }
-            String[] fields = TruffleOptions.AOT ? new String[0] : JavaInteropReflect.findUniquePublicMemberNames(receiver.getLookupClass(), receiver.isStaticClass(), includeInternal);
-            return JavaObject.forObject(fields, receiver.languageContext);
+            String[] fields = TruffleOptions.AOT ? new String[0] : JavaInteropReflect.findUniquePublicMemberNames(receiver.getLookupClass(), !receiver.isClass(), includeInternal);
+            return JavaInterop.asTruffleObject(fields);
         }
     }
 
@@ -505,7 +490,7 @@ class JavaObjectMessageResolution {
             if (TruffleOptions.AOT) {
                 return 0;
             }
-            return keyInfoCache().execute(receiver.getLookupClass(), name, receiver.isStaticClass());
+            return keyInfoCache().execute(receiver.getLookupClass(), name, receiver.isClass());
         }
 
         private KeyInfoCacheNode keyInfoCache() {

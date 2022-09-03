@@ -152,14 +152,8 @@ final class JavaInteropReflect {
             }
         }
 
-        if (onlyStatic) {
-            if (!readable) {
-                if ("class".equals(name)) {
-                    readable = true;
-                    internal = true;
-                }
-            }
-            if (!readable) {
+        if (!readable) {
+            if (onlyStatic) {
                 Class<?> innerClass = findInnerClass(clazz, name);
                 if (innerClass != null) {
                     readable = true;
@@ -240,12 +234,12 @@ final class JavaInteropReflect {
     }
 
     @CompilerDirectives.TruffleBoundary
-    static String[] findUniquePublicMemberNames(Class<?> clazz, boolean onlyStatic, boolean includeInternal) throws SecurityException {
+    static String[] findUniquePublicMemberNames(Class<?> clazz, boolean onlyInstance, boolean includeInternal) throws SecurityException {
         JavaClassDesc classDesc = JavaClassDesc.forClass(clazz);
         Collection<String> names = new LinkedHashSet<>();
-        names.addAll(classDesc.getFieldNames(onlyStatic));
-        names.addAll(classDesc.getMethodNames(onlyStatic, includeInternal));
-        if (onlyStatic) {
+        names.addAll(classDesc.getFieldNames(!onlyInstance));
+        names.addAll(classDesc.getMethodNames(!onlyInstance, includeInternal));
+        if (!onlyInstance) {
             if (Modifier.isPublic(clazz.getModifiers())) {
                 // no support for non-static member types now
                 for (Class<?> t : clazz.getClasses()) {
