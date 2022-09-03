@@ -22,19 +22,17 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import com.oracle.jvmci.code.ForeignCallsProvider;
-import com.oracle.jvmci.meta.ResolvedJavaMethod;
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.LocationIdentity;
 import static com.oracle.graal.compiler.target.Backend.*;
 import static com.oracle.graal.replacements.amd64.AMD64MathIntrinsicNode.Operation.*;
 import sun.misc.*;
 
 import com.oracle.graal.amd64.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.graphbuilderconf.InvocationPlugin.Receiver;
 import com.oracle.graal.graphbuilderconf.InvocationPlugins.Registration;
+import com.oracle.graal.graphbuilderconf.MethodIdMap.Receiver;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.replacements.*;
@@ -58,9 +56,9 @@ public class AMD64GraphBuilderPlugins {
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
                     ValueNode folded = AMD64CountLeadingZerosNode.tryFold(value);
                     if (folded != null) {
-                        b.addPush(Kind.Int, folded);
+                        b.addPush(folded);
                     } else {
-                        b.addPush(Kind.Int, new AMD64CountLeadingZerosNode(value));
+                        b.addPush(new AMD64CountLeadingZerosNode(value));
                     }
                     return true;
                 }
@@ -73,9 +71,9 @@ public class AMD64GraphBuilderPlugins {
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
                     ValueNode folded = AMD64CountTrailingZerosNode.tryFold(value);
                     if (folded != null) {
-                        b.addPush(Kind.Int, folded);
+                        b.addPush(folded);
                     } else {
-                        b.addPush(Kind.Int, new AMD64CountTrailingZerosNode(value));
+                        b.addPush(new AMD64CountTrailingZerosNode(value));
                     }
                     return true;
                 }
@@ -116,7 +114,7 @@ public class AMD64GraphBuilderPlugins {
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unsafe, ValueNode object, ValueNode offset, ValueNode value) {
                     // Emits a null-check for the otherwise unused receiver
                     unsafe.get();
-                    b.addPush(kind, new AtomicReadAndWriteNode(object, offset, value, kind, LocationIdentity.any()));
+                    b.addPush(kind.getStackKind(), new AtomicReadAndWriteNode(object, offset, value, kind, LocationIdentity.any()));
                     return true;
                 }
             });
@@ -125,7 +123,7 @@ public class AMD64GraphBuilderPlugins {
                     public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unsafe, ValueNode object, ValueNode offset, ValueNode delta) {
                         // Emits a null-check for the otherwise unused receiver
                         unsafe.get();
-                        b.addPush(kind, new AtomicReadAndAddNode(object, offset, delta, LocationIdentity.any()));
+                        b.addPush(kind.getStackKind(), new AtomicReadAndAddNode(object, offset, delta, LocationIdentity.any()));
                         return true;
                     }
                 });

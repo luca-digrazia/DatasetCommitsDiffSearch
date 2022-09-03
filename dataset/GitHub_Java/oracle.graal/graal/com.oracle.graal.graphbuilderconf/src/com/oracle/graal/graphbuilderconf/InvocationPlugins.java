@@ -22,18 +22,16 @@
  */
 package com.oracle.graal.graphbuilderconf;
 
-import com.oracle.jvmci.meta.MethodIdHolder;
-import com.oracle.jvmci.meta.ResolvedJavaMethod;
-import com.oracle.jvmci.meta.MethodIdMap;
-import com.oracle.jvmci.meta.MetaAccessProvider;
 import static java.lang.String.*;
 
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.jvmci.meta.MethodIdMap.MethodKey;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.graphbuilderconf.MethodIdMap.MethodKey;
+import com.oracle.graal.graphbuilderconf.MethodIdMap.Receiver;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -41,7 +39,7 @@ import com.oracle.graal.nodes.*;
  */
 public class InvocationPlugins {
 
-    public static class InvocationPluginReceiver implements InvocationPlugin.Receiver {
+    public static class InvocationPluginReceiver implements Receiver {
         private final GraphBuilderContext parser;
         private ValueNode[] args;
         private ValueNode value;
@@ -165,10 +163,7 @@ public class InvocationPlugins {
          *
          * @param substituteDeclaringClass the class declaring the substitute method
          * @param name the name of both the original and substitute method
-         * @param argumentTypes the argument types of the method. Element 0 of this array must be
-         *            the {@link Class} value for {@link InvocationPlugin.Receiver} iff the method
-         *            is non-static. Upon returning, element 0 will have been rewritten to
-         *            {@code declaringClass}
+         * @param argumentTypes the parameter types of the substitute
          */
         public void registerMethodSubstitution(Class<?> substituteDeclaringClass, String name, Class<?>... argumentTypes) {
             MethodSubstitutionPlugin plugin = new MethodSubstitutionPlugin(substituteDeclaringClass, name, argumentTypes);
@@ -208,18 +203,9 @@ public class InvocationPlugins {
     /**
      * Registers an invocation plugin for a given method. There must be no plugin currently
      * registered for {@code method}.
-     *
-     * @param argumentTypes the argument types of the method. Element 0 of this array must be the
-     *            {@link Class} value for {@link InvocationPlugin.Receiver} iff the method is
-     *            non-static. Upon returning, element 0 will have been rewritten to
-     *            {@code declaringClass}
      */
     public void register(InvocationPlugin plugin, Class<?> declaringClass, String name, Class<?>... argumentTypes) {
-        boolean isStatic = argumentTypes.length == 0 || argumentTypes[0] != InvocationPlugin.Receiver.class;
-        if (!isStatic) {
-            argumentTypes[0] = declaringClass;
-        }
-        MethodKey<InvocationPlugin> methodInfo = plugins.put(plugin, isStatic, declaringClass, name, argumentTypes);
+        MethodKey<InvocationPlugin> methodInfo = plugins.put(plugin, declaringClass, name, argumentTypes);
         assert Checker.check(this, methodInfo, plugin);
     }
 
@@ -238,14 +224,6 @@ public class InvocationPlugins {
             }
         }
         return plugins.get((MethodIdHolder) method);
-    }
-
-    /**
-     * Disallows new registrations of new plugins, and creates the internal tables for method
-     * lookup.
-     */
-    public void closeRegistration() {
-        plugins.createEntries();
     }
 
     /**
@@ -274,9 +252,8 @@ public class InvocationPlugins {
                     Class<?>[] sig = method.getParameterTypes();
                     assert sig[0] == GraphBuilderContext.class;
                     assert sig[1] == ResolvedJavaMethod.class;
-                    assert sig[2] == InvocationPlugin.Receiver.class;
-                    Class<?>[] sigTail = Arrays.copyOfRange(sig, 3, sig.length);
-                    assert Arrays.asList(sigTail).stream().allMatch(c -> c == ValueNode.class);
+                    assert sig[2] == Receiver.class;
+                    assert Arrays.asList(Arrays.copyOfRange(sig, 3, sig.length)).stream().allMatch(c -> c == ValueNode.class);
                     while (sigs.size() < sig.length - 2) {
                         sigs.add(null);
                     }
@@ -302,7 +279,7 @@ public class InvocationPlugins {
                 msplugin.getJavaSubstitute();
                 return true;
             }
-            int arguments = method.getDeclaredParameterCount();
+            int arguments = method.isStatic ? method.argumentTypes.length : method.argumentTypes.length - 1;
             assert arguments < SIGS.length : format("need to extend %s to support method with %d arguments: %s", InvocationPlugin.class.getSimpleName(), arguments, method);
             for (Method m : plugin.getClass().getDeclaredMethods()) {
                 if (m.getName().equals("apply")) {

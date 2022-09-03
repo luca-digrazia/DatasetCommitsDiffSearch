@@ -127,10 +127,6 @@ public abstract class GraalCompilerTest extends GraalTest {
     protected static void breakpoint() {
     }
 
-    @SuppressWarnings("unused")
-    protected static void breakpoint(int arg0) {
-    }
-
     protected Suites createSuites() {
         Suites ret = backend.getSuites().createSuites();
         ListIterator<BasePhase<? super HighTierContext>> iter = ret.getHighTier().findPhase(CleanTypeProfileProxyPhase.class);
@@ -436,8 +432,8 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     protected static class Result {
 
-        public final Object returnValue;
-        public final Throwable exception;
+        final Object returnValue;
+        final Throwable exception;
 
         public Result(Object returnValue, Throwable exception) {
             this.returnValue = returnValue;
@@ -856,12 +852,6 @@ public abstract class GraalCompilerTest extends GraalTest {
                 return true;
             }
         }, GraalCompilerTest.class, "breakpoint");
-        invocationPlugins.register(new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg0) {
-                b.add(new BreakpointNode(arg0));
-                return true;
-            }
-        }, GraalCompilerTest.class, "breakpoint", int.class);
         return conf;
     }
 

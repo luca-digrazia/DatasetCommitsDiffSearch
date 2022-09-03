@@ -62,11 +62,6 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
         this.originalIsStatic = parameters.length == 0 || parameters[0] != Receiver.class;
     }
 
-    public boolean inlineOnly() {
-        // Conservatively assume MacroNodes may be used in a substitution
-        return true;
-    }
-
     /**
      * Gets the substitute method, resolving it first if necessary.
      */
@@ -126,7 +121,8 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
                 return m;
             }
         }
-        throw new GraalInternalError("No method found specified by %s", this);
+        throw new GraalInternalError("No method found in %s compatible with \"%s(%s)\"", declaringClass.getName(), name, Arrays.asList(parameters).stream().map(c -> c.getSimpleName()).collect(
+                        Collectors.joining(", ")));
     }
 
     /**
@@ -168,11 +164,5 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
             }
         }
         throw new GraalInternalError("could not find method named \"execute\" in " + c.getName());
-    }
-
-    @Override
-    public String toString() {
-        return String.format("%s[%s.%s(%s)]", getClass().getSimpleName(), declaringClass.getName(), name,
-                        Arrays.asList(parameters).stream().map(c -> c.getSimpleName()).collect(Collectors.joining(", ")));
     }
 }

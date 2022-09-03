@@ -45,18 +45,16 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
     private final StampProvider stampProvider;
     private final StructuredGraph graph;
     private final ResolvedJavaMethod method;
-    private final int invokeBci;
     private FixedWithNextNode lastInstr;
     private ValueNode[] arguments;
     private ValueNode returnValue;
 
-    public IntrinsicGraphBuilder(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, StampProvider stampProvider, ResolvedJavaMethod method, int invokeBci) {
+    public IntrinsicGraphBuilder(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, StampProvider stampProvider, ResolvedJavaMethod method) {
         this.metaAccess = metaAccess;
         this.constantReflection = constantReflection;
         this.stampProvider = stampProvider;
         this.graph = new StructuredGraph(method, AllowAssumptions.YES);
         this.method = method;
-        this.invokeBci = invokeBci;
         this.lastInstr = graph.start();
 
         Signature sig = method.getSignature();
@@ -165,7 +163,7 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
     }
 
     public int bci() {
-        return invokeBci;
+        return -1;
     }
 
     public InvokeKind getInvokeKind() {
