@@ -130,12 +130,6 @@ public final class ProbeNode extends Node {
         }
     }
 
-    /**
-     * Creates a shallow copy of this node.
-     *
-     * @return the new copy
-     * @since 0.31
-     */
     @Override
     public Node copy() {
         ProbeNode pn = (ProbeNode) super.copy();
