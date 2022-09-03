@@ -103,15 +103,14 @@ public abstract class TruffleCompiler {
 
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
 
-        boolean needSourcePositions = graalTruffleRuntime.enableInfopoints() || TruffleCompilerOptions.TruffleInstrumentBranches.getValue() ||
-                        TruffleCompilerOptions.TruffleInstrumentBoundaries.getValue();
+        boolean needSourcePositions = graalTruffleRuntime.enableInfopoints() || TruffleCompilerOptions.TruffleInstrumentBranches.getValue();
         GraphBuilderConfiguration baseConfig = GraphBuilderConfiguration.getDefault(new Plugins(plugins)).withNodeSourcePosition(needSourcePositions);
         this.config = baseConfig.withSkippedExceptionTypes(skippedExceptionTypes).withOmitAssertions(TruffleCompilerOptions.TruffleExcludeAssertions.getValue());
 
         this.partialEvaluator = createPartialEvaluator();
 
         if (Debug.isEnabled()) {
-            DebugEnvironment.ensureInitialized(graalTruffleRuntime.getRequiredGraalCapability(SnippetReflectionProvider.class));
+            DebugEnvironment.initialize(System.out, graalTruffleRuntime.getRequiredGraalCapability(SnippetReflectionProvider.class));
         }
 
         graalTruffleRuntime.reinstallStubs();
