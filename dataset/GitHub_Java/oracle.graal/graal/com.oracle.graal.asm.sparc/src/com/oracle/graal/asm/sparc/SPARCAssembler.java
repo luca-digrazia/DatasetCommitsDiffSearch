@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 20txa", "15, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,133 +22,22 @@
  */
 package com.oracle.graal.asm.sparc;
 
-import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Icc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Always;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Add;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Addc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Addcc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.And;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Andcc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Andn;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Andncc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Casa;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Casxa;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Fcmp;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Flushw;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Fpop1;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Fpop2;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Impdep1;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Jmpl;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Lddf;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Ldf;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Ldsb;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Ldsh;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Ldsw;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Ldub;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Lduh;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Lduw;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Lduwa;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Ldx;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Ldxa;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Membar;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Movcc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Mulx;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Or;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Popc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Prefetch;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Rd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Restore;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Save;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Sdivx;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Sll;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Sllx;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Sra;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Srax;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Srl;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Srlx;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Stb;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Stdf;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Stf;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Sth;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Stw;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Stx;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Stxa;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Sub;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Subcc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Udivx;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Wr;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Xnor;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Xor;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Xorcc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fabsd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fabss;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Faddd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Faddq;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fadds;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fandd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fdivd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fdivs;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fdtoi;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fdtos;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fdtox;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fitod;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fitos;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fmovd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fmovdcc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fmovs;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fmovscc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fmuld;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fmuls;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fnegd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fnegs;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fpadd32;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fsmuld;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fsqrtd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fsqrts;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fsrc2d;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fsrc2s;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fstod;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fstoi;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fstox;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fsubd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fsubs;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fxtod;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fxtos;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fzerod;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fzeros;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Movdtox;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Movstosw;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Movwtos;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Movxtod;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.UMulxhi;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Ops.ArithOp;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Ops.LdstOp;
-import static java.lang.String.format;
-import static jdk.internal.jvmci.sparc.SPARC.INSTRUCTION_SIZE;
-import static jdk.internal.jvmci.sparc.SPARC.g0;
-import static jdk.internal.jvmci.sparc.SPARC.isCPURegister;
-import static jdk.internal.jvmci.sparc.SPARC.isDoubleFloatRegister;
-import static jdk.internal.jvmci.sparc.SPARC.isSingleFloatRegister;
-import static jdk.internal.jvmci.sparc.SPARC.r15;
-import static jdk.internal.jvmci.sparc.SPARC.r2;
-import static jdk.internal.jvmci.sparc.SPARC.r5;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Ops.*;
+import static java.lang.String.*;
+import static jdk.internal.jvmci.sparc.SPARC.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.code.RegisterConfig;
-import jdk.internal.jvmci.code.TargetDescription;
-import jdk.internal.jvmci.meta.JavaConstant;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.sparc.SPARC;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.sparc.*;
 import jdk.internal.jvmci.sparc.SPARC.CPUFeature;
 
-import com.oracle.graal.asm.Assembler;
-import com.oracle.graal.asm.Label;
-import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.asm.*;
 
 /**
  * This class implements an assembler that can encode most SPARC instructions.
@@ -682,10 +571,10 @@ public abstract class SPARCAssembler extends Assembler {
             return operator;
         }
 
-        public static CC forKind(JavaKind kind) {
-            boolean isInt = kind == JavaKind.Boolean || kind == JavaKind.Byte || kind == JavaKind.Char || kind == JavaKind.Short || kind == JavaKind.Int;
-            boolean isFloat = kind == JavaKind.Float || kind == JavaKind.Double;
-            boolean isLong = kind == JavaKind.Long || kind == JavaKind.Object;
+        public static CC forKind(Kind kind) {
+            boolean isInt = kind == Kind.Boolean || kind == Kind.Byte || kind == Kind.Char || kind == Kind.Short || kind == Kind.Int;
+            boolean isFloat = kind == Kind.Float || kind == Kind.Double;
+            boolean isLong = kind == Kind.Long || kind == Kind.Object;
             assert isInt || isFloat || isLong;
             if (isLong) {
                 return Xcc;
@@ -1554,7 +1443,7 @@ public abstract class SPARCAssembler extends Assembler {
 
     public static boolean isSimm13(JavaConstant constant) {
         long bits;
-        switch (constant.getJavaKind()) {
+        switch (constant.getKind()) {
             case Double:
                 bits = Double.doubleToRawLongBits(constant.asDouble());
                 break;
@@ -1562,7 +1451,7 @@ public abstract class SPARCAssembler extends Assembler {
                 bits = Float.floatToRawIntBits(constant.asFloat());
                 break;
             case Object:
-                return constant.isNull();
+                return JavaConstant.NULL_POINTER.equals(constant);
             default:
                 bits = constant.asLong();
                 break;
