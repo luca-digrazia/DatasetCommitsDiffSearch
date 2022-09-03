@@ -28,7 +28,7 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.common.*;
 
 /**
  * Compiler phase for intrinsifying the access to the Truffle virtual frame.
@@ -49,12 +49,12 @@ public class ReplaceIntrinsicsPhase extends Phase {
                 if (invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special) {
                     Class<? extends FixedWithNextNode> macroSubstitution = replacements.getMacroSubstitution(methodCallTarget.targetMethod());
                     if (macroSubstitution != null) {
-                        InliningUtil.inlineMacroNode(methodCallTarget.invoke(), methodCallTarget.targetMethod(), macroSubstitution);
+                        InliningUtil.inlineMacroNode(methodCallTarget.invoke(), methodCallTarget.targetMethod(), graph, macroSubstitution);
                         Debug.dump(graph, "After inlining %s", methodCallTarget.targetMethod().toString());
                     } else {
                         StructuredGraph inlineGraph = replacements.getMethodSubstitution(methodCallTarget.targetMethod());
                         if (inlineGraph != null) {
-                            InliningUtil.inline(methodCallTarget.invoke(), inlineGraph, true, null);
+                            InliningUtil.inline(methodCallTarget.invoke(), inlineGraph, true);
                             Debug.dump(graph, "After inlining %s", methodCallTarget.targetMethod().toString());
                         }
                     }
