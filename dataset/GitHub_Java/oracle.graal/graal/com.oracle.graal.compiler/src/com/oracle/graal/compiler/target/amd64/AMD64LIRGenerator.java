@@ -31,14 +31,12 @@ import java.util.*;
 
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ci.CiTargetMethod.Mark;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.cri.xir.CiXirAssembler.XirMark;
 import com.oracle.max.cri.xir.*;
 import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
@@ -97,15 +95,15 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
-    public AMD64LIRGenerator(Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir, CiAssumptions assumptions) {
-        super(graph, runtime, target, frameMap, method, lir, xir, assumptions);
+    public AMD64LIRGenerator(Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
+        super(graph, runtime, target, frameMap, method, lir, xir);
         lir.spillMoveFactory = new AMD64SpillMoveFactory();
     }
 
     @Override
     protected void emitNode(ValueNode node) {
-        if (node instanceof LIRGenLowerable) {
-            ((LIRGenLowerable) node).generate(this);
+        if (node instanceof AMD64LIRLowerable) {
+            ((AMD64LIRLowerable) node).generateAmd64(this);
         } else {
             super.emitNode(node);
         }
@@ -340,7 +338,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public CiValue emitRem(CiValue a, CiValue b) {
+    public Variable emitRem(CiValue a, CiValue b) {
         switch(a.kind) {
             case Int:
                 emitMove(a, RAX_I);
@@ -351,9 +349,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
                 append(new DivOp(LREM, RDX_L, RAX_L, load(b), state()));
                 return emitMove(RDX_L);
             case Float:
-                return emitCall(CiRuntimeCall.ArithmeticFrem, false, a, b);
+                return emitCallToRuntime(CiRuntimeCall.ArithmeticFrem, false, a, b);
             case Double:
-                return emitCall(CiRuntimeCall.ArithmeticDrem, false, a, b);
+                return emitCallToRuntime(CiRuntimeCall.ArithmeticDrem, false, a, b);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
@@ -500,10 +498,11 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
 
     @Override
-    public void emitDeoptimizeOnOverflow(RiDeoptAction action, RiDeoptReason reason, Object deoptInfo) {
+    public void emitDeoptimizeOn(Condition cond, RiDeoptAction action, RiDeoptReason reason, Object deoptInfo) {
+        assert cond != null;
         LIRDebugInfo info = state();
         LabelRef stubEntry = createDeoptStub(action, reason, info, deoptInfo);
-        append(new BranchOp(ConditionFlag.overflow, stubEntry, info));
+        append(new BranchOp(cond, stubEntry, info));
     }
 
 

@@ -24,12 +24,11 @@ package com.oracle.graal.lir;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.cfg.*;
-import com.oracle.graal.nodes.*;
 
 /**
  * This class implements the overall container for the LIR graph
@@ -43,7 +42,7 @@ public class LIR {
      * The nodes for the blocks.
      * TODO: This should go away, we want all nodes connected with a next-pointer.
      */
-    private final BlockMap<List<ScheduledNode>> blockToNodesMap;
+    private final BlockMap<List<Node>> blockToNodesMap;
 
     /**
      * The linear-scan ordered list of blocks.
@@ -66,8 +65,8 @@ public class LIR {
     public SpillMoveFactory spillMoveFactory;
 
     public interface SpillMoveFactory {
-        LIRInstruction createMove(Value result, Value input);
-        LIRInstruction createExchange(Value input1, Value input2);
+        LIRInstruction createMove(CiValue result, CiValue input);
+        LIRInstruction createExchange(CiValue input1, CiValue input2);
     }
 
     private boolean hasArgInCallerFrame;
@@ -88,7 +87,7 @@ public class LIR {
      * @param numLoops number of loops
      * @param compilation the compilation
      */
-    public LIR(ControlFlowGraph cfg, BlockMap<List<ScheduledNode>> blockToNodesMap, List<Block> linearScanOrder, List<Block> codeEmittingOrder) {
+    public LIR(ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodesMap, List<Block> linearScanOrder, List<Block> codeEmittingOrder) {
         this.cfg = cfg;
         this.blockToNodesMap = blockToNodesMap;
         this.codeEmittingOrder = codeEmittingOrder;
@@ -100,7 +99,7 @@ public class LIR {
     /**
      * Gets the nodes in a given block.
      */
-    public List<ScheduledNode> nodesFor(Block block) {
+    public List<Node> nodesFor(Block block) {
         return blockToNodesMap.get(block);
     }
 
