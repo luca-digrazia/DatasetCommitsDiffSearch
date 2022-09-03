@@ -50,12 +50,12 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMThread;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 import sun.misc.Signal;
 import sun.misc.SignalHandler;
@@ -64,13 +64,13 @@ import sun.misc.SignalHandler;
 public abstract class LLVMSignal extends LLVMExpressionNode {
 
     @Specialization
-    protected LLVMNativePointer doSignal(int signal, Object handler,
+    protected LLVMAddress doSignal(int signal, Object handler,
                     @Cached("getContextReference()") ContextReference<LLVMContext> context,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
         return setSignalHandler(context.get(), signal, toNative.executeWithTarget(handler));
     }
 
-    private static LLVMNativePointer setSignalHandler(LLVMContext context, int signalId, LLVMNativePointer function) {
+    private static LLVMAddress setSignalHandler(LLVMContext context, int signalId, LLVMAddress function) {
         try {
             Signals decodedSignal = Signals.decode(signalId);
             return setSignalHandler(context, decodedSignal.signal(), function);
@@ -91,9 +91,9 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
     }
 
     @TruffleBoundary
-    private static LLVMNativePointer setSignalHandler(LLVMContext context, Signal signal, LLVMNativePointer function) {
+    private static LLVMAddress setSignalHandler(LLVMContext context, Signal signal, LLVMAddress function) {
         int signalId = signal.getNumber();
-        LLVMNativePointer returnFunction = context.getSigDfl();
+        LLVMAddress returnFunction = context.getSigDfl();
 
         try {
             LLVMSignalHandler newSignalHandler = new LLVMSignalHandler(context, signal, function);
@@ -116,6 +116,7 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
                 registeredSignals.put(signalId, newSignalHandler);
             }
         } catch (IllegalArgumentException e) {
+            System.err.println("could not register signal with id " + signalId + " (" + signal + ")");
             return context.getSigErr();
         }
 
@@ -141,22 +142,22 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
 
         private final Signal signal;
         private final LLVMContext context;
-        private final LLVMNativePointer handler;
+        private final LLVMAddress handler;
 
         private final Lock lock = new ReentrantLock();
         private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
         @TruffleBoundary
-        private LLVMSignalHandler(LLVMContext context, Signal signal, LLVMNativePointer function) throws IllegalArgumentException {
+        private LLVMSignalHandler(LLVMContext context, Signal signal, LLVMAddress function) throws IllegalArgumentException {
             this.signal = signal;
             this.context = context;
 
             lock.lock();
             try {
-                if (function.asNative() == context.getSigDfl().asNative()) {
+                if (function.getVal() == context.getSigDfl().getVal()) {
                     this.handler = function;
                     Signal.handle(signal, SignalHandler.SIG_DFL);
-                } else if (function.asNative() == context.getSigIgn().asNative()) {
+                } else if (function.getVal() == context.getSigIgn().getVal()) {
                     this.handler = function;
                     Signal.handle(signal, SignalHandler.SIG_IGN);
                 } else {
@@ -173,7 +174,7 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
             }
         }
 
-        public LLVMNativePointer getFunction() {
+        public LLVMAddress getFunction() {
             return handler;
         }
 
