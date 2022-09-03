@@ -30,10 +30,6 @@ public class LitePalDB {
      */
     private List<String> classNames;
 
-    public static void fromDefault(String dbName) {
-
-    }
-
     public LitePalDB(String dbName, int version) {
         this.dbName = dbName;
         this.version = version;
@@ -70,7 +66,7 @@ public class LitePalDB {
      */
     public List<String> getClassNames() {
         if (classNames == null) {
-            classNames = new ArrayList<>();
+            classNames = new ArrayList<String>();
             classNames.add("org.litepal.model.Table_Schema");
         } else if (classNames.isEmpty()) {
             classNames.add("org.litepal.model.Table_Schema");

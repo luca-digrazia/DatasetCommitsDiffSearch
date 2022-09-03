@@ -1,13 +1,6 @@
 package org.litepal;
 
 import android.content.Context;
-import android.database.sqlite.SQLiteDatabase;
-import android.text.TextUtils;
-
-import org.litepal.parser.LitePalAttr;
-import org.litepal.tablemanager.Connector;
-
-import java.util.List;
 
 /**
  * @author Tony Green
@@ -28,26 +21,12 @@ public class LitePal {
         LitePalApplication.sContext = context;
     }
 
-    /**
-     * Get a writable SQLiteDatabase.
-     *
-     * @return A writable SQLiteDatabase instance
-     */
-    public static SQLiteDatabase getDatabase() {
-        return Connector.getDatabase();
-    }
-
     public static void use(LitePalDB litePalDB) {
-        LitePalAttr litePalAttr = LitePalAttr.getInstance();
-        litePalAttr.setDbName(litePalDB.getDbName());
-        litePalAttr.setVersion(litePalDB.getVersion());
-        litePalAttr.setStorage(litePalDB.isExternalStorage() ? "external" : "internal");
-        litePalAttr.setClassNames(litePalDB.getClassNames());
-        litePalAttr.setCases("lower");
+
     }
 
-    public static void useDefault() {
-        LitePalAttr.cleanInstance();
+    public static void useLitePalXML() {
+
     }
 
 }
