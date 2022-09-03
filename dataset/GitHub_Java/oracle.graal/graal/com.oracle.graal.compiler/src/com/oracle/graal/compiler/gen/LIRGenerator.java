@@ -373,20 +373,12 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                 stateAfter = ((StateSplit) instr).stateAfter();
             }
             if (instr instanceof ValueNode) {
-
-                ValueNode valueNode = (ValueNode) instr;
-                if (operand(valueNode) == null) {
-                    if (!peephole(valueNode)) {
-                        try {
-                            doRoot((ValueNode) instr);
-                        } catch (GraalInternalError e) {
-                            throw e.addContext(instr);
-                        } catch (Throwable e) {
-                            throw new GraalInternalError(e).addContext(instr);
-                        }
-                    }
-                } else {
-                    // There can be cases in which the result of an instruction is already set before by other instructions.
+                try {
+                    doRoot((ValueNode) instr);
+                } catch (GraalInternalError e) {
+                    throw e.addContext(instr);
+                } catch (Throwable e) {
+                    throw new GraalInternalError(e).addContext(instr);
                 }
             }
             if (stateAfter != null) {
@@ -423,8 +415,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             TTY.println();
         }
     }
-
-    protected abstract boolean peephole(ValueNode valueNode);
 
     private boolean checkStateReady(FrameState state) {
         FrameState fs = state;
