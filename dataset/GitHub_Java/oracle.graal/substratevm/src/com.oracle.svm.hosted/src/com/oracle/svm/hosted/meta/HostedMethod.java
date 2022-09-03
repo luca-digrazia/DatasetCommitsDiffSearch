@@ -78,7 +78,6 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
      */
     private int codeAddressOffset;
     private boolean codeAddressOffsetValid;
-    private boolean compiled;
 
     /**
      * All concrete methods that can actually be called when calling this method. This includes all
@@ -125,7 +124,6 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
     }
 
     public void setCodeAddressOffset(int address) {
-        assert isCompiled();
         codeAddressOffset = address;
         codeAddressOffsetValid = true;
     }
@@ -143,14 +141,6 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
 
     public boolean isCodeAddressOffsetValid() {
         return codeAddressOffsetValid;
-    }
-
-    public void setCompiled() {
-        this.compiled = true;
-    }
-
-    public boolean isCompiled() {
-        return compiled;
     }
 
     /*
