@@ -64,9 +64,8 @@ public class VMToCompilerImpl implements VMToCompiler {
     private static final OptionValue<Boolean> PrintQueue = new OptionValue<>(false);
 
     @Option(help = "Interval in milliseconds at which to print compilation rate periodically. " +
-                   "The compilation statistics are reset after each print out so this option " +
-                   "is incompatible with -XX:+CITime and -XX:+CITimeEach.")
-    public static final OptionValue<Integer> PrintCompRate = new OptionValue<>(0);
+                   "The compilation statistics are reset after each print out.")
+    private static final OptionValue<Integer> PrintCompRate = new OptionValue<>(0);
 
     @Option(help = "Print bootstrap progress and summary")
     private static final OptionValue<Boolean> PrintBootstrap = new OptionValue<>(true);
@@ -184,25 +183,26 @@ public class VMToCompilerImpl implements VMToCompiler {
         }
 
         if (PrintCompRate.getValue() != 0) {
-            if (runtime.getConfig().ciTime || runtime.getConfig().ciTimeEach) {
-                throw new GraalInternalError("PrintCompRate is incompatible with CITime and CITimeEach");
-            }
-            Thread t = new Thread() {
+            if (!runtime.getConfig().ciTime && !runtime.getConfig().ciTimeEach) {
+                TTY.println("PrintCompRate requires CITime or CITimeEach");
+            } else {
+                Thread t = new Thread() {
 
-                @Override
-                public void run() {
-                    while (true) {
-                        runtime.getCompilerToVM().printCompilationStatistics(true, false);
-                        runtime.getCompilerToVM().resetCompilationStatistics();
-                        try {
-                            Thread.sleep(PrintCompRate.getValue());
-                        } catch (InterruptedException e) {
+                    @Override
+                    public void run() {
+                        while (true) {
+                            runtime.getCompilerToVM().printCompilationStatistics(true, false);
+                            runtime.getCompilerToVM().resetCompilationStatistics();
+                            try {
+                                Thread.sleep(PrintCompRate.getValue());
+                            } catch (InterruptedException e) {
+                            }
                         }
                     }
-                }
-            };
-            t.setDaemon(true);
-            t.start();
+                };
+                t.setDaemon(true);
+                t.start();
+            }
         }
 
         BenchmarkCounters.initialize(runtime.getCompilerToVM());
@@ -673,8 +673,15 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public ResolvedJavaType createResolvedJavaType(Class javaMirror) {
-        return HotSpotResolvedObjectType.fromClass(javaMirror);
+    public HotSpotResolvedObjectType createResolvedJavaType(long metaspaceKlass, String name, String simpleName, Class javaMirror, int sizeOrSpecies) {
+        HotSpotResolvedObjectType type = new HotSpotResolvedObjectType(metaspaceKlass, name, simpleName, javaMirror, sizeOrSpecies);
+
+        long offset = runtime().getConfig().graalMirrorInClassOffset;
+        if (!unsafe.compareAndSwapObject(javaMirror, offset, null, type)) {
+            // lost the race - return the existing value instead
+            type = (HotSpotResolvedObjectType) unsafe.getObject(javaMirror, offset);
+        }
+        return type;
     }
 
     @Override
