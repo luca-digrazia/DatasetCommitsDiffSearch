@@ -27,6 +27,8 @@ import static com.oracle.max.cri.ci.CiValueUtil.*;
 import static com.oracle.max.graal.compiler.target.amd64.AMD64ArithmeticOpcode.*;
 import static com.oracle.max.graal.compiler.target.amd64.AMD64CompareOpcode.*;
 import static com.oracle.max.graal.compiler.target.amd64.AMD64CompareToIntOpcode.*;
+import static com.oracle.max.graal.compiler.target.amd64.AMD64ConvertFIOpcode.*;
+import static com.oracle.max.graal.compiler.target.amd64.AMD64ConvertFLOpcode.*;
 import static com.oracle.max.graal.compiler.target.amd64.AMD64ConvertOpcode.*;
 import static com.oracle.max.graal.compiler.target.amd64.AMD64DivOpcode.*;
 import static com.oracle.max.graal.compiler.target.amd64.AMD64LogicFloatOpcode.*;
@@ -38,17 +40,15 @@ import static com.oracle.max.graal.compiler.target.amd64.AMD64StandardOpcode.*;
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.cri.xir.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.lir.*;
+import com.oracle.max.graal.compiler.stub.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.calc.*;
-import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.java.*;
 
 /**
@@ -73,8 +73,8 @@ public class AMD64LIRGenerator extends LIRGenerator {
         StandardOpcode.XIR = AMD64XirOpcode.XIR;
     }
 
-    public AMD64LIRGenerator(GraalContext context, Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
-        super(context, graph, runtime, target, frameMap, method, lir, xir);
+    public AMD64LIRGenerator(GraalCompilation compilation, RiXirGenerator xir) {
+        super(compilation, xir);
         lir.methodEndMarker = new AMD64MethodEndStub();
     }
 
@@ -107,39 +107,6 @@ public class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
-    @Override
-    public CiAddress makeAddress(LocationNode location, ValueNode object) {
-        CiValue base = operand(object);
-        CiValue index = CiValue.IllegalValue;
-        int scale = 1;
-        long displacement = location.displacement();
-
-        if (isConstant(base)) {
-            if (!asConstant(base).isNull()) {
-                displacement += asConstant(base).asLong();
-            }
-            base = CiValue.IllegalValue;
-        }
-
-        if (location instanceof IndexedLocationNode) {
-            IndexedLocationNode indexedLoc = (IndexedLocationNode) location;
-
-            index = operand(indexedLoc.index());
-            if (indexedLoc.indexScalingEnabled()) {
-                scale = target().sizeInBytes(location.getValueKind());
-            }
-            if (isConstant(index)) {
-                displacement += asConstant(index).asLong() * scale;
-                index = CiValue.IllegalValue;
-            }
-        }
-
-        if (!NumUtil.isInt(displacement)) {
-            // Currently it's not worth handling this case.
-            throw new CiBailout("integer overflow when computing constant displacement");
-        }
-        return new CiAddress(location.getValueKind(), base, index, CiAddress.Scale.fromInt(scale), (int) displacement);
-    }
 
     @Override
     public Variable emitMove(CiValue input) {
@@ -154,22 +121,29 @@ public class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitLoad(CiValue loadAddress, boolean canTrap) {
-        Variable result = newVariable(loadAddress.kind);
-        append(LOAD.create(result, loadAddress, canTrap ? state() : null));
+    public Variable emitLoad(CiAddress loadAddress, CiKind kind, boolean canTrap) {
+        Variable result = newVariable(kind);
+        append(LOAD.create(result, loadAddress.base, loadAddress.index, loadAddress.scale, loadAddress.displacement, kind, canTrap ? state() : null));
         return result;
     }
 
     @Override
-    public void emitStore(CiValue storeAddress, CiValue inputVal, boolean canTrap) {
-        CiValue input = loadForStore(inputVal, storeAddress.kind);
-        append(STORE.create(storeAddress, input, canTrap ? state() : null));
+    public void emitStore(CiAddress storeAddress, CiValue inputVal, CiKind kind, boolean canTrap) {
+        CiValue input = loadForStore(inputVal, kind);
+        append(STORE.create(storeAddress.base, storeAddress.index, storeAddress.scale, storeAddress.displacement, input, kind, canTrap ? state() : null));
     }
 
     @Override
-    public Variable emitLea(CiValue address) {
+    public Variable emitLea(CiAddress address) {
         Variable result = newVariable(target().wordKind);
-        append(LEA.create(result, address));
+        append(LEA_MEMORY.create(result, address.base, address.index, address.scale, address.displacement));
+        return result;
+    }
+
+    @Override
+    public Variable emitLea(CiStackSlot address) {
+        Variable result = newVariable(target().wordKind);
+        append(LEA_STACK.create(result, address));
         return result;
     }
 
@@ -450,12 +424,12 @@ public class AMD64LIRGenerator extends LIRGenerator {
             case D2F: append(D2F.create(result, input)); break;
             case I2F: append(I2F.create(result, input)); break;
             case I2D: append(I2D.create(result, input)); break;
-            case F2I: append(F2I.create(result, input)); break;
-            case D2I: append(D2I.create(result, input)); break;
+            case F2I: append(F2I.create(result, stubFor(CompilerStub.Id.f2i), input)); break;
+            case D2I: append(D2I.create(result, stubFor(CompilerStub.Id.d2i), input)); break;
             case L2F: append(L2F.create(result, input)); break;
             case L2D: append(L2D.create(result, input)); break;
-            case F2L: append(F2L.create(result, input)); break;
-            case D2L: append(D2L.create(result, input)); break;
+            case F2L: append(F2L.create(result, stubFor(CompilerStub.Id.f2l), input, newVariable(CiKind.Long))); break;
+            case D2L: append(D2L.create(result, stubFor(CompilerStub.Id.d2l), input, newVariable(CiKind.Long))); break;
             case MOV_I2F: append(MOV_I2F.create(result, input)); break;
             case MOV_L2D: append(MOV_L2D.create(result, input)); break;
             case MOV_F2I: append(MOV_F2I.create(result, input)); break;
@@ -479,8 +453,8 @@ public class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public void emitMembar(int barriers) {
-        int necessaryBarriers = target.arch.requiredBarriers(barriers);
-        if (target.isMP && necessaryBarriers != 0) {
+        int necessaryBarriers = compilation.compiler.target.arch.requiredBarriers(barriers);
+        if (compilation.compiler.target.isMP && necessaryBarriers != 0) {
             append(MEMBAR.create(necessaryBarriers));
         }
     }
@@ -489,7 +463,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
     protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, CiValue index) {
         // Making a copy of the switch value is necessary because jump table destroys the input value
         Variable tmp = emitMove(index);
-        append(TABLE_SWITCH.create(lowKey, defaultTarget, targets, tmp, newVariable(target.wordKind)));
+        append(TABLE_SWITCH.create(lowKey, defaultTarget, targets, tmp, newVariable(compilation.compiler.target.wordKind)));
     }
 
     @Override
@@ -511,23 +485,29 @@ public class AMD64LIRGenerator extends LIRGenerator {
 
         CiValue expected = loadNonConst(operand(node.expected()));
         Variable newValue = load(operand(node.newValue()));
-
-        CiAddress address;
-        CiValue index = operand(node.offset());
-        if (isConstant(index) && NumUtil.isInt(asConstant(index).asLong())) {
-            address = new CiAddress(kind, load(operand(node.object())), (int) asConstant(index).asLong());
+        Variable addrBase = load(operand(node.object()));
+        CiValue addrIndex = operand(node.offset());
+        int addrDisplacement = 0;
+        if (isConstant(addrIndex) && NumUtil.isInt(asConstant(addrIndex).asLong())) {
+            addrDisplacement = (int) asConstant(addrIndex).asLong();
+            addrIndex = CiValue.IllegalValue;
         } else {
-            address = new CiAddress(kind, load(operand(node.object())), load(index), CiAddress.Scale.Times1, 0);
+            addrIndex = load(addrIndex);
         }
 
         if (kind == CiKind.Object) {
-            address = new CiAddress(kind, emitLea(address));
-            preGCWriteBarrier(address.base, false, null);
+            Variable loadedAddress = newVariable(compilation.compiler.target.wordKind);
+            append(LEA_MEMORY.create(loadedAddress, addrBase, addrIndex, CiAddress.Scale.Times1, addrDisplacement));
+            preGCWriteBarrier(loadedAddress, false, null);
+
+            addrBase = loadedAddress;
+            addrIndex = Variable.IllegalValue;
+            addrDisplacement = 0;
         }
 
         CiRegisterValue rax = AMD64.rax.asValue(kind);
         append(MOVE.create(rax, expected));
-        append(CAS.create(rax, address, rax, newValue));
+        append(CAS.create(rax, addrBase, addrIndex, CiAddress.Scale.Times1, addrDisplacement, rax, newValue));
 
         Variable result = newVariable(node.kind());
         if (node.directResult()) {
@@ -538,7 +518,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
         setResult(node, result);
 
         if (kind == CiKind.Object) {
-            postGCWriteBarrier(address.base, newValue);
+            postGCWriteBarrier(addrBase, newValue);
         }
     }
 

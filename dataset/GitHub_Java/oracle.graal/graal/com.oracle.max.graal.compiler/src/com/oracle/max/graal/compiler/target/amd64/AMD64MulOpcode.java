@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,53 +22,59 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
+import static com.oracle.max.cri.ci.CiValueUtil.*;
+
+import java.util.*;
+
 import com.oracle.max.asm.target.amd64.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.sun.cri.ci.*;
 
 public enum AMD64MulOpcode implements LIROpcode {
     IMUL, LMUL;
 
-    public LIRInstruction create(CiVariable result, CiValue left, CiValue right) {
-        CiValue[] inputs = new CiValue[] {left};
-        CiValue[] alives = new CiValue[] {right};
+    public LIRInstruction create(CiValue result, CiValue x, CiValue y) {
+        CiValue[] inputs = new CiValue[] {x};
+        CiValue[] alives = new CiValue[] {y};
+        CiValue[] outputs = new CiValue[] {result};
 
-        return new AMD64LIRInstruction(this, result, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
+        return new AMD64LIRInstruction(this, outputs, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                CiValue left = input(0);
-                CiValue right = alive(0);
-                assert !(right instanceof CiRegisterValue) || tasm.asRegister(result()) != tasm.asRegister(right) : "result and right must be different registers";
-                AMD64MoveOpcode.move(tasm, masm, result(), left);
-                emit(tasm, masm, result(), right);
+                emit(tasm, masm, output(0), input(0), alive(0));
             }
 
             @Override
-            public boolean inputCanBeMemory(int index) {
-                return index == 0;
-            }
-
-            @Override
-            public CiValue registerHint() {
-                return input(0);
+            public EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+                if (mode == OperandMode.Input && index == 0) {
+                    return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+                } else if (mode == OperandMode.Alive && index == 0) {
+                    return EnumSet.of(OperandFlag.Register, OperandFlag.Constant);
+                } else if (mode == OperandMode.Output && index == 0) {
+                    return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
+                }
+                return super.flagsFor(mode, index);
             }
         };
     }
 
-    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue leftAndResult, CiValue right) {
-        CiRegister dst = tasm.asRegister(leftAndResult);
-        if (right.isRegister()) {
+    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue x, CiValue y) {
+        assert sameRegister(x, y) || differentRegisters(result, y);
+        AMD64MoveOpcode.move(tasm, masm, result, x);
+
+        CiRegister dst = asRegister(result);
+        if (isRegister(y)) {
             switch (this) {
-                case IMUL: masm.imull(dst, tasm.asRegister(right)); break;
-                case LMUL: masm.imulq(dst, tasm.asRegister(right)); break;
+                case IMUL: masm.imull(dst, asRegister(y)); break;
+                case LMUL: masm.imulq(dst, asRegister(y)); break;
                 default:   throw Util.shouldNotReachHere();
             }
         } else {
             switch (this) {
-                case IMUL: masm.imull(dst, dst, tasm.asIntConst(right)); break;
-                case LMUL: masm.imulq(dst, dst, tasm.asIntConst(right)); break;
+                case IMUL: masm.imull(dst, dst, tasm.asIntConst(y)); break;
+                case LMUL: masm.imulq(dst, dst, tasm.asIntConst(y)); break;
                 default:   throw Util.shouldNotReachHere();
             }
         }

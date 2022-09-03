@@ -63,16 +63,6 @@ public class CiValueUtil {
         return (CiStackSlot) value;
     }
 
-    public static boolean isAddress(CiValue value) {
-        assert value != null;
-        return value instanceof CiAddress;
-    }
-
-    public static CiAddress asAddress(CiValue value) {
-        assert value != null;
-        return (CiAddress) value;
-    }
-
 
     public static boolean isRegister(CiValue value) {
         assert value != null;

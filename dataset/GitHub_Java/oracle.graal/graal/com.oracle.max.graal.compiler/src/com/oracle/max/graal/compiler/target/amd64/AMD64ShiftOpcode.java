@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,65 +22,73 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
+import static com.oracle.max.cri.ci.CiValueUtil.*;
+
+import java.util.*;
+
 import com.oracle.max.asm.target.amd64.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.sun.cri.ci.*;
 
 public enum AMD64ShiftOpcode implements LIROpcode {
-    ISHL, ISHR, UISHR,
-    LSHL, LSHR, ULSHR;
+    ISHL, ISHR, IUSHR,
+    LSHL, LSHR, LUSHR;
 
-    public LIRInstruction create(CiVariable result, CiValue left, CiValue right) {
-        CiValue[] inputs = new CiValue[] {left};
-        CiValue[] alives = new CiValue[] {right};
+    public LIRInstruction create(CiValue result, CiValue x, CiValue y) {
+        CiValue[] inputs = new CiValue[] {x};
+        CiValue[] alives = new CiValue[] {y};
+        CiValue[] outputs = new CiValue[] {result};
 
-        return new AMD64LIRInstruction(this, result, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
+        return new AMD64LIRInstruction(this, outputs, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                CiValue left = input(0);
-                CiValue right = alive(0);
-                assert !(right instanceof CiRegisterValue) || tasm.asRegister(result()) != tasm.asRegister(right) : "result and right must be different registers";
-                AMD64MoveOpcode.move(tasm, masm, result(), left);
-                emit(tasm, masm, result(), right);
+                emit(tasm, masm, output(0), input(0), alive(0));
             }
 
             @Override
-            public boolean inputCanBeMemory(int index) {
-                return true;
-            }
-
-            @Override
-            public CiValue registerHint() {
-                return input(0);
+            public EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+                if (mode == OperandMode.Input && index == 0) {
+                    return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+                } else if (mode == OperandMode.Alive && index == 0) {
+                    return EnumSet.of(OperandFlag.Register, OperandFlag.Constant);
+                } else if (mode == OperandMode.Output && index == 0) {
+                    return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
+                }
+                return super.flagsFor(mode, index);
             }
         };
     }
 
-    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue leftAndResult, CiValue right) {
-        CiRegister dst = tasm.asRegister(leftAndResult);
-        if (right.isRegister()) {
-            assert tasm.asRegister(right) == AMD64.rcx;
+    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue x, CiValue y) {
+        assert sameRegister(x, y) || differentRegisters(result, y);
+        AMD64MoveOpcode.move(tasm, masm, result, x);
+
+        CiRegister dst = asRegister(result);
+        if (isRegister(y)) {
+            assert asRegister(y) == AMD64.rcx;
             switch (this) {
                 case ISHL:  masm.shll(dst); break;
                 case ISHR:  masm.sarl(dst); break;
-                case UISHR: masm.shrl(dst); break;
+                case IUSHR: masm.shrl(dst); break;
                 case LSHL:  masm.shlq(dst); break;
                 case LSHR:  masm.sarq(dst); break;
-                case ULSHR: masm.shrq(dst); break;
+                case LUSHR: masm.shrq(dst); break;
                 default:    throw Util.shouldNotReachHere();
             }
-        } else {
+        } else if (isConstant(y)) {
             switch (this) {
-                case ISHL:  masm.shll(dst, tasm.asIntConst(right) & 31); break;
-                case ISHR:  masm.sarl(dst, tasm.asIntConst(right) & 31); break;
-                case UISHR: masm.shrl(dst, tasm.asIntConst(right) & 31); break;
-                case LSHL:  masm.shlq(dst, tasm.asIntConst(right) & 63); break;
-                case LSHR:  masm.sarq(dst, tasm.asIntConst(right) & 63); break;
-                case ULSHR: masm.shrq(dst, tasm.asIntConst(right) & 63); break;
+                case ISHL:  masm.shll(dst, tasm.asIntConst(y) & 31); break;
+                case ISHR:  masm.sarl(dst, tasm.asIntConst(y) & 31); break;
+                case IUSHR: masm.shrl(dst, tasm.asIntConst(y) & 31); break;
+                case LSHL:  masm.shlq(dst, tasm.asIntConst(y) & 63); break;
+                case LSHR:  masm.sarq(dst, tasm.asIntConst(y) & 63); break;
+                case LUSHR: masm.shrq(dst, tasm.asIntConst(y) & 63); break;
                 default:   throw Util.shouldNotReachHere();
             }
+        } else {
+            throw Util.shouldNotReachHere();
         }
     }
 }

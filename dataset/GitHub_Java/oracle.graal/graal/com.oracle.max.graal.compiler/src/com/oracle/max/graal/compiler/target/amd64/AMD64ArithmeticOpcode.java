@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +22,15 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
+import static com.oracle.max.cri.ci.CiValueUtil.*;
+
+import java.util.*;
+
 import com.oracle.max.asm.target.amd64.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.sun.cri.ci.*;
 
 public enum AMD64ArithmeticOpcode implements LIROpcode {
     IADD, ISUB, IAND, IOR, IXOR,
@@ -34,41 +38,43 @@ public enum AMD64ArithmeticOpcode implements LIROpcode {
     FADD, FSUB, FMUL, FDIV,
     DADD, DSUB, DMUL, DDIV;
 
-    public LIRInstruction create(CiVariable result, CiValue left, CiValue right) {
-        assert (name().startsWith("I") && result.kind == CiKind.Int && left.kind.stackKind() == CiKind.Int && right.kind.stackKind() == CiKind.Int)
-            || (name().startsWith("L") && result.kind == CiKind.Long && left.kind == CiKind.Long && right.kind == CiKind.Long)
-            || (name().startsWith("F") && result.kind == CiKind.Float && left.kind == CiKind.Float && right.kind == CiKind.Float)
-            || (name().startsWith("D") && result.kind == CiKind.Double && left.kind == CiKind.Double && right.kind == CiKind.Double);
+    public LIRInstruction create(CiValue result, CiValue x, CiValue y) {
+        assert (name().startsWith("I") && result.kind == CiKind.Int && x.kind.stackKind() == CiKind.Int && y.kind.stackKind() == CiKind.Int)
+            || (name().startsWith("L") && result.kind == CiKind.Long && x.kind == CiKind.Long && y.kind == CiKind.Long)
+            || (name().startsWith("F") && result.kind == CiKind.Float && x.kind == CiKind.Float && y.kind == CiKind.Float)
+            || (name().startsWith("D") && result.kind == CiKind.Double && x.kind == CiKind.Double && y.kind == CiKind.Double);
 
-        CiValue[] inputs = new CiValue[] {left};
-        CiValue[] alives = new CiValue[] {right};
+        CiValue[] inputs = new CiValue[] {x};
+        CiValue[] alives = new CiValue[] {y};
+        CiValue[] outputs = new CiValue[] {result};
 
-        return new AMD64LIRInstruction(this, result, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
+        return new AMD64LIRInstruction(this, outputs, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                CiValue left = input(0);
-                CiValue right = alive(0);
-                assert !(right instanceof CiRegisterValue) || tasm.asRegister(result()) != tasm.asRegister(right) : "result and right must be different registers";
-                AMD64MoveOpcode.move(tasm, masm, result(), left);
-                emit(tasm, masm, result(), right);
+                emit(tasm, masm, output(0), input(0), alive(0));
             }
 
             @Override
-            public boolean inputCanBeMemory(int index) {
-                return true;
-            }
-
-            @Override
-            public CiValue registerHint() {
-                return input(0);
+            public EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+                if (mode == OperandMode.Input && index == 0) {
+                    return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+                } else if (mode == OperandMode.Alive && index == 0) {
+                    return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+                } else if (mode == OperandMode.Output && index == 0) {
+                    return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
+                }
+                return super.flagsFor(mode, index);
             }
         };
     }
 
-    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue leftAndResult, CiValue right) {
-        CiRegister dst = tasm.asRegister(leftAndResult);
-        if (right.isRegister()) {
-            CiRegister rreg = tasm.asRegister(right);
+    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue x, CiValue y) {
+        assert sameRegister(x, y) || differentRegisters(result, y);
+        AMD64MoveOpcode.move(tasm, masm, result, x);
+
+        CiRegister dst = asRegister(result);
+        if (isRegister(y)) {
+            CiRegister rreg = asRegister(y);
             switch (this) {
                 case IADD: masm.addl(dst,  rreg); break;
                 case ISUB: masm.subl(dst,  rreg); break;
@@ -90,30 +96,30 @@ public enum AMD64ArithmeticOpcode implements LIROpcode {
                 case DDIV: masm.divsd(dst, rreg); break;
                 default:   throw Util.shouldNotReachHere();
             }
-        } else if (right.isConstant()) {
+        } else if (isConstant(y)) {
             switch (this) {
-                case IADD: masm.incrementl(dst, tasm.asIntConst(right)); break;
-                case ISUB: masm.decrementl(dst, tasm.asIntConst(right)); break;
-                case IAND: masm.andl(dst,  tasm.asIntConst(right)); break;
-                case IOR:  masm.orl(dst,   tasm.asIntConst(right)); break;
-                case IXOR: masm.xorl(dst,  tasm.asIntConst(right)); break;
-                case LADD: masm.addq(dst,  tasm.asIntConst(right)); break;
-                case LSUB: masm.subq(dst,  tasm.asIntConst(right)); break;
-                case LAND: masm.andq(dst,  tasm.asIntConst(right)); break;
-                case LOR:  masm.orq(dst,   tasm.asIntConst(right)); break;
-                case LXOR: masm.xorq(dst,  tasm.asIntConst(right)); break;
-                case FADD: masm.addss(dst, tasm.asFloatConstRef(right)); break;
-                case FSUB: masm.subss(dst, tasm.asFloatConstRef(right)); break;
-                case FMUL: masm.mulss(dst, tasm.asFloatConstRef(right)); break;
-                case FDIV: masm.divss(dst, tasm.asFloatConstRef(right)); break;
-                case DADD: masm.addsd(dst, tasm.asDoubleConstRef(right)); break;
-                case DSUB: masm.subsd(dst, tasm.asDoubleConstRef(right)); break;
-                case DMUL: masm.mulsd(dst, tasm.asDoubleConstRef(right)); break;
-                case DDIV: masm.divsd(dst, tasm.asDoubleConstRef(right)); break;
+                case IADD: masm.incrementl(dst, tasm.asIntConst(y)); break;
+                case ISUB: masm.decrementl(dst, tasm.asIntConst(y)); break;
+                case IAND: masm.andl(dst,  tasm.asIntConst(y)); break;
+                case IOR:  masm.orl(dst,   tasm.asIntConst(y)); break;
+                case IXOR: masm.xorl(dst,  tasm.asIntConst(y)); break;
+                case LADD: masm.addq(dst,  tasm.asIntConst(y)); break;
+                case LSUB: masm.subq(dst,  tasm.asIntConst(y)); break;
+                case LAND: masm.andq(dst,  tasm.asIntConst(y)); break;
+                case LOR:  masm.orq(dst,   tasm.asIntConst(y)); break;
+                case LXOR: masm.xorq(dst,  tasm.asIntConst(y)); break;
+                case FADD: masm.addss(dst, tasm.asFloatConstRef(y)); break;
+                case FSUB: masm.subss(dst, tasm.asFloatConstRef(y)); break;
+                case FMUL: masm.mulss(dst, tasm.asFloatConstRef(y)); break;
+                case FDIV: masm.divss(dst, tasm.asFloatConstRef(y)); break;
+                case DADD: masm.addsd(dst, tasm.asDoubleConstRef(y)); break;
+                case DSUB: masm.subsd(dst, tasm.asDoubleConstRef(y)); break;
+                case DMUL: masm.mulsd(dst, tasm.asDoubleConstRef(y)); break;
+                case DDIV: masm.divsd(dst, tasm.asDoubleConstRef(y)); break;
                 default:   throw Util.shouldNotReachHere();
             }
         } else {
-            CiAddress raddr = tasm.asAddress(right);
+            CiAddress raddr = tasm.asAddress(y);
             switch (this) {
                 case IADD: masm.addl(dst,  raddr); break;
                 case ISUB: masm.subl(dst,  raddr); break;

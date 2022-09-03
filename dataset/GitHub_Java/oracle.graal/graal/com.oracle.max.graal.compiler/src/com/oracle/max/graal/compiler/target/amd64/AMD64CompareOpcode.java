@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,43 +22,48 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
+import static com.oracle.max.cri.ci.CiValueUtil.*;
+
+import java.util.*;
+
 import com.oracle.max.asm.target.amd64.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.sun.cri.ci.*;
 
 public enum AMD64CompareOpcode implements LIROpcode {
     ICMP, LCMP, ACMP, FCMP, DCMP;
 
-    public LIRInstruction create(CiVariable left, CiValue right) {
-        assert (name().startsWith("I") && left.kind == CiKind.Int && right.kind.stackKind() == CiKind.Int)
-            || (name().startsWith("I") && left.kind == CiKind.Jsr && right.kind == CiKind.Jsr)
-            || (name().startsWith("L") && left.kind == CiKind.Long && right.kind == CiKind.Long)
-            || (name().startsWith("A") && left.kind == CiKind.Object && right.kind == CiKind.Object)
-            || (name().startsWith("F") && left.kind == CiKind.Float && right.kind == CiKind.Float)
-            || (name().startsWith("D") && left.kind == CiKind.Double && right.kind == CiKind.Double) : "left.kind=" + left.kind + ", right.kind=" + right.kind;
-        CiValue[] inputs = new CiValue[] {left, right};
+    public LIRInstruction create(CiValue x, CiValue y) {
+        assert (name().startsWith("I") && x.kind == CiKind.Int && y.kind.stackKind() == CiKind.Int)
+            || (name().startsWith("I") && x.kind == CiKind.Jsr && y.kind == CiKind.Jsr)
+            || (name().startsWith("L") && x.kind == CiKind.Long && y.kind == CiKind.Long)
+            || (name().startsWith("A") && x.kind == CiKind.Object && y.kind == CiKind.Object)
+            || (name().startsWith("F") && x.kind == CiKind.Float && y.kind == CiKind.Float)
+            || (name().startsWith("D") && x.kind == CiKind.Double && y.kind == CiKind.Double);
+        CiValue[] inputs = new CiValue[] {x, y};
 
-        return new AMD64LIRInstruction(this, CiValue.IllegalValue, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+        return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                CiValue left = input(0);
-                CiValue right = input(1);
-                emit(tasm, masm, left, right);
+                emit(tasm, masm, input(0), input(1));
             }
 
             @Override
-            public boolean inputCanBeMemory(int index) {
-                return index == 1;
+            public EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+                if (mode == OperandMode.Input && index == 1) {
+                    return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+                }
+                return super.flagsFor(mode, index);
             }
         };
     }
 
-    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue left, CiValue right) {
-        CiRegister lreg = tasm.asRegister(left);
-        if (right.isRegister()) {
-            CiRegister rreg = tasm.asRegister(right);
+    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue x, CiValue y) {
+        CiRegister lreg = asRegister(x);
+        if (isRegister(y)) {
+            CiRegister rreg = asRegister(y);
             switch (this) {
                 case ICMP: masm.cmpl(lreg, rreg); break;
                 case LCMP: masm.cmpq(lreg, rreg); break;
@@ -67,22 +72,22 @@ public enum AMD64CompareOpcode implements LIROpcode {
                 case DCMP: masm.ucomisd(lreg, rreg); break;
                 default:   throw Util.shouldNotReachHere();
             }
-        } else if (right.isConstant()) {
+        } else if (isConstant(y)) {
             switch (this) {
-                case ICMP: masm.cmpl(lreg, tasm.asIntConst(right)); break;
-                case LCMP: masm.cmpq(lreg, tasm.asIntConst(right)); break;
+                case ICMP: masm.cmpl(lreg, tasm.asIntConst(y)); break;
+                case LCMP: masm.cmpq(lreg, tasm.asIntConst(y)); break;
                 case ACMP:
-                    if (((CiConstant) right).isNull()) {
+                    if (((CiConstant) y).isNull()) {
                         masm.cmpq(lreg, 0); break;
                     } else {
                         throw Util.shouldNotReachHere("Only null object constants are allowed in comparisons");
                     }
-                case FCMP: masm.ucomiss(lreg, tasm.asFloatConstRef(right)); break;
-                case DCMP: masm.ucomisd(lreg, tasm.asDoubleConstRef(right)); break;
+                case FCMP: masm.ucomiss(lreg, tasm.asFloatConstRef(y)); break;
+                case DCMP: masm.ucomisd(lreg, tasm.asDoubleConstRef(y)); break;
                 default:   throw Util.shouldNotReachHere();
             }
         } else {
-            CiAddress raddr = tasm.asAddress(right);
+            CiAddress raddr = tasm.asAddress(y);
             switch (this) {
                 case ICMP: masm.cmpl(lreg, raddr); break;
                 case LCMP: masm.cmpq(lreg, raddr); break;

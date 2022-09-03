@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,21 @@
  */
 package com.oracle.max.graal.compiler.lir;
 
+import static com.oracle.max.cri.ci.CiValueUtil.*;
+
 import java.util.*;
 
-import com.sun.cri.ci.*;
-import com.sun.cri.ci.CiTargetMethod.*;
-import com.sun.cri.ri.*;
-import com.sun.cri.xir.CiXirAssembler.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ci.CiTargetMethod.*;
+import com.oracle.max.cri.ri.*;
+import com.oracle.max.cri.xir.CiXirAssembler.*;
+import com.oracle.max.graal.compiler.util.*;
 
 /**
  * This class represents a call instruction; either to a {@linkplain CiRuntimeCall runtime method},
  * a {@linkplain RiMethod Java method}, a native function or a global stub.
- *
- * @author Marcelo Cintra
  */
-public class LIRCall extends LIRInstruction {
+public abstract class LIRCall extends LIRInstruction {
 
     /**
      * The target of the call. This will be a {@link CiRuntimeCall}, {@link RiMethod} or {@link CiValue}
@@ -49,95 +50,48 @@ public class LIRCall extends LIRInstruction {
 
     private final int targetAddressIndex;
 
-    public final List<CiValue> pointerSlots;
-
-
-    private static CiValue[] toArray(List<CiValue> arguments) {
-        return arguments.toArray(new CiValue[arguments.size()]);
+    private static CiValue[] toArray(List<CiValue> arguments, CiValue targetAddress) {
+        CiValue[] result = new CiValue[arguments.size() + (targetAddress != null ? 1 : 0)];
+        arguments.toArray(result);
+        if (targetAddress != null) {
+            result[arguments.size()] = targetAddress;
+        }
+        return result;
     }
 
     public LIRCall(LIROpcode opcode,
                    Object target,
                    CiValue result,
                    List<CiValue> arguments,
+                   CiValue targetAddress,
                    LIRDebugInfo info,
-                   Map<XirMark, Mark> marks,
-                   boolean calleeSaved,
-                   List<CiValue> pointerSlots) {
-        super(opcode, result, info, !calleeSaved, 0, 0, toArray(arguments));
+                   Map<XirMark, Mark> marks) {
+        super(opcode, isLegal(result) ? new CiValue[] {result} : LIRInstruction.NO_OPERANDS, info, toArray(arguments, targetAddress), LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
         this.marks = marks;
-        this.pointerSlots = pointerSlots;
-        if (opcode == LIROpcode.DirectCall) {
+        if (targetAddress == null) {
             this.targetAddressIndex = -1;
         } else {
             // The last argument is the operand holding the address for the indirect call
-            this.targetAddressIndex = arguments.size() - 1;
+            assert inputs.length - 1 == arguments.size();
+            this.targetAddressIndex = arguments.size();
         }
         this.target = target;
     }
 
-    /**
-     * Emits target assembly code for this instruction.
-     *
-     * @param masm the target assembler
-     */
-    @Override
-    public void emitCode(LIRAssembler masm) {
-        masm.emitCall(this);
-    }
-
-    /**
-     * Returns the receiver for this method call.
-     * @return the receiver
-     */
-    public CiValue receiver() {
-        return operand(0);
-    }
-
-    public RiMethod method() {
-        return (RiMethod) target;
-    }
-
-    public CiRuntimeCall runtimeCall() {
-        return (CiRuntimeCall) target;
-    }
-
     public CiValue targetAddress() {
         if (targetAddressIndex >= 0) {
-            return operand(targetAddressIndex);
+            return input(targetAddressIndex);
         }
         return null;
     }
 
     @Override
-    public String operationString(OperandFormatter operandFmt) {
-        StringBuilder buf = new StringBuilder();
-        if (result().isLegal()) {
-            buf.append(operandFmt.format(result())).append(" = ");
+    protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+        if (mode == OperandMode.Input) {
+            return EnumSet.of(OperandFlag.Register, OperandFlag.Stack);
+        } else if (mode == OperandMode.Output) {
+            return EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
         }
-        String targetAddress = null;
-        if (code == LIROpcode.RuntimeCall) {
-            buf.append(target);
-        } else if (code != LIROpcode.DirectCall && code != LIROpcode.ConstDirectCall) {
-            if (targetAddressIndex >= 0) {
-                targetAddress = operandFmt.format(targetAddress());
-                buf.append(targetAddress);
-            }
-        }
-        buf.append('(');
-        boolean first = true;
-        for (LIROperand operandSlot : operands) {
-            String operand = operandFmt.format(operandSlot.value(this));
-            if (!operand.isEmpty() && !operand.equals(targetAddress)) {
-                if (!first) {
-                    buf.append(", ");
-                } else {
-                    first = false;
-                }
-                buf.append(operand);
-            }
-        }
-        buf.append(')');
-        return buf.toString();
+        throw Util.shouldNotReachHere();
     }
 }
