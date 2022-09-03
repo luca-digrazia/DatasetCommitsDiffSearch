@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.Value;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
@@ -101,7 +101,6 @@ public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLower
         return this;
     }
 
-    @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias1 = tool.getAlias(array1);
         ValueNode alias2 = tool.getAlias(array2);
@@ -176,17 +175,14 @@ public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLower
         gen.setResult(this, result);
     }
 
-    @Override
     public LocationIdentity getLocationIdentity() {
         return NamedLocationIdentity.getArrayLocation(kind);
     }
 
-    @Override
     public MemoryNode getLastLocationAccess() {
         return lastLocationAccess;
     }
 
-    @Override
     public void setLastLocationAccess(MemoryNode lla) {
         updateUsages(ValueNodeUtil.asNode(lastLocationAccess), ValueNodeUtil.asNode(lla));
         lastLocationAccess = lla;
