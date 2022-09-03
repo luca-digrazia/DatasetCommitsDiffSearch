@@ -50,7 +50,7 @@ final class LibFFILibrary implements TruffleObject {
 
     @Override
     public ForeignAccess getForeignAccess() {
-        return LibFFILibraryMessageResolutionForeign.ACCESS;
+        return LibFFILibraryMessageResolutionForeign.createAccess();
     }
 
     private static final class Destructor extends NativeAllocation.Destructor {

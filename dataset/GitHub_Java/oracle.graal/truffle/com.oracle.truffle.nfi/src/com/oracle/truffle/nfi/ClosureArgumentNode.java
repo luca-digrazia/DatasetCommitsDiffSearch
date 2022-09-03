@@ -47,27 +47,11 @@ abstract class ClosureArgumentNode extends Node {
         }
     }
 
-    static class ObjectClosureArgumentNode extends ClosureArgumentNode {
+    static class DirectClosureArgumentNode extends ClosureArgumentNode {
 
         @Override
         public Object execute(Object arg) {
-            if (arg == null) {
-                return new NativePointer(0);
-            } else {
-                return arg;
-            }
-        }
-    }
-
-    static class StringClosureArgumentNode extends ClosureArgumentNode {
-
-        @Override
-        public Object execute(Object arg) {
-            if (arg == null) {
-                return new NativeString(0);
-            } else {
-                return arg;
-            }
+            return arg;
         }
     }
 }

@@ -30,8 +30,7 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.interop.java.JavaInterop;
-import com.oracle.truffle.nfi.ClosureArgumentNode.ObjectClosureArgumentNode;
-import com.oracle.truffle.nfi.ClosureArgumentNode.StringClosureArgumentNode;
+import com.oracle.truffle.nfi.ClosureArgumentNode.DirectClosureArgumentNode;
 import com.oracle.truffle.nfi.ClosureArgumentNodeFactory.BufferClosureArgumentNodeGen;
 import com.oracle.truffle.nfi.NativeArgumentBuffer.TypeTag;
 import com.oracle.truffle.nfi.SerializeArgumentNodeFactory.SerializeArrayArgumentNodeGen;
@@ -389,7 +388,7 @@ abstract class LibFFIType {
 
         @Override
         public ClosureArgumentNode createClosureArgumentNode() {
-            return new StringClosureArgumentNode();
+            return new DirectClosureArgumentNode();
         }
 
         @Override
@@ -416,12 +415,7 @@ abstract class LibFFIType {
 
         @Override
         protected Object doDeserialize(NativeArgumentBuffer buffer) {
-            Object ret = buffer.getObject(size);
-            if (ret == null) {
-                return new NativePointer(0);
-            } else {
-                return ret;
-            }
+            return buffer.getObject(size);
         }
 
         @Override
@@ -431,7 +425,7 @@ abstract class LibFFIType {
 
         @Override
         public ClosureArgumentNode createClosureArgumentNode() {
-            return new ObjectClosureArgumentNode();
+            return new DirectClosureArgumentNode();
         }
 
         @Override
@@ -656,12 +650,8 @@ abstract class LibFFIType {
         @Override
         protected Object doDeserialize(NativeArgumentBuffer buffer) {
             long functionPointer = buffer.getPointer(size);
-            if (functionPointer == 0) {
-                return new NativePointer(0);
-            } else {
-                LibFFISymbol symbol = LibFFISymbol.create(null, functionPointer);
-                return new LibFFIFunction(symbol, signature);
-            }
+            LibFFISymbol symbol = LibFFISymbol.create(null, functionPointer);
+            return new LibFFIFunction(symbol, signature);
         }
 
         @Override

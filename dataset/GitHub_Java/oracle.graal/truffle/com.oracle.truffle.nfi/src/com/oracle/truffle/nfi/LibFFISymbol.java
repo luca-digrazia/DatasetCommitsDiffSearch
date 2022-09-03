@@ -24,9 +24,13 @@
  */
 package com.oracle.truffle.nfi;
 
-final class LibFFISymbol extends NativePointer {
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.TruffleObject;
+
+final class LibFFISymbol implements TruffleObject {
 
     protected final LibFFILibrary library;
+    protected final long address;
 
     static LibFFISymbol create(LibFFILibrary library, long address) {
         assert address != 0;
@@ -34,7 +38,12 @@ final class LibFFISymbol extends NativePointer {
     }
 
     private LibFFISymbol(LibFFILibrary library, long address) {
-        super(address);
         this.library = library;
+        this.address = address;
+    }
+
+    @Override
+    public ForeignAccess getForeignAccess() {
+        return LibFFISymbolMessageResolutionForeign.createAccess();
     }
 }

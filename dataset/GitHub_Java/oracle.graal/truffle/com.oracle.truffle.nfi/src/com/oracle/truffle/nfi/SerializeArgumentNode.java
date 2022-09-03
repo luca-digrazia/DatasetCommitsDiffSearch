@@ -56,12 +56,7 @@ abstract class SerializeArgumentNode extends Node {
             this.argType = argType;
         }
 
-        @SuppressWarnings("unused")
-        protected boolean isSpecialized(TruffleObject arg) {
-            return false;
-        }
-
-        @Specialization(guards = {"!isSpecialized(arg)", "checkNull(isNull, arg)"})
+        @Specialization(guards = "checkNull(isNull, arg)")
         @SuppressWarnings("unused")
         protected Object serializeNull(NativeArgumentBuffer buffer, TruffleObject arg,
                         @Cached("createIsNull()") Node isNull) {
@@ -69,10 +64,8 @@ abstract class SerializeArgumentNode extends Node {
             return null;
         }
 
-        @Specialization(guards = {"!isSpecialized(arg)", "!checkNull(isNull, arg)"})
-        @SuppressWarnings("unused")
+        @Specialization
         protected Object serializeUnbox(NativeArgumentBuffer buffer, TruffleObject arg,
-                        @Cached("createIsNull()") Node isNull,
                         @Cached("createUnbox()") Node unbox,
                         @Cached("argType.createSerializeArgumentNode()") SerializeArgumentNode serialize) {
             try {
@@ -150,11 +143,6 @@ abstract class SerializeArgumentNode extends Node {
             super(type);
         }
 
-        @Override
-        protected boolean isSpecialized(TruffleObject arg) {
-            return arg instanceof NativeString || arg instanceof NativePointer;
-        }
-
         @Specialization(insertBefore = "serializeNull")
         protected Object serializeNativeString(NativeArgumentBuffer buffer, NativeString string) {
             argType.serialize(buffer, string);
@@ -166,17 +154,18 @@ abstract class SerializeArgumentNode extends Node {
             argType.serialize(buffer, ptr);
             return null;
         }
+
+        @Specialization(insertBefore = "serializeNull")
+        protected Object serializeSymbol(NativeArgumentBuffer buffer, LibFFISymbol symbol) {
+            argType.serialize(buffer, symbol);
+            return null;
+        }
     }
 
     abstract static class SerializeStringArgumentNode extends SerializeUnboxingArgumentNode {
 
         SerializeStringArgumentNode(LibFFIType type) {
             super(type);
-        }
-
-        @Override
-        protected boolean isSpecialized(TruffleObject arg) {
-            return arg instanceof NativeString;
         }
 
         @Specialization(insertBefore = "serializeNull")
