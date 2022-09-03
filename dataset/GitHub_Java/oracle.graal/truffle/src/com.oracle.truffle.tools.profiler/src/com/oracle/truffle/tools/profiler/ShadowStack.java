@@ -46,7 +46,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Custom more efficient stack representations for profilers.
  * 
- * @since 0.30
+ * @since 0.29
  */
 final class ShadowStack {
 
