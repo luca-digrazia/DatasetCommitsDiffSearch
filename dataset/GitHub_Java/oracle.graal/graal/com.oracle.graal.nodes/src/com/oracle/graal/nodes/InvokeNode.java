@@ -34,10 +34,9 @@ import com.oracle.graal.nodes.util.*;
 /**
  * The {@code InvokeNode} represents all kinds of method calls.
  */
-@NodeInfo(nameTemplate = "Invoke#{p#targetMethod/s}")
 public final class InvokeNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, Invoke, LIRLowerable, MemoryCheckpoint  {
 
-    @Input private final CallTargetNode callTarget;
+    @Input private final MethodCallTargetNode callTarget;
     private final int bci;
     private boolean megamorphic;
     private boolean useForInlining;
@@ -49,7 +48,7 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
      * @param bci the bytecode index of the original invoke (used for debug infos)
      * @param callTarget the target method being called
      */
-    public InvokeNode(CallTargetNode callTarget, int bci, long leafGraphId) {
+    public InvokeNode(MethodCallTargetNode callTarget, int bci, long leafGraphId) {
         super(callTarget.returnStamp());
         this.callTarget = callTarget;
         this.bci = bci;
@@ -58,14 +57,8 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
         this.useForInlining = true;
     }
 
-    @Override
-    public CallTargetNode callTarget() {
+    public MethodCallTargetNode callTarget() {
         return callTarget;
-    }
-
-    @Override
-    public MethodCallTargetNode methodCallTarget() {
-        return (MethodCallTargetNode) callTarget;
     }
 
     @Override
@@ -93,17 +86,21 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     }
 
     @Override
-    public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
-        Map<Object, Object> debugProperties = super.getDebugProperties(map);
-        if (callTarget instanceof MethodCallTargetNode && methodCallTarget().targetMethod() != null) {
-            debugProperties.put("targetMethod", methodCallTarget().targetMethod());
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> debugProperties = super.getDebugProperties();
+        if (callTarget != null && callTarget.targetMethod() != null) {
+            debugProperties.put("targetMethod", MetaUtil.format("%h.%n(%p)", callTarget.targetMethod()));
         }
         return debugProperties;
     }
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+        NodeInputList<ValueNode> parameters = callTarget.arguments();
+        ValueNode firstParam = parameters.size() <= 0 ? null : parameters.get(0);
+        if (!callTarget.isStatic() && firstParam.kind() == Kind.Object && !firstParam.objectStamp().nonNull()) {
+            dependencies().add(tool.createNullCheckGuard(firstParam, leafGraphId));
+        }
     }
 
     @Override
@@ -116,7 +113,10 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
         if (verbosity == Verbosity.Long) {
             return super.toString(Verbosity.Short) + "(bci=" + bci() + ")";
         } else if (verbosity == Verbosity.Name) {
-            return "Invoke#" + callTarget().targetName();
+            if (callTarget == null || callTarget.targetMethod() == null) {
+                return "Invoke#??Invalid!";
+            }
+            return "Invoke#" + callTarget.targetMethod().name();
         } else {
             return super.toString(verbosity);
         }
@@ -134,7 +134,7 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     @Override
     public FrameState stateDuring() {
         FrameState stateAfter = stateAfter();
-        FrameState stateDuring = stateAfter.duplicateModified(bci(), stateAfter.rethrowException(), kind());
+        FrameState stateDuring = stateAfter.duplicateModified(bci(), stateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind());
         stateDuring.setDuringCall(true);
         return stateDuring;
     }
@@ -142,7 +142,7 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     @Override
     public void intrinsify(Node node) {
         assert !(node instanceof ValueNode) || ((ValueNode) node).kind().isVoid() == kind().isVoid();
-        CallTargetNode call = callTarget;
+        MethodCallTargetNode call = callTarget;
         FrameState stateAfter = stateAfter();
         if (node instanceof StateSplit) {
             StateSplit stateSplit = (StateSplit) node;

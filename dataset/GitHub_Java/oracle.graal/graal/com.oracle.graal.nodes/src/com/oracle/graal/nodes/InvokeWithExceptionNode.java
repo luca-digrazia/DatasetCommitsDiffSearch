@@ -31,12 +31,11 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
-@NodeInfo(nameTemplate = "Invoke!#{p#targetMethod/s}")
 public class InvokeWithExceptionNode extends ControlSplitNode implements Node.IterableNodeType, Invoke, MemoryCheckpoint, LIRLowerable {
     public static final int NORMAL_EDGE = 0;
     public static final int EXCEPTION_EDGE = 1;
 
-    @Input private final CallTargetNode callTarget;
+    @Input private final MethodCallTargetNode callTarget;
     @Input private FrameState stateAfter;
     private final int bci;
     // megamorph should only be true when the compiler is sure that the call site is megamorph, and false when in doubt
@@ -44,7 +43,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     private boolean useForInlining;
     private final long leafGraphId;
 
-    public InvokeWithExceptionNode(CallTargetNode callTarget, DispatchBeginNode exceptionEdge, int bci, long leafGraphId) {
+    public InvokeWithExceptionNode(MethodCallTargetNode callTarget, DispatchBeginNode exceptionEdge, int bci, long leafGraphId) {
         super(callTarget.returnStamp(), new BeginNode[]{null, exceptionEdge}, new double[]{1.0, 0.0});
         this.bci = bci;
         this.callTarget = callTarget;
@@ -69,12 +68,8 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         setBlockSuccessor(NORMAL_EDGE, x);
     }
 
-    public CallTargetNode callTarget() {
+    public MethodCallTargetNode callTarget() {
         return callTarget;
-    }
-
-    public MethodCallTargetNode methodCallTarget() {
-        return (MethodCallTargetNode) callTarget;
     }
 
     @Override
@@ -107,7 +102,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         if (verbosity == Verbosity.Long) {
             return super.toString(Verbosity.Short) + "(bci=" + bci() + ")";
         } else if (verbosity == Verbosity.Name) {
-            return "Invoke#" + (callTarget == null ? "null" : callTarget().targetName());
+            return "Invoke!#" + callTarget.targetMethod().name();
         } else {
             return super.toString(verbosity);
         }
@@ -133,7 +128,11 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+        NodeInputList<ValueNode> parameters = callTarget.arguments();
+        ValueNode firstParam = parameters.size() <= 0 ? null : parameters.get(0);
+        if (!callTarget.isStatic() && firstParam.kind() == Kind.Object && !firstParam.objectStamp().nonNull()) {
+            dependencies().add(tool.createNullCheckGuard(firstParam, leafGraphId));
+        }
     }
 
     @Override
@@ -156,16 +155,17 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
 
     public FrameState stateDuring() {
         FrameState tempStateAfter = stateAfter();
-        FrameState stateDuring = tempStateAfter.duplicateModified(bci(), tempStateAfter.rethrowException(), kind());
+        FrameState stateDuring = tempStateAfter.duplicateModified(bci(), tempStateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind());
         stateDuring.setDuringCall(true);
         return stateDuring;
     }
 
     @Override
-    public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
-        Map<Object, Object> debugProperties = super.getDebugProperties(map);
-        if (callTarget instanceof MethodCallTargetNode && methodCallTarget().targetMethod() != null) {
-            debugProperties.put("targetMethod", methodCallTarget().targetMethod());
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> debugProperties = super.getDebugProperties();
+        debugProperties.put("memoryCheckpoint", "true");
+        if (callTarget != null && callTarget.targetMethod() != null) {
+            debugProperties.put("targetMethod", MetaUtil.format("%h.%n(%p)", callTarget.targetMethod()));
         }
         return debugProperties;
     }
@@ -179,7 +179,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     @Override
     public void intrinsify(Node node) {
         assert !(node instanceof ValueNode) || ((ValueNode) node).kind().isVoid() == kind().isVoid();
-        CallTargetNode call = callTarget;
+        MethodCallTargetNode call = callTarget;
         FrameState state = stateAfter();
         killExceptionEdge();
         if (node instanceof StateSplit) {

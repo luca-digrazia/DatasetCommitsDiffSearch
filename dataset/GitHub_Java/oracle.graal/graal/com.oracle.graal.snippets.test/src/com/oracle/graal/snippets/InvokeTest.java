@@ -25,10 +25,9 @@ package com.oracle.graal.snippets;
 import org.junit.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.compiler.phases.*;
+import com.oracle.graal.compiler.tests.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
 
 /**
  * Tests the implementation of the snippets for lowering the INVOKE* instructions.
@@ -41,14 +40,11 @@ public class InvokeTest extends GraalCompilerTest {
     }
 
     public interface I {
-
         String virtualMethod(String s);
     }
 
     public static class A implements I {
-
         final String name = "A";
-
         public String virtualMethod(String s) {
             return name + s;
         }

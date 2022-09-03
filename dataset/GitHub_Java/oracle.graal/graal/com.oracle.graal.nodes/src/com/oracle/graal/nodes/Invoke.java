@@ -32,12 +32,7 @@ public interface Invoke extends StateSplit, Lowerable {
 
     void setNext(FixedNode x);
 
-    CallTargetNode callTarget();
-
-    /**
-     * Utility method that returns the {@link #callTarget()} cast to a {@link MethodCallTargetNode}.
-     */
-    MethodCallTargetNode methodCallTarget();
+    MethodCallTargetNode callTarget();
 
     int bci();
 
@@ -62,11 +57,11 @@ public interface Invoke extends StateSplit, Lowerable {
     void setUseForInlining(boolean value);
 
     /**
-     * True if this invocation is almost certainly polymorphic, false when in doubt.
+     * True if this invocation is almost certainly megamorphic, false when in doubt.
      */
-    boolean isPolymorphic();
+    boolean isMegamorphic();
 
-    void setPolymorphic(boolean value);
+    void setMegamorphic(boolean value);
 
     long leafGraphId();
 }
