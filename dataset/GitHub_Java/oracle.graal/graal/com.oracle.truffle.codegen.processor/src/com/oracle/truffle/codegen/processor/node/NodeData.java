@@ -46,6 +46,7 @@ public class NodeData extends Template {
 
     private List<SpecializationData> specializations;
     private List<SpecializationListenerData> specializationListeners;
+    private List<GuardData> guards;
     private List<ExecutableTypeData> executableTypes;
     private List<ShortCircuitData> shortCircuits;
 
@@ -63,6 +64,7 @@ public class NodeData extends Template {
         this.nodeType = splitSource.nodeType;
         this.specializations = splitSource.specializations;
         this.specializationListeners = splitSource.specializationListeners;
+        this.guards = splitSource.guards;
         this.executableTypes = splitSource.executableTypes;
         this.shortCircuits = splitSource.shortCircuits;
         this.fields = splitSource.fields;
@@ -74,33 +76,32 @@ public class NodeData extends Template {
 
     @Override
     protected List<MessageContainer> findChildContainers() {
-        List<MessageContainer> children = new ArrayList<>();
+        List<MessageContainer> sinks = new ArrayList<>();
         if (declaredChildren != null) {
-            children.addAll(declaredChildren);
+            sinks.addAll(declaredChildren);
         }
         if (typeSystem != null) {
-            children.add(typeSystem);
+            sinks.add(typeSystem);
         }
         if (specializations != null) {
-            for (MessageContainer specialization : specializations) {
-                if (specialization.getMessageElement() != null) {
-                    children.add(specialization);
-                }
-            }
+            sinks.addAll(specializations);
         }
         if (specializationListeners != null) {
-            children.addAll(specializationListeners);
+            sinks.addAll(specializationListeners);
+        }
+        if (guards != null) {
+            sinks.addAll(guards);
         }
         if (executableTypes != null) {
-            children.addAll(executableTypes);
+            sinks.addAll(executableTypes);
         }
         if (shortCircuits != null) {
-            children.addAll(shortCircuits);
+            sinks.addAll(shortCircuits);
         }
         if (fields != null) {
-            children.addAll(fields);
+            sinks.addAll(fields);
         }
-        return children;
+        return sinks;
     }
 
     public ParameterSpec getInstanceParameterSpec() {
@@ -182,9 +183,20 @@ public class NodeData extends Template {
 
         methods.addAll(getSpecializationListeners());
         methods.addAll(getExecutableTypes());
+        methods.addAll(getGuards());
         methods.addAll(getShortCircuits());
 
         return methods;
+    }
+
+    public List<GuardData> findGuards(String name) {
+        List<GuardData> foundGuards = new ArrayList<>();
+        for (GuardData guardData : getGuards()) {
+            if (guardData.getMethodName().equals(name)) {
+                foundGuards.add(guardData);
+            }
+        }
+        return foundGuards;
     }
 
     public ExecutableTypeData findGenericExecutableType(ProcessorContext context, TypeData type) {
@@ -296,7 +308,6 @@ public class NodeData extends Template {
         return null;
     }
 
-    @Override
     public TypeSystemData getTypeSystem() {
         return typeSystem;
     }
@@ -308,7 +319,7 @@ public class NodeData extends Template {
     private String dump(int level) {
         String indent = "";
         for (int i = 0; i < level; i++) {
-            indent += "    ";
+            indent += "  ";
         }
         StringBuilder builder = new StringBuilder();
 
@@ -319,6 +330,7 @@ public class NodeData extends Template {
         dumpProperty(builder, indent, "fields", getFields());
         dumpProperty(builder, indent, "executableTypes", getExecutableTypes());
         dumpProperty(builder, indent, "specializations", getSpecializations());
+        dumpProperty(builder, indent, "guards", getGuards());
         dumpProperty(builder, indent, "messages", collectMessages());
         if (getDeclaredChildren().size() > 0) {
             builder.append(String.format("\n%s  children = [", indent));
@@ -336,7 +348,7 @@ public class NodeData extends Template {
         if (value instanceof List) {
             List<?> list = (List<?>) value;
             if (!list.isEmpty()) {
-                b.append(String.format("\n%s  %s = %s", indent, propertyName, dumpList(indent, (List<?>) value)));
+                b.append(String.format("\n%s  %s = %s", indent, propertyName, dumpList((List<?>) value)));
             }
         } else {
             if (value != null) {
@@ -345,7 +357,7 @@ public class NodeData extends Template {
         }
     }
 
-    private static String dumpList(String indent, List<?> array) {
+    private static String dumpList(List<?> array) {
         if (array == null) {
             return "null";
         }
@@ -359,12 +371,12 @@ public class NodeData extends Template {
         StringBuilder b = new StringBuilder();
         b.append("[");
         for (Object object : array) {
-            b.append("\n        ");
-            b.append(indent);
+            b.append("\n");
+            b.append("    ");
             b.append(object);
             b.append(", ");
         }
-        b.append("\n    ").append(indent).append("]");
+        b.append("\n  ]");
         return b.toString();
     }
 
@@ -407,6 +419,10 @@ public class NodeData extends Template {
         return specializationListeners;
     }
 
+    public List<GuardData> getGuards() {
+        return guards;
+    }
+
     public List<ExecutableTypeData> getExecutableTypes() {
         return executableTypes;
     }
@@ -426,6 +442,10 @@ public class NodeData extends Template {
 
     void setSpecializationListeners(List<SpecializationListenerData> specializationListeners) {
         this.specializationListeners = specializationListeners;
+    }
+
+    void setGuards(List<GuardData> guards) {
+        this.guards = guards;
     }
 
     void setExecutableTypes(List<ExecutableTypeData> executableTypes) {
