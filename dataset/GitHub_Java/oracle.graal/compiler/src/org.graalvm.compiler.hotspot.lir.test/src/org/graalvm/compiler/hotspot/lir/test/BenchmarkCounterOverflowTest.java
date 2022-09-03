@@ -101,12 +101,8 @@ public class BenchmarkCounterOverflowTest extends LIRTest {
         Assume.assumeFalse("subprocess already spawned -> skip", Boolean.getBoolean(SUBPROCESS_PROPERTY));
         List<String> vmArgs = withoutDebuggerArguments(getVMCommandLine());
         vmArgs.add("-XX:JVMCICounterSize=1");
-        vmArgs.add("-Dgraal." + BenchmarkCounters.Options.AbortOnBenchmarkCounterOverflow.getName() + "=true");
+        vmArgs.add("-Dgraal." + BenchmarkCounters.Options.BenchmarkCountersDetectOverflow.getName() + "=true");
         vmArgs.add("-D" + SUBPROCESS_PROPERTY + "=true");
-
-        // Disable increment range checks (e.g. HotSpotCounterOp.checkIncrements())
-        vmArgs.add("-dsa");
-        vmArgs.add("-da");
 
         List<String> mainClassAndArgs = new ArrayList<>();
         mainClassAndArgs.add("com.oracle.mxtool.junit.MxJUnitWrapper");
@@ -135,6 +131,6 @@ public class BenchmarkCounterOverflowTest extends LIRTest {
                 Assert.fail("Unexpected stack trace: " + line);
             }
         }
-        Assert.fail(String.format("Could not find method in output:%n%s", proc));
+        Assert.fail("Could not find method in error message");
     }
 }
