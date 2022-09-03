@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -34,10 +32,10 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.java.BytecodeParser.BytecodeParserError;
+import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.ReturnNode;
@@ -54,9 +52,6 @@ import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.typestate.TypeState;
 import com.oracle.graal.pointsto.util.AnalysisError;
 
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.meta.JavaConstant;
-
 public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
 
     protected MethodFlowsGraph originalMethodFlows;
@@ -64,7 +59,7 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
     private int localCallingContextDepth;
 
     private final AnalysisMethod method;
-    protected EconomicMap<JavaConstant, BytecodePosition> objectConstants;
+    private StructuredGraph graphRef;
 
     private volatile boolean methodParsed;
     private InvokeTypeFlow parsingReason;
@@ -83,10 +78,6 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
         return method;
     }
 
-    public EconomicMap<JavaConstant, BytecodePosition> getObjectConstants() {
-        return objectConstants;
-    }
-
     public InvokeTypeFlow getParsingReason() {
         return parsingReason;
     }
@@ -96,8 +87,10 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
         InvokeTypeFlow invokeFlow = parsingReason;
 
         while (invokeFlow != null) {
-            parsingContext.add(invokeFlow.getSource().getMethod().asStackTraceElement(invokeFlow.getSource().getBCI()));
-            invokeFlow = ((AnalysisMethod) invokeFlow.getSource().getMethod()).getTypeFlow().parsingReason;
+            AnalysisMethod caller = invokeFlow.location.getMethod();
+            Invoke invokeNode = invokeFlow.invoke();
+            parsingContext.add(caller.asStackTraceElement(invokeNode.bci()));
+            invokeFlow = invokeFlow.location.getMethod().getTypeFlow().parsingReason;
         }
         return parsingContext.toArray(new StackTraceElement[parsingContext.size()]);
     }
@@ -244,18 +237,8 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
         return result;
     }
 
-    /** Check if the type flow is saturated, i.e., any of its clones is saturated. */
-    public boolean isSaturated(BigBang bb, TypeFlow<?> originalTypeFlow) {
-        boolean saturated = false;
-        for (MethodFlowsGraph methodFlows : clonedMethodFlows.values()) {
-            TypeFlow<?> clonedTypeFlow = methodFlows.lookupCloneOf(bb, originalTypeFlow);
-            saturated |= clonedTypeFlow.isSaturated();
-        }
-        return saturated;
-    }
-
     // get original parameter
-    public FormalParamTypeFlow getParameterFlow(int idx) {
+    protected FormalParamTypeFlow getParameterFlow(int idx) {
         return originalMethodFlows.getParameter(idx);
     }
 
@@ -272,19 +255,23 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
         return originalMethodFlows.getInvokeFlows();
     }
 
-    private static ParameterNode computeReturnedParameter(StructuredGraph graph) {
+    public StructuredGraph getGraph() {
+        return graphRef;
+    }
 
-        if (graph == null) {
+    private ParameterNode computeReturnedParamter() {
+
+        if (graphRef == null) {
             // Some methods, e.g., native ones, don't have a graph.
             return null;
         }
 
         ParameterNode retParam = null;
 
-        for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
+        for (ParameterNode param : graphRef.getNodes(ParameterNode.TYPE)) {
             if (param.stamp(NodeView.DEFAULT) instanceof ObjectStamp) {
                 boolean returnsParameter = true;
-                NodeIterable<ReturnNode> retIterable = graph.getNodes(ReturnNode.TYPE);
+                NodeIterable<ReturnNode> retIterable = graphRef.getNodes(ReturnNode.TYPE);
                 returnsParameter &= retIterable.count() > 0;
                 for (ReturnNode ret : retIterable) {
                     returnsParameter &= ret.result() == param;
@@ -316,12 +303,10 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
     private synchronized void doParse(BigBang bb, InvokeTypeFlow reason) {
         if (!methodParsed) {
             parsingReason = reason;
-            StructuredGraph graph = null;
             try {
                 MethodTypeFlowBuilder builder = bb.createMethodTypeFlowBuilder(bb, this);
                 builder.apply();
-                graph = builder.graph;
-
+                graphRef = builder.graph;
             } catch (BytecodeParserError ex) {
                 /* Rewrite some bytecode parsing errors as unsupported features. */
                 if (ex.getCause() instanceof UnsupportedFeatureException) {
@@ -331,10 +316,19 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
                     }
                     String message = cause.getMessage();
                     bb.getUnsupportedFeatures().addMessage(method.format("%H.%n(%p)"), method, message, ex.context(), cause.getCause());
+                } else if (ex.getCause() instanceof ClassNotFoundException) {
+                    String message = "Bytecode parsing error: " + ex.getMessage();
+                    bb.getUnsupportedFeatures().addMessage(method.format("%H.%n(%p)"), method, message, ex.context(), ex.getCause());
+                } else if (ex.getCause() instanceof NoClassDefFoundError) {
+                    String message = "Bytecode parsing error: " + ex.getMessage();
+                    bb.getUnsupportedFeatures().addMessage(method.format("%H.%n(%p)"), method, message, ex.context(), ex.getCause());
                 } else {
-                    /* Wrap all other errors as parsing errors. */
-                    throw AnalysisError.parsingError(method, ex);
+                    throw ex;
                 }
+            } catch (NoClassDefFoundError ex) {
+                bb.getUnsupportedFeatures().addMessage(method.format("%H.%n(%p)"), method, ex.toString(), null, ex);
+            } catch (UnsupportedFeatureException ex) {
+                bb.getUnsupportedFeatures().addMessage(method.format("%H.%n(%p)"), method, ex.getMessage(), null, ex);
             } catch (Throwable t) {
                 /* Wrap all other errors as parsing errors. */
                 throw AnalysisError.parsingError(method, t);
@@ -344,7 +338,7 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
 
             bb.numParsedGraphs.incrementAndGet();
 
-            returnedParameter = computeReturnedParameter(graph);
+            returnedParameter = computeReturnedParamter();
 
             methodParsed = true;
         }
