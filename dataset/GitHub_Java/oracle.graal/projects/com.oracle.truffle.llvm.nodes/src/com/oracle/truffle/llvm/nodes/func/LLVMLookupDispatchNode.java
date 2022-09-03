@@ -218,7 +218,7 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
     protected LLVMDerefHandleGetReceiverNode getDerefHandleGetReceiverNode() {
         if (derefHandleGetReceiverNode == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            derefHandleGetReceiverNode = insert(LLVMDerefHandleGetReceiverNode.create(LLVMMemory.getDerefHandleObjectMask()));
+            derefHandleGetReceiverNode = insert(LLVMDerefHandleGetReceiverNode.create(LLVMMemory.getObjectMask()));
         }
         return derefHandleGetReceiverNode;
     }
