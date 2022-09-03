@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +22,21 @@
  */
 package com.oracle.graal.hotspot.nodes.type;
 
-import java.util.*;
+import java.util.Objects;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.spi.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
-import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.spi.LIRKindTool;
+import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.hotspot.CompressEncoding;
+
+import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
+import jdk.vm.ci.hotspot.HotSpotMemoryAccessProvider;
+import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.MemoryAccessProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
 
 public final class KlassPointerStamp extends MetaspacePointerStamp {
 
@@ -48,6 +56,10 @@ public final class KlassPointerStamp extends MetaspacePointerStamp {
         return KLASS_NON_NULL;
     }
 
+    public static KlassPointerStamp klassAlwaysNull() {
+        return KLASS_ALWAYS_NULL;
+    }
+
     private KlassPointerStamp(boolean nonNull, boolean alwaysNull) {
         this(nonNull, alwaysNull, null);
     }
@@ -55,6 +67,11 @@ public final class KlassPointerStamp extends MetaspacePointerStamp {
     private KlassPointerStamp(boolean nonNull, boolean alwaysNull, CompressEncoding encoding) {
         super(nonNull, alwaysNull);
         this.encoding = encoding;
+    }
+
+    @Override
+    protected AbstractPointerStamp copyWith(boolean newNonNull, boolean newAlwaysNull) {
+        return new KlassPointerStamp(newNonNull, newAlwaysNull, encoding);
     }
 
     @Override
@@ -70,6 +87,15 @@ public final class KlassPointerStamp extends MetaspacePointerStamp {
     }
 
     @Override
+    public boolean isCompatible(Constant constant) {
+        if (constant instanceof HotSpotMetaspaceConstant) {
+            return ((HotSpotMetaspaceConstant) constant).asResolvedJavaType() != null;
+        } else {
+            return super.isCompatible(constant);
+        }
+    }
+
+    @Override
     public Stamp constant(Constant c, MetaAccessProvider meta) {
         if (isCompressed()) {
             if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(c)) {
@@ -82,6 +108,7 @@ public final class KlassPointerStamp extends MetaspacePointerStamp {
         }
 
         assert c instanceof HotSpotMetaspaceConstant;
+        assert ((HotSpotMetaspaceConstant) c).isCompressed() == isCompressed();
         if (nonNull()) {
             return this;
         }
@@ -104,7 +131,7 @@ public final class KlassPointerStamp extends MetaspacePointerStamp {
     @Override
     public LIRKind getLIRKind(LIRKindTool tool) {
         if (isCompressed()) {
-            return LIRKind.value(Kind.Int);
+            return ((HotSpotLIRKindTool) tool).getNarrowPointerKind();
         } else {
             return super.getLIRKind(tool);
         }
@@ -132,7 +159,7 @@ public final class KlassPointerStamp extends MetaspacePointerStamp {
     public Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement) {
         HotSpotMemoryAccessProvider hsProvider = (HotSpotMemoryAccessProvider) provider;
         if (isCompressed()) {
-            return hsProvider.readNarrowKlassPointerConstant(base, displacement, encoding);
+            return hsProvider.readNarrowKlassPointerConstant(base, displacement);
         } else {
             return hsProvider.readKlassPointerConstant(base, displacement);
         }

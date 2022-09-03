@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,36 +22,61 @@
  */
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-import static jdk.internal.jvmci.meta.LocationIdentity.*;
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.JavaKind;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.nodes.*;
+import static com.oracle.graal.compiler.common.LocationIdentity.any;
 
-@NodeInfo
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.word.KlassPointer;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.NamedLocationIdentity;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.replacements.SnippetTemplate;
+import com.oracle.graal.replacements.nodes.BasicArrayCopyNode;
+
+@NodeInfo(allowedUsageTypes = InputType.Memory)
 public final class ArrayCopySlowPathNode extends BasicArrayCopyNode {
 
     public static final NodeClass<ArrayCopySlowPathNode> TYPE = NodeClass.create(ArrayCopySlowPathNode.class);
 
     private final SnippetTemplate.SnippetInfo snippet;
 
-    public ArrayCopySlowPathNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind, SnippetTemplate.SnippetInfo snippet) {
+    /**
+     * Extra context for the slow path snippet.
+     */
+    private final Object argument;
+
+    /**
+     * AOT compilation requires klass constants to be exposed after the first lowering to be handled
+     * automatically. Lowering for {@link ArrayCopySlowPathNode}, with snippet ==
+     * {@link ArrayCopySnippets#arraycopyPredictedObjectWork}, requires a klass of Object[]. For
+     * other snippets {@link #predictedKlass} is a null constant.
+     */
+    @Input protected ValueNode predictedKlass;
+
+    public ArrayCopySlowPathNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, ValueNode predictedKlass, JavaKind elementKind,
+                    SnippetTemplate.SnippetInfo snippet, Object argument) {
         super(TYPE, src, srcPos, dest, destPos, length, elementKind, BytecodeFrame.INVALID_FRAMESTATE_BCI);
         assert StampTool.isPointerNonNull(src) && StampTool.isPointerNonNull(dest) : "must have been null checked";
         this.snippet = snippet;
+        this.argument = argument;
+        this.predictedKlass = predictedKlass;
     }
 
     @NodeIntrinsic
-    public static native void arraycopy(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, int length, @ConstantNodeParameter Kind elementKind,
-                    @ConstantNodeParameter SnippetTemplate.SnippetInfo snippet);
+    public static native void arraycopy(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, int length, KlassPointer predictedKlass,
+                    @ConstantNodeParameter JavaKind elementKind, @ConstantNodeParameter SnippetTemplate.SnippetInfo snippet, @ConstantNodeParameter Object argument);
 
     public SnippetTemplate.SnippetInfo getSnippet() {
         return snippet;
+    }
+
+    public Object getArgument() {
+        return argument;
     }
 
     @Override
@@ -64,5 +89,9 @@ public final class ArrayCopySlowPathNode extends BasicArrayCopyNode {
 
     public void setBci(int bci) {
         this.bci = bci;
+    }
+
+    public ValueNode getPredictedKlass() {
+        return predictedKlass;
     }
 }

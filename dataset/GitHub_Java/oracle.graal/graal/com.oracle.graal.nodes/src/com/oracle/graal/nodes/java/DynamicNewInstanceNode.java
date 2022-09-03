@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,36 +22,76 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
+import java.lang.reflect.Modifier;
 
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.ValueNode;
+
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+@NodeInfo
 public class DynamicNewInstanceNode extends AbstractNewObjectNode implements Canonicalizable {
+    public static final NodeClass<DynamicNewInstanceNode> TYPE = NodeClass.create(DynamicNewInstanceNode.class);
 
-    @Input private ValueNode clazz;
+    @Input ValueNode clazz;
+
+    /**
+     * Class pointer to class.class needs to be exposed earlier than this node is lowered so that it
+     * can be replaced by the AOT machinery. If it's not needed for lowering this input can be
+     * ignored.
+     */
+    @OptionalInput ValueNode classClass;
 
     public DynamicNewInstanceNode(ValueNode clazz, boolean fillContents) {
-        super(StampFactory.objectNonNull(), fillContents);
-        this.clazz = clazz;
+        this(TYPE, clazz, fillContents, null);
     }
 
-    @Override
-    public Node canonical(CanonicalizerTool tool) {
-        if (clazz.isConstant()) {
-            ResolvedJavaType type = tool.getConstantReflection().asJavaType(clazz.asConstant());
-            if (type != null && type.isInitialized()) {
-                return graph().add(new NewInstanceNode(type, fillContents()));
-            }
-        }
-        return this;
+    protected DynamicNewInstanceNode(NodeClass<? extends DynamicNewInstanceNode> c, ValueNode clazz, boolean fillContents, FrameState stateBefore) {
+        super(c, StampFactory.objectNonNull(), fillContents, stateBefore);
+        this.clazz = clazz;
     }
 
     public ValueNode getInstanceType() {
         return clazz;
     }
 
-    @NodeIntrinsic
-    public static native Object allocateInstance(Class<?> clazz, @ConstantNodeParameter boolean fillContents);
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (clazz.isConstant()) {
+            ResolvedJavaType type = tool.getConstantReflection().asJavaType(clazz.asConstant());
+            if (type != null && type.isInitialized() && !throwsInstantiationException(type, tool.getMetaAccess())) {
+                return createNewInstanceNode(type);
+            }
+        }
+        return this;
+    }
+
+    /** Hook for subclasses to instantiate a subclass of {@link NewInstanceNode}. */
+    protected NewInstanceNode createNewInstanceNode(ResolvedJavaType type) {
+        return new NewInstanceNode(type, fillContents(), stateBefore());
+    }
+
+    public static boolean throwsInstantiationException(Class<?> type, Class<?> classClass) {
+        return type.isPrimitive() || type.isArray() || type.isInterface() || Modifier.isAbstract(type.getModifiers()) || type == classClass;
+    }
+
+    public static boolean throwsInstantiationException(ResolvedJavaType type, MetaAccessProvider metaAccess) {
+        return type.isPrimitive() || type.isArray() || type.isInterface() || Modifier.isAbstract(type.getModifiers()) || type.equals(metaAccess.lookupJavaType(Class.class));
+    }
+
+    public ValueNode getClassClass() {
+        return classClass;
+    }
+
+    public void setClassClass(ValueNode newClassClass) {
+        updateUsages(classClass, newClassClass);
+        classClass = newClassClass;
+    }
 }
