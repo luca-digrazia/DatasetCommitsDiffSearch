@@ -22,20 +22,34 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.ProfilingInfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
-public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerable, Canonicalizable.Binary<ValueNode> {
+public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerable, MemoryArithmeticLIRLowerable, Canonicalizable {
 
     @Input private ValueNode x;
     @Input private ValueNode y;
 
-    public ValueNode getX() {
+    public ValueNode x() {
         return x;
     }
 
-    public ValueNode getY() {
+    public ValueNode y() {
         return y;
+    }
+
+    protected void setX(ValueNode x) {
+        updateUsages(this.x, x);
+        this.x = x;
+    }
+
+    protected void setY(ValueNode y) {
+        updateUsages(this.y, y);
+        this.y = y;
     }
 
     public BinaryOpLogicNode(ValueNode x, ValueNode y) {
@@ -44,6 +58,8 @@ public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerabl
         this.y = y;
     }
 
+    public abstract TriState evaluate(ConstantReflectionProvider constantReflection, ValueNode forX, ValueNode forY);
+
     @Override
     public boolean verify() {
         assertTrue(x.stamp().isCompatible(y.stamp()), "stamps not compatible: %s, %s", x.stamp(), y.stamp());
@@ -51,6 +67,22 @@ public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerabl
     }
 
     @Override
+    public Node canonical(CanonicalizerTool tool) {
+        switch (evaluate(tool.getConstantReflection(), x(), y())) {
+            case FALSE:
+                return LogicConstantNode.contradiction(graph());
+            case TRUE:
+                return LogicConstantNode.tautology(graph());
+        }
+        return this;
+    }
+
+    @Override
     public void generate(NodeLIRBuilderTool gen) {
+    }
+
+    @Override
+    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
+        return false;
     }
 }

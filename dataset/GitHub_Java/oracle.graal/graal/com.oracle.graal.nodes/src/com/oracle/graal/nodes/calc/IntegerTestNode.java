@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -32,7 +32,6 @@ import com.oracle.graal.nodes.*;
  * expression "(x &amp; y) == 0", meaning that it will return true if (and only if) no bit is set in
  * both x and y.
  */
-@NodeInfo
 public class IntegerTestNode extends BinaryOpLogicNode {
 
     /**
@@ -46,19 +45,19 @@ public class IntegerTestNode extends BinaryOpLogicNode {
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+    public TriState evaluate(ConstantReflectionProvider constantReflection, ValueNode forX, ValueNode forY) {
         if (forX.isConstant() && forY.isConstant()) {
-            return LogicConstantNode.forBoolean((forX.asConstant().asLong() & forY.asConstant().asLong()) == 0);
+            return TriState.get((forX.asConstant().asLong() & forY.asConstant().asLong()) == 0);
         }
-        if (getX().stamp() instanceof IntegerStamp && getY().stamp() instanceof IntegerStamp) {
+        if (x().stamp() instanceof IntegerStamp && y().stamp() instanceof IntegerStamp) {
             IntegerStamp xStamp = (IntegerStamp) forX.stamp();
             IntegerStamp yStamp = (IntegerStamp) forY.stamp();
             if ((xStamp.upMask() & yStamp.upMask()) == 0) {
-                return LogicConstantNode.tautology();
+                return TriState.TRUE;
             } else if ((xStamp.downMask() & yStamp.downMask()) != 0) {
-                return LogicConstantNode.contradiction();
+                return TriState.FALSE;
             }
         }
-        return this;
+        return TriState.UNKNOWN;
     }
 }

@@ -120,7 +120,7 @@ public abstract class CompareNode extends BinaryOpLogicNode {
         if (x() instanceof ConvertNode && y() instanceof ConvertNode) {
             ConvertNode convertX = (ConvertNode) x();
             ConvertNode convertY = (ConvertNode) y();
-            if (convertX.preservesOrder(condition()) && convertY.preservesOrder(condition()) && convertX.getInput().stamp().isCompatible(convertY.getInput().stamp())) {
+            if (convertX.isLossless() && convertY.isLossless() && convertX.getInput().stamp().isCompatible(convertY.getInput().stamp())) {
                 setX(convertX.getInput());
                 setY(convertY.getInput());
             }
@@ -142,8 +142,8 @@ public abstract class CompareNode extends BinaryOpLogicNode {
         return this;
     }
 
-    private ConstantNode canonicalConvertConstant(ConvertNode convert, Constant constant) {
-        if (convert.preservesOrder(condition())) {
+    private static ConstantNode canonicalConvertConstant(ConvertNode convert, Constant constant) {
+        if (convert.isLossless()) {
             Constant reverseConverted = convert.reverse(constant);
             if (convert.convert(reverseConverted).equals(constant)) {
                 return ConstantNode.forPrimitive(convert.getInput().stamp(), reverseConverted, convert.graph());
