@@ -65,7 +65,6 @@ import com.oracle.graal.truffle.debug.TraceCompilationListener;
 import com.oracle.graal.truffle.debug.TraceCompilationPolymorphismListener;
 import com.oracle.graal.truffle.debug.TraceInliningListener;
 import com.oracle.graal.truffle.debug.TraceSplittingListener;
-import com.oracle.graal.truffle.phases.InstrumentBranchesPhase;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -391,7 +390,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     private void shutdown() {
         getCompilationNotify().notifyShutdown(this);
-        InstrumentBranchesPhase.instrumentation.dumpAccessTable();
     }
 
     protected void doCompile(OptimizedCallTarget optimizedCallTarget) {
