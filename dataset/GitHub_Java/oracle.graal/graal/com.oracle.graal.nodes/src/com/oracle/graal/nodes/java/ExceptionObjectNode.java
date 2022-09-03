@@ -29,8 +29,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * The {@code ExceptionObject} instruction represents the incoming exception object to an exception
- * handler.
+ * The {@code ExceptionObject} instruction represents the incoming exception object to an exception handler.
  */
 public class ExceptionObjectNode extends AbstractStateSplit implements StateSplit, LIRLowerable, MemoryCheckpoint {
 
@@ -38,7 +37,7 @@ public class ExceptionObjectNode extends AbstractStateSplit implements StateSpli
      * Constructs a new ExceptionObject instruction.
      */
     public ExceptionObjectNode(MetaAccessProvider runtime) {
-        super(StampFactory.declared(runtime.lookupJavaType(Throwable.class)));
+        super(StampFactory.declared(runtime.getResolvedJavaType(Throwable.class)));
     }
 
     @Override

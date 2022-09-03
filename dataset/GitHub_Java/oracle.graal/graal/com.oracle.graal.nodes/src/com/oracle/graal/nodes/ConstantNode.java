@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
@@ -34,7 +32,7 @@ import com.oracle.graal.nodes.type.*;
  * The {@code ConstantNode} represents a constant such as an integer value,
  * long, float, object reference, address, etc.
  */
-@NodeInfo(shortName = "Const", nameTemplate = "Const({p#rawvalue})")
+@NodeInfo(shortName = "Const")
 public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     public final Constant value;
@@ -67,7 +65,7 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
     }
 
     public static ConstantNode forConstant(Constant constant, MetaAccessProvider runtime, Graph graph) {
-        if (constant.getKind() == Kind.Object) {
+        if (constant.kind == Kind.Object) {
             return graph.unique(new ConstantNode(constant, runtime));
         } else {
             return graph.unique(new ConstantNode(constant));
@@ -171,7 +169,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
      * @return a node representing the object
      */
     public static ConstantNode forObject(Object o, MetaAccessProvider runtime, Graph graph) {
-        assert !(o instanceof Constant) : "wrapping a Constant into a Constant";
         return graph.unique(new ConstantNode(Constant.forObject(o), runtime));
     }
 
@@ -222,16 +219,9 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
     }
 
     @Override
-    public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
-        Map<Object, Object> properties = super.getDebugProperties(map);
-        properties.put("rawvalue", value.getKind().isObject() ? value.getKind().format(value.asBoxedValue()) : value.asBoxedValue());
-        return properties;
-    }
-
-    @Override
     public String toString(Verbosity verbosity) {
         if (verbosity == Verbosity.Name) {
-            return super.toString(Verbosity.Name) + "(" + value.getKind().format(value.asBoxedValue()) + ")";
+            return super.toString(Verbosity.Name) + "(" + value.kind.format(value.boxedValue()) + ")";
         } else {
             return super.toString(verbosity);
         }
