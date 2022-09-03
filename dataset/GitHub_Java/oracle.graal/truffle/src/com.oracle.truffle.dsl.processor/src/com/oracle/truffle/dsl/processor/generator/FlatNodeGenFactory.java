@@ -611,7 +611,6 @@ public class FlatNodeGenFactory {
 
         CodeTreeBuilder builder = isValid.createBuilder();
         if (assumptionType.getKind() == TypeKind.ARRAY) {
-            isValid.addAnnotationMirror(new CodeAnnotationMirror(context.getDeclaredType(ExplodeLoop.class)));
             isValid.addParameter(new CodeVariableElement(getType(Assumption[].class), "assumptions"));
             builder.startFor().startGroup().type(((ArrayType) assumptionType).getComponentType()).string(" assumption : assumptions").end().end();
             builder.startBlock();
