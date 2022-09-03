@@ -24,14 +24,15 @@ package com.oracle.graal.nodes.type;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.type.GenericStamp.GenericStampType;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 
 public class StampFactory {
 
-    private static final Stamp[] stampCache = new Stamp[Kind.values().length];
+    private static final Stamp[] stampCache = new Stamp[CiKind.values().length];
     private static final Stamp objectStamp = new ObjectStamp(null, false, false);
     private static final Stamp objectNonNullStamp = new ObjectStamp(null, false, true);
     private static final Stamp dependencyStamp = new GenericStamp(GenericStampType.Dependency);
@@ -42,28 +43,28 @@ public class StampFactory {
 
     private static final Stamp positiveInt = forInt(0, Integer.MAX_VALUE);
 
-    private static void setCache(Kind kind, Stamp stamp) {
+    private static void setCache(CiKind kind, Stamp stamp) {
         stampCache[kind.ordinal()] = stamp;
     }
 
     static {
-        setCache(Kind.Boolean, new IntegerStamp(Kind.Boolean));
-        setCache(Kind.Byte, new IntegerStamp(Kind.Byte));
-        setCache(Kind.Short, new IntegerStamp(Kind.Short));
-        setCache(Kind.Char, new IntegerStamp(Kind.Char));
-        setCache(Kind.Int, new IntegerStamp(Kind.Int));
-        setCache(Kind.Long, new IntegerStamp(Kind.Long));
+        setCache(CiKind.Boolean, new IntegerStamp(CiKind.Boolean));
+        setCache(CiKind.Byte, new IntegerStamp(CiKind.Byte));
+        setCache(CiKind.Short, new IntegerStamp(CiKind.Short));
+        setCache(CiKind.Char, new IntegerStamp(CiKind.Char));
+        setCache(CiKind.Int, new IntegerStamp(CiKind.Int));
+        setCache(CiKind.Long, new IntegerStamp(CiKind.Long));
 
-        setCache(Kind.Float, new FloatStamp(Kind.Float));
-        setCache(Kind.Double, new FloatStamp(Kind.Double));
+        setCache(CiKind.Float, new FloatStamp(CiKind.Float));
+        setCache(CiKind.Double, new FloatStamp(CiKind.Double));
 
-        setCache(Kind.Jsr, new IntegerStamp(Kind.Jsr));
+        setCache(CiKind.Jsr, new IntegerStamp(CiKind.Jsr));
 
-        setCache(Kind.Object, objectStamp);
-        setCache(Kind.Void, voidStamp);
+        setCache(CiKind.Object, objectStamp);
+        setCache(CiKind.Void, voidStamp);
     }
 
-    public static Stamp forKind(Kind kind) {
+    public static Stamp forKind(CiKind kind) {
         assert stampCache[kind.stackKind().ordinal()] != null : "unexpected forKind(" + kind + ")";
         return stampCache[kind.stackKind().ordinal()];
     }
@@ -73,7 +74,7 @@ public class StampFactory {
     }
 
     public static Stamp intValue() {
-        return forKind(Kind.Int);
+        return forKind(CiKind.Int);
     }
 
     public static Stamp dependency() {
@@ -97,31 +98,31 @@ public class StampFactory {
     }
 
     public static Stamp forInt(int lowerBound, int upperBound) {
-        return new IntegerStamp(Kind.Int, lowerBound, upperBound);
+        return new IntegerStamp(CiKind.Int, lowerBound, upperBound);
     }
 
     public static Stamp forLong(long lowerBound, long upperBound) {
-        return new IntegerStamp(Kind.Long, lowerBound, upperBound);
+        return new IntegerStamp(CiKind.Long, lowerBound, upperBound);
     }
 
-    public static Stamp forConstant(Constant value) {
-        assert value.kind != Kind.Object;
-        if (value.kind == Kind.Object) {
+    public static Stamp forConstant(CiConstant value) {
+        assert value.kind != CiKind.Object;
+        if (value.kind == CiKind.Object) {
             throw new GraalInternalError("unexpected kind: %s", value.kind);
         } else {
-            if (value.kind == Kind.Int) {
+            if (value.kind == CiKind.Int) {
                 return forInt(value.asInt(), value.asInt());
-            } else if (value.kind == Kind.Long) {
+            } else if (value.kind == CiKind.Long) {
                 return forLong(value.asLong(), value.asLong());
             }
             return forKind(value.kind.stackKind());
         }
     }
 
-    public static Stamp forConstant(Constant value, MetaAccessProvider runtime) {
-        assert value.kind == Kind.Object;
-        if (value.kind == Kind.Object) {
-            ResolvedJavaType type = value.isNull() ? null : runtime.getTypeOf(value);
+    public static Stamp forConstant(CiConstant value, RiRuntime runtime) {
+        assert value.kind == CiKind.Object;
+        if (value.kind == CiKind.Object) {
+            RiResolvedType type = value.isNull() ? null : runtime.getTypeOf(value);
             return new ObjectStamp(type, value.isNonNull(), value.isNonNull());
         } else {
             throw new GraalInternalError("CiKind.Object expected, actual kind: %s", value.kind);
@@ -136,18 +137,18 @@ public class StampFactory {
         return objectNonNullStamp;
     }
 
-    public static Stamp declared(ResolvedJavaType type) {
+    public static Stamp declared(RiResolvedType type) {
         return declared(type, false);
     }
 
-    public static Stamp declaredNonNull(ResolvedJavaType type) {
+    public static Stamp declaredNonNull(RiResolvedType type) {
         return declared(type, true);
     }
 
-    public static Stamp declared(ResolvedJavaType type, boolean nonNull) {
+    public static Stamp declared(RiResolvedType type, boolean nonNull) {
         assert type != null;
-        assert type.kind() == Kind.Object;
-        ResolvedJavaType exact = type.exactType();
+        assert type.kind(false) == CiKind.Object;
+        RiResolvedType exact = type.exactType();
         if (exact != null) {
             return new ObjectStamp(exact, true, nonNull);
         } else {
@@ -155,7 +156,7 @@ public class StampFactory {
         }
     }
 
-    public static Stamp exactNonNull(ResolvedJavaType type) {
+    public static Stamp exactNonNull(RiResolvedType type) {
         return new ObjectStamp(type, true, true);
     }
 

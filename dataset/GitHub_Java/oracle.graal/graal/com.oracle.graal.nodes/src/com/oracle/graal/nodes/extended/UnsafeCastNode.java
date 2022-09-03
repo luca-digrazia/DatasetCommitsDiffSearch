@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -32,16 +32,16 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code UnsafeCastNode} produces the same value as its input, but with a different type.
  */
-public final class UnsafeCastNode extends FloatingNode implements Canonicalizable, Lowerable, LIRLowerable {
+public final class UnsafeCastNode extends FloatingNode implements Canonicalizable, Lowerable {
 
     @Input private ValueNode object;
-    private ResolvedJavaType toType;
+    private RiResolvedType toType;
 
     public ValueNode object() {
         return object;
     }
 
-    public UnsafeCastNode(ValueNode object, ResolvedJavaType toType) {
+    public UnsafeCastNode(ValueNode object, RiResolvedType toType) {
         super(StampFactory.declared(toType, object.stamp().nonNull()));
         this.object = object;
         this.toType = toType;
@@ -49,32 +49,20 @@ public final class UnsafeCastNode extends FloatingNode implements Canonicalizabl
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        if (object != null && object.kind().isObject() && object.objectStamp().type() != null && object.objectStamp().type().isSubtypeOf(toType)) {
+        if (object != null && object.objectStamp().type() != null && object.objectStamp().type().isSubtypeOf(toType)) {
             return object;
         }
         return this;
     }
 
-
     @Override
     public void lower(CiLoweringTool tool) {
-        if (object.kind() == kind()) {
-            ((StructuredGraph) graph()).replaceFloating(this, object);
-        } else {
-            // Cannot remove an unsafe cast between two different kinds
-        }
+        ((StructuredGraph) graph()).replaceFloating(this, object);
     }
 
     @SuppressWarnings("unused")
     @NodeIntrinsic
     public static <T> T cast(Object object, @ConstantNodeParameter Class<?> toType) {
         throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
-    }
-
-    @Override
-    public void generate(LIRGeneratorTool generator) {
-        Value result = generator.newVariable(kind());
-        generator.emitMove(generator.operand(object), result);
-        generator.setResult(this, result);
     }
 }
