@@ -620,15 +620,12 @@ public abstract class ShapeImpl extends Shape {
             return cachedShape;
         }
 
-        ShapeImpl shape = getShapeFromProperty(prop.getKey());
+        ShapeImpl shape = getShapeFromProperty(prop);
         if (shape != null) {
             List<Transition> transitionList = new ArrayList<>();
             ShapeImpl current = this;
             while (current != shape) {
-                if (!(current.getTransitionFromParent() instanceof Transition.DirectReplacePropertyTransition) ||
-                                !((Transition.DirectReplacePropertyTransition) current.getTransitionFromParent()).getPropertyBefore().getKey().equals(prop.getKey())) {
-                    transitionList.add(current.getTransitionFromParent());
-                }
+                transitionList.add(current.getTransitionFromParent());
                 current = current.parent;
             }
             ShapeImpl newShape = shape.parent;
@@ -658,14 +655,7 @@ public abstract class ShapeImpl extends Shape {
         } else if (transition instanceof ReservePrimitiveArrayTransition) {
             return reservePrimitiveExtensionArray();
         } else if (transition instanceof DirectReplacePropertyTransition) {
-            Property oldProperty = ((DirectReplacePropertyTransition) transition).getPropertyBefore();
-            Property newProperty = ((DirectReplacePropertyTransition) transition).getPropertyAfter();
-            if (append) {
-                assert oldProperty.getLocation() instanceof DualLocation && newProperty.getLocation() instanceof DualLocation;
-                oldProperty = getProperty(oldProperty.getKey());
-                newProperty = newProperty.relocate(((DualLocation) oldProperty.getLocation()).changeType(((DualLocation) newProperty.getLocation()).getType()));
-            }
-            return replaceProperty(oldProperty, newProperty);
+            return replaceProperty(((DirectReplacePropertyTransition) transition).getPropertyBefore(), ((DirectReplacePropertyTransition) transition).getPropertyAfter());
         } else {
             throw new UnsupportedOperationException();
         }
