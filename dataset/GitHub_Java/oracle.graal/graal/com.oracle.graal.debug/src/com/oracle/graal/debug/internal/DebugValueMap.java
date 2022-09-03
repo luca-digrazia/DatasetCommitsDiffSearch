@@ -24,9 +24,6 @@ package com.oracle.graal.debug.internal;
 
 import java.util.*;
 
-/**
- * A node in a tree of {@link DebugValue}s.
- */
 public class DebugValueMap {
 
     private static List<DebugValueMap> topLevelMaps = new ArrayList<>();
@@ -105,9 +102,9 @@ public class DebugValueMap {
     }
 
     public void normalize() {
-        if (hasChildren()) {
+        if (this.hasChildren()) {
             Map<String, DebugValueMap> occurred = new HashMap<>();
-            for (DebugValueMap map : children) {
+            for (DebugValueMap map : this.children) {
                 String mapName = map.getName();
                 if (!occurred.containsKey(mapName)) {
                     occurred.put(mapName, map);
@@ -122,7 +119,7 @@ public class DebugValueMap {
                 // At least one duplicate was found.
                 children.clear();
                 for (DebugValueMap map : occurred.values()) {
-                    addChild(map);
+                    children.add(map);
                     map.normalize();
                 }
             }

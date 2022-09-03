@@ -129,7 +129,8 @@ public class CanonicalizerPhase extends Phase {
         graph.stopTrackingInputChange();
         while (graph.getUsagesDroppedNodesCount() > 0) {
             for (Node n : graph.getAndCleanUsagesDroppedNodes()) {
-                if (!n.isDeleted() && n.usages().size() == 0 && GraphUtil.isFloatingNode().apply(n)) {
+                if (!n.isDeleted() && n.usages().size() == 0 && n instanceof FloatingNode) {
+                    n.clearInputs();
                     n.safeDelete();
                 }
             }

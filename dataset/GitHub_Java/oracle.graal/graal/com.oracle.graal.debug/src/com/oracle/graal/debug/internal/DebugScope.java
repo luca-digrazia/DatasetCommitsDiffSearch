@@ -33,7 +33,6 @@ public final class DebugScope {
     private static ThreadLocal<DebugScope> instanceTL = new ThreadLocal<>();
     private static ThreadLocal<DebugConfig> configTL = new ThreadLocal<>();
     private static ThreadLocal<Throwable> lastExceptionThrownTL = new ThreadLocal<>();
-    private static ThreadLocal<DebugScope> lastLogScope = new ThreadLocal<>();
     private static DebugTimer scopeTime = Debug.timer("ScopeTime");
 
     private final DebugScope parent;
@@ -49,8 +48,6 @@ public final class DebugScope {
     private boolean meterEnabled;
     private boolean timeEnabled;
     private boolean dumpEnabled;
-
-    private PrintStream output;
 
     public static DebugScope getInstance() {
         DebugScope result = instanceTL.get();
@@ -106,11 +103,7 @@ public final class DebugScope {
 
     public void log(String msg, Object... args) {
         if (isLogEnabled()) {
-            if (lastLogScope.get() != this) {
-                output.println("scope: " + qualifiedName + " " + this);
-                lastLogScope.set(this);
-            }
-            output.println(String.format(msg, args));
+            cachedOut.println(String.format(msg, args));
         }
     }
 
@@ -180,13 +173,11 @@ public final class DebugScope {
             meterEnabled = false;
             timeEnabled = false;
             dumpEnabled = false;
-            output = null;
         } else {
             logEnabled = config.isLogEnabled();
             meterEnabled = config.isMeterEnabled();
             timeEnabled = config.isTimeEnabled();
             dumpEnabled = config.isDumpEnabled();
-            output = config.output();
         }
     }
 
@@ -289,5 +280,11 @@ public final class DebugScope {
 
     public String getQualifiedName() {
         return qualifiedName;
+    }
+
+    public static PrintStream cachedOut;
+
+    public static void initialize() {
+        cachedOut = System.out;
     }
 }
