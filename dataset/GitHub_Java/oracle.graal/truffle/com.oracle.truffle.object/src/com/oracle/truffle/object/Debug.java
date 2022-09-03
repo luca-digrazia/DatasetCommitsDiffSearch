@@ -28,66 +28,18 @@ import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.nio.file.Paths;
 import java.util.Collection;
-import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.oracle.truffle.api.nodes.GraphPrintVisitor;
-import com.oracle.truffle.api.object.DynamicObject;
-import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.object.debug.GraphvizShapeVisitor;
 import com.oracle.truffle.object.debug.IGVShapeVisitor;
 import com.oracle.truffle.object.debug.JSONShapeVisitor;
-import com.oracle.truffle.object.debug.ShapeProfiler;
 
 class Debug {
     private static Collection<ShapeImpl> allShapes;
 
-    static void trackShape(ShapeImpl newShape) {
+    static void registerShape(ShapeImpl newShape) {
         allShapes.add(newShape);
-    }
-
-    static void trackObject(DynamicObject obj) {
-        ShapeProfiler.getInstance().track(obj);
-    }
-
-    static Iterable<ShapeImpl> getAllShapes() {
-        return allShapes;
-    }
-
-    static String dumpObject(DynamicObject object, int level, int levelStop) {
-        List<Property> properties = object.getShape().getPropertyListInternal(true);
-        StringBuilder sb = new StringBuilder(properties.size() * 10);
-        sb.append("{\n");
-        for (Property property : properties) {
-            indent(sb, level + 1);
-
-            sb.append(property.getKey());
-            sb.append('[').append(property.getLocation()).append(']');
-            Object value = property.get(object, false);
-            if (value instanceof DynamicObject) {
-                if (level < levelStop) {
-                    value = dumpObject((DynamicObject) value, level + 1, levelStop);
-                } else {
-                    value = value.toString();
-                }
-            }
-            sb.append(": ");
-            sb.append(value);
-            if (property != properties.get(properties.size() - 1)) {
-                sb.append(",");
-            }
-            sb.append("\n");
-        }
-        indent(sb, level);
-        sb.append("}");
-        return sb.toString();
-    }
-
-    private static StringBuilder indent(StringBuilder sb, int level) {
-        for (int i = 0; i < level; i++) {
-            sb.append(' ');
-        }
-        return sb;
     }
 
     static {
@@ -116,7 +68,7 @@ class Debug {
                 private void dumpDOT() throws FileNotFoundException, UnsupportedEncodingException {
                     try (PrintWriter out = new PrintWriter(getOutputFile("dot"), "UTF-8")) {
                         GraphvizShapeVisitor visitor = new GraphvizShapeVisitor();
-                        for (ShapeImpl shape : getAllShapes()) {
+                        for (ShapeImpl shape : allShapes) {
                             shape.accept(visitor);
                         }
                         out.println(visitor);
@@ -127,7 +79,7 @@ class Debug {
                     try (PrintWriter out = new PrintWriter(getOutputFile("json"), "UTF-8")) {
                         out.println("{\"shapes\": [");
                         boolean first = true;
-                        for (ShapeImpl shape : getAllShapes()) {
+                        for (ShapeImpl shape : allShapes) {
                             if (!first) {
                                 out.println(",");
                             }
@@ -145,7 +97,7 @@ class Debug {
                     GraphPrintVisitor printer = new GraphPrintVisitor();
                     printer.beginGroup("shapes");
                     IGVShapeVisitor visitor = new IGVShapeVisitor(printer);
-                    for (ShapeImpl shape : getAllShapes()) {
+                    for (ShapeImpl shape : allShapes) {
                         if (isRootShape(shape)) {
                             printer.beginGraph(DebugShapeVisitor.getId(shape));
                             shape.accept(visitor);
@@ -153,7 +105,7 @@ class Debug {
                         }
                     }
                     printer.beginGraph("all shapes");
-                    for (ShapeImpl shape : getAllShapes()) {
+                    for (ShapeImpl shape : allShapes) {
                         if (isRootShape(shape)) {
                             shape.accept(visitor);
                         }

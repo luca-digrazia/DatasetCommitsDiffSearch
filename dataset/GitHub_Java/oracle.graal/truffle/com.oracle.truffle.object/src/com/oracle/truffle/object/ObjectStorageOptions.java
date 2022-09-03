@@ -24,10 +24,7 @@ package com.oracle.truffle.object;
 
 import static com.oracle.truffle.api.object.Layout.OPTION_PREFIX;
 
-public final class ObjectStorageOptions {
-    private ObjectStorageOptions() {
-    }
-
+public class ObjectStorageOptions {
     // Shape configuration
     /** Primitive location switch. */
     public static boolean PrimitiveLocations = booleanOption(OPTION_PREFIX + "PrimitiveLocations", true);
