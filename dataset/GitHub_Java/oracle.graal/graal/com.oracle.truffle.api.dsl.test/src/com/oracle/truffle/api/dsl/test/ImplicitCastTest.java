@@ -34,16 +34,16 @@ import com.oracle.truffle.api.frame.*;
 
 public class ImplicitCastTest {
 
-    @TypeSystem({int.class, String.class, boolean.class})
+    @TypeSystem({int.class, boolean.class, String.class})
     static class ImplicitCast0Types {
 
         @ImplicitCast
-        static boolean castInt(int intvalue) {
+        boolean castInt(int intvalue) {
             return intvalue == 1 ? true : false;
         }
 
         @ImplicitCast
-        static boolean castString(String strvalue) {
+        boolean castString(String strvalue) {
             return strvalue.equals("1");
         }
 
@@ -55,12 +55,12 @@ public class ImplicitCastTest {
 
         public abstract Object executeEvaluated(VirtualFrame frame, Object value2);
 
-        @Specialization
+        @Specialization(order = 1)
         public String op1(String value) {
             return value;
         }
 
-        @Specialization
+        @Specialization(order = 2)
         public boolean op1(boolean value) {
             return value;
         }
@@ -81,21 +81,22 @@ public class ImplicitCastTest {
 
     @TypeSystemReference(ImplicitCast0Types.class)
     @NodeChild(value = "operand", type = ImplicitCast1Node.class)
+    // TODO temporary workaround
     abstract static class ImplicitCast1Node extends ValueNode {
 
         public abstract Object executeEvaluated(VirtualFrame frame, Object operand);
 
-        @Specialization
+        @Specialization(order = 0)
         public String op0(String value) {
             return value;
         }
 
-        @Specialization(rewriteOn = RuntimeException.class)
+        @Specialization(order = 1, rewriteOn = RuntimeException.class)
         public boolean op1(@SuppressWarnings("unused") boolean value) throws RuntimeException {
             throw new RuntimeException();
         }
 
-        @Specialization(contains = "op1")
+        @Specialization(order = 2)
         public boolean op2(boolean value) {
             return value;
         }
@@ -119,18 +120,18 @@ public class ImplicitCastTest {
     // TODO temporary workaround
     abstract static class ImplicitCast2Node extends ValueNode {
 
-        @Specialization
+        @Specialization(order = 0)
         public String op0(String v0, String v1) {
             return v0 + v1;
         }
 
         @SuppressWarnings("unused")
-        @Specialization(rewriteOn = RuntimeException.class)
+        @Specialization(order = 1, rewriteOn = RuntimeException.class)
         public boolean op1(boolean v0, boolean v1) throws RuntimeException {
             throw new RuntimeException();
         }
 
-        @Specialization(contains = "op1")
+        @Specialization(order = 2)
         public boolean op2(boolean v0, boolean v1) {
             return v0 && v1;
         }
@@ -153,28 +154,6 @@ public class ImplicitCastTest {
         Assert.assertEquals("42", root.getNode().executeEvaluated(null, "4", "2"));
         Assert.assertEquals(true, root.getNode().executeEvaluated(null, 1, 1));
         Assert.assertEquals(true, root.getNode().executeEvaluated(null, true, true));
-    }
-
-    @TypeSystem({String.class, boolean.class})
-    static class ImplicitCastError1 {
-
-        @ImplicitCast
-        @ExpectError("Target type and source type of an @ImplicitCast must not be the same type.")
-        static String castInvalid(@SuppressWarnings("unused") String value) {
-            throw new AssertionError();
-        }
-
-    }
-
-    @TypeSystem({String.class, boolean.class})
-    static class ImplicitCastError2 {
-
-        @ImplicitCast
-        @ExpectError("Target type and source type of an @ImplicitCast must not be the same type.")
-        static String castInvalid(@SuppressWarnings("unused") String value) {
-            throw new AssertionError();
-        }
-
     }
 
 }
