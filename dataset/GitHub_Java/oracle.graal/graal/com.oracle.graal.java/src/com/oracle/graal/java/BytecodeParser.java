@@ -1985,13 +1985,9 @@ public class BytecodeParser implements GraphBuilderContext {
         synchronizedEpilogue(BytecodeFrame.AFTER_BCI, x, kind);
     }
 
-    protected MonitorEnterNode createMonitorEnterNode(ValueNode x, MonitorIdNode monitorId) {
-        return new MonitorEnterNode(x, monitorId);
-    }
-
     protected void genMonitorEnter(ValueNode x, int bci) {
         MonitorIdNode monitorId = graph.add(new MonitorIdNode(frameState.lockDepth(true)));
-        MonitorEnterNode monitorEnter = append(createMonitorEnterNode(x, monitorId));
+        MonitorEnterNode monitorEnter = append(new MonitorEnterNode(x, monitorId));
         frameState.pushLock(x, monitorId);
         monitorEnter.setStateAfter(createFrameState(bci, monitorEnter));
     }
@@ -3434,7 +3430,7 @@ public class BytecodeParser implements GraphBuilderContext {
         if (skippedExceptionTypes != null) {
             for (ResolvedJavaType exceptionType : skippedExceptionTypes) {
                 if (exceptionType.isAssignableFrom(resolvedType)) {
-                    append(new DeoptimizeNode(DeoptimizationAction.None, TransferToInterpreter));
+                    append(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, TransferToInterpreter));
                     return;
                 }
             }
