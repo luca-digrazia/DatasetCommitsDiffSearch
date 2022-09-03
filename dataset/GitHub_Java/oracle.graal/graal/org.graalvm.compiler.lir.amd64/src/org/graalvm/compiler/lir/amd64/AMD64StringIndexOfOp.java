@@ -22,9 +22,6 @@
  */
 package org.graalvm.compiler.lir.amd64;
 
-import static jdk.vm.ci.amd64.AMD64.rax;
-import static jdk.vm.ci.amd64.AMD64.rcx;
-import static jdk.vm.ci.amd64.AMD64.rdx;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.ILLEGAL;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
@@ -38,7 +35,6 @@ import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.amd64.AMD64.CPUFeature;
 import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.meta.Value;
 
 /**
@@ -50,10 +46,8 @@ public final class AMD64StringIndexOfOp extends AMD64LIRInstruction {
     @Def({REG}) protected Value resultValue;
     @Alive({REG}) protected Value charPtr1Value;
     @Alive({REG}) protected Value charPtr2Value;
-    @Use({REG}) protected RegisterValue cnt1Value;
-    @Temp({REG}) protected RegisterValue cnt1ValueT;
-    @Use({REG}) protected RegisterValue cnt2Value;
-    @Temp({REG}) protected RegisterValue cnt2ValueT;
+    @Alive({REG}) protected Value cnt1Value;
+    @Alive({REG}) protected Value cnt2Value;
     @Temp({REG}) protected Value temp1;
     @Temp({REG, ILLEGAL}) protected Value vectorTemp1;
 
@@ -61,23 +55,14 @@ public final class AMD64StringIndexOfOp extends AMD64LIRInstruction {
 
     private final int vmPageSize;
 
-    public AMD64StringIndexOfOp(LIRGeneratorTool tool, Value result, Value charPtr1, Value charPtr2, RegisterValue cnt1, RegisterValue cnt2, RegisterValue temp1, RegisterValue vectorTemp1,
-                    int intCnt2, int vmPageSize) {
+    public AMD64StringIndexOfOp(LIRGeneratorTool tool, Value result, Value charPtr1, Value charPtr2, Value cnt1, Value cnt2, Value temp1, Value vectorTemp1, int intCnt2, int vmPageSize) {
         super(TYPE);
         assert ((AMD64) tool.target().arch).getFeatures().contains(CPUFeature.SSE4_2);
         resultValue = result;
         charPtr1Value = charPtr1;
         charPtr2Value = charPtr2;
-        /*
-         * The count values are inputs but are also killed like temporaries so need both Use and
-         * Temp annotations, which will only work with fixed registers.
-         */
         cnt1Value = cnt1;
-        cnt1ValueT = cnt1;
         cnt2Value = cnt2;
-        cnt2ValueT = cnt2;
-        assert asRegister(cnt1).equals(rdx) && asRegister(cnt2).equals(rax) && asRegister(temp1).equals(rcx) : "fixed register usage required";
-
         this.temp1 = temp1;
         this.vectorTemp1 = vectorTemp1;
         this.intCnt2 = intCnt2;

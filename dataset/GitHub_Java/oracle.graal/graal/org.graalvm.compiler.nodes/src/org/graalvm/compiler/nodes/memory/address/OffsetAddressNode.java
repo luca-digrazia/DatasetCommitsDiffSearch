@@ -58,7 +58,6 @@ public class OffsetAddressNode extends AddressNode implements Canonicalizable, P
         this.offset = offset;
     }
 
-    @Override
     public ValueNode getBase() {
         return base;
     }

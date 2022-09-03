@@ -22,9 +22,6 @@
  */
 package org.graalvm.compiler.replacements;
 
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
-
 import org.graalvm.compiler.core.common.LocationIdentity;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
@@ -39,7 +36,7 @@ import org.graalvm.compiler.nodes.memory.MemoryNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 
-@NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+@NodeInfo
 public class SnippetLowerableMemoryNode extends FixedWithNextNode implements Lowerable, MemoryAccess {
     public static final NodeClass<SnippetLowerableMemoryNode> TYPE = NodeClass.create(SnippetLowerableMemoryNode.class);
 

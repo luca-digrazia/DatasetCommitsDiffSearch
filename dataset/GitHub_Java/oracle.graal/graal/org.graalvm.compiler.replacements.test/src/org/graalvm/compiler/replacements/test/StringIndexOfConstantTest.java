@@ -24,7 +24,6 @@ package org.graalvm.compiler.replacements.test;
 
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.ConstantBindingParameterPlugin;
 import org.junit.Test;
 
@@ -32,35 +31,6 @@ import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class StringIndexOfConstantTest extends StringIndexOfTestBase {
-
-    /*
-     * These test definitions could live in the superclass except that the mx junit individual test
-     * runner can't find tests in superclasses.
-     */
-    @Override
-    @Test
-    public void testStringIndexOfConstant() {
-        super.testStringIndexOfConstant();
-    }
-
-    @Override
-    @Test
-    public void testStringIndexOfConstantOffset() {
-        super.testStringIndexOfConstantOffset();
-    }
-
-    @Override
-    @Test
-    public void testStringBuilderIndexOfConstant() {
-        super.testStringBuilderIndexOfConstant();
-    }
-
-    @Override
-    @Test
-    public void testStringBuilderIndexOfConstantOffset() {
-        super.testStringBuilderIndexOfConstantOffset();
-    }
-
     Object[] constantArgs;
 
     @Override
@@ -72,20 +42,35 @@ public class StringIndexOfConstantTest extends StringIndexOfTestBase {
         return super.editGraphBuilderConfiguration(conf);
     }
 
+    @Test
+    public void testStringIndexOfConstant() {
+        test("testStringIndexOf", new Object[]{this.sourceString, this.constantString});
+    }
+
+    @Test
+    public void testStringIndexOfConstantOffset() {
+        test("testStringIndexOfOffset", new Object[]{this.sourceString, this.constantString, Math.min(sourceString.length() - 1, 3)});
+    }
+
+    @Test
+    public void testStringBuilderIndexOfConstant() {
+        test("testStringBuilderIndexOf", new Object[]{new StringBuilder(this.sourceString), this.constantString});
+    }
+
     @Override
-    protected Result test(OptionValues options, ResolvedJavaMethod method, Object receiver, Object... args) {
+    protected Result test(String name, Object... args) {
         constantArgs = new Object[args.length + 1];
         for (int i = 0; i < args.length; i++) {
             if (args[i] == constantString) {
                 constantArgs[i + 1] = constantString;
             }
         }
-        return super.test(options, method, receiver, args);
+        return super.test(name, args);
     }
 
     @Override
-    protected InstalledCode getCode(final ResolvedJavaMethod installedCodeOwner, StructuredGraph graph0, boolean ignoreForceCompile, boolean ignoreInstallAsDefault, OptionValues options) {
+    protected InstalledCode getCode(final ResolvedJavaMethod installedCodeOwner, StructuredGraph graph0, boolean forceCompile) {
         // Force recompile if constant binding should be done
-        return super.getCode(installedCodeOwner, graph0, /* forceCompile */true, /* installAsDefault */false, options);
+        return getCode(installedCodeOwner, graph0, true, false);
     }
 }

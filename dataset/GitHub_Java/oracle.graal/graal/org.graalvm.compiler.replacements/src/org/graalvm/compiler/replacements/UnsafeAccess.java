@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,24 +20,32 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.replacements.test;
+package org.graalvm.compiler.replacements;
 
-import org.junit.Test;
+import java.lang.reflect.Field;
 
-public class StringIndexOfTest extends StringIndexOfTestBase {
+import sun.misc.Unsafe;
 
-    @Test
-    public void testStringIndexOfConstant() {
-        test("testStringIndexOf", new Object[]{this.sourceString, this.constantString});
-    }
+/**
+ * Package private access to the {@link Unsafe} capability.
+ */
+class UnsafeAccess {
 
-    @Test
-    public void testStringIndexOfConstantOffset() {
-        test("testStringIndexOfOffset", new Object[]{this.sourceString, this.constantString, Math.min(sourceString.length() - 1, 3)});
-    }
+    static final Unsafe UNSAFE = initUnsafe();
 
-    @Test
-    public void testStringBuilderIndexOfConstant() {
-        test("testStringBuilderIndexOf", new Object[]{new StringBuilder(this.sourceString), this.constantString});
+    private static Unsafe initUnsafe() {
+        try {
+            // Fast path when we are trusted.
+            return Unsafe.getUnsafe();
+        } catch (SecurityException se) {
+            // Slow path when we are not trusted.
+            try {
+                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafe.setAccessible(true);
+                return (Unsafe) theUnsafe.get(Unsafe.class);
+            } catch (Exception e) {
+                throw new RuntimeException("exception while trying to get Unsafe", e);
+            }
+        }
     }
 }

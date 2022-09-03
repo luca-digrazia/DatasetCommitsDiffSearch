@@ -32,7 +32,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.api.replacements.MethodSubstitutionRegistry;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
@@ -41,15 +40,14 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
-import org.graalvm.util.EconomicMap;
 import org.graalvm.util.Equivalence;
-import org.graalvm.util.MapCursor;
+import org.graalvm.util.EconomicMap;
+import org.graalvm.util.EconomicSet;
 import org.graalvm.util.UnmodifiableMapCursor;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Signature;
 
 /**
  * Manages a set of {@link InvocationPlugin}s.
@@ -370,109 +368,162 @@ public class InvocationPlugins {
 
     }
 
-    boolean checkResolvable(boolean isOptional, Type declaringType, boolean isStatic, String name, Type... argumentTypes) {
-        Class<?> declaringClass = resolveType(declaringType, isOptional);
-        if (declaringClass == null) {
-            return true;
-        }
-        try {
-            Executable res;
-            Class<?>[] parameterTypes = resolveTypes(argumentTypes, isStatic ? 0 : 1, argumentTypes.length);
-            if (name.equals("<init>")) {
-                res = declaringClass.getDeclaredConstructor(parameterTypes);
-            } else {
-                res = declaringClass.getDeclaredMethod(name, parameterTypes);
-            }
-            assert Modifier.isStatic(res.getModifiers()) == isStatic : res;
-        } catch (NoSuchMethodException | SecurityException e) {
-            if (isOptional) {
-                return true;
-            }
-            throw new AssertionError(e);
-        }
-        return true;
-    }
-
     /**
-     * Associates an {@link InvocationPlugin} with the details of a method it substitutes.
+     * Key for a {@linkplain ClassPlugins#entries resolved} plugin registration. Due to the
+     * possibility of class redefinition, we cannot directly use {@link ResolvedJavaMethod}s as
+     * keys. A {@link ResolvedJavaMethod} implementation might implement {@code equals()} and
+     * {@code hashCode()} based on internal representation subject to change by class redefinition.
      */
-    public static class Binding {
-        /**
-         * The plugin this binding is for.
-         */
-        public final InvocationPlugin plugin;
+    static final class ResolvedJavaMethodKey {
+        private final ResolvedJavaMethod method;
 
-        /**
-         * Specifies if the associated method is static.
-         */
-        public final boolean isStatic;
-
-        /**
-         * The name of the associated method.
-         */
-        public final String name;
-
-        /**
-         * A partial
-         * <a href="http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.3.3">method
-         * descriptor</a> for the associated method. The descriptor includes enclosing {@code '('}
-         * and {@code ')'} characters but omits the return type suffix.
-         */
-        public final String argumentsDescriptor;
-
-        /**
-         * Link in a list of bindings.
-         */
-        private Binding next;
-
-        Binding(InvocationPlugin data, boolean isStatic, String name, Type... argumentTypes) {
-            this.plugin = data;
-            this.isStatic = isStatic;
-            this.name = name;
-            StringBuilder buf = new StringBuilder();
-            buf.append('(');
-            for (int i = isStatic ? 0 : 1; i < argumentTypes.length; i++) {
-                buf.append(MetaUtil.toInternalName(argumentTypes[i].getTypeName()));
-            }
-            buf.append(')');
-            this.argumentsDescriptor = buf.toString();
+        ResolvedJavaMethodKey(ResolvedJavaMethod method) {
+            this.method = method;
         }
 
-        Binding(ResolvedJavaMethod resolved, InvocationPlugin data) {
-            this.plugin = data;
-            this.isStatic = resolved.isStatic();
-            this.name = resolved.getName();
-            Signature sig = resolved.getSignature();
-            String desc = sig.toMethodDescriptor();
-            assert desc.indexOf(')') != -1 : desc;
-            this.argumentsDescriptor = desc.substring(0, desc.indexOf(')') + 1);
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof ResolvedJavaMethodKey) {
+                ResolvedJavaMethodKey that = (ResolvedJavaMethodKey) obj;
+                if (this.method.isStatic() == that.method.isStatic()) {
+                    if (this.method.getDeclaringClass().equals(that.method.getDeclaringClass())) {
+                        if (this.method.getName().equals(that.method.getName())) {
+                            if (this.method.getSignature().equals(that.method.getSignature())) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return this.method.getName().hashCode();
         }
 
         @Override
         public String toString() {
-            return name + argumentsDescriptor;
+            return "ResolvedJavaMethodKey<" + method + ">";
         }
+    }
+
+    /**
+     * Key for {@linkplain ClassPlugins#registrations registering} an {@link InvocationPlugin} for a
+     * specific method.
+     */
+    static class MethodKey {
+        final boolean isStatic;
 
         /**
-         * Gets next binding in a list of bindings headed by this object.
+         * This method is optional. This is used for new API methods not present in previous JDK
+         * versions.
          */
-        public Binding getNext() {
-            return next;
+        final boolean isOptional;
+
+        final String name;
+        final Type[] argumentTypes;
+        final InvocationPlugin value;
+
+        /**
+         * Used to lazily initialize {@link #resolved}.
+         */
+        private final MetaAccessProvider metaAccess;
+
+        private volatile ResolvedJavaMethod resolved;
+
+        MethodKey(MetaAccessProvider metaAccess, InvocationPlugin data, boolean isStatic, boolean isOptional, String name, Type... argumentTypes) {
+            this.metaAccess = metaAccess;
+            this.value = data;
+            this.isStatic = isStatic;
+            this.isOptional = isOptional;
+            this.name = name;
+            this.argumentTypes = argumentTypes;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof MethodKey) {
+                MethodKey that = (MethodKey) obj;
+                boolean res = this.name.equals(that.name) && areEqual(this.argumentTypes, that.argumentTypes);
+                assert !res || this.isStatic == that.isStatic;
+                return res;
+            }
+            return false;
+        }
+
+        private static boolean areEqual(Type[] args1, Type[] args2) {
+            if (args1.length == args2.length) {
+                for (int i = 0; i < args1.length; i++) {
+                    if (!args1[i].getTypeName().equals(args2[i].getTypeName())) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+
+        public int getDeclaredParameterCount() {
+            return isStatic ? argumentTypes.length : argumentTypes.length - 1;
+        }
+
+        @Override
+        public int hashCode() {
+            return name.hashCode();
+        }
+
+        private ResolvedJavaMethod resolve(Class<?> declaringClass) {
+            if (resolved == null) {
+                Executable method = resolveJava(declaringClass);
+                if (method == null) {
+                    return null;
+                }
+                resolved = metaAccess.lookupJavaMethod(method);
+            }
+            return resolved;
+        }
+
+        private Executable resolveJava(Class<?> declaringClass) {
+            try {
+                Executable res;
+                Class<?>[] parameterTypes = resolveTypes(argumentTypes, isStatic ? 0 : 1, argumentTypes.length);
+                if (name.equals("<init>")) {
+                    res = declaringClass.getDeclaredConstructor(parameterTypes);
+                } else {
+                    res = declaringClass.getDeclaredMethod(name, parameterTypes);
+                }
+                assert Modifier.isStatic(res.getModifiers()) == isStatic : res;
+                return res;
+            } catch (NoSuchMethodException | SecurityException e) {
+                if (isOptional) {
+                    return null;
+                }
+                throw new InternalError(e);
+            }
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder(name).append('(');
+            for (Type p : argumentTypes) {
+                if (sb.charAt(sb.length() - 1) != '(') {
+                    sb.append(", ");
+                }
+                sb.append(p.getTypeName());
+            }
+            return sb.append(')').toString();
         }
     }
 
     private final MetaAccessProvider metaAccess;
 
-    /**
-     * Map from class names in {@linkplain MetaUtil#toInternalName(String) internal} form to the
-     * invocation plugin bindings for the class.
-     */
     private final EconomicMap<String, ClassPlugins> registrations = EconomicMap.create(Equivalence.DEFAULT);
 
     /**
-     * Deferred registrations as well as guard for ensuring no registrations are made after the
-     * first read access to the plugins. The guard uses double-checked locking which is why this
-     * field is {@code volatile}.
+     * Deferred registrations as well as guard for initialization. The guard uses double-checked
+     * locking which is why this field is {@code volatile}.
      */
     private volatile List<Runnable> deferredRegistrations = new ArrayList<>();
 
@@ -486,99 +537,111 @@ public class InvocationPlugins {
     }
 
     /**
-     * Per-class bindings.
+     * Per-class invocation plugins.
      */
     protected static class ClassPlugins {
+        private final Type declaringType;
 
-        /**
-         * Maps method names to binding lists.
-         */
-        private final EconomicMap<String, Binding> bindings = EconomicMap.create(Equivalence.DEFAULT);
+        private final List<MethodKey> registrations = new ArrayList<>();
 
-        /**
-         * Gets the invocation plugin for a given method.
-         *
-         * @return the invocation plugin for {@code method} or {@code null}
-         */
-        public InvocationPlugin get(ResolvedJavaMethod method) {
-            Binding binding = bindings.get(method.getName());
-            while (binding != null) {
-                if (method.isStatic() == binding.isStatic && method.getSignature().toMethodDescriptor().startsWith(binding.argumentsDescriptor)) {
-                    return binding.plugin;
-                }
-                binding = binding.next;
-            }
-            return null;
+        public ClassPlugins(Type declaringClass) {
+            this.declaringType = declaringClass;
         }
 
-        public void register(Binding binding, boolean allowOverwrite) {
+        /**
+         * Entry map that is initialized upon first call to {@link #get(ResolvedJavaMethod)}.
+         *
+         * Note: this must be volatile as threads may race to initialize it.
+         */
+        private volatile EconomicMap<ResolvedJavaMethodKey, InvocationPlugin> entries;
+
+        void initializeMap() {
+            if (!isClosed()) {
+                if (registrations.isEmpty()) {
+                    entries = EconomicMap.create(Equivalence.DEFAULT);
+                } else {
+                    Class<?> declaringClass = resolveType(declaringType, true);
+                    if (declaringClass == null) {
+                        // An optional type that could not be resolved
+                        entries = EconomicMap.create(Equivalence.DEFAULT);
+                    } else {
+                        EconomicMap<ResolvedJavaMethodKey, InvocationPlugin> newEntries = EconomicMap.create(Equivalence.DEFAULT);
+                        for (MethodKey methodKey : registrations) {
+                            ResolvedJavaMethod m = methodKey.resolve(declaringClass);
+                            if (m != null) {
+                                newEntries.put(new ResolvedJavaMethodKey(m), methodKey.value);
+                                if (entries != null) {
+                                    // Another thread finished initializing entries first
+                                    return;
+                                }
+                            }
+                        }
+                        entries = newEntries;
+                    }
+                }
+            }
+        }
+
+        public InvocationPlugin get(ResolvedJavaMethod method) {
+            if (!isClosed()) {
+                initializeMap();
+            }
+            return entries.get(new ResolvedJavaMethodKey(method));
+        }
+
+        public void register(MethodKey methodKey, boolean allowOverwrite) {
+            assert !isClosed() : "registration is closed: " + methodKey;
             if (allowOverwrite) {
-                if (lookup(binding) != null) {
-                    register(binding);
+                int index = registrations.indexOf(methodKey);
+                if (index >= 0) {
+                    registrations.set(index, methodKey);
                     return;
                 }
             } else {
-                assert lookup(binding) == null : "a value is already registered for " + binding;
+                assert !registrations.contains(methodKey) : "a value is already registered for " + declaringType + "." + methodKey;
             }
-            register(binding);
+            registrations.add(methodKey);
         }
 
-        InvocationPlugin lookup(Binding binding) {
-            Binding b = bindings.get(binding.name);
-            while (b != null) {
-                if (b.isStatic == binding.isStatic && b.argumentsDescriptor.equals(binding.argumentsDescriptor)) {
-                    return b.plugin;
-                }
-                b = b.next;
-            }
-            return null;
-        }
-
-        /**
-         * Registers {@code binding}.
-         */
-        void register(Binding binding) {
-            Binding head = bindings.get(binding.name);
-            assert binding.next == null;
-            binding.next = head;
-            bindings.put(binding.name, binding);
+        public boolean isClosed() {
+            return entries != null;
         }
     }
 
     /**
-     * Registers a binding of a method to an invocation plugin.
+     * Adds an entry to this map for a specified method.
      *
-     * @param plugin invocation plugin to be associated with the specified method
+     * @param value value to be associated with the specified method
      * @param isStatic specifies if the method is static
+     * @param isOptional specifies if the method is optional
      * @param declaringClass the class declaring the method
      * @param name the name of the method
      * @param argumentTypes the argument types of the method. Element 0 of this array must be
      *            {@code declaringClass} iff the method is non-static.
      * @return an object representing the method
      */
-    Binding put(InvocationPlugin plugin, boolean isStatic, boolean allowOverwrite, Type declaringClass, String name, Type... argumentTypes) {
-        assert deferredRegistrations != null : "registration is closed";
+    MethodKey put(InvocationPlugin value, boolean isStatic, boolean isOptional, boolean allowOverwrite, Type declaringClass, String name, Type... argumentTypes) {
         assert isStatic || argumentTypes[0] == declaringClass;
 
         String internalName = MetaUtil.toInternalName(declaringClass.getTypeName());
         ClassPlugins classPlugins = registrations.get(internalName);
         if (classPlugins == null) {
-            classPlugins = new ClassPlugins();
+            classPlugins = new ClassPlugins(declaringClass);
             registrations.put(internalName, classPlugins);
         }
         assert isStatic || argumentTypes[0] == declaringClass;
-        Binding binding = new Binding(plugin, isStatic, name, argumentTypes);
-        classPlugins.register(binding, allowOverwrite);
-        return binding;
+        MethodKey methodKey = new MethodKey(metaAccess, value, isStatic, isOptional, name, argumentTypes);
+        classPlugins.register(methodKey, allowOverwrite);
+        return methodKey;
     }
 
     /**
-     * Determines if a method denoted by a given {@link Binding} is in this map.
+     * Determines if a method denoted by a given {@link MethodKey} is in this map.
      */
-    boolean containsKey(Type declaringType, Binding key) {
+    boolean containsKey(Type declaringType, MethodKey key) {
         String internalName = MetaUtil.toInternalName(declaringType.getTypeName());
         ClassPlugins classPlugins = registrations.get(internalName);
-        return classPlugins != null && classPlugins.lookup(key) != null;
+        return classPlugins != null && classPlugins.registrations.contains(key);
     }
 
     InvocationPlugin get(ResolvedJavaMethod method) {
@@ -601,6 +664,9 @@ public class InvocationPlugins {
                     deferredRegistrations = null;
                 }
             }
+            for (ClassPlugins e : registrations.getValues()) {
+                e.initializeMap();
+            }
         }
     }
 
@@ -610,6 +676,9 @@ public class InvocationPlugins {
      */
     public void closeRegistration() {
         flushDeferrables();
+        for (ClassPlugins e : registrations.getValues()) {
+            e.initializeMap();
+        }
     }
 
     public int size() {
@@ -648,10 +717,12 @@ public class InvocationPlugins {
             String internalName = method.getDeclaringClass().getName();
             ClassPlugins classPlugins = registrations.get(internalName);
             if (classPlugins == null) {
-                classPlugins = new ClassPlugins();
+                classPlugins = new ClassPlugins(null);
                 registrations.put(internalName, classPlugins);
+                classPlugins.entries = EconomicMap.create(Equivalence.DEFAULT);
             }
-            classPlugins.register(new Binding(method, plugin));
+
+            classPlugins.entries.put(new ResolvedJavaMethodKey(method), plugin);
         }
     }
 
@@ -668,9 +739,8 @@ public class InvocationPlugins {
         if (!isStatic) {
             argumentTypes[0] = declaringClass;
         }
-        Binding binding = put(plugin, isStatic, allowOverwrite, declaringClass, name, argumentTypes);
-        assert Checker.check(this, declaringClass, binding);
-        assert checkResolvable(isOptional, declaringClass, isStatic, name, argumentTypes);
+        MethodKey methodKey = put(plugin, isStatic, isOptional, allowOverwrite, declaringClass, name, argumentTypes);
+        assert Checker.check(this, declaringClass, methodKey, plugin);
     }
 
     /**
@@ -720,31 +790,18 @@ public class InvocationPlugins {
     }
 
     /**
-     * Gets the set of registered invocation plugins.
-     *
-     * @return a map from class names in {@linkplain MetaUtil#toInternalName(String) internal} form
-     *         to the invocation plugin bindings for methods in the class
+     * Gets the set of methods for which invocation plugins have been registered. Once this method
+     * is called, no further registrations can be made.
      */
-    public EconomicMap<String, List<Binding>> getBindings() {
-        EconomicMap<String, List<Binding>> res = EconomicMap.create(Equivalence.DEFAULT);
+    public EconomicSet<ResolvedJavaMethod> getMethods() {
+        EconomicSet<ResolvedJavaMethod> res = EconomicSet.create(Equivalence.DEFAULT);
         if (parent != null) {
-            res.putAll(parent.getBindings());
+            res.addAll(parent.getMethods());
         }
         flushDeferrables();
-        MapCursor<String, ClassPlugins> classes = registrations.getEntries();
-        while (classes.advance()) {
-            String type = classes.getKey();
-            ClassPlugins cp = classes.getValue();
-            MapCursor<String, Binding> methods = cp.bindings.getEntries();
-            while (methods.advance()) {
-                List<Binding> bindings = res.get(type);
-                if (bindings == null) {
-                    bindings = new ArrayList<>();
-                    res.put(type, bindings);
-                }
-                for (Binding b = methods.getValue(); b != null; b = b.next) {
-                    bindings.add(b);
-                }
+        for (ClassPlugins cp : registrations.getValues()) {
+            for (ResolvedJavaMethodKey key : cp.entries.getKeys()) {
+                res.add(key.method);
             }
         }
         return res;
@@ -800,11 +857,10 @@ public class InvocationPlugins {
             SIGS = sigs.toArray(new Class<?>[sigs.size()][]);
         }
 
-        public static boolean check(InvocationPlugins plugins, Type declaringType, Binding binding) {
-            InvocationPlugin plugin = binding.plugin;
+        public static boolean check(InvocationPlugins plugins, Type declaringType, MethodKey method, InvocationPlugin plugin) {
             InvocationPlugins p = plugins.parent;
             while (p != null) {
-                assert !p.containsKey(declaringType, binding) : "a plugin is already registered for " + binding;
+                assert !p.containsKey(declaringType, method) : "a plugin is already registered for " + method;
                 p = p.parent;
             }
             if (plugin instanceof ForeignCallPlugin || plugin instanceof GeneratedInvocationPlugin) {
@@ -816,8 +872,8 @@ public class InvocationPlugins {
                 assert substitute.getAnnotation(MethodSubstitution.class) != null : format("Substitute method must be annotated with @%s: %s", MethodSubstitution.class.getSimpleName(), substitute);
                 return true;
             }
-            int arguments = plugins.metaAccess.parseMethodDescriptor(binding.argumentsDescriptor + "V").getParameterCount(false);
-            assert arguments < SIGS.length : format("need to extend %s to support method with %d arguments: %s", InvocationPlugin.class.getSimpleName(), arguments, binding);
+            int arguments = method.getDeclaredParameterCount();
+            assert arguments < SIGS.length : format("need to extend %s to support method with %d arguments: %s", InvocationPlugin.class.getSimpleName(), arguments, method);
             for (Method m : plugin.getClass().getDeclaredMethods()) {
                 if (m.getName().equals("apply")) {
                     Class<?>[] parameterTypes = m.getParameterTypes();
@@ -826,7 +882,7 @@ public class InvocationPlugins {
                     }
                 }
             }
-            throw new AssertionError(format("graph builder plugin for %s not found", binding));
+            throw new AssertionError(format("graph builder plugin for %s not found", method));
         }
     }
 
@@ -877,7 +933,7 @@ public class InvocationPlugins {
         if (type instanceof Class) {
             return (Class<?>) type;
         }
-        if (type instanceof OptionalLazySymbol) {
+        if (optional && type instanceof OptionalLazySymbol) {
             return ((OptionalLazySymbol) type).resolve();
         }
         return resolveClass(type.getTypeName(), optional);
