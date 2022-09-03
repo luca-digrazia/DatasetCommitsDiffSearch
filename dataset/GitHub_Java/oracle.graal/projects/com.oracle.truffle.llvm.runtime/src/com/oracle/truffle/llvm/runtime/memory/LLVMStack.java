@@ -29,6 +29,14 @@
  */
 package com.oracle.truffle.llvm.runtime.memory;
 
+import static com.oracle.truffle.llvm.runtime.memory.LLVMMemory.getUnsafe;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameUtil;
@@ -39,104 +47,104 @@ import com.oracle.truffle.api.frame.VirtualFrame;
  */
 public final class LLVMStack {
 
+    /**
+     * Nodes that access (e.g. alloca) or need (e.g. calls) the stack must be annotated
+     * with @StackNode.
+     */
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target({ElementType.TYPE})
+    public @interface NeedsStack {
+
+    }
+
     public static final String FRAME_ID = "<stackpointer>";
 
-    private final int stackSize;
-
-    private long lowerBounds;
-    private long upperBounds;
-    private boolean isAllocated;
+    @CompilationFinal private long lowerBounds;
+    @CompilationFinal private long upperBounds;
+    private boolean isFreed = true;
 
     private long stackPointer;
 
     public LLVMStack(int stackSize) {
-        this.stackSize = stackSize;
+        allocate(stackSize);
+    }
 
-        lowerBounds = 0;
-        upperBounds = 0;
-        stackPointer = 0;
-        isAllocated = false;
+    @TruffleBoundary
+    private void allocate(final int stackSize) {
+        if (!isFreed) {
+            throw new AssertionError("previously not deallocated");
+        }
+        final long stackAllocation = getUnsafe().allocateMemory(stackSize * 1024);
+        lowerBounds = stackAllocation;
+        upperBounds = stackAllocation + stackSize * 1024;
+        isFreed = false;
+        stackPointer = upperBounds;
+    }
+
+    public boolean isFreed() {
+        return isFreed;
     }
 
     public final class StackPointer implements AutoCloseable {
 
-        private long basePointer;
+        private final long pointer;
 
-        private StackPointer(long basePointer) {
-            this.basePointer = basePointer;
+        private StackPointer() {
+            this.pointer = getStackPointer();
         }
 
-        public long get(LLVMMemory memory) {
-            if (basePointer == 0) {
-                basePointer = getStackPointer(memory);
-                stackPointer = basePointer;
-            }
-            return stackPointer;
-        }
-
-        public void set(long sp) {
-            stackPointer = sp;
+        public long get() {
+            return pointer;
         }
 
         @Override
         public void close() {
-            if (basePointer != 0) {
-                stackPointer = basePointer;
-            }
-        }
-
-        public StackPointer newFrame() {
-            return new StackPointer(stackPointer);
+            setStackPointer(pointer);
         }
     }
 
-    @TruffleBoundary
-    private void allocate(LLVMMemory memory) {
-        if (isAllocated) {
-            return;
-        }
-        final long stackAllocation = memory.allocateMemory(stackSize * 1024).getVal();
-        lowerBounds = stackAllocation;
-        upperBounds = stackAllocation + stackSize * 1024;
-        isAllocated = true;
-        stackPointer = upperBounds;
-    }
-
-    private long getStackPointer(LLVMMemory memory) {
-        allocate(memory);
+    private long getStackPointer() {
         long sp = this.stackPointer;
+        assert assertStackPointer();
         return sp;
     }
 
-    public StackPointer newFrame() {
-        return new StackPointer(stackPointer);
+    public StackPointer takeStackPointer() {
+        return new StackPointer();
+    }
+
+    private boolean assertStackPointer() {
+        boolean azzert = stackPointer != 0;
+        stackPointer = 0;
+        return azzert;
+    }
+
+    public void setStackPointer(long pointer) {
+        this.stackPointer = pointer;
     }
 
     @TruffleBoundary
-    public void free(LLVMMemory memory) {
-        if (isAllocated) {
-            /*
-             * It can be that the stack was never allocated.
-             */
-            memory.free(lowerBounds);
-            lowerBounds = 0;
-            upperBounds = 0;
-            stackPointer = 0;
-            isAllocated = false;
+    public void free() {
+        if (isFreed) {
+            throw new AssertionError("already freed");
         }
+        getUnsafe().freeMemory(lowerBounds);
+        lowerBounds = 0;
+        upperBounds = 0;
+        stackPointer = 0;
+        isFreed = true;
     }
 
     public static final int NO_ALIGNMENT_REQUIREMENTS = 1;
 
-    public static long allocateStackMemory(VirtualFrame frame, LLVMMemory memory, FrameSlot stackPointerSlot, final long size, final int alignment) {
+    public static long allocateStackMemory(VirtualFrame frame, FrameSlot stackPointerSlot, final long size, final int alignment) {
         assert size >= 0;
         assert alignment != 0 && powerOfTwo(alignment);
-        StackPointer basePointer = (StackPointer) FrameUtil.getObjectSafe(frame, stackPointerSlot);
-        long stackPointer = basePointer.get(memory);
+        long stackPointer = FrameUtil.getLongSafe(frame, stackPointerSlot);
         assert stackPointer != 0;
         final long alignedAllocation = (stackPointer - size) & -alignment;
         assert alignedAllocation <= stackPointer;
-        basePointer.set(alignedAllocation);
+        frame.setLong(stackPointerSlot, alignedAllocation);
         return alignedAllocation;
     }
 
@@ -144,4 +152,15 @@ public final class LLVMStack {
         return (value & -value) == value;
     }
 
+    /*
+     * TODO: How frequent is this? having a finalizer will prevent EA and add significant overhead.
+     * maybe this can be done using a reference queue?
+     */
+    @Override
+    protected void finalize() throws Throwable {
+        super.finalize();
+        if (!isFreed) {
+            throw new AssertionError("Did not free stack memory!");
+        }
+    }
 }
