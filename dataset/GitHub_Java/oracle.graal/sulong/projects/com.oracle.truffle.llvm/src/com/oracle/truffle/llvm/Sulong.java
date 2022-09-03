@@ -107,7 +107,7 @@ public final class Sulong extends LLVMLanguage {
     }
 
     @Override
-    protected CallTarget parse(ParsingRequest request) {
+    protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
         Source source = request.getSource();
         LLVMContext context = findLLVMContext();
         return new Runner(context).parse(source);
