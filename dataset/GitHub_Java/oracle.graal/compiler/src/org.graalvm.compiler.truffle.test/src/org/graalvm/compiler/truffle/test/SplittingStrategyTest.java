@@ -47,11 +47,8 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
-
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 
 public class SplittingStrategyTest {
 
@@ -68,7 +65,6 @@ public class SplittingStrategyTest {
     }
 
     private static final GraalTruffleRuntime runtime = (GraalTruffleRuntime) Truffle.getRuntime();
-    final FallbackSplitInfo fallbackSplitInfo = new FallbackSplitInfo();
     private SplitCountingListener listener;
 
     @Before
@@ -150,9 +146,7 @@ public class SplittingStrategyTest {
     @Test
     @SuppressWarnings("try")
     public void testDefaultStrategyStabilises() {
-        try (TruffleCompilerOptions.TruffleOptionsOverrideScope s = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleSplittingMaxNumberOfSplits,
-                        fallbackSplitInfo.getSplitLimit() + 1000)) {
-            createDummyTargetsToBoostGrowingSplitLimit();
+        try (TruffleCompilerOptions.TruffleOptionsOverrideScope s = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleSplittingMaxNumberOfSplits, 1000)) {
             class InnerRootNode extends RootNode {
                 OptimizedCallTarget target;
                 @Child private DirectCallNode callNode1;
@@ -332,69 +326,13 @@ public class SplittingStrategyTest {
         }
     }
 
-    static class FallbackSplitInfo {
-        final Object fallbackEngineData;
-
-        FallbackSplitInfo() {
-            this.fallbackEngineData = reflectivelyGetSplittingLimitFromRuntime(runtime, new DummyRootNode());
-        }
-
-        int getSplitCount() {
-            try {
-                return (int) reflectivelyGetField(fallbackEngineData, "splitCount");
-            } catch (NoSuchFieldException | IllegalAccessException e) {
-                Assert.assertTrue("Exception while reading from engine data", false);
-                return 0;
-            }
-        }
-
-        int getSplitLimit() {
-            try {
-                return (int) reflectivelyGetField(fallbackEngineData, "splitLimit");
-            } catch (NoSuchFieldException | IllegalAccessException e) {
-                Assert.assertTrue("Exception while reading from engine data", false);
-                return 0;
-            }
-        }
-
-        private static Object reflectivelyGetSplittingLimitFromRuntime(GraalTruffleRuntime graalTruffleRuntime, RootNode rootNode) {
-            try {
-                final Object tvmci = reflectivelyGetField(graalTruffleRuntime, "tvmci");
-                final Method getEngineDataMethod = tvmci.getClass().getDeclaredMethod("getEngineData", new Class<?>[]{RootNode.class});
-                getEngineDataMethod.setAccessible(true);
-                final Object fallbackEngineData = getEngineDataMethod.invoke(tvmci, rootNode);
-                return fallbackEngineData;
-            } catch (NoSuchFieldException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
-                Assert.assertTrue("Exception while getting engine data", false);
-                return null;
-            }
-        }
-
-        private static Object reflectivelyGetField(Object o, String fieldName) throws NoSuchFieldException, IllegalAccessException {
-            Field fallbackEngineDataField = null;
-            Class<?> cls = o.getClass();
-            while (fallbackEngineDataField == null) {
-                try {
-                    fallbackEngineDataField = cls.getDeclaredField(fieldName);
-                } catch (NoSuchFieldException e) {
-                    if (cls.getSuperclass() != null) {
-                        cls = cls.getSuperclass();
-                    } else {
-                        throw e;
-                    }
-                }
-            }
-            fallbackEngineDataField.setAccessible(true);
-            return fallbackEngineDataField.get(o);
-        }
-    }
+    private int expectedMaxSplits = 10;
 
     @Test
+    @Ignore("Depends on state in runtime")
     @SuppressWarnings("try")
     public void testMaxLimitForTargetsOutsideEngine() {
-        final int expectedSplits = 10;
-        try (TruffleCompilerOptions.TruffleOptionsOverrideScope s = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleSplittingMaxNumberOfSplits,
-                        fallbackSplitInfo.getSplitCount() + expectedSplits)) {
+        try (TruffleCompilerOptions.TruffleOptionsOverrideScope s = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleSplittingMaxNumberOfSplits, expectedMaxSplits)) {
 
             final OptimizedCallTarget inner = (OptimizedCallTarget) runtime.createCallTarget(new DummyRootNode());
             final OptimizedCallTarget outer = (OptimizedCallTarget) runtime.createCallTarget(new CallsInnerAndSwapsCallNode(inner));
@@ -407,7 +345,7 @@ public class SplittingStrategyTest {
             for (int i = 0; i < 100; i++) {
                 outer.call();
             }
-            Assert.assertEquals("Too many of too few splits.", expectedSplits, localListener.splitCount);
+            Assert.assertEquals("Too many of too few splits.", expectedMaxSplits - expectedGrowingSplits, localListener.splitCount);
             runtime.removeCompilationListener(localListener);
         }
     }
@@ -418,32 +356,24 @@ public class SplittingStrategyTest {
         }
     }
 
+    private int expectedGrowingSplits = 2 * TruffleCompilerOptions.getValue(TruffleCompilerOptions.TruffleSplittingLimitGrowth);
+
     @Test
+    @Ignore("Depends on state in runtime")
     @SuppressWarnings("try")
     public void testGrowingLimitForTargetsOutsideEngine() {
-        final int expectedGrowingSplits = 2 * TruffleCompilerOptions.getValue(TruffleCompilerOptions.TruffleSplittingLimitGrowth);
         final OptimizedCallTarget inner = (OptimizedCallTarget) runtime.createCallTarget(new DummyRootNode());
         final OptimizedCallTarget outer = (OptimizedCallTarget) runtime.createCallTarget(new CallsInnerAndSwapsCallNode(inner));
-        // Use up the entire budget
-        while (fallbackSplitInfo.getSplitCount() < fallbackSplitInfo.getSplitLimit()) {
+
+        SplitCountingListener localListener = new SplitCountingListener();
+        runtime.addCompilationListener(localListener);
+
+        for (int i = 0; i < 100; i++) {
             outer.call();
         }
-        try (TruffleCompilerOptions.TruffleOptionsOverrideScope s = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleSplittingMaxNumberOfSplits,
-                        fallbackSplitInfo.getSplitCount() + 2 * expectedGrowingSplits)) {
-            // Create 2 targets to boost the growing limit
-            runtime.createCallTarget(new DummyRootNode());
-            runtime.createCallTarget(new DummyRootNode());
 
-            SplitCountingListener localListener = new SplitCountingListener();
-            runtime.addCompilationListener(localListener);
-
-            for (int i = 0; i < 100; i++) {
-                outer.call();
-            }
-
-            Assert.assertEquals("Too many of too few splits.", expectedGrowingSplits, localListener.splitCount);
-            runtime.removeCompilationListener(localListener);
-        }
+        Assert.assertEquals("Too many of too few splits.", expectedGrowingSplits, localListener.splitCount);
+        runtime.removeCompilationListener(localListener);
     }
 
     @TruffleLanguage.Registration(id = "SplitTestLanguage", name = "SplitTestLanguage", mimeType = "application/x-split-test-lang", version = "0.1")
