@@ -31,6 +31,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.word.*;
@@ -47,15 +48,6 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
      */
     public enum RegisterEffect {
         DESTROYS_REGISTERS, PRESERVES_REGISTERS
-    }
-
-    /**
-     * Constants for specifying whether a call is a leaf or not. A leaf function does not lock, GC
-     * or throw exceptions. That is, the thread's execution state during the call is never inspected
-     * by another thread.
-     */
-    public enum Transition {
-        LEAF, NOT_LEAF;
     }
 
     /**
@@ -83,9 +75,9 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
      */
     private CallingConvention cc;
 
-    private final RegisterEffect effect;
+    private final CompilerToVM vm;
 
-    private final Transition transition;
+    private final RegisterEffect effect;
 
     /**
      * Creates a {@link HotSpotRuntimeCallTarget}.
@@ -95,18 +87,18 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
      * @param effect specifies if the call destroys or preserves all registers (apart from
      *            temporaries which are always destroyed)
      * @param ccType calling convention type
-     * @param transition specifies if this is a {@linkplain #isLeaf() leaf} call
+     * @param ccProvider calling convention provider
+     * @param vm the Java to HotSpot C/C++ runtime interface
      */
-    public static HotSpotRuntimeCallTarget create(Descriptor descriptor, long address, RegisterEffect effect, Type ccType, Transition transition) {
-        CallingConvention targetCc = createCallingConvention(descriptor, ccType);
-        return new HotSpotRuntimeCallTarget(descriptor, address, effect, transition, targetCc);
+    public static HotSpotRuntimeCallTarget create(Descriptor descriptor, long address, RegisterEffect effect, Type ccType, RegisterConfig ccProvider, HotSpotRuntime runtime, CompilerToVM vm) {
+        CallingConvention targetCc = createCallingConvention(descriptor, ccType, ccProvider, runtime);
+        return new HotSpotRuntimeCallTarget(descriptor, address, effect, targetCc, vm);
     }
 
     /**
      * Gets a calling convention for a given descriptor and call type.
      */
-    public static CallingConvention createCallingConvention(Descriptor descriptor, Type ccType) {
-        HotSpotRuntime runtime = graalRuntime().getRuntime();
+    public static CallingConvention createCallingConvention(Descriptor descriptor, Type ccType, RegisterConfig ccProvider, HotSpotRuntime runtime) {
         Class<?>[] argumentTypes = descriptor.getArgumentTypes();
         JavaType[] parameterTypes = new JavaType[argumentTypes.length];
         for (int i = 0; i < parameterTypes.length; ++i) {
@@ -114,7 +106,7 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
         }
         TargetDescription target = graalRuntime().getTarget();
         JavaType returnType = asJavaType(descriptor.getResultType(), runtime);
-        return runtime.lookupRegisterConfig().getCallingConvention(ccType, returnType, parameterTypes, target, false);
+        return ccProvider.getCallingConvention(ccType, returnType, parameterTypes, target, false);
     }
 
     private static JavaType asJavaType(Class type, HotSpotRuntime runtime) {
@@ -125,12 +117,12 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
         }
     }
 
-    public HotSpotRuntimeCallTarget(Descriptor descriptor, long address, RegisterEffect effect, Transition transition, CallingConvention cc) {
+    public HotSpotRuntimeCallTarget(Descriptor descriptor, long address, RegisterEffect effect, CallingConvention cc, CompilerToVM vm) {
         this.address = address;
         this.effect = effect;
-        this.transition = transition;
         this.descriptor = descriptor;
         this.cc = cc;
+        this.vm = vm;
     }
 
     @Override
@@ -143,7 +135,7 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
     }
 
     public long getMaxCallTargetOffset() {
-        return graalRuntime().getCompilerToVM().getMaxCallTargetOffset(address);
+        return vm.getMaxCallTargetOffset(address);
     }
 
     public Descriptor getDescriptor() {
@@ -187,13 +179,5 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
     @Override
     public boolean destroysRegisters() {
         return effect == DESTROYS_REGISTERS;
-    }
-
-    /**
-     * Determines if this is call to a function that does not lock, GC or throw exceptions. That is,
-     * the thread's execution state during the call is never inspected by another thread.
-     */
-    public boolean isLeaf() {
-        return transition == Transition.LEAF;
     }
 }

@@ -51,17 +51,15 @@ public final class HotSpotCompiledRuntimeStub extends HotSpotCompiledCode {
         assert compResult.getExceptionHandlers().isEmpty();
         for (DataPatch data : compResult.getDataReferences()) {
             Constant constant = data.constant;
-            if (constant != null) {
-                assert constant.getKind() != Kind.Object : this + " cannot have embedded object constant: " + constant;
-                assert constant.getPrimitiveAnnotation() == null : this + " cannot have embedded metadata: " + constant;
-            }
+            assert constant.getKind() != Kind.Object : this + " cannot have embedded object constant: " + constant;
+            assert constant.getPrimitiveAnnotation() == null : this + " cannot have embedded metadata: " + constant;
         }
         for (Infopoint infopoint : compResult.getInfopoints()) {
             assert infopoint instanceof Call : this + " cannot have non-call infopoint: " + infopoint;
             Call call = (Call) infopoint;
-            assert call.target instanceof HotSpotForeignCallLinkage : this + " cannot have non runtime call: " + call.target;
-            HotSpotForeignCallLinkage linkage = (HotSpotForeignCallLinkage) call.target;
-            assert !linkage.isCompiledStub() : this + " cannot call compiled stub " + linkage;
+            assert call.target instanceof HotSpotRuntimeCallTarget : this + " cannot have non runtime call: " + call.target;
+            HotSpotRuntimeCallTarget callTarget = (HotSpotRuntimeCallTarget) call.target;
+            assert !callTarget.isCompiledStub() : this + " cannot call compiled stub " + callTarget;
         }
         return true;
     }

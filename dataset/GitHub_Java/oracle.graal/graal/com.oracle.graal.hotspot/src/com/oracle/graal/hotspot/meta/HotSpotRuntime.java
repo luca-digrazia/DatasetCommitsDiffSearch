@@ -104,7 +104,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
     public final HotSpotVMConfig config;
 
-    protected final RegisterConfig regConfig;
+    protected final RegisterConfig javaABI;
+    protected final RegisterConfig nativeABI;
     protected final HotSpotGraalRuntime graalRuntime;
 
     private CheckCastSnippets.Templates checkcastSnippets;
@@ -180,7 +181,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     public HotSpotRuntime(HotSpotVMConfig c, HotSpotGraalRuntime graalRuntime) {
         this.config = c;
         this.graalRuntime = graalRuntime;
-        regConfig = createRegisterConfig();
+        javaABI = createRegisterConfig(false);
+        nativeABI = createRegisterConfig(true);
     }
 
     protected HotSpotRuntimeCallTarget register(HotSpotRuntimeCallTarget call) {
@@ -193,7 +195,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
      * Registers the details for linking a call to a {@link Stub}.
      */
     protected RuntimeCallTarget registerStubCall(Descriptor descriptor) {
-        return register(HotSpotRuntimeCallTarget.create(descriptor, 0L, PRESERVES_REGISTERS, JavaCallee, regConfig, this, graalRuntime.getCompilerToVM()));
+        return register(HotSpotRuntimeCallTarget.create(descriptor, 0L, PRESERVES_REGISTERS, JavaCallee, javaABI, this, graalRuntime.getCompilerToVM()));
     }
 
     /**
@@ -202,14 +204,14 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     protected RuntimeCallTarget registerCRuntimeCall(Descriptor descriptor, long address) {
         Class<?> resultType = descriptor.getResultType();
         assert resultType.isPrimitive() || Word.class.isAssignableFrom(resultType) : "C runtime call must return object thread local storage: " + descriptor;
-        return register(HotSpotRuntimeCallTarget.create(descriptor, address, DESTROYS_REGISTERS, NativeCall, regConfig, this, graalRuntime.getCompilerToVM()));
+        return register(HotSpotRuntimeCallTarget.create(descriptor, address, DESTROYS_REGISTERS, NativeCall, nativeABI, this, graalRuntime.getCompilerToVM()));
     }
 
     /**
      * Registers the details for a call to a stub that never returns.
      */
     protected RuntimeCallTarget registerNoReturnStub(Descriptor descriptor, long address, CallingConvention.Type ccType) {
-        return register(HotSpotRuntimeCallTarget.create(descriptor, address, PRESERVES_REGISTERS, ccType, regConfig, this, graalRuntime.getCompilerToVM()));
+        return register(HotSpotRuntimeCallTarget.create(descriptor, address, PRESERVES_REGISTERS, ccType, javaABI, this, graalRuntime.getCompilerToVM()));
     }
 
     /**
@@ -218,10 +220,10 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
      * another thread.
      */
     protected RuntimeCallTarget registerLeafCall(Descriptor descriptor, long address, CallingConvention.Type ccType, RegisterEffect effect) {
-        return register(HotSpotRuntimeCallTarget.create(descriptor, address, effect, ccType, regConfig, this, graalRuntime.getCompilerToVM()));
+        return register(HotSpotRuntimeCallTarget.create(descriptor, address, effect, ccType, javaABI, this, graalRuntime.getCompilerToVM()));
     }
 
-    protected abstract RegisterConfig createRegisterConfig();
+    protected abstract RegisterConfig createRegisterConfig(boolean isNative);
 
     public void registerReplacements(Replacements replacements) {
         registerStubCall(VERIFY_OOP);
@@ -283,15 +285,15 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             replacements.registerSubstitutions(ReflectionSubstitutions.class);
         }
 
-        checkcastSnippets = new CheckCastSnippets.Templates(this, replacements, graalRuntime.getTarget());
-        instanceofSnippets = new InstanceOfSnippets.Templates(this, replacements, graalRuntime.getTarget());
-        newObjectSnippets = new NewObjectSnippets.Templates(this, replacements, graalRuntime.getTarget());
-        monitorSnippets = new MonitorSnippets.Templates(this, replacements, graalRuntime.getTarget(), config.useFastLocking);
-        writeBarrierSnippets = new WriteBarrierSnippets.Templates(this, replacements, graalRuntime.getTarget());
-        boxingSnippets = new BoxingSnippets.Templates(this, replacements, graalRuntime.getTarget());
-        exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(this, replacements, graalRuntime.getTarget());
+        TargetDescription target = graalRuntime.getTarget();
+        checkcastSnippets = new CheckCastSnippets.Templates(this, replacements, target);
+        instanceofSnippets = new InstanceOfSnippets.Templates(this, replacements, target);
+        newObjectSnippets = new NewObjectSnippets.Templates(this, replacements, target, config.useTLAB);
+        monitorSnippets = new MonitorSnippets.Templates(this, replacements, target, config.useFastLocking);
+        writeBarrierSnippets = new WriteBarrierSnippets.Templates(this, replacements, target);
+        boxingSnippets = new BoxingSnippets.Templates(this, replacements, target);
+        exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(this, replacements, target);
 
-        TargetDescription target = getTarget();
         link(new NewInstanceStub(this, replacements, target, runtimeCalls.get(NEW_INSTANCE)));
         link(new NewArrayStub(this, replacements, target, runtimeCalls.get(NEW_ARRAY)));
         link(new NewMultiArrayStub(this, replacements, target, runtimeCalls.get(NEW_MULTI_ARRAY)));
@@ -320,7 +322,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     }
 
     private void linkRuntimeCall(Descriptor descriptor, long address, Replacements replacements) {
-        RuntimeCallStub stub = new RuntimeCallStub(address, descriptor, true, this, replacements, regConfig, graalRuntime.getCompilerToVM());
+        RuntimeCallStub stub = new RuntimeCallStub(address, descriptor, true, this, replacements, nativeABI, graalRuntime.getCompilerToVM());
         HotSpotRuntimeCallTarget linkage = stub.getLinkage();
         HotSpotRuntimeCallTarget targetLinkage = stub.getTargetLinkage();
         linkage.setCompiledStub(stub);
@@ -351,7 +353,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         if (compResult != null) {
             HexCodeFile.addAnnotations(hcf, compResult.getAnnotations());
             addExceptionHandlersComment(compResult, hcf);
-            Register fp = regConfig.getFrameRegister();
+            Register fp = javaABI.getFrameRegister();
             RefMapFormatter slotFormatter = new RefMapFormatter(target.arch, target.wordSize, fp, 0);
             for (Infopoint infopoint : compResult.getInfopoints()) {
                 if (infopoint instanceof Call) {
@@ -455,7 +457,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
     @Override
     public RegisterConfig lookupRegisterConfig() {
-        return regConfig;
+        return javaABI;
     }
 
     @Override
@@ -668,9 +670,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         if (value instanceof VirtualObjectNode) {
                             value = allocations[commit.getVirtualObjects().indexOf(value)];
                         }
-                        if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
-                            graph.addBeforeFixed(commit, graph.add(new WriteNode(newObject, value, createFieldLocation(graph, (HotSpotResolvedJavaField) instance.field(i)), WriteBarrierType.NONE)));
-                        }
+                        graph.addBeforeFixed(commit, graph.add(new WriteNode(newObject, value, createFieldLocation(graph, (HotSpotResolvedJavaField) instance.field(i)), WriteBarrierType.NONE)));
                     }
                 } else {
                     VirtualArrayNode array = (VirtualArrayNode) virtual;
@@ -682,10 +682,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                             assert indexOf != -1 : commit + " " + value;
                             value = allocations[indexOf];
                         }
-                        if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
-                            graph.addBeforeFixed(commit,
-                                            graph.add(new WriteNode(newObject, value, createArrayLocation(graph, element.getKind(), ConstantNode.forInt(i, graph)), WriteBarrierType.NONE)));
-                        }
+                        graph.addBeforeFixed(commit, graph.add(new WriteNode(newObject, value, createArrayLocation(graph, element.getKind(), ConstantNode.forInt(i, graph)), WriteBarrierType.NONE)));
                     }
                 }
             }
@@ -739,9 +736,9 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         } else if (n instanceof InstanceOfDynamicNode) {
             instanceofSnippets.lower((InstanceOfDynamicNode) n, tool);
         } else if (n instanceof NewInstanceNode) {
-            newObjectSnippets.lower((NewInstanceNode) n);
+            newObjectSnippets.lower((NewInstanceNode) n, tool);
         } else if (n instanceof NewArrayNode) {
-            newObjectSnippets.lower((NewArrayNode) n);
+            newObjectSnippets.lower((NewArrayNode) n, tool);
         } else if (n instanceof MonitorEnterNode) {
             monitorSnippets.lower((MonitorEnterNode) n, tool);
         } else if (n instanceof MonitorExitNode) {
@@ -750,8 +747,14 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             writeBarrierSnippets.lower((SerialWriteBarrier) n, tool);
         } else if (n instanceof SerialArrayRangeWriteBarrier) {
             writeBarrierSnippets.lower((SerialArrayRangeWriteBarrier) n, tool);
+        } else if (n instanceof TLABAllocateNode) {
+            newObjectSnippets.lower((TLABAllocateNode) n, tool);
+        } else if (n instanceof InitializeObjectNode) {
+            newObjectSnippets.lower((InitializeObjectNode) n, tool);
+        } else if (n instanceof InitializeArrayNode) {
+            newObjectSnippets.lower((InitializeArrayNode) n, tool);
         } else if (n instanceof NewMultiArrayNode) {
-            newObjectSnippets.lower((NewMultiArrayNode) n);
+            newObjectSnippets.lower((NewMultiArrayNode) n, tool);
         } else if (n instanceof LoadExceptionObjectNode) {
             exceptionObjectSnippets.lower((LoadExceptionObjectNode) n);
         } else if (n instanceof IntegerDivNode || n instanceof IntegerRemNode || n instanceof UnsignedDivNode || n instanceof UnsignedRemNode) {

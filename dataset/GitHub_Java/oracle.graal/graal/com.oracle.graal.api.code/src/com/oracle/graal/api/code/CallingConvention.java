@@ -27,8 +27,9 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import com.oracle.graal.api.meta.*;
 
 /**
- * A calling convention describes the locations in which the arguments for a call are placed and the
- * location in which the return value is placed if the call is not void.
+ * A calling convention describes the locations in which the arguments for a call are placed, the
+ * location in which the return value is placed if the call is not void and any
+ * {@linkplain #getTemporaries() extra} locations used (and killed) by the call.
  */
 public class CallingConvention {
 
@@ -77,8 +78,13 @@ public class CallingConvention {
     private final AllocatableValue[] argumentLocations;
 
     /**
+     * The locations used (and killed) by the call in addition to the arguments.
+     */
+    private final AllocatableValue[] temporaryLocations;
+
+    /**
      * Creates a description of the registers and stack locations used by a call.
-     *
+     * 
      * @param stackSize amount of stack space (in bytes) required for the stack-based arguments of
      *            the call
      * @param returnLocation the location for the return value or {@link Value#ILLEGAL} if a void
@@ -86,11 +92,28 @@ public class CallingConvention {
      * @param argumentLocations the ordered locations in which the arguments are placed
      */
     public CallingConvention(int stackSize, AllocatableValue returnLocation, AllocatableValue... argumentLocations) {
+        this(AllocatableValue.NONE, stackSize, returnLocation, argumentLocations);
+    }
+
+    /**
+     * Creates a description of the registers and stack locations used by a call.
+     * 
+     * @param temporaryLocations the locations used (and killed) by the call in addition to
+     *            {@code arguments}
+     * @param stackSize amount of stack space (in bytes) required for the stack-based arguments of
+     *            the call
+     * @param returnLocation the location for the return value or {@link Value#ILLEGAL} if a void
+     *            call
+     * @param argumentLocations the ordered locations in which the arguments are placed
+     */
+    public CallingConvention(AllocatableValue[] temporaryLocations, int stackSize, AllocatableValue returnLocation, AllocatableValue... argumentLocations) {
         assert argumentLocations != null;
+        assert temporaryLocations != null;
         assert returnLocation != null;
         this.argumentLocations = argumentLocations;
         this.stackSize = stackSize;
         this.returnLocation = returnLocation;
+        this.temporaryLocations = temporaryLocations;
         assert verify();
     }
 
@@ -132,6 +155,17 @@ public class CallingConvention {
         return argumentLocations.clone();
     }
 
+    /**
+     * Gets the locations used (and killed) by the call apart from the
+     * {@linkplain #getArgument(int) arguments}.
+     */
+    public AllocatableValue[] getTemporaries() {
+        if (temporaryLocations.length == 0) {
+            return temporaryLocations;
+        }
+        return temporaryLocations.clone();
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -144,6 +178,14 @@ public class CallingConvention {
         if (!returnLocation.equals(Value.ILLEGAL)) {
             sb.append(" -> ").append(returnLocation);
         }
+        if (temporaryLocations.length != 0) {
+            sb.append("; temps=");
+            sep = "";
+            for (Value op : temporaryLocations) {
+                sb.append(sep).append(op);
+                sep = ", ";
+            }
+        }
         sb.append("]");
         return sb.toString();
     }
@@ -151,7 +193,7 @@ public class CallingConvention {
     private boolean verify() {
         for (int i = 0; i < argumentLocations.length; i++) {
             Value location = argumentLocations[i];
-            assert isStackSlot(location) || isAllocatableValue(location);
+            assert isStackSlot(location) || isRegister(location);
         }
         return true;
     }
