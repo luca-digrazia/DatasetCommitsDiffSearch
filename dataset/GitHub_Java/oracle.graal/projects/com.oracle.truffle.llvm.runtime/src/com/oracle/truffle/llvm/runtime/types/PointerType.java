@@ -31,10 +31,11 @@ package com.oracle.truffle.llvm.runtime.types;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public final class PointerType extends AggregateType {
@@ -72,7 +73,11 @@ public final class PointerType extends AggregateType {
 
     @Override
     public int getSize(DataSpecConverter targetDataLayout) {
-        return LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
+        if (getPointeeType() instanceof FunctionType) {
+            return LLVMHeap.FUNCTION_PTR_SIZE_BYTE;
+        } else {
+            return LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
+        }
     }
 
     @Override
@@ -83,12 +88,12 @@ public final class PointerType extends AggregateType {
     }
 
     @Override
-    public long getOffsetOf(long index, DataSpecConverter targetDataLayout) {
+    public int getOffsetOf(int index, DataSpecConverter targetDataLayout) {
         return getPointeeType().getSize(targetDataLayout) * index;
     }
 
     @Override
-    public Type getElementType(long index) {
+    public Type getElementType(int index) {
         return getPointeeType();
     }
 
@@ -123,4 +128,5 @@ public final class PointerType extends AggregateType {
     public boolean equals(Object obj) {
         return obj instanceof PointerType;
     }
+
 }

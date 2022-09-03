@@ -79,7 +79,7 @@ public final class ArrayType extends AggregateType {
     }
 
     @Override
-    public Type getElementType(long index) {
+    public Type getElementType(int index) {
         return getElementType();
     }
 
@@ -101,7 +101,7 @@ public final class ArrayType extends AggregateType {
     }
 
     @Override
-    public long getOffsetOf(long index, DataSpecConverter targetDataLayout) {
+    public int getOffsetOf(int index, DataSpecConverter targetDataLayout) {
         return getElementType().getSize(targetDataLayout) * index;
     }
 

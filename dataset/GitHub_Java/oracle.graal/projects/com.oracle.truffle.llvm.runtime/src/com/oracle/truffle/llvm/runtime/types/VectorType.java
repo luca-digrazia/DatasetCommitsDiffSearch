@@ -78,7 +78,7 @@ public final class VectorType extends AggregateType {
     }
 
     @Override
-    public Type getElementType(long index) {
+    public Type getElementType(int index) {
         if (index >= length) {
             CompilerDirectives.transferToInterpreter();
             throw new ArrayIndexOutOfBoundsException();
@@ -109,7 +109,7 @@ public final class VectorType extends AggregateType {
     }
 
     @Override
-    public long getOffsetOf(long index, DataSpecConverter targetDataLayout) {
+    public int getOffsetOf(int index, DataSpecConverter targetDataLayout) {
         return getElementType().getSize(targetDataLayout) * index;
     }
 
@@ -152,4 +152,5 @@ public final class VectorType extends AggregateType {
         }
         return true;
     }
+
 }

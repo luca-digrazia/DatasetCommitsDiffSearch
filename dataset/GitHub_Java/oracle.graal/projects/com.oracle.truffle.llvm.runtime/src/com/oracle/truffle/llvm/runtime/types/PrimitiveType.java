@@ -65,9 +65,6 @@ public final class PrimitiveType extends Type {
             this.sizeInBits = sizeInBits;
         }
 
-        public int getSizeInBits() {
-            return sizeInBits;
-        }
     }
 
     private final PrimitiveKind kind;
@@ -127,7 +124,7 @@ public final class PrimitiveType extends Type {
     @Override
     public Type shallowCopy() {
         final PrimitiveType copy = new PrimitiveType(kind, constant);
-        copy.setInteropType(getInteropType());
+        copy.setSourceType(getSourceType());
         return copy;
     }
 
@@ -137,7 +134,7 @@ public final class PrimitiveType extends Type {
         if (Type.isIntegerType(this)) {
             return String.format("i%d", getBitSize());
         } else {
-            return kind.name().toLowerCase();
+            return kind.name();
         }
     }
 
@@ -174,4 +171,5 @@ public final class PrimitiveType extends Type {
         }
         return true;
     }
+
 }
