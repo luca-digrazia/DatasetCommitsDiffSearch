@@ -30,7 +30,7 @@ import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.*;
 
 /**
  * Substitutions for {@link java.lang.System} methods.
@@ -56,7 +56,8 @@ public class SystemSubstitutions {
 
     @MethodSubstitution
     public static int identityHashCode(Object x) {
-        if (probability(NOT_FREQUENT_PROBABILITY, x == null)) {
+        if (x == null) {
+            probability(NOT_FREQUENT_PROBABILITY);
             return 0;
         }
 
