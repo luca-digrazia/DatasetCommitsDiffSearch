@@ -79,8 +79,6 @@ public class CompilerToVMImpl implements CompilerToVM {
     @Override
     public native int lookupKlassRefIndexInPool(long metaspaceConstantPool, int cpi);
 
-    public native long constantPoolKlassAt(long metaspaceConstantPool, int cpi);
-
     @Override
     public native long lookupKlassInPool(long metaspaceConstantPool, int cpi);
 
@@ -90,7 +88,8 @@ public class CompilerToVMImpl implements CompilerToVM {
     @Override
     public native long resolveField(long metaspaceConstantPool, int cpi, byte opcode, long[] info);
 
-    public native int constantPoolRemapInstructionOperandFromCache(long metaspaceConstantPool, int cpi);
+    @Override
+    public native void loadReferencedTypeInPool(long metaspaceConstantPool, int cpi, byte opcode);
 
     @Override
     public native Object lookupAppendixInPool(long metaspaceConstantPool, int cpi);

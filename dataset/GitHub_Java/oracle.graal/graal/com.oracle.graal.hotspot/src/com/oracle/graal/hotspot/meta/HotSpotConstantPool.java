@@ -147,7 +147,8 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
      */
     private long getEntryAt(int index) {
         assertBounds(index);
-        return unsafe.getAddress(metaspaceConstantPool + runtime().getConfig().constantPoolSize + index * runtime().getTarget().wordSize);
+        HotSpotVMConfig config = runtime().getConfig();
+        return unsafe.getAddress(metaspaceConstantPool + config.constantPoolSize + index * runtime().getTarget().wordSize);
     }
 
     /**
@@ -276,20 +277,6 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
      */
     private int getKlassRefIndexAt(int index) {
         return runtime().getCompilerToVM().lookupKlassRefIndexInPool(metaspaceConstantPool, index);
-    }
-
-    /**
-     * Gets the uncached klass reference index constant pool entry at index {@code index}. See:
-     * {@code ConstantPool::uncached_klass_ref_index_at}.
-     * 
-     * @param index constant pool index
-     * @return klass reference index
-     */
-    private int getUncachedKlassRefIndexAt(int index) {
-        assert getTagAt(index) == JVM_CONSTANT.Fieldref || getTagAt(index) == JVM_CONSTANT.MethodRef || getTagAt(index) == JVM_CONSTANT.InterfaceMethodref;
-        final int refIndex = unsafe.getInt(metaspaceConstantPool + runtime().getConfig().constantPoolSize + index * runtime().getTarget().wordSize);
-        // klass ref index is in the low 16-bits.
-        return refIndex & 0xFFFF;
     }
 
     /**
@@ -464,37 +451,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
                 break;
             default:
                 index = toConstantPoolIndex(cpi, opcode);
-                index = runtime().getCompilerToVM().constantPoolRemapInstructionOperandFromCache(metaspaceConstantPool, index);
         }
-
-        JVM_CONSTANT tag = getTagAt(index);
-        switch (tag) {
-            case Fieldref:
-            case MethodRef:
-            case InterfaceMethodref:
-                index = getUncachedKlassRefIndexAt(index);
-                tag = getTagAt(index);
-                assert tag == JVM_CONSTANT.Class || tag == JVM_CONSTANT.UnresolvedClass || tag == JVM_CONSTANT.UnresolvedClassInError : tag;
-                break;
-            default:
-                // nothing
-                break;
-        }
-
-        switch (tag) {
-            case Class:
-            case UnresolvedClass:
-            case UnresolvedClassInError:
-                final long metaspaceKlass = runtime().getCompilerToVM().constantPoolKlassAt(metaspaceConstantPool, index);
-                HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
-                Class<?> klass = type.mirror();
-                if (!klass.isPrimitive() && !klass.isArray()) {
-                    unsafe.ensureClassInitialized(klass);
-                }
-                break;
-            default:
-                // nothing
-                break;
-        }
+        runtime().getCompilerToVM().loadReferencedTypeInPool(metaspaceConstantPool, index, (byte) opcode);
     }
 }
