@@ -22,8 +22,6 @@
  */
 package org.graalvm.compiler.replacements;
 
-import static org.graalvm.compiler.core.common.GraalOptions.MaximumRecursiveInlining;
-
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.nodes.CallTargetNode;
@@ -46,16 +44,6 @@ public class MethodHandlePlugin implements NodePlugin {
     public MethodHandlePlugin(MethodHandleAccessProvider methodHandleAccess, boolean safeForDeoptimization) {
         this.methodHandleAccess = methodHandleAccess;
         this.safeForDeoptimization = safeForDeoptimization;
-    }
-
-    private static int countRecursiveInlining(GraphBuilderContext b, ResolvedJavaMethod method) {
-        int count = 0;
-        for (GraphBuilderContext c = b.getParent(); c != null; c = c.getParent()) {
-            if (method.equals(c.getMethod())) {
-                count++;
-            }
-        }
-        return count;
     }
 
     @Override
@@ -95,19 +83,11 @@ public class MethodHandlePlugin implements NodePlugin {
                     // As such, it needs to recursively inline everything.
                     inlineEverything = args.length != argumentsList.size();
                 }
-                ResolvedJavaMethod targetMethod = callTarget.targetMethod();
-                if (inlineEverything && !targetMethod.hasBytecodes()) {
+                if (inlineEverything && !callTarget.targetMethod().hasBytecodes()) {
                     // we need to force-inline but we can not, leave the invoke as-is
                     return false;
                 }
-
-                int recursionDepth = countRecursiveInlining(b, targetMethod);
-                int maxRecursionDepth = MaximumRecursiveInlining.getValue(b.getOptions());
-                if (recursionDepth > maxRecursionDepth) {
-                    return false;
-                }
-
-                b.handleReplacedInvoke(invoke.getInvokeKind(), targetMethod, argumentsList.toArray(new ValueNode[argumentsList.size()]), inlineEverything);
+                b.handleReplacedInvoke(invoke.getInvokeKind(), callTarget.targetMethod(), argumentsList.toArray(new ValueNode[argumentsList.size()]), inlineEverything);
             }
             return true;
         }
