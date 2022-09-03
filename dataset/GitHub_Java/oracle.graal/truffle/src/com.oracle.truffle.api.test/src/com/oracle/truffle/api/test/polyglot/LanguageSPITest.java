@@ -56,8 +56,7 @@ public class LanguageSPITest {
         langContext = null;
         Engine engine = Engine.create();
 
-        Context context = Context.create(LanguageSPITestLanguage.ID);
-        assertTrue(context.initialize(LanguageSPITestLanguage.ID));
+        Context context = engine.getLanguage(LanguageSPITestLanguage.ID).createContext();
         assertNotNull(langContext);
         assertEquals(0, langContext.disposeCalled);
         context.close();
@@ -70,7 +69,7 @@ public class LanguageSPITest {
         langContext = null;
         Engine engine = Engine.create();
 
-        Context context = Context.newBuilder().engine(engine).build();
+        Context context = engine.createContext();
         context.initialize(LanguageSPITestLanguage.ID);
 
         assertNotNull(langContext);
@@ -85,11 +84,11 @@ public class LanguageSPITest {
     public void testImplicitClose() {
         Engine engine = Engine.create();
         langContext = null;
-        Context c = Context.newBuilder().engine(engine).build();
+        Context c = engine.createContext();
         c.initialize(LanguageSPITestLanguage.ID);
         LanguageContext context1 = langContext;
 
-        Context.newBuilder().engine(engine).build().initialize(LanguageSPITestLanguage.ID);
+        engine.createContext().initialize(LanguageSPITestLanguage.ID);
         LanguageContext context2 = langContext;
 
         c.close();
@@ -101,7 +100,7 @@ public class LanguageSPITest {
     @Test
     public void testImplicitCloseFromOtherThread() throws InterruptedException {
         Engine engine = Engine.create();
-        Context context = Context.newBuilder().engine(engine).build();
+        Context context = engine.createContext();
         langContext = null;
         context.initialize(LanguageSPITestLanguage.ID);
 
@@ -121,7 +120,7 @@ public class LanguageSPITest {
         langContext = null;
         Thread t = new Thread(new Runnable() {
             public void run() {
-                Context context = Context.newBuilder().engine(engine).build();
+                Context context = engine.createContext();
                 context.initialize(LanguageSPITestLanguage.ID);
             }
         });
@@ -135,14 +134,14 @@ public class LanguageSPITest {
     public void testContextCloseInsideFromSameThread() {
         Engine engine = Engine.create();
         langContext = null;
-        Context context = Context.newBuilder(LanguageSPITestLanguage.ID).engine(engine).build();
+        Context context = engine.getLanguage(LanguageSPITestLanguage.ID).createContext();
         LanguageSPITestLanguage.runinside = new Callable<CallTarget>() {
             public CallTarget call() throws Exception {
                 context.close();
                 return null;
             }
         };
-        context.eval(LanguageSPITestLanguage.ID, "");
+        context.eval("");
         engine.close();
         assertEquals(1, langContext.disposeCalled);
     }
@@ -151,14 +150,14 @@ public class LanguageSPITest {
     public void testContextCloseInsideFromSameThreadCancelExecution() {
         Engine engine = Engine.create();
         langContext = null;
-        Context context = Context.newBuilder(LanguageSPITestLanguage.ID).engine(engine).build();
+        Context context = engine.getLanguage(LanguageSPITestLanguage.ID).createContext();
         LanguageSPITestLanguage.runinside = new Callable<CallTarget>() {
             public CallTarget call() throws Exception {
                 context.close(true);
                 return null;
             }
         };
-        context.eval(LanguageSPITestLanguage.ID, "");
+        context.eval("");
         engine.close();
         assertEquals(1, langContext.disposeCalled);
     }
@@ -167,14 +166,14 @@ public class LanguageSPITest {
     public void testEngineCloseInsideFromSameThread() {
         Engine engine = Engine.create();
         langContext = null;
-        Context context = Context.newBuilder(LanguageSPITestLanguage.ID).engine(engine).build();
+        Context context = engine.getLanguage(LanguageSPITestLanguage.ID).createContext();
         LanguageSPITestLanguage.runinside = new Callable<CallTarget>() {
             public CallTarget call() throws Exception {
                 engine.close();
                 return null;
             }
         };
-        context.eval(LanguageSPITestLanguage.ID, "");
+        context.eval("");
         assertEquals(1, langContext.disposeCalled);
     }
 
@@ -182,14 +181,14 @@ public class LanguageSPITest {
     public void testEngineCloseInsideFromSameThreadCancelExecution() {
         Engine engine = Engine.create();
         langContext = null;
-        Context context = Context.newBuilder(LanguageSPITestLanguage.ID).engine(engine).build();
+        Context context = engine.getLanguage(LanguageSPITestLanguage.ID).createContext();
         LanguageSPITestLanguage.runinside = new Callable<CallTarget>() {
             public CallTarget call() throws Exception {
                 engine.close(true);
                 return null;
             }
         };
-        context.eval(LanguageSPITestLanguage.ID, "");
+        context.eval("");
         assertEquals(1, langContext.disposeCalled);
     }
 
@@ -210,7 +209,7 @@ public class LanguageSPITest {
         ExecutorService service = Executors.newFixedThreadPool(1);
         try {
             Engine engine = Engine.create();
-            Context context = Context.newBuilder(LanguageSPITestLanguage.ID).engine(engine).build();
+            Context context = engine.getLanguage(LanguageSPITestLanguage.ID).createContext();
 
             CountDownLatch beforeSleep = new CountDownLatch(1);
             CountDownLatch interrupt = new CountDownLatch(1);
@@ -228,7 +227,7 @@ public class LanguageSPITest {
                     return null;
                 }
             };
-            Future<Value> future = service.submit(() -> context.eval(LanguageSPITestLanguage.ID, ""));
+            Future<Value> future = service.submit(() -> context.eval(""));
             beforeSleep.await(10000, TimeUnit.MILLISECONDS);
             context.close(true);
 
@@ -246,36 +245,6 @@ public class LanguageSPITest {
         } finally {
             service.shutdown();
         }
-    }
-
-    @Test
-    public void testImplicitEngineClose() {
-        Context context = Context.create();
-        context.close();
-
-        try {
-            context.getEngine().getOptions();
-            fail();
-        } catch (IllegalStateException e) {
-            // expect closed
-        }
-
-        try {
-            context.getEngine().getLanguages();
-            fail();
-        } catch (IllegalStateException e) {
-            // expect closed
-        }
-
-        try {
-            context.getEngine().getInstruments();
-            fail();
-        } catch (IllegalStateException e) {
-            // expect closed
-        }
-
-        // does not fail
-        context.getEngine().close();
     }
 
 }
