@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -59,6 +59,7 @@ import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.virtual.phases.ea.ReadEliminationBlockState.CacheEntry;
 import org.graalvm.compiler.virtual.phases.ea.ReadEliminationBlockState.LoadCacheEntry;
 import org.graalvm.compiler.virtual.phases.ea.ReadEliminationBlockState.UnsafeLoadCacheEntry;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 import org.graalvm.util.EconomicSet;
@@ -66,12 +67,7 @@ import org.graalvm.util.MapCursor;
 
 import jdk.vm.ci.meta.JavaKind;
 
-/**
- * This closure initially handled a set of nodes that is disjunct from
- * {@link PEReadEliminationClosure}, but over time both have evolved so that there's a significant
- * overlap.
- */
-public final class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockState> {
+public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockState> {
 
     public ReadEliminationClosure(ControlFlowGraph cfg) {
         super(null, cfg);
@@ -230,7 +226,7 @@ public final class ReadEliminationClosure extends EffectsClosure<ReadElimination
 
     private class ReadEliminationMergeProcessor extends EffectsClosure<ReadEliminationBlockState>.MergeProcessor {
 
-        private final EconomicMap<Object, ValuePhiNode> materializedPhis = EconomicMap.create(Equivalence.DEFAULT);
+        private final EconomicMap<Object, ValuePhiNode> materializedPhis = CollectionFactory.newMap(Equivalence.DEFAULT);
 
         ReadEliminationMergeProcessor(Block mergeBlock) {
             super(mergeBlock);
@@ -247,6 +243,12 @@ public final class ReadEliminationClosure extends EffectsClosure<ReadElimination
 
         @Override
         protected void merge(List<ReadEliminationBlockState> states) {
+            super.merge(states);
+
+            mergeReadCache(states);
+        }
+
+        private void mergeReadCache(List<ReadEliminationBlockState> states) {
             MapCursor<CacheEntry<?>, ValueNode> cursor = states.get(0).readCache.getEntries();
             while (cursor.advance()) {
                 CacheEntry<?> key = cursor.getKey();
@@ -254,9 +256,9 @@ public final class ReadEliminationClosure extends EffectsClosure<ReadElimination
                 boolean phi = false;
                 for (int i = 1; i < states.size(); i++) {
                     ValueNode otherValue = states.get(i).readCache.get(key);
-                    // E.g. unsafe loads / stores with different access kinds have different stamps
-                    // although location, object and offset are the same. In this case we cannot
-                    // create a phi nor can we set a common value.
+                    // e.g. unsafe loads / stores with different access kinds have different stamps
+                    // although location, object and offset are the same, in this case we cannot
+                    // create a phi nor can we set a common value
                     if (otherValue == null || !value.stamp().isCompatible(otherValue.stamp())) {
                         value = null;
                         phi = false;
@@ -280,10 +282,6 @@ public final class ReadEliminationClosure extends EffectsClosure<ReadElimination
                     newState.addCacheEntry(key, value);
                 }
             }
-            /*
-             * For object phis, see if there are known reads on all predecessors, for which we could
-             * create new phis.
-             */
             for (PhiNode phi : getPhis()) {
                 if (phi.getStackKind() == JavaKind.Object) {
                     for (CacheEntry<?> entry : states.get(0).readCache.getKeys()) {
@@ -291,6 +289,7 @@ public final class ReadEliminationClosure extends EffectsClosure<ReadElimination
                             mergeReadCachePhi(phi, entry, states);
                         }
                     }
+
                 }
             }
         }
@@ -338,7 +337,7 @@ public final class ReadEliminationClosure extends EffectsClosure<ReadElimination
                     loopKilledLocations.setKillsAll();
                 } else {
                     // we have fully processed this loop >1 times, update the killed locations
-                    EconomicSet<LocationIdentity> forwardEndLiveLocations = EconomicSet.create(Equivalence.DEFAULT);
+                    EconomicSet<LocationIdentity> forwardEndLiveLocations = CollectionFactory.newSet(Equivalence.DEFAULT);
                     for (CacheEntry<?> entry : initialState.readCache.getKeys()) {
                         forwardEndLiveLocations.add(entry.getIdentity());
                     }
