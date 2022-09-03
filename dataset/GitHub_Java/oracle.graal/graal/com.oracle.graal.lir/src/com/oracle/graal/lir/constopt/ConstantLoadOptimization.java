@@ -26,6 +26,7 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
 
 import java.util.*;
+import java.util.stream.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
@@ -85,7 +86,7 @@ public class ConstantLoadOptimization {
         try (Indent indent = Debug.logAndIndent("ConstantLoadOptimization")) {
             try (Scope s = Debug.scope("BuildDefUseTree")) {
                 // build DefUseTree
-                lir.getControlFlowGraph().getBlocks().forEach(this::analyzeBlock);
+                lir.getControlFlowGraph().getBlocks().forEach(this::processBlock);
                 // remove all with only one use
                 map.filter(t -> {
                     if (t.usageCount() > 1) {
@@ -113,6 +114,10 @@ public class ConstantLoadOptimization {
         }
     }
 
+    public void print() {
+        map.forEach(t -> Debug.log(1, "%s", t));
+    }
+
     private static boolean isConstantLoad(LIRInstruction inst) {
         if (!(inst instanceof MoveOp)) {
             return false;
@@ -131,10 +136,7 @@ public class ConstantLoadOptimization {
         list.add(entry);
     }
 
-    /**
-     * Collects def-use information for a {@code block}.
-     */
-    private void analyzeBlock(AbstractBlock<?> block) {
+    private void processBlock(AbstractBlock<?> block) {
         try (Indent indent = Debug.logAndIndent("Block: %s", block)) {
 
             InstructionValueConsumer loadConsumer = new InstructionValueConsumer() {
@@ -200,9 +202,11 @@ public class ConstantLoadOptimization {
         }
     }
 
-    /**
-     * Creates the dominator tree and searches for an solution.
-     */
+    public List<UseEntry> getUsages(AbstractBlock<?> block, Variable variable) {
+        List<UseEntry> list = blockMap.get(block);
+        return list == null ? Collections.emptyList() : list.stream().filter(u -> u.getValue().equals(variable)).collect(Collectors.toList());
+    }
+
     private void createConstantTree(DefUseTree tree) {
         ConstantTree constTree = new ConstantTree(lir.getControlFlowGraph(), tree);
         constTree.set(Flags.SUBTREE, tree.getBlock());
@@ -220,9 +224,9 @@ public class ConstantLoadOptimization {
         int usageCount = cost.getUsages().size();
         assert usageCount == tree.usageCount() : "Usage count differs: " + usageCount + " vs. " + tree.usageCount();
 
-        if (Debug.isLogEnabled()) {
-            try (Indent i = Debug.logAndIndent("Variable: %s, Block: %s, prob.: %f", tree.getVariable(), tree.getBlock(), tree.getBlock().probability())) {
-                Debug.log("Usages result: %s", cost);
+        if (Debug.isLogEnabled(1)) {
+            try (Indent i = Debug.logAndIndent(1, "Variable: %s, Block: %s, prob.: %f", tree.getVariable(), tree.getBlock(), tree.getBlock().probability())) {
+                Debug.log(1, "Usages result: %s", cost);
             }
 
         }
@@ -265,26 +269,6 @@ public class ConstantLoadOptimization {
         }
     }
 
-    private void insertLoad(Constant constant, LIRKind kind, AbstractBlock<?> block, List<UseEntry> usages) {
-        assert usages != null && usages.size() > 0 : String.format("No usages %s %s %s", constant, block, usages);
-        // create variable
-        Variable variable = lirGen.newVariable(kind);
-        // create move
-        LIRInstruction move = lir.getSpillMoveFactory().createMove(variable, constant);
-        // insert instruction
-        getInsertionBuffer(block).append(1, move);
-        Debug.log("new move (%s) and inserted in block %s", move, block);
-        // update usages
-        for (UseEntry u : usages) {
-            u.getPosition().set(u.getInstruction(), variable);
-            Debug.log("patched instruction %s", u.getInstruction());
-        }
-    }
-
-    /**
-     * Inserts the constant loads created in {@link #createConstantTree} and deletes the original
-     * definition.
-     */
     private void rewriteBlock(AbstractBlock<?> block) {
         // insert moves
         LIRInsertionBuffer buffer = insertionBuffers.get(block);
@@ -314,6 +298,22 @@ public class ConstantLoadOptimization {
         LIRInstruction instruction = tree.getInstruction();
         Debug.log("deleting instruction %s from block %s", instruction, block);
         lir.getLIRforBlock(block).set(instruction.id(), null);
+    }
+
+    private void insertLoad(Constant constant, LIRKind kind, AbstractBlock<?> block, List<UseEntry> usages) {
+        assert usages != null && usages.size() > 0 : String.format("No usages %s %s %s", constant, block, usages);
+        // create variable
+        Variable variable = lirGen.newVariable(kind);
+        // create move
+        LIRInstruction move = lir.getSpillMoveFactory().createMove(variable, constant);
+        // insert instruction
+        getInsertionBuffer(block).append(1, move);
+        Debug.log("new move (%s) and inserted in block %s", move, block);
+        // update usages
+        for (UseEntry u : usages) {
+            u.getPosition().set(u.getInstruction(), variable);
+            Debug.log("patched instruction %s", u.getInstruction());
+        }
     }
 
     private LIRInsertionBuffer getInsertionBuffer(AbstractBlock<?> block) {

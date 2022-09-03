@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.lir.constopt;
 
-import java.util.ArrayList;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
+import java.util.*;
+import java.util.function.*;
 
-import com.oracle.graal.lir.Variable;
+import com.oracle.graal.lir.*;
 
 /**
  * Maps variables to a generic type.
@@ -37,7 +36,7 @@ class VariableMap<T> {
 
     private final ArrayList<T> content;
 
-    VariableMap() {
+    public VariableMap() {
         content = new ArrayList<>();
     }
 

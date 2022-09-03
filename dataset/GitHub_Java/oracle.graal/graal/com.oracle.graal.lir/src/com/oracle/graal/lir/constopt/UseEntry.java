@@ -31,11 +31,11 @@ import com.oracle.graal.lir.*;
  */
 class UseEntry {
 
-    private final AbstractBlockBase<?> block;
+    private final AbstractBlock<?> block;
     private final LIRInstruction instruction;
     private final ValuePosition position;
 
-    public UseEntry(AbstractBlockBase<?> block, LIRInstruction instruction, ValuePosition position) {
+    public UseEntry(AbstractBlock<?> block, LIRInstruction instruction, ValuePosition position) {
         this.block = block;
         this.instruction = instruction;
         this.position = position;
@@ -45,12 +45,12 @@ class UseEntry {
         return instruction;
     }
 
-    public AbstractBlockBase<?> getBlock() {
+    public AbstractBlock<?> getBlock() {
         return block;
     }
 
-    public void setValue(Value newValue) {
-        position.set(getInstruction(), newValue);
+    public ValuePosition getPosition() {
+        return position;
     }
 
     public Value getValue() {
@@ -61,5 +61,4 @@ class UseEntry {
     public String toString() {
         return "Use[" + getValue() + ":" + instruction + ":" + block + "]";
     }
-
 }

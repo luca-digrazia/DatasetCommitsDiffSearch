@@ -24,22 +24,20 @@ package com.oracle.graal.lir.constopt;
 
 import java.util.*;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
 import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.constopt.ConstantTree.Flags;
 import com.oracle.graal.lir.constopt.ConstantTree.NodeCost;
 
 /**
  * Analyzes a {@link ConstantTree} and marks potential materialization positions.
  */
-public final class ConstantTreeAnalyzer {
+public class ConstantTreeAnalyzer {
     private final ConstantTree tree;
     private final BitSet visited;
 
-    @SuppressWarnings("try")
-    public static NodeCost analyze(ConstantTree tree, AbstractBlockBase<?> startBlock) {
+    public static NodeCost analyze(ConstantTree tree, AbstractBlock<?> startBlock) {
         try (Scope s = Debug.scope("ConstantTreeAnalyzer")) {
             ConstantTreeAnalyzer analyzer = new ConstantTreeAnalyzer(tree);
             analyzer.analyzeBlocks(startBlock);
@@ -62,12 +60,11 @@ public final class ConstantTreeAnalyzer {
      *
      * @param startBlock The start block of the dominator subtree.
      */
-    @SuppressWarnings("try")
-    private void analyzeBlocks(AbstractBlockBase<?> startBlock) {
-        Deque<AbstractBlockBase<?>> worklist = new ArrayDeque<>();
+    private void analyzeBlocks(AbstractBlock<?> startBlock) {
+        Deque<AbstractBlock<?>> worklist = new ArrayDeque<>();
         worklist.offerLast(startBlock);
         while (!worklist.isEmpty()) {
-            AbstractBlockBase<?> block = worklist.pollLast();
+            AbstractBlock<?> block = worklist.pollLast();
             try (Indent i = Debug.logAndIndent(3, "analyze: %s", block)) {
                 assert block != null : "worklist is empty!";
                 assert isMarked(block) : "Block not part of the dominator tree: " + block;
@@ -82,7 +79,7 @@ public final class ConstantTreeAnalyzer {
                     // if not yet visited (and not a leaf block) process all children first!
                     Debug.log(3, "not marked");
                     worklist.offerLast(block);
-                    List<? extends AbstractBlockBase<?>> children = block.getDominated();
+                    List<? extends AbstractBlock<?>> children = block.getDominated();
                     children.forEach(child -> filteredPush(worklist, child));
                     visited.set(block.getId());
                 } else {
@@ -100,15 +97,15 @@ public final class ConstantTreeAnalyzer {
      *
      * @param block The block to be processed.
      */
-    private void process(AbstractBlockBase<?> block) {
+    private void process(AbstractBlock<?> block) {
         List<UseEntry> usages = new ArrayList<>();
         double bestCost = 0;
         int numMat = 0;
-        List<? extends AbstractBlockBase<?>> children = block.getDominated();
+        List<? extends AbstractBlock<?>> children = block.getDominated();
         assert children.stream().anyMatch(this::isMarked) : "no children? should have called leafCost(): " + block;
 
         // collect children costs
-        for (AbstractBlockBase<?> child : children) {
+        for (AbstractBlock<?> child : children) {
             if (isMarked(child)) {
                 NodeCost childCost = tree.getCost(child);
                 assert childCost != null : "Child with null cost? block: " + child;
@@ -154,23 +151,23 @@ public final class ConstantTreeAnalyzer {
         return probabilityBlock * Math.pow(0.9, numMat - 1) < probabilityChildren;
     }
 
-    private void filteredPush(Deque<AbstractBlockBase<?>> worklist, AbstractBlockBase<?> block) {
+    private void filteredPush(Deque<AbstractBlock<?>> worklist, AbstractBlock<?> block) {
         if (isMarked(block)) {
             Debug.log(3, "adding %s to the worklist", block);
             worklist.offerLast(block);
         }
     }
 
-    private void leafCost(AbstractBlockBase<?> block) {
+    private void leafCost(AbstractBlock<?> block) {
         tree.set(Flags.CANDIDATE, block);
         tree.getOrInitCost(block);
     }
 
-    private boolean isMarked(AbstractBlockBase<?> block) {
+    private boolean isMarked(AbstractBlock<?> block) {
         return tree.isMarked(block);
     }
 
-    private boolean isLeafBlock(AbstractBlockBase<?> block) {
+    private boolean isLeafBlock(AbstractBlock<?> block) {
         return tree.isLeafBlock(block);
     }
 
