@@ -81,7 +81,6 @@ public final class BciBlockMapping {
         public int endBci;
         public boolean isExceptionEntry;
         public boolean isLoopHeader;
-        public boolean isLastLoopEnd;
         public int loopId;
 
         /**
@@ -98,21 +97,13 @@ public final class BciBlockMapping {
         public long loops;
         public JSRData jsrData;
 
-        public static class JSRData implements Cloneable {
+        public static class JSRData {
             public HashMap<JsrScope, BciBlock> jsrAlternatives;
             public JsrScope jsrScope = JsrScope.EMPTY_SCOPE;
             public BciBlock jsrSuccessor;
             public int jsrReturnBci;
             public BciBlock retSuccessor;
             public boolean endsWithRet = false;
-
-            public JSRData copy() {
-                try {
-                    return (JSRData) this.clone();
-                } catch (CloneNotSupportedException e) {
-                    return null;
-                }
-            }
         }
 
         public BciBlock() {
@@ -136,9 +127,6 @@ public final class BciBlockMapping {
         public BciBlock copy() {
             try {
                 BciBlock block = (BciBlock) super.clone();
-                if (block.jsrData != null) {
-                    block.jsrData = block.jsrData.copy();
-                }
                 block.successors = new ArrayList<>(successors);
                 return block;
             } catch (CloneNotSupportedException e) {
@@ -359,16 +347,14 @@ public final class BciBlockMapping {
     private final boolean doLivenessAnalysis;
     public LocalLiveness liveness;
     private int blocksNotYetAssignedId;
-    private final boolean consecutiveLoopBlocks;
 
     /**
      * Creates a new BlockMap instance from bytecode of the given method .
      *
      * @param method the compiler interface method containing the code
      */
-    private BciBlockMapping(ResolvedJavaMethod method, boolean doLivenessAnalysis, boolean consecutiveLoopBlocks) {
+    private BciBlockMapping(ResolvedJavaMethod method, boolean doLivenessAnalysis) {
         this.doLivenessAnalysis = doLivenessAnalysis;
-        this.consecutiveLoopBlocks = consecutiveLoopBlocks;
         this.method = method;
         this.exceptionHandlers = method.getExceptionHandlers();
         this.stream = new BytecodeStream(method.getCode());
@@ -740,7 +726,6 @@ public final class BciBlockMapping {
     }
 
     private void computeBlockOrder() {
-        int maxBlocks = blocksNotYetAssignedId;
         this.blocks = new BciBlock[blocksNotYetAssignedId];
         long loop = computeBlockOrder(blockMap[0]);
 
@@ -751,61 +736,23 @@ public final class BciBlockMapping {
             throw new BailoutException("Non-reducible loop");
         }
 
-        if (blocks[0] != null && this.nextLoop == 0) {
-            // No unreached blocks and no loops
-            for (int i = 0; i < blocks.length; ++i) {
-                blocks[i].setId(i);
-            }
-            return;
-        }
-
-        // Purge null entries for unreached blocks and sort blocks such that loop bodies are always
-        // consecutively in the array.
-        int blockCount = maxBlocks - blocksNotYetAssignedId;
-        BciBlock[] newBlocks = new BciBlock[blockCount];
-        int next = 0;
-        for (int i = 0; i < blocks.length; ++i) {
-            BciBlock b = blocks[i];
-            if (b != null) {
-                b.setId(next);
-                newBlocks[next++] = b;
-                if (consecutiveLoopBlocks && b.isLoopHeader) {
-                    next = handleLoopHeader(newBlocks, next, i, b);
-                }
-            }
-        }
-        blocks = newBlocks;
-
-        if (consecutiveLoopBlocks && this.nextLoop > 2) {
-            System.out.println();
-            for (int i = 0; i < blocks.length; ++i) {
-                String succ = "";
-                for (BciBlock succBlock : blocks[i].getSuccessors()) {
-                    succ += succBlock.getId() + " ";
-                }
-                System.out.printf("%3s %10s %s %s succ=[%s]\n", blocks[i].getId(), Long.toBinaryString(blocks[i].loops), blocks[i].isLoopHeader, blocks[i].isLastLoopEnd, succ);
-            }
-            System.out.println();
+        if (blocks[0] == null) {
+            purgeLeadingNullBlocks();
         }
     }
 
-    private int handleLoopHeader(BciBlock[] newBlocks, int nextStart, int i, BciBlock loopHeader) {
-        int next = nextStart;
-        BciBlock last = loopHeader;
-        for (int j = i + 1; j < blocks.length; ++j) {
-            BciBlock other = blocks[j];
-            if (other != null && (other.loops & (1L << loopHeader.loopId)) != 0) {
-                other.setId(next);
-                newBlocks[next++] = other;
-                last = other;
-                blocks[j] = null;
-                if (other.isLoopHeader) {
-                    next = handleLoopHeader(newBlocks, next, j, other);
-                }
+    private void purgeLeadingNullBlocks() {
+        // Purge leading null values due to unreachable blocks.
+        int i = 0;
+        for (; i < blocks.length; ++i) {
+            if (blocks[i] != null) {
+                break;
             }
         }
-        last.isLastLoopEnd = true;
-        return next;
+        blocks = Arrays.copyOfRange(blocks, i, blocks.length);
+        for (i = 0; i < blocks.length; ++i) {
+            blocks[i].setId(i);
+        }
     }
 
     public void log(String name) {
@@ -927,7 +874,6 @@ public final class BciBlockMapping {
             if (successor.active) {
                 // Reached block via backward branch.
                 block.isLoopEnd = true;
-                loops |= (1L << successor.loopId);
             }
         }
 
@@ -941,6 +887,7 @@ public final class BciBlockMapping {
         block.active = false;
         blocksNotYetAssignedId--;
         blocks[blocksNotYetAssignedId] = block;
+        block.setId(blocksNotYetAssignedId);
 
         return loops;
     }
@@ -1196,8 +1143,8 @@ public final class BciBlockMapping {
         }
     }
 
-    public static BciBlockMapping create(ResolvedJavaMethod method, boolean doLivenessAnalysis, boolean consecutiveLoopBlocks) {
-        BciBlockMapping map = new BciBlockMapping(method, doLivenessAnalysis, consecutiveLoopBlocks);
+    public static BciBlockMapping create(ResolvedJavaMethod method, boolean doLivenessAnalysis) {
+        BciBlockMapping map = new BciBlockMapping(method, doLivenessAnalysis);
         map.build();
         if (Debug.isDumpEnabled()) {
             Debug.dump(map, method.format("After block building %f %R %H.%n(%P)"));
