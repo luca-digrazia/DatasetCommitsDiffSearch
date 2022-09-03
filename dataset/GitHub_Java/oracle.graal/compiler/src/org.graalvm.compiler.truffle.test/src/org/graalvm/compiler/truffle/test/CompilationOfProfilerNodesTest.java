@@ -55,7 +55,7 @@ public class CompilationOfProfilerNodesTest extends TestWithSynchronousCompiling
             ")";
 
     @Test
-    @SuppressWarnings("try")
+    @SuppressWarnings("unused")
     public void testInvalidationsDontPoluteShadowStack() {
         // Test assumes that foo will be inlined into bar
         try (TruffleCompilerOptions.TruffleOptionsOverrideScope inline = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleFunctionInlining, true)) {
