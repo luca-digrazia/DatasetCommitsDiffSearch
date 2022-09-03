@@ -81,13 +81,11 @@ final class HostInteropReflect {
 
     @CompilerDirectives.TruffleBoundary
     static Class<?> findInnerClass(Class<?> clazz, String name) {
-        if (!TruffleOptions.AOT) { // GR-13208: SVM does not support Class.getClasses() yet
-            if (Modifier.isPublic(clazz.getModifiers())) {
-                for (Class<?> t : clazz.getClasses()) {
-                    // no support for non-static type members now
-                    if (isStaticTypeOrInterface(t) && t.getSimpleName().equals(name)) {
-                        return t;
-                    }
+        if (Modifier.isPublic(clazz.getModifiers())) {
+            for (Class<?> t : clazz.getClasses()) {
+                // no support for non-static type members now
+                if (isStaticTypeOrInterface(t) && t.getSimpleName().equals(name)) {
+                    return t;
                 }
             }
         }
@@ -100,6 +98,10 @@ final class HostInteropReflect {
 
     @CompilerDirectives.TruffleBoundary
     static HostMethodDesc findMethod(Class<?> clazz, String name, boolean onlyStatic) {
+        if (TruffleOptions.AOT) {
+            return null;
+        }
+
         HostClassDesc classDesc = HostClassDesc.forClass(clazz);
         HostMethodDesc foundMethod = classDesc.lookupMethod(name, onlyStatic);
         if (foundMethod == null && isJNIName(name)) {
@@ -116,6 +118,10 @@ final class HostInteropReflect {
 
     @CompilerDirectives.TruffleBoundary
     static int findKeyInfo(Class<?> clazz, String name, boolean onlyStatic) {
+        if (TruffleOptions.AOT) {
+            return 0;
+        }
+
         boolean readable = false;
         boolean writable = false;
         boolean invocable = false;
@@ -238,15 +244,13 @@ final class HostInteropReflect {
         names.addAll(classDesc.getMethodNames(onlyStatic, includeInternal));
         if (onlyStatic) {
             names.add("class");
-            if (!TruffleOptions.AOT) { // GR-13208: SVM does not support Class.getClasses() yet
-                if (Modifier.isPublic(clazz.getModifiers())) {
-                    // no support for non-static member types now
-                    for (Class<?> t : clazz.getClasses()) {
-                        if (!isStaticTypeOrInterface(t)) {
-                            continue;
-                        }
-                        names.add(t.getSimpleName());
+            if (Modifier.isPublic(clazz.getModifiers())) {
+                // no support for non-static member types now
+                for (Class<?> t : clazz.getClasses()) {
+                    if (!isStaticTypeOrInterface(t)) {
+                        continue;
                     }
+                    names.add(t.getSimpleName());
                 }
             }
         }
@@ -366,7 +370,7 @@ class FunctionProxyNode extends HostRootNode<TruffleObject> {
             this.returnType = HostInteropReflect.getMethodGenericReturnType(method);
             this.executeNode = insert(new PolyglotExecuteNode());
         }
-        return executeNode.execute(languageContext, function, args[ARGUMENT_OFFSET], returnClass, returnType);
+        return executeNode.execute(languageContext, function, args[OFFSET], returnClass, returnType);
     }
 
     @Override
@@ -396,7 +400,7 @@ class FunctionProxyNode extends HostRootNode<TruffleObject> {
     }
 }
 
-final class FunctionProxyHandler implements InvocationHandler, HostWrapper {
+final class FunctionProxyHandler implements InvocationHandler {
     final TruffleObject functionObj;
     final PolyglotLanguageContext languageContext;
     private final Method functionMethod;
@@ -410,28 +414,12 @@ final class FunctionProxyHandler implements InvocationHandler, HostWrapper {
     }
 
     @Override
-    public Object getGuestObject() {
-        return functionObj;
-    }
-
-    @Override
-    public PolyglotContextImpl getContext() {
-        return languageContext.context;
-    }
-
-    @Override
-    public PolyglotLanguageContext getLanguageContext() {
-        return languageContext;
-    }
-
-    @Override
     public Object invoke(Object proxy, Method method, Object[] arguments) throws Throwable {
         CompilerAsserts.neverPartOfCompilation();
-        Object[] resolvedArguments = arguments == null ? HostInteropReflect.EMPTY : arguments;
         if (method.equals(functionMethod)) {
-            return target.call(languageContext, functionObj, spreadVarArgsArray(resolvedArguments));
+            return target.call(languageContext, functionObj, spreadVarArgsArray(arguments));
         } else {
-            return invokeDefault(this, proxy, method, resolvedArguments);
+            return invokeDefault(proxy, method, arguments);
         }
     }
 
@@ -451,24 +439,19 @@ final class FunctionProxyHandler implements InvocationHandler, HostWrapper {
         }
     }
 
-    static Object invokeDefault(HostWrapper host, Object proxy, Method method, Object[] arguments) throws Throwable {
+    private static Object invokeDefault(Object proxy, Method method, Object[] arguments) throws Throwable {
         if (method.getDeclaringClass() == Object.class) {
             switch (method.getName()) {
                 case "equals":
-                    return HostWrapper.equalsProxy(host, arguments[0]);
+                    return proxy == arguments[0];
                 case "hashCode":
-                    return HostWrapper.hashCode(host);
+                    return System.identityHashCode(proxy);
                 case "toString":
-                    return HostWrapper.toString(host);
+                    return proxy.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(proxy));
                 default:
                     throw new UnsupportedOperationException(method.getName());
             }
         }
-
-        if (TruffleOptions.AOT) {
-            throw new UnsupportedOperationException("calling default method " + method.getName() + " is not yet supported on SubstrateVM");
-        }
-
         // default method; requires Java 9 (JEP 274)
         Class<?> declaringClass = method.getDeclaringClass();
         assert declaringClass.isInterface() : declaringClass;
@@ -513,8 +496,8 @@ class ObjectProxyNode extends HostRootNode<TruffleObject> {
             toGuests = ToGuestValuesNode.create();
             proxyInvoke = ProxyInvokeNodeGen.create();
         }
-        Method method = (Method) args[ARGUMENT_OFFSET];
-        Object[] arguments = toGuests.apply(languageContext, (Object[]) args[ARGUMENT_OFFSET + 1]);
+        Method method = (Method) args[OFFSET];
+        Object[] arguments = toGuests.apply(languageContext, (Object[]) args[OFFSET + 1]);
         return proxyInvoke.execute(languageContext, receiver, method, arguments);
     }
 
@@ -639,7 +622,7 @@ abstract class ProxyInvokeNode extends Node {
 
 }
 
-final class ObjectProxyHandler implements InvocationHandler, HostWrapper {
+final class ObjectProxyHandler implements InvocationHandler {
 
     final TruffleObject obj;
     final PolyglotLanguageContext languageContext;
@@ -652,29 +635,9 @@ final class ObjectProxyHandler implements InvocationHandler, HostWrapper {
     }
 
     @Override
-    public Object getGuestObject() {
-        return obj;
-    }
-
-    @Override
-    public PolyglotLanguageContext getLanguageContext() {
-        return languageContext;
-    }
-
-    @Override
-    public PolyglotContextImpl getContext() {
-        return languageContext.context;
-    }
-
-    @Override
     public Object invoke(Object proxy, Method method, Object[] arguments) throws Throwable {
         CompilerAsserts.neverPartOfCompilation();
-        Object[] resolvedArguments = arguments == null ? HostInteropReflect.EMPTY : arguments;
-        try {
-            return invoke.call(languageContext, obj, method, resolvedArguments);
-        } catch (UnsupportedOperationException e) {
-            return FunctionProxyHandler.invokeDefault(this, proxy, method, resolvedArguments);
-        }
+        return invoke.call(languageContext, obj, method, arguments == null ? HostInteropReflect.EMPTY : arguments);
     }
 
 }

@@ -25,10 +25,8 @@
 package com.oracle.svm.hosted.meta;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 
-import com.oracle.graal.pointsto.infrastructure.OriginalFieldProvider;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.svm.core.meta.ReadableJavaField;
 import com.oracle.svm.core.meta.SharedField;
@@ -41,7 +39,7 @@ import jdk.vm.ci.meta.JavaTypeProfile;
 /**
  * Store the compile-time information for a field in the Substrate VM, such as the field offset.
  */
-public class HostedField implements ReadableJavaField, OriginalFieldProvider, SharedField, Comparable<HostedField> {
+public class HostedField implements ReadableJavaField, SharedField, Comparable<HostedField> {
 
     private final HostedUniverse universe;
     private final HostedMetaAccess metaAccess;
@@ -136,7 +134,7 @@ public class HostedField implements ReadableJavaField, OriginalFieldProvider, Sh
 
     @Override
     public int getOffset() {
-        return getLocation();
+        return wrapped.getOffset();
     }
 
     @Override
@@ -238,10 +236,5 @@ public class HostedField implements ReadableJavaField, OriginalFieldProvider, Sh
          * order unchanged and therefore keeps the field order we get from the hosting VM.
          */
         return result;
-    }
-
-    @Override
-    public Field getJavaField() {
-        return OriginalFieldProvider.getJavaField(getDeclaringClass().universe.getSnippetReflection(), wrapped);
     }
 }
