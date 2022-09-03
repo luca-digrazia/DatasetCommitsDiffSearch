@@ -36,7 +36,8 @@ import org.graalvm.compiler.lir.alloc.trace.TraceAllocationPhase.TraceAllocation
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool.MoveFactory;
 import org.graalvm.compiler.lir.phases.AllocationPhase;
-import org.graalvm.compiler.lir.ssa.SSAUtil;
+import org.graalvm.compiler.lir.ssi.SSIUtil;
+import org.graalvm.compiler.lir.ssi.SSIVerifier;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
@@ -77,20 +78,20 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
         MoveFactory spillMoveFactory = context.spillMoveFactory;
         RegisterAllocationConfig registerAllocationConfig = context.registerAllocationConfig;
         LIR lir = lirGenRes.getLIR();
+        assert SSIVerifier.verify(lir) : "LIR not in SSI form.";
         TraceBuilderResult resultTraces = context.contextLookup(TraceBuilderResult.class);
-        GlobalLivenessInfo livenessInfo = context.contextLookup(GlobalLivenessInfo.class);
-        assert livenessInfo != null;
-        TraceAllocationContext traceContext = new TraceAllocationContext(spillMoveFactory, registerAllocationConfig, resultTraces, livenessInfo);
+
+        TraceAllocationContext traceContext = new TraceAllocationContext(spillMoveFactory, registerAllocationConfig, resultTraces);
         AllocatableValue[] cachedStackSlots = Options.TraceRACacheStackSlots.getValue(lir.getOptions()) ? new AllocatableValue[lir.numVariables()] : null;
 
         // currently this is not supported
         boolean neverSpillConstant = false;
 
-        final TraceRegisterAllocationPolicy plan = DefaultTraceRegisterAllocationPolicy.allocationPolicy(target, lirGenRes, spillMoveFactory, registerAllocationConfig, cachedStackSlots, resultTraces,
-                        neverSpillConstant, livenessInfo, lir.getOptions());
+        final TraceRegisterAllocationPolicy plan = DefaultTraceRegisterAllocationPolicy.allocationPolicy(target, lirGenRes, spillMoveFactory, registerAllocationConfig, cachedStackSlots,
+                        resultTraces, neverSpillConstant, lir.getOptions());
 
         Debug.dump(Debug.INFO_LOG_LEVEL, lir, "Before TraceRegisterAllocation");
-        try (Scope s0 = Debug.scope("AllocateTraces", resultTraces, livenessInfo)) {
+        try (Scope s0 = Debug.scope("AllocateTraces", resultTraces)) {
             for (Trace trace : resultTraces.getTraces()) {
                 tracesCounter.increment();
                 TraceAllocationPhase<TraceAllocationContext> allocator = plan.selectStrategy(trace);
@@ -107,19 +108,25 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
         }
 
         TRACE_GLOBAL_MOVE_RESOLUTION_PHASE.apply(target, lirGenRes, traceContext);
-        deconstructSSAForm(lir);
+        deconstructSSIForm(lir);
     }
 
     /**
-     * Remove Phi In/Out.
+     * Remove Phi/Sigma In/Out.
+     *
+     * Note: Incoming Values are needed for the RegisterVerifier, otherwise SIGMAs/PHIs where the
+     * Out and In value matches (ie. there is no resolution move) are falsely detected as errors.
      */
-    private static void deconstructSSAForm(LIR lir) {
+    @SuppressWarnings("try")
+    private static void deconstructSSIForm(LIR lir) {
         for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
-            if (SSAUtil.isMerge(block)) {
-                SSAUtil.phiIn(lir, block).clearIncomingValues();
-                for (AbstractBlockBase<?> pred : block.getPredecessors()) {
-                    SSAUtil.phiOut(lir, pred).clearOutgoingValues();
+            try (Indent i = Debug.logAndIndent("Fixup Block %s", block)) {
+                if (block.getPredecessorCount() != 0) {
+                    SSIUtil.removeIncoming(lir, block);
+                } else {
+                    assert lir.getControlFlowGraph().getStartBlock().equals(block);
                 }
+                SSIUtil.removeOutgoing(lir, block);
             }
         }
     }

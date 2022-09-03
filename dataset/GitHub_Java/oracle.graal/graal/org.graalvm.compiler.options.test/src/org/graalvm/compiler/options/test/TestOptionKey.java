@@ -28,41 +28,48 @@
 
 package org.graalvm.compiler.options.test;
 
-import static org.graalvm.compiler.options.test.TestOptionKey.Options.MyOption;
-import static org.graalvm.compiler.options.test.TestOptionKey.Options.MyOtherOption;
+import static org.graalvm.compiler.options.OptionValues.GLOBAL;
+import static org.graalvm.compiler.options.test.TestOptionKey.Options.Mutable;
+import static org.graalvm.compiler.options.test.TestOptionKey.Options.SecondMutable;
+import static org.graalvm.compiler.options.test.TestOptionKey.Options.Stable;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionKey;
-import org.graalvm.compiler.options.OptionValues;
-import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Test;
 
 @SuppressWarnings("try")
 public class TestOptionKey {
 
     public static class Options {
-        public static final OptionKey<String> MyOption = new OptionKey<>("original");
-        public static final OptionKey<String> MyOtherOption = new OptionKey<>("original");
+        public static final OptionKey<Boolean> Stable = new OptionKey<>(true);
+        public static final OptionKey<String> Mutable = new OptionKey<>("original");
+        public static final OptionKey<String> SecondMutable = new OptionKey<>("second");
+    }
+
+    static final OptionDescriptor stable = OptionDescriptor.create("Stable", Boolean.class, "", Options.class, "Stable", Stable);
+    static final OptionDescriptor mutable = OptionDescriptor.create("Mutable", String.class, "", Options.class, "Mutable", Mutable);
+    static final OptionDescriptor secondMutable = OptionDescriptor.create("SecondMutable", String.class, "", Options.class, "SecondMutable", SecondMutable);
+
+    @Test
+    public void testMutable() {
+        assertEquals("original", Mutable.getValue(GLOBAL));
+    }
+
+    @Test
+    public void testMultiple() {
+        assertEquals("original", Mutable.getValue(GLOBAL));
+        assertEquals("second", SecondMutable.getValue(GLOBAL));
+    }
+
+    @Test
+    public void testStable() {
+        assertTrue(Stable.getValue(GLOBAL));
     }
 
     @Test
     public void toStringTest() {
-        OptionDescriptor.create("MyOption", String.class, "", Options.class, "MyOption", MyOption);
-        assertEquals("MyOption", MyOption.toString());
-    }
-
-    @Test
-    public void missingDescriptorTest() {
-        OptionValues options = new OptionValues(OptionValues.newOptionMap());
-        Assume.assumeTrue(OptionValues.class.desiredAssertionStatus() == true);
-        boolean sawAssertionError = false;
-        try {
-            MyOtherOption.getValue(options);
-        } catch (AssertionError e) {
-            sawAssertionError = true;
-        }
-        Assert.assertTrue(sawAssertionError);
+        assertEquals("Mutable", Mutable.toString());
     }
 }

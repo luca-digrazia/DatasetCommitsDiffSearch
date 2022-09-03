@@ -22,6 +22,7 @@
  */
 package org.graalvm.compiler.truffle.substitutions;
 
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleUseFrameWithoutBoxing;
 import static java.lang.Character.toUpperCase;
 
 import java.lang.ref.Reference;
@@ -67,9 +68,8 @@ import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.virtual.EnsureVirtualizedNode;
 import org.graalvm.compiler.options.Option;
+import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.options.OptionValue;
-import org.graalvm.compiler.options.StableOptionValue;
 import org.graalvm.compiler.replacements.nodes.arithmetic.IntegerAddExactNode;
 import org.graalvm.compiler.replacements.nodes.arithmetic.IntegerMulExactNode;
 import org.graalvm.compiler.replacements.nodes.arithmetic.IntegerMulHighNode;
@@ -90,7 +90,6 @@ import org.graalvm.compiler.truffle.nodes.frame.NewFrameNode;
 import org.graalvm.compiler.truffle.nodes.frame.VirtualFrameGetNode;
 import org.graalvm.compiler.truffle.nodes.frame.VirtualFrameIsNode;
 import org.graalvm.compiler.truffle.nodes.frame.VirtualFrameSetNode;
-
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.ExactMath;
@@ -113,7 +112,7 @@ public class TruffleGraphBuilderPlugins {
 
     public static class Options {
         @Option(help = "Intrinsify get/set/is methods of FrameWithoutBoxing to improve Truffle compilation time", type = OptionType.Debug)//
-        public static final OptionValue<Boolean> TruffleIntrinsifyFrameAccess = new StableOptionValue<>(true);
+        public static final OptionKey<Boolean> TruffleIntrinsifyFrameAccess = new OptionKey<>(true);
     }
 
     public static void registerInvocationPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification, SnippetReflectionProvider snippetReflection) {
@@ -125,7 +124,7 @@ public class TruffleGraphBuilderPlugins {
         registerOptimizedCallTargetPlugins(plugins, snippetReflection, canDelayIntrinsification);
         registerCompilationFinalReferencePlugins(plugins, snippetReflection, canDelayIntrinsification);
 
-        if (TruffleCompilerOptions.TruffleUseFrameWithoutBoxing.getValue()) {
+        if (TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing)) {
             registerFrameWithoutBoxingPlugins(plugins, canDelayIntrinsification, snippetReflection);
         } else {
             registerFrameWithBoxingPlugins(plugins, canDelayIntrinsification);
@@ -400,7 +399,7 @@ public class TruffleGraphBuilderPlugins {
                 FrameDescriptor constantDescriptor = snippetReflection.asObject(FrameDescriptor.class, descriptor.asJavaConstant());
 
                 ValueNode nonNullArguments = b.add(new PiNode(args, StampFactory.objectNonNull(StampTool.typeReferenceOrNull(args))));
-                Class<?> frameClass = TruffleCompilerOptions.TruffleUseFrameWithoutBoxing.getValue() ? FrameWithoutBoxing.class : FrameWithBoxing.class;
+                Class<?> frameClass = TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing) ? FrameWithoutBoxing.class : FrameWithBoxing.class;
                 NewFrameNode newFrame = new NewFrameNode(b.getMetaAccess(), snippetReflection, b.getGraph(), b.getMetaAccess().lookupJavaType(frameClass), constantDescriptor, descriptor,
                                 nonNullArguments);
                 b.addPush(JavaKind.Object, newFrame);
@@ -457,9 +456,9 @@ public class TruffleGraphBuilderPlugins {
         Registration r = new Registration(plugins, FrameWithoutBoxing.class);
         registerFrameMethods(r);
         registerUnsafeCast(r, canDelayIntrinsification);
-        registerUnsafeLoadStorePlugins(r, null, JavaKind.Int, JavaKind.Long, JavaKind.Float, JavaKind.Double, JavaKind.Object);
+        registerUnsafeLoadStorePlugins(r, JavaKind.Int, JavaKind.Long, JavaKind.Float, JavaKind.Double, JavaKind.Object);
 
-        if (Options.TruffleIntrinsifyFrameAccess.getValue()) {
+        if (TruffleCompilerOptions.getValue(Options.TruffleIntrinsifyFrameAccess)) {
             for (Map.Entry<JavaKind, Integer> kindAndTag : accessorKindToTag.entrySet()) {
                 registerFrameAccessors(r, kindAndTag.getKey(), kindAndTag.getValue(), snippetReflection);
             }
@@ -563,7 +562,7 @@ public class TruffleGraphBuilderPlugins {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 ValueNode frame = receiver.get();
-                if (Options.TruffleIntrinsifyFrameAccess.getValue() && frame instanceof NewFrameNode && ((NewFrameNode) frame).getIntrinsifyAccessors()) {
+                if (TruffleCompilerOptions.getValue(Options.TruffleIntrinsifyFrameAccess) && frame instanceof NewFrameNode && ((NewFrameNode) frame).getIntrinsifyAccessors()) {
                     JavaConstant speculation = b.getGraph().getSpeculationLog().speculate(((NewFrameNode) frame).getIntrinsifyAccessorsSpeculation());
                     b.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.RuntimeConstraint, speculation));
                     return true;
@@ -620,14 +619,14 @@ public class TruffleGraphBuilderPlugins {
         });
     }
 
-    public static void registerUnsafeLoadStorePlugins(Registration r, JavaConstant anyConstant, JavaKind... kinds) {
+    public static void registerUnsafeLoadStorePlugins(Registration r, JavaKind... kinds) {
         for (JavaKind kind : kinds) {
             String kindName = kind.getJavaName();
             kindName = toUpperCase(kindName.charAt(0)) + kindName.substring(1);
             String getName = "unsafeGet" + kindName;
             String putName = "unsafePut" + kindName;
             r.register4(getName, Object.class, long.class, boolean.class, Object.class, new CustomizedUnsafeLoadPlugin(kind));
-            r.register4(putName, Object.class, long.class, kind == JavaKind.Object ? Object.class : kind.toJavaClass(), Object.class, new CustomizedUnsafeStorePlugin(kind, anyConstant));
+            r.register4(putName, Object.class, long.class, kind == JavaKind.Object ? Object.class : kind.toJavaClass(), Object.class, new CustomizedUnsafeStorePlugin(kind));
         }
     }
 
@@ -661,11 +660,9 @@ public class TruffleGraphBuilderPlugins {
     static class CustomizedUnsafeStorePlugin implements InvocationPlugin {
 
         private final JavaKind kind;
-        private final JavaConstant anyConstant;
 
-        CustomizedUnsafeStorePlugin(JavaKind kind, JavaConstant anyConstant) {
+        CustomizedUnsafeStorePlugin(JavaKind kind) {
             this.kind = kind;
-            this.anyConstant = anyConstant;
         }
 
         @Override
@@ -673,16 +670,13 @@ public class TruffleGraphBuilderPlugins {
             ValueNode locationArgument = location;
             if (locationArgument.isConstant()) {
                 LocationIdentity locationIdentity;
-                boolean forceAnyLocation = false;
                 if (locationArgument.isNullConstant()) {
                     locationIdentity = LocationIdentity.any();
-                } else if (locationArgument.asJavaConstant().equals(anyConstant)) {
-                    locationIdentity = LocationIdentity.any();
-                    forceAnyLocation = true;
                 } else {
                     locationIdentity = ObjectLocationIdentity.create(locationArgument.asJavaConstant());
                 }
-                b.add(new UnsafeStoreNode(object, offset, value, kind, locationIdentity, null, forceAnyLocation));
+
+                b.add(new UnsafeStoreNode(object, offset, value, kind, locationIdentity, null));
                 return true;
             }
             // TODO: should we throw b.bailout() here?

@@ -262,15 +262,19 @@ public final class GraalOptions {
     @Option(help = "Use a cache for snippet graphs.", type = OptionType.Debug)
     public static final OptionKey<Boolean> UseSnippetGraphCache = new OptionKey<>(true);
 
-    private static boolean assertionsEnabled() {
-        boolean enabled = false;
-        // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)
-        assert (enabled = true) == true;
-        return enabled;
-    }
+    @Option(help = "Enable expensive assertions", type = OptionType.Debug)
+    public static final OptionKey<Boolean> DetailedAsserts = new OptionKey<Boolean>() {
+        @Override
+        protected Boolean defaultValue() {
+            boolean enabled = false;
+            // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)
+            assert (enabled = true) == true;
+            return enabled;
+        }
+    };
 
-    @Option(help = "Enable expensive assertions.", type = OptionType.Debug)
-    public static final OptionKey<Boolean> DetailedAsserts = new OptionKey<>(assertionsEnabled());
+    @Option(help = "Enable Graal instrumentation")
+    public static final OptionKey<Boolean> UseGraalInstrumentation = new OptionKey<>(false);
 
     @Option(help = "Enable experimental Trace Register Allocation.", type = OptionType.Debug)
     public static final OptionKey<Boolean> TraceRA = new OptionKey<>(false);

@@ -22,13 +22,13 @@
  */
 package org.graalvm.compiler.graph;
 
-import static org.graalvm.compiler.core.common.Fields.translateInto;
 import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
 import static org.graalvm.compiler.graph.Edges.translateInto;
 import static org.graalvm.compiler.graph.Graph.isModificationCountsEnabled;
 import static org.graalvm.compiler.graph.InputEdges.translateInto;
 import static org.graalvm.compiler.graph.Node.WithAllEdges;
 import static org.graalvm.compiler.graph.UnsafeAccess.UNSAFE;
+import static org.graalvm.compiler.options.OptionValues.GLOBAL;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
@@ -38,16 +38,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.FieldIntrospection;
 import org.graalvm.compiler.core.common.Fields;
 import org.graalvm.compiler.core.common.FieldsScanner;
-import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugCounter;
@@ -70,8 +68,7 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionValue;
-import org.graalvm.compiler.options.StableOptionValue;
+import org.graalvm.compiler.options.OptionKey;
 
 /**
  * Metadata for every {@link Node} type. The metadata includes:
@@ -86,7 +83,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     public static class Options {
         // @formatter:off
         @Option(help = "Verifies that receivers of NodeInfo#size() and NodeInfo#cycles() do not have UNSET values.")
-        public static final OptionValue<Boolean> VerifyNodeCostOnAccess = new StableOptionValue<>(false);
+        public static final OptionKey<Boolean> VerifyNodeCostOnAccess = new OptionKey<>(false);
         // @formatter:on
     }
 
@@ -141,7 +138,6 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     private static final Class<?> SUCCESSOR_LIST_CLASS = NodeSuccessorList.class;
 
     private static AtomicInteger nextIterableId = new AtomicInteger();
-    private static AtomicInteger nextLeafId = new AtomicInteger();
 
     private final InputEdges inputs;
     private final SuccessorEdges successors;
@@ -174,8 +170,6 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
      */
     private final boolean isSimplifiable;
     private final boolean isLeafNode;
-
-    private final int leafId;
 
     public NodeClass(Class<T> clazz, NodeClass<? super T> superNodeClass) {
         this(clazz, superNodeClass, new FieldsScanner.DefaultCalcOffset(), null, 0);
@@ -211,11 +205,6 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         }
 
         isLeafNode = inputs.getCount() + successors.getCount() == 0;
-        if (isLeafNode) {
-            this.leafId = nextLeafId.getAndIncrement();
-        } else {
-            this.leafId = -1;
-        }
 
         canGVN = Node.ValueNumberable.class.isAssignableFrom(clazz);
         startGVNNumber = clazz.getName().hashCode();
@@ -286,14 +275,14 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     private final NodeSize size;
 
     public NodeCycles cycles() {
-        if (Options.VerifyNodeCostOnAccess.getValue() && cycles == NodeCycles.CYCLES_UNSET) {
+        if (Options.VerifyNodeCostOnAccess.getValue(GLOBAL) && cycles == NodeCycles.CYCLES_UNSET) {
             throw new GraalError("Missing NodeCycles specification in the @NodeInfo annotation of the node %s", this);
         }
         return cycles;
     }
 
     public NodeSize size() {
-        if (Options.VerifyNodeCostOnAccess.getValue() && size == NodeSize.SIZE_UNSET) {
+        if (Options.VerifyNodeCostOnAccess.getValue(GLOBAL) && size == NodeSize.SIZE_UNSET) {
             throw new GraalError("Missing NodeSize specification in the @NodeInfo annotation of the node %s", this);
         }
         return size;
@@ -819,15 +808,15 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         Node replacement(Node node, Edges.Type type);
     }
 
-    static EconomicMap<Node, Node> addGraphDuplicate(final Graph graph, final Graph oldGraph, int estimatedNodeCount, Iterable<? extends Node> nodes, final DuplicationReplacement replacements) {
-        final EconomicMap<Node, Node> newNodes;
+    static Map<Node, Node> addGraphDuplicate(final Graph graph, final Graph oldGraph, int estimatedNodeCount, Iterable<? extends Node> nodes, final DuplicationReplacement replacements) {
+        final Map<Node, Node> newNodes;
         int denseThreshold = oldGraph.getNodeCount() + oldGraph.getNodesDeletedSinceLastCompression() >> 4;
         if (estimatedNodeCount > denseThreshold) {
             // Use dense map
-            newNodes = new NodeMap<>(oldGraph);
+            newNodes = new NodeNodeMap(oldGraph);
         } else {
             // Use sparse map
-            newNodes = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
+            newNodes = NodeCollectionsFactory.newIdentityMap();
         }
         createNodeDuplicates(graph, nodes, replacements, newNodes);
 
@@ -868,7 +857,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         return newNodes;
     }
 
-    private static void createNodeDuplicates(final Graph graph, Iterable<? extends Node> nodes, final DuplicationReplacement replacements, final EconomicMap<Node, Node> newNodes) {
+    private static void createNodeDuplicates(final Graph graph, Iterable<? extends Node> nodes, final DuplicationReplacement replacements, final Map<Node, Node> newNodes) {
         for (Node node : nodes) {
             if (node != null) {
                 assert !node.isDeleted() : "trying to duplicate deleted node: " + node;
@@ -895,12 +884,12 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         }
     }
 
-    private static void transferEdgesDifferentNodeClass(final Graph graph, final DuplicationReplacement replacements, final EconomicMap<Node, Node> newNodes, Node oldNode, Node node) {
+    private static void transferEdgesDifferentNodeClass(final Graph graph, final DuplicationReplacement replacements, final Map<Node, Node> newNodes, Node oldNode, Node node) {
         transferEdges(graph, replacements, newNodes, oldNode, node, Edges.Type.Inputs);
         transferEdges(graph, replacements, newNodes, oldNode, node, Edges.Type.Successors);
     }
 
-    private static void transferEdges(final Graph graph, final DuplicationReplacement replacements, final EconomicMap<Node, Node> newNodes, Node oldNode, Node node, Edges.Type type) {
+    private static void transferEdges(final Graph graph, final DuplicationReplacement replacements, final Map<Node, Node> newNodes, Node oldNode, Node node, Edges.Type type) {
         NodeClass<?> nodeClass = node.getNodeClass();
         NodeClass<?> oldNodeClass = oldNode.getNodeClass();
         Edges oldEdges = oldNodeClass.getEdges(type);
@@ -933,10 +922,6 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
      */
     public boolean isLeafNode() {
         return isLeafNode;
-    }
-
-    public int getLeafId() {
-        return this.leafId;
     }
 
     public long inputsIteration() {
