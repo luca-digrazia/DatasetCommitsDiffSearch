@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-public abstract class LLVMAMD64SyscallGetdents64Node extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallGetdents64Node extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode getdents64;
 
     public LLVMAMD64SyscallGetdents64Node() {
-        super("getdents64");
         getdents64 = LLVMAMD64PosixCallNodeGen.create("getdents64", "(UINT32,UINT64,UINT32):SINT32", 3);
     }
 
-    @Specialization
-    protected long execute(@SuppressWarnings("unused") VirtualFrame frame, long fd, LLVMAddress dirp, long count) {
-        return (int) getdents64.execute((int) fd, dirp.getVal(), (int) count);
+    @Override
+    public final String getName() {
+        return "getdents64";
     }
 
     @Specialization
-    protected long execute(VirtualFrame frame, long fd, long dirp, long count) {
-        return execute(frame, fd, LLVMAddress.fromLong(dirp), count);
+    protected long op(long fd, LLVMNativePointer dirp, long count) {
+        return (int) getdents64.execute((int) fd, dirp.asNative(), (int) count);
+    }
+
+    @Specialization
+    protected long op(long fd, long dirp, long count) {
+        return op(fd, LLVMNativePointer.create(dirp), count);
     }
 }

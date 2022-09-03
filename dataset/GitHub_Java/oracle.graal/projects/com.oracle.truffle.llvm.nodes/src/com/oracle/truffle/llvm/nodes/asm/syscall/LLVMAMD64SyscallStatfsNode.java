@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-public abstract class LLVMAMD64SyscallStatfsNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallStatfsNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode statfs;
 
     public LLVMAMD64SyscallStatfsNode() {
-        super("statfs");
         statfs = LLVMAMD64PosixCallNodeGen.create("statfs", "(UINT64,UINT64):SINT32", 2);
     }
 
-    @Specialization
-    protected long execute(@SuppressWarnings("unused") VirtualFrame frame, LLVMAddress path, LLVMAddress buf) {
-        return (int) statfs.execute(path.getVal(), buf.getVal());
+    @Override
+    public final String getName() {
+        return "statfs";
     }
 
     @Specialization
-    protected long execute(VirtualFrame frame, long path, long buf) {
-        return execute(frame, LLVMAddress.fromLong(path), LLVMAddress.fromLong(buf));
+    protected long op(LLVMNativePointer path, LLVMNativePointer buf) {
+        return (int) statfs.execute(path.asNative(), buf.asNative());
+    }
+
+    @Specialization
+    protected long op(long path, long buf) {
+        return op(LLVMNativePointer.create(path), LLVMNativePointer.create(buf));
     }
 }

@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-public abstract class LLVMAMD64SyscallSyslogNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallSyslogNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode syslog;
 
     public LLVMAMD64SyscallSyslogNode() {
-        super("syslog");
         syslog = LLVMAMD64PosixCallNodeGen.create("syslog", "(SINT32,UINT64,SINT32):SINT32", 3);
     }
 
-    @Specialization
-    protected long execute(@SuppressWarnings("unused") VirtualFrame frame, long type, LLVMAddress bufp, long len) {
-        return (int) syslog.execute((int) type, bufp.getVal(), (int) len);
+    @Override
+    public final String getName() {
+        return "syslog";
     }
 
     @Specialization
-    protected long execute(VirtualFrame frame, long type, long bufp, long len) {
-        return execute(frame, type, LLVMAddress.fromLong(bufp), len);
+    protected long op(long type, LLVMNativePointer bufp, long len) {
+        return (int) syslog.execute((int) type, bufp.asNative(), (int) len);
+    }
+
+    @Specialization
+    protected long op(long type, long bufp, long len) {
+        return op(type, LLVMNativePointer.create(bufp), len);
     }
 }

@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-public abstract class LLVMAMD64SyscallPollNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallPollNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode poll;
 
     public LLVMAMD64SyscallPollNode() {
-        super("poll");
         poll = LLVMAMD64PosixCallNodeGen.create("poll", "(UINT64,UINT64,SINT32):SINT32", 3);
     }
 
-    @Specialization
-    protected long execute(@SuppressWarnings("unused") VirtualFrame frame, LLVMAddress fds, long nfds, long timeout) {
-        return (int) poll.execute(fds.getVal(), nfds, (int) timeout);
+    @Override
+    public final String getName() {
+        return "poll";
     }
 
     @Specialization
-    protected long execute(VirtualFrame frame, long fds, long nfds, long timeout) {
-        return execute(frame, LLVMAddress.fromLong(fds), nfds, timeout);
+    protected long op(LLVMNativePointer fds, long nfds, long timeout) {
+        return (int) poll.execute(fds.asNative(), nfds, (int) timeout);
+    }
+
+    @Specialization
+    protected long op(long fds, long nfds, long timeout) {
+        return op(LLVMNativePointer.create(fds), nfds, timeout);
     }
 }

@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-public abstract class LLVMAMD64SyscallGetgroupsNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallGetgroupsNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode getgroups;
 
     public LLVMAMD64SyscallGetgroupsNode() {
-        super("getgroups");
         getgroups = LLVMAMD64PosixCallNodeGen.create("getgroups", "(SINT32,UINT64):SINT32", 2);
     }
 
-    @Specialization
-    protected long execute(@SuppressWarnings("unused") VirtualFrame frame, long gidsetsize, LLVMAddress grouplist) {
-        return (int) getgroups.execute((int) gidsetsize, grouplist.getVal());
+    @Override
+    public final String getName() {
+        return "getgroups";
     }
 
     @Specialization
-    protected long execute(VirtualFrame frame, long gidsetsize, long grouplist) {
-        return execute(frame, gidsetsize, LLVMAddress.fromLong(grouplist));
+    protected long op(long gidsetsize, LLVMNativePointer grouplist) {
+        return (int) getgroups.execute((int) gidsetsize, grouplist.asNative());
+    }
+
+    @Specialization
+    protected long execute(long gidsetsize, long grouplist) {
+        return op(gidsetsize, LLVMNativePointer.create(grouplist));
     }
 }

@@ -73,10 +73,6 @@ public abstract class LLVMGetElementPtrNode extends LLVMExpressionNode {
     }
 
     public abstract static class LLVMIncrementPointerNode extends LLVMNode {
-        public abstract Object executeWithTarget(Object addr, int val);
-
-        public abstract Object executeWithTarget(Object addr, long val);
-
         public abstract Object executeWithTarget(Object addr, Object val);
 
         @Specialization
@@ -95,7 +91,7 @@ public abstract class LLVMGetElementPtrNode extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected Object executePointee(LLVMGlobal addr, int incr,
+        protected Object doPointee(LLVMGlobal addr, int incr,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
                         @Cached("create()") LLVMGlobalReadNode.ReadObjectNode readObject,
                         @Cached("create()") BranchProfile notNativeBranch) {
@@ -137,7 +133,7 @@ public abstract class LLVMGetElementPtrNode extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected Object executePointee(LLVMGlobal addr, long incr,
+        protected Object doPointee(LLVMGlobal addr, long incr,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
                         @Cached("create()") LLVMGlobalReadNode.ReadObjectNode readObject,
                         @Cached("create()") BranchProfile zeroIncr,
