@@ -37,7 +37,7 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.nodes.*;
 
-public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableNodeType, Lowerable {
+public class ArrayCopyNode extends MacroNode implements Virtualizable, Node.IterableNodeType, Lowerable {
 
     public ArrayCopyNode(Invoke invoke) {
         super(invoke);
@@ -87,7 +87,7 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
         // additions, etc.
         PhaseContext context = new PhaseContext(tool.getRuntime(), tool.assumptions(), tool.getReplacements());
         new CanonicalizerPhase(true).apply(snippetGraph, context);
-        new LoopFullUnrollPhase(new CanonicalizerPhase(true)).apply(snippetGraph, context);
+        new LoopFullUnrollPhase(true).apply(snippetGraph, context);
         new CanonicalizerPhase(true).apply(snippetGraph, context);
     }
 
