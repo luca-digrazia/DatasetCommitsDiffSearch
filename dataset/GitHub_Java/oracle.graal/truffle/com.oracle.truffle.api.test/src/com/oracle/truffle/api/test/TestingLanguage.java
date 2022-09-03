@@ -22,31 +22,34 @@
  */
 package com.oracle.truffle.api.test;
 
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.debug.DebugSupportProvider;
-import com.oracle.truffle.api.instrument.ToolSupportProvider;
-import com.oracle.truffle.api.source.Source;
 import java.io.IOException;
 
-public final class TestingLanguage extends TruffleLanguage {
-    public static final TruffleLanguage INSTANCE = new TestingLanguage();
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrument.Visualizer;
+import com.oracle.truffle.api.instrument.WrapperNode;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.source.Source;
+
+public final class TestingLanguage extends TruffleLanguage<Object> {
+    public static final TestingLanguage INSTANCE = new TestingLanguage();
 
     private TestingLanguage() {
-        super(null);
     }
 
     @Override
-    protected Object eval(Source code) throws IOException {
+    protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
         throw new IOException();
     }
 
     @Override
-    protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
+    protected Object findExportedSymbol(Object context, String globalName, boolean onlyExplicit) {
         return null;
     }
 
     @Override
-    protected Object getLanguageGlobal() {
+    protected Object getLanguageGlobal(Object context) {
         return null;
     }
 
@@ -56,12 +59,27 @@ public final class TestingLanguage extends TruffleLanguage {
     }
 
     @Override
-    protected ToolSupportProvider getToolSupport() {
+    protected Visualizer getVisualizer() {
         return null;
     }
 
     @Override
-    protected DebugSupportProvider getDebugSupport() {
+    protected boolean isInstrumentable(Node node) {
+        return false;
+    }
+
+    @Override
+    protected WrapperNode createWrapperNode(Node node) {
+        return null;
+    }
+
+    @Override
+    protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
+        return null;
+    }
+
+    @Override
+    protected Object createContext(Env env) {
         return null;
     }
 
