@@ -229,6 +229,7 @@ public abstract class Source {
      */
     public static Source fromText(CharSequence chars, String description) {
         CompilerAsserts.neverPartOfCompilation();
+        assert chars != null;
         return new LiteralSource(description, chars.toString());
     }
 
