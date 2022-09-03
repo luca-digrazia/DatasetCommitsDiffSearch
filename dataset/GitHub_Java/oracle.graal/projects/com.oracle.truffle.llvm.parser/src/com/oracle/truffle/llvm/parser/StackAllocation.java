@@ -87,11 +87,7 @@ public final class StackAllocation {
             frame.addFrameSlot(LLVMException.FRAME_SLOT_ID, null, FrameSlotKind.Object);
             frame.addFrameSlot(LLVMStack.FRAME_ID, PrimitiveType.I64, FrameSlotKind.Long);
             for (FunctionParameter parameter : functionDefinition.getParameters()) {
-                Type type = parameter.getType();
-                if (parameter.isSourceVariable()) {
-                    type = type.shallowCopy();
-                }
-                frame.addFrameSlot(parameter.getName(), type, Type.getFrameSlotKind(type));
+                frame.addFrameSlot(parameter.getName(), parameter.getType(), Type.getFrameSlotKind(parameter.getType()));
             }
 
             final StackAllocationFunctionVisitor functionVisitor = new StackAllocationFunctionVisitor(frame);
@@ -112,16 +108,8 @@ public final class StackAllocation {
         @Override
         public void visitValueInstruction(ValueInstruction valueInstruction) {
             final String slotName = valueInstruction.getName();
-
-            Type type = valueInstruction.getType();
-            final FrameSlotKind slotKind = Type.getFrameSlotKind(type);
-
-            if (valueInstruction.isSourceVariable()) {
-                // when we set the sourcetype at runtime this type needs to be distinct
-                type = type.shallowCopy();
-            }
-
-            frame.addFrameSlot(slotName, type, slotKind);
+            final FrameSlotKind slotKind = Type.getFrameSlotKind(valueInstruction.getType());
+            frame.addFrameSlot(slotName, valueInstruction.getType(), slotKind);
         }
 
         @Override
