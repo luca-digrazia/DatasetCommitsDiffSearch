@@ -41,9 +41,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Formattable;
 import java.util.Formatter;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
@@ -51,13 +53,8 @@ import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.api.replacements.Snippet.ConstantParameter;
 import org.graalvm.compiler.api.replacements.Snippet.VarargsParameter;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
-import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.LocationIdentity;
-import org.graalvm.compiler.core.common.ImmutableEconomicMap;
-import org.graalvm.compiler.core.common.EconomicMap;
-import org.graalvm.compiler.core.common.EconomicSet;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
@@ -685,7 +682,7 @@ public class SnippetTemplate {
                 snippetCopy.disableUnsafeAccessTracking();
             }
 
-            EconomicMap<Node, Node> nodeReplacements = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
+            Map<Node, Node> nodeReplacements = Node.newIdentityMap();
             nodeReplacements.put(snippetGraph.start(), snippetCopy.start());
 
             MetaAccessProvider metaAccess = providers.getMetaAccess();
@@ -695,30 +692,27 @@ public class SnippetTemplate {
             VarargsPlaceholderNode[] placeholders = new VarargsPlaceholderNode[parameterCount];
 
             for (int i = 0; i < parameterCount; i++) {
-                ParameterNode parameter = snippetGraph.getParameter(i);
-                if (parameter != null) {
-                    if (args.info.isConstantParameter(i)) {
-                        Object arg = args.values[i];
-                        JavaKind kind = signature.getParameterKind(i);
-                        ConstantNode constantNode;
-                        if (arg instanceof Constant) {
-                            Stamp stamp = args.constStamps[i];
-                            if (stamp == null) {
-                                assert arg instanceof JavaConstant : "could not determine type of constant " + arg;
-                                constantNode = ConstantNode.forConstant((JavaConstant) arg, metaAccess, snippetCopy);
-                            } else {
-                                constantNode = ConstantNode.forConstant(stamp, (Constant) arg, metaAccess, snippetCopy);
-                            }
+                if (args.info.isConstantParameter(i)) {
+                    Object arg = args.values[i];
+                    JavaKind kind = signature.getParameterKind(i);
+                    ConstantNode constantNode;
+                    if (arg instanceof Constant) {
+                        Stamp stamp = args.constStamps[i];
+                        if (stamp == null) {
+                            assert arg instanceof JavaConstant : "could not determine type of constant " + arg;
+                            constantNode = ConstantNode.forConstant((JavaConstant) arg, metaAccess, snippetCopy);
                         } else {
-                            constantNode = ConstantNode.forConstant(snippetReflection.forBoxed(kind, arg), metaAccess, snippetCopy);
+                            constantNode = ConstantNode.forConstant(stamp, (Constant) arg, metaAccess, snippetCopy);
                         }
-                        nodeReplacements.put(parameter, constantNode);
-                    } else if (args.info.isVarargsParameter(i)) {
-                        Varargs varargs = (Varargs) args.values[i];
-                        VarargsPlaceholderNode placeholder = snippetCopy.unique(new VarargsPlaceholderNode(varargs, providers.getMetaAccess()));
-                        nodeReplacements.put(parameter, placeholder);
-                        placeholders[i] = placeholder;
+                    } else {
+                        constantNode = ConstantNode.forConstant(snippetReflection.forBoxed(kind, arg), metaAccess, snippetCopy);
                     }
+                    nodeReplacements.put(snippetGraph.getParameter(i), constantNode);
+                } else if (args.info.isVarargsParameter(i)) {
+                    Varargs varargs = (Varargs) args.values[i];
+                    VarargsPlaceholderNode placeholder = snippetCopy.unique(new VarargsPlaceholderNode(varargs, providers.getMetaAccess()));
+                    nodeReplacements.put(snippetGraph.getParameter(i), placeholder);
+                    placeholders[i] = placeholder;
                 }
             }
             snippetCopy.addDuplicates(snippetGraph.getNodes(), snippetGraph, snippetGraph.getNodeCount(), nodeReplacements);
@@ -747,22 +741,21 @@ public class SnippetTemplate {
                     parameters[i] = params;
 
                     VarargsPlaceholderNode placeholder = placeholders[i];
-                    if (placeholder != null) {
-                        for (Node usage : placeholder.usages().snapshot()) {
-                            if (usage instanceof LoadIndexedNode) {
-                                LoadIndexedNode loadIndexed = (LoadIndexedNode) usage;
-                                Debug.dump(Debug.INFO_LOG_LEVEL, snippetCopy, "Before replacing %s", loadIndexed);
-                                LoadSnippetVarargParameterNode loadSnippetParameter = snippetCopy.add(new LoadSnippetVarargParameterNode(params, loadIndexed.index(), loadIndexed.stamp()));
-                                snippetCopy.replaceFixedWithFixed(loadIndexed, loadSnippetParameter);
-                                Debug.dump(Debug.INFO_LOG_LEVEL, snippetCopy, "After replacing %s", loadIndexed);
-                            } else if (usage instanceof StoreIndexedNode) {
-                                /*
-                                 * The template lowering doesn't really treat this as an array so
-                                 * you can't store back into the varargs. Allocate your own array if
-                                 * you really need this and EA should eliminate it.
-                                 */
-                                throw new GraalError("Can't store into VarargsParameter array");
-                            }
+                    assert placeholder != null;
+                    for (Node usage : placeholder.usages().snapshot()) {
+                        if (usage instanceof LoadIndexedNode) {
+                            LoadIndexedNode loadIndexed = (LoadIndexedNode) usage;
+                            Debug.dump(Debug.INFO_LOG_LEVEL, snippetCopy, "Before replacing %s", loadIndexed);
+                            LoadSnippetVarargParameterNode loadSnippetParameter = snippetCopy.add(new LoadSnippetVarargParameterNode(params, loadIndexed.index(), loadIndexed.stamp()));
+                            snippetCopy.replaceFixedWithFixed(loadIndexed, loadSnippetParameter);
+                            Debug.dump(Debug.INFO_LOG_LEVEL, snippetCopy, "After replacing %s", loadIndexed);
+                        } else if (usage instanceof StoreIndexedNode) {
+                            /*
+                             * The template lowering doesn't really treat this as an array so you
+                             * can't store back into the varargs. Allocate your own array if you
+                             * really need this and EA should eliminate it.
+                             */
+                            throw new GraalError("Can't store into VarargsParameter array");
                         }
                     }
                 } else {
@@ -1045,8 +1038,8 @@ public class SnippetTemplate {
      *
      * @return the map that will be used to bind arguments to parameters when inlining this template
      */
-    private EconomicMap<Node, Node> bind(StructuredGraph replaceeGraph, MetaAccessProvider metaAccess, Arguments args) {
-        EconomicMap<Node, Node> replacements = CollectionsFactory.newMap(CompareStrategy.IDENTITY);
+    private Map<Node, Node> bind(StructuredGraph replaceeGraph, MetaAccessProvider metaAccess, Arguments args) {
+        Map<Node, Node> replacements = Node.newIdentityMap();
         assert args.info.getParameterCount() == parameters.length : "number of args (" + args.info.getParameterCount() + ") != number of parameters (" + parameters.length + ")";
         for (int i = 0; i < parameters.length; i++) {
             Object parameter = parameters[i];
@@ -1155,7 +1148,7 @@ public class SnippetTemplate {
             return true;
         }
 
-        EconomicSet<LocationIdentity> kills = CollectionsFactory.newSet(CompareStrategy.EQUALS, memoryMap.getLocations());
+        Set<LocationIdentity> kills = new HashSet<>(memoryMap.getLocations());
 
         if (replacee instanceof MemoryCheckpoint.Single) {
             // check if some node in snippet graph also kills the same location
@@ -1189,7 +1182,7 @@ public class SnippetTemplate {
             kills.remove(p);
         }
 
-        assert kills.isEmpty() : "snippet graph kills non-private locations " + kills + " that replacee (" + replacee + ") doesn't kill";
+        assert kills.isEmpty() : "snippet graph kills non-private locations " + Arrays.toString(kills.toArray()) + " that replacee (" + replacee + ") doesn't kill";
         return true;
     }
 
@@ -1230,9 +1223,9 @@ public class SnippetTemplate {
 
     private class MemoryOutputMap extends MemoryInputMap {
 
-        private final ImmutableEconomicMap<Node, Node> duplicates;
+        private final Map<Node, Node> duplicates;
 
-        MemoryOutputMap(ValueNode replacee, ImmutableEconomicMap<Node, Node> duplicates) {
+        MemoryOutputMap(ValueNode replacee, Map<Node, Node> duplicates) {
             super(replacee);
             this.duplicates = duplicates;
         }
@@ -1256,7 +1249,7 @@ public class SnippetTemplate {
         }
     }
 
-    private void rewireMemoryGraph(ValueNode replacee, ImmutableEconomicMap<Node, Node> duplicates) {
+    private void rewireMemoryGraph(ValueNode replacee, Map<Node, Node> duplicates) {
         if (replacee.graph().isAfterFloatingReadPhase()) {
             // rewire outgoing memory edges
             replaceMemoryUsages(replacee, new MemoryOutputMap(replacee, duplicates));
@@ -1335,7 +1328,7 @@ public class SnippetTemplate {
      * @return the map of duplicated nodes (original -&gt; duplicate)
      */
     @SuppressWarnings("try")
-    public ImmutableEconomicMap<Node, Node> instantiate(MetaAccessProvider metaAccess, FixedNode replacee, UsageReplacer replacer, Arguments args) {
+    public Map<Node, Node> instantiate(MetaAccessProvider metaAccess, FixedNode replacee, UsageReplacer replacer, Arguments args) {
         assert assertSnippetKills(replacee);
         try (DebugCloseable a = args.info.instantiationTimer.start(); DebugCloseable b = instantiationTimer.start()) {
             args.info.instantiationCounter.increment();
@@ -1344,9 +1337,9 @@ public class SnippetTemplate {
             StartNode entryPointNode = snippet.start();
             FixedNode firstCFGNode = entryPointNode.next();
             StructuredGraph replaceeGraph = replacee.graph();
-            EconomicMap<Node, Node> replacements = bind(replaceeGraph, metaAccess, args);
+            Map<Node, Node> replacements = bind(replaceeGraph, metaAccess, args);
             replacements.put(entryPointNode, AbstractBeginNode.prevBegin(replacee));
-            ImmutableEconomicMap<Node, Node> duplicates = replaceeGraph.addDuplicates(nodes, snippet, snippet.getNodeCount(), replacements);
+            Map<Node, Node> duplicates = replaceeGraph.addDuplicates(nodes, snippet, snippet.getNodeCount(), replacements);
             Debug.dump(Debug.INFO_LOG_LEVEL, replaceeGraph, "After inlining snippet %s", snippet.method());
 
             // Re-wire the control flow graph around the replacee
@@ -1374,7 +1367,7 @@ public class SnippetTemplate {
                 }
 
                 for (DeoptimizingNode deoptNode : deoptNodes) {
-                    DeoptimizingNode deoptDup = (DeoptimizingNode) duplicates.get(deoptNode.asNode());
+                    DeoptimizingNode deoptDup = (DeoptimizingNode) duplicates.get(deoptNode);
                     if (deoptDup.canDeoptimize()) {
                         if (deoptDup instanceof DeoptimizingNode.DeoptBefore) {
                             ((DeoptimizingNode.DeoptBefore) deoptDup).setStateBefore(stateBefore);
@@ -1457,7 +1450,7 @@ public class SnippetTemplate {
         }
     }
 
-    private void updateStamps(ValueNode replacee, ImmutableEconomicMap<Node, Node> duplicates) {
+    private void updateStamps(ValueNode replacee, Map<Node, Node> duplicates) {
         for (ValueNode stampNode : stampNodes) {
             Node stampDup = duplicates.get(stampNode);
             ((ValueNode) stampDup).setStamp(replacee.stamp());
@@ -1497,9 +1490,9 @@ public class SnippetTemplate {
             StartNode entryPointNode = snippet.start();
             FixedNode firstCFGNode = entryPointNode.next();
             StructuredGraph replaceeGraph = replacee.graph();
-            EconomicMap<Node, Node> replacements = bind(replaceeGraph, metaAccess, args);
+            Map<Node, Node> replacements = bind(replaceeGraph, metaAccess, args);
             replacements.put(entryPointNode, tool.getCurrentGuardAnchor().asNode());
-            ImmutableEconomicMap<Node, Node> duplicates = replaceeGraph.addDuplicates(nodes, snippet, snippet.getNodeCount(), replacements);
+            Map<Node, Node> duplicates = replaceeGraph.addDuplicates(nodes, snippet, snippet.getNodeCount(), replacements);
             Debug.dump(Debug.INFO_LOG_LEVEL, replaceeGraph, "After inlining snippet %s", snippet.method());
 
             FixedWithNextNode lastFixedNode = tool.lastFixedNode();
@@ -1549,7 +1542,7 @@ public class SnippetTemplate {
             StartNode entryPointNode = snippet.start();
             assert entryPointNode.next() == (memoryAnchor == null ? returnNode : memoryAnchor) : entryPointNode.next();
             StructuredGraph replaceeGraph = replacee.graph();
-            EconomicMap<Node, Node> replacements = bind(replaceeGraph, metaAccess, args);
+            Map<Node, Node> replacements = bind(replaceeGraph, metaAccess, args);
             MemoryAnchorNode anchorDuplicate = null;
             if (memoryAnchor != null) {
                 anchorDuplicate = replaceeGraph.add(new MemoryAnchorNode());
@@ -1561,7 +1554,7 @@ public class SnippetTemplate {
                     floatingNodes.add(n);
                 }
             }
-            ImmutableEconomicMap<Node, Node> duplicates = replaceeGraph.addDuplicates(floatingNodes, snippet, floatingNodes.size(), replacements);
+            Map<Node, Node> duplicates = replaceeGraph.addDuplicates(floatingNodes, snippet, floatingNodes.size(), replacements);
             Debug.dump(Debug.INFO_LOG_LEVEL, replaceeGraph, "After inlining snippet %s", snippet.method());
 
             rewireFrameStates(replacee, duplicates);
@@ -1578,11 +1571,11 @@ public class SnippetTemplate {
         }
     }
 
-    protected void rewireFrameStates(ValueNode replacee, ImmutableEconomicMap<Node, Node> duplicates) {
+    protected void rewireFrameStates(ValueNode replacee, Map<Node, Node> duplicates) {
         if (replacee instanceof StateSplit) {
             for (StateSplit sideEffectNode : sideEffectNodes) {
                 assert ((StateSplit) replacee).hasSideEffect();
-                Node sideEffectDup = duplicates.get(sideEffectNode.asNode());
+                Node sideEffectDup = duplicates.get(sideEffectNode);
                 ((StateSplit) sideEffectDup).setStateAfter(((StateSplit) replacee).stateAfter());
             }
         }
