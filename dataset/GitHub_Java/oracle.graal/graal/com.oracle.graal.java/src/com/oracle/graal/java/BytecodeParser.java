@@ -2911,10 +2911,9 @@ public class BytecodeParser implements GraphBuilderContext {
         }
         int startBci = nextBlock.startBci;
         int targetAtStart = stream.readUByte(startBci);
-        if (targetAtStart == Bytecodes.GOTO && nextBlock.getPredecessorCount() == 1) {
+        if (targetAtStart == Bytecodes.GOTO) {
             // This is an empty block. Skip it.
-            BciBlock successorBlock = nextBlock.successors.get(0);
-            appendGoto(successorBlock);
+            appendGoto(nextBlock.successors.get(0));
             assert nextBlock.numNormalSuccessors() == 1;
         } else {
             appendGoto(nextBlock);
