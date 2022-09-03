@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.api.nodes;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerOptions;
 import com.oracle.truffle.api.ExecutionContext;
@@ -50,13 +49,35 @@ public abstract class RootNode extends Node {
     @CompilationFinal private FrameDescriptor frameDescriptor;
 
     /**
+     * @deprecated each RootNode should be associated with a {@link TruffleLanguage} use constructor
+     *             that allows you to specify it. This method will be removed on Aug 15, 2015.
+     */
+    @Deprecated
+    protected RootNode() {
+        this(null, null, null, false);
+    }
+
+    /**
+     * @deprecated each RootNode should be associated with a {@link TruffleLanguage} use constructor
+     *             that allows you to specify it. This method will be removed on Aug 15, 2015.
+     */
+    @Deprecated
+    protected RootNode(SourceSection sourceSection) {
+        this(null, sourceSection, null, false);
+    }
+
+    /**
+     * @deprecated each RootNode should be associated with a {@link TruffleLanguage} use constructor
+     *             that allows you to specify it. This method will be removed on Aug 15, 2015.
+     */
+    @Deprecated
+    protected RootNode(SourceSection sourceSection, FrameDescriptor frameDescriptor) {
+        this(null, sourceSection, frameDescriptor, false);
+    }
+
+    /**
      * Creates new root node. Each {@link RootNode} is associated with a particular language - if
      * the root node represents a method it is assumed the method is written in such language.
-     * <p>
-     * <strong>Note:</strong> Although the {@link SourceSection} <em>can</em> be {@code null}, this
-     * is strongly discouraged for the purposes of testing/tracing/tooling. Please use
-     * {@link SourceSection#createUnavailable(String, String)} to create a descriptive instance with
-     * a language-specific <em>kind</em> such as "SL Builtin" and a <em>name</em> if possible.
      *
      * @param language the language of the node, <b>cannot be</b> <code>null</code>
      * @param sourceSection a part of source associated with this node, can be <code>null</code>
@@ -107,7 +128,6 @@ public abstract class RootNode extends Node {
      * heuristics can use the loop count to guide compilation and inlining.
      */
     public final void reportLoopCount(int count) {
-        CompilerAsserts.neverPartOfCompilation();
         if (getCallTarget() instanceof LoopCountReceiver) {
             ((LoopCountReceiver) getCallTarget()).reportLoopCount(count);
         }
@@ -166,16 +186,7 @@ public abstract class RootNode extends Node {
     }
 
     public final void applyInstrumentation() {
-        if (isInstrumentable()) {
-            Node.ACCESSOR.probeAST(this);
-        }
-    }
-
-    /**
-     * Does this contain AST content that it is possible to instrument.
-     */
-    protected boolean isInstrumentable() {
-        return true;
+        super.probeAST(this);
     }
 
     /**

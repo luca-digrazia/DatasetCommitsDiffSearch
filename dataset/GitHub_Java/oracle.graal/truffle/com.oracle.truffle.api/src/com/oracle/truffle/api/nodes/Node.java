@@ -75,7 +75,7 @@ public abstract class Node implements NodeInterface, Cloneable {
     protected Node(SourceSection sourceSection) {
         CompilerAsserts.neverPartOfCompilation();
         this.sourceSection = sourceSection;
-        this.nodeClass = NodeClass.Lookup.get(getClass());
+        this.nodeClass = NodeClass.get(getClass());
         if (TruffleOptions.TraceASTJSON) {
             JSONHelper.dumpNewNode(this);
         }
@@ -200,14 +200,12 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     private void adoptHelper() {
-        NodeUtil.forEachChild(this, new NodeVisitor() {
-            public boolean visit(Node child) {
-                if (child != null && child.getParent() != Node.this) {
-                    Node.this.adoptHelper(child);
-                }
-                return true;
+        Iterable<Node> children = this.getChildren();
+        for (Node child : children) {
+            if (child != null && child.getParent() != this) {
+                this.adoptHelper(child);
             }
-        });
+        }
     }
 
     private void adoptUnadoptedHelper(final Node newChild) {
@@ -220,14 +218,12 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     private void adoptUnadoptedHelper() {
-        NodeUtil.forEachChild(this, new NodeVisitor() {
-            public boolean visit(Node child) {
-                if (child != null && child.getParent() == null) {
-                    Node.this.adoptUnadoptedHelper(child);
-                }
-                return true;
+        Iterable<Node> children = this.getChildren();
+        for (Node child : children) {
+            if (child != null && child.getParent() == null) {
+                this.adoptUnadoptedHelper(child);
             }
-        });
+        }
     }
 
     /**
@@ -392,6 +388,16 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     /**
+     * This method must never be called. It enforces that {@link Object#clone} is not directly
+     * called by subclasses. Use the {@link #copy()} method instead.
+     */
+    @Override
+    @Deprecated
+    protected final Object clone() throws CloneNotSupportedException {
+        throw new IllegalStateException("This method should never be called, use the copy method instead!");
+    }
+
+    /**
      * Get the root node of the tree a node belongs to.
      *
      * @return the {@link RootNode} or {@code null} if there is none.
@@ -485,6 +491,11 @@ public abstract class Node implements NodeInterface, Cloneable {
         return "";
     }
 
+    @SuppressWarnings("static-method")
+    protected final void probeAST(RootNode rootNode) {
+        ACCESSOR.probeAST(rootNode);
+    }
+
     private static final Object GIL = new Object();
 
     private static final ThreadLocal<Integer> IN_ATOMIC_BLOCK = new ThreadLocal<Integer>() {
@@ -508,7 +519,7 @@ public abstract class Node implements NodeInterface, Cloneable {
         return true;
     }
 
-    static final class AccessorNodes extends Accessor {
+    private static final class AccessorNodes extends Accessor {
         @SuppressWarnings("rawtypes")
         @Override
         protected Class<? extends TruffleLanguage> findLanguage(RootNode n) {
@@ -522,5 +533,5 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     // registers into Accessor.NODES
-    static final AccessorNodes ACCESSOR = new AccessorNodes();
+    private static final AccessorNodes ACCESSOR = new AccessorNodes();
 }

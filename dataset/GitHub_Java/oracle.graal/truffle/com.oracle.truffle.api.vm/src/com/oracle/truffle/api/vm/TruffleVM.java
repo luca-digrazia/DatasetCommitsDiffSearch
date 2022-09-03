@@ -55,12 +55,15 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
+import com.oracle.truffle.api.debug.DebugSupportProvider;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.ExecutionEvent;
 import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.impl.Accessor;
+import com.oracle.truffle.api.instrument.ASTProber;
 import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrument.Probe;
+import com.oracle.truffle.api.instrument.ToolSupportProvider;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.source.Source;
@@ -789,13 +792,18 @@ public final class TruffleVM {
         TruffleLanguage<?> getImpl(boolean create) {
             getEnv(create);
             TruffleLanguage<?> impl = info.getImpl(false);
+            if (impl != null) {
+                ASTProber prober = SPI.getDefaultASTProber(impl);
+                if (prober != null) {
+                    instrumenter.registerASTProber(prober);
+                }
+            }
             return impl;
         }
 
         TruffleLanguage.Env getEnv(boolean create) {
             if (env == null && create) {
-                final TruffleLanguage<?> impl = info.getImpl(true);
-                env = SPI.attachEnv(TruffleVM.this, impl, out, err, in, TruffleVM.this.instrumenter);
+                env = SPI.attachEnv(TruffleVM.this, info.getImpl(true), out, err, in, TruffleVM.this.instrumenter);
             }
             return env;
         }
@@ -891,6 +899,18 @@ public final class TruffleVM {
             return super.languageGlobal(env);
         }
 
+        @SuppressWarnings("deprecation")
+        @Override
+        public ToolSupportProvider getToolSupport(TruffleLanguage<?> l) {
+            throw new UnsupportedOperationException();
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public DebugSupportProvider getDebugSupport(TruffleLanguage<?> l) {
+            throw new UnsupportedOperationException();
+        }
+
         @Override
         protected Instrumenter createInstrumenter(Object vm) {
             return super.createInstrumenter(vm);
@@ -899,6 +919,11 @@ public final class TruffleVM {
         @Override
         protected Debugger createDebugger(Object vm, Instrumenter instrumenter) {
             return super.createDebugger(vm, instrumenter);
+        }
+
+        @Override
+        protected ASTProber getDefaultASTProber(TruffleLanguage impl) {
+            return super.getDefaultASTProber(impl);
         }
 
         @Override

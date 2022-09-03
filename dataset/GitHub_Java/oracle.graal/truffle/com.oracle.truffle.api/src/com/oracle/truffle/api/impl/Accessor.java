@@ -36,6 +36,7 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
+import com.oracle.truffle.api.debug.DebugSupportProvider;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrument.ASTProber;
@@ -43,6 +44,7 @@ import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
 import com.oracle.truffle.api.instrument.AdvancedInstrumentRootFactory;
 import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrument.Probe;
+import com.oracle.truffle.api.instrument.ToolSupportProvider;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -78,6 +80,18 @@ public abstract class Accessor {
                 return false;
             }
 
+            @SuppressWarnings("deprecation")
+            @Override
+            protected ToolSupportProvider getToolSupport() {
+                throw new UnsupportedOperationException();
+            }
+
+            @SuppressWarnings("deprecation")
+            @Override
+            protected DebugSupportProvider getDebugSupport() {
+                return null;
+            }
+
             @Override
             protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
                 throw new IOException();
@@ -99,8 +113,19 @@ public abstract class Accessor {
             }
 
             @Override
+            protected ASTProber getDefaultASTProber() {
+                return null;
+            }
+
+            @Override
             protected Visualizer getVisualizer() {
                 return null;
+            }
+
+            @SuppressWarnings("deprecation")
+            @Override
+            protected void enableASTProbing(ASTProber astProber) {
+                throw new UnsupportedOperationException();
             }
 
             @Override
@@ -174,6 +199,16 @@ public abstract class Accessor {
         return API.languageGlobal(env);
     }
 
+    @Deprecated
+    protected ToolSupportProvider getToolSupport(@SuppressWarnings("unused") TruffleLanguage<?> l) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Deprecated
+    protected DebugSupportProvider getDebugSupport(@SuppressWarnings("unused") TruffleLanguage<?> l) {
+        throw new UnsupportedOperationException();
+    }
+
     /**
      * Provided by each {@linkplain TruffleLanguage language implementation}.
      */
@@ -200,6 +235,13 @@ public abstract class Accessor {
 
     protected WrapperNode createWrapperNode(Node node, TruffleLanguage language) {
         return API.createWrapperNode(node, language);
+    }
+
+    /**
+     * Provided by each {@linkplain TruffleLanguage language implementation}.
+     */
+    protected ASTProber getDefaultASTProber(TruffleLanguage language) {
+        return API.getDefaultASTProber(language);
     }
 
     protected AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(Object vm, Class<? extends TruffleLanguage> languageClass, String expr, AdvancedInstrumentResultListener resultListener)

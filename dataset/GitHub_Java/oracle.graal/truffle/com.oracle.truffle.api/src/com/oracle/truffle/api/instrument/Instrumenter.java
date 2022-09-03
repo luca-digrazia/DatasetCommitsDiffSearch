@@ -37,55 +37,14 @@ import java.util.Set;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.impl.Accessor;
-import com.oracle.truffle.api.instrument.TagInstrument.AfterTagInstrument;
-import com.oracle.truffle.api.instrument.TagInstrument.BeforeTagInstrument;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
- * Client access to instrumentation services in a Truffle execution environment.
- * <p>
- * Services include:
- * <ul>
- * <li>A collection of {@linkplain Probe Probes}, each of which is {@linkplain #probe(Node) created}
- * by clients in permanent association with a particular {@linkplain SourceSection source code
- * location} in an AST executing in this environment. The Probe keeps tracks of all <em>clones</em>
- * of the AST and ensures that any instrumentation <em>attached</em> to the Probe is put into effect
- * in each AST clone at the {@link Node} that corresponds to the Probe's source code location.</li>
- * <p>
- * <li>A collection of {@linkplain ProbeListener listeners} that have registered to be notified
- * whenever a new {@link Probe} is created in this environment and whenever a new {@link SyntaxTag}
- * (or simply "tag") is newly added to an existing {@link Probe} in this environment.</li>
- * <p>
- * <li>The ability to {@linkplain #findProbesTaggedAs(SyntaxTag) enumerate} all existing
- * {@linkplain Probe Probes} in this environment, optionally filtered to include only those to which
- * a specific {@linkplain SyntaxTag tag} has been added.</li>
- * <p>
- * <li>The ability to <em>attach</em> a client-provided <em>event listener</em> to an existing
- * {@link Probe} in this environment. The listener subsequently receives notification of execution
- * events at the {@linkplain Node Nodes} corresponding to the Probe's {@linkplain SourceSection
- * source code location}. The <em>attachment</em> also produces a {@link ProbeInstrument} that
- * represents the binding, and which can be used to {@linkplain Instrument#dispose() detach} the
- * listener from the Probe and stop event notification. A listener can be attached to any number of
- * Probes, each time producing a new {@linkplain ProbeInstrument} that represents the binding.</li>
- * <p>
- * <li>The ability to <em>attach</em> a client-provided <em>event listener</em> to a specific
- * {@linkplain SyntaxTag tag} for all {@linkplain Probe Probes} in the environment. A maximum of
- * <em>one</em> listener may be attached to receive notification of "<em>before</em>" execution
- * events (i.e. the flow of execution is just about to enter a {@link Node}), and a maximum of
- * <em>one</em> listener may be attached to receive notification of "<em>after</em>" execution
- * events. The <em>attachment</em> also produces a {@link TagInstrument} that represents the
- * binding, and which can be used to {@linkplain Instrument#dispose() detach} the listener from the
- * Probes and stop event notification. This mechanism is designed for much lower runtime overhead
- * than other ways to accomplish the same thing, e.g. by attaching one listener individually to
- * every Probe with the desired tag.</li>
- * <p>
- * <li>A collection of {@linkplain Tool Tools}, possibly client-provided, that can be
- * {@linkplain #install(Tool) installed} for data collection, possibly providing their own services
- * with the resulting information.</li>
- * </ul>
+ * Access to instrumentation services in an instance of {@link TruffleVM}.
  */
 public final class Instrumenter {
 
@@ -97,6 +56,16 @@ public final class Instrumenter {
         if (TRACE) {
             OUT.println(TRACE_PREFIX + String.format(format, args));
         }
+    }
+
+    /**
+     * Walks an AST, looking for the first node with an assigned {@link SourceSection} and returning
+     * the {@link Source}.
+     */
+    private static Source findSource(Node node) {
+        final FindSourceVisitor visitor = new FindSourceVisitor();
+        node.accept(visitor);
+        return visitor.source;
     }
 
     private enum ToolState {
@@ -115,19 +84,18 @@ public final class Instrumenter {
     }
 
     /**
-     * {@linkplain Instrumenter Instrumentation}-based collectors of data during Guest Language
+     * {@linkplain Instrument Instrumentation}-based collectors of data during Guest Language
      * program execution.
      * <p>
      * Tools share a common <em>life cycle</em>:
      * <ul>
-     * <li>A newly created tool is "UNINSTALLED"; it does nothing until
-     * {@linkplain Instrumenter#install(Tool) installed} .</li>
-     * <li>An installed tool becomes "ENABLED" and immediately begins attaching
-     * {@linkplain ProbeInstrument instrumentation} to ASTs and collecting execution data.</li>
+     * <li>A newly created tool is inert until {@linkplain Instrumenter#install(Tool) installed}.</li>
+     * <li>An installed tool becomes <em>enabled</em> and immediately begins installing
+     * {@linkplain Instrument instrumentation} on ASTs and collecting execution data from them.</li>
      * <li>A tool may only be installed once.</li>
-     * <li>It is possible to install multiple instances of a tool, possibly (but not necessarily)
-     * configured differently with respect to what data is being collected.</li>
-     * <li>Once installed, a tool can be {@linkplain #setEnabled(boolean) "ENABLED" and "DISABLED"}
+     * <li>It should be possible to install multiple instances of a tool, possibly (but not
+     * necessarily) configured differently with respect to what data is being collected.</li>
+     * <li>Once installed, a tool can be {@linkplain #setEnabled(boolean) enabled and disabled}
      * arbitrarily.</li>
      * <li>A disabled tool:
      * <ul>
@@ -274,24 +242,49 @@ public final class Instrumenter {
     private final List<WeakReference<Probe>> probes = new ArrayList<>();
 
     /**
-     * A global instrument that triggers notification just before executing any Node that is Probed
-     * with a matching tag.
+     * A global trap that triggers notification just before executing any Node that is Probed with a
+     * matching tag.
      */
-    @CompilationFinal private BeforeTagInstrument beforeTagInstrument = null;
+    @CompilationFinal private SyntaxTagTrap beforeTagTrap = null;
 
     /**
-     * A global instrument that triggers notification just after executing any Node that is Probed
-     * with a matching tag.
+     * A global trap that triggers notification just after executing any Node that is Probed with a
+     * matching tag.
      */
-    @CompilationFinal private AfterTagInstrument afterTagInstrument = null;
+    @CompilationFinal private SyntaxTagTrap afterTagTrap = null;
+
+    private static final class FindSourceVisitor implements NodeVisitor {
+
+        Source source = null;
+
+        public boolean visit(Node node) {
+            final SourceSection sourceSection = node.getSourceSection();
+            if (sourceSection != null) {
+                source = sourceSection.getSource();
+                return false;
+            }
+            return true;
+        }
+    }
 
     Instrumenter(Object vm) {
         this.vm = vm;
     }
 
     /**
-     * Prepares an AST node for {@linkplain ProbeInstrument instrumentation}, where the node is
-     * presumed to be part of a well-formed Truffle AST that has not yet been executed.
+     * Returns {@code true} if the AST node can be "instrumented" by {@linkplain #probe(Node)
+     * Probing}.
+     * <p>
+     * <b>Note:</b> instrumentation requires a appropriate {@linkplain #createWrapperNode(Node)
+     * WrapperNode}.
+     */
+    public boolean isInstrumentable(Node node) {
+        return ACCESSOR.isInstrumentable(vm, node);
+    }
+
+    /**
+     * Prepares an AST node for {@linkplain Instrument instrumentation}, where the node is presumed
+     * to be part of a well-formed Truffle AST that has not yet been executed.
      * <p>
      * <em>Probing</em> a node is idempotent:
      * <ul>
@@ -305,7 +298,7 @@ public final class Instrumenter {
      * It is a runtime error to attempt Probing an AST node with no parent.
      *
      * @return a (possibly newly created) {@link Probe} associated with this node.
-     * @throws ProbeException (unchecked) when a Probe cannot be created, leaving the AST unchanged
+     * @throws ProbeException (unchecked) when a probe cannot be created, leaving the AST unchanged
      */
     @SuppressWarnings("rawtypes")
     public Probe probe(Node node) {
@@ -331,11 +324,11 @@ public final class Instrumenter {
             return wrapper.getProbe();
         }
 
-        if (!ACCESSOR.isInstrumentable(vm, node)) {
+        if (!isInstrumentable(node)) {
             throw new ProbeException(ProbeFailure.Reason.NOT_INSTRUMENTABLE, parent, node, null);
         }
 
-        // Create a new wrapper/Probe with this node as its child.
+        // Create a new wrapper/probe with this node as its child.
         final WrapperNode wrapper = createWrapperNode(node);
 
         if (wrapper == null || !(wrapper instanceof Node)) {
@@ -400,6 +393,54 @@ public final class Instrumenter {
         return taggedProbes;
     }
 
+    // TODO (mlvdv) generalize to permit multiple "before traps" without a performance hit?
+    /**
+     * Sets the current "<em>before</em> tag trap"; there can be no more than one in effect.
+     * <ul>
+     * <li>The before-trap triggers a callback just <strong><em>before</em></strong> execution
+     * reaches <strong><em>any</em></strong> {@link Probe} (either existing or subsequently created)
+     * with the specified {@link SyntaxTag}.</li>
+     * <li>Setting the before-trap to {@code null} clears an existing before-trap.</li>
+     * <li>Setting a non{@code -null} before-trap when one is already set clears the previously set
+     * before-trap.</li>
+     * </ul>
+     *
+     * @param newBeforeTagTrap The new "before" {@link SyntaxTagTrap} to set.
+     */
+    public void setBeforeTagTrap(SyntaxTagTrap newBeforeTagTrap) {
+        beforeTagTrap = newBeforeTagTrap;
+        for (WeakReference<Probe> ref : probes) {
+            final Probe probe = ref.get();
+            if (probe != null) {
+                probe.notifyTrapsChanged();
+            }
+        }
+    }
+
+    // TODO (mlvdv) generalize to permit multiple "after traps" without a performance hit?
+    /**
+     * Sets the current "<em>after</em> tag trap"; there can be no more than one in effect.
+     * <ul>
+     * <li>The after-trap triggers a callback just <strong><em>after</em></strong> execution leaves
+     * <strong><em>any</em></strong> {@link Probe} (either existing or subsequently created) with
+     * the specified {@link SyntaxTag}.</li>
+     * <li>Setting the after-trap to {@code null} clears an existing after-trap.</li>
+     * <li>Setting a non{@code -null} after-trap when one is already set clears the previously set
+     * after-trap.</li>
+     * </ul>
+     *
+     * @param newAfterTagTrap The new "after" {@link SyntaxTagTrap} to set.
+     */
+    public void setAfterTagTrap(SyntaxTagTrap newAfterTagTrap) {
+        afterTagTrap = newAfterTagTrap;
+        for (WeakReference<Probe> ref : probes) {
+            final Probe probe = ref.get();
+            if (probe != null) {
+                probe.notifyTrapsChanged();
+            }
+        }
+    }
+
     /**
      * Enables instrumentation at selected nodes in all subsequently constructed ASTs. Ignored if
      * the argument is already registered, runtime error if argument is {@code null}.
@@ -417,46 +458,46 @@ public final class Instrumenter {
 
     /**
      * <em>Attaches</em> a {@link SimpleInstrumentListener listener} to a {@link Probe}, creating a
-     * <em>binding</em> called an {@link ProbeInstrument}. Until the Instrument is
-     * {@linkplain ProbeInstrument#dispose() disposed}, it routes synchronous notification of
+     * <em>binding</em> called an {@link Instrument}. Until the Instrument is
+     * {@linkplain Instrument#dispose() disposed}, it routes synchronous notification of
      * {@linkplain EventHandlerNode execution events} taking place at the Probe's AST location to
      * the listener.
      *
-     * @param probe source of AST execution events
+     * @param probe source of execution events
      * @param listener receiver of execution events
      * @param instrumentInfo optional documentation about the Instrument
      * @return a handle for access to the binding
      */
     @SuppressWarnings("static-method")
-    public ProbeInstrument attach(Probe probe, SimpleInstrumentListener listener, String instrumentInfo) {
-        final ProbeInstrument instrument = new ProbeInstrument.SimpleInstrument(listener, instrumentInfo);
+    public Instrument attach(Probe probe, SimpleInstrumentListener listener, String instrumentInfo) {
+        final Instrument instrument = new Instrument.SimpleInstrument(listener, instrumentInfo);
         probe.attach(instrument);
         return instrument;
     }
 
     /**
      * <em>Attaches</em> a {@link StandardInstrumentListener listener} to a {@link Probe}, creating
-     * a <em>binding</em> called an {@link ProbeInstrument}. Until the Instrument is
-     * {@linkplain ProbeInstrument#dispose() disposed}, it routes synchronous notification of
+     * a <em>binding</em> called an {@link Instrument}. Until the Instrument is
+     * {@linkplain Instrument#dispose() disposed}, it routes synchronous notification of
      * {@linkplain EventHandlerNode execution events} taking place at the Probe's AST location to
      * the listener.
      *
-     * @param probe source of AST execution events
+     * @param probe source of execution events
      * @param listener receiver of execution events
      * @param instrumentInfo optional documentation about the Instrument
      * @return a handle for access to the binding
      */
     @SuppressWarnings("static-method")
-    public ProbeInstrument attach(Probe probe, StandardInstrumentListener listener, String instrumentInfo) {
-        final ProbeInstrument instrument = new ProbeInstrument.StandardInstrument(listener, instrumentInfo);
+    public Instrument attach(Probe probe, StandardInstrumentListener listener, String instrumentInfo) {
+        final Instrument instrument = new Instrument.StandardInstrument(listener, instrumentInfo);
         probe.attach(instrument);
         return instrument;
     }
 
     /**
      * <em>Attaches</em> a {@link AdvancedInstrumentResultListener listener} to a {@link Probe},
-     * creating a <em>binding</em> called an {@link ProbeInstrument}. Until the Instrument is
-     * {@linkplain ProbeInstrument#dispose() disposed}, it routes synchronous notification of
+     * creating a <em>binding</em> called an {@link Instrument}. Until the Instrument is
+     * {@linkplain Instrument#dispose() disposed}, it routes synchronous notification of
      * {@linkplain EventHandlerNode execution events} taking place at the Probe's AST location to
      * the listener.
      * <p>
@@ -466,7 +507,7 @@ public final class Instrumenter {
      * Any {@link RuntimeException} thrown by execution of the fragment is caught by the framework
      * and reported to the listener; there is no other notification.
      *
-     * @param probe source of AST execution events
+     * @param probe probe source of execution events
      * @param listener optional client callback for results/failure notification
      * @param rootFactory provider of AST fragments on behalf of the client
      * @param requiredResultType optional requirement, any non-assignable result is reported to the
@@ -475,60 +516,10 @@ public final class Instrumenter {
      * @return a handle for access to the binding
      */
     @SuppressWarnings("static-method")
-    public ProbeInstrument attach(Probe probe, AdvancedInstrumentResultListener listener, AdvancedInstrumentRootFactory rootFactory, Class<?> requiredResultType, String instrumentInfo) {
-        final ProbeInstrument instrument = new ProbeInstrument.AdvancedInstrument(listener, rootFactory, requiredResultType, instrumentInfo);
+    public Instrument attach(Probe probe, AdvancedInstrumentResultListener listener, AdvancedInstrumentRootFactory rootFactory, Class<?> requiredResultType, String instrumentInfo) {
+        final Instrument instrument = new Instrument.AdvancedInstrument(listener, rootFactory, requiredResultType, instrumentInfo);
         probe.attach(instrument);
         return instrument;
-    }
-
-    // TODO (mlvdv) allow multiple <em>before</em> instruments without performance hit?
-    /**
-     * Sets the current "<em>before</em>" TagInstrument; there can be no more than one in effect.
-     * <ul>
-     * <li>The Instrument triggers a callback just <strong><em>before</em></strong> execution
-     * reaches <strong><em>any</em></strong> {@link Probe} (either existing or subsequently created)
-     * with the specified {@link SyntaxTag}.</li>
-     * <li>Calling {@link TagInstrument#dispose()} removes the instrument.</li>
-     * </ul>
-     *
-     * @param tag identifies the nodes to be instrumented
-     * @param listener receiver of <em>before</em> execution events
-     * @param instrumentInfo optional, mainly for debugging.
-     * @return a newly created, active Instrument
-     * @throws IllegalStateException if called when a <em>before</em> Instrument is active.
-     */
-    public TagInstrument attach(SyntaxTag tag, StandardBeforeInstrumentListener listener, String instrumentInfo) {
-        if (beforeTagInstrument != null) {
-            throw new IllegalStateException("Only one 'before' TagInstrument at a time");
-        }
-        this.beforeTagInstrument = new TagInstrument.BeforeTagInstrument(this, tag, listener, instrumentInfo);
-        notifyTagInstrumentChange();
-        return beforeTagInstrument;
-    }
-
-    // TODO (mlvdv) allow multiple <em>after</em> instruments without performance hit?
-    /**
-     * Sets the current "<em>after</em>" TagInstrument; there can be no more than one in effect.
-     * <ul>
-     * <li>The Instrument triggers a callback just <strong><em>after</em></strong> execution reaches
-     * <strong><em>any</em></strong> {@link Probe} (either existing or subsequently created) with
-     * the specified {@link SyntaxTag}.</li>
-     * <li>Calling {@link TagInstrument#dispose()} removes the instrument.</li>
-     * </ul>
-     *
-     * @param tag identifies the nodes to be instrumented
-     * @param listener receiver of <em>after</em> execution events
-     * @param instrumentInfo optional, mainly for debugging.
-     * @return a newly created, active Instrument
-     * @throws IllegalStateException if called when a <em>after</em> Instrument is active.
-     */
-    public TagInstrument attach(SyntaxTag tag, StandardAfterInstrumentListener listener, String instrumentInfo) {
-        if (afterTagInstrument != null) {
-            throw new IllegalStateException("Only one 'afater' TagInstrument at a time");
-        }
-        this.afterTagInstrument = new TagInstrument.AfterTagInstrument(this, tag, listener, instrumentInfo);
-        notifyTagInstrumentChange();
-        return afterTagInstrument;
     }
 
     /**
@@ -559,31 +550,12 @@ public final class Instrumenter {
         }
     }
 
-    BeforeTagInstrument getBeforeTagInstrument() {
-        return beforeTagInstrument;
+    SyntaxTagTrap getBeforeTagTrap() {
+        return beforeTagTrap;
     }
 
-    AfterTagInstrument getAfterTagInstrument() {
-        return afterTagInstrument;
-    }
-
-    void disposeBeforeTagInstrument() {
-        beforeTagInstrument = null;
-        notifyTagInstrumentChange();
-    }
-
-    void disposeAfterTagInstrument() {
-        afterTagInstrument = null;
-        notifyTagInstrumentChange();
-    }
-
-    private void notifyTagInstrumentChange() {
-        for (WeakReference<Probe> ref : probes) {
-            final Probe probe = ref.get();
-            if (probe != null) {
-                probe.notifyTagInstrumentsChanged();
-            }
-        }
+    SyntaxTagTrap getAfterTagTrap() {
+        return afterTagTrap;
     }
 
     // TODO (mlvdv) build this in as a VM event?
@@ -595,24 +567,24 @@ public final class Instrumenter {
         if (!astProbers.isEmpty()) {
 
             String name = "<?>";
-            final SourceSection sourceSection = rootNode.getSourceSection();
-            if (sourceSection != null) {
-                final Source source = sourceSection.getSource();
-                if (source != null) {
-                    name = source.getShortName();
-                } else {
+            final Source source = findSource(rootNode);
+            if (source != null) {
+                name = source.getShortName();
+            } else {
+                final SourceSection sourceSection = rootNode.getEncapsulatingSourceSection();
+                if (sourceSection != null) {
                     name = sourceSection.getShortDescription();
                 }
             }
             trace("START %s", name);
             for (ProbeListener listener : probeListeners) {
-                listener.startASTProbing(rootNode);
+                listener.startASTProbing(source);
             }
             for (ASTProber prober : astProbers) {
                 prober.probeAST(this, rootNode);  // TODO (mlvdv)
             }
             for (ProbeListener listener : probeListeners) {
-                listener.endASTProbing(rootNode);
+                listener.endASTProbing(source);
             }
             trace("FINISHED %s", name);
         }

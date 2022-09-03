@@ -25,10 +25,10 @@
 package com.oracle.truffle.api.vm;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -78,7 +78,6 @@ final class SymbolInvokerImpl {
         public Object execute(VirtualFrame frame) {
             final Object[] args = frame.getArguments();
             if (args.length != argumentLength) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new ArgumentsMishmashException();
             }
             Object tmp = ForeignAccess.execute(foreignAccess, frame, function, args);
