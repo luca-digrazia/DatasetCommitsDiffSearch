@@ -109,8 +109,8 @@ public class JavaFunctionTest {
 
     public interface Hashable {
         @Override
-        int hashCode();
+        public int hashCode();
 
-        String name();
+        public String name();
     }
 }
