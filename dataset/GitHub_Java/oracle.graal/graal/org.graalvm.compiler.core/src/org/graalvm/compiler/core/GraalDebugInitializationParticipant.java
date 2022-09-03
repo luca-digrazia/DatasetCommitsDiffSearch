@@ -40,7 +40,7 @@ public class GraalDebugInitializationParticipant implements DebugInitializationP
 
     @Override
     public void apply(Params params) {
-        OptionValues options = OptionValues.GLOBAL;
+        OptionValues options = params.options;
         if (GraalDebugConfig.areDebugScopePatternsEnabled(options)) {
             params.enable = true;
         }
@@ -79,7 +79,7 @@ public class GraalDebugInitializationParticipant implements DebugInitializationP
             }
         }
         if (GraalDebugConfig.isNotEmpty(GraalDebugConfig.Options.MethodMeter, options) || params.enableUnscopedMethodMetrics) {
-            if (!MethodMetricsPrinter.methodMetricsDumpingEnabled()) {
+            if (!MethodMetricsPrinter.methodMetricsDumpingEnabled(options)) {
                 TTY.println("WARNING: MethodMeter is enabled but MethodMeter dumping is disabled. Output will not contain MethodMetrics.");
             }
         }
