@@ -1207,7 +1207,7 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private void instanceOf(InterpreterFrame frame, char cpi) {
-        frame.pushInt(resolveType(frame, Bytecodes.INSTANCEOF, cpi).isInstance(Constant.forObject(frame.popObject())) ? 1 : 0);
+        frame.pushInt(resolveType(frame, Bytecodes.INSTANCEOF, cpi).toJava().isInstance(frame.popObject()) ? 1 : 0);
     }
 
     private void pushCPConstant(InterpreterFrame frame, char cpi) {
@@ -1633,7 +1633,7 @@ public final class BytecodeInterpreter implements Interpreter {
 
     private ResolvedJavaField findThrowableField(InterpreterFrame frame, String name) {
         ResolvedJavaType throwableType = resolveType(frame, Throwable.class);
-        ResolvedJavaField[] fields = throwableType.getInstanceFields(false);
+        ResolvedJavaField[] fields = throwableType.getDeclaredFields();
         for (int i = 0; i < fields.length; i++) {
             if (fields[i].getName().equals(name)) {
                 return fields[i];

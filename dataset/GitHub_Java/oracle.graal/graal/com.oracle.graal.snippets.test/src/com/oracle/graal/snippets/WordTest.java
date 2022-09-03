@@ -32,7 +32,7 @@ import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.snippets.Snippet.SnippetInliningPolicy;
+import com.oracle.graal.snippets.Snippet.InliningPolicy;
 
 /**
  * Tests for the {@link Word} type.
@@ -43,10 +43,10 @@ public class WordTest extends GraalCompilerTest implements SnippetsInterface {
 
     public WordTest() {
         TargetDescription target = Graal.getRequiredCapability(GraalCompiler.class).target;
-        installer = new SnippetInstaller(runtime, new Assumptions(false), target);
+        installer = new SnippetInstaller(runtime, target);
     }
 
-    private static final ThreadLocal<SnippetInliningPolicy> inliningPolicy = new ThreadLocal<>();
+    private static final ThreadLocal<InliningPolicy> inliningPolicy = new ThreadLocal<>();
 
     @Override
     protected StructuredGraph parse(Method m) {
@@ -114,9 +114,9 @@ public class WordTest extends GraalCompilerTest implements SnippetsInterface {
 
     @Test
     public void test_fromObject() {
-        inliningPolicy.set(new SnippetInliningPolicy() {
+        inliningPolicy.set(new InliningPolicy() {
             public boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller) {
-                return SnippetInliningPolicy.Default.shouldInline(method, caller) && !method.getName().equals("hashCode");
+                return InliningPolicy.Default.shouldInline(method, caller) && !method.getName().equals("hashCode");
             }
         });
         test("fromToObject", "object1", "object2");
