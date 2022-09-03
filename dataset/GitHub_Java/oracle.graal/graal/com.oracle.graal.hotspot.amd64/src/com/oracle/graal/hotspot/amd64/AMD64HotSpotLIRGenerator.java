@@ -411,13 +411,12 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         return result;
     }
 
-    @Override
-    public Value emitUncommonTrapCall(Value trapRequest, Value mode, SaveRegistersOp saveRegisterOp) {
+    public Value emitUncommonTrapCall(Value trapRequest, SaveRegistersOp saveRegisterOp) {
         ForeignCallLinkage linkage = getForeignCalls().lookupForeignCall(UNCOMMON_TRAP);
 
         Register thread = getProviders().getRegisters().getThreadRegister();
         append(new AMD64HotSpotCRuntimeCallPrologueOp(config.threadLastJavaSpOffset(), thread));
-        Variable result = super.emitForeignCall(linkage, null, thread.asValue(LIRKind.value(AMD64Kind.QWORD)), trapRequest, mode);
+        Variable result = super.emitForeignCall(linkage, null, thread.asValue(LIRKind.value(AMD64Kind.QWORD)), trapRequest);
         append(new AMD64HotSpotCRuntimeCallEpilogueOp(config.threadLastJavaSpOffset(), config.threadLastJavaFpOffset(), thread));
 
         Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = ((AMD64HotSpotLIRGenerationResult) getResult()).getCalleeSaveInfo();
@@ -427,13 +426,12 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         return result;
     }
 
-    @Override
-    public Value emitDeoptimizationFetchUnrollInfoCall(Value mode, SaveRegistersOp saveRegisterOp) {
+    public Value emitDeoptimizationFetchUnrollInfoCall(SaveRegistersOp saveRegisterOp) {
         ForeignCallLinkage linkage = getForeignCalls().lookupForeignCall(FETCH_UNROLL_INFO);
 
         Register thread = getProviders().getRegisters().getThreadRegister();
         append(new AMD64HotSpotCRuntimeCallPrologueOp(config.threadLastJavaSpOffset(), thread));
-        Variable result = super.emitForeignCall(linkage, null, thread.asValue(LIRKind.value(AMD64Kind.QWORD)), mode);
+        Variable result = super.emitForeignCall(linkage, null, thread.asValue(LIRKind.value(AMD64Kind.QWORD)));
         append(new AMD64HotSpotCRuntimeCallEpilogueOp(config.threadLastJavaSpOffset(), config.threadLastJavaFpOffset(), thread));
 
         Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = ((AMD64HotSpotLIRGenerationResult) getResult()).getCalleeSaveInfo();
@@ -615,7 +613,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         if (BenchmarkCounters.enabled) {
             return new AMD64HotSpotCounterOp(name, group, increment, getProviders().getRegisters(), config, getOrInitRescueSlot());
         }
-        throw JVMCIError.shouldNotReachHere("BenchmarkCounters are not enabled!");
+        return null;
     }
 
     @Override
@@ -623,7 +621,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         if (BenchmarkCounters.enabled) {
             return new AMD64HotSpotCounterOp(names, groups, increments, getProviders().getRegisters(), config, getOrInitRescueSlot());
         }
-        throw JVMCIError.shouldNotReachHere("BenchmarkCounters are not enabled!");
+        return null;
     }
 
     @Override

@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
 
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.nodeinfo.NodeInfo;
@@ -36,14 +36,11 @@ import com.oracle.graal.nodes.extended.UnsafeStoreNode;
 import com.oracle.graal.nodes.spi.LIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
-
 /**
  * A special purpose store node that differs from {@link UnsafeStoreNode} in that it is not a
  * {@link StateSplit} and takes a computed address instead of an object.
  */
-@NodeInfo(cycles = CYCLES_3, size = SIZE_1)
+@NodeInfo
 public final class DirectStoreNode extends FixedWithNextNode implements LIRLowerable {
 
     public static final NodeClass<DirectStoreNode> TYPE = NodeClass.create(DirectStoreNode.class);
@@ -61,7 +58,7 @@ public final class DirectStoreNode extends FixedWithNextNode implements LIRLower
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         Value v = gen.operand(value);
-        LIRKind lirKind = LIRKind.fromJavaKind(gen.getLIRGeneratorTool().target().arch, kind);
+        LIRKind lirKind = gen.getLIRGeneratorTool().target().getLIRKind(kind);
         gen.getLIRGeneratorTool().getArithmetic().emitStore(lirKind, gen.operand(address), v, null);
     }
 

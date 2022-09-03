@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,13 +24,11 @@ package com.oracle.graal.nodes.memory;
 
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.LocationIdentity;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Simplifiable;
 import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.PiNode;
 import com.oracle.graal.nodes.ValueNode;
@@ -51,9 +49,7 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simpli
 
     public static final NodeClass<WriteNode> TYPE = NodeClass.create(WriteNode.class);
 
-    @OptionalInput(InputType.Guard) protected GuardingNode storeCheckGuard;
-
-    protected WriteNode(ValueNode address, LocationIdentity location, ValueNode value, BarrierType barrierType) {
+    private WriteNode(ValueNode address, LocationIdentity location, ValueNode value, BarrierType barrierType) {
         this((AddressNode) address, location, value, barrierType);
     }
 
@@ -99,13 +95,7 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simpli
         throw JVMCIError.shouldNotReachHere("unexpected WriteNode before PEA");
     }
 
-    @Override
     public boolean canNullCheck() {
         return true;
-    }
-
-    public void setStoreCheckGuard(GuardingNode newStoreCheckGuard) {
-        updateUsages((Node) this.storeCheckGuard, (Node) newStoreCheckGuard);
-        this.storeCheckGuard = newStoreCheckGuard;
     }
 }

@@ -133,7 +133,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
                         constantTableBaseProvider);
     }
 
-    public SPARCHotSpotLIRGenerator(LIRKindTool lirKindTool, SPARCArithmeticLIRGenerator arithmeticLIRGen, MoveFactory moveFactory, HotSpotProviders providers, HotSpotVMConfig config,
+    protected SPARCHotSpotLIRGenerator(LIRKindTool lirKindTool, SPARCArithmeticLIRGenerator arithmeticLIRGen, MoveFactory moveFactory, HotSpotProviders providers, HotSpotVMConfig config,
                     CallingConvention cc, LIRGenerationResult lirGenRes, ConstantTableBaseProvider constantTableBaseProvider) {
         super(lirKindTool, arithmeticLIRGen, moveFactory, providers, cc, lirGenRes, constantTableBaseProvider);
         assert config.basicLockSize == 8;

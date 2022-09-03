@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.lir.gen;
 
-import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.Register;
@@ -66,12 +65,6 @@ public interface LIRGeneratorTool extends BenchmarkCounterFactory {
          *         register.
          */
         boolean canInlineConstant(JavaConstant c);
-
-        /**
-         * @param constant The constant that might be moved to a stack slot.
-         * @return {@code true} if constant to stack moves are supported for this constant.
-         */
-        boolean allowConstantToStackMove(Constant constant);
 
         LIRInstruction createMove(AllocatableValue result, Value input);
 
@@ -228,8 +221,6 @@ public interface LIRGeneratorTool extends BenchmarkCounterFactory {
     AllocatableValue resultOperandFor(JavaKind javaKind, LIRKind lirKind);
 
     <I extends LIRInstruction> I append(I op);
-
-    void setInfo(BytecodePosition position);
 
     void emitJump(LabelRef label);
 

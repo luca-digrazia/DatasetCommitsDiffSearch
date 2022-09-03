@@ -78,7 +78,6 @@ import com.oracle.graal.compiler.common.calc.FloatConvert;
 import com.oracle.graal.lir.ConstantValue;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.VirtualStackSlot;
 import com.oracle.graal.lir.gen.ArithmeticLIRGenerator;
 import com.oracle.graal.lir.sparc.SPARCAddressValue;
 import com.oracle.graal.lir.sparc.SPARCArithmetic;
@@ -586,16 +585,12 @@ public class SPARCArithmeticLIRGenerator extends ArithmeticLIRGenerator {
         return result;
     }
 
-    protected VirtualStackSlot getTempSlot(LIRKind kind) {
-        return getLIRGen().getResult().getFrameMapBuilder().allocateSpillSlot(kind);
-    }
-
     private void moveBetweenFpGp(AllocatableValue dst, AllocatableValue src) {
         AllocatableValue tempSlot;
         if (getLIRGen().getArchitecture().getFeatures().contains(CPUFeature.VIS3)) {
             tempSlot = AllocatableValue.ILLEGAL;
         } else {
-            tempSlot = getTempSlot(LIRKind.value(XWORD));
+            tempSlot = getLIRGen().getTempSlot(LIRKind.value(XWORD));
         }
         getLIRGen().append(new MoveFpGp(dst, src, tempSlot));
     }
