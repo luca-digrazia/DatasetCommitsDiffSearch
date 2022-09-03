@@ -906,15 +906,11 @@ public class ElementUtils {
             return false;
         } else {
             if (type1.getKind() == type2.getKind()) {
-                return getUniqueIdentifier(type1).equals(getUniqueIdentifier(type2));
+                return type1.toString().equals(type2.toString());
             } else {
                 return false;
             }
         }
-    }
-
-    public static String getUniqueIdentifier(TypeMirror typeMirror) {
-        return fixECJBinaryNameIssue(typeMirror.toString());
     }
 
     public static int compareByTypeHierarchy(TypeMirror t1, TypeMirror t2) {
