@@ -22,13 +22,18 @@
  */
 package com.oracle.graal.phases.common.cfs;
 
-import java.util.*;
-
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.api.meta.ResolvedJavaType;
+import com.oracle.graal.graph.InputType;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class FlowUtil {
 
@@ -231,7 +236,7 @@ public class FlowUtil {
         ArrayList<ValueNode> result = null;
         NodeClass.NodeClassIterator iter = n.inputs().iterator();
         while (iter.hasNext()) {
-            Position pos = iter.nextPosition();
+            NodeClass.Position pos = iter.nextPosition();
             InputType inputType = pos.getInputType(n);
             boolean isReducibleInput = (inputType == InputType.Value || inputType == InputType.Condition);
             if (isReducibleInput) {
