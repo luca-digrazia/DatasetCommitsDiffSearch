@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -43,6 +41,7 @@ import org.graalvm.compiler.lir.framemap.FrameMapBuilder;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.nodes.GraphSpeculationLog;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.compiler.phases.tiers.SuitesProvider;
 import org.graalvm.compiler.phases.tiers.TargetProvider;
@@ -192,8 +191,6 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
      * @param context a custom debug context to use for the code installation
      * @return a reference to the compiled and ready-to-run installed code
      * @throws BailoutException if the code installation failed
-     * @throws IllegalArgumentException if {@code installedCode != null} and this object does not
-     *             support a predefined {@link InstalledCode} object
      */
     @SuppressWarnings("try")
     public InstalledCode createInstalledCode(DebugContext debug, ResolvedJavaMethod method, CompilationRequest compilationRequest, CompilationResult compilationResult,
@@ -211,15 +208,16 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
 
             InstalledCode installedCode;
             try {
-                preCodeInstallationTasks(tasks, compilationResult);
+                preCodeInstallationTasks(tasks, compilationResult, predefinedInstalledCode);
                 CompiledCode compiledCode = createCompiledCode(method, compilationRequest, compilationResult);
-                installedCode = getProviders().getCodeCache().installCode(method, compiledCode, predefinedInstalledCode, speculationLog, isDefault);
+                installedCode = getProviders().getCodeCache().installCode(method, compiledCode, predefinedInstalledCode, GraphSpeculationLog.unwrap(speculationLog), isDefault);
+                assert predefinedInstalledCode == null || installedCode == predefinedInstalledCode;
             } catch (Throwable t) {
                 failCodeInstallationTasks(tasks, t);
                 throw t;
             }
 
-            postCodeInstallationTasks(tasks, compilationResult, installedCode);
+            postCodeInstallationTasks(tasks, installedCode);
 
             return installedCode;
         } catch (Throwable e) {
@@ -233,16 +231,16 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
         }
     }
 
-    private static void preCodeInstallationTasks(CodeInstallationTask[] tasks, CompilationResult compilationResult) {
+    private static void preCodeInstallationTasks(CodeInstallationTask[] tasks, CompilationResult compilationResult, InstalledCode predefinedInstalledCode) {
         for (CodeInstallationTask task : tasks) {
-            task.preProcess(compilationResult);
+            task.preProcess(compilationResult, predefinedInstalledCode);
         }
     }
 
-    private static void postCodeInstallationTasks(CodeInstallationTask[] tasks, CompilationResult compilationResult, InstalledCode installedCode) {
+    private static void postCodeInstallationTasks(CodeInstallationTask[] tasks, InstalledCode installedCode) {
         try {
             for (CodeInstallationTask task : tasks) {
-                task.postProcess(compilationResult, installedCode);
+                task.postProcess(installedCode);
             }
         } catch (Throwable t) {
             installedCode.invalidate();
@@ -311,18 +309,19 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
          * Task to run before code installation.
          *
          * @param compilationResult the code about to be installed
+         * @param predefinedInstalledCode a pre-allocated {@link InstalledCode} object that will be
+         *            used as a reference to the installed code. May be {@code null}.
          *
          */
-        public void preProcess(CompilationResult compilationResult) {
+        public void preProcess(CompilationResult compilationResult, InstalledCode predefinedInstalledCode) {
         }
 
         /**
          * Task to run after the code is installed.
          *
-         * @param compilationResult the code about to be installed
          * @param installedCode a reference to the installed code
          */
-        public void postProcess(CompilationResult compilationResult, InstalledCode installedCode) {
+        public void postProcess(InstalledCode installedCode) {
         }
 
         /**
