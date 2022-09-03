@@ -194,7 +194,7 @@ final class TraceInterval extends IntervalHint {
      * The {@linkplain RegisterValue register} or {@linkplain Variable variable} for this interval
      * prior to register allocation.
      */
-    public final Variable operand;
+    @Deprecated public final AllocatableValue operand;
 
     /**
      * The operand number for this interval's {@linkplain #operand operand}.
@@ -287,7 +287,7 @@ final class TraceInterval extends IntervalHint {
         this(operand, operand.index);
     }
 
-    private TraceInterval(Variable operand, int operandNumber) {
+    private TraceInterval(AllocatableValue operand, int operandNumber) {
         assert operand != null;
         this.operand = operand;
         this.operandNumber = operandNumber;
