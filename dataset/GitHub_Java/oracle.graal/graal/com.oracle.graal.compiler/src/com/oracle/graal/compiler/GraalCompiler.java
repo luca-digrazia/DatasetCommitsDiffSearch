@@ -29,24 +29,23 @@ import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionalit
 
 import java.util.*;
 
+import com.oracle.graal.alloc.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CompilationResult.ConstantReference;
 import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ProfilingInfo.TriState;
-import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.alloc.lsra.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.constopt.*;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.stackslotalloc.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
@@ -132,6 +131,7 @@ public class GraalCompiler {
      */
     public static class Request<T extends CompilationResult> {
         public final StructuredGraph graph;
+        public final Object stub;
         public final CallingConvention cc;
         public final ResolvedJavaMethod installedCodeOwner;
         public final Providers providers;
@@ -151,6 +151,7 @@ public class GraalCompiler {
          * @param cc the calling convention for calls to the code compiled for {@code graph}
          * @param installedCodeOwner the method the compiled code will be associated with once
          *            installed. This argument can be null.
+         * @param stub
          * @param providers
          * @param backend
          * @param target
@@ -163,10 +164,11 @@ public class GraalCompiler {
          * @param compilationResult
          * @param factory
          */
-        public Request(StructuredGraph graph, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend, TargetDescription target,
+        public Request(StructuredGraph graph, Object stub, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend, TargetDescription target,
                         Map<ResolvedJavaMethod, StructuredGraph> cache, PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo,
                         SpeculationLog speculationLog, Suites suites, T compilationResult, CompilationResultBuilderFactory factory) {
             this.graph = graph;
+            this.stub = stub;
             this.cc = cc;
             this.installedCodeOwner = installedCodeOwner;
             this.providers = providers;
@@ -201,11 +203,11 @@ public class GraalCompiler {
      *            installed. This argument can be null.
      * @return the result of the compilation
      */
-    public static <T extends CompilationResult> T compileGraph(StructuredGraph graph, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend,
+    public static <T extends CompilationResult> T compileGraph(StructuredGraph graph, Object stub, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend,
                     TargetDescription target, Map<ResolvedJavaMethod, StructuredGraph> cache, PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts,
                     ProfilingInfo profilingInfo, SpeculationLog speculationLog, Suites suites, T compilationResult, CompilationResultBuilderFactory factory) {
-        return compile(new Request<>(graph, cc, installedCodeOwner, providers, backend, target, cache, graphBuilderSuite, optimisticOpts, profilingInfo, speculationLog, suites, compilationResult,
-                        factory));
+        return compile(new Request<>(graph, stub, cc, installedCodeOwner, providers, backend, target, cache, graphBuilderSuite, optimisticOpts, profilingInfo, speculationLog, suites,
+                        compilationResult, factory));
     }
 
     /**
@@ -218,7 +220,7 @@ public class GraalCompiler {
         try (Scope s0 = Debug.scope("GraalCompiler", r.graph, r.providers.getCodeCache())) {
             Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
             SchedulePhase schedule = emitFrontEnd(r.providers, r.target, r.graph, assumptions, r.cache, r.graphBuilderSuite, r.optimisticOpts, r.profilingInfo, r.speculationLog, r.suites);
-            emitBackEnd(r.graph, null, r.cc, r.installedCodeOwner, r.backend, r.target, r.compilationResult, r.factory, assumptions, schedule, null);
+            emitBackEnd(r.graph, r.stub, r.cc, r.installedCodeOwner, r.backend, r.target, r.compilationResult, r.factory, assumptions, schedule, null);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
@@ -321,6 +323,7 @@ public class GraalCompiler {
         }
         try (Scope ds = Debug.scope("BackEnd", lir)) {
             FrameMapBuilder frameMapBuilder = backend.newFrameMapBuilder(registerConfig);
+            frameMapBuilder.requireMapping(lir);
             LIRGenerationResult lirGenRes = backend.newLIRGenerationResult(lir, frameMapBuilder, graph.method(), stub);
             LIRGeneratorTool lirGen = backend.newLIRGenerator(cc, lirGenRes);
             NodeLIRBuilderTool nodeLirGen = backend.newNodeLIRBuilder(graph, lirGen);
@@ -348,26 +351,25 @@ public class GraalCompiler {
             try (Scope s = Debug.scope("Allocator", nodeLirGen)) {
                 if (backend.shouldAllocateRegisters()) {
                     LinearScan.allocate(target, lirGenRes);
+                } else if (!LocationMarker.Options.UseLocationMarker.getValue()) {
+                    // build frame map for targets that do not allocate registers
+                    lirGenRes.buildFrameMap();
                 }
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
 
-            try (Scope s1 = Debug.scope("BuildFrameMap")) {
-                // build frame map
-                final StackSlotAllocator allocator;
-                if (LSStackSlotAllocator.Options.LSStackSlotAllocation.getValue()) {
-                    allocator = new LSStackSlotAllocator();
-                } else {
-                    allocator = new SimpleStackSlotAllocator();
+            if (LocationMarker.Options.UseLocationMarker.getValue()) {
+                try (Scope s1 = Debug.scope("BuildFrameMap")) {
+                    // build frame map
+                    lirGenRes.buildFrameMap();
+                    Debug.dump(lir, "After FrameMap building");
                 }
-                lirGenRes.buildFrameMap(allocator);
-                Debug.dump(lir, "After FrameMap building");
-            }
-            try (Scope s1 = Debug.scope("MarkLocations")) {
-                if (backend.shouldAllocateRegisters()) {
-                    // currently we mark locations only if we do register allocation
-                    LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
+                try (Scope s1 = Debug.scope("MarkLocations")) {
+                    if (backend.shouldAllocateRegisters()) {
+                        // currently we mark locations only if we do register allocation
+                        LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
+                    }
                 }
             }
 

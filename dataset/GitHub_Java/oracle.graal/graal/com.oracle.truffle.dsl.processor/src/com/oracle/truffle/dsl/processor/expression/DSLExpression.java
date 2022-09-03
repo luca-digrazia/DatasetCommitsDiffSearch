@@ -23,7 +23,6 @@
 package com.oracle.truffle.dsl.processor.expression;
 
 import java.util.*;
-import java.util.concurrent.atomic.*;
 
 import javax.lang.model.element.*;
 import javax.lang.model.type.*;
@@ -67,19 +66,6 @@ public abstract class DSLExpression {
 
         });
         return variables;
-    }
-
-    public boolean containsComparisons() {
-        final AtomicBoolean found = new AtomicBoolean();
-        this.accept(new AbstractDSLExpressionVisitor() {
-            @Override
-            public void visitBinary(Binary binary) {
-                if (binary.isComparison()) {
-                    found.set(true);
-                }
-            }
-        });
-        return found.get();
     }
 
     public void setResolvedTargetType(TypeMirror resolvedTargetType) {
@@ -143,10 +129,6 @@ public abstract class DSLExpression {
             this.operator = operator;
             this.left = left;
             this.right = right;
-        }
-
-        public boolean isComparison() {
-            return DSLExpressionResolver.COMPARABLE_OPERATORS.contains(operator) || DSLExpressionResolver.IDENTITY_OPERATORS.contains(operator);
         }
 
         @Override
@@ -251,13 +233,10 @@ public abstract class DSLExpression {
 
         @Override
         public TypeMirror getResolvedType() {
-            if (resolvedMethod == null) {
-                return null;
-            }
             if (resolvedMethod.getKind() == ElementKind.CONSTRUCTOR) {
                 return resolvedMethod.getEnclosingElement().asType();
             } else {
-                return resolvedMethod.getReturnType();
+                return resolvedMethod != null ? resolvedMethod.getReturnType() : null;
             }
         }
 
