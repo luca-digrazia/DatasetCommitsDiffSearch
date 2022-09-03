@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,54 @@
  */
 package com.oracle.graal.nodes.cfg;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
+import com.oracle.graal.compiler.common.cfg.CFGVerifier;
+import com.oracle.graal.compiler.common.cfg.Loop;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.AbstractEndNode;
+import com.oracle.graal.nodes.ControlSplitNode;
+import com.oracle.graal.nodes.EndNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.IfNode;
+import com.oracle.graal.nodes.LoopBeginNode;
+import com.oracle.graal.nodes.LoopEndNode;
+import com.oracle.graal.nodes.LoopExitNode;
+import com.oracle.graal.nodes.MergeNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
 
-public class ControlFlowGraph {
+public final class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
+    /**
+     * Don't allow probability values to be become too small or too high as this makes frequency
+     * calculations over- or underflow the range of a double. This commonly happens with infinite
+     * loops within infinite loops. The value is chosen a bit lower than half the maximum exponent
+     * supported by double. That way we can never overflow to infinity when multiplying two
+     * probability values.
+     */
+    public static final double MIN_PROBABILITY = 0x1.0p-500;
+    public static final double MAX_PROBABILITY = 1 / MIN_PROBABILITY;
 
     public final StructuredGraph graph;
 
-    private final NodeMap<Block> nodeToBlock;
+    private NodeMap<Block> nodeToBlock;
     private Block[] reversePostOrder;
-    private Loop[] loops;
-
+    private List<Loop<Block>> loops;
 
     public static ControlFlowGraph compute(StructuredGraph graph, boolean connectBlocks, boolean computeLoops, boolean computeDominators, boolean computePostdominators) {
         ControlFlowGraph cfg = new ControlFlowGraph(graph);
         cfg.identifyBlocks();
-        if (connectBlocks || computeLoops || computeDominators || computePostdominators) {
-            cfg.connectBlocks();
-        }
+        cfg.computeProbabilities();
+
         if (computeLoops) {
             cfg.computeLoopInformation();
         }
@@ -52,46 +79,99 @@ public class ControlFlowGraph {
         if (computePostdominators) {
             cfg.computePostdominators();
         }
-        assert CFGVerifier.verify(cfg);
+        // there's not much to verify when connectBlocks == false
+        assert !(connectBlocks || computeLoops || computeDominators || computePostdominators) || CFGVerifier.verify(cfg);
         return cfg;
     }
 
-    protected ControlFlowGraph(StructuredGraph graph) {
+    private ControlFlowGraph(StructuredGraph graph) {
         this.graph = graph;
         this.nodeToBlock = graph.createNodeMap();
     }
 
+    private void computeDominators() {
+        assert reversePostOrder[0].getPredecessorCount() == 0 : "start block has no predecessor and therefore no dominator";
+        Block[] blocks = reversePostOrder;
+        for (int i = 1; i < blocks.length; i++) {
+            Block block = blocks[i];
+            assert block.getPredecessorCount() > 0;
+            Block dominator = null;
+            for (Block pred : block.getPredecessors()) {
+                if (!pred.isLoopEnd()) {
+                    dominator = ((dominator == null) ? pred : commonDominatorRaw(dominator, pred));
+                }
+            }
+            // set dominator
+            block.setDominator(dominator);
+            if (dominator.getDominated().equals(Collections.emptyList())) {
+                dominator.setDominated(new ArrayList<>());
+            }
+            dominator.getDominated().add(block);
+        }
+        calcDominatorRanges(getStartBlock(), reversePostOrder.length);
+    }
+
+    private static void calcDominatorRanges(Block block, int size) {
+        Block[] stack = new Block[size];
+        stack[0] = block;
+        int tos = 0;
+        int myNumber = 0;
+
+        do {
+            Block cur = stack[tos];
+            List<Block> dominated = cur.getDominated();
+
+            if (cur.getDominatorNumber() == -1) {
+                cur.setDominatorNumber(myNumber);
+                if (dominated.size() > 0) {
+                    // Push children onto stack.
+                    for (Block b : dominated) {
+                        stack[++tos] = b;
+                    }
+                } else {
+                    cur.setMaxChildDomNumber(myNumber);
+                    --tos;
+                }
+                ++myNumber;
+            } else {
+                cur.setMaxChildDomNumber(dominated.get(0).getMaxChildDominatorNumber());
+                --tos;
+            }
+        } while (tos >= 0);
+    }
+
+    private static Block commonDominatorRaw(Block a, Block b) {
+        int aDomDepth = a.getDominatorDepth();
+        int bDomDepth = b.getDominatorDepth();
+        if (aDomDepth > bDomDepth) {
+            return commonDominatorRawSameDepth(a.getDominator(aDomDepth - bDomDepth), b);
+        } else {
+            return commonDominatorRawSameDepth(a, b.getDominator(bDomDepth - aDomDepth));
+        }
+    }
+
+    private static Block commonDominatorRawSameDepth(Block a, Block b) {
+        Block iterA = a;
+        Block iterB = b;
+        while (iterA != iterB) {
+            iterA = iterA.getDominator();
+            iterB = iterB.getDominator();
+        }
+        return iterA;
+    }
+
+    @Override
     public Block[] getBlocks() {
         return reversePostOrder;
     }
 
+    @Override
     public Block getStartBlock() {
         return reversePostOrder[0];
     }
 
-    public Iterable<Block> postOrder() {
-        return new Iterable<Block>() {
-            @Override
-            public Iterator<Block> iterator() {
-                return new Iterator<Block>() {
-                    private int nextIndex = reversePostOrder.length - 1;
-                    @Override
-                    public boolean hasNext() {
-                        return nextIndex >= 0;
-                    }
-
-                    @Override
-                    public Block next() {
-                        return reversePostOrder[nextIndex--];
-                    }
-
-                    @Override
-                    public void remove() {
-                        throw new UnsupportedOperationException();
-                    }
-                };
-            }
-        };
+    public Block[] reversePostOrder() {
+        return reversePostOrder;
     }
 
     public NodeMap<Block> getNodeToBlock() {
@@ -102,246 +182,320 @@ public class ControlFlowGraph {
         return nodeToBlock.get(node);
     }
 
-    public Loop[] getLoops() {
+    @Override
+    public List<Loop<Block>> getLoops() {
         return loops;
     }
 
-    protected static final int BLOCK_ID_INITIAL = -1;
-    protected static final int BLOCK_ID_VISITED = -2;
-
-    private void identifyBlocks() {
-        // Find all block headers
-        int numBlocks = 0;
-        for (Node node : graph.getNodes()) {
-            if (node instanceof BeginNode) {
-                Block block = new Block();
-                numBlocks++;
-
-                block.beginNode = (BeginNode) node;
-                Node cur = node;
-                Node last;
-                do {
-                    assert !cur.isDeleted();
-
-                    assert nodeToBlock.get(cur) == null;
-                    nodeToBlock.set(cur, block);
-                    if (cur instanceof MergeNode) {
-                        for (PhiNode phi : ((MergeNode) cur).phis()) {
-                            nodeToBlock.set(phi, block);
-                        }
-                    }
-
-                    if (cur instanceof FixedNode) {
-                        double probability = ((FixedNode) cur).probability();
-                        if (probability > block.probability) {
-                            block.probability = probability;
-                        }
-                    }
-
-                    last = cur;
-                    cur = cur.successors().first();
-                } while (cur != null && !(cur instanceof BeginNode));
-
-                block.endNode = (FixedNode) last;
-            }
-        }
-
-        // Compute postorder.
-        ArrayList<Block> postOrder = new ArrayList<>(numBlocks);
-        ArrayList<Block> stack = new ArrayList<>();
-        stack.add(blockFor(graph.start()));
-
-        do {
-            Block block = stack.get(stack.size() - 1);
-            if (block.id == BLOCK_ID_INITIAL) {
-                // First time we see this block: push all successors.
-                for (Node suxNode : block.getEndNode().cfgSuccessors()) {
-                    Block suxBlock = blockFor(suxNode);
-                    if (suxBlock.id == BLOCK_ID_INITIAL) {
-                        stack.add(suxBlock);
-                    }
-                }
-                block.id = BLOCK_ID_VISITED;
-            } else if (block.id == BLOCK_ID_VISITED) {
-                // Second time we see this block: All successors have been processed, so add block to postorder list.
-                stack.remove(stack.size() - 1);
-                postOrder.add(block);
+    private void identifyBlock(Block block) {
+        FixedWithNextNode cur = block.getBeginNode();
+        while (true) {
+            assert !cur.isDeleted();
+            assert nodeToBlock.get(cur) == null;
+            nodeToBlock.set(cur, block);
+            FixedNode next = cur.next();
+            if (next instanceof AbstractBeginNode) {
+                block.endNode = cur;
+                return;
+            } else if (next instanceof FixedWithNextNode) {
+                cur = (FixedWithNextNode) next;
             } else {
-                throw GraalInternalError.shouldNotReachHere();
+                nodeToBlock.set(next, block);
+                block.endNode = next;
+                return;
             }
-        } while (!stack.isEmpty());
-
-        // Compute reverse postorder and number blocks.
-        assert postOrder.size() <= numBlocks : "some blocks originally created can be unreachable, so actual block list can be shorter";
-        numBlocks = postOrder.size();
-        reversePostOrder = new Block[numBlocks];
-        for (int i = 0; i < numBlocks; i++) {
-            Block block = postOrder.get(numBlocks - i - 1);
-            block.id = i;
-            reversePostOrder[i] = block;
         }
     }
 
-    // Connect blocks (including loop backward edges), but ignoring dead code (blocks with id < 0).
-    private void connectBlocks() {
-        for (Block block : reversePostOrder) {
-            List<Block> predecessors = new ArrayList<>();
-            for (Node predNode : block.getBeginNode().cfgPredecessors()) {
-                Block predBlock = nodeToBlock.get(predNode);
-                if (predBlock.id >= 0) {
-                    predecessors.add(predBlock);
-                }
-            }
-            if (block.getBeginNode() instanceof LoopBeginNode) {
-                for (LoopEndNode predNode : ((LoopBeginNode) block.getBeginNode()).orderedLoopEnds()) {
-                    Block predBlock = nodeToBlock.get(predNode);
-                    if (predBlock.id >= 0) {
-                        predecessors.add(predBlock);
-                    }
-                }
-            }
-            block.predecessors = predecessors;
-
-            List<Block> successors = new ArrayList<>();
-            for (Node suxNode : block.getEndNode().cfgSuccessors()) {
-                Block suxBlock = nodeToBlock.get(suxNode);
-                assert suxBlock.id >= 0;
-                successors.add(suxBlock);
-            }
-            if (block.getEndNode() instanceof LoopEndNode) {
-                Block suxBlock = nodeToBlock.get(((LoopEndNode) block.getEndNode()).loopBegin());
-                assert suxBlock.id >= 0;
-                successors.add(suxBlock);
-            }
-            block.successors = successors;
+    /**
+     * Identify and connect blocks (including loop backward edges). Predecessors need to be in the
+     * order expected when iterating phi inputs.
+     */
+    private void identifyBlocks() {
+        // Find all block headers.
+        int numBlocks = 0;
+        for (AbstractBeginNode begin : graph.getNodes(AbstractBeginNode.TYPE)) {
+            Block block = new Block(begin);
+            identifyBlock(block);
+            numBlocks++;
         }
+
+        // Compute reverse post order.
+        int count = 0;
+        NodeMap<Block> nodeMap = this.nodeToBlock;
+        Block[] stack = new Block[numBlocks];
+        int tos = 0;
+        Block startBlock = blockFor(graph.start());
+        stack[0] = startBlock;
+        startBlock.setPredecessors(Block.EMPTY_ARRAY);
+        do {
+            Block block = stack[tos];
+            int id = block.getId();
+            if (id == BLOCK_ID_INITIAL) {
+                // First time we see this block: push all successors.
+                FixedNode last = block.getEndNode();
+                if (last instanceof EndNode) {
+                    EndNode endNode = (EndNode) last;
+                    Block suxBlock = nodeMap.get(endNode.merge());
+                    if (suxBlock.getId() == BLOCK_ID_INITIAL) {
+                        stack[++tos] = suxBlock;
+                    }
+                    block.setSuccessors(new Block[]{suxBlock});
+                } else if (last instanceof IfNode) {
+                    IfNode ifNode = (IfNode) last;
+                    Block trueSucc = nodeMap.get(ifNode.trueSuccessor());
+                    stack[++tos] = trueSucc;
+                    Block falseSucc = nodeMap.get(ifNode.falseSuccessor());
+                    stack[++tos] = falseSucc;
+                    block.setSuccessors(new Block[]{trueSucc, falseSucc});
+                    Block[] ifPred = new Block[]{block};
+                    trueSucc.setPredecessors(ifPred);
+                    falseSucc.setPredecessors(ifPred);
+                } else if (last instanceof LoopEndNode) {
+                    LoopEndNode loopEndNode = (LoopEndNode) last;
+                    block.setSuccessors(new Block[]{nodeMap.get(loopEndNode.loopBegin())});
+                    // Nothing to do push onto the stack.
+                } else {
+                    assert !(last instanceof AbstractEndNode) : "Algorithm only supports EndNode and LoopEndNode.";
+                    int startTos = tos;
+                    Block[] ifPred = new Block[]{block};
+                    for (Node suxNode : last.successors()) {
+                        Block sux = nodeMap.get(suxNode);
+                        stack[++tos] = sux;
+                        sux.setPredecessors(ifPred);
+                    }
+                    int suxCount = tos - startTos;
+                    Block[] successors = new Block[suxCount];
+                    System.arraycopy(stack, startTos + 1, successors, 0, suxCount);
+                    block.setSuccessors(successors);
+                }
+                block.setId(BLOCK_ID_VISITED);
+                AbstractBeginNode beginNode = block.getBeginNode();
+                if (beginNode instanceof LoopBeginNode) {
+                    computeLoopPredecessors(nodeMap, block, (LoopBeginNode) beginNode);
+                } else if (beginNode instanceof MergeNode) {
+                    MergeNode mergeNode = (MergeNode) beginNode;
+                    int forwardEndCount = mergeNode.forwardEndCount();
+                    Block[] predecessors = new Block[forwardEndCount];
+                    for (int i = 0; i < forwardEndCount; ++i) {
+                        predecessors[i] = nodeMap.get(mergeNode.forwardEndAt(i));
+                    }
+                    block.setPredecessors(predecessors);
+                }
+
+            } else if (id == BLOCK_ID_VISITED) {
+                // Second time we see this block: All successors have been processed, so add block
+                // to result list. Can safely reuse the stack for this.
+                --tos;
+                count++;
+                int index = numBlocks - count;
+                stack[index] = block;
+                block.setId(index);
+            } else {
+                throw GraalError.shouldNotReachHere();
+            }
+        } while (tos >= 0);
+
+        // Compute reverse postorder and number blocks.
+        assert count == numBlocks : "all blocks must be reachable";
+        this.reversePostOrder = stack;
+    }
+
+    private static void computeLoopPredecessors(NodeMap<Block> nodeMap, Block block, LoopBeginNode loopBeginNode) {
+        int forwardEndCount = loopBeginNode.forwardEndCount();
+        LoopEndNode[] loopEnds = loopBeginNode.orderedLoopEnds();
+        Block[] predecessors = new Block[forwardEndCount + loopEnds.length];
+        for (int i = 0; i < forwardEndCount; ++i) {
+            predecessors[i] = nodeMap.get(loopBeginNode.forwardEndAt(i));
+        }
+        for (int i = 0; i < loopEnds.length; ++i) {
+            predecessors[i + forwardEndCount] = nodeMap.get(loopEnds[i]);
+        }
+        block.setPredecessors(predecessors);
+    }
+
+    private void computeProbabilities() {
+
+        for (Block block : reversePostOrder) {
+            Block[] predecessors = block.getPredecessors();
+
+            double probability;
+            if (predecessors.length == 0) {
+                probability = 1D;
+            } else if (predecessors.length == 1) {
+                Block pred = predecessors[0];
+                probability = pred.probability;
+                if (pred.getSuccessorCount() > 1) {
+                    assert pred.getEndNode() instanceof ControlSplitNode;
+                    ControlSplitNode controlSplit = (ControlSplitNode) pred.getEndNode();
+                    probability *= controlSplit.probability(block.getBeginNode());
+                }
+            } else {
+                probability = predecessors[0].probability;
+                for (int i = 1; i < predecessors.length; ++i) {
+                    probability += predecessors[i].probability;
+                }
+
+                if (block.getBeginNode() instanceof LoopBeginNode) {
+                    LoopBeginNode loopBegin = (LoopBeginNode) block.getBeginNode();
+                    probability *= loopBegin.loopFrequency();
+                }
+            }
+            if (probability < MIN_PROBABILITY) {
+                block.setProbability(MIN_PROBABILITY);
+            } else if (probability > MAX_PROBABILITY) {
+                block.setProbability(MAX_PROBABILITY);
+            } else {
+                block.setProbability(probability);
+            }
+        }
+
     }
 
     private void computeLoopInformation() {
-        ArrayList<Loop> loopsList = new ArrayList<>();
-        for (Block block : reversePostOrder) {
-            Node beginNode = block.getBeginNode();
-            if (beginNode instanceof LoopBeginNode) {
-                Loop loop = new Loop(block.getLoop(), loopsList.size(), block);
-                loopsList.add(loop);
+        loops = new ArrayList<>();
+        if (graph.hasLoops()) {
+            Block[] stack = new Block[this.reversePostOrder.length];
+            for (Block block : reversePostOrder) {
+                AbstractBeginNode beginNode = block.getBeginNode();
+                if (beginNode instanceof LoopBeginNode) {
+                    Loop<Block> loop = new HIRLoop(block.getLoop(), loops.size(), block);
+                    loops.add(loop);
+                    block.loop = loop;
+                    loop.getBlocks().add(block);
 
-                LoopBeginNode loopBegin = (LoopBeginNode) beginNode;
-                for (LoopEndNode end : loopBegin.loopEnds()) {
-                    Block endBlock = nodeToBlock.get(end);
-                    computeLoopBlocks(endBlock, loop);
-                }
+                    LoopBeginNode loopBegin = (LoopBeginNode) beginNode;
+                    for (LoopEndNode end : loopBegin.loopEnds()) {
+                        Block endBlock = nodeToBlock.get(end);
+                        computeLoopBlocks(endBlock, loop, stack, true);
+                    }
 
-                for (LoopExitNode exit : loopBegin.loopExits()) {
-                    Block exitBlock = nodeToBlock.get(exit);
-                    List<Block> predecessors = exitBlock.getPredecessors();
-                    assert predecessors.size() == 1;
-                    computeLoopBlocks(predecessors.get(0), loop);
-                    loop.exits.add(exitBlock);
-                }
-                List<Block> unexpected = new LinkedList<>();
-                for (Block b : loop.blocks) {
-                    for (Block sux : b.getSuccessors()) {
-                        if (sux.loop != loop) {
-                            BeginNode begin = sux.getBeginNode();
-                            if (!(begin instanceof LoopExitNode && ((LoopExitNode) begin).loopBegin() == loopBegin)) {
-                                Debug.log("Unexpected loop exit with %s, including whole branch in the loop", sux);
-                                unexpected.add(sux);
+                    if (graph.getGuardsStage() != GuardsStage.AFTER_FSA) {
+                        for (LoopExitNode exit : loopBegin.loopExits()) {
+                            Block exitBlock = nodeToBlock.get(exit);
+                            assert exitBlock.getPredecessorCount() == 1;
+                            computeLoopBlocks(exitBlock.getFirstPredecessor(), loop, stack, true);
+                            loop.getExits().add(exitBlock);
+                        }
+
+                        // The following loop can add new blocks to the end of the loop's block
+                        // list.
+                        int size = loop.getBlocks().size();
+                        for (int i = 0; i < size; ++i) {
+                            Block b = loop.getBlocks().get(i);
+                            for (Block sux : b.getSuccessors()) {
+                                if (sux.loop != loop) {
+                                    AbstractBeginNode begin = sux.getBeginNode();
+                                    if (!(begin instanceof LoopExitNode && ((LoopExitNode) begin).loopBegin() == loopBegin)) {
+                                        Debug.log(Debug.VERBOSE_LOG_LEVEL, "Unexpected loop exit with %s, including whole branch in the loop", sux);
+                                        computeLoopBlocks(sux, loop, stack, false);
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                for (Block b : unexpected) {
-                    addBranchToLoop(loop, b);
+            }
+        }
+
+        /*
+         * Compute the loop exit blocks after FSA.
+         */
+        if (graph.getGuardsStage() == GuardsStage.AFTER_FSA) {
+            for (Block b : reversePostOrder) {
+                if (b.getLoop() != null) {
+                    for (Block succ : b.getSuccessors()) {
+                        // if the loop of the succ is a different one (or none)
+                        if (b.getLoop() != succ.getLoop()) {
+                            // and the succ loop is not a child loop of the curr one
+                            if (succ.getLoop() == null) {
+                                // we might exit multiple loops if b.loops is not a loop at depth 0
+                                Loop<Block> curr = b.getLoop();
+                                while (curr != null) {
+                                    curr.getExits().add(succ);
+                                    curr = curr.getParent();
+                                }
+                            } else {
+                                /*
+                                 * succ also has a loop, might be a child loop
+                                 *
+                                 * if it is a child loop we do not exit a loop. if it is a loop
+                                 * different than b.loop and not a child loop it must be a parent
+                                 * loop, thus we exit all loops between b.loop and succ.loop
+                                 *
+                                 * if we exit multiple loops immediately after each other the
+                                 * bytecode parser might generate loop exit nodes after another and
+                                 * the CFG will identify them as separate blocks, we just take the
+                                 * first one and exit all loops at this one
+                                 */
+                                if (succ.getLoop().getParent() != b.getLoop()) {
+                                    assert succ.getLoop().getDepth() < b.getLoop().getDepth();
+                                    // b.loop must not be a transitive parent of succ.loop
+                                    assert !Loop.transitiveParentLoop(succ.getLoop(), b.getLoop());
+                                    Loop<Block> curr = b.getLoop();
+                                    while (curr != null && curr != succ.getLoop()) {
+                                        curr.getExits().add(succ);
+                                        curr = curr.getParent();
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
-        loops = loopsList.toArray(new Loop[loopsList.size()]);
+
     }
 
-    private static void addBranchToLoop(Loop l, Block b) {
-        if (l.blocks.contains(b)) {
-            return;
-        }
-        l.blocks.add(b);
-        b.loop = l;
-        for (Block sux : b.getSuccessors()) {
-            addBranchToLoop(l, sux);
-        }
-    }
+    private static void computeLoopBlocks(Block start, Loop<Block> loop, Block[] stack, boolean usePred) {
+        if (start.loop != loop) {
+            start.loop = loop;
+            stack[0] = start;
+            loop.getBlocks().add(start);
+            int tos = 0;
+            do {
+                Block block = stack[tos--];
 
-    private static void computeLoopBlocks(Block block, Loop loop) {
-        if (block.getLoop() == loop) {
-            return;
-        }
-        assert block.loop == loop.parent;
-        block.loop = loop;
-
-        assert !loop.blocks.contains(block);
-        loop.blocks.add(block);
-
-        if (block != loop.header) {
-            for (Block pred : block.getPredecessors()) {
-                computeLoopBlocks(pred, loop);
-            }
-        }
-    }
-
-    private void computeDominators() {
-        assert reversePostOrder[0].getPredecessors().size() == 0 : "start block has no predecessor and therefore no dominator";
-        for (int i = 1; i < reversePostOrder.length; i++) {
-            Block block = reversePostOrder[i];
-            List<Block> predecessors = block.getPredecessors();
-            assert predecessors.size() > 0;
-
-            Block dominator = predecessors.get(0);
-            for (int j = 1; j < predecessors.size(); j++) {
-                Block pred = predecessors.get(j);
-                if (!pred.isLoopEnd()) {
-                    dominator = commonDominator(dominator, pred);
+                // Add predecessors or successors to the loop.
+                for (Block b : (usePred ? block.getPredecessors() : block.getSuccessors())) {
+                    if (b.loop != loop) {
+                        stack[++tos] = b;
+                        b.loop = loop;
+                        loop.getBlocks().add(b);
+                    }
                 }
-            }
-            setDominator(block, dominator);
+            } while (tos >= 0);
         }
     }
 
-    private static void setDominator(Block block, Block dominator) {
-        block.dominator = dominator;
-        if (dominator.dominated == null) {
-            dominator.dominated = new ArrayList<>();
-        }
-        dominator.dominated.add(block);
-    }
+    public void computePostdominators() {
 
-    public static Block commonDominator(Block a, Block b) {
-        Block iterA = a;
-        Block iterB = b;
-        while (iterA != iterB) {
-            if (iterA.getId() > iterB.getId()) {
-                iterA = iterA.getDominator();
-            } else {
-                assert iterB.getId() > iterA.getId();
-                iterB = iterB.getDominator();
-            }
-        }
-        return iterA;
-    }
+        Block[] reversePostOrderTmp = this.reversePostOrder;
 
-    private void computePostdominators() {
-        for (Block block : postOrder()) {
+        outer: for (int j = reversePostOrderTmp.length - 1; j >= 0; --j) {
+            Block block = reversePostOrderTmp[j];
             if (block.isLoopEnd()) {
                 // We do not want the loop header registered as the postdominator of the loop end.
                 continue;
             }
-            Block postdominator = null;
+            if (block.getSuccessorCount() == 0) {
+                // No successors => no postdominator.
+                continue;
+            }
+            Block firstSucc = block.getSuccessors()[0];
+            if (block.getSuccessorCount() == 1) {
+                block.postdominator = firstSucc;
+                continue;
+            }
+            Block postdominator = firstSucc;
             for (Block sux : block.getSuccessors()) {
-                if (sux.isExceptionEntry()) {
-                    // We ignore exception handlers.
-                } else if (postdominator == null) {
-                    postdominator = sux;
-                } else {
-                    postdominator = commonPostdominator(postdominator, sux);
+                postdominator = commonPostdominator(postdominator, sux);
+                if (postdominator == null) {
+                    // There is a dead end => no postdominator available.
+                    continue outer;
                 }
             }
+            assert !Arrays.asList(block.getSuccessors()).contains(postdominator) : "Block " + block + " has a wrong post dominator: " + postdominator;
             block.postdominator = postdominator;
         }
     }
@@ -364,5 +518,9 @@ public class ControlFlowGraph {
             }
         }
         return iterA;
+    }
+
+    public void setNodeToBlock(NodeMap<Block> nodeMap) {
+        this.nodeToBlock = nodeMap;
     }
 }

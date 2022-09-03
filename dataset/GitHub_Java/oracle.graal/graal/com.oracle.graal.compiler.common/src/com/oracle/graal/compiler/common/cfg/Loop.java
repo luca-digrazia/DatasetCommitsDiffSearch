@@ -23,24 +23,25 @@
 
 package com.oracle.graal.compiler.common.cfg;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
-public abstract class Loop<T extends AbstractBlock<T>> {
+public abstract class Loop<T extends AbstractBlockBase<T>> {
 
-    public final Loop<T> parent;
-    public final List<Loop<T>> children;
+    private final Loop<T> parent;
+    private final List<Loop<T>> children;
 
-    public final int depth;
-    public final int index;
-    public final T header;
-    public final List<T> blocks;
-    public final List<T> exits;
+    private final int depth;
+    private final int index;
+    private final T header;
+    private final List<T> blocks;
+    private final List<T> exits;
 
     protected Loop(Loop<T> parent, int index, T header) {
         this.parent = parent;
         if (parent != null) {
-            this.depth = parent.depth + 1;
-            parent.children.add(this);
+            this.depth = parent.getDepth() + 1;
+            parent.getChildren().add(this);
         } else {
             this.depth = 1;
         }
@@ -55,6 +56,53 @@ public abstract class Loop<T extends AbstractBlock<T>> {
 
     @Override
     public String toString() {
-        return "loop " + index + " depth " + depth + (parent != null ? " outer " + parent.index : "");
+        return "loop " + index + " depth " + getDepth() + (parent != null ? " outer " + parent.index : "");
+    }
+
+    public Loop<T> getParent() {
+        return parent;
+    }
+
+    public List<Loop<T>> getChildren() {
+        return children;
+    }
+
+    public int getDepth() {
+        return depth;
+    }
+
+    public int getIndex() {
+        return index;
+    }
+
+    public T getHeader() {
+        return header;
+    }
+
+    public List<T> getBlocks() {
+        return blocks;
+    }
+
+    public List<T> getExits() {
+        return exits;
+    }
+
+    /**
+     * Determines if one loop is a transitive parent of another loop.
+     *
+     * @param childLoop The loop for which parentLoop might be a transitive parent loop.
+     * @param parentLoop The loop which might be a transitive parent loop of child loop.
+     * @return {@code true} if parentLoop is a (transitive) parent loop of childLoop, {@code false}
+     *         otherwise
+     */
+    public static <T extends AbstractBlockBase<T>> boolean transitiveParentLoop(Loop<T> childLoop, Loop<T> parentLoop) {
+        Loop<T> curr = childLoop;
+        while (curr != null) {
+            if (curr == parentLoop) {
+                return true;
+            }
+            curr = curr.getParent();
+        }
+        return false;
     }
 }
