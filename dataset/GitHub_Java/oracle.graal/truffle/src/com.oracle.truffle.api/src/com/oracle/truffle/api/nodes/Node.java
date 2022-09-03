@@ -495,14 +495,9 @@ public abstract class Node implements NodeInterface, Cloneable {
         return null;
     }
 
-    protected void splitCandidate() {
+    public void splitCandidate() {
         CompilerAsserts.neverPartOfCompilation();
         Node.ACCESSOR.nodes().splitCandidate(this);
-    }
-    protected void reportNodeCostChange(NodeCost oldCost, NodeCost newCost) {
-        if (oldCost.compareTo(newCost) < 0 && newCost == NodeCost.POLYMORPHIC) {
-            splitCandidate();
-        }
     }
 
     /**
