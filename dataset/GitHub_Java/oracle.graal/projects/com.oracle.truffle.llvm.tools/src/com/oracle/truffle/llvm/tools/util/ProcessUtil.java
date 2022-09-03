@@ -29,45 +29,68 @@
  */
 package com.oracle.truffle.llvm.tools.util;
 
-import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.util.concurrent.TimeUnit;
 
 public class ProcessUtil {
 
+    private static final int BUFFER_SIZE = 1024;
     private static final int PROCESS_WAIT_TIMEOUT = 5000;
 
+    /**
+     * This class represents the result of a native command executed by the operating system.
+     */
     public static final class ProcessResult {
 
         private final String originalCommand;
         private final String stdErr;
-        private final String stdInput;
+        private final String stdOutput;
         private final int returnValue;
 
         private ProcessResult(String originalCommand, int returnValue, String stdErr, String stdInput) {
             this.originalCommand = originalCommand;
             this.returnValue = returnValue;
             this.stdErr = stdErr;
-            this.stdInput = stdInput;
+            this.stdOutput = stdInput;
         }
 
+        /**
+         * Gets the Standard error stream of the executed native command.
+         *
+         * @return <code>stderr</code> as a string
+         */
         public String getStdErr() {
             return stdErr;
         }
 
-        public String getStdInput() {
-            return stdInput;
+        /**
+         * Gets the Standard output stream of the executed native command.
+         *
+         * @return <code>stdout</code> as a string
+         */
+        public String getStdOutput() {
+            return stdOutput;
         }
 
+        /**
+         * Gets the return value of the executed native command.
+         *
+         * @return <code>stderr</code> as a string
+         */
         public int getReturnValue() {
             return returnValue;
         }
 
         @Override
         public String toString() {
-            return originalCommand + ": " + returnValue;
+            StringBuilder sb = new StringBuilder();
+            sb.append("command : " + originalCommand + "\n");
+            sb.append("stderr: " + stdErr + "\n");
+            sb.append("stdout: " + stdOutput + "\n");
+            sb.append("return value: " + returnValue + "\n");
+            return sb.toString();
         }
 
     }
@@ -116,6 +139,7 @@ public class ProcessUtil {
             String readError = readStreamAndClose(process.getErrorStream());
             String inputStream = readStreamAndClose(process.getInputStream());
             int llvmResult = process.exitValue();
+            process.destroyForcibly();
             return new ProcessResult(command, llvmResult, readError, inputStream);
         } catch (Exception e) {
             throw new RuntimeException(command + " ", e);
@@ -129,24 +153,15 @@ public class ProcessUtil {
     }
 
     public static String readStreamAndClose(InputStream inputStream) throws IOException {
-        final BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            sb.append(line);
+        final ByteArrayOutputStream result = new ByteArrayOutputStream();
+        final byte[] buffer = new byte[BUFFER_SIZE];
+        int length;
+        while ((length = inputStream.read(buffer)) != -1) {
+            result.write(buffer, 0, length);
         }
-        reader.close();
-        return sb.toString();
-    }
-
-    public static String readStream(InputStream inputStream) throws IOException {
-        final BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            sb.append(line);
-        }
-        return sb.toString();
+        inputStream.close();
+        result.close();
+        return result.toString();
     }
 
 }
