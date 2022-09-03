@@ -24,18 +24,11 @@
  */
 package com.oracle.truffle.tools.chromeinspector.server;
 
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.io.PrintStream;
-import java.io.PrintWriter;
-import java.io.PushbackInputStream;
 import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -123,7 +116,7 @@ public final class WebSocketServer extends NanoWSD {
                 info.put("description", "GraalVM");
                 info.put("faviconUrl", "https://assets-cdn.github.com/images/icons/emoji/unicode/1f680.png");
                 String ws = getHostname() + ":" + getListeningPort() + path;
-                info.put("devtoolsFrontendUrl", "chrome-devtools://devtools/bundled/inspector.html?experiments=true&v8only=true&ws=" + ws);
+                info.put("devtoolsFrontendUrl", "chrome-devtools://devtools/bundled/inspector.html?ws=" + ws);
                 info.put("id", path.substring(1));
                 info.put("title", "GraalVM");
                 info.put("type", "node");
@@ -164,34 +157,6 @@ public final class WebSocketServer extends NanoWSD {
         } else {
             return new ClosedWebSocket(handshake);
         }
-    }
-
-    @Override
-    protected ClientHandler createClientHandler(Socket finalAccept, InputStream inputStream) {
-        PushbackInputStream pbInputStream = new PushbackInputStream(inputStream, 3);
-        try {
-            byte[] buf = new byte[3];
-            pbInputStream.read(buf);
-            String text = new String(buf);
-            pbInputStream.unread(buf);
-            if (!"GET".equals(text)) {
-                try (OutputStream outputStream = finalAccept.getOutputStream()) {
-                    ContentType contentType = new ContentType(NanoHTTPD.MIME_PLAINTEXT);
-                    PrintWriter pw = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream, contentType.getEncoding())), false);
-                    pw.append("HTTP/1.1 ").append(Response.Status.BAD_REQUEST.getDescription()).append(" \r\n");
-                    String mimeType = contentType.getContentTypeHeader();
-                    if (mimeType != null) {
-                        pw.append("Content-Type: ").append(mimeType).append("\r\n");
-                    }
-                    pw.append("\r\n");
-                    pw.append("WebSockets request was expected");
-                    pw.flush();
-                }
-                return null;
-            }
-        } catch (IOException ex) {
-        }
-        return new ClientHandler(pbInputStream, finalAccept);
     }
 
     private class InspectWebSocket extends NanoWSD.WebSocket {
