@@ -317,7 +317,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     public void notifyTransferToInterpreter() {
         CompilerAsserts.neverPartOfCompilation();
         if (TraceTruffleTransferToInterpreter.getValue()) {
-            TraceTransferToInterpreterHelper.traceTransferToInterpreter(this, getVMConfig());
+            TraceTraceTransferToInterpreterHelper.traceTransferToInterpreter(this, getVMConfig());
         }
     }
 
@@ -341,7 +341,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         return new HotSpotNativeFunctionInterface(getHotSpotProviders(), factory, backend, config.dllLoad, config.dllLookup, config.rtldDefault);
     }
 
-    private static class TraceTransferToInterpreterHelper {
+    private static class TraceTraceTransferToInterpreterHelper {
         private static final long THREAD_EETOP_OFFSET;
 
         static {
@@ -381,7 +381,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
                     sourceSection = root.getSourceSection();
                 }
 
-                if (sourceSection == null || sourceSection.getSource() == null) {
+                if (sourceSection == null) {
                     builder.append("(Unknown)");
                 } else {
                     builder.append("(").append(formatPath(sourceSection)).append(":").append(sourceSection.getStartLine()).append(")");
@@ -404,17 +404,17 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         }
 
         private static String formatPath(SourceSection sourceSection) {
-            if (sourceSection.getSource().getPath() != null) {
-                Path path = FileSystems.getDefault().getPath(".").toAbsolutePath();
-                Path filePath = FileSystems.getDefault().getPath(sourceSection.getSource().getPath()).toAbsolutePath();
+            Path path = FileSystems.getDefault().getPath(".").toAbsolutePath();
+            Path filePath = FileSystems.getDefault().getPath(sourceSection.getSource().getPath()).toAbsolutePath();
 
-                try {
-                    return path.relativize(filePath).toString();
-                } catch (IllegalArgumentException e) {
-                    // relativization failed
-                }
+            String pathString;
+            try {
+                pathString = path.relativize(filePath).toString();
+            } catch (IllegalArgumentException e) {
+                // relativization failed
+                pathString = sourceSection.getSource().getName();
             }
-            return sourceSection.getSource().getName();
+            return pathString;
         }
 
         private static void logTransferToInterpreter(final HotSpotTruffleRuntime runtime) {
