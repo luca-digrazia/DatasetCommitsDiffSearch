@@ -32,6 +32,7 @@ import static com.oracle.graal.hotspot.CompileTheWorldOptions.CompileTheWorldMet
 import static com.oracle.graal.hotspot.CompileTheWorldOptions.CompileTheWorldStartAt;
 import static com.oracle.graal.hotspot.CompileTheWorldOptions.CompileTheWorldStopAt;
 import static com.oracle.graal.hotspot.CompileTheWorldOptions.CompileTheWorldVerbose;
+import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 
 import java.io.Closeable;
 import java.io.File;
@@ -95,6 +96,7 @@ import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.runtime.JVMCI;
@@ -768,7 +770,7 @@ public final class CompileTheWorld {
         if (Modifier.isAbstract(modifiers) || Modifier.isNative(modifiers)) {
             return false;
         }
-        GraalHotSpotVMConfig c = compiler.getGraalRuntime().getVMConfig();
+        HotSpotVMConfig c = config();
         if (c.dontCompileHugeMethods && javaMethod.getCodeSize() > c.hugeMethodLimit) {
             println(verbose || methodFilters != null,
                             String.format("CompileTheWorld (%d) : Skipping huge method %s (use -XX:-DontCompileHugeMethods or -XX:HugeMethodLimit=%d to include it)", classFileCounter,
