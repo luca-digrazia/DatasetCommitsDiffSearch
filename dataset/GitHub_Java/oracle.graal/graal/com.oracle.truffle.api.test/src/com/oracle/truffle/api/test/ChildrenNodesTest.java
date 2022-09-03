@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,15 +34,17 @@ import com.oracle.truffle.api.nodes.*;
  * <h3>Creating an Array of Children Nodes</h3>
  *
  * <p>
- * An array of children nodes can be used as a field in a parent node. The field has to be annotated with
- * {@link com.oracle.truffle.api.nodes.Node.Children} and must be declared private and final. Before assigning the field
- * in the parent node constructor, {@link Node#adoptChildren} must be called in order to update the parent pointers in
- * the child nodes. After filling the array with its first values, it must never be changed. It is only possible to call
- * {@link Node#replace} on a child node.
+ * An array of children nodes can be used as a field in a parent node. The field has to be annotated
+ * with {@link com.oracle.truffle.api.nodes.Node.Children} and must be declared private and final.
+ * Before assigning the field in the parent node constructor, {@link Node#adoptChildren} must be
+ * called in order to update the parent pointers in the child nodes. After filling the array with
+ * its first values, it must never be changed. It is only possible to call {@link Node#replace} on a
+ * child node.
  * </p>
  *
  * <p>
- * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.test.FinalFieldTest}.
+ * The next part of the Truffle API introduction is at
+ * {@link com.oracle.truffle.api.test.FinalFieldTest}.
  * </p>
  */
 public class ChildrenNodesTest {
@@ -53,13 +55,13 @@ public class ChildrenNodesTest {
         TestChildNode firstChild = new TestChildNode();
         TestChildNode secondChild = new TestChildNode();
         TestRootNode rootNode = new TestRootNode(new TestChildNode[]{firstChild, secondChild});
+        CallTarget target = runtime.createCallTarget(rootNode);
         Assert.assertEquals(rootNode, firstChild.getParent());
         Assert.assertEquals(rootNode, secondChild.getParent());
         Iterator<Node> iterator = rootNode.getChildren().iterator();
         Assert.assertEquals(firstChild, iterator.next());
         Assert.assertEquals(secondChild, iterator.next());
         Assert.assertFalse(iterator.hasNext());
-        CallTarget target = runtime.createCallTarget(rootNode);
         Object result = target.call();
         Assert.assertEquals(42, result);
     }
@@ -69,7 +71,8 @@ public class ChildrenNodesTest {
         @Children private final TestChildNode[] children;
 
         public TestRootNode(TestChildNode[] children) {
-            this.children = adoptChildren(children);
+            super(null);
+            this.children = children;
         }
 
         @Override
@@ -83,9 +86,59 @@ public class ChildrenNodesTest {
     }
 
     class TestChildNode extends Node {
+
+        public TestChildNode() {
+            super(null);
+        }
+
         public int execute() {
             return 21;
         }
     }
-}
 
+    @Test
+    public void testMultipleChildrenFields() {
+        TruffleRuntime runtime = Truffle.getRuntime();
+        TestChildNode firstChild = new TestChildNode();
+        TestChildNode secondChild = new TestChildNode();
+        TestChildNode thirdChild = new TestChildNode();
+        TestChildNode forthChild = new TestChildNode();
+        TestRootNode rootNode = new TestRoot2Node(new TestChildNode[]{firstChild, secondChild}, new TestChildNode[]{thirdChild, forthChild});
+        CallTarget target = runtime.createCallTarget(rootNode);
+        Assert.assertEquals(rootNode, firstChild.getParent());
+        Assert.assertEquals(rootNode, secondChild.getParent());
+        Assert.assertEquals(rootNode, thirdChild.getParent());
+        Assert.assertEquals(rootNode, forthChild.getParent());
+        Iterator<Node> iterator = rootNode.getChildren().iterator();
+        Assert.assertEquals(firstChild, iterator.next());
+        Assert.assertEquals(secondChild, iterator.next());
+        Assert.assertEquals(thirdChild, iterator.next());
+        Assert.assertEquals(forthChild, iterator.next());
+        Assert.assertFalse(iterator.hasNext());
+        Object result = target.call();
+        Assert.assertEquals(2 * 42, result);
+    }
+
+    class TestRoot2Node extends TestRootNode {
+        @Children private final TestChildNode[] children1;
+        @Children private final TestChildNode[] children2;
+
+        public TestRoot2Node(TestChildNode[] children1, TestChildNode[] children2) {
+            super(new TestChildNode[0]);
+            this.children1 = children1;
+            this.children2 = children2;
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            int sum = 0;
+            for (int i = 0; i < children1.length; ++i) {
+                sum += children1[i].execute();
+            }
+            for (int i = 0; i < children2.length; ++i) {
+                sum += children2[i].execute();
+            }
+            return sum;
+        }
+    }
+}
