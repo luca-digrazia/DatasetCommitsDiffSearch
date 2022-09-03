@@ -34,7 +34,7 @@ import com.oracle.graal.nodes.type.*;
  * Represents an atomic compare-and-swap operation The result is a boolean that contains whether the
  * value matched the expected value.
  */
-public class CompareAndSwapNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
+public class CompareAndSwapNode extends AbstractStateSplit implements Lowerable, MemoryCheckpoint.Single {
 
     @Input private ValueNode object;
     @Input private ValueNode offset;
@@ -79,7 +79,7 @@ public class CompareAndSwapNode extends AbstractMemoryCheckpoint implements Lowe
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+        tool.getRuntime().lower(this, tool);
     }
 
     // specialized on value type until boxing/unboxing is sorted out in intrinsification
