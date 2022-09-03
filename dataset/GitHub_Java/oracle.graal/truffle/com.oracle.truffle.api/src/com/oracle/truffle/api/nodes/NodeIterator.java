@@ -30,13 +30,14 @@ import java.util.NoSuchElementException;
 final class NodeIterator implements Iterator<Node> {
 
     private final NodeClass nodeClass;
-    private final Iterator<? extends Object> fields;
+    private final Object[] fields;
     private final Node node;
     private Node next;
+    private int fieldsIndex;
     private int childrenIndex;
     private Object[] children;
 
-    NodeIterator(NodeClass nodeClass, Node node, Iterator<? extends Object> fields) {
+    NodeIterator(NodeClass nodeClass, Node node, Object[] fields) {
         this.nodeClass = nodeClass;
         this.fields = fields;
         this.node = node;
@@ -47,11 +48,13 @@ final class NodeIterator implements Iterator<Node> {
         if (advanceChildren()) {
             return;
         }
-        while (fields.hasNext()) {
-            Object field = fields.next();
+        while (fieldsIndex < fields.length) {
+            Object field = fields[fieldsIndex++];
             if (nodeClass.isChildField(field)) {
                 next = (Node) nodeClass.getFieldObject(field, node);
-                return;
+                if (next != null) {
+                    return;
+                }
             } else if (nodeClass.isChildrenField(field)) {
                 children = (Object[]) nodeClass.getFieldObject(field, node);
                 childrenIndex = 0;
@@ -68,15 +71,19 @@ final class NodeIterator implements Iterator<Node> {
     private boolean advanceChildren() {
         if (children == null) {
             return false;
-        } else if (childrenIndex < children.length) {
+        }
+
+        while (childrenIndex < children.length) {
             next = (Node) children[childrenIndex];
             childrenIndex++;
-            return true;
-        } else {
-            children = null;
-            childrenIndex = 0;
-            return false;
+            if (next != null) {
+                return true;
+            }
         }
+
+        children = null;
+        childrenIndex = 0;
+        return false;
     }
 
     public boolean hasNext() {
