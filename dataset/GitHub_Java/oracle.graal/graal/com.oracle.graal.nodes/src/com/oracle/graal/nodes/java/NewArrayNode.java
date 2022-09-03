@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,12 +40,24 @@ import com.oracle.graal.nodes.virtual.*;
 @NodeInfo
 public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableAllocation {
 
-    public NewArrayNode(ResolvedJavaType elementType, ValueNode length, boolean fillContents) {
+    /**
+     * Constructs a new NewArrayNode.
+     *
+     * @param elementType the the type of the elements of the newly created array (not the type of
+     *            the array itself).
+     * @param length the node that produces the length for this allocation.
+     * @param fillContents determines whether the array elements should be initialized to zero/null.
+     */
+    public static NewArrayNode create(ResolvedJavaType elementType, ValueNode length, boolean fillContents) {
+        return USE_GENERATED_NODES ? new NewArrayNodeGen(elementType, length, fillContents) : new NewArrayNode(elementType, length, fillContents);
+    }
+
+    protected NewArrayNode(ResolvedJavaType elementType, ValueNode length, boolean fillContents) {
         super(StampFactory.exactNonNull(elementType.getArrayClass()), length, fillContents);
     }
 
     @NodeIntrinsic
-    private static native Object newArray(@ConstantNodeParameter Class<?> elementType, int length, @ConstantNodeParameter boolean fillContents);
+    static private native Object newArray(@ConstantNodeParameter Class<?> elementType, int length, @ConstantNodeParameter boolean fillContents);
 
     public static Object newUninitializedArray(Class<?> elementType, int length) {
         return newArray(elementType, length, false);
@@ -63,7 +75,7 @@ public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableA
     @Override
     public void virtualize(VirtualizerTool tool) {
         if (length().asConstant() != null) {
-            final int constantLength = length().asJavaConstant().asInt();
+            final int constantLength = length().asConstant().asInt();
             if (constantLength >= 0 && constantLength < tool.getMaximumEntryCount()) {
                 ValueNode[] state = new ValueNode[constantLength];
                 ConstantNode defaultForKind = constantLength == 0 ? null : defaultElementValue();
@@ -78,7 +90,7 @@ public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableA
     }
 
     protected VirtualArrayNode createVirtualArrayNode(int constantLength) {
-        return new VirtualArrayNode(elementType(), constantLength);
+        return VirtualArrayNode.create(elementType(), constantLength);
     }
 
     /* Factored out in a separate method so that subclasses can override it. */
