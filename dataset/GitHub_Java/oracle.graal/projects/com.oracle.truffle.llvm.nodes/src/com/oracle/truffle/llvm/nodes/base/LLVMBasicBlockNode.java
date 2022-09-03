@@ -101,7 +101,15 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
                 if (exceptionSourceSection == null) {
                     throw t;
                 } else {
-                    throw new RuntimeException("LLVM error in " + statement.getSourceDescription(), t);
+                    StringBuilder messageBuilder = new StringBuilder();
+                    messageBuilder.append("LLVM error in ");
+                    String sourceDescription = statement.getSourceDescription();
+                    if (sourceDescription == null) {
+                        messageBuilder.append(getRootNode().getName());
+                    } else {
+                        messageBuilder.append(sourceDescription);
+                    }
+                    throw new RuntimeException(messageBuilder.toString(), t);
                 }
             }
         }
@@ -109,7 +117,10 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
 
     @TruffleBoundary
     private static void trace(LLVMExpressionNode statement) {
-        LLVMLogger.print(LLVMOptions.DEBUG.traceExecution()).accept(("[sulong] " + statement.getSourceDescription()));
+        SourceSection section = statement.getEncapsulatingSourceSection();
+        String name = section == null ? "null" : section.getSource().getName();
+        LLVMLogger.print(LLVMOptions.DEBUG.traceExecution()).accept(
+                        String.format("[sulong] %s in %s", statement.getSourceDescription(), name));
     }
 
     @Override
@@ -117,9 +128,9 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
         LLVMFunctionStartNode functionStartNode = NodeUtil.findParent(this, LLVMFunctionStartNode.class);
         assert functionStartNode != null : getParent().getClass();
         if (blockId == 0) {
-            return String.format("first basic block in %s", functionStartNode.getName());
+            return String.format("first basic block in function %s", functionStartNode.getName());
         } else {
-            return String.format("basic block %s in %s", blockName, functionStartNode.getName());
+            return String.format("basic block %s in function %s", blockName, functionStartNode.getName());
         }
     }
 
