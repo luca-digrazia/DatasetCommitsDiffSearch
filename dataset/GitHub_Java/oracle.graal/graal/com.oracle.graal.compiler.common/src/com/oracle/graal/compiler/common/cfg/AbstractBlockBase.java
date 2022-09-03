@@ -22,16 +22,21 @@
  */
 package com.oracle.graal.compiler.common.cfg;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
 
-public abstract class AbstractBlockBase<T extends AbstractBlock<T>> implements AbstractBlock<T> {
+public abstract class AbstractBlockBase<T extends AbstractBlockBase<T>> {
 
     protected int id;
+    protected int domDepth;
 
-    protected List<T> predecessors;
-    protected List<T> successors;
+    protected T[] predecessors;
+    protected T[] successors;
 
     private T dominator;
+    private List<T> dominated;
+    private int domNumber;
+    private int maxChildDomNumber;
 
     private boolean align;
     private int linearScanNumber;
@@ -39,6 +44,24 @@ public abstract class AbstractBlockBase<T extends AbstractBlock<T>> implements A
     protected AbstractBlockBase() {
         this.id = AbstractControlFlowGraph.BLOCK_ID_INITIAL;
         this.linearScanNumber = -1;
+        this.domNumber = -1;
+        this.maxChildDomNumber = -1;
+    }
+
+    public void setDominatorNumber(int domNumber) {
+        this.domNumber = domNumber;
+    }
+
+    public void setMaxChildDomNumber(int maxChildDomNumber) {
+        this.maxChildDomNumber = maxChildDomNumber;
+    }
+
+    public int getDominatorNumber() {
+        return domNumber;
+    }
+
+    public int getMaxChildDominatorNumber() {
+        return this.maxChildDomNumber;
     }
 
     public int getId() {
@@ -49,19 +72,19 @@ public abstract class AbstractBlockBase<T extends AbstractBlock<T>> implements A
         this.id = id;
     }
 
-    public List<T> getPredecessors() {
+    public T[] getPredecessors() {
         return predecessors;
     }
 
-    public void setPredecessors(List<T> predecessors) {
+    public void setPredecessors(T[] predecessors) {
         this.predecessors = predecessors;
     }
 
-    public List<T> getSuccessors() {
+    public T[] getSuccessors() {
         return successors;
     }
 
-    public void setSuccessors(List<T> successors) {
+    public void setSuccessors(T[] successors) {
         this.successors = successors;
     }
 
@@ -71,6 +94,22 @@ public abstract class AbstractBlockBase<T extends AbstractBlock<T>> implements A
 
     public void setDominator(T dominator) {
         this.dominator = dominator;
+        this.domDepth = dominator.domDepth + 1;
+    }
+
+    public int getDominatorDepth() {
+        return domDepth;
+    }
+
+    public List<T> getDominated() {
+        if (dominated == null) {
+            return Collections.emptyList();
+        }
+        return dominated;
+    }
+
+    public void setDominated(List<T> blocks) {
+        dominated = blocks;
     }
 
     @Override
@@ -79,11 +118,11 @@ public abstract class AbstractBlockBase<T extends AbstractBlock<T>> implements A
     }
 
     public int getPredecessorCount() {
-        return getPredecessors().size();
+        return getPredecessors().length;
     }
 
     public int getSuccessorCount() {
-        return getSuccessors().size();
+        return getSuccessors().length;
     }
 
     public int getLinearScanNumber() {
@@ -101,4 +140,22 @@ public abstract class AbstractBlockBase<T extends AbstractBlock<T>> implements A
     public void setAlign(boolean align) {
         this.align = align;
     }
+
+    public abstract boolean isExceptionEntry();
+
+    public abstract Loop<T> getLoop();
+
+    public abstract int getLoopDepth();
+
+    public abstract void delete();
+
+    public abstract boolean isLoopEnd();
+
+    public abstract boolean isLoopHeader();
+
+    public abstract T getPostdominator();
+
+    public abstract double probability();
+
+    public abstract T getDominator(int distance);
 }
