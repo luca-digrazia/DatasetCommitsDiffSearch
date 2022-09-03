@@ -317,10 +317,8 @@ public final class DebuggerTester implements AutoCloseable {
                 }
             } else if (event instanceof SuspendedEvent) {
                 throw new AssertionError("Expected done but got " + event);
-            } else if (event instanceof Throwable) {
-                throw new AssertionError("Got exception", (Throwable) event);
             } else {
-                throw new AssertionError("Got unknown: " + event);
+                throw new AssertionError("Got unknown");
             }
         } finally {
             source = null;
