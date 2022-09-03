@@ -22,25 +22,25 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ri.*;
 
-@NodeInfo(shortName = "Deopt", nameTemplate = "Deopt {p#reason/s}")
+@NodeInfo(shortName = "Deopt")
 public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, LIRLowerable {
 
     private String message;
-    private final DeoptimizationAction action;
-    private final DeoptimizationReason reason;
+    private final RiDeoptAction action;
+    private final RiDeoptReason reason;
     private final long leafGraphId;
 
-    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason) {
+
+    public DeoptimizeNode(RiDeoptAction action, RiDeoptReason reason) {
         this(action, reason, -1);
     }
 
-    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason, long leafGraphId) {
+    public DeoptimizeNode(RiDeoptAction action, RiDeoptReason reason, long leafGraphId) {
         super(StampFactory.forVoid());
         this.action = action;
         this.reason = reason;
@@ -55,11 +55,11 @@ public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, 
         return message;
     }
 
-    public DeoptimizationAction action() {
+    public RiDeoptAction action() {
         return action;
     }
 
-    public DeoptimizationReason reason() {
+    public RiDeoptReason reason() {
         return reason;
     }
 
@@ -72,8 +72,9 @@ public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, 
         gen.emitDeoptimize(action, reason, message, leafGraphId);
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void deopt(@ConstantNodeParameter
-    DeoptimizationAction action, @ConstantNodeParameter
-    DeoptimizationReason reason);
+    public static void deopt(@ConstantNodeParameter RiDeoptAction action, @ConstantNodeParameter RiDeoptReason reason) {
+        throw new UnsupportedOperationException();
+    }
 }

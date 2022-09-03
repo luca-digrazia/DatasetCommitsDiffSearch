@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ci.*;
 
 /**
  * An IsNullNode will be true if the supplied value is null, and false if it is non-null.
  */
-public final class IsNullNode extends BooleanNode implements Canonicalizable, LIRLowerable, Virtualizable {
+public final class IsNullNode extends BooleanNode implements Canonicalizable, LIRLowerable {
 
     @Input private ValueNode object;
 
@@ -45,7 +45,7 @@ public final class IsNullNode extends BooleanNode implements Canonicalizable, LI
      */
     public IsNullNode(ValueNode object) {
         super(StampFactory.condition());
-        assert object.kind() == Kind.Object : object;
+        assert object.kind() == CiKind.Object : object.kind();
         this.object = object;
     }
 
@@ -57,27 +57,20 @@ public final class IsNullNode extends BooleanNode implements Canonicalizable, LI
     @Override
     public boolean verify() {
         assertTrue(object() != null, "is null input must not be null");
-        assertTrue(object().kind() == Kind.Object, "is null input must be an object");
+        assertTrue(object().kind().isObject(), "is null input must be an object");
         return super.verify();
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        Constant constant = object().asConstant();
+        CiConstant constant = object().asConstant();
         if (constant != null) {
-            assert constant.getKind() == Kind.Object;
+            assert constant.kind == CiKind.Object;
             return ConstantNode.forBoolean(constant.isNull(), graph());
         }
         if (object.objectStamp().nonNull()) {
             return ConstantNode.forBoolean(false, graph());
         }
         return this;
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        if (tool.getVirtualState(object()) != null || tool.getMaterializedValue(object()) != null) {
-            tool.replaceWithValue(ConstantNode.forBoolean(false, graph()));
-        }
     }
 }

@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import static com.oracle.graal.graph.iterators.NodePredicates.*;
-
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -38,7 +36,7 @@ import com.oracle.max.cri.ci.*;
 public final class ValueAnchorNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType {
 
     public ValueAnchorNode(ValueNode... values) {
-        super(StampFactory.illegal(), values);
+        super(StampFactory.dependency(), values);
     }
 
     @Override
@@ -46,10 +44,8 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
         // Nothing to emit, since this node is used for structural purposes only.
     }
 
-    public void addAnchoredNode(Node value) {
-        if (!this.dependencies().contains(value)) {
-            this.dependencies().add(value);
-        }
+    public void addAnchoredValue(ValueNode value) {
+        this.dependencies().add(value);
     }
 
     @Override
@@ -57,12 +53,12 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
         if (this.predecessor() instanceof ValueAnchorNode) {
             // transfer values and remove
             ValueAnchorNode previousAnchor = (ValueAnchorNode) this.predecessor();
-            for (Node node : dependencies().nonNull().distinct()) {
-                previousAnchor.addAnchoredNode(node);
+            for (ValueNode node : dependencies().nonNull()) {
+                previousAnchor.dependencies().add(node);
             }
             return null;
         }
-        for (Node node : dependencies().nonNull().and(isNotA(BeginNode.class))) {
+        for (Node node : dependencies().nonNull()) {
             if (node instanceof ConstantNode) {
                 continue;
             }

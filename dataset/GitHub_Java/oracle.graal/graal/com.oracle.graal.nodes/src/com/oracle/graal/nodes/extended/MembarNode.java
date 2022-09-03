@@ -25,12 +25,12 @@ package com.oracle.graal.nodes.extended;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.criutils.*;
+import com.oracle.max.cri.util.*;
 
 /**
  * Creates a memory barrier.
  */
-public class MembarNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint {
+public class MembarNode extends AbstractStateSplit implements StateSplit, LIRLowerable, MemoryCheckpoint {
 
     private final int barriers;
 
@@ -49,7 +49,7 @@ public class MembarNode extends FixedWithNextNode implements LIRLowerable, Memor
 
     @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void memoryBarrier(@ConstantNodeParameter int barriers) {
+    public static void get(@ConstantNodeParameter int barriers) {
         throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
     }
 }

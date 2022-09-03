@@ -49,7 +49,7 @@ public class InsertStateAfterPlaceholderPhase extends Phase {
     protected void run(StructuredGraph graph) {
         for (ReturnNode ret : graph.getNodes(ReturnNode.class)) {
             PlaceholderNode p = graph.add(new PlaceholderNode());
-            p.setStateAfter(graph.add(new FrameState(FrameState.AFTER_BCI)));
+            p.setStateAfter(graph.add(new FrameState(null, FrameState.AFTER_BCI, 0, 0, false, false)));
             graph.addBeforeFixed(ret, p);
         }
     }

@@ -22,21 +22,20 @@
  */
 package com.oracle.graal.nodes.type;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.spi.types.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
-/**
- * A stamp is the basis for a type system over the nodes in a graph.
- */
+
 public abstract class Stamp {
 
-    private final Kind kind;
+    private final CiKind kind;
 
-    protected Stamp(Kind kind) {
+    protected Stamp(CiKind kind) {
         this.kind = kind;
     }
 
-    public Kind kind() {
+    public CiKind kind() {
         return kind;
     }
 
@@ -50,6 +49,14 @@ public abstract class Stamp {
 
     public boolean nonNull() {
         return false;
+    }
+
+    public RiResolvedType exactType() {
+        return null;
+    }
+
+    public RiResolvedType declaredType() {
+        return null;
     }
 
     public abstract boolean alwaysDistinct(Stamp other);

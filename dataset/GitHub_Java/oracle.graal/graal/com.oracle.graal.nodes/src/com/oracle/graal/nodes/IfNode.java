@@ -24,7 +24,7 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
@@ -135,7 +135,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                             if (trueValue.kind() != falseValue.kind()) {
                                 return;
                             }
-                            if (trueValue.kind() != Kind.Int && trueValue.kind() != Kind.Long) {
+                            if (trueValue.kind() != CiKind.Int && trueValue.kind() != CiKind.Long) {
                                 return;
                             }
                             if (trueValue.isConstant() && falseValue.isConstant()) {
@@ -188,7 +188,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     }
 
     @Override
-    public Negatable negate() {
+    public void negate() {
         BeginNode trueSucc = trueSuccessor();
         BeginNode falseSucc = falseSuccessor();
         setTrueSuccessor(null);
@@ -198,6 +198,5 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         double prop = branchProbability[TRUE_EDGE];
         branchProbability[TRUE_EDGE] = branchProbability[FALSE_EDGE];
         branchProbability[FALSE_EDGE] = prop;
-        return this;
     }
 }

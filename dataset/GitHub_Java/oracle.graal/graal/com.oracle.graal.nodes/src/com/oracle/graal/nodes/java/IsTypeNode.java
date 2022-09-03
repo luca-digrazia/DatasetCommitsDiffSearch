@@ -22,17 +22,18 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.JavaType.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
+import com.oracle.max.cri.ri.RiType.Representation;
 
 public final class IsTypeNode extends BooleanNode implements Canonicalizable, LIRLowerable {
 
     @Input private ValueNode objectClass;
-    private final ResolvedJavaType type;
+    private final RiResolvedType type;
 
     public ValueNode objectClass() {
         return objectClass;
@@ -41,17 +42,17 @@ public final class IsTypeNode extends BooleanNode implements Canonicalizable, LI
     /**
      * Constructs a new IsTypeNode.
      *
-     * @param objectClass the instruction producing the object to check against the given type
+     * @param object the instruction producing the object to check against the given type
      * @param type the type for this check
      */
-    public IsTypeNode(ValueNode objectClass, ResolvedJavaType type) {
+    public IsTypeNode(ValueNode objectClass, RiResolvedType type) {
         super(StampFactory.condition());
-        assert objectClass == null || objectClass.kind() == Kind.Object;
+        assert objectClass == null || objectClass.kind() == CiKind.Object;
         this.type = type;
         this.objectClass = objectClass;
     }
 
-    public ResolvedJavaType type() {
+    public RiResolvedType type() {
         return type;
     }
 
@@ -63,10 +64,10 @@ public final class IsTypeNode extends BooleanNode implements Canonicalizable, LI
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         if (objectClass().isConstant()) {
-            Constant constant = objectClass().asConstant();
-            Constant typeHub = type.getEncoding(Representation.ObjectHub);
+            CiConstant constant = objectClass().asConstant();
+            CiConstant typeHub = type.getEncoding(Representation.ObjectHub);
             assert constant.kind == typeHub.kind;
-            return ConstantNode.forBoolean(tool.runtime().areConstantObjectsEqual(constant, typeHub), graph());
+            return ConstantNode.forBoolean(constant.equivalent(typeHub), graph());
         }
         // TODO(ls) since a ReadHubNode with an exactType should canonicalize itself to a constant this should actually never happen, maybe turn into an assertion?
         if (objectClass() instanceof ReadHubNode) {

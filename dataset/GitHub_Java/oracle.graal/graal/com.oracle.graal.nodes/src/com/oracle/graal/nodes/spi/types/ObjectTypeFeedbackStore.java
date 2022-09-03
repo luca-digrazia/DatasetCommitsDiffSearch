@@ -114,8 +114,17 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
         }
 
         @Override
-        public boolean notExactType(RiResolvedType type) {
-            return false;
+        public boolean notExactType(final RiResolvedType type) {
+            return store.prove(Info.class, new BooleanPredicate<Info>() {
+                @Override
+                public boolean evaluate(Info element) {
+                    if (element instanceof ObjectTypeExact) {
+                        return ((ObjectTypeExact) element).type != type;
+                    } else {
+                        return (element instanceof Equals) && ((Equals) element).constant.isNull();
+                    }
+                }
+            });
         }
 
         @Override
@@ -129,7 +138,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
         }
 
         @Override
-        public Node dependency() {
+        public ValueNode dependency() {
             return store.dependency;
         }
     }
@@ -216,7 +225,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
 
     private final TypeFeedbackChanged changed;
 
-    private Node dependency;
+    private ValueNode dependency;
 
     private void updateDependency() {
         dependency = changed.node;

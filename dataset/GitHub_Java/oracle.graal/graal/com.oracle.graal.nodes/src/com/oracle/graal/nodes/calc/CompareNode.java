@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /* TODO (thomaswue/gdub) For high-level optimization purpose the compare node should be a boolean *value* (it is currently only a helper node)
  * But in the back-end the comparison should not always be materialized (for example in x86 the comparison result will not be in a register but in a flag)
@@ -80,9 +80,9 @@ public abstract class CompareNode extends BooleanNode implements Canonicalizable
     }
 
 
-    private ValueNode optimizeConditional(Constant constant, ConditionalNode conditionalNode, CodeCacheProvider runtime, Condition cond) {
-        Constant trueConstant = conditionalNode.trueValue().asConstant();
-        Constant falseConstant = conditionalNode.falseValue().asConstant();
+    private ValueNode optimizeMaterialize(CiConstant constant, MaterializeNode materializeNode, RiRuntime runtime, Condition cond) {
+        CiConstant trueConstant = materializeNode.trueValue().asConstant();
+        CiConstant falseConstant = materializeNode.falseValue().asConstant();
 
         if (falseConstant != null && trueConstant != null) {
             Boolean trueResult = cond.foldCondition(trueConstant, constant, runtime, unorderedIsTrue());
@@ -96,11 +96,11 @@ public abstract class CompareNode extends BooleanNode implements Canonicalizable
                 } else {
                     if (trueUnboxedResult) {
                         assert falseUnboxedResult == false;
-                        return conditionalNode.condition();
+                        return materializeNode.condition();
                     } else {
                         assert falseUnboxedResult == true;
                         negateUsages();
-                        return conditionalNode.condition();
+                        return materializeNode.condition();
 
                     }
                 }
@@ -109,7 +109,7 @@ public abstract class CompareNode extends BooleanNode implements Canonicalizable
         return this;
     }
 
-    protected ValueNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
+    protected ValueNode optimizeNormalizeCmp(CiConstant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
         throw new GraalInternalError("NormalizeCompareNode connected to %s (%s %s %s)", this, constant, normalizeNode, mirrored);
     }
 
@@ -118,14 +118,14 @@ public abstract class CompareNode extends BooleanNode implements Canonicalizable
             return ConstantNode.forBoolean(condition().foldCondition(x().asConstant(), y().asConstant(), tool.runtime(), unorderedIsTrue()), graph());
         }
         if (x().isConstant()) {
-            if (y() instanceof ConditionalNode) {
-                return optimizeConditional(x().asConstant(), (ConditionalNode) y(), tool.runtime(), condition().mirror());
+            if (y() instanceof MaterializeNode) {
+                return optimizeMaterialize(x().asConstant(), (MaterializeNode) y(), tool.runtime(), condition().mirror());
             } else if (y() instanceof NormalizeCompareNode) {
                 return optimizeNormalizeCmp(x().asConstant(), (NormalizeCompareNode) y(), true);
             }
         } else if (y().isConstant()) {
-            if (x() instanceof ConditionalNode) {
-                return optimizeConditional(y().asConstant(), (ConditionalNode) x(), tool.runtime(), condition());
+            if (x() instanceof MaterializeNode) {
+                return optimizeMaterialize(y().asConstant(), (MaterializeNode) x(), tool.runtime(), condition());
             } else if (x() instanceof NormalizeCompareNode) {
                 return optimizeNormalizeCmp(y().asConstant(), (NormalizeCompareNode) x(), false);
             }

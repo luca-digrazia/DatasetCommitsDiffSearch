@@ -62,6 +62,13 @@ public class BeginNode extends FixedWithNextNode implements StateSplit, LIRLower
     }
 
     @Override
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> debugProperties = super.getDebugProperties();
+        debugProperties.put("shortName", "B");
+        return debugProperties;
+    }
+
+    @Override
     public void simplify(SimplifierTool tool) {
         FixedNode prev = (FixedNode) this.predecessor();
         if (prev == null) {
@@ -71,7 +78,6 @@ public class BeginNode extends FixedWithNextNode implements StateSplit, LIRLower
         } else {
             // This begin node can be removed and all guards moved up to the preceding begin node.
             prepareDelete();
-            tool.addToWorkList(next());
             ((StructuredGraph) graph()).removeFixed(this);
         }
     }
@@ -137,7 +143,7 @@ public class BeginNode extends FixedWithNextNode implements StateSplit, LIRLower
     }
 
     public NodeIterable<FixedNode> getBlockNodes() {
-        return new AbstractNodeIterable<FixedNode>() {
+        return new NodeIterable<FixedNode>() {
             @Override
             public Iterator<FixedNode> iterator() {
                 return new BlockNodeIterator(BeginNode.this);

@@ -22,14 +22,11 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-/**
- * An analog to {@link WriteNode} with the additional semantics of null-checking the receiver object
- * before writing to it.
- */
 public class SafeWriteNode extends SafeAccessNode implements StateSplit, Lowerable {
 
     @Input private ValueNode value;
@@ -59,7 +56,7 @@ public class SafeWriteNode extends SafeAccessNode implements StateSplit, Lowerab
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(CiLoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) graph();
         ValueNode guard = tool.createNullCheckGuard(object(), leafGraphId());
         WriteNode write = graph.add(new WriteNode(object(), value(), location()));

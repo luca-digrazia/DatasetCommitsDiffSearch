@@ -49,25 +49,22 @@ public final class ReadHubNode extends FixedWithNextNode implements Lowerable, C
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        RiRuntime runtime = tool.runtime();
-        if (runtime != null) {
-            ObjectStamp stamp = object.objectStamp();
+        ObjectStamp stamp = object.objectStamp();
 
-            RiResolvedType exactType;
-            if (stamp.isExactType()) {
-                exactType = stamp.type();
-            } else if (stamp.type() != null && tool.assumptions() != null) {
-                exactType = stamp.type().uniqueConcreteSubtype();
-                if (exactType != null) {
-                    tool.assumptions().recordConcreteSubtype(stamp.type(), exactType);
-                }
-            } else {
-                exactType = null;
-            }
-
+        RiResolvedType exactType;
+        if (stamp.isExactType()) {
+            exactType = stamp.type();
+        } else if (stamp.type() != null && tool.assumptions() != null) {
+            exactType = stamp.type().uniqueConcreteSubtype();
             if (exactType != null) {
-                return ConstantNode.forCiConstant(exactType.getEncoding(Representation.ObjectHub), runtime, graph());
+                tool.assumptions().recordConcreteSubtype(stamp.type(), exactType);
             }
+        } else {
+            exactType = null;
+        }
+
+        if (exactType != null) {
+            return ConstantNode.forCiConstant(exactType.getEncoding(Representation.ObjectHub), tool.runtime(), graph());
         }
         return this;
     }

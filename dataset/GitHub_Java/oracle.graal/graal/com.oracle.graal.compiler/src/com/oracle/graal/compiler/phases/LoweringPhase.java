@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
@@ -31,7 +29,10 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * Processes all {@link Lowerable} nodes to do their lowering.
@@ -41,7 +42,7 @@ public class LoweringPhase extends Phase {
     private class LoweringToolBase implements CiLoweringTool {
 
         @Override
-        public ExtendedRiRuntime getRuntime() {
+        public GraalRuntime getRuntime() {
             return runtime;
         }
 
@@ -52,30 +53,30 @@ public class LoweringPhase extends Phase {
 
         @Override
         public ValueNode createNullCheckGuard(ValueNode object, long leafGraphId) {
-            return createGuard(object.graph().unique(new IsNullNode(object)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true, leafGraphId);
+            return createGuard(object.graph().unique(new IsNullNode(object)), RiDeoptReason.NullCheckException, RiDeoptAction.InvalidateReprofile, true, leafGraphId);
         }
 
         @Override
-        public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, long leafGraphId) {
+        public ValueNode createGuard(BooleanNode condition, RiDeoptReason deoptReason, RiDeoptAction action, long leafGraphId) {
             return createGuard(condition, deoptReason, action, false, leafGraphId);
         }
 
         @Override
-        public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated, long leafGraphId) {
+        public ValueNode createGuard(BooleanNode condition, RiDeoptReason deoptReason, RiDeoptAction action, boolean negated, long leafGraphId) {
             // TODO (thomaswue): Document why this must not be called on floating nodes.
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public Assumptions assumptions() {
+        public CiAssumptions assumptions() {
             return assumptions;
         }
     }
 
-    private final ExtendedRiRuntime runtime;
-    private final Assumptions assumptions;
+    private final GraalRuntime runtime;
+    private final CiAssumptions assumptions;
 
-    public LoweringPhase(ExtendedRiRuntime runtime, Assumptions assumptions) {
+    public LoweringPhase(GraalRuntime runtime, CiAssumptions assumptions) {
         this.runtime = runtime;
         this.assumptions = assumptions;
     }
@@ -95,7 +96,7 @@ public class LoweringPhase extends Phase {
             if (graph.getNewNodes(mark).filter(FixedNode.class).isEmpty()) {
                 break;
             }
-            assert graph.verify();
+            graph.verify();
             processed.grow();
         }
 
@@ -104,6 +105,27 @@ public class LoweringPhase extends Phase {
         final CiLoweringTool loweringTool = new LoweringToolBase();
         for (Node node : processed) {
             if (node instanceof Lowerable) {
+                assert !(node instanceof FixedNode) || node.predecessor() == null : node;
+                ((Lowerable) node).lower(loweringTool);
+            }
+        }
+    }
+
+    protected void run0(final StructuredGraph graph) {
+        ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, false, true, true);
+
+        NodeBitMap processed = graph.createNodeBitMap();
+        NodeBitMap activeGuards = graph.createNodeBitMap();
+        processBlock(cfg.getStartBlock(), activeGuards, processed, null);
+
+        processed.negate();
+        final CiLoweringTool loweringTool = new LoweringToolBase();
+        for (Node node : processed) {
+            if (node instanceof CheckCastNode) {
+                // This is a checkcast that was created while lowering some other node (e.g. StoreIndexed).
+                // This checkcast must now be LIR lowered.
+                // TODO (dnsimon) this is temp workaround that will be removed
+            } else if (node instanceof Lowerable) {
                 assert !(node instanceof FixedNode) || node.predecessor() == null : node;
                 ((Lowerable) node).lower(loweringTool);
             }
@@ -150,7 +172,7 @@ public class LoweringPhase extends Phase {
             }
 
             @Override
-            public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated, long leafGraphId) {
+            public ValueNode createGuard(BooleanNode condition, RiDeoptReason deoptReason, RiDeoptAction action, boolean negated, long leafGraphId) {
                 FixedNode guardAnchor = (FixedNode) getGuardAnchor();
                 if (GraalOptions.OptEliminateGuards) {
                     for (Node usage : condition.usages()) {

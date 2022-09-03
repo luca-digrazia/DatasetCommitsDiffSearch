@@ -145,7 +145,7 @@ public class StampFactory {
         return declared(type, true);
     }
 
-    public static Stamp declared(RiResolvedType type, boolean nonNull) {
+    private static Stamp declared(RiResolvedType type, boolean nonNull) {
         assert type != null;
         assert type.kind(false) == CiKind.Object;
         RiResolvedType exact = type.exactType();

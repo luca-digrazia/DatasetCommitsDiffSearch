@@ -22,17 +22,18 @@
  */
 package com.oracle.graal.nodes.type;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 
 public class ObjectStamp extends Stamp {
 
-    private final ResolvedJavaType type;
+    private final RiResolvedType type;
     private final boolean exactType;
     private final boolean nonNull;
 
-    public ObjectStamp(ResolvedJavaType type, boolean exactType, boolean nonNull) {
-        super(Kind.Object);
+    public ObjectStamp(RiResolvedType type, boolean exactType, boolean nonNull) {
+        super(CiKind.Object);
         assert !exactType || type != null;
         this.type = type;
         this.exactType = exactType;
@@ -44,12 +45,22 @@ public class ObjectStamp extends Stamp {
         return nonNull;
     }
 
-    public ResolvedJavaType type() {
+    public RiResolvedType type() {
         return type;
     }
 
     public boolean isExactType() {
         return exactType;
+    }
+
+    @Override
+    public RiResolvedType exactType() {
+        return exactType ? type : null;
+    }
+
+    @Override
+    public RiResolvedType declaredType() {
+        return type;
     }
 
     @Override
@@ -76,7 +87,7 @@ public class ObjectStamp extends Stamp {
     @Override
     public Stamp meet(Stamp otherStamp) {
         ObjectStamp other = (ObjectStamp) otherStamp;
-        ResolvedJavaType orType = meetTypes(type(), other.type());
+        RiResolvedType orType = meetTypes(type(), other.type());
         boolean meetExactType = orType == type && orType == other.type && exactType && other.exactType;
         boolean meetNonNull = nonNull && other.nonNull;
 
@@ -87,7 +98,7 @@ public class ObjectStamp extends Stamp {
         }
     }
 
-    private static ResolvedJavaType meetTypes(ResolvedJavaType a, ResolvedJavaType b) {
+    private static RiResolvedType meetTypes(RiResolvedType a, RiResolvedType b) {
         if (a == b) {
             return a;
         } else if (a == null || b == null) {

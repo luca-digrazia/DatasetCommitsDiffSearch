@@ -24,11 +24,10 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.type.GenericStamp.*;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.max.cri.ci.*;
 
 /**
  * This class represents a value within the graph, including local variables, phis, and
@@ -37,8 +36,8 @@ import com.oracle.graal.nodes.util.*;
 public abstract class ValueNode extends ScheduledNode implements StampProvider {
 
     /**
-     * The kind of this value. This is {@link Kind#Void} for instructions that produce no value.
-     * This kind is guaranteed to be a {@linkplain Kind#stackKind() stack kind}.
+     * The kind of this value. This is {@link CiKind#Void} for instructions that produce no value.
+     * This kind is guaranteed to be a {@linkplain CiKind#stackKind() stack kind}.
      */
     private Stamp stamp;
 
@@ -77,7 +76,7 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
         this.stamp = stamp;
     }
 
-    public Kind kind() {
+    public CiKind kind() {
         return stamp.kind();
     }
 
@@ -99,34 +98,25 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
 
     /**
      * Convert this value to a constant if it is a constant, otherwise return null.
-     * @return the {@link Constant} represented by this value if it is a constant; {@code null}
+     * @return the {@link CiConstant} represented by this value if it is a constant; {@code null}
      * otherwise
      */
-    public final Constant asConstant() {
+    public final CiConstant asConstant() {
         if (this instanceof ConstantNode) {
             return ((ConstantNode) this).value;
         }
         return null;
     }
 
-    public <T extends Stamp> boolean verifyStamp(Class<T> stampClass) {
-        assert stampClass.isInstance(stamp) : this + " (" + GraphUtil.approxSourceLocation(this) + ") has unexpected stamp type: expected " + stampClass.getName() +
-            ", got " + stamp.getClass().getName();
-        return true;
-    }
-
     public final ObjectStamp objectStamp() {
-        assert verifyStamp(ObjectStamp.class);
         return (ObjectStamp) stamp;
     }
 
     public final IntegerStamp integerStamp() {
-        assert verifyStamp(IntegerStamp.class);
         return (IntegerStamp) stamp;
     }
 
     public final FloatStamp floatStamp() {
-        assert verifyStamp(FloatStamp.class);
         return (FloatStamp) stamp;
     }
 

@@ -22,28 +22,37 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-@NodeInfo(nameTemplate = "VirtualObject {p#type}")
-public class VirtualObjectNode extends FloatingNode implements LIRLowerable {
+import com.oracle.max.cri.ri.*;
 
-    @SuppressWarnings("unused")
-    private final int id;
-    private final ResolvedJavaType type;
-    private final int fieldsCount;
 
-    public VirtualObjectNode(int id, ResolvedJavaType type, int fieldCount) {
+public class VirtualObjectNode extends ValueNode implements LIRLowerable {
+
+    private RiResolvedType type;
+    private EscapeField[] fields;
+    private int fieldsCount;
+
+    public VirtualObjectNode(RiResolvedType type, EscapeField[] fields) {
         super(StampFactory.virtual());
-        this.id = id;
+        this.type = type;
+        this.fields = fields;
+        this.fieldsCount = fields.length;
+    }
+
+    public VirtualObjectNode(RiResolvedType type, int fieldCount) {
+        super(StampFactory.virtual());
         this.type = type;
         this.fieldsCount = fieldCount;
     }
 
-    public JavaType type() {
+    public RiType type() {
         return type;
+    }
+
+    public EscapeField[] fields() {
+        return fields;
     }
 
     @Override

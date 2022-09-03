@@ -24,7 +24,8 @@ package com.oracle.graal.compiler.phases;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.criutils.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.graph.*;
 import com.oracle.graal.compiler.util.*;
@@ -37,32 +38,36 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
-import com.oracle.max.criutils.*;
 
 
 public class EscapeAnalysisPhase extends Phase {
 
-    /**
-     * Encapsulates the state of the virtual object, which is updated while traversing the control flow graph.
-     */
     public static class BlockExitState implements MergeableState<BlockExitState> {
         public final ValueNode[] fieldState;
         public final VirtualObjectNode virtualObject;
+        public ValueNode virtualObjectField;
         public final Graph graph;
 
         public BlockExitState(EscapeField[] fields, VirtualObjectNode virtualObject) {
             this.fieldState = new ValueNode[fields.length];
             this.virtualObject = virtualObject;
+            this.virtualObjectField = null;
             this.graph = virtualObject.graph();
             for (int i = 0; i < fields.length; i++) {
-                fieldState[i] = ConstantNode.defaultForKind(fields[i].type().kind(), virtualObject.graph());
+                fieldState[i] = ConstantNode.defaultForKind(fields[i].type().kind(true), virtualObject.graph());
+                virtualObjectField = graph.add(new VirtualObjectFieldNode(virtualObject, virtualObjectField, fieldState[i], i));
             }
         }
 
         public BlockExitState(BlockExitState state) {
             this.fieldState = state.fieldState.clone();
             this.virtualObject = state.virtualObject;
+            this.virtualObjectField = state.virtualObjectField;
             this.graph = state.graph;
+        }
+
+        public void updateField(int fieldIndex) {
+            virtualObjectField = graph.add(new VirtualObjectFieldNode(virtualObject, virtualObjectField, fieldState[fieldIndex], fieldIndex));
         }
 
         @Override
@@ -72,8 +77,14 @@ public class EscapeAnalysisPhase extends Phase {
 
         @Override
         public boolean merge(MergeNode merge, List<BlockExitState> withStates) {
+            PhiNode vobjPhi = null;
             PhiNode[] valuePhis = new PhiNode[fieldState.length];
             for (BlockExitState other : withStates) {
+                if (virtualObjectField != other.virtualObjectField && vobjPhi == null) {
+                    vobjPhi = graph.add(new PhiNode(PhiType.Virtual, merge));
+                    vobjPhi.addInput(virtualObjectField);
+                    virtualObjectField = vobjPhi;
+                }
                 for (int i2 = 0; i2 < fieldState.length; i2++) {
                     if (fieldState[i2] != other.fieldState[i2] && valuePhis[i2] == null) {
                         valuePhis[i2] = graph.add(new PhiNode(fieldState[i2].kind(), merge));
@@ -83,10 +94,20 @@ public class EscapeAnalysisPhase extends Phase {
                 }
             }
             for (BlockExitState other : withStates) {
+                if (vobjPhi != null) {
+                    vobjPhi.addInput(other.virtualObjectField);
+                }
                 for (int i2 = 0; i2 < fieldState.length; i2++) {
                     if (valuePhis[i2] != null) {
                         valuePhis[i2].addInput(other.fieldState[i2]);
                     }
+                }
+            }
+            assert vobjPhi == null || vobjPhi.valueCount() == withStates.size() + 1;
+            for (int i2 = 0; i2 < fieldState.length; i2++) {
+                if (valuePhis[i2] != null) {
+                    virtualObjectField = graph.add(new VirtualObjectFieldNode(virtualObject, virtualObjectField, valuePhis[i2], i2));
+                    assert valuePhis[i2].valueCount() == withStates.size() + 1;
                 }
             }
             return true;
@@ -94,16 +115,30 @@ public class EscapeAnalysisPhase extends Phase {
 
         @Override
         public void loopBegin(LoopBeginNode loopBegin) {
+            assert virtualObjectField != null : "unexpected null virtualObjectField";
+            PhiNode vobjPhi = null;
+            vobjPhi = graph.add(new PhiNode(PhiType.Virtual, loopBegin));
+            vobjPhi.addInput(virtualObjectField);
+            virtualObjectField = vobjPhi;
             for (int i2 = 0; i2 < fieldState.length; i2++) {
                 PhiNode valuePhi = graph.add(new PhiNode(fieldState[i2].kind(), loopBegin));
                 valuePhi.addInput(fieldState[i2]);
                 fieldState[i2] = valuePhi;
+                updateField(i2);
             }
         }
 
         @Override
         public void loopEnds(LoopBeginNode loopBegin, List<BlockExitState> loopEndStates) {
+            while (!loopBegin.isPhiAtMerge(virtualObjectField)) {
+                if (virtualObjectField instanceof PhiNode) {
+                    virtualObjectField = ((PhiNode) virtualObjectField).valueAt(0);
+                } else {
+                    virtualObjectField = ((VirtualObjectFieldNode) virtualObjectField).lastState();
+                }
+            }
             for (BlockExitState loopEndState : loopEndStates) {
+                ((PhiNode) virtualObjectField).addInput(loopEndState.virtualObjectField);
                 for (int i2 = 0; i2 < fieldState.length; i2++) {
                     ((PhiNode) fieldState[i2]).addInput(loopEndState.fieldState[i2]);
                 }
@@ -140,12 +175,6 @@ public class EscapeAnalysisPhase extends Phase {
             }
         }
 
-        private void process() {
-            for (Node usage : node.usages().snapshot()) {
-                op.beforeUpdate(node, usage);
-            }
-        }
-
         public void removeAllocation() {
             escapeFields = op.fields(node);
             for (int i = 0; i < escapeFields.length; i++) {
@@ -173,31 +202,52 @@ public class EscapeAnalysisPhase extends Phase {
                 final PostOrderNodeIterator<?> iterator = new PostOrderNodeIterator<BlockExitState>(next, startState) {
                     @Override
                     protected void node(FixedNode curNode) {
-                        op.updateState(virtual, curNode, fields, state.fieldState);
+                        int changedField = op.updateState(virtual, curNode, fields, state.fieldState);
+                        if (changedField != -1) {
+                            state.updateField(changedField);
+                        }
                         if (curNode instanceof LoopExitNode) {
+                            state.virtualObjectField = graph.unique(new ValueProxyNode(state.virtualObjectField, (LoopExitNode) curNode, PhiType.Virtual));
                             for (int i = 0; i < state.fieldState.length; i++) {
                                 state.fieldState[i] = graph.unique(new ValueProxyNode(state.fieldState[i], (LoopExitNode) curNode, PhiType.Value));
                             }
                         }
                         if (!curNode.isDeleted() && curNode instanceof StateSplit && ((StateSplit) curNode).stateAfter() != null) {
-                            VirtualObjectState v = graph.add(new VirtualObjectState(virtual, state.fieldState));
-                            ((StateSplit) curNode).stateAfter().addVirtualObjectMapping(v);
+                            if (state.virtualObjectField != null) {
+                                ValueNode v = state.virtualObjectField;
+                                if (curNode instanceof LoopBeginNode) {
+                                    while (!((LoopBeginNode) curNode).isPhiAtMerge(v)) {
+                                        if (v instanceof PhiNode) {
+                                            v = ((PhiNode) v).valueAt(0);
+                                        } else {
+                                            v = ((VirtualObjectFieldNode) v).lastState();
+                                        }
+                                    }
+                                }
+                                ((StateSplit) curNode).stateAfter().addVirtualObjectMapping(v);
+                            }
                         }
                     }
                 };
                 iterator.apply();
             }
         }
+
+        private void process() {
+            for (Node usage : node.usages().snapshot()) {
+                op.beforeUpdate(node, usage);
+            }
+        }
     }
 
-    private final TargetDescription target;
-    private final ExtendedRiRuntime runtime;
-    private final Assumptions assumptions;
+    private final CiTarget target;
+    private final GraalRuntime runtime;
+    private final CiAssumptions assumptions;
     private final RiGraphCache cache;
     private final PhasePlan plan;
     private final OptimisticOptimizations optimisticOpts;
 
-    public EscapeAnalysisPhase(TargetDescription target, ExtendedRiRuntime runtime, Assumptions assumptions, RiGraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
+    public EscapeAnalysisPhase(CiTarget target, GraalRuntime runtime, CiAssumptions assumptions, RiGraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
         this.runtime = runtime;
         this.target = target;
         this.assumptions = assumptions;
@@ -228,7 +278,7 @@ public class EscapeAnalysisPhase extends Phase {
 
     private static Node escape(EscapeRecord record, Node usage) {
         final Node node = record.node;
-        if (usage instanceof VirtualState) {
+        if (usage instanceof FrameState) {
             assert usage.inputs().contains(node);
             return null;
         } else {
@@ -268,6 +318,8 @@ public class EscapeAnalysisPhase extends Phase {
                     // in order to not escape, the access needs to have a valid constant index and either a store into node or be self-referencing
                     return EscapeOp.isValidConstantIndex(x) && x.value() != node ? null : x.array();
                 }
+            } else if (usage instanceof VirtualObjectFieldNode) {
+                return null;
             } else if (usage instanceof RegisterFinalizerNode) {
                 assert ((RegisterFinalizerNode) usage).object() == node;
                 return null;
@@ -415,7 +467,7 @@ public class EscapeAnalysisPhase extends Phase {
         for (Node usage : node.usages().snapshot()) {
             boolean escapes = op.escape(node, usage);
             if (escapes) {
-                if (usage instanceof VirtualState) {
+                if (usage instanceof FrameState) {
                     // nothing to do...
                 } else if (usage instanceof MethodCallTargetNode) {
                     if (usage.usages().size() == 0) {

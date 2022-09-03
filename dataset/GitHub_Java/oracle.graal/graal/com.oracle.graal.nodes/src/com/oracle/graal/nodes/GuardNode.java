@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * A guard is a node that deoptimizes based on a conditional expression. Guards are not attached to a certain frame
@@ -45,8 +44,8 @@ public final class GuardNode extends FloatingNode implements Canonicalizable, LI
 
     @Input private BooleanNode condition;
     @Input(notDataflow = true) private FixedNode anchor;
-    private final DeoptimizationReason reason;
-    private final DeoptimizationAction action;
+    private final RiDeoptReason reason;
+    private final RiDeoptAction action;
     private boolean negated;
     private final long leafGraphId;
 
@@ -75,15 +74,15 @@ public final class GuardNode extends FloatingNode implements Canonicalizable, LI
         return negated;
     }
 
-    public DeoptimizationReason reason() {
+    public RiDeoptReason reason() {
         return reason;
     }
 
-    public DeoptimizationAction action() {
+    public RiDeoptAction action() {
         return action;
     }
 
-    public GuardNode(BooleanNode condition, FixedNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, long leafGraphId) {
+    public GuardNode(BooleanNode condition, FixedNode anchor, RiDeoptReason reason, RiDeoptAction action, boolean negated, long leafGraphId) {
         super(StampFactory.dependency());
         this.condition = condition;
         this.anchor = anchor;
@@ -134,8 +133,7 @@ public final class GuardNode extends FloatingNode implements Canonicalizable, LI
     }
 
     @Override
-    public Negatable negate() {
+    public void negate() {
         negated = !negated;
-        return this;
     }
 }

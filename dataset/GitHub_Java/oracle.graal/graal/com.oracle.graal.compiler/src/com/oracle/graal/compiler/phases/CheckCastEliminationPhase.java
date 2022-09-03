@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.phases;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.graph.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -34,6 +33,7 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.max.cri.ri.*;
 
 public class CheckCastEliminationPhase extends Phase {
 
@@ -47,18 +47,16 @@ public class CheckCastEliminationPhase extends Phase {
     private static final DebugMetric metricGuardsReplaced = Debug.metric("GuardsReplaced");
 
     private StructuredGraph graph;
-    private boolean graphModified;
 
     @Override
     protected void run(StructuredGraph inputGraph) {
         graph = inputGraph;
-        graphModified = false;
         new EliminateCheckCasts(graph.start(), new State()).apply();
     }
 
     public static class State implements MergeableState<State> {
 
-        private IdentityHashMap<ValueNode, ResolvedJavaType> knownTypes;
+        private IdentityHashMap<ValueNode, RiResolvedType> knownTypes;
         private HashSet<ValueNode> knownNotNull;
         private HashSet<ValueNode> knownNull;
         private IdentityHashMap<BooleanNode, ValueNode> trueConditions;
@@ -82,18 +80,18 @@ public class CheckCastEliminationPhase extends Phase {
 
         @Override
         public boolean merge(MergeNode merge, List<State> withStates) {
-            IdentityHashMap<ValueNode, ResolvedJavaType> newKnownTypes = new IdentityHashMap<>();
+            IdentityHashMap<ValueNode, RiResolvedType> newKnownTypes = new IdentityHashMap<>();
             HashSet<ValueNode> newKnownNotNull = new HashSet<>();
             HashSet<ValueNode> newKnownNull = new HashSet<>();
             IdentityHashMap<BooleanNode, ValueNode> newTrueConditions = new IdentityHashMap<>();
             IdentityHashMap<BooleanNode, ValueNode> newFalseConditions = new IdentityHashMap<>();
 
-            for (Map.Entry<ValueNode, ResolvedJavaType> entry : knownTypes.entrySet()) {
+            for (Map.Entry<ValueNode, RiResolvedType> entry : knownTypes.entrySet()) {
                 ValueNode node = entry.getKey();
-                ResolvedJavaType type = entry.getValue();
+                RiResolvedType type = entry.getValue();
 
                 for (State other : withStates) {
-                    ResolvedJavaType otherType = other.getNodeType(node);
+                    RiResolvedType otherType = other.getNodeType(node);
                     type = widen(type, otherType);
                     if (type == null) {
                         break;
@@ -168,16 +166,16 @@ public class CheckCastEliminationPhase extends Phase {
             // this piece of code handles phis (merges the types and knownNull/knownNotNull of the values)
             if (!(merge instanceof LoopBeginNode)) {
                 for (PhiNode phi : merge.phis()) {
-                    if (phi.type() == PhiType.Value && phi.kind() == Kind.Object) {
+                    if (phi.type() == PhiType.Value && phi.kind() == CiKind.Object) {
                         ValueNode firstValue = phi.valueAt(0);
-                        ResolvedJavaType type = getNodeType(firstValue);
+                        RiResolvedType type = getNodeType(firstValue);
                         boolean notNull = knownNotNull.contains(firstValue);
                         boolean nul = knownNull.contains(firstValue);
 
                         for (int i = 0; i < withStates.size(); i++) {
                             State otherState = withStates.get(i);
                             ValueNode value = phi.valueAt(i + 1);
-                            ResolvedJavaType otherType = otherState.getNodeType(value);
+                            RiResolvedType otherType = otherState.getNodeType(value);
                             type = widen(type, otherType);
                             notNull &= otherState.knownNotNull.contains(value);
                             nul &= otherState.knownNull.contains(value);
@@ -203,8 +201,8 @@ public class CheckCastEliminationPhase extends Phase {
             return true;
         }
 
-        public ResolvedJavaType getNodeType(ValueNode node) {
-            ResolvedJavaType result = knownTypes.get(node);
+        public RiResolvedType getNodeType(ValueNode node) {
+            RiResolvedType result = knownTypes.get(node);
             return result == null ? node.objectStamp().type() : result;
         }
 
@@ -226,7 +224,7 @@ public class CheckCastEliminationPhase extends Phase {
         }
     }
 
-    public static ResolvedJavaType widen(ResolvedJavaType a, ResolvedJavaType b) {
+    public static RiResolvedType widen(RiResolvedType a, RiResolvedType b) {
         if (a == null || b == null) {
             return null;
         } else if (a == b) {
@@ -236,7 +234,7 @@ public class CheckCastEliminationPhase extends Phase {
         }
     }
 
-    public static ResolvedJavaType tighten(ResolvedJavaType a, ResolvedJavaType b) {
+    public static RiResolvedType tighten(RiResolvedType a, RiResolvedType b) {
         if (a == null) {
             return b;
         } else if (b == null) {
@@ -307,7 +305,6 @@ public class CheckCastEliminationPhase extends Phase {
                     BooleanNode condition = guard.condition();
                     ValueNode existingGuards = guard.negated() ? state.falseConditions.get(condition) : state.trueConditions.get(condition);
                     if (existingGuards != null) {
-                        graphModified = true;
                         guard.replaceAtUsages(existingGuards);
                         GraphUtil.killWithUnusedFloatingInputs(guard);
                         metricGuardsReplaced.increment();
@@ -321,7 +318,6 @@ public class CheckCastEliminationPhase extends Phase {
                                 removeCheck = true;
                             }
                             if (removeCheck) {
-                                graphModified = true;
                                 metricNullCheckGuardRemoved.increment();
                             }
                         }
@@ -339,14 +335,13 @@ public class CheckCastEliminationPhase extends Phase {
                 }
             } else if (node instanceof CheckCastNode) {
                 CheckCastNode checkCast = (CheckCastNode) node;
-                ResolvedJavaType type = state.getNodeType(checkCast.object());
+                RiResolvedType type = state.getNodeType(checkCast.object());
                 if (checkCast.targetClass() != null && type != null && type.isSubtypeOf(checkCast.targetClass())) {
                     PiNode piNode;
                     boolean nonNull = state.knownNotNull.contains(checkCast.object());
                     piNode = graph.unique(new PiNode(checkCast.object(), lastBegin, nonNull ? StampFactory.declaredNonNull(type) : StampFactory.declared(type)));
                     checkCast.replaceAtUsages(piNode);
                     graph.removeFixed(checkCast);
-                    graphModified = true;
                     metricCheckCastRemoved.increment();
                 }
             } else if (node instanceof IfNode) {
@@ -365,7 +360,7 @@ public class CheckCastEliminationPhase extends Phase {
                         if (state.knownNull.contains(object)) {
                             replaceWith = ConstantNode.forBoolean(false, graph);
                         } else if (state.knownNotNull.contains(object)) {
-                            ResolvedJavaType type = state.getNodeType(object);
+                            RiResolvedType type = state.getNodeType(object);
                             if (type != null && type.isSubtypeOf(instanceOf.targetClass())) {
                                 replaceWith = ConstantNode.forBoolean(true, graph);
                             }
@@ -387,7 +382,6 @@ public class CheckCastEliminationPhase extends Phase {
                     }
                 }
                 if (replaceWith != null) {
-                    graphModified = true;
                     ifNode.setCompare(replaceWith);
                     if (compare.usages().isEmpty()) {
                         GraphUtil.killWithUnusedFloatingInputs(compare);
@@ -395,10 +389,6 @@ public class CheckCastEliminationPhase extends Phase {
                 }
             }
         }
-    }
-
-    public boolean wasGraphModfied() {
-        return graphModified;
     }
 
 }

@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ci.*;
 
 @NodeInfo(shortName = "|<|")
 public final class IntegerBelowThanNode extends CompareNode {
@@ -39,8 +39,8 @@ public final class IntegerBelowThanNode extends CompareNode {
      */
     public IntegerBelowThanNode(ValueNode x, ValueNode y) {
         super(x, y);
-        assert !x.kind().isFloatOrDouble() && x.kind() != Kind.Object;
-        assert !y.kind().isFloatOrDouble() && y.kind() != Kind.Object;
+        assert !x.kind().isFloatOrDouble() && x.kind() != CiKind.Object;
+        assert !y.kind().isFloatOrDouble() && y.kind() != CiKind.Object;
     }
 
     @Override
@@ -60,10 +60,10 @@ public final class IntegerBelowThanNode extends CompareNode {
         } else {
             IntegerStamp xStamp = x().integerStamp();
             IntegerStamp yStamp = y().integerStamp();
-            if (yStamp.isPositive()) {
-                if (xStamp.isPositive() && xStamp.upperBound() < yStamp.lowerBound()) {
+            if (yStamp.lowerBound() >= 0 && yStamp.upperBound() >= 0) {
+                if (xStamp.lowerBound() >= 0 && xStamp.upperBound() < yStamp.lowerBound()) {
                     return ConstantNode.forBoolean(true, graph());
-                } else if (xStamp.isStrictlyNegative() || xStamp.lowerBound() >= yStamp.upperBound()) {
+                } else if (xStamp.upperBound() < 0 || xStamp.lowerBound() >= yStamp.upperBound()) {
                     return ConstantNode.forBoolean(false, graph());
                 }
             }

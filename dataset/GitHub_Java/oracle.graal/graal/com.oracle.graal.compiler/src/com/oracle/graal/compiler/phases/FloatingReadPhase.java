@@ -138,9 +138,6 @@ public class FloatingReadPhase extends Phase {
         }
 
         public void processWrite(WriteNode writeNode) {
-            if (writeNode.location().locationIdentity() == LocationNode.ANY_LOCATION) {
-                map.clear();
-            }
             map.put(writeNode.location().locationIdentity(), writeNode);
         }
 
@@ -155,13 +152,12 @@ public class FloatingReadPhase extends Phase {
             } else {
                 floatingRead = graph.unique(new FloatingReadNode(readNode.object(), readNode.location(), getLocationForRead(readNode), readNode.stamp(), readNode.dependencies()));
             }
-            floatingRead.setNullCheck(readNode.getNullCheck());
             ValueAnchorNode anchor = null;
             for (GuardNode guard : readNode.dependencies().filter(GuardNode.class)) {
                 if (anchor == null) {
                     anchor = graph.add(new ValueAnchorNode());
                 }
-                anchor.addAnchoredNode(guard);
+                anchor.addAnchoredValue(guard);
             }
             if (anchor != null) {
                 graph.addAfterFixed(readNode, anchor);

@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.nodes.type;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
 
 public final class GenericStamp extends Stamp {
 
@@ -33,7 +33,7 @@ public final class GenericStamp extends Stamp {
     private final GenericStampType type;
 
     protected GenericStamp(GenericStampType type) {
-        super(Kind.Void);
+        super(CiKind.Void);
         this.type = type;
     }
 

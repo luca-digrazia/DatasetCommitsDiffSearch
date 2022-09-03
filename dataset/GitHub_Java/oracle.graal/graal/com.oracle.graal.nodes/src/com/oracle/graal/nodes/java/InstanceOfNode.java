@@ -22,12 +22,13 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
@@ -36,8 +37,8 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
 
     @Input private ValueNode object;
     @Input private ValueNode targetClassInstruction;
-    private final ResolvedJavaType targetClass;
-    private final JavaTypeProfile profile;
+    private final RiResolvedType targetClass;
+    private final RiTypeProfile profile;
 
     /**
      * Constructs a new InstanceOfNode.
@@ -46,11 +47,11 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
      * @param targetClass the class which is the target of the instanceof check
      * @param object the instruction producing the object input to this instruction
      */
-    public InstanceOfNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object) {
+    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object) {
         this(targetClassInstruction, targetClass, object, null);
     }
 
-    public InstanceOfNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object, JavaTypeProfile profile) {
+    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiTypeProfile profile) {
         super(StampFactory.condition());
         this.targetClassInstruction = targetClassInstruction;
         this.targetClass = targetClass;
@@ -68,7 +69,7 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
         assert object() != null : this;
 
         ObjectStamp stamp = object().objectStamp();
-        ResolvedJavaType type = stamp.type();
+        RiResolvedType type = stamp.type();
 
         if (stamp.isExactType()) {
             boolean subType = type.isSubtypeOf(targetClass());
@@ -103,8 +104,15 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
                 // since the subtype comparison was only performed on a declared type we don't really know if it might be true at run time...
             }
         }
-        if (object().objectStamp().alwaysNull()) {
-            return ConstantNode.forBoolean(false, graph());
+
+        CiConstant constant = object().asConstant();
+        if (constant != null) {
+            assert constant.kind == CiKind.Object;
+            if (constant.isNull()) {
+                return ConstantNode.forBoolean(false, graph());
+            } else {
+                assert false : "non-null constants are always expected to provide an exact type";
+            }
         }
         return this;
     }
@@ -117,13 +125,13 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
     @Override
     public Result canonical(TypeFeedbackTool tool) {
         ObjectTypeQuery query = tool.queryObject(object());
-        if (query.constantBound(Condition.EQ, Constant.NULL_OBJECT)) {
+        if (query.constantBound(Condition.EQ, CiConstant.NULL_OBJECT)) {
             return new Result(ConstantNode.forBoolean(false, graph()), query);
         } else if (targetClass() != null) {
             if (query.notDeclaredType(targetClass())) {
                 return new Result(ConstantNode.forBoolean(false, graph()), query);
             }
-            if (query.constantBound(Condition.NE, Constant.NULL_OBJECT)) {
+            if (query.constantBound(Condition.NE, CiConstant.NULL_OBJECT)) {
                 if (query.declaredType(targetClass())) {
                     return new Result(ConstantNode.forBoolean(true, graph()), query);
                 }
@@ -144,11 +152,11 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
      * Gets the target class, i.e. the class being cast to, or the class being tested against.
      * @return the target class
      */
-    public ResolvedJavaType targetClass() {
+    public RiResolvedType targetClass() {
         return targetClass;
     }
 
-    public JavaTypeProfile profile() {
+    public RiTypeProfile profile() {
         return profile;
     }
 }

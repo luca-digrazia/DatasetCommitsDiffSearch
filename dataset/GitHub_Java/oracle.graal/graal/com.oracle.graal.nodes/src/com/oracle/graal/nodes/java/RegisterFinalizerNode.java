@@ -22,18 +22,15 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ci.*;
 
 /**
  * This node is used to perform the finalizer registration at the end of the java.lang.Object constructor.
  */
 public final class RegisterFinalizerNode extends AbstractStateSplit implements StateSplit, Canonicalizable, LIRLowerable {
-
-    public static final Descriptor REGISTER_FINALIZER = new Descriptor("registerFinalizer", true, void.class, Object.class);
 
     @Input private ValueNode object;
 
@@ -48,8 +45,7 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements S
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        RuntimeCallTarget call = gen.getRuntime().lookupRuntimeCall(REGISTER_FINALIZER);
-        gen.emitCall(call, call.getCallingConvention(), true, gen.operand(object()));
+        gen.emitCall(CiRuntimeCall.RegisterFinalizer, true, gen.operand(object()));
     }
 
     @Override
@@ -61,7 +57,7 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements S
             needsCheck = stamp.type().hasFinalizer();
         } else if (stamp.type() != null && !stamp.type().hasFinalizableSubclass()) {
             // if either the declared type of receiver or the holder can be assumed to have no finalizers
-            if (tool.assumptions().useOptimisticAssumptions() && tool.assumptions().recordNoFinalizableSubclassAssumption(stamp.type())) {
+            if (tool.assumptions() != null && tool.assumptions().recordNoFinalizableSubclassAssumption(stamp.type())) {
                 needsCheck = false;
             }
         }

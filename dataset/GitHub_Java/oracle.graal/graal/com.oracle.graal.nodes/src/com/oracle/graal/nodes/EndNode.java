@@ -45,12 +45,19 @@ public class EndNode extends FixedNode implements Node.IterableNodeType, LIRLowe
 
     @Override
     public boolean verify() {
-        assertTrue(usages().count() <= 1, "at most one usage");
+        assertTrue(usages().size() <= 1, "at most one usage");
         return super.verify();
     }
 
     @Override
-    public Iterable<? extends Node> cfgSuccessors() {
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> debugProperties = super.getDebugProperties();
+        debugProperties.put("shortName", "E");
+        return debugProperties;
+    }
+
+    @Override
+    public Iterable< ? extends Node> cfgSuccessors() {
         return Arrays.asList(merge());
     }
 }

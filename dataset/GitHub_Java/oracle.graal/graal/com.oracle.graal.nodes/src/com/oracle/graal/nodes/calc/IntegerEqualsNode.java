@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.max.cri.ci.*;
 
 @NodeInfo(shortName = "==")
 public final class IntegerEqualsNode extends CompareNode {
@@ -38,8 +38,8 @@ public final class IntegerEqualsNode extends CompareNode {
      */
     public IntegerEqualsNode(ValueNode x, ValueNode y) {
         super(x, y);
-        assert x.kind() != Kind.Double && x.kind() != Kind.Float && x.kind() != Kind.Object;
-        assert y.kind() != Kind.Double && y.kind() != Kind.Float && y.kind() != Kind.Object;
+        assert !x.kind().isFloatOrDouble() && x.kind() != CiKind.Object;
+        assert !y.kind().isFloatOrDouble() && y.kind() != CiKind.Object;
     }
 
     @Override
@@ -53,12 +53,12 @@ public final class IntegerEqualsNode extends CompareNode {
     }
 
     @Override
-    protected ValueNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
-        if (constant.getKind() == Kind.Int && constant.asInt() == 0) {
+    protected ValueNode optimizeNormalizeCmp(CiConstant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
+        if (constant.kind == CiKind.Int && constant.asInt() == 0) {
             ValueNode a = mirrored ? normalizeNode.y() : normalizeNode.x();
             ValueNode b = mirrored ? normalizeNode.x() : normalizeNode.y();
 
-            if (normalizeNode.x().kind() == Kind.Double || normalizeNode.x().kind() == Kind.Float) {
+            if (normalizeNode.x().kind().isFloatOrDouble()) {
                 return graph().unique(new FloatEqualsNode(a, b));
             } else {
                 return graph().unique(new IntegerEqualsNode(a, b));

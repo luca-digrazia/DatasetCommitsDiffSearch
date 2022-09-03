@@ -22,13 +22,13 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
-
     @Input protected final NodeInputList<ValueNode> arguments;
 
     public CallTargetNode(ValueNode[] arguments) {
@@ -40,12 +40,12 @@ public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
         return arguments;
     }
 
-    public abstract JavaType returnType();
+    public abstract RiType returnType();
 
-    public abstract Kind returnKind();
+    public abstract CiKind returnKind();
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        // nop
+        //nop
     }
 }

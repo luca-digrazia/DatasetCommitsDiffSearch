@@ -22,13 +22,15 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * Implements a type check that results in a {@link ClassCastException} if it fails.
@@ -37,8 +39,8 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
 
     @Input private ValueNode object;
     @Input private ValueNode targetClassInstruction;
-    private final ResolvedJavaType targetClass;
-    private final JavaTypeProfile profile;
+    private final RiResolvedType targetClass;
+    private final RiTypeProfile profile;
 
     /**
      * Creates a new CheckCast instruction.
@@ -46,12 +48,12 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
      * @param targetClass the class being cast to
      * @param object the instruction producing the object
      */
-    public CheckCastNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object) {
+    public CheckCastNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object) {
         this(targetClassInstruction, targetClass, object, null);
     }
 
-    public CheckCastNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object, JavaTypeProfile profile) {
-        super(targetClass == null ? StampFactory.object() : StampFactory.declared(targetClass));
+    public CheckCastNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiTypeProfile profile) {
+        super(targetClass == null ? StampFactory.forKind(CiKind.Object) : StampFactory.declared(targetClass));
         this.targetClassInstruction = targetClassInstruction;
         this.targetClass = targetClass;
         this.object = object;
@@ -59,7 +61,7 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(CiLoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 
@@ -69,28 +71,23 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
     }
 
     @Override
-    public boolean inferStamp() {
-        if (object().stamp().nonNull() && !stamp().nonNull()) {
-            setStamp(targetClass == null ? StampFactory.objectNonNull() : StampFactory.declaredNonNull(targetClass));
-            return true;
-        }
-        return super.inferStamp();
-    }
-
-    @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         assert object() != null : this;
 
         if (targetClass != null) {
-            ResolvedJavaType objectType = object().objectStamp().type();
+            RiResolvedType objectType = object().objectStamp().type();
             if (objectType != null && objectType.isSubtypeOf(targetClass)) {
                 // we don't have to check for null types here because they will also pass the checkcast.
                 return object();
             }
         }
 
-        if (object().objectStamp().alwaysNull()) {
-            return object();
+        CiConstant constant = object().asConstant();
+        if (constant != null) {
+            assert constant.kind == CiKind.Object;
+            if (constant.isNull()) {
+                return object();
+            }
         }
         return this;
     }
@@ -105,7 +102,7 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
     @Override
     public Result canonical(TypeFeedbackTool tool) {
         ObjectTypeQuery query = tool.queryObject(object());
-        if (query.constantBound(Condition.EQ, Constant.NULL_OBJECT)) {
+        if (query.constantBound(Condition.EQ, CiConstant.NULL_OBJECT)) {
             return new Result(object(), query);
         } else if (targetClass() != null) {
             if (query.declaredType(targetClass())) {
@@ -130,11 +127,11 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
      *
      * @return the target class or null if not known
      */
-    public ResolvedJavaType targetClass() {
+    public RiResolvedType targetClass() {
         return targetClass;
     }
 
-    public JavaTypeProfile profile() {
+    public RiTypeProfile profile() {
         return profile;
     }
 }

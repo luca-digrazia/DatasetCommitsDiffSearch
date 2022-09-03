@@ -22,7 +22,8 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -36,25 +37,30 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
         Virtual
     }
 
-    private final JavaType returnType;
-    private ResolvedJavaMethod targetMethod;
+    private final RiType returnType;
+    private RiResolvedMethod targetMethod;
     private InvokeKind invokeKind;
 
     /**
      * @param arguments
      */
-    public MethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType) {
+    public MethodCallTargetNode(InvokeKind invokeKind, RiResolvedMethod targetMethod, ValueNode[] arguments, RiType returnType) {
         super(arguments);
         this.invokeKind = invokeKind;
         this.returnType = returnType;
         this.targetMethod = targetMethod;
     }
 
+    @Override
+    public RiType returnType() {
+        return returnType;
+    }
+
     /**
      * Gets the target method for this invocation instruction.
      * @return the target method
      */
-    public ResolvedJavaMethod targetMethod() {
+    public RiResolvedMethod targetMethod() {
         return targetMethod;
     }
 
@@ -66,7 +72,7 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
         this.invokeKind = kind;
     }
 
-    public void setTargetMethod(ResolvedJavaMethod method) {
+    public void setTargetMethod(RiResolvedMethod method) {
         targetMethod = method;
     }
 
@@ -87,8 +93,9 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
         return invokeKind() == InvokeKind.Static;
     }
 
-    public Kind returnKind() {
-        return targetMethod().getSignature().getReturnKind();
+    @Override
+    public CiKind returnKind() {
+        return targetMethod().signature().returnKind(false);
     }
 
     public Invoke invoke() {
@@ -98,7 +105,7 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
 
     @Override
     public boolean verify() {
-        assert usages().count() <= 1 : "call target may only be used by a single invoke";
+        assert usages().size() <= 1 : "call target may only be used by a single invoke";
         for (Node n : usages()) {
             assertTrue(n instanceof Invoke, "call target can only be used from an invoke (%s)", n);
         }
@@ -120,7 +127,7 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
             ValueNode receiver = receiver();
             if (receiver != null && receiver.objectStamp().isExactType()) {
                 if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual) {
-                    ResolvedJavaMethod method = receiver.objectStamp().type().resolveMethod(targetMethod);
+                    RiResolvedMethod method = receiver.objectStamp().type().resolveMethodImpl(targetMethod);
                     if (method != null) {
                         invokeKind = InvokeKind.Special;
                         targetMethod = method;
@@ -131,30 +138,12 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
         return this;
     }
 
-    @Override
     public Stamp returnStamp() {
-        Kind returnKind = targetMethod.getSignature().getReturnKind();
-        if (returnKind == Kind.Object && returnType instanceof ResolvedJavaType) {
-            return StampFactory.declared((ResolvedJavaType) returnType);
+        CiKind returnKind = targetMethod.signature().returnKind(false);
+        if (returnKind == CiKind.Object && returnType instanceof RiResolvedType) {
+            return StampFactory.declared((RiResolvedType) returnType);
         } else {
             return StampFactory.forKind(returnKind);
         }
-    }
-
-    @Override
-    public String targetName() {
-        if (targetMethod() == null) {
-            return "??Invalid!";
-        }
-        return targetMethod().getName();
-    }
-
-    public static MethodCallTargetNode find(StructuredGraph graph, ResolvedJavaMethod method) {
-        for (MethodCallTargetNode target : graph.getNodes(MethodCallTargetNode.class)) {
-            if (target.targetMethod == method) {
-                return target;
-            }
-        }
-        return null;
     }
 }

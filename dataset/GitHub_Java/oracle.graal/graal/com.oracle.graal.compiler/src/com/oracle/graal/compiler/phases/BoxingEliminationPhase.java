@@ -26,13 +26,14 @@ import static com.oracle.graal.graph.iterators.NodePredicates.*;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 public class BoxingEliminationPhase extends Phase {
 
@@ -62,12 +63,12 @@ public class BoxingEliminationPhase extends Phase {
         }
     }
 
-    private PhiNode getReplacementPhi(PhiNode phiNode, Kind kind, Map<PhiNode, PhiNode> phiReplacements) {
+    private PhiNode getReplacementPhi(PhiNode phiNode, CiKind kind, Map<PhiNode, PhiNode> phiReplacements) {
         if (!phiReplacements.containsKey(phiNode)) {
             PhiNode result = null;
             ObjectStamp stamp = phiNode.objectStamp();
             if (stamp.nonNull() && stamp.isExactType()) {
-                ResolvedJavaType type = stamp.type();
+                RiResolvedType type = stamp.type();
                 if (type != null && type.toJava() == kind.toBoxedJavaClass()) {
                     StructuredGraph graph = (StructuredGraph) phiNode.graph();
                     result = graph.add(new PhiNode(kind, phiNode.merge()));
@@ -93,7 +94,7 @@ public class BoxingEliminationPhase extends Phase {
         return phiReplacements.get(phiNode);
     }
 
-    private ValueNode unboxedValue(ValueNode n, Kind kind, Map<PhiNode, PhiNode> phiReplacements) {
+    private ValueNode unboxedValue(ValueNode n, CiKind kind, Map<PhiNode, PhiNode> phiReplacements) {
         if (n instanceof BoxNode) {
             BoxNode boxNode = (BoxNode) n;
             return boxNode.source();
@@ -110,7 +111,7 @@ public class BoxingEliminationPhase extends Phase {
         assert boxNode.objectStamp().isExactType();
         virtualizeUsages(boxNode, boxNode.source(), boxNode.objectStamp().type());
 
-        if (boxNode.usages().filter(isNotA(VirtualState.class)).isNotEmpty()) {
+        if (boxNode.usages().filter(isNotA(FrameState.class).nor(VirtualObjectFieldNode.class)).isNotEmpty()) {
             // Elimination failed, because boxing object escapes.
             return;
         }
@@ -122,10 +123,10 @@ public class BoxingEliminationPhase extends Phase {
         ((StructuredGraph) boxNode.graph()).removeFixed(boxNode);
     }
 
-    private static void virtualizeUsages(ValueNode boxNode, ValueNode replacement, ResolvedJavaType exactType) {
+    private static void virtualizeUsages(ValueNode boxNode, ValueNode replacement, RiResolvedType exactType) {
         ValueNode virtualValueNode = null;
         VirtualObjectNode virtualObjectNode = null;
-        for (Node n : boxNode.usages().filter(NodePredicates.isA(VirtualState.class)).snapshot()) {
+        for (Node n : boxNode.usages().filter(NodePredicates.isA(FrameState.class).or(VirtualObjectFieldNode.class)).snapshot()) {
             if (virtualValueNode == null) {
                 virtualObjectNode = n.graph().unique(new BoxedVirtualObjectNode(exactType, replacement));
             }
