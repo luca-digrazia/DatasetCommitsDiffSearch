@@ -24,8 +24,6 @@ package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
@@ -69,42 +67,12 @@ public abstract class HotSpotCounterOp extends LIRInstruction {
     }
 
     protected interface CounterProcedure {
-        /**
-         * Lambda interface for iterating over counters declared in this op.
-         *
-         * @param counterIndex Index in this CounterOp object.
-         * @param increment Value for increment
-         * @param displacement Displacement in bytes in the counter array
-         */
-        void apply(int counterIndex, Value increment, int displacement);
+        void apply(String name, String group, Value increment);
     }
 
-    /**
-     * Calls the {@link CounterProcedure} for each counter in ascending order of their displacement
-     * in the counter array.
-     *
-     * @param proc The procedure to be called
-     * @param target Target architecture (used to calculate the array displacements)
-     */
-    protected void forEachCounter(CounterProcedure proc, TargetDescription target) {
-        if (names.length == 1) { // fast path
-            int arrayIndex = getIndex(names[0], groups[0], increments[0]);
-            int displacement = getDisplacementForLongIndex(target, arrayIndex);
-            proc.apply(0, increments[0], displacement);
-        } else { // Slow path with sort by displacements ascending
-            int[] displacements = new int[names.length];
-            HashMap<Integer, Integer> offsetMap = new HashMap<>(names.length);
-            for (int i = 0; i < names.length; i++) {
-                int arrayIndex = getIndex(names[i], groups[i], increments[i]);
-                displacements[i] = getDisplacementForLongIndex(target, arrayIndex);
-                offsetMap.put(displacements[i], i);
-            }
-            Arrays.sort(displacements);
-            // Now apply in order
-            for (int offset : displacements) {
-                int idx = offsetMap.get(offset);
-                proc.apply(idx, increments[idx], displacements[idx]);
-            }
+    protected void forEachCounter(CounterProcedure proc) {
+        for (int i = 0; i < names.length; i++) {
+            proc.apply(names[i], groups[i], increments[i]);
         }
     }
 
@@ -116,17 +84,6 @@ public abstract class HotSpotCounterOp extends LIRInstruction {
         assert isRegister(increment) : "Unexpected Value: " + increment;
         // get index for the counter
         return BenchmarkCounters.getIndex(name, group, config);
-    }
-
-    /**
-     * Patches the increment value in the instruction emitted by this instruction. Use only, if
-     * patching is needed after assembly.
-     *
-     * @param asm
-     * @param increment
-     */
-    public void patchCounterIncrement(Assembler asm, int[] increment) {
-        throw GraalInternalError.unimplemented();
     }
 
     private static long asLong(JavaConstant value) {
@@ -152,11 +109,4 @@ public abstract class HotSpotCounterOp extends LIRInstruction {
         return (int) l;
     }
 
-    public String[] getNames() {
-        return names;
-    }
-
-    public String[] getGroups() {
-        return groups;
-    }
 }
