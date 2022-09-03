@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,6 +23,7 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
@@ -32,8 +33,8 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "%")
 public class FloatRemNode extends FloatArithmeticNode implements Canonicalizable, Lowerable {
 
-    public FloatRemNode(ValueNode x, ValueNode y, boolean isStrictFP) {
-        super(x.stamp().unrestricted(), x, y, isStrictFP);
+    public FloatRemNode(Stamp stamp, ValueNode x, ValueNode y, boolean isStrictFP) {
+        super(stamp, x, y, isStrictFP);
     }
 
     public Constant evalConst(Constant... inputs) {
@@ -49,8 +50,8 @@ public class FloatRemNode extends FloatArithmeticNode implements Canonicalizable
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (getX().isConstant() && getY().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(getX().asConstant(), getY().asConstant()), graph());
+        if (x().isConstant() && y().isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
         }
         return this;
     }
@@ -62,6 +63,6 @@ public class FloatRemNode extends FloatArithmeticNode implements Canonicalizable
 
     @Override
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitRem(builder.operand(getX()), builder.operand(getY()), null));
+        builder.setResult(this, gen.emitRem(builder.operand(x()), builder.operand(y()), null));
     }
 }
