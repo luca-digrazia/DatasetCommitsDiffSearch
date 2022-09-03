@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -41,6 +39,7 @@ public final class UnexpectedResultException extends SlowPathException {
      * @param result the alternative result
      */
     public UnexpectedResultException(Object result) {
+        super(null, null);
         assert !(result instanceof Throwable);
         this.result = result;
     }
@@ -50,5 +49,14 @@ public final class UnexpectedResultException extends SlowPathException {
      */
     public Object getResult() {
         return result;
+    }
+
+    /**
+     * For performance reasons, this exception does not record any stack trace information.
+     */
+    @SuppressWarnings("sync-override")
+    @Override
+    public Throwable fillInStackTrace() {
+        return null;
     }
 }
