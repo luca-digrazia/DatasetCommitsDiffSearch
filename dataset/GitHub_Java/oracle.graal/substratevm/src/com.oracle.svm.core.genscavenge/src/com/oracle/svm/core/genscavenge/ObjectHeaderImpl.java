@@ -217,7 +217,7 @@ public class ObjectHeaderImpl extends ObjectHeader {
          * can convert the hub to a Pointer without any precautions.
          */
         Word result = Word.objectToUntrackedPointer(hub);
-        if (SubstrateOptions.SpawnIsolates.getValue()) {
+        if (SubstrateOptions.UseHeapBaseRegister.getValue()) {
             if (hasBase()) {
                 result = result.subtract(KnownIntrinsics.heapBase());
             }
