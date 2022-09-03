@@ -231,11 +231,10 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     @Override
     public Object call(Object... args) {
         compilationProfile.reportIndirectCall();
-        Assumption argumentTypesAssumption = profiledArgumentTypesAssumption;
-        if (argumentTypesAssumption != null && argumentTypesAssumption.isValid()) {
+        if (profiledArgumentTypesAssumption != null && profiledArgumentTypesAssumption.isValid()) {
             // Argument profiling is not possible for targets of indirect calls.
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            argumentTypesAssumption.invalidate();
+            profiledArgumentTypesAssumption.invalidate();
             profiledArgumentTypes = null;
         }
         return doInvoke(args);
