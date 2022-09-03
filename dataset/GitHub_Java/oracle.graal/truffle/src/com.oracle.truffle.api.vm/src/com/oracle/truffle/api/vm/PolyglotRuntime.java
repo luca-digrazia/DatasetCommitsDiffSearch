@@ -27,7 +27,6 @@ package com.oracle.truffle.api.vm;
 import static com.oracle.truffle.api.vm.VMAccessor.INSTRUMENT;
 import static com.oracle.truffle.api.vm.VMAccessor.LANGUAGE;
 import static com.oracle.truffle.api.vm.VMAccessor.NODES;
-import static com.oracle.truffle.api.vm.VMAccessor.SPI;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -90,7 +89,6 @@ public final class PolyglotRuntime {
     }
 
     PolyglotRuntime(DispatchOutputStream out, DispatchOutputStream err, InputStream in, boolean automaticDispose) {
-        PolyglotEngine.ensureInitialized();
         this.engineProfile = PolyglotEngine.GLOBAL_PROFILE;
         this.instrumentationHandler = INSTRUMENT.createInstrumentationHandler(this, out, err, in);
         /*
@@ -118,7 +116,7 @@ public final class PolyglotRuntime {
         }
         this.automaticDispose = automaticDispose;
         this.languages = languageList;
-        this.instruments = createInstruments(InstrumentCache.load(SPI.allLoaders()));
+        this.instruments = createInstruments(InstrumentCache.load());
         for (Instrument instrument : instruments.values()) {
             instInfos.put(instrument.getId(), LANGUAGE.createInstrument(instrument, instrument.getId(), instrument.getName(), instrument.getVersion()));
         }
@@ -258,7 +256,7 @@ public final class PolyglotRuntime {
                         initialized = true;
                         LoadedLanguage loadedLanguage = cache.loadLanguage();
                         LANGUAGE.initializeLanguage(language, loadedLanguage.getLanguage(), loadedLanguage.isSingleton());
-                        options = LANGUAGE.describeOptions(loadedLanguage.getLanguage(), cache.getId());
+                        options = new OptionDescriptorsImpl(LANGUAGE.describeOptions(loadedLanguage.getLanguage(), cache.getId()));
                     }
                 }
             }
@@ -457,7 +455,9 @@ public final class PolyglotRuntime {
                         }
 
                         INSTRUMENT.initializeInstrument(PolyglotRuntime.this.instrumentationHandler, this, getCache().getInstrumentationClass());
-                        OptionDescriptors descriptors = INSTRUMENT.describeOptions(getRuntime().instrumentationHandler, this, this.getId());
+
+                        OptionDescriptors descriptors = new OptionDescriptorsImpl(INSTRUMENT.describeOptions(getRuntime().instrumentationHandler,
+                                        this, this.getId()));
                         OptionValuesImpl values = new OptionValuesImpl(null, descriptors);
                         INSTRUMENT.createInstrument(PolyglotRuntime.this.instrumentationHandler, this, cache.services(), values);
                     } else {

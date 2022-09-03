@@ -1452,7 +1452,7 @@ public class PolyglotEngine {
                     localEnv = env;
                     if (localEnv == null && create) {
                         localEnv = LANGUAGE.createEnv(this, shared.getLanguageEnsureInitialized(), engine().out, engine().err, engine().in,
-                                        getArgumentsForLanguage(), new OptionValuesImpl(null, shared.options), new String[0]);
+                                        getArgumentsForLanguage(), new OptionValuesImpl(null, shared.options));
                         context = LANGUAGE.getContext(localEnv);
                         this.env = localEnv;
                         LANGUAGE.postInitEnv(localEnv);
