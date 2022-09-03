@@ -36,7 +36,6 @@ import com.oracle.objectfile.ObjectFile.Element;
 import com.oracle.objectfile.ObjectFile.RelocationKind;
 import com.oracle.objectfile.ObjectFile.RelocationRecord;
 import com.oracle.objectfile.ObjectFile.Segment;
-import com.oracle.objectfile.ObjectFile.Symbol;
 import com.oracle.objectfile.io.AssemblyBuffer;
 import com.oracle.objectfile.macho.MachOObjectFile.MachOSection;
 import com.oracle.objectfile.macho.MachOObjectFile.SectionFlag;
@@ -200,8 +199,7 @@ public class MachOUserDefinedSection extends MachOSection implements ObjectFile.
         sbb.writeTruncatedLong(desiredInlineAddendValue, length);
 
         // set section flag to note that we have relocations
-        Symbol sym = getOwner().getSymbolTable().getSymbol(symbolName);
-        boolean symbolIsDefinedLocally = (sym != null && sym.isDefined());
+        boolean symbolIsDefinedLocally = getOwner().getSymbolTable().uniqueDefinedSymbolWithName(symbolName) != null;
         // see note in MachOObjectFile's createDefinedSymbol
         boolean createAsLocalReloc = false;
         assert !createAsLocalReloc || symbolIsDefinedLocally;
