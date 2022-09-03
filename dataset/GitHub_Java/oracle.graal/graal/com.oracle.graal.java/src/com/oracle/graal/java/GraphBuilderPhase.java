@@ -27,7 +27,6 @@ import static com.oracle.graal.api.code.TypeCheckHints.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.bytecode.Bytecodes.*;
 import static com.oracle.graal.java.GraphBuilderPhase.RuntimeCalls.*;
-import static com.oracle.graal.phases.GraalOptions.*;
 import static java.lang.reflect.Modifier.*;
 
 import java.lang.reflect.*;
@@ -159,7 +158,7 @@ public class GraphBuilderPhase extends Phase {
         methodSynchronizedObject = null;
         this.currentGraph = graph;
         this.frameState = new FrameStateBuilder(method, graph, graphBuilderConfig.eagerResolving());
-        TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
+        TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
         try {
             build();
         } finally {
@@ -183,7 +182,7 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void build() {
-        if (PrintProfilingInformation.getValue()) {
+        if (GraalOptions.PrintProfilingInformation) {
             TTY.println("Profiling info for " + method);
             TTY.println(MetaUtil.indent(MetaUtil.profileToString(profilingInfo, method, CodeUtil.NEW_LINE), "  "));
         }
@@ -922,7 +921,7 @@ public class GraphBuilderPhase extends Phase {
         append(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 0.1));
         lastInstr = falseSucc;
 
-        if (OmitHotExceptionStacktrace.getValue()) {
+        if (GraalOptions.OmitHotExceptionStacktrace) {
             ValueNode exception = ConstantNode.forObject(cachedNullPointerException, runtime, currentGraph);
             trueSucc.setNext(handleException(exception, bci()));
         } else {
@@ -946,7 +945,7 @@ public class GraphBuilderPhase extends Phase {
         append(new IfNode(currentGraph.unique(new IntegerBelowThanNode(index, length)), trueSucc, falseSucc, 0.9));
         lastInstr = trueSucc;
 
-        if (OmitHotExceptionStacktrace.getValue()) {
+        if (GraalOptions.OmitHotExceptionStacktrace) {
             ValueNode exception = ConstantNode.forObject(cachedArrayIndexOutOfBoundsException, runtime, currentGraph);
             falseSucc.setNext(handleException(exception, bci()));
         } else {
@@ -1024,7 +1023,7 @@ public class GraphBuilderPhase extends Phase {
         if (target instanceof ResolvedJavaMethod) {
             ResolvedJavaMethod resolvedTarget = (ResolvedJavaMethod) target;
             ResolvedJavaType holder = resolvedTarget.getDeclaringClass();
-            if (!holder.isInitialized() && ResolveClassBeforeStaticInvoke.getValue()) {
+            if (!holder.isInitialized() && GraalOptions.ResolveClassBeforeStaticInvoke) {
                 handleUnresolvedInvoke(target, InvokeKind.Static);
             } else {
                 ValueNode[] args = frameState.popArguments(resolvedTarget.getSignature().getParameterSlots(false), resolvedTarget.getSignature().getParameterCount(false));
@@ -1108,11 +1107,8 @@ public class GraphBuilderPhase extends Phase {
         }
         if (exact != null) {
             // either the holder class is exact, or the receiver object has an exact type
-            ResolvedJavaMethod exactMethod = exact.resolveMethod(target);
-            if (exactMethod != null) {
-                invokeDirect(exactMethod, args);
-                return;
-            }
+            invokeDirect(exact.resolveMethod(target), args);
+            return;
         }
         // devirtualization failed, produce an actual invokevirtual
         appendInvoke(invokeKind, target, args);
@@ -1124,7 +1120,7 @@ public class GraphBuilderPhase extends Phase {
 
     private void appendInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args) {
         Kind resultType = targetMethod.getSignature().getReturnKind();
-        if (DeoptALot.getValue()) {
+        if (GraalOptions.DeoptALot) {
             append(new DeoptimizeNode(DeoptimizationAction.None, RuntimeConstraint));
             frameState.pushReturn(resultType, ConstantNode.defaultForKind(resultType, currentGraph));
             return;
@@ -1767,7 +1763,7 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void traceState() {
-        if (TraceBytecodeParserLevel.getValue() >= TRACELEVEL_STATE && Debug.isLogEnabled()) {
+        if (GraalOptions.TraceBytecodeParserLevel >= TRACELEVEL_STATE && Debug.isLogEnabled()) {
             Debug.log(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
             for (int i = 0; i < frameState.localsSize(); ++i) {
                 ValueNode value = frameState.localAt(i);
@@ -1997,7 +1993,7 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void traceInstruction(int bci, int opcode, boolean blockStart) {
-        if (TraceBytecodeParserLevel.getValue() >= TRACELEVEL_INSTRUCTIONS && Debug.isLogEnabled()) {
+        if (GraalOptions.TraceBytecodeParserLevel >= TRACELEVEL_INSTRUCTIONS && Debug.isLogEnabled()) {
             StringBuilder sb = new StringBuilder(40);
             sb.append(blockStart ? '+' : '|');
             if (bci < 10) {

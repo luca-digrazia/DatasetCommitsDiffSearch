@@ -24,9 +24,9 @@ package com.oracle.graal.hotspot.stubs;
 
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.meta.MetaUtil.*;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
 import java.lang.reflect.*;
 
@@ -40,6 +40,7 @@ import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
@@ -259,7 +260,7 @@ public class ForeignCallStub extends Stub {
             if (kind == Kind.Object) {
                 stamp = StampFactory.declared(type);
             } else {
-                stamp = StampFactory.forKind(type.getKind());
+                stamp = StampFactory.forKind(kind);
             }
             LocalNode local = builder.add(new LocalNode(i, stamp));
             locals[i] = local;
@@ -282,14 +283,14 @@ public class ForeignCallStub extends Stub {
         return invoke;
     }
 
-    private StubForeignCallNode createTargetCall(GraphBuilder builder, LocalNode[] locals, ReadRegisterNode thread) {
+    private ForeignCallNode createTargetCall(GraphBuilder builder, LocalNode[] locals, ReadRegisterNode thread) {
         if (prependThread) {
             ValueNode[] targetArguments = new ValueNode[1 + locals.length];
             targetArguments[0] = thread;
             System.arraycopy(locals, 0, targetArguments, 1, locals.length);
-            return builder.append(new StubForeignCallNode(runtime, target.getDescriptor(), targetArguments));
+            return builder.append(new ForeignCallNode(runtime, target.getDescriptor(), targetArguments));
         } else {
-            return builder.append(new StubForeignCallNode(runtime, target.getDescriptor(), locals));
+            return builder.append(new ForeignCallNode(runtime, target.getDescriptor(), locals));
         }
     }
 

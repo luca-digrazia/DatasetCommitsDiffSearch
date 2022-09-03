@@ -189,6 +189,11 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     }
 
     @Override
+    public boolean isCallSiteDeoptimization() {
+        return true;
+    }
+
+    @Override
     public GuardingNode getGuard() {
         return guard;
     }

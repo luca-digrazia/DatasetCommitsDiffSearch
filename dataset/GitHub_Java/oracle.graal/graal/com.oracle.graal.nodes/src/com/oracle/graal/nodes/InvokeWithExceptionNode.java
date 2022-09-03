@@ -238,6 +238,11 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     @Override
+    public boolean isCallSiteDeoptimization() {
+        return true;
+    }
+
+    @Override
     public GuardingNode getGuard() {
         return guard;
     }
