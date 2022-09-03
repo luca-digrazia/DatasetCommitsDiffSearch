@@ -70,9 +70,10 @@ public class NodeIntrinsificationPhase extends Phase {
 
     protected boolean tryIntrinsify(MethodCallTargetNode methodCallTargetNode, List<Node> cleanUpReturnList) {
         ResolvedJavaMethod target = methodCallTargetNode.targetMethod();
-        NodeIntrinsic intrinsic = target.getAnnotation(Node.NodeIntrinsic.class);
         ResolvedJavaType declaringClass = target.getDeclaringClass();
         StructuredGraph graph = methodCallTargetNode.graph();
+
+        NodeIntrinsic intrinsic = getIntrinsic(target);
         if (intrinsic != null) {
             assert target.getAnnotation(Fold.class) == null;
             assert Modifier.isStatic(target.getModifiers()) : "node intrinsic must be static: " + target;
@@ -129,6 +130,13 @@ public class NodeIntrinsificationPhase extends Phase {
     }
 
     /**
+     * Permits a subclass to override the default definition of "intrinsic".
+     */
+    protected NodeIntrinsic getIntrinsic(ResolvedJavaMethod method) {
+        return method.getAnnotation(Node.NodeIntrinsic.class);
+    }
+
+    /**
      * Permits a subclass to override the default definition of "foldable".
      */
     protected boolean isFoldable(ResolvedJavaMethod method) {
@@ -138,7 +146,7 @@ public class NodeIntrinsificationPhase extends Phase {
     /**
      * Converts the arguments of an invoke node to object values suitable for use as the arguments
      * to a reflective invocation of a Java constructor or method.
-     *
+     * 
      * @param folding specifies if the invocation is for handling a {@link Fold} annotation
      * @return the arguments for the reflective invocation or null if an argument of {@code invoke}
      *         that is expected to be constant isn't
@@ -395,7 +403,7 @@ public class NodeIntrinsificationPhase extends Phase {
             }
             graph.removeFixed(pi);
         } else {
-            DebugScope.forceDump(graph, "exception");
+            DebugScope.dump(graph, "exception");
             assert false : sourceLocation(usage) + " has unexpected usage " + usage + " of checkcast " + input + " at " + sourceLocation(input);
         }
     }
