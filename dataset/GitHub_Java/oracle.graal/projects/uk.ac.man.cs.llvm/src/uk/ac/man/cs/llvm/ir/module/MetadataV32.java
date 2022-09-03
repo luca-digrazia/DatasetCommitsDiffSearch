@@ -229,9 +229,7 @@ public class MetadataV32 extends Metadata {
         node.setType(metadata.getReference(args.next()));
         node.setLocalToCompileUnit(asInt1(args.next()));
         node.setDefinedInCompileUnit(asInt1(args.next()));
-        // TODO: Reference to the global variable, can be MetadataConstant but also
-        // MetadataConstantPointer
-        args.next();
+        metadata.getReference(args.next()); // TODO: Reference to the global variable
 
         metadata.add(node);
     }
