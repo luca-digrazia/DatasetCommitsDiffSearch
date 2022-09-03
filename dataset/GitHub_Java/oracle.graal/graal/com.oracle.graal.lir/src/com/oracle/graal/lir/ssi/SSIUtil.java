@@ -25,6 +25,8 @@ package com.oracle.graal.lir.ssi;
 import java.util.Arrays;
 import java.util.List;
 
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.LIRInstruction;
@@ -33,8 +35,6 @@ import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.ValueConsumer;
 import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
-
-import jdk.vm.ci.meta.Value;
 
 /**
  * Utilities for working with Static-Single-Information LIR form.
@@ -152,7 +152,8 @@ public final class SSIUtil {
         assert fromBlock.getSuccessorCount() == 1 || toBlock.getPredecessorCount() == 1 : String.format("Critical Edge? %s has %d successors and %s has %d predecessors", fromBlock,
                         fromBlock.getSuccessorCount(), toBlock, toBlock.getPredecessorCount());
         assert Arrays.asList(fromBlock.getSuccessors()).contains(toBlock) : String.format("Predecessor block %s has wrong successor: %s, should contain: %s", fromBlock,
-                        Arrays.toString(fromBlock.getSuccessors()), toBlock);
+                        Arrays.toString(fromBlock.getSuccessors()),
+                        toBlock);
 
         BlockEndOp blockEnd = outgoing(lir, fromBlock);
         LabelOp label = incoming(lir, toBlock);

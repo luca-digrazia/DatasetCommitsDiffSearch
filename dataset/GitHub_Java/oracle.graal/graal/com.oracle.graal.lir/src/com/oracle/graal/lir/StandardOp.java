@@ -27,24 +27,25 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.OUTGOING;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
+import static com.oracle.graal.lir.LIRValueUtil.isVariable;
 
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
-import com.oracle.graal.asm.Label;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.framemap.FrameMap;
-import com.oracle.graal.lir.ssa.SSAUtil;
-
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterSaveLayout;
 import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.Value;
+
+import com.oracle.graal.asm.Label;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.framemap.FrameMap;
+import com.oracle.graal.lir.ssa.SSAUtil;
 
 /**
  * A collection of machine-independent LIR operations, as well as interfaces to be implemented for
@@ -182,7 +183,7 @@ public class StandardOp {
          * @return true if this label acts as a PhiIn.
          */
         public boolean isPhiIn() {
-            return getPhiSize() > 0;
+            return getIncomingSize() > 0 && isVariable(getIncomingValue(0));
         }
 
         public void forEachIncomingValue(InstructionValueProcedure proc) {
@@ -398,7 +399,7 @@ public class StandardOp {
         @Override
         public void emitCode(CompilationResultBuilder crb) {
             if (block != null) {
-                throw new GraalError(this + " should have been replaced");
+                throw new JVMCIError(this + " should have been replaced");
             }
         }
     }
@@ -469,7 +470,7 @@ public class StandardOp {
 
         @Override
         public void emitCode(CompilationResultBuilder crb) {
-            throw new GraalError(this + " should have been removed");
+            throw new JVMCIError(this + " should have been removed");
         }
 
         @Override
