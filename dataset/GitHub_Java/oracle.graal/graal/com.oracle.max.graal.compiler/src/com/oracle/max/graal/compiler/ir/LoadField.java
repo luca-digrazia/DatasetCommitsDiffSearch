@@ -23,6 +23,7 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.graph.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.compiler.phases.LoweringPhase.LoweringOp;
@@ -129,9 +130,13 @@ public final class LoadField extends AccessField {
             LoadField loadField = (LoadField) node;
             Graph graph = node.graph();
             CiConstant constant = null;
-            if (loadField.isStatic()) {
+            if (graph instanceof CompilerGraph) {
+                RiMethod method = ((CompilerGraph) graph).getCompilation().method;
+                if (loadField.isStatic() && !method.isClassInitializer()) {
                     constant = loadField.field().constantValue(null);
-            } else {
+                }
+            }
+            if (!loadField.isStatic()) {
                 Value object = loadField.object();
                 if (object.isConstant()) {
                     constant = loadField.field().constantValue(object.asConstant());

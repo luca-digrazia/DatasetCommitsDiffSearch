@@ -24,6 +24,7 @@ package com.oracle.max.graal.compiler.phases;
 
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.schedule.*;
+import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -49,42 +50,27 @@ public class LoweringPhase extends Phase {
         s.apply(graph);
 
         for (Block b : s.getBlocks()) {
-            final Node[] firstNodeValue = new Node[]{b.firstNode()};
+            //final Node firstNode = b.firstNode();
 
             final CiLoweringTool loweringTool = new CiLoweringTool() {
                 @Override
                 public Node getGuardAnchor() {
-                    Node firstNode = firstNodeValue[0];
-                    if (firstNode == firstNode.graph().start()) {
-                        Anchor a = new Anchor(graph);
-                        a.setNext((FixedNode) firstNode.graph().start().start());
-                        firstNode.graph().start().setStart(a);
-                        firstNodeValue[0] = a;
-                        return a;
-                    } else if (!(firstNode instanceof Anchor) && !(firstNode instanceof Merge)) {
-                        Anchor a = new Anchor(graph);
-                        assert firstNode.predecessors().size() == 1;
-                        Node pred = firstNode.predecessors().get(0);
-                        int predIndex = pred.successors().indexOf(firstNode);
-                        pred.successors().set(predIndex, a);
-                        a.setNext((FixedNode) firstNode);
-                        firstNodeValue[0] = a;
-                        return a;
-                    }
-                    return firstNode;
+                    throw Util.unimplemented();
+//                    if (!(firstNode instanceof Anchor) && !(firstNode instanceof Merge)) {
+//                        Anchor a = new Anchor(graph);
+//                        assert firstNode.predecessors().size() == 1;
+//                        Node pred = firstNode.predecessors().get(0);
+//                        int predIndex = firstNode.predecessorsIndex().get(0);
+//                        a.successors().setAndClear(Instruction.SUCCESSOR_NEXT, pred, predIndex);
+//                        pred.successors().set(predIndex, a);
+//                        return a;
+//                    }
+//                    return firstNode;
                 }
 
                 @Override
                 public RiRuntime getRuntime() {
                     return runtime;
-                }
-
-                @Override
-                public Node createGuard(Node condition) {
-                    GuardNode guard = new GuardNode(graph);
-                    guard.setAnchor((FixedNode) getGuardAnchor());
-                    guard.setNode((BooleanNode) condition);
-                    return guard;
                 }
             };
 
