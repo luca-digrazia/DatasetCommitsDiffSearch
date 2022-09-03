@@ -42,7 +42,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public boolean useBiasedLocking;
     public boolean usePopCountInstruction;
     public boolean useAESIntrinsics;
-    public boolean useG1GC;
 
     // offsets, ...
     public int vmPageSize;
@@ -288,7 +287,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int layoutHelperLog2ElementSizeMask;
     public int layoutHelperElementTypeShift;
     public int layoutHelperElementTypeMask;
-    public int layoutHelperElementTypePrimitiveInPlace;
     public int layoutHelperHeaderSizeShift;
     public int layoutHelperHeaderSizeMask;
     public int layoutHelperOffset;
