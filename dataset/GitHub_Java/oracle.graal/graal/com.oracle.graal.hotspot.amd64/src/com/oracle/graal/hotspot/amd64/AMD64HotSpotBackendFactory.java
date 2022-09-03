@@ -52,13 +52,12 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
         assert host == null;
         TargetDescription target = createTarget(runtime.getConfig());
 
-        HotSpotRegistersProvider registers = createRegisters();
         HotSpotMetaAccessProvider metaAccess = createMetaAccess(runtime);
         HotSpotCodeCacheProvider codeCache = createCodeCache(runtime, target);
         HotSpotConstantReflectionProvider constantReflection = createConstantReflection(runtime);
         Value[] nativeABICallerSaveRegisters = createNativeABICallerSaveRegisters(runtime.getConfig(), codeCache.getRegisterConfig());
         HotSpotHostForeignCallsProvider foreignCalls = createForeignCalls(runtime, metaAccess, codeCache, nativeABICallerSaveRegisters);
-        HotSpotHostLoweringProvider lowerer = createLowerer(runtime, metaAccess, foreignCalls, registers);
+        HotSpotHostLoweringProvider lowerer = createLowerer(runtime, metaAccess, foreignCalls);
         // Replacements cannot have speculative optimizations since they have
         // to be valid for the entire run of the VM.
         Assumptions assumptions = new Assumptions(false);
@@ -66,6 +65,7 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
         Replacements replacements = createReplacements(runtime, assumptions, p);
         HotSpotDisassemblerProvider disassembler = createDisassembler(runtime);
         HotSpotSuitesProvider suites = createSuites(runtime);
+        HotSpotRegisters registers = createRegisters();
         HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers);
 
         return createBackend(runtime, providers);
@@ -75,7 +75,7 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
         return new AMD64HotSpotBackend(runtime, providers);
     }
 
-    protected HotSpotRegistersProvider createRegisters() {
+    protected HotSpotRegisters createRegisters() {
         return new HotSpotRegisters(AMD64.r15, AMD64.r12, AMD64.rsp);
     }
 
@@ -108,8 +108,8 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
         return new HotSpotSuitesProvider(runtime);
     }
 
-    protected AMD64HotSpotLoweringProvider createLowerer(HotSpotGraalRuntime runtime, HotSpotMetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers) {
-        return new AMD64HotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers);
+    protected AMD64HotSpotLoweringProvider createLowerer(HotSpotGraalRuntime runtime, HotSpotMetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls) {
+        return new AMD64HotSpotLoweringProvider(runtime, metaAccess, foreignCalls);
     }
 
     protected Value[] createNativeABICallerSaveRegisters(HotSpotVMConfig config, RegisterConfig regConfig) {

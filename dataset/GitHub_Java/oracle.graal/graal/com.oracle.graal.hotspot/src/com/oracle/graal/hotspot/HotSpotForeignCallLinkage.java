@@ -46,8 +46,7 @@ public class HotSpotForeignCallLinkage implements ForeignCallLinkage, InvokeTarg
      * {@linkplain ForeignCallLinkage#getTemporaries() temporary} registers.
      */
     public enum RegisterEffect {
-        DESTROYS_REGISTERS,
-        PRESERVES_REGISTERS
+        DESTROYS_REGISTERS, PRESERVES_REGISTERS
     }
 
     /**
@@ -56,9 +55,7 @@ public class HotSpotForeignCallLinkage implements ForeignCallLinkage, InvokeTarg
      * by another thread.
      */
     public enum Transition {
-        LEAF_NOFP,
-        LEAF,
-        NOT_LEAF;
+        LEAF, NOT_LEAF;
     }
 
     /**
@@ -258,10 +255,6 @@ public class HotSpotForeignCallLinkage implements ForeignCallLinkage, InvokeTarg
 
     @Override
     public boolean canDeoptimize() {
-        return transition == Transition.NOT_LEAF;
-    }
-
-    public boolean mayContainFP() {
-        return transition != Transition.LEAF_NOFP;
+        return transition != Transition.LEAF;
     }
 }
