@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.sl.test;
 
-import static com.oracle.truffle.sl.test.SLJavaInteropTest.toUnixString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -81,14 +80,14 @@ import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.StandardTags.CallTag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.KeyInfo;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.library.LibraryFactory;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
@@ -99,8 +98,6 @@ import com.oracle.truffle.tck.DebuggerTester;
  * Test of SL instrumentation.
  */
 public class SLInstrumentTest {
-
-    static final InteropLibrary INTEROP = LibraryFactory.resolve(InteropLibrary.class).getUncached();
 
     @Test
     public void testLexicalScopes() throws Exception {
@@ -461,24 +458,25 @@ public class SLInstrumentTest {
     }
 
     private static boolean contains(TruffleObject vars, String key) {
-        return INTEROP.isMemberExisting(vars, key);
+        return KeyInfo.isExisting(ForeignAccess.sendKeyInfo(Message.KEY_INFO.createNode(), vars, key));
     }
 
     private static Object read(TruffleObject vars, String key) {
         try {
-            return INTEROP.readMember(vars, key);
+            return ForeignAccess.sendRead(Message.READ.createNode(), vars, key);
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
             throw new AssertionError(e);
         }
     }
 
     private static boolean isNull(TruffleObject vars) {
-        return INTEROP.isNull(vars);
+        return ForeignAccess.sendIsNull(Message.IS_NULL.createNode(), vars);
     }
 
     private static int keySize(TruffleObject vars) {
         try {
-            return (int) INTEROP.getArraySize(INTEROP.getMembers(vars));
+            Object keys = ForeignAccess.sendKeys(Message.KEYS.createNode(), vars);
+            return ((Number) ForeignAccess.sendGetSize(Message.GET_SIZE.createNode(), (TruffleObject) keys)).intValue();
         } catch (UnsupportedMessageException e) {
             throw new AssertionError(e);
         }
@@ -520,7 +518,7 @@ public class SLInstrumentTest {
         Context context = Context.newBuilder().engine(engine).build();
         context.eval(source);
         String engineOutput = fullOutput;
-        assertEquals(engineOutput, toUnixString(engineOut));
+        assertEquals(engineOutput, engineOut.toString());
 
         // Check output
         Instrument outInstr = engine.getInstruments().get("testEnvironmentHandlerInstrument");
@@ -531,7 +529,7 @@ public class SLInstrumentTest {
         context.eval(source);
         BufferedReader fromOutReader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(consumedOut.toByteArray())));
         engineOutput = engineOutput + fullOutput;
-        assertEquals(engineOutput, toUnixString(engineOut));
+        assertEquals(engineOutput, engineOut.toString());
         assertTrue(fromOutReader.ready());
         assertEquals(fullLines, readLinesList(fromOutReader));
 
@@ -543,7 +541,7 @@ public class SLInstrumentTest {
         fromOutReader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(consumedOut.toByteArray())));
         BufferedReader fromOutReader2 = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(consumedOut2.toByteArray())));
         engineOutput = engineOutput + fullOutput;
-        assertEquals(engineOutput, toUnixString(engineOut));
+        assertEquals(engineOutput, engineOut.toString());
         assertTrue(fromOutReader.ready());
         assertTrue(fromOutReader2.ready());
         String fullLines2x = fullLines.substring(0, fullLines.length() - 1) + ", " + fullLines.substring(1);
@@ -556,7 +554,7 @@ public class SLInstrumentTest {
         consumedOut2.reset();
         context.eval(source);
         engineOutput = engineOutput + fullOutput;
-        assertEquals(engineOutput, toUnixString(engineOut));
+        assertEquals(engineOutput, engineOut.toString());
         assertEquals(0, consumedOut.size());
         assertTrue(consumedOut2.size() > 0);
         fromOutReader2 = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(consumedOut2.toByteArray())));
@@ -567,7 +565,7 @@ public class SLInstrumentTest {
         outputConsumerBinding2.dispose();
         context.eval(source);
         engineOutput = engineOutput + fullOutput;
-        assertEquals(engineOutput, toUnixString(engineOut));
+        assertEquals(engineOutput, engineOut.toString());
         assertEquals(0, consumedOut.size());
         assertEquals(0, consumedOut2.size());
 
@@ -759,16 +757,17 @@ public class SLInstrumentTest {
         assertEquals(Boolean.TRUE, ret.asBoolean());
 
         earlyReturn.fceCode = "fce(c)";
-        earlyReturn.returnValue = -42.00;
+        earlyReturn.returnValue = -42.42;
         ret = context.eval(source);
         assertTrue(ret.isNumber());
-        assertEquals(-42.0, ret.asDouble(), 1e-8);
+        assertEquals(-42.42, ret.asDouble(), 1e-8);
 
         earlyReturn.fceCode = "fce(c)";
         earlyReturn.returnValue = "Hello!";
         ret = context.eval(source);
         assertTrue(ret.isString());
         assertEquals("Hello!", ret.asString());
+
     }
 
     @TruffleInstrument.Registration(id = "testEarlyReturn", services = EarlyReturnInstrument.class)
@@ -814,9 +813,6 @@ public class SLInstrumentTest {
      */
     @Test
     public void testReplaceNodeReturnValue() throws Exception {
-        if (System.getProperty("java.vm.name").contains("Graal:graal-enterprise")) {
-            return; // GR-16755
-        }
         String code = "function main() {\n" +
                         "  a = new();\n" +
                         "  b = a.rp1;\n" +
@@ -871,33 +867,41 @@ public class SLInstrumentTest {
             });
         }
 
-        @ExportLibrary(InteropLibrary.class)
-        @SuppressWarnings("static-method")
         static class ReplacedTruffleObject implements TruffleObject {
-
-            @ExportMessage
-            final Object readMember(@SuppressWarnings("unused") String member) {
-                return "Replaced Value";
+            @Override
+            public ForeignAccess getForeignAccess() {
+                return ReplacedTruffleObjectMessageResolutionForeign.ACCESS;
             }
 
-            @ExportMessage
-            final boolean hasMembers() {
-                return true;
+            public static boolean isInstance(TruffleObject obj) {
+                return obj instanceof ReplacedTruffleObject;
             }
 
-            @ExportMessage
-            final Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
-                return new KeysArray(new String[]{"rp1, rp2"});
-            }
+            @MessageResolution(receiverType = ReplacedTruffleObject.class)
+            static final class ReplacedTruffleObjectMessageResolution {
 
-            @ExportMessage
-            final boolean isMemberReadable(String member) {
-                return member.equals("rp1") || member.equals("rp2");
+                @Resolve(message = "KEYS")
+                abstract static class ReplacedKeysNode extends Node {
+
+                    @SuppressWarnings("unused")
+                    public Object access(ReplacedTruffleObject ato) {
+                        return new KeysArray(new String[]{"rp1, rp2"});
+                    }
+                }
+
+                @Resolve(message = "READ")
+                abstract static class ReplacedReadNode extends Node {
+
+                    @SuppressWarnings("unused")
+                    public Object access(ReplacedTruffleObject ato, String name) {
+                        return "Replaced Value";
+                    }
+                }
             }
         }
     }
 
-    @ExportLibrary(InteropLibrary.class)
+    @MessageResolution(receiverType = KeysArray.class)
     static final class KeysArray implements TruffleObject {
 
         private final String[] keys;
@@ -906,30 +910,42 @@ public class SLInstrumentTest {
             this.keys = keys;
         }
 
-        @SuppressWarnings("static-method")
-        @ExportMessage
-        boolean hasArrayElements() {
-            return true;
-        }
+        @Resolve(message = "HAS_SIZE")
+        abstract static class HasSize extends Node {
 
-        @ExportMessage
-        boolean isArrayElementReadable(long index) {
-            return index >= 0 && index < keys.length;
-        }
-
-        @ExportMessage
-        long getArraySize() {
-            return keys.length;
-        }
-
-        @ExportMessage
-        Object readArrayElement(long index) throws InvalidArrayIndexException {
-            try {
-                return keys[(int) index];
-            } catch (IndexOutOfBoundsException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw InvalidArrayIndexException.create(index);
+            public Object access(@SuppressWarnings("unused") KeysArray receiver) {
+                return true;
             }
+        }
+
+        @Resolve(message = "GET_SIZE")
+        abstract static class GetSize extends Node {
+
+            public Object access(KeysArray receiver) {
+                return receiver.keys.length;
+            }
+        }
+
+        @Resolve(message = "READ")
+        abstract static class Read extends Node {
+
+            public Object access(KeysArray receiver, int index) {
+                try {
+                    return receiver.keys[index];
+                } catch (IndexOutOfBoundsException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw UnknownIdentifierException.raise(String.valueOf(index));
+                }
+            }
+        }
+
+        @Override
+        public ForeignAccess getForeignAccess() {
+            return KeysArrayForeign.ACCESS;
+        }
+
+        static boolean isInstance(TruffleObject array) {
+            return array instanceof KeysArray;
         }
 
     }
