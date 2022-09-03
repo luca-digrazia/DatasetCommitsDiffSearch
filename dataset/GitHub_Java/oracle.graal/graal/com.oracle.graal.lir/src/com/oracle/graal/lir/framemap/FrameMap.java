@@ -85,7 +85,7 @@ public abstract class FrameMap {
     /**
      * Determines if this frame has values on the stack for outgoing calls.
      */
-    protected boolean hasOutgoingStackArguments;
+    private boolean hasOutgoingStackArguments;
 
     /**
      * The list of stack slots allocated in this frame that are present in every reference map.

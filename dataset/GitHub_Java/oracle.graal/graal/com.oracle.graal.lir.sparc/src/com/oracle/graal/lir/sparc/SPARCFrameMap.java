@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,42 +22,50 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.framemap.FrameMap;
+
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.sparc.SPARC;
+import jdk.vm.ci.sparc.SPARCKind;
 
 /**
  * SPARC specific frame map.
- * 
+ *
  * This is the format of a SPARC stack frame:
- * 
+ *
  * <pre>
  *   Base       Contents
- * 
  *            :                                :  -----
  *   caller   | incoming overflow argument n   |    ^
  *   frame    :     ...                        :    | positive
  *            | incoming overflow argument 0   |    | offsets
- *   ---------+--------------------------------+---------------------
- *            | spill slot 0                   |    | negative   ^      |
+ *            +--------------------------------+    |
+ *            |                                |    |
+ *            : register save area             :    |
+ *            |                                |    |
+ *   ---------+--------------------------------+---------------------------
+ *            | spill slot 0                   |    | negative   ^      ^
  *            :     ...                        :    v offsets    |      |
- *            | spill slot n                   |  -----        total  frame
- *            +--------------------------------+               frame  size
+ *            | spill slot n                   |  -----        total    |
+ *            +--------------------------------+               frame    |
  *   current  | alignment padding              |               size     |
  *   frame    +--------------------------------+  -----          |      |
- *            | outgoing overflow argument n   |    ^            |      |
- *            :     ...                        :    | positive   |      |
- *            | outgoing overflow argument 0   |    | offsets    |      v
- *            +--------------------------------+    |            |
- *            | return address                 |    |            |
- *            +--------------------------------+    |            |    -----
- *            |                                |    |            |      ^
+ *            | outgoing overflow argument n   |    ^            |    frame
+ *            :     ...                        :    | positive   |    size
+ *            | outgoing overflow argument 0   |    | offsets    |      |
+ *            +--------------------------------+    |            |      |
+ *            | return address                 |    |            |      |
+ *            +--------------------------------+    |            |      |
+ *            |                                |    |            |      |
  *            : callee save area               :    |            |      |
- *            |                                |    |            v      |
- *    %sp-->  +--------------------------------+---------------------------
- * 
+ *            |                                |    |            v      v
+ *    %sp--&gt;  +--------------------------------+---------------------------
+ *
  * </pre>
- * 
+ *
  * The spill slot area also includes stack allocated memory blocks (ALLOCA blocks). The size of such
  * a block may be greater than the size of a normal spill slot or the word size.
  * <p>
@@ -69,17 +77,49 @@ import com.oracle.graal.lir.*;
  */
 public final class SPARCFrameMap extends FrameMap {
 
-    public SPARCFrameMap(CodeCacheProvider runtime, TargetDescription target, RegisterConfig registerConfig) {
-        super(runtime, target, registerConfig);
+    public SPARCFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ReferenceMapBuilderFactory referenceMapFactory) {
+        super(codeCache, registerConfig, referenceMapFactory);
+        // Initial spill size is set to register save area size (SPARC register window)
+        initialSpillSize = 0;
+        spillSize = initialSpillSize;
     }
 
     @Override
-    public int offsetToCalleeSaveArea() {
-        return 0;
+    public int totalFrameSize() {
+        return frameSize();
     }
 
     @Override
-    protected StackSlot allocateNewSpillSlot(PlatformKind kind, int additionalOffset) {
-        return StackSlot.get(kind, spillSize + additionalOffset, false);
+    public int currentFrameSize() {
+        return alignFrameSize(SPARC.REGISTER_SAFE_AREA_SIZE + outgoingSize + spillSize);
+    }
+
+    /**
+     * In SPARC we have spill slots word aligned.
+     */
+    @Override
+    public int spillSlotSize(LIRKind kind) {
+        return kind.getPlatformKind().getSizeInBytes();
+    }
+
+    @Override
+    public int offsetForStackSlot(StackSlot slot) {
+        // @formatter:off
+        assert (!slot.getRawAddFrameSize() && slot.getRawOffset() <  outgoingSize + SPARC.REGISTER_SAFE_AREA_SIZE) ||
+               (slot.getRawAddFrameSize() && slot.getRawOffset()  <  0 && -slot.getRawOffset() <= spillSize) ||
+               (slot.getRawAddFrameSize() && slot.getRawOffset()  >= 0) :
+                   String.format("RawAddFrameSize: %b RawOffset: 0x%x spillSize: 0x%x outgoingSize: 0x%x", slot.getRawAddFrameSize(), slot.getRawOffset(), spillSize, outgoingSize);
+        // @formatter:on
+        return super.offsetForStackSlot(slot);
+    }
+
+    @Override
+    public boolean frameNeedsAllocating() {
+        return super.frameNeedsAllocating() || spillSize > 0;
+    }
+
+    public StackSlot allocateDeoptimizationRescueSlot() {
+        assert spillSize == initialSpillSize : "Deoptimization rescue slot must be the first stack slot";
+        return allocateSpillSlot(LIRKind.value(SPARCKind.XWORD));
     }
 }
