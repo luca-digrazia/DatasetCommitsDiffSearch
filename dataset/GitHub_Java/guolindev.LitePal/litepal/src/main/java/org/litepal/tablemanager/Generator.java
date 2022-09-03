@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.litepal.tablemanager;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 import org.litepal.LitePalBase;
 import org.litepal.exceptions.DatabaseGenerateException;
@@ -28,6 +29,7 @@ import org.litepal.util.BaseUtility;
 
 import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
+import android.text.TextUtils;
 
 /**
  * This class is the basic class for managing database dynamically. It is used
@@ -80,8 +82,6 @@ public abstract class Generator extends LitePalBase {
 	 * mapping list of litepal.xml file.
 	 * 
 	 * @return Collection of RelationModel for all the mapping classes.
-	 * 
-	 * @throws org.litepal.exceptions.DatabaseGenerateException
 	 */
 	protected Collection<AssociationsModel> getAllAssociations() {
 		if (mAllRelationModels == null || mAllRelationModels.isEmpty()) {
@@ -102,13 +102,15 @@ public abstract class Generator extends LitePalBase {
 	 * 
 	 * @throws org.litepal.exceptions.DatabaseGenerateException
 	 */
-	protected void execute(String[] sqls, SQLiteDatabase db) {
+	protected void execute(List<String> sqls, SQLiteDatabase db) {
 		String throwSQL = "";
 		try {
-			if (sqls != null) {
+			if (sqls != null && !sqls.isEmpty()) {
 				for (String sql : sqls) {
-					throwSQL = sql;
-					db.execSQL(BaseUtility.changeCase(sql));
+                    if (!TextUtils.isEmpty(sql)) {
+                        throwSQL = BaseUtility.changeCase(sql);
+                        db.execSQL(throwSQL);
+                    }
 				}
 			}
 		} catch (SQLException e) {
