@@ -61,8 +61,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
         MethodHandle(config().jvmConstantMethodHandle),
         MethodHandleInError(config().jvmConstantMethodHandleInError),
         MethodType(config().jvmConstantMethodType),
-        MethodTypeInError(config().jvmConstantMethodTypeInError),
-        InvokeDynamic(config().jvmConstantInvokeDynamic);
+        MethodTypeInError(config().jvmConstantMethodTypeInError);
         // @formatter:on
 
         private final int value;
@@ -96,7 +95,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     /**
      * Gets the holder for this constant pool as {@link HotSpotResolvedObjectType}.
-     *
+     * 
      * @return holder for this constant pool
      */
     private HotSpotResolvedObjectType getHolder() {
@@ -107,7 +106,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     /**
      * Converts a raw index from the bytecodes to a constant pool index by adding a
      * {@link HotSpotVMConfig#constantPoolCpCacheIndexTag constant}.
-     *
+     * 
      * @param rawIndex index from the bytecode
      * @param opcode bytecode to convert the index for
      * @return constant pool index
@@ -127,39 +126,8 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     }
 
     /**
-     * Decode a constant pool cache index to a constant pool index.
-     *
-     * See {@code ConstantPool::decode_cpcache_index}.
-     *
-     * @param index constant pool cache index
-     * @return decoded index
-     */
-    private static int decodeConstantPoolCacheIndex(int index) {
-        if (isInvokedynamicIndex(index)) {
-            return decodeInvokedynamicIndex(index);
-        } else {
-            return index - runtime().getConfig().constantPoolCpCacheIndexTag;
-        }
-    }
-
-    /**
-     * See {@code ConstantPool::is_invokedynamic_index}.
-     */
-    private static boolean isInvokedynamicIndex(int index) {
-        return index < 0;
-    }
-
-    /**
-     * See {@code ConstantPool::decode_invokedynamic_index}.
-     */
-    private static int decodeInvokedynamicIndex(int i) {
-        assert isInvokedynamicIndex(i) : i;
-        return ~i;
-    }
-
-    /**
      * Gets the constant pool tag at index {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return constant pool tag
      */
@@ -173,7 +141,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     /**
      * Gets the constant pool entry at index {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return constant pool entry
      */
@@ -184,7 +152,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     /**
      * Gets the integer constant pool entry at index {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return integer constant pool entry at index
      */
@@ -195,7 +163,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     /**
      * Gets the long constant pool entry at index {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return long constant pool entry
      */
@@ -206,7 +174,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     /**
      * Gets the float constant pool entry at index {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return float constant pool entry
      */
@@ -217,7 +185,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     /**
      * Gets the double constant pool entry at index {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return float constant pool entry
      */
@@ -228,7 +196,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     /**
      * Gets the {@code JVM_CONSTANT_NameAndType} constant pool entry at index {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return {@code JVM_CONSTANT_NameAndType} constant pool entry
      */
@@ -240,7 +208,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     /**
      * Gets the {@code JVM_CONSTANT_NameAndType} reference index constant pool entry at index
      * {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return {@code JVM_CONSTANT_NameAndType} reference constant pool entry
      */
@@ -251,7 +219,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     /**
      * Gets the name of a {@code JVM_CONSTANT_NameAndType} constant pool entry at index
      * {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return name as {@link String}
      */
@@ -264,7 +232,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     /**
      * Gets the name reference index of a {@code JVM_CONSTANT_NameAndType} constant pool entry at
      * index {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return name reference index
      */
@@ -277,7 +245,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     /**
      * Gets the signature of a {@code JVM_CONSTANT_NameAndType} constant pool entry at index
      * {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return signature as {@link String}
      */
@@ -290,7 +258,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     /**
      * Gets the signature reference index of a {@code JVM_CONSTANT_NameAndType} constant pool entry
      * at index {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return signature reference index
      */
@@ -302,7 +270,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     /**
      * Gets the klass reference index constant pool entry at index {@code index}.
-     *
+     * 
      * @param index constant pool index
      * @return klass reference index
      */
@@ -313,7 +281,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     /**
      * Gets the uncached klass reference index constant pool entry at index {@code index}. See:
      * {@code ConstantPool::uncached_klass_ref_index_at}.
-     *
+     * 
      * @param index constant pool index
      * @return klass reference index
      */
@@ -326,7 +294,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     /**
      * Asserts that the constant pool index {@code index} is in the bounds of the constant pool.
-     *
+     * 
      * @param index constant pool index
      */
     private void assertBounds(int index) {
@@ -335,7 +303,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     /**
      * Asserts that the constant pool tag at index {@code index} is equal to {@code tag}.
-     *
+     * 
      * @param index constant pool index
      * @param tag expected tag
      */
@@ -403,7 +371,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     /**
      * Gets a {@link JavaType} corresponding a given metaspace Klass or a metaspace Symbol depending
      * on the {@link HotSpotVMConfig#compilerToVMKlassTag tag}.
-     *
+     * 
      * @param metaspacePointer either a metaspace Klass or a metaspace Symbol
      */
     private static JavaType getJavaType(final long metaspacePointer) {
@@ -493,11 +461,6 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
             case Bytecodes.LDC_W:
             case Bytecodes.LDC2_W:
                 index = cpi;
-                break;
-            case Bytecodes.INVOKEDYNAMIC:
-                // invokedynamic instructions point to a constant pool cache entry.
-                index = decodeConstantPoolCacheIndex(cpi);
-                index = runtime().getCompilerToVM().constantPoolRemapInstructionOperandFromCache(metaspaceConstantPool, index);
                 break;
             default:
                 index = toConstantPoolIndex(cpi, opcode);
