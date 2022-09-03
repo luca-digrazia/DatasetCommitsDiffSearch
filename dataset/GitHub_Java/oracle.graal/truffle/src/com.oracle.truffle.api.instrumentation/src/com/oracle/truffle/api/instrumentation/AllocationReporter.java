@@ -38,15 +38,12 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 
 /**
  * Reporter of guest language value allocations. Language implementation ought to use this class to
  * report all allocations and re-allocations of guest language values. An instance of this class can
- * be obtained from {@link Env#lookup(java.lang.Class) Env.lookup(AllocationReporter.class)}. If
- * used from compiled code paths, then the allocation reporter must be stored in a compilation final
- * or final field.
+ * be obtained from {@link Env#lookup(java.lang.Class) Env.lookup(AllocationReporter.class)}.
  * <p>
  * Usage example: {@link AllocationReporterSnippets#example}
  *
@@ -211,10 +208,8 @@ public final class AllocationReporter {
         notifyAllocateOrReallocate(valueToReallocate, oldSize, newSizeEstimate);
     }
 
-    @ExplodeLoop
     private void notifyAllocateOrReallocate(Object value, long oldSize, long newSizeEstimate) {
         assert setValueCheck(value);
-        CompilerAsserts.partialEvaluationConstant(this);
         if (!listenersNotChangedAssumption.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
         }
@@ -258,7 +253,6 @@ public final class AllocationReporter {
     }
 
     private void notifyAllocated(Object value, long oldSize, long newSize) {
-        CompilerAsserts.partialEvaluationConstant(this);
         if (!listenersNotChangedAssumption.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
         }

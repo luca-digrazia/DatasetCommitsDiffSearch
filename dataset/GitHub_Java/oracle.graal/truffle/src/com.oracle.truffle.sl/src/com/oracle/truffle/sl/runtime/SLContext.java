@@ -270,8 +270,4 @@ public final class SLContext {
         return slValue;
     }
 
-    public static SLContext getCurrent() {
-        return SLLanguage.getCurrentContext();
-    }
-
 }
