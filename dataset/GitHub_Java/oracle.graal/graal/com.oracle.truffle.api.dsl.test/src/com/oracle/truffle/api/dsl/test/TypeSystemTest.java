@@ -24,12 +24,13 @@ package com.oracle.truffle.api.dsl.test;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.dsl.test.NodeContainerTest.Str;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
 public class TypeSystemTest {
 
-    @TypeSystem({int.class, boolean.class, String.class, CallTarget.class, BExtendsAbstract.class, CExtendsAbstract.class, Abstract.class, Object[].class})
+    @TypeSystem({int.class, boolean.class, String.class, Str.class, CallTarget.class, BExtendsAbstract.class, CExtendsAbstract.class, Abstract.class, Object[].class})
     static class SimpleTypes {
 
         static int intCheck;
@@ -47,6 +48,11 @@ public class TypeSystemTest {
             return (int) value;
         }
 
+        @ImplicitCast
+        Str castStr(String strvalue) {
+            return new Str(strvalue);
+        }
+
     }
 
     @TypeSystemReference(SimpleTypes.class)
@@ -58,6 +64,10 @@ public class TypeSystemTest {
 
         public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
             return SimpleTypesGen.SIMPLETYPES.expectInteger(execute(frame));
+        }
+
+        public Str executeStr(VirtualFrame frame) throws UnexpectedResultException {
+            return SimpleTypesGen.SIMPLETYPES.expectStr(execute(frame));
         }
 
         public String executeString(VirtualFrame frame) throws UnexpectedResultException {
@@ -100,7 +110,7 @@ public class TypeSystemTest {
 
         public TestRootNode(E node) {
             super(null);
-            this.node = node;
+            this.node = adoptChild(node);
         }
 
         @Override
