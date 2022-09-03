@@ -424,10 +424,9 @@ public final class Source {
      * using the file extension and/or using it contents. Returns <code>null</code> if the language
      * of the given file could not be detected.
      *
-     * @throws IOException if an error opening the file occured.
      * @since 1.0
      */
-    public static String findLanguage(File file) throws IOException {
+    public static String findLanguage(File file) {
         return IMPL.findLanguage(file);
     }
 

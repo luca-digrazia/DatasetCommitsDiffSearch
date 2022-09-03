@@ -34,7 +34,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
 
-public final class PolyglotContext {
+/**
+ * @deprecated use {@link Context} instead.
+ */
+@Deprecated
+public final class PolyglotContext implements AutoCloseable {
 
     private final Map<String, Context> contexts = new ConcurrentHashMap<>();
 
@@ -47,7 +51,7 @@ public final class PolyglotContext {
     }
 
     public Value eval(String languageId, String source) {
-        return getContext(languageId).eval(source);
+        return getContext(languageId).eval(languageId, source);
     }
 
     public Value eval(String languageId, Source source) {
@@ -59,7 +63,7 @@ public final class PolyglotContext {
     }
 
     public Value eval(Language language, String source) {
-        return getContext(language).eval(source);
+        return getContext(language).eval(language.getId(), source);
     }
 
     public Context getContext(String languageId) {
@@ -91,7 +95,7 @@ public final class PolyglotContext {
             return prevContext;
         }
         Context context = new Context(impl, language);
-        context.initializeLanguage();
+        context.initialize(language.getId());
         contexts.put(language.getId(), context);
         return context;
     }
@@ -106,6 +110,24 @@ public final class PolyglotContext {
 
     public Engine getEngine() {
         return engine;
+    }
+
+    /**
+     * Closes this context and frees up potentially allocated native resources. Languages might not
+     * be able to free all native resources allocated by a context automatically, therefore it is
+     * recommended to close contexts after use. If the source {@link #getEngine() engine} is closed
+     * then this context is closed automatically.
+     * <p>
+     * If internal errors occur during closing of the language then they are printed to the
+     * configured {@link Builder#setErr(OutputStream) error output stream}. If a context was closed
+     * then all its methods will throw an {@link IllegalStateException} when invoked. Multiple calls
+     * to close have no effect.
+     *
+     * @see Engine#close() To close an engine.
+     * @since 1.0
+     */
+    public void close() {
+        impl.close(false);
     }
 
     public static class Builder {
@@ -151,11 +173,7 @@ public final class PolyglotContext {
          */
         public Builder setArguments(String languageId, String[] args) {
             Objects.requireNonNull(args);
-            Language language = engine.getLanguage(languageId);
-            if (language == null) {
-                throw new IllegalArgumentException("Invalid language id specified.");
-            }
-            return setArguments(language, args);
+            return setArguments(engine.getLanguage(languageId), args);
         }
 
         /**

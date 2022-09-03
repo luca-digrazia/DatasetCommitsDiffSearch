@@ -231,7 +231,6 @@ public final class Engine implements AutoCloseable {
         return getImpl().loadLanguageClass(className);
     }
 
-    @SuppressWarnings("hiding")
     public static final class Builder {
 
         private OutputStream out = System.out;
@@ -246,54 +245,21 @@ public final class Engine implements AutoCloseable {
             return this;
         }
 
-        public Builder out(OutputStream out) {
+        public Builder setOut(OutputStream out) {
             Objects.requireNonNull(out);
             this.out = out;
             return this;
         }
 
-        /**
-         * @deprecated use {@link #out(OutputStream)} instead.
-         */
-        @Deprecated
-        public Builder setOut(OutputStream out) {
-            return out(out);
-        }
-
-        public Builder err(OutputStream err) {
+        public Builder setErr(OutputStream err) {
             Objects.requireNonNull(err);
             this.err = err;
             return this;
         }
 
-        /**
-         * @deprecated use {@link #err(OutputStream)} instead.
-         */
-        @Deprecated
-        public Builder setErr(OutputStream err) {
-            return err(err);
-        }
-
-        public Builder in(InputStream in) {
+        public Builder setIn(InputStream in) {
             Objects.requireNonNull(in);
             this.in = in;
-            return this;
-        }
-
-        /**
-         * @deprecated use {@link #in(InputStream)} instead.
-         */
-        @Deprecated
-        public Builder setIn(InputStream in) {
-            return in(in);
-        }
-
-        /**
-         * @deprecated use {@link #useSystemProperties(boolean)} instead
-         */
-        @Deprecated
-        public Builder setUseSystemProperties(boolean enabled) {
-            useSystemProperties = enabled;
             return this;
         }
 
@@ -314,17 +280,14 @@ public final class Engine implements AutoCloseable {
          * @see #build() To build the engine instance.
          * @since 1.0
          */
-        public Builder useSystemProperties(boolean enabled) {
+        public Builder setUseSystemProperties(boolean enabled) {
             useSystemProperties = enabled;
             return this;
         }
 
-        /**
-         * @deprecated use {@link #option(String, String)} instead.
-         */
-        @Deprecated
-        public Builder setOption(String key, String value) {
-            return option(key, value);
+        // not implemented yet. planned in the future
+        Builder setSandbox(@SuppressWarnings("unused") boolean value) {
+            return this;
         }
 
         /**
@@ -339,19 +302,11 @@ public final class Engine implements AutoCloseable {
          *      instrument}.
          * @since 1.0
          */
-        public Builder option(String key, String value) {
+        public Builder setOption(String key, String value) {
             Objects.requireNonNull(key, "Key must not be null.");
             Objects.requireNonNull(value, "Value must not be null.");
             options.put(key, value);
             return this;
-        }
-
-        /**
-         * @deprecated use {@link #options(Map)} instead
-         */
-        @Deprecated
-        public Builder setOptions(Map<String, String> options) {
-            return options(options);
         }
 
         /**
@@ -362,7 +317,7 @@ public final class Engine implements AutoCloseable {
          * @see #setOption(String, String) To set a single option.
          * @since 1.0
          */
-        public Builder options(Map<String, String> options) {
+        public Builder setOptions(Map<String, String> options) {
             for (String key : options.keySet()) {
                 Objects.requireNonNull(options.get(key), "All option values must be non-null.");
             }

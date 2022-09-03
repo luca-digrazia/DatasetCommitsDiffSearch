@@ -146,8 +146,8 @@ final class PolyglotLanguageContextImpl implements VMObject {
         if (receiver instanceof Value) {
             Value receiverValue = (Value) receiver;
             PolyglotValueImpl argumentCache = (PolyglotValueImpl) context.engine.impl.getAPIAccess().getImpl(receiverValue);
-            Thread valueThread = argumentCache.languageContext.context.boundThread.get();
-            Thread currentThread = context.boundThread.get();
+            Thread valueThread = argumentCache.languageContext.context.boundThread;
+            Thread currentThread = context.boundThread;
 
             if (argumentCache.languageContext.getEngine() != getEngine()) {
                 throw engineError(new IllegalArgumentException(String.format("Values cannot be passed from one engine to another. " +

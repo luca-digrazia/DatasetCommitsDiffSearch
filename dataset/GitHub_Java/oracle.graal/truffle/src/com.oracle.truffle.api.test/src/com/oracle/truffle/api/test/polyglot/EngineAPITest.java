@@ -55,44 +55,44 @@ public class EngineAPITest {
     public void testBuilder() {
         assertNotNull(Engine.newBuilder().build());
         try {
-            Engine.newBuilder().err(null);
+            Engine.newBuilder().setErr(null);
             fail();
         } catch (NullPointerException e) {
         }
         try {
-            Engine.newBuilder().out(null);
+            Engine.newBuilder().setOut(null);
             fail();
         } catch (NullPointerException e) {
         }
         try {
-            Engine.newBuilder().in(null);
+            Engine.newBuilder().setIn(null);
             fail();
         } catch (NullPointerException e) {
         }
         try {
-            Engine.newBuilder().option(null, "");
+            Engine.newBuilder().setOption(null, "");
             fail();
         } catch (NullPointerException e) {
         }
         try {
-            Engine.newBuilder().option("", null);
+            Engine.newBuilder().setOption("", null);
             fail();
         } catch (NullPointerException e) {
         }
 
         try {
-            Engine.newBuilder().options(null);
+            Engine.newBuilder().setOptions(null);
             fail();
         } catch (NullPointerException e) {
         }
         try {
             Map<String, String> options = new HashMap<>();
             options.put("", null);
-            Engine.newBuilder().options(options);
+            Engine.newBuilder().setOptions(options);
             fail();
         } catch (NullPointerException e) {
         }
-        Assert.assertNotNull(Engine.newBuilder().useSystemProperties(false).build());
+        Assert.assertNotNull(Engine.newBuilder().setUseSystemProperties(false).build());
     }
 
     @Test
