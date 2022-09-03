@@ -23,8 +23,9 @@
 package com.oracle.max.graal.compiler.phases;
 
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.ir.Conditional.ConditionalStructure;
+import com.oracle.max.graal.compiler.ir.Phi.PhiType;
 import com.oracle.max.graal.compiler.schedule.*;
+import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 
 
@@ -69,7 +70,22 @@ public class ConvertConditionalPhase extends Phase {
                 condition = ((NegateBooleanNode) condition).value();
             }
             if (!(condition instanceof Compare || condition instanceof IsNonNull || condition instanceof NegateBooleanNode || condition instanceof Constant)) {
-                ConditionalStructure conditionalStructure = Conditional.createConditionalStructure(condition, conditional.trueValue(), conditional.falseValue());
+                If ifNode = new If(conditional.condition(), 0.5, graph);
+                EndNode trueEnd = new EndNode(graph);
+                EndNode falseEnd = new EndNode(graph);
+                ifNode.setTrueSuccessor(trueEnd);
+                ifNode.setFalseSuccessor(falseEnd);
+                Merge merge = new Merge(graph);
+                merge.addEnd(trueEnd);
+                merge.addEnd(falseEnd);
+                Phi phi = new Phi(conditional.kind, merge, PhiType.Value, graph);
+                phi.addInput(conditional.trueValue());
+                phi.addInput(conditional.falseValue());
+                //recreate framestate
+                FrameState stateDuring = conditional.stateDuring();
+                FrameStateBuilder builder = new FrameStateBuilder(stateDuring);
+                builder.push(phi.kind, phi);
+                merge.setStateAfter(builder.create(stateDuring.bci));
                 // schedule the if...
                 if (schedule == null) {
                     schedule = new IdentifyBlocksPhase(false, false);
@@ -80,9 +96,15 @@ public class ConvertConditionalPhase extends Phase {
                 Anchor prev = block.createAnchor();
                 FixedNode next = prev.next();
                 prev.setNext(null);
-                conditionalStructure.merge.setNext(next);
-                prev.setNext(conditionalStructure.ifNode);
-                conditional.replaceAndDelete(conditionalStructure.phi);
+                merge.setNext(next);
+                prev.setNext(ifNode);
+                conditional.replaceAndDelete(phi);
+            } else {
+                FrameState stateDuring = conditional.stateDuring();
+                conditional.setStateDuring(null);
+                if (stateDuring != null && stateDuring.usages().size() == 0) {
+                    stateDuring.delete();
+                }
             }
         }
     }
