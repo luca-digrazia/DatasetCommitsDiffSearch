@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.match;
 
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Node.Verbosity;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -68,41 +67,35 @@ public class MatchPattern {
         private static final DebugMetric MatchResult_ALREADY_USED = Debug.metric("MatchResult_ALREADY_USED");
 
         static final Result OK = new Result(MatchResultCode.OK, null, null);
-        private static final Result CACHED_WRONG_CLASS = new Result(MatchResultCode.WRONG_CLASS, null, null);
-        private static final Result CACHED_NAMED_VALUE_MISMATCH = new Result(MatchResultCode.NAMED_VALUE_MISMATCH, null, null);
-        private static final Result CACHED_TOO_MANY_USERS = new Result(MatchResultCode.TOO_MANY_USERS, null, null);
-        private static final Result CACHED_NOT_IN_BLOCK = new Result(MatchResultCode.NOT_IN_BLOCK, null, null);
-        private static final Result CACHED_NOT_SAFE = new Result(MatchResultCode.NOT_SAFE, null, null);
-        private static final Result CACHED_ALREADY_USED = new Result(MatchResultCode.ALREADY_USED, null, null);
 
         static Result WRONG_CLASS(ValueNode node, MatchPattern matcher) {
             MatchResult_WRONG_CLASS.increment();
-            return Debug.isEnabled() ? new Result(MatchResultCode.WRONG_CLASS, node, matcher) : CACHED_WRONG_CLASS;
+            return new Result(MatchResultCode.WRONG_CLASS, node, matcher);
         }
 
         static Result NAMED_VALUE_MISMATCH(ValueNode node, MatchPattern matcher) {
             MatchResult_NAMED_VALUE_MISMATCH.increment();
-            return Debug.isEnabled() ? new Result(MatchResultCode.NAMED_VALUE_MISMATCH, node, matcher) : CACHED_NAMED_VALUE_MISMATCH;
+            return new Result(MatchResultCode.NAMED_VALUE_MISMATCH, node, matcher);
         }
 
         static Result TOO_MANY_USERS(ValueNode node, MatchPattern matcher) {
             MatchResult_TOO_MANY_USERS.increment();
-            return Debug.isEnabled() ? new Result(MatchResultCode.TOO_MANY_USERS, node, matcher) : CACHED_TOO_MANY_USERS;
+            return new Result(MatchResultCode.TOO_MANY_USERS, node, matcher);
         }
 
         static Result NOT_IN_BLOCK(ScheduledNode node, MatchPattern matcher) {
             MatchResult_NOT_IN_BLOCK.increment();
-            return Debug.isEnabled() ? new Result(MatchResultCode.NOT_IN_BLOCK, node, matcher) : CACHED_NOT_IN_BLOCK;
+            return new Result(MatchResultCode.NOT_IN_BLOCK, node, matcher);
         }
 
         static Result NOT_SAFE(ScheduledNode node, MatchPattern matcher) {
             MatchResult_NOT_SAFE.increment();
-            return Debug.isEnabled() ? new Result(MatchResultCode.NOT_SAFE, node, matcher) : CACHED_NOT_SAFE;
+            return new Result(MatchResultCode.NOT_SAFE, node, matcher);
         }
 
         static Result ALREADY_USED(ValueNode node, MatchPattern matcher) {
             MatchResult_ALREADY_USED.increment();
-            return Debug.isEnabled() ? new Result(MatchResultCode.ALREADY_USED, node, matcher) : CACHED_ALREADY_USED;
+            return new Result(MatchResultCode.ALREADY_USED, node, matcher);
         }
 
         @Override
@@ -110,11 +103,7 @@ public class MatchPattern {
             if (code == MatchResultCode.OK) {
                 return "OK";
             }
-            if (node == null) {
-                return code.toString();
-            } else {
-                return code + " " + node.toString(Verbosity.Id) + "|" + node.getClass().getSimpleName() + " " + matcher;
-            }
+            return code + " " + node.toString(Verbosity.Id) + "|" + node.getClass().getSimpleName() + " " + matcher;
         }
     }
 
@@ -135,17 +124,17 @@ public class MatchPattern {
     private final MatchPattern[] patterns;
 
     /**
-     * The inputs to match the patterns against.
+     * Helper class to visit the inputs.
      */
-    private final NodeClass.Position[] inputs;
+    private final MatchNodeAdapter adapter;
+
+    private static final MatchPattern[] EMPTY_PATTERNS = new MatchPattern[0];
 
     /**
      * Can there only be one user of the node. Constant nodes can be matched even if there are other
      * users.
      */
     private final boolean singleUser;
-
-    private static final MatchPattern[] EMPTY_PATTERNS = new MatchPattern[0];
 
     public MatchPattern(String name, boolean singleUser) {
         this(null, name, singleUser);
@@ -156,28 +145,37 @@ public class MatchPattern {
         this.name = name;
         this.singleUser = singleUser;
         this.patterns = EMPTY_PATTERNS;
-        this.inputs = null;
+        this.adapter = null;
     }
 
-    private MatchPattern(Class<? extends ValueNode> nodeClass, String name, boolean singleUser, MatchPattern[] patterns, NodeClass.Position[] inputs) {
-        assert inputs == null || inputs.length == patterns.length;
+    public MatchPattern(Class<? extends ValueNode> nodeClass, String name, MatchPattern first, MatchNodeAdapter adapter, boolean singleUser) {
         this.nodeClass = nodeClass;
         this.name = name;
         this.singleUser = singleUser;
-        this.patterns = patterns;
-        this.inputs = inputs;
+        this.patterns = new MatchPattern[1];
+        patterns[0] = first;
+        this.adapter = adapter;
     }
 
-    public MatchPattern(Class<? extends ValueNode> nodeClass, String name, MatchPattern first, NodeClass.Position[] inputs, boolean singleUser) {
-        this(nodeClass, name, singleUser, new MatchPattern[]{first}, inputs);
+    public MatchPattern(Class<? extends ValueNode> nodeClass, String name, MatchPattern first, MatchPattern second, MatchNodeAdapter adapter, boolean singleUser) {
+        this.nodeClass = nodeClass;
+        this.name = name;
+        this.singleUser = singleUser;
+        this.patterns = new MatchPattern[2];
+        patterns[0] = first;
+        patterns[1] = second;
+        this.adapter = adapter;
     }
 
-    public MatchPattern(Class<? extends ValueNode> nodeClass, String name, MatchPattern first, MatchPattern second, NodeClass.Position[] inputs, boolean singleUser) {
-        this(nodeClass, name, singleUser, new MatchPattern[]{first, second}, inputs);
-    }
-
-    public MatchPattern(Class<? extends ValueNode> nodeClass, String name, MatchPattern first, MatchPattern second, MatchPattern third, NodeClass.Position[] inputs, boolean singleUser) {
-        this(nodeClass, name, singleUser, new MatchPattern[]{first, second, third}, inputs);
+    public MatchPattern(Class<? extends ValueNode> nodeClass, String name, MatchPattern first, MatchPattern second, MatchPattern third, MatchNodeAdapter adapter, boolean singleUser) {
+        this.nodeClass = nodeClass;
+        this.name = name;
+        this.singleUser = singleUser;
+        this.patterns = new MatchPattern[3];
+        patterns[0] = first;
+        patterns[1] = second;
+        patterns[2] = third;
+        this.adapter = adapter;
     }
 
     Class<? extends ValueNode> nodeClass() {
@@ -223,7 +221,7 @@ public class MatchPattern {
         }
 
         for (int input = 0; input < patterns.length; input++) {
-            result = patterns[input].matchUsage(getInput(input, node), context, false);
+            result = patterns[input].matchUsage(adapter.getInput(input, node), context, false);
             if (result != Result.OK) {
                 return result;
             }
@@ -257,7 +255,7 @@ public class MatchPattern {
         }
 
         for (int input = 0; input < patterns.length; input++) {
-            result = patterns[input].matchShape(getInput(input, node), statement, false);
+            result = patterns[input].matchShape(adapter.getInput(input, node), statement, false);
             if (result != Result.OK) {
                 return result;
             }
@@ -281,15 +279,11 @@ public class MatchPattern {
             sb.append(result);
             for (int input = 0; input < patterns.length; input++) {
                 sb.append(" ");
-                sb.append(patterns[input].formatMatch(getInput(input, root)));
+                sb.append(patterns[input].formatMatch(adapter.getInput(input, root)));
             }
             sb.append(")");
             return sb.toString();
         }
-    }
-
-    private ValueNode getInput(int index, ValueNode node) {
-        return (ValueNode) inputs[index].get(node);
     }
 
     @Override

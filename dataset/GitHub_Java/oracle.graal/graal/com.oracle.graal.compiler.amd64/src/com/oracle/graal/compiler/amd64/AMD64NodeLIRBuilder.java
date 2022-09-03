@@ -316,7 +316,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
         throw GraalInternalError.shouldNotReachHere();
     }
 
-    protected AMD64Arithmetic getOp(ValueNode operation, Access access) {
+    private AMD64Arithmetic getOp(ValueNode operation, Access access) {
         Kind memoryKind = getMemoryKind(access);
         if (operation.getClass() == IntegerAddNode.class) {
             switch (memoryKind) {
