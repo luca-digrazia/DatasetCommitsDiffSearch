@@ -709,9 +709,7 @@ public class TestResolvedJavaType extends TypeUniverse {
         "getSourceFileName",
         "getClassFilePath",
         "isLocal",
-        "isJavaLangObject",
         "isMember",
-        "getElementalType",
         "getEnclosingType"
     };
     // @formatter:on
