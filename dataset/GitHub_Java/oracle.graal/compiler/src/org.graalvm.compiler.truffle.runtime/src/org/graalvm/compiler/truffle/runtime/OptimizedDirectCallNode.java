@@ -38,7 +38,6 @@ import com.oracle.truffle.api.profiles.ValueProfile;
 import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleExperimentalSplitting;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleTraceSplittingSummary;
 
 /**
  * A call node with a constant {@link CallTarget} that can be optimized by Graal.
@@ -52,15 +51,14 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
     private boolean inliningForced;
     @CompilationFinal private ValueProfile exceptionProfile;
 
-    private final boolean experimentalSplitting;
-    private final boolean traceSplittingSummary;
     @CompilationFinal private OptimizedCallTarget splitCallTarget;
 
-    public OptimizedDirectCallNode(OptimizedCallTarget target) {
+    private final GraalTruffleRuntime runtime;
+
+    public OptimizedDirectCallNode(GraalTruffleRuntime runtime, OptimizedCallTarget target) {
         super(target);
         assert target.getSourceCallTarget() == null;
-        this.experimentalSplitting = TruffleCompilerOptions.getValue(TruffleExperimentalSplitting);
-        this.traceSplittingSummary = TruffleCompilerOptions.getValue(TruffleTraceSplittingSummary);
+        this.runtime = runtime;
     }
 
     @Override
@@ -145,10 +143,14 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
 
     private void onInterpreterCall() {
         int calls = ++callCount;
-        if (calls == 1) {
-            getCurrentCallTarget().incrementKnownCallSites();
+        if (CompilerDirectives.inInterpreter()) {
+            if (calls == 1) {
+                getCurrentCallTarget().incrementKnownCallSites();
+            }
         }
-        TruffleSplittingStrategy.beforeCall(this, OptimizedCallTarget.runtime().getTvmci(), traceSplittingSummary, experimentalSplitting);
+        if (CompilerDirectives.inInterpreter()) {
+            TruffleSplittingStrategy.beforeCall(this, runtime.getTvmci());
+        }
     }
 
     /** Used by the splitting strategy to install new targets. */
@@ -184,13 +186,13 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
                 replace(this, "Split call node");
             }
             splitCallTarget = splitTarget;
-            OptimizedCallTarget.runtime().getListener().onCompilationSplit(this);
+            runtime.getListener().onCompilationSplit(this);
         });
     }
 
     @Override
     public boolean cloneCallTarget() {
-        TruffleSplittingStrategy.forceSplitting(this, OptimizedCallTarget.runtime().getTvmci(), traceSplittingSummary);
+        TruffleSplittingStrategy.forceSplitting(this, runtime.getTvmci());
         return true;
     }
 }
