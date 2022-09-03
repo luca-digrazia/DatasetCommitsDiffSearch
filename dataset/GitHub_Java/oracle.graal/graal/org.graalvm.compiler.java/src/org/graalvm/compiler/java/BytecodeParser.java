@@ -1401,6 +1401,11 @@ public class BytecodeParser implements GraphBuilderContext {
         }
         if (invokeKind.hasReceiver()) {
             args[0] = emitExplicitExceptions(args[0]);
+
+            if (args[0].isNullConstant()) {
+                append(new DeoptimizeNode(InvalidateRecompile, NullCheckException));
+                return null;
+            }
         }
 
         InlineInfo inlineInfo = null;
@@ -1411,11 +1416,6 @@ public class BytecodeParser implements GraphBuilderContext {
                 if (TraceParserPlugins.getValue(options)) {
                     traceWithContext("used node plugin for %s", targetMethod.format("%h.%n(%p)"));
                 }
-                return null;
-            }
-
-            if (invokeKind.hasReceiver() && args[0].isNullConstant()) {
-                append(new DeoptimizeNode(InvalidateRecompile, NullCheckException));
                 return null;
             }
 
