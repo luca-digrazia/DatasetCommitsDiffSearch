@@ -79,7 +79,6 @@ import com.oracle.svm.hosted.meta.HostedType;
 import com.oracle.svm.hosted.meta.HostedUniverse;
 import com.oracle.svm.hosted.meta.MaterializedConstantFields;
 import com.oracle.svm.hosted.meta.MethodPointer;
-import com.oracle.svm.hosted.meta.UniverseBuilder;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -356,7 +355,7 @@ public final class NativeImageHeap {
         final DynamicHub hub = type.getHub();
         final ObjectInfo info;
 
-        boolean immutable = immutableFromParent || isKnownImmutable(object);
+        boolean immutable = immutableFromParent || isImmutable(object);
         boolean written = false;
         boolean references = false;
         boolean relocatable = false; /* always false when !spawnIsolates() */
@@ -365,9 +364,9 @@ public final class NativeImageHeap {
             final HostedInstanceClass clazz = (HostedInstanceClass) type;
             // If the type has a monitor field, it has a reference field that is written.
             if (clazz.getMonitorFieldOffset() != 0) {
+                immutable = false;
                 written = true;
                 references = true;
-                // also not immutable: users of registerAsImmutable() must take precautions
             }
 
             final JavaConstant con = SubstrateObjectConstant.forObject(object);
@@ -454,19 +453,24 @@ public final class NativeImageHeap {
             throw shouldNotReachHere();
         }
 
-        final HeapPartition partition = choosePartition(object, !written || immutable, references, relocatable);
+        final HeapPartition partition = choosePartition(!written || immutable, references, relocatable);
         info.assignToHeapPartition(partition, layout);
     }
 
     /** Determine if an object in the host heap will be immutable in the native image heap. */
-    private boolean isKnownImmutable(final Object obj) {
+    private boolean isImmutable(final Object obj) {
         if (obj instanceof String) {
             // Strings need to have their hash code set or they are not immutable.
             // If the hash is 0, then it will be recomputed again (and again)
             // so the String is not immutable.
             return obj.hashCode() != 0;
+        } else if (obj instanceof DynamicHub) {
+            return true;
+        } else if (knownImmutableObjects.contains(obj)) {
+            return true;
+        } else {
+            return false;
         }
-        return UniverseBuilder.isKnownImmutableType(obj.getClass()) || knownImmutableObjects.contains(obj);
     }
 
     /** Add an object to the model of the native image heap. */
@@ -477,22 +481,20 @@ public final class NativeImageHeap {
         return info;
     }
 
-    private HeapPartition choosePartition(Object object, boolean immutable, boolean references, boolean relocatable) {
+    private HeapPartition choosePartition(boolean immutable, boolean references, boolean relocatable) {
         if (SubstrateOptions.UseOnlyWritableBootImageHeap.getValue()) {
             assert !spawnIsolates();
             // Emergency use only! Alarms will sound!
             return writableReference;
         }
 
-        if (relocatable && !isKnownImmutable(object)) {
-            VMError.shouldNotReachHere("Object with relocatable pointers must be explicitly immutable: " + object);
-        }
         if (immutable) {
             if (relocatable) {
                 return readOnlyRelocatable;
             }
             return references ? readOnlyReference : readOnlyPrimitive;
         } else {
+            VMError.guarantee(!relocatable, "Objects with relocatable pointers must be immutable");
             return references ? writableReference : writablePrimitive;
         }
     }

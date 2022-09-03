@@ -66,7 +66,6 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.meta.VMConstant;
 
 public class LIRCompilerBackend {
@@ -84,17 +83,7 @@ public class LIRCompilerBackend {
             try (DebugContext.Scope s2 = debug.scope("CodeGen", lirGen, lirGen.getLIR())) {
                 int bytecodeSize = graph.method() == null ? 0 : graph.getBytecodeSize();
                 compilationResult.setHasUnsafeAccess(graph.hasUnsafeAccess());
-                emitCode(backend,
-                                graph.getAssumptions(),
-                                graph.method(),
-                                graph.getMethods(),
-                                graph.getFields(),
-                                graph.getSpeculationLog(),
-                                bytecodeSize,
-                                lirGen,
-                                compilationResult,
-                                installedCodeOwner,
-                                factory);
+                emitCode(backend, graph.getAssumptions(), graph.method(), graph.getMethods(), graph.getFields(), bytecodeSize, lirGen, compilationResult, installedCodeOwner, factory);
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
@@ -183,17 +172,8 @@ public class LIRCompilerBackend {
     }
 
     @SuppressWarnings("try")
-    public static void emitCode(Backend backend,
-                    Assumptions assumptions,
-                    ResolvedJavaMethod rootMethod,
-                    Collection<ResolvedJavaMethod> inlinedMethods,
-                    EconomicSet<ResolvedJavaField> accessedFields,
-                    SpeculationLog speculationLog,
-                    int bytecodeSize,
-                    LIRGenerationResult lirGenRes,
-                    CompilationResult compilationResult,
-                    ResolvedJavaMethod installedCodeOwner,
-                    CompilationResultBuilderFactory factory) {
+    public static void emitCode(Backend backend, Assumptions assumptions, ResolvedJavaMethod rootMethod, Collection<ResolvedJavaMethod> inlinedMethods, EconomicSet<ResolvedJavaField> accessedFields,
+                    int bytecodeSize, LIRGenerationResult lirGenRes, CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner, CompilationResultBuilderFactory factory) {
         DebugContext debug = lirGenRes.getLIR().getDebug();
         try (DebugCloseable a = EmitCode.start(debug)) {
             LIRGenerationProvider lirBackend = (LIRGenerationProvider) backend;
@@ -208,9 +188,6 @@ public class LIRCompilerBackend {
                 compilationResult.setMethods(rootMethod, inlinedMethods);
                 compilationResult.setFields(accessedFields);
                 compilationResult.setBytecodeSize(bytecodeSize);
-            }
-            if (speculationLog != null) {
-                compilationResult.setSpeculationLog(speculationLog);
             }
             crb.finish();
             if (debug.isCountEnabled()) {

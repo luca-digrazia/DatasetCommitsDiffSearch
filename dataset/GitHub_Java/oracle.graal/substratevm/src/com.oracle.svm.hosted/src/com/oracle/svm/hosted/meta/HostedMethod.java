@@ -124,10 +124,6 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
         return implementations;
     }
 
-    public String getQualifiedName() {
-        return wrapped.getQualifiedName();
-    }
-
     public void setCodeAddressOffset(int address) {
         assert isCompiled();
         codeAddressOffset = address;
@@ -248,11 +244,6 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
     @Override
     public StructuredGraph buildGraph(DebugContext debug, ResolvedJavaMethod method, HostedProviders providers, Purpose purpose) {
         return wrapped.buildGraph(debug, method, providers, purpose);
-    }
-
-    @Override
-    public boolean allowRuntimeCompilation() {
-        return wrapped.allowRuntimeCompilation();
     }
 
     @Override

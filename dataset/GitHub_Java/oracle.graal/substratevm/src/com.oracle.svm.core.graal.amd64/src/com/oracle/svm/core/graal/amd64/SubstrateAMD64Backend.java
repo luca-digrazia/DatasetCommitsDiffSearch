@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.core.graal.amd64;
 
-import static com.oracle.svm.core.SubstrateOptions.CompilerBackend;
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 import static com.oracle.svm.core.util.VMError.unimplemented;
 import static jdk.vm.ci.amd64.AMD64.rax;
@@ -158,7 +157,7 @@ import jdk.vm.ci.meta.Value;
 class SubstrateAMD64BackendFeature implements Feature {
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return Platform.includedIn(Platform.AMD64.class) && CompilerBackend.getValue().equals("lir");
+        return Platform.includedIn(Platform.AMD64.class) && Platform.usesLIR();
     }
 
     @Override

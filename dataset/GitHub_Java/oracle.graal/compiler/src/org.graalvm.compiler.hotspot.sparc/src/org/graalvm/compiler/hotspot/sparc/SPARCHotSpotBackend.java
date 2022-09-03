@@ -48,6 +48,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.asm.Assembler;
@@ -76,7 +77,9 @@ import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.hotspot.stubs.Stub;
 import org.graalvm.compiler.lir.InstructionValueConsumer;
 import org.graalvm.compiler.lir.LIR;
+import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.LIRInstruction;
+import org.graalvm.compiler.lir.StandardOp.SaveRegistersOp;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
 import org.graalvm.compiler.lir.asm.DataBuilder;
@@ -243,7 +246,10 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend implements LIRGenera
         }
 
         if (stub != null) {
-            updateStub(stub, gen, frameMap);
+            // Even on sparc we need to save floating point registers
+            EconomicSet<Register> destroyedCallerRegisters = gatherDestroyedCallerRegisters(lir);
+            EconomicMap<LIRFrameState, SaveRegistersOp> calleeSaveInfo = gen.getCalleeSaveInfo();
+            updateStub(stub, destroyedCallerRegisters, calleeSaveInfo, frameMap);
         }
         assert registerSizePredictionValidator(crb, debug);
         return crb;

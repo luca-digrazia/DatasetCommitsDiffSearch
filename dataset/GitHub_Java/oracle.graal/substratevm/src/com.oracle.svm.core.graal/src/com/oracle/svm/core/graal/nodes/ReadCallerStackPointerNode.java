@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,31 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.hosted.code;
+package com.oracle.svm.core.graal.nodes;
 
-import org.graalvm.nativeimage.Feature;
-import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
+import org.graalvm.compiler.graph.NodeClass;
+import org.graalvm.compiler.nodeinfo.NodeCycles;
+import org.graalvm.compiler.nodeinfo.NodeInfo;
+import org.graalvm.compiler.nodeinfo.NodeSize;
+import org.graalvm.compiler.nodes.FixedWithNextNode;
+import org.graalvm.compiler.nodes.spi.LIRLowerable;
+import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 
-import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.hosted.image.LIRNativeImageCodeCache;
-import com.oracle.svm.hosted.image.NativeImageCodeCache;
-import com.oracle.svm.hosted.image.NativeImageCodeCacheFactory;
-import com.oracle.svm.hosted.image.NativeImageHeap;
+import com.oracle.svm.core.FrameAccess;
 
-@AutomaticFeature
-class SubstrateLIRBackendFeature implements Feature {
-    @Override
-    public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return Platform.usesLIR();
+import jdk.vm.ci.meta.Value;
+
+@NodeInfo(cycles = NodeCycles.CYCLES_1, size = NodeSize.SIZE_1)
+public final class ReadCallerStackPointerNode extends FixedWithNextNode implements LIRLowerable {
+    public static final NodeClass<ReadCallerStackPointerNode> TYPE = NodeClass.create(ReadCallerStackPointerNode.class);
+
+    public ReadCallerStackPointerNode() {
+        super(TYPE, FrameAccess.getWordStamp());
     }
 
     @Override
-    public void afterRegistration(AfterRegistrationAccess access) {
-        ImageSingletons.add(NativeImageCodeCacheFactory.class, new NativeImageCodeCacheFactory() {
-            @Override
-            public NativeImageCodeCache newCodeCache(CompileQueue compileQueue, NativeImageHeap heap) {
-                return new LIRNativeImageCodeCache(compileQueue.getCompilations(), heap);
-            }
-        });
+    public void generate(NodeLIRBuilderTool gen) {
+        Value result = gen.getLIRGeneratorTool().emitReadCallerStackPointer(FrameAccess.getWordStamp());
+        gen.setResult(this, result);
     }
 }

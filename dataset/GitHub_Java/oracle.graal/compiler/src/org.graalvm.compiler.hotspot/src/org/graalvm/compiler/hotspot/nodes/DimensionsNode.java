@@ -28,6 +28,8 @@ import static org.graalvm.compiler.core.common.NumUtil.roundUp;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
 
+import java.util.BitSet;
+
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.lir.VirtualStackSlot;
@@ -62,7 +64,7 @@ public final class DimensionsNode extends FixedWithNextNode implements LIRLowera
         int size = rank * 4;
         int wordSize = lirGen.target().wordSize;
         int slots = roundUp(size, wordSize) / wordSize;
-        VirtualStackSlot array = lirGen.allocateStackSlots(slots);
+        VirtualStackSlot array = lirGen.allocateStackSlots(slots, new BitSet(0), null);
         Value result = lirGen.emitAddress(array);
         gen.setResult(this, result);
     }

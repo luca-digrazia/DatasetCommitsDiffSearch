@@ -26,7 +26,8 @@ package com.oracle.svm.core.graal.stackvalue;
 
 import static org.graalvm.compiler.core.common.NumUtil.roundUp;
 
-import org.graalvm.compiler.core.common.PermanentBailoutException;
+import java.util.BitSet;
+
 import org.graalvm.compiler.core.common.calc.UnsignedMath;
 import org.graalvm.compiler.graph.IterableNodeType;
 import org.graalvm.compiler.graph.NodeClass;
@@ -42,6 +43,7 @@ import org.graalvm.word.WordBase;
 
 import com.oracle.svm.core.FrameAccess;
 
+import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.meta.JavaConstant;
 
 @NodeInfo(cycles = NodeCycles.CYCLES_1, size = NodeSize.SIZE_1)
@@ -98,7 +100,7 @@ public final class StackValueNode extends FixedWithNextNode implements LIRLowera
          * small value that seems to be in range.
          */
         if (UnsignedMath.aboveOrEqual(numElements, MAX_SIZE) || UnsignedMath.aboveOrEqual(elementSize, MAX_SIZE) || UnsignedMath.aboveOrEqual(numElements * elementSize, MAX_SIZE)) {
-            throw new PermanentBailoutException("stack value has illegal size " + numElements + " * " + elementSize + ": " + slotIdentity.name);
+            throw new BailoutException("stack value has illegal size " + numElements + " * " + elementSize + ": " + slotIdentity.name);
         }
         this.size = (int) (numElements * elementSize);
         this.slotIdentity = slotIdentity;
@@ -117,7 +119,7 @@ public final class StackValueNode extends FixedWithNextNode implements LIRLowera
             if (slot == null) {
                 int wordSize = gen.getLIRGeneratorTool().target().wordSize;
                 int slots = roundUp(size, wordSize) / wordSize;
-                slot = gen.getLIRGeneratorTool().allocateStackSlots(slots);
+                slot = gen.getLIRGeneratorTool().allocateStackSlots(slots, new BitSet(0), null);
                 stackSlotHolder.slot = slot;
             }
             gen.setResult(this, gen.getLIRGeneratorTool().emitAddress(slot));

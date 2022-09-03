@@ -263,19 +263,14 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
             if (config.useCompressedClassPointers) {
                 Register register = r10;
-                Register heapBase = providers.getRegisters().getHeapBaseRegister();
-                AMD64HotSpotMove.decodeKlassPointer(crb, asm, register, heapBase, src, config);
+                AMD64HotSpotMove.decodeKlassPointer(crb, asm, register, providers.getRegisters().getHeapBaseRegister(), src, config);
                 if (GeneratePIC.getValue(crb.getOptions())) {
-                    asm.movq(heapBase, asm.getPlaceholder(-1));
+                    asm.movq(providers.getRegisters().getHeapBaseRegister(), asm.getPlaceholder(-1));
                     crb.recordMark(config.MARKID_NARROW_OOP_BASE_ADDRESS);
                 } else {
                     if (config.narrowKlassBase != 0) {
                         // The heap base register was destroyed above, so restore it
-                        if (config.narrowOopBase == 0L) {
-                            asm.xorq(heapBase, heapBase);
-                        } else {
-                            asm.movq(heapBase, config.narrowOopBase);
-                        }
+                        asm.movq(providers.getRegisters().getHeapBaseRegister(), config.narrowOopBase);
                     }
                 }
                 asm.cmpq(inlineCacheKlass, register);

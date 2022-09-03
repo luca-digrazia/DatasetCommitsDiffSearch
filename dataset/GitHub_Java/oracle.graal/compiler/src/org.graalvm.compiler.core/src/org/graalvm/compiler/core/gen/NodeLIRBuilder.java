@@ -255,7 +255,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
             // get ValueKind for input
             final LIRKind valueKind;
-            if (value != null && !(value instanceof ComplexMatchValue)) {
+            if (value != null) {
                 valueKind = value.getValueKind(LIRKind.class);
             } else {
                 assert isPhiInputFromBackedge(phi, i) : String.format("Input %s to phi node %s is not yet available although it is not coming from a loop back edge", node, phi);
@@ -358,6 +358,10 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
             List<Node> nodes = blockMap.get(block);
 
+            // Allow NodeLIRBuilder subclass to specialize code generation of any interesting groups
+            // of instructions
+            matchComplexExpressions(nodes);
+
             boolean trace = traceLIRGeneratorLevel >= 3;
             for (int i = 0; i < nodes.size(); i++) {
                 Node node = nodes.get(i);
@@ -415,23 +419,11 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         }
     }
 
-    @Override
     @SuppressWarnings("try")
-    public void matchBlock(Block block, StructuredGraph graph, StructuredGraph.ScheduleResult schedule) {
-        try (BlockScope blockScope = gen.getBlockScopeMatch(block)) {
-            // Allow NodeLIRBuilder subclass to specialize code generation of any interesting groups
-            // of instructions
-            matchComplexExpressions(block, schedule);
-        }
-    }
-
-    @SuppressWarnings("try")
-    protected void matchComplexExpressions(Block block, StructuredGraph.ScheduleResult schedule) {
-
+    protected void matchComplexExpressions(List<Node> nodes) {
         if (matchRules != null) {
             DebugContext debug = gen.getResult().getLIR().getDebug();
             try (DebugContext.Scope s = debug.scope("MatchComplexExpressions")) {
-                List<Node> nodes = schedule.getBlockToNodesMap().get(block);
                 if (LogVerbose.getValue(nodeOperands.graph().getOptions())) {
                     int i = 0;
                     for (Node node : nodes) {
@@ -449,7 +441,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
                     List<MatchStatement> statements = matchRules.get(node.getClass());
                     if (statements != null) {
                         for (MatchStatement statement : statements) {
-                            if (statement.generate(this, index, node, block, schedule)) {
+                            if (statement.generate(this, index, node, nodes)) {
                                 // Found a match so skip to the next
                                 break;
                             }

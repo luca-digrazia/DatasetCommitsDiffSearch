@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,49 +24,30 @@
  */
 package com.oracle.svm.core.graal.nodes;
 
-import static org.graalvm.compiler.core.common.NumUtil.roundUp;
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
-import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
-
-import java.util.BitSet;
-
-import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.lir.VirtualStackSlot;
+import org.graalvm.compiler.nodeinfo.NodeCycles;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
+import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
-import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
-import org.graalvm.word.Pointer;
+
+import com.oracle.svm.core.FrameAccess;
 
 import jdk.vm.ci.meta.Value;
 
-/**
- * Intrinsic for allocating an on-stack array of integers to hold the dimensions of a multianewarray
- * instruction.
- */
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
-public class DimensionsNode extends FixedWithNextNode implements LIRLowerable {
-    public static final NodeClass<DimensionsNode> TYPE = NodeClass.create(DimensionsNode.class);
+@NodeInfo(cycles = NodeCycles.CYCLES_1, size = NodeSize.SIZE_1)
+public final class ReadReturnAddressNode extends FixedWithNextNode implements LIRLowerable {
+    public static final NodeClass<ReadReturnAddressNode> TYPE = NodeClass.create(ReadReturnAddressNode.class);
 
-    @Input protected ValueNode rank;
-
-    protected DimensionsNode(@InjectedNodeParameter Stamp stamp, ValueNode rank) {
-        super(TYPE, stamp);
-        this.rank = rank;
+    public ReadReturnAddressNode() {
+        super(TYPE, FrameAccess.getWordStamp());
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        int size = rank.asJavaConstant().asInt() * 4;
-        int wordSize = gen.getLIRGeneratorTool().target().wordSize;
-        int slots = roundUp(size, wordSize) / wordSize;
-        VirtualStackSlot array = gen.getLIRGeneratorTool().allocateStackSlots(slots, new BitSet(0), null);
-        Value result = gen.getLIRGeneratorTool().emitAddress(array);
+        assert FrameAccess.returnAddressSize() > 0;
+        Value result = gen.getLIRGeneratorTool().emitReadReturnAddress(FrameAccess.getWordStamp(), FrameAccess.returnAddressSize());
         gen.setResult(this, result);
     }
-
-    @NodeIntrinsic
-    public static native Pointer allocaDimsArray(int rank);
 }
