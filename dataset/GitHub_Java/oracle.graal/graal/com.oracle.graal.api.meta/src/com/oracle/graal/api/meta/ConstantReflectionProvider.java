@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.api.meta;
 
-import java.lang.invoke.*;
-
 /**
  * Reflection operations on values represented as {@linkplain JavaConstant constants}. All methods
  * in this interface require the VM to access the actual object encapsulated in {@link Kind#Object
@@ -32,7 +30,7 @@ import java.lang.invoke.*;
  * result is not available at this point. The caller is responsible to check for {@code null}
  * results and handle them properly, e.g., not perform an optimization.
  */
-public interface ConstantReflectionProvider {
+public interface ConstantReflectionProvider extends Remote {
 
     /**
      * Compares two constants for equality. The equality relationship is symmetric. Returns
@@ -56,53 +54,26 @@ public interface ConstantReflectionProvider {
     JavaConstant readArrayElement(JavaConstant array, int index);
 
     /**
-     * Reads a value from the given array at the given index if it is a stable array. Returns
-     * {@code null} if the constant is not a stable array, if it is a default value, if the index is
-     * out of bounds, or if the value is not available at this point.
+     * Reads a value of this kind using a base address and a displacement. No bounds checking or
+     * type checking is performed. Returns {@code null} if the value is not available at this point.
+     *
+     * @param base the base address from which the value is read.
+     * @param displacement the displacement within the object in bytes
+     * @return the read value encapsulated in a {@link JavaConstant} object, or {@code null} if the
+     *         value cannot be read.
      */
-    JavaConstant readConstantArrayElement(JavaConstant array, int index);
+    JavaConstant readUnsafeConstant(Kind kind, JavaConstant base, long displacement);
 
     /**
-     * Gets the constant value of this field. Note that a {@code static final} field may not be
-     * considered constant if its declaring class is not yet initialized or if it is a well known
-     * field that can be updated via other means (e.g., {@link System#setOut(java.io.PrintStream)}).
+     * Reads a primitive value using a base address and a displacement.
      *
-     * @param receiver object from which this field's value is to be read. This value is ignored if
-     *            this field is static.
-     * @return the constant value of this field or {@code null} if this field is not considered
-     *         constant by the runtime
+     * @param kind the {@link Kind} of the returned {@link JavaConstant} object
+     * @param base the base address from which the value is read
+     * @param displacement the displacement within the object in bytes
+     * @param bits the number of bits to read from memory
+     * @return the read value encapsulated in a {@link JavaConstant} object of {@link Kind} kind
      */
-    JavaConstant readConstantFieldValue(JavaField field, JavaConstant receiver);
-
-    /**
-     * Gets the current value of this field for a given object, if available.
-     *
-     * There is no guarantee that the same value will be returned by this method for a field unless
-     * the field is considered to be {@linkplain #readConstantFieldValue(JavaField, JavaConstant)
-     * constant} by the runtime.
-     *
-     * @param receiver object from which this field's value is to be read. This value is ignored if
-     *            this field is static.
-     * @return the value of this field or {@code null} if the value is not available (e.g., because
-     *         the field holder is not yet initialized).
-     */
-    JavaConstant readFieldValue(JavaField field, JavaConstant receiver);
-
-    /**
-     * Gets the current value of this field for a given object, if available. Like
-     * {@link #readFieldValue(JavaField, JavaConstant)} but treats array fields as stable.
-     *
-     * There is no guarantee that the same value will be returned by this method for a field unless
-     * the field is considered to be {@linkplain #readConstantFieldValue(JavaField, JavaConstant)
-     * constant} by the runtime.
-     *
-     * @param receiver object from which this field's value is to be read. This value is ignored if
-     *            this field is static.
-     * @param isDefaultStable if {@code true}, default values are considered stable
-     * @return the value of this field or {@code null} if the value is not available (e.g., because
-     *         the field holder is not yet initialized).
-     */
-    JavaConstant readStableFieldValue(JavaField field, JavaConstant receiver, boolean isDefaultStable);
+    JavaConstant readRawConstant(Kind kind, JavaConstant base, long displacement, int bits);
 
     /**
      * Converts the given {@link Kind#isPrimitive() primitive} constant to a boxed
@@ -130,15 +101,5 @@ public interface ConstantReflectionProvider {
      * as a class by the VM) encapsulated in the given constant. Returns {@code null} if the
      * constant does not encapsulate a class, or if the type is not available at this point.
      */
-    ResolvedJavaType asJavaType(Constant constant);
-
-    /**
-     * Gets access to the internals of {@link MethodHandle}.
-     */
-    MethodHandleAccessProvider getMethodHandleAccess();
-
-    /**
-     * Gets raw memory access.
-     */
-    MemoryAccessProvider getMemoryAccessProvider();
+    ResolvedJavaType asJavaType(JavaConstant constant);
 }
