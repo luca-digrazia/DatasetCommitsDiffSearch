@@ -42,7 +42,6 @@ import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.core.common.LocationIdentity;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.calc.UnsignedMath;
-import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
@@ -174,8 +173,7 @@ public class StandardGraphBuilderPlugins {
                 @Override
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
                     ResolvedJavaField field = b.getMetaAccess().lookupJavaField(STRING_VALUE_FIELD);
-                    b.addPush(JavaKind.Object, LoadFieldNode.create(b.getConstantFieldProvider(), b.getConstantReflection(), b.getMetaAccess(),
-                                    b.getOptions(), b.getAssumptions(), value, field, false, false));
+                    b.addPush(JavaKind.Object, LoadFieldNode.create(b.getAssumptions(), value, field));
                     return true;
                 }
             });
@@ -559,8 +557,8 @@ public class StandardGraphBuilderPlugins {
             r.register2("get" + c.getSimpleName() + "Unsafe", Node.class, long.class, new InvocationPlugin() {
                 @Override
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode node, ValueNode offset) {
-                    ObjectStamp stamp = StampFactory.object(TypeReference.createTrusted(b.getAssumptions(), metaAccess.lookupJavaType(c)));
-                    RawLoadNode value = b.add(new RawLoadNode(stamp, node, offset, LocationIdentity.any(), JavaKind.Object));
+                    RawLoadNode value = b.add(new RawLoadNode(node, offset, JavaKind.Object, LocationIdentity.any()));
+                    value.setStamp(StampFactory.object(TypeReference.createTrusted(b.getAssumptions(), metaAccess.lookupJavaType(c))));
                     b.addPush(JavaKind.Object, value);
                     return true;
                 }
