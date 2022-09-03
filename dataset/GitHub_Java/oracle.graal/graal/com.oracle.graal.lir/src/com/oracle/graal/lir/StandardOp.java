@@ -23,7 +23,6 @@
 package com.oracle.graal.lir;
 
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.graal.lir.LIRValueUtil.*;
 
 import java.util.*;
 
@@ -113,13 +112,6 @@ public class StandardOp {
 
         public Label getLabel() {
             return label;
-        }
-
-        /**
-         * @return true if this label acts as a PhiIn.
-         */
-        public boolean isPhiIn() {
-            return getIncomingSize() > 0 && isVariable(getIncomingValue(0));
         }
     }
 
