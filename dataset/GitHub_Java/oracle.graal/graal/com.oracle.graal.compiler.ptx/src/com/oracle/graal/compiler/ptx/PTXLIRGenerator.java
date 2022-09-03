@@ -414,7 +414,7 @@ public class PTXLIRGenerator extends LIRGenerator {
 
     private void emitIntegerTest(Value a, Value b) {
 
-        assert a.getKind().isNumericInteger();
+        assert a.getKind().getStackKind() == Kind.Int || a.getKind() == Kind.Long;
 
         if (LIRValueUtil.isVariable(b)) {
             append(new PTXTestOp(load(b), loadNonConst(a), nextPredRegNum));

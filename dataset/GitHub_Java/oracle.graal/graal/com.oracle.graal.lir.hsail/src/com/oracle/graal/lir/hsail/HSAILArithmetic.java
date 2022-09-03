@@ -403,7 +403,6 @@ public enum HSAILArithmetic {
                 masm.emitForceBitwise("or", dst, src1, src2);
                 break;
             case IREM:
-            case LREM:
                 masm.emit("rem", dst, src1, src2);
                 break;
             default:

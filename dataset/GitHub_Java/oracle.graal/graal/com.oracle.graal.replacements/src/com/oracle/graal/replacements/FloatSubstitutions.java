@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.replacements;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.replacements.ClassSubstitution.*;
 
 /**
  * Substitutions for {@link java.lang.Float} methods.
@@ -35,9 +36,7 @@ public class FloatSubstitutions {
 
     @MethodSubstitution
     public static int floatToRawIntBits(float value) {
-        @JavacBug(id = 6995200)
-        Integer result = ConvertNode.convert(ConvertNode.Op.MOV_F2I, value);
-        return result;
+        return ReinterpretNode.reinterpret(Kind.Int, value);
     }
 
     // TODO This method is not necessary, since the JDK method does exactly this
@@ -52,8 +51,6 @@ public class FloatSubstitutions {
 
     @MethodSubstitution
     public static float intBitsToFloat(int bits) {
-        @JavacBug(id = 6995200)
-        Float result = ConvertNode.convert(ConvertNode.Op.MOV_I2F, bits);
-        return result;
+        return ReinterpretNode.reinterpret(Kind.Float, bits);
     }
 }

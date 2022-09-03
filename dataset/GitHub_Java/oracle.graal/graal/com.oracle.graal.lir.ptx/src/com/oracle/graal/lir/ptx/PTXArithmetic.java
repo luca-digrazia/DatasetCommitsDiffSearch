@@ -22,26 +22,13 @@
  */
 package com.oracle.graal.lir.ptx;
 
+import static com.oracle.graal.asm.ptx.PTXAssembler.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.ptx.*;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Add;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.And;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Cvt;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Div;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Mul;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Neg;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Not;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Or;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Rem;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Shl;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Shr;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Sub;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Ushr;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Xor;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
@@ -69,7 +56,7 @@ public enum PTXArithmetic {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
             Variable dst = (Variable) result;
             Variable src = (Variable) x;
             if (from == Kind.Long && to == Kind.Int) {
@@ -94,8 +81,8 @@ public enum PTXArithmetic {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            emit(crb, masm, opcode, result, x, null);
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
+            emit(tasm, masm, opcode, result, x, null);
         }
     }
 
@@ -113,8 +100,8 @@ public enum PTXArithmetic {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            emit(crb, masm, opcode, result, x, y, null);
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
+            emit(tasm, masm, opcode, result, x, y, null);
         }
 
         @Override
@@ -138,8 +125,8 @@ public enum PTXArithmetic {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            emit(crb, masm, opcode, result, x, y, null);
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
+            emit(tasm, masm, opcode, result, x, y, null);
         }
 
         @Override
@@ -163,12 +150,12 @@ public enum PTXArithmetic {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
             if (sameRegister(result, y)) {
-                emit(crb, masm, opcode, result, x, null);
+                emit(tasm, masm, opcode, result, x, null);
             } else {
-                PTXMove.move(crb, masm, result, x);
-                emit(crb, masm, opcode, result, y, null);
+                PTXMove.move(tasm, masm, result, x);
+                emit(tasm, masm, opcode, result, y, null);
             }
         }
 
@@ -193,8 +180,8 @@ public enum PTXArithmetic {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            emit(crb, masm, opcode, result, x, y, null);
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
+            emit(tasm, masm, opcode, result, x, y, null);
         }
 
         @Override
@@ -221,8 +208,8 @@ public enum PTXArithmetic {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            emit(crb, masm, opcode, result, y, state);
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
+            emit(tasm, masm, opcode, result, y, state);
         }
 
         @Override
@@ -232,7 +219,7 @@ public enum PTXArithmetic {
         }
     }
 
-    public static void emit(CompilationResultBuilder crb, PTXMacroAssembler masm, PTXArithmetic opcode, Value dst, Value src, LIRFrameState info) {
+    public static void emit(TargetMethodAssembler tasm, PTXAssembler masm, PTXArithmetic opcode, Value dst, Value src, LIRFrameState info) {
         int exceptionOffset = -1;
         Variable dest = (Variable) dst;
 
@@ -280,11 +267,11 @@ public enum PTXArithmetic {
 
         if (info != null) {
             assert exceptionOffset != -1;
-            crb.recordImplicitException(exceptionOffset, info);
+            tasm.recordImplicitException(exceptionOffset, info);
         }
     }
 
-    public static void emit(CompilationResultBuilder crb, PTXMacroAssembler masm, PTXArithmetic opcode,
+    public static void emit(TargetMethodAssembler tasm, PTXAssembler masm, PTXArithmetic opcode,
                             Value dst, Value src1, Value src2, LIRFrameState info) {
         int exceptionOffset = -1;
         Variable dest = (Variable) dst;
@@ -350,7 +337,7 @@ public enum PTXArithmetic {
 
         if (info != null) {
             assert exceptionOffset != -1;
-            crb.recordImplicitException(exceptionOffset, info);
+            tasm.recordImplicitException(exceptionOffset, info);
         }
     }
 

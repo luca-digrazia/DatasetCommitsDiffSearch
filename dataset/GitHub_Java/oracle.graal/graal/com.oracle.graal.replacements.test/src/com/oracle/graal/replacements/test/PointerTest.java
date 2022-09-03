@@ -52,7 +52,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
 
     public PointerTest() {
         target = getCodeCache().getTarget();
-        installer = new ReplacementsImpl(getProviders(), new Assumptions(false), getTarget());
+        installer = new ReplacementsImpl(getProviders(), new Assumptions(false));
     }
 
     private static final ThreadLocal<SnippetInliningPolicy> inliningPolicy = new ThreadLocal<>();
@@ -66,7 +66,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     @Test
     public void testRead1() {
         for (Kind kind : KINDS) {
-            assertRead(parse("read" + kind.name() + "1"), kind, true, ID);
+            assertRead(parse("read" + kind.name() + "1"), kind, false, ID);
         }
     }
 
@@ -80,14 +80,14 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     @Test
     public void testRead3() {
         for (Kind kind : KINDS) {
-            assertRead(parse("read" + kind.name() + "3"), kind, true, LocationIdentity.ANY_LOCATION);
+            assertRead(parse("read" + kind.name() + "3"), kind, false, LocationIdentity.ANY_LOCATION);
         }
     }
 
     @Test
     public void testWrite1() {
         for (Kind kind : KINDS) {
-            assertWrite(parse("write" + kind.name() + "1"), kind, true, ID);
+            assertWrite(parse("write" + kind.name() + "1"), kind, false, ID);
         }
     }
 
@@ -101,7 +101,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     @Test
     public void testWrite3() {
         for (Kind kind : KINDS) {
-            assertWrite(parse("write" + kind.name() + "3"), kind, true, LocationIdentity.ANY_LOCATION);
+            assertWrite(parse("write" + kind.name() + "3"), kind, false, LocationIdentity.ANY_LOCATION);
         }
     }
 
