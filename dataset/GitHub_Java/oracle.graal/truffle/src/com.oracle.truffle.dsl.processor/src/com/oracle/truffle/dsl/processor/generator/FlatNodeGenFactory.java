@@ -1865,8 +1865,11 @@ class FlatNodeGenFactory {
         List<CodeTree> values = new ArrayList<>();
         if (method.getFrameParameter() != null) {
             LocalVariable frameLocal = frameState.get(FRAME_VALUE);
-            assert frameLocal != null;
-            values.add(createParameterReference(frameLocal, method.getMethod(), 0));
+            if (frameLocal == null) {
+                values.add(CodeTreeBuilder.singleString("null"));
+            } else {
+                values.add(createParameterReference(frameLocal, method.getMethod(), 0));
+            }
         }
 
         int evaluatedIndex = 0;
