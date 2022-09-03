@@ -60,7 +60,7 @@ public class UnsafeCastNode extends FloatingGuardedNode implements LIRLowerable,
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        assert getKind() == Kind.Object && object.getKind() == Kind.Object;
+        assert kind() == Kind.Object && object.kind() == Kind.Object;
 
         ObjectStamp my = (ObjectStamp) stamp();
         ObjectStamp other = (ObjectStamp) object.stamp();
@@ -95,7 +95,7 @@ public class UnsafeCastNode extends FloatingGuardedNode implements LIRLowerable,
 
     @Override
     public void generate(LIRGeneratorTool generator) {
-        assert getKind() == Kind.Object && object.getKind() == Kind.Object;
+        assert kind() == Kind.Object && object.kind() == Kind.Object;
         /*
          * The LIR only cares about the kind of an operand, not the actual type of an object. So we
          * do not have to introduce a new operand.
