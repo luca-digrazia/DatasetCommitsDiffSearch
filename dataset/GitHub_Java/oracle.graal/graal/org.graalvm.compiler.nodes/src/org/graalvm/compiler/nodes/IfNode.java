@@ -768,7 +768,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 end.safeDelete();
             }
         }
-
         transferProxies(trueSuccessor(), trueMerge);
         transferProxies(falseSuccessor(), falseMerge);
 
