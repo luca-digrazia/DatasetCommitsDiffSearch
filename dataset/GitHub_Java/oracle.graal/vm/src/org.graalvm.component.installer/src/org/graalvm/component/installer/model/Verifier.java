@@ -62,8 +62,8 @@ public class Verifier {
         return replaceComponents;
     }
 
-    public Verifier replaceComponents(boolean value) {
-        this.replaceComponents = value;
+    public Verifier replaceComponents(boolean replaceComponents) {
+        this.replaceComponents = replaceComponents;
         return this;
     }
 
@@ -71,13 +71,13 @@ public class Verifier {
         return ignoreRequirements;
     }
 
-    public Verifier ignoreRequirements(boolean value) {
-        this.ignoreRequirements = value;
+    public Verifier ignoreRequirements(boolean ignoreRequirements) {
+        this.ignoreRequirements = ignoreRequirements;
         return this;
     }
 
-    public Verifier collect(boolean value) {
-        this.collectErrors = value;
+    public Verifier collect(boolean collectErrors) {
+        this.collectErrors = collectErrors;
         return this;
     }
 
