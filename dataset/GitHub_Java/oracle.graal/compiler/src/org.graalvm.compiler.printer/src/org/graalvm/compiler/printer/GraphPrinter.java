@@ -35,7 +35,6 @@ import org.graalvm.compiler.debug.DebugContext.Scope;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.util.JavaConstantFormatter;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.serviceprovider.JDK9Method;
 
@@ -47,7 +46,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.services.Services;
 
-interface GraphPrinter extends Closeable, JavaConstantFormatter {
+interface GraphPrinter extends Closeable {
 
     /**
      * Starts a new group of graphs with the given name, short name and method byte code index (BCI)
@@ -117,28 +116,7 @@ interface GraphPrinter extends Closeable, JavaConstantFormatter {
                 return true;
             }
         }
-        if (c.getClassLoader() == GraphPrinter.class.getClassLoader()) {
-            return true;
-        }
         return false;
-    }
-
-    /**
-     * Use the real {@link Object#toString()} method for {@link JavaConstant JavaConstants} that are
-     * wrapping trusted types, other just return the results of {@link JavaConstant#toString()}.
-     */
-    @Override
-    default String format(JavaConstant constant) {
-        SnippetReflectionProvider snippetReflection = getSnippetReflectionProvider();
-        if (snippetReflection != null) {
-            if (constant.getJavaKind() == JavaKind.Object) {
-                Object obj = snippetReflection.asObject(Object.class, constant);
-                if (obj != null) {
-                    return GraphPrinter.constantToString(obj);
-                }
-            }
-        }
-        return constant.toString();
     }
 
     /**
@@ -147,14 +125,21 @@ interface GraphPrinter extends Closeable, JavaConstantFormatter {
      * value.
      */
     default void updateStringPropertiesForConstant(Map<Object, Object> props, ConstantNode cn) {
-        if (cn.isJavaConstant() && cn.getStackKind().isObject()) {
-            String toString = format(cn.asJavaConstant());
-            String rawvalue = GraphPrinter.truncate(toString);
-            // Overwrite the value inserted by
-            // ConstantNode.getDebugProperties()
-            props.put("rawvalue", rawvalue);
-            if (!rawvalue.equals(toString)) {
-                props.put("toString", toString);
+        SnippetReflectionProvider snippetReflection = getSnippetReflectionProvider();
+        if (snippetReflection != null && cn.getValue() instanceof JavaConstant) {
+            JavaConstant constant = (JavaConstant) cn.getValue();
+            if (constant.getJavaKind() == JavaKind.Object) {
+                Object obj = snippetReflection.asObject(Object.class, constant);
+                if (obj != null) {
+                    String toString = GraphPrinter.constantToString(obj);
+                    String rawvalue = GraphPrinter.truncate(toString);
+                    // Overwrite the value inserted by
+                    // ConstantNode.getDebugProperties()
+                    props.put("rawvalue", rawvalue);
+                    if (!rawvalue.equals(toString)) {
+                        props.put("toString", toString);
+                    }
+                }
             }
         }
     }

@@ -25,6 +25,7 @@ package org.graalvm.compiler.printer;
 import static org.graalvm.compiler.debug.DebugConfig.asJavaMethod;
 
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -81,16 +82,8 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     public GraphPrinterDumpHandler(GraphPrinterSupplier printerSupplier) {
         this.printerSupplier = printerSupplier;
         /* Add the JVM and Java arguments to the graph properties to help identify it. */
-        this.jvmArguments = jvmArguments();
+        this.jvmArguments = String.join(" ", ManagementFactory.getRuntimeMXBean().getInputArguments());
         this.sunJavaCommand = System.getProperty("sun.java.command");
-    }
-
-    private static String jvmArguments() {
-        try {
-            return String.join(" ", java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments());
-        } catch (LinkageError err) {
-            return "unknown";
-        }
     }
 
     private void ensureInitialized(Graph graph) {
