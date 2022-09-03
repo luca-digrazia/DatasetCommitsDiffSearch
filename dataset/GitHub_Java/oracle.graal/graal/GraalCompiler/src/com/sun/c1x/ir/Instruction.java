@@ -97,6 +97,10 @@ public abstract class Instruction extends Value {
         C1XMetrics.HIRInstructions++;
     }
 
+    public Instruction(CiKind kind) {
+        this(kind, 0, 0, null);
+    }
+
     /**
      * Gets the bytecode index of this instruction.
      * @return the bytecode index of this instruction
