@@ -72,6 +72,16 @@ import com.oracle.truffle.api.nodes.RootNode;
 
 public class StackTraceTest {
 
+    private static boolean isCompileImmediately() {
+        CallTarget target = Truffle.getRuntime().createCallTarget(new RootNode(null) {
+            @Override
+            public Object execute(VirtualFrame frame) {
+                return CompilerDirectives.inCompiledCode();
+            }
+        });
+        return (boolean) target.call();
+    }
+
     @Test
     public void testFirstFrameIsCurrentFrame() {
         CallTarget callTarget = createCallTarget(new ReturnStackTraceNode());
@@ -245,7 +255,7 @@ public class StackTraceTest {
     @Test
     public void testAsynchronousFrameAccess() throws InterruptedException, ExecutionException, TimeoutException {
         // Takes too long with immediate compilation
-        Assume.assumeFalse(CompileImmediatelyCheck.isCompileImmediately());
+        Assume.assumeFalse(isCompileImmediately());
         final ExecutorService exec = Executors.newFixedThreadPool(50);
         try {
             List<Callable<Void>> callables = new ArrayList<>();
