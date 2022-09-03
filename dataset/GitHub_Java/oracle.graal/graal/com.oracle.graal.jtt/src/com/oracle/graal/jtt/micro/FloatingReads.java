@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.jtt.micro;
 
-import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 
-public class FloatingReads extends JTTTest {
+public class FloatingReads {
     public static long init = Runtime.getRuntime().totalMemory();
     private final int f = 10;
     private int a;
@@ -61,23 +61,23 @@ public class FloatingReads extends JTTTest {
         return a + b + c;
     }
 
-    //@Test
+    @Test
     public void run0() {
-        runTest("test", 10);
+        Assert.assertEquals(-42, test(10));
     }
 
-    //@Test
+    @Test
     public void run1() {
-        runTest("test", 1000);
+        Assert.assertEquals(2147465134, test(1000));
     }
 
-    //@Test
+    @Test
     public void run2() {
-        runTest("test", 1);
+        Assert.assertEquals(-3, test(1));
     }
 
-    //@Test
+    @Test
     public void run3() {
-        runTest("test", 0);
+        Assert.assertEquals(15, test(0));
     }
 }
