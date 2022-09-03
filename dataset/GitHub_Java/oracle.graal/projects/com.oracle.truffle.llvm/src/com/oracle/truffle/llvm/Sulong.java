@@ -56,6 +56,7 @@ import com.oracle.truffle.llvm.runtime.debug.LLVMDebugObject;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceScope;
+import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 @TruffleLanguage.Registration(id = "llvm", name = "llvm", version = "0.01", mimeType = {Sulong.LLVM_SULONG_TYPE, Sulong.LLVM_BITCODE_MIME_TYPE, Sulong.LLVM_BITCODE_BASE64_MIME_TYPE,
@@ -115,6 +116,10 @@ public final class Sulong extends LLVMLanguage {
     @Override
     public LLVMContext findLLVMContext() {
         return getContextReference().get();
+    }
+
+    public static ContextReference<LLVMContext> getCurrentLanguage() {
+        return getCurrentLanguage(LLVMLanguage.class).getContextReference();
     }
 
     public static void main(String[] args) throws Exception {
@@ -186,9 +191,12 @@ public final class Sulong extends LLVMLanguage {
     }
 
     @Override
-    protected void disposeThread(LLVMContext context, Thread thread) {
-        super.disposeThread(context, thread);
-        context.getThreadingStack().freeStack(thread);
+    protected void initializeThread(LLVMContext context, Thread thread) {
+        super.initializeThread(context, thread);
+        LLVMThreadingStack threadingStack = context.getThreadingStack();
+        if (thread != threadingStack.getDefaultThread()) {
+            threadingStack.initializeThread();
+        }
     }
 
     @Override
