@@ -51,7 +51,7 @@ public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowe
                     tool.deleteBranch(next);
                 }
 
-                DeoptimizeNode deopt = graph().add(new DeoptimizeNode(getAction(), getReason()));
+                DeoptimizeNode deopt = graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, getReason()));
                 deopt.setDeoptimizationState(getDeoptimizationState());
                 setNext(deopt);
             }
@@ -68,7 +68,7 @@ public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowe
             ValueAnchorNode newAnchor = graph().add(new ValueAnchorNode(guard.asNode()));
             graph().replaceFixedWithFixed(this, newAnchor);
         } else {
-            lowerToIf().lower(tool);
+            lowerToIf(tool);
         }
     }
 

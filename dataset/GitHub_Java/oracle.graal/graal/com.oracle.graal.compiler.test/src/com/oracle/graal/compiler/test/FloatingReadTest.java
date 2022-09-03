@@ -58,7 +58,7 @@ public class FloatingReadTest extends GraphScheduleTest {
     private void test(final String snippet) {
         try (Scope s = Debug.scope("FloatingReadTest", new DebugDumpScope(snippet))) {
 
-            StructuredGraph graph = parseEager(snippet);
+            StructuredGraph graph = parse(snippet);
             PhaseContext context = new PhaseContext(getProviders(), new Assumptions(false));
             new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
             new FloatingReadPhase().apply(graph);
@@ -68,7 +68,6 @@ public class FloatingReadTest extends GraphScheduleTest {
 
             for (Node n : graph.getNodes()) {
                 if (n instanceof ReturnNode) {
-                    assert returnNode == null;
                     returnNode = (ReturnNode) n;
                 } else if (n instanceof MonitorExit) {
                     monitorexit = (MonitorExit) n;

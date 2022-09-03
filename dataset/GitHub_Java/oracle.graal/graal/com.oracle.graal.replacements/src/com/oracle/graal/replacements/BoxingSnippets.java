@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,24 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
 
+import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.replacements.Snippet.SnippetInliningPolicy;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
@@ -55,7 +56,7 @@ public class BoxingSnippets implements Snippets {
 
         @Override
         public boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller) {
-            if (method.isNative()) {
+            if (Modifier.isNative(method.getModifiers())) {
                 return false;
             }
             if (method.getAnnotation(Fold.class) != null) {
@@ -172,13 +173,30 @@ public class BoxingSnippets implements Snippets {
         return value.shortValue();
     }
 
-    public static FloatingNode canonicalizeBoxing(BoxNode box, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
+    public static FloatingNode canonicalizeBoxing(BoxNode box, MetaAccessProvider metaAccess) {
         ValueNode value = box.getValue();
         if (value.isConstant()) {
-            JavaConstant sourceConstant = value.asJavaConstant();
-            JavaConstant boxedConstant = constantReflection.boxPrimitive(sourceConstant);
-            if (boxedConstant != null && sourceConstant.getKind() == box.getBoxingKind()) {
-                return ConstantNode.forConstant(boxedConstant, metaAccess, box.graph());
+            Constant sourceConstant = value.asConstant();
+            switch (box.getBoxingKind()) {
+                case Boolean:
+                    return ConstantNode.forObject(Boolean.valueOf(sourceConstant.asInt() != 0), metaAccess, box.graph());
+                case Byte:
+                    return ConstantNode.forObject(Byte.valueOf((byte) sourceConstant.asInt()), metaAccess, box.graph());
+                case Char:
+                    return ConstantNode.forObject(Character.valueOf((char) sourceConstant.asInt()), metaAccess, box.graph());
+                case Short:
+                    return ConstantNode.forObject(Short.valueOf((short) sourceConstant.asInt()), metaAccess, box.graph());
+                case Int:
+                    return ConstantNode.forObject(Integer.valueOf(sourceConstant.asInt()), metaAccess, box.graph());
+                case Long:
+                    return ConstantNode.forObject(Long.valueOf(sourceConstant.asLong()), metaAccess, box.graph());
+                case Float:
+                    return ConstantNode.forObject(Float.valueOf(sourceConstant.asFloat()), metaAccess, box.graph());
+                case Double:
+                    return ConstantNode.forObject(Double.valueOf(sourceConstant.asDouble()), metaAccess, box.graph());
+                default:
+                    assert false : "Unexpected source kind for boxing";
+                    break;
             }
         }
         return null;
@@ -189,8 +207,8 @@ public class BoxingSnippets implements Snippets {
         private final EnumMap<Kind, SnippetInfo> boxSnippets = new EnumMap<>(Kind.class);
         private final EnumMap<Kind, SnippetInfo> unboxSnippets = new EnumMap<>(Kind.class);
 
-        public Templates(Providers providers, SnippetReflectionProvider snippetReflection, TargetDescription target) {
-            super(providers, snippetReflection, target);
+        public Templates(Providers providers, TargetDescription target) {
+            super(providers, target);
             for (Kind kind : new Kind[]{Kind.Boolean, Kind.Byte, Kind.Char, Kind.Double, Kind.Float, Kind.Int, Kind.Long, Kind.Short}) {
                 boxSnippets.put(kind, snippet(BoxingSnippets.class, kind.getJavaName() + "ValueOf"));
                 unboxSnippets.put(kind, snippet(BoxingSnippets.class, kind.getJavaName() + "Value"));
@@ -198,7 +216,7 @@ public class BoxingSnippets implements Snippets {
         }
 
         public void lower(BoxNode box, LoweringTool tool) {
-            FloatingNode canonical = canonicalizeBoxing(box, providers.getMetaAccess(), providers.getConstantReflection());
+            FloatingNode canonical = canonicalizeBoxing(box, providers.getMetaAccess());
             // if in AOT mode, we don't want to embed boxed constants.
             if (canonical != null && !ImmutableCode.getValue()) {
                 box.graph().replaceFloating(box, canonical);

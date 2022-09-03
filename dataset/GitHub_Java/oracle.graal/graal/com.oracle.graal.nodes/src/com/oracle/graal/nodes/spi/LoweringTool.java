@@ -39,6 +39,8 @@ public interface LoweringTool {
 
     Replacements getReplacements();
 
+    GuardingNode createNullCheckGuard(FixedNode before, GuardedNode guardedNode, ValueNode object);
+
     GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action);
 
     GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated);

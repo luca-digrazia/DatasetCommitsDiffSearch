@@ -28,12 +28,12 @@ import static com.oracle.graal.nodes.PiNode.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
@@ -44,12 +44,6 @@ import com.oracle.graal.word.*;
 
 /**
  * Snippet for loading the exception object at the start of an exception dispatcher.
- * <p>
- * The frame state upon entry to an exception handler is such that it is a
- * {@link BytecodeFrame#rethrowException rethrow exception} state and the stack contains exactly the
- * exception object (per the JVM spec) to rethrow. This means that the code generated for this node
- * must not cause a deoptimization as the runtime/interpreter would not have a valid location to
- * find the exception object to be rethrown.
  */
 public class LoadExceptionObjectSnippets implements Snippets {
 
@@ -59,7 +53,7 @@ public class LoadExceptionObjectSnippets implements Snippets {
     private static final boolean USE_C_RUNTIME = Boolean.getBoolean("graal.loadExceptionObject.useCRuntime");
 
     @Snippet
-    public static Throwable loadException(@ConstantParameter Register threadRegister) {
+    public static Object loadException(@ConstantParameter Register threadRegister) {
         Word thread = registerAsWord(threadRegister);
         Object exception = readExceptionOop(thread);
         writeExceptionOop(thread, null);
@@ -72,7 +66,7 @@ public class LoadExceptionObjectSnippets implements Snippets {
         private final SnippetInfo loadException = snippet(LoadExceptionObjectSnippets.class, "loadException");
 
         public Templates(HotSpotProviders providers, TargetDescription target) {
-            super(providers, providers.getSnippetReflection(), target);
+            super(providers, target);
         }
 
         public void lower(LoadExceptionObjectNode loadExceptionObject, HotSpotRegistersProvider registers, LoweringTool tool) {

@@ -26,7 +26,6 @@ import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -50,7 +49,7 @@ public class AMD64ConvertSnippets implements Snippets {
      * conversion. If the float value is a NaN, infinity or if the result of the conversion is
      * larger than {@link Integer#MAX_VALUE} then CVTTSS2SI returns {@link Integer#MIN_VALUE} and
      * extra tests are required on the float value to return the correct int value.
-     *
+     * 
      * @param input the float being converted
      * @param result the result produced by the CVTTSS2SI instruction
      */
@@ -75,7 +74,7 @@ public class AMD64ConvertSnippets implements Snippets {
      * conversion. If the float value is a NaN or infinity then CVTTSS2SI returns
      * {@link Long#MIN_VALUE} and extra tests are required on the float value to return the correct
      * long value.
-     *
+     * 
      * @param input the float being converted
      * @param result the result produced by the CVTTSS2SI instruction
      */
@@ -100,7 +99,7 @@ public class AMD64ConvertSnippets implements Snippets {
      * conversion. If the double value is a NaN, infinity or if the result of the conversion is
      * larger than {@link Integer#MAX_VALUE} then CVTTSD2SI returns {@link Integer#MIN_VALUE} and
      * extra tests are required on the double value to return the correct int value.
-     *
+     * 
      * @param input the double being converted
      * @param result the result produced by the CVTTSS2SI instruction
      */
@@ -125,7 +124,7 @@ public class AMD64ConvertSnippets implements Snippets {
      * conversion. If the double value is a NaN, infinity or if the result of the conversion is
      * larger than {@link Long#MAX_VALUE} then CVTTSD2SI returns {@link Long#MIN_VALUE} and extra
      * tests are required on the double value to return the correct long value.
-     *
+     * 
      * @param input the double being converted
      * @param result the result produced by the CVTTSS2SI instruction
      */
@@ -150,8 +149,8 @@ public class AMD64ConvertSnippets implements Snippets {
         private final SnippetInfo d2i;
         private final SnippetInfo d2l;
 
-        public Templates(Providers providers, SnippetReflectionProvider snippetReflection, TargetDescription target) {
-            super(providers, snippetReflection, target);
+        public Templates(Providers providers, TargetDescription target) {
+            super(providers, target);
 
             f2i = snippet(AMD64ConvertSnippets.class, "f2i");
             f2l = snippet(AMD64ConvertSnippets.class, "f2l");
@@ -159,33 +158,42 @@ public class AMD64ConvertSnippets implements Snippets {
             d2l = snippet(AMD64ConvertSnippets.class, "d2l");
         }
 
-        public void lower(FloatConvertNode convert, LoweringTool tool) {
-            SnippetInfo key;
-            switch (convert.getOp()) {
-                case F2I:
-                    key = f2i;
+        public void lower(ConvertNode convert, LoweringTool tool) {
+            SnippetInfo key = null;
+            switch (convert.getFromKind()) {
+                case Float:
+                    switch (convert.getToKind()) {
+                        case Int:
+                            key = f2i;
+                            break;
+                        case Long:
+                            key = f2l;
+                            break;
+                    }
                     break;
-                case F2L:
-                    key = f2l;
+                case Double:
+                    switch (convert.getToKind()) {
+                        case Int:
+                            key = d2i;
+                            break;
+                        case Long:
+                            key = d2l;
+                            break;
+                    }
                     break;
-                case D2I:
-                    key = d2i;
-                    break;
-                case D2L:
-                    key = d2l;
-                    break;
-                default:
-                    return;
+            }
+            if (key == null) {
+                return;
             }
 
             StructuredGraph graph = convert.graph();
 
             Arguments args = new Arguments(key, graph.getGuardsStage(), tool.getLoweringStage());
-            args.add("input", convert.getValue());
-            args.add("result", graph.unique(new AMD64FloatConvertNode(convert.stamp(), convert.getOp(), convert.getValue())));
+            args.add("input", convert.value());
+            args.add("result", graph.unique(new AMD64ConvertNode(convert.getFromKind(), convert.getToKind(), convert.value())));
 
             SnippetTemplate template = template(args);
-            Debug.log("Lowering %s in %s: node=%s, template=%s, arguments=%s", convert.getOp(), graph, convert, template, args);
+            Debug.log("Lowering %c2%c in %s: node=%s, template=%s, arguments=%s", convert.getFromKind().getTypeChar(), convert.getToKind().getTypeChar(), graph, convert, template, args);
             template.instantiate(providers.getMetaAccess(), convert, DEFAULT_REPLACER, tool, args);
             graph.removeFloating(convert);
         }

@@ -40,8 +40,6 @@ public class LowTier extends PhaseSuite<LowTierContext> {
 
         appendPhase(new ExpandLogicPhase());
 
-        appendPhase(new UseTrappingNullChecksPhase());
-
         appendPhase(new DeadCodeEliminationPhase());
     }
 }

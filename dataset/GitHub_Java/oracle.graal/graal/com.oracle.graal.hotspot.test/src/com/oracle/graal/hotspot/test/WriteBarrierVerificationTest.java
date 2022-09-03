@@ -547,7 +547,7 @@ public class WriteBarrierVerificationTest extends GraalCompilerTest {
         test("test11Snippet", 11, new int[]{5});
     }
 
-    @Test
+    @Test(expected = AssertionError.class)
     public void test56() {
         test("test11Snippet", 11, new int[]{11});
     }
@@ -613,7 +613,7 @@ public class WriteBarrierVerificationTest extends GraalCompilerTest {
     private void test(final String snippet, final int expectedBarriers, final int... removedBarrierIndices) {
         try (Scope d = Debug.scope("WriteBarrierVerificationTest", new DebugDumpScope(snippet))) {
             final StructuredGraph graph = parse(snippet);
-            HighTierContext highTierContext = new HighTierContext(getProviders(), new Assumptions(false), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+            HighTierContext highTierContext = new HighTierContext(getProviders(), new Assumptions(false), null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
             new InliningPhase(new CanonicalizerPhase(true)).apply(graph, highTierContext);
 
             MidTierContext midTierContext = new MidTierContext(getProviders(), new Assumptions(false), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());

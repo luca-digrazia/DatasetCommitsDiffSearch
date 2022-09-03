@@ -31,10 +31,10 @@ import static com.oracle.graal.replacements.SnippetTemplate.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
@@ -223,47 +223,24 @@ public class UnsafeArrayCopySnippets implements Snippets {
         int log2ElementSize = (layoutHelper >> layoutHelperLog2ElementSizeShift()) & layoutHelperLog2ElementSizeMask();
         int headerSize = (layoutHelper >> layoutHelperHeaderSizeShift()) & layoutHelperHeaderSizeMask();
 
-        Unsigned vectorSize = Word.unsigned(VECTOR_SIZE);
         Unsigned srcOffset = Word.unsigned(srcPos).shiftLeft(log2ElementSize).add(headerSize);
         Unsigned destOffset = Word.unsigned(destPos).shiftLeft(log2ElementSize).add(headerSize);
         Unsigned destStart = destOffset;
+        Unsigned sizeInBytes = Word.unsigned(length).shiftLeft(log2ElementSize);
         Unsigned destEnd = destOffset.add(Word.unsigned(length).shiftLeft(log2ElementSize));
 
-        Unsigned destVectorEnd = null;
-        Unsigned nonVectorBytes = null;
-        Unsigned sizeInBytes = Word.unsigned(length).shiftLeft(log2ElementSize);
-        if (supportsUnalignedMemoryAccess) {
-            nonVectorBytes = sizeInBytes.unsignedRemainder(vectorSize);
-            destVectorEnd = destEnd;
-        } else {
-            boolean inPhase = srcOffset.and((int) VECTOR_SIZE - 1).equal(destOffset.and((int) VECTOR_SIZE - 1));
-            boolean hasAtLeastOneVector = sizeInBytes.aboveOrEqual(vectorSize);
-            // We must have at least one full vector, otherwise we must copy each byte separately
-            if (hasAtLeastOneVector && inPhase) { // If in phase, we can vectorize
-                nonVectorBytes = vectorSize.subtract(destStart.unsignedRemainder(vectorSize));
-            } else { // fallback is byte-wise
-                nonVectorBytes = sizeInBytes;
-            }
-            destVectorEnd = destEnd.subtract(destEnd.unsignedRemainder(vectorSize));
-        }
-
+        Unsigned nonVectorBytes = sizeInBytes.unsignedRemainder(Word.unsigned(VECTOR_SIZE));
         Unsigned destNonVectorEnd = destStart.add(nonVectorBytes);
+
         while (destOffset.belowThan(destNonVectorEnd)) {
             ObjectAccess.writeByte(dest, destOffset, ObjectAccess.readByte(src, srcOffset, ANY_LOCATION), ANY_LOCATION);
             destOffset = destOffset.add(1);
             srcOffset = srcOffset.add(1);
         }
-        // Unsigned destVectorEnd = destEnd.subtract(destEnd.unsignedRemainder(8));
-        while (destOffset.belowThan(destVectorEnd)) {
+        while (destOffset.belowThan(destEnd)) {
             ObjectAccess.writeWord(dest, destOffset, ObjectAccess.readWord(src, srcOffset, ANY_LOCATION), ANY_LOCATION);
             destOffset = destOffset.add(wordSize());
             srcOffset = srcOffset.add(wordSize());
-        }
-        // Do the last bytes each when it is required to have absolute alignment.
-        while (!supportsUnalignedMemoryAccess && destOffset.belowThan(destEnd)) {
-            ObjectAccess.writeByte(dest, destOffset, ObjectAccess.readByte(src, srcOffset, ANY_LOCATION), ANY_LOCATION);
-            destOffset = destOffset.add(1);
-            srcOffset = srcOffset.add(1);
         }
     }
 
@@ -272,8 +249,8 @@ public class UnsafeArrayCopySnippets implements Snippets {
         private final SnippetInfo[] arraycopySnippets;
         private final SnippetInfo genericPrimitiveSnippet;
 
-        public Templates(HotSpotProviders providers, TargetDescription target) {
-            super(providers, providers.getSnippetReflection(), target);
+        public Templates(Providers providers, TargetDescription target) {
+            super(providers, target);
 
             arraycopySnippets = new SnippetInfo[Kind.values().length];
             arraycopySnippets[Kind.Boolean.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyBoolean");

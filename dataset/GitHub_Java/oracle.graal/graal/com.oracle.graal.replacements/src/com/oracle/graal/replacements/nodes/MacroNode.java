@@ -38,7 +38,6 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.replacements.*;
 
 public class MacroNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
 
@@ -87,15 +86,7 @@ public class MacroNode extends AbstractMemoryCheckpoint implements Lowerable, Me
     protected StructuredGraph getLoweredSubstitutionGraph(LoweringTool tool) {
         StructuredGraph methodSubstitution = tool.getReplacements().getMethodSubstitution(getTargetMethod());
         if (methodSubstitution != null) {
-            methodSubstitution = methodSubstitution.copy();
-            if (stateAfter() == null || stateAfter().bci == FrameState.AFTER_BCI) {
-                /*
-                 * handles the case of a MacroNode inside a snippet used for another MacroNode
-                 * lowering
-                 */
-                new CollapseFrameForSingleSideEffectPhase().apply(methodSubstitution);
-            }
-            return lowerReplacement(methodSubstitution, tool);
+            return lowerReplacement(methodSubstitution.copy(), tool);
         }
         return null;
     }

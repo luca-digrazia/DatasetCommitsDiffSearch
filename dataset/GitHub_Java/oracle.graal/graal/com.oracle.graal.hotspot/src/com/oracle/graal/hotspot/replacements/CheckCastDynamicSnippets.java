@@ -32,13 +32,11 @@ import static com.oracle.graal.replacements.SnippetTemplate.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
@@ -55,13 +53,13 @@ public class CheckCastDynamicSnippets implements Snippets {
         if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
         } else {
-            GuardingNode anchorNode = SnippetAnchorNode.anchor();
+            BeginNode anchorNode = BeginNode.anchor();
             Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
             if (!checkUnknownSubType(hub, objectHub)) {
                 DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             }
         }
-        GuardingNode anchorNode = SnippetAnchorNode.anchor();
+        BeginNode anchorNode = BeginNode.anchor();
         return piCast(verifyOop(object), StampFactory.forNodeIntrinsic(), anchorNode);
     }
 
@@ -69,8 +67,8 @@ public class CheckCastDynamicSnippets implements Snippets {
 
         private final SnippetInfo dynamic = snippet(CheckCastDynamicSnippets.class, "checkcastDynamic");
 
-        public Templates(HotSpotProviders providers, TargetDescription target) {
-            super(providers, providers.getSnippetReflection(), target);
+        public Templates(Providers providers, TargetDescription target) {
+            super(providers, target);
         }
 
         public void lower(CheckCastDynamicNode checkcast, LoweringTool tool) {

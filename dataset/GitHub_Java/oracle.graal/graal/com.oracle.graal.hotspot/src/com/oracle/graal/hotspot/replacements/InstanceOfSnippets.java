@@ -187,7 +187,7 @@ public class InstanceOfSnippets implements Snippets {
         BeginNode anchorNode = BeginNode.anchor();
         Word hub = loadWordFromObject(mirror, klassOffset());
         Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
-        if (hub.equal(0) || !checkUnknownSubType(hub, objectHub)) {
+        if (!checkUnknownSubType(hub, objectHub)) {
             return falseValue;
         }
         return trueValue;
@@ -230,7 +230,7 @@ public class InstanceOfSnippets implements Snippets {
                 Arguments args;
 
                 StructuredGraph graph = instanceOf.graph();
-                if (hintInfo.hintHitProbability >= hintHitProbabilityThresholdForDeoptimizingSnippet() && hintInfo.exact == null) {
+                if (hintInfo.hintHitProbability >= hintHitProbabilityThresholdForDeoptimizingSnippet()) {
                     Hints hints = createHints(hintInfo, providers.getMetaAccess(), false, graph);
                     args = new Arguments(instanceofWithProfile, graph.getGuardsStage(), tool.getLoweringStage());
                     args.add("object", object);
@@ -256,7 +256,7 @@ public class InstanceOfSnippets implements Snippets {
                 }
                 args.add("trueValue", replacer.trueValue);
                 args.add("falseValue", replacer.falseValue);
-                if (hintInfo.hintHitProbability >= hintHitProbabilityThresholdForDeoptimizingSnippet() && hintInfo.exact == null) {
+                if (hintInfo.hintHitProbability >= hintHitProbabilityThresholdForDeoptimizingSnippet()) {
                     args.addConst("nullSeen", hintInfo.profile.getNullSeen() != TriState.FALSE);
                 }
                 return args;

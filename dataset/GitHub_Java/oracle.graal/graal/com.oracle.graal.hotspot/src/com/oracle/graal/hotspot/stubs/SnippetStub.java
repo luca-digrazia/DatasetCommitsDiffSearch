@@ -22,109 +22,74 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import java.lang.reflect.*;
+import static com.oracle.graal.api.meta.MetaUtil.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.java.*;
-import com.oracle.graal.java.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
+import com.oracle.graal.replacements.SnippetTemplate.Arguments;
+import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 
 /**
  * Base class for a stub defined by a snippet.
  */
 public abstract class SnippetStub extends Stub implements Snippets {
 
-    protected final ResolvedJavaMethod method;
+    static class Template extends AbstractTemplates {
 
-    /**
-     * Creates a new snippet stub.
-     *
-     * @param snippetMethodName name of the single {@link Snippet} annotated method in the class of
-     *            this object
-     * @param linkage linkage details for a call to the stub
-     */
-    public SnippetStub(String snippetMethodName, HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
-        this(null, snippetMethodName, providers, linkage);
+        Template(Providers providers, TargetDescription target, Class<? extends Snippets> declaringClass) {
+            super(providers, target);
+            this.info = snippet(declaringClass, null);
+        }
+
+        /**
+         * Info for the method implementing the stub.
+         */
+        protected final SnippetInfo info;
+
+        protected StructuredGraph getGraph(Arguments args) {
+            SnippetTemplate template = template(args);
+            return template.copySpecializedGraph();
+        }
     }
 
+    protected final Template snippet;
+
     /**
      * Creates a new snippet stub.
-     *
-     * @param snippetDeclaringClass this class in which the {@link Snippet} annotated method is
-     *            declared. If {@code null}, this the class of this object is used.
-     * @param snippetMethodName name of the single {@link Snippet} annotated method in
-     *            {@code snippetDeclaringClass}
+     * 
      * @param linkage linkage details for a call to the stub
      */
-    public SnippetStub(Class<? extends Snippets> snippetDeclaringClass, String snippetMethodName, HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
+    public SnippetStub(HotSpotProviders providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
         super(providers, linkage);
-        Method javaMethod = SnippetTemplate.AbstractTemplates.findMethod(snippetDeclaringClass == null ? getClass() : snippetDeclaringClass, snippetMethodName, null);
-        this.method = providers.getMetaAccess().lookupJavaMethod(javaMethod);
+        this.snippet = new Template(providers, target, getClass());
     }
-
-    public static final ThreadLocal<StructuredGraph> SnippetGraphUnderConstruction = new ThreadLocal<>();
 
     @Override
     protected StructuredGraph getGraph() {
-        Plugins defaultPlugins = providers.getGraphBuilderPlugins();
-        Plugins plugins = new Plugins(providers.getMetaAccess()).updateFrom(defaultPlugins, false);
-        plugins.getInvocationPlugins().setDefaults(defaultPlugins.getInvocationPlugins());
-        plugins.setParameterPlugin(new ConstantBindingParameterPlugin(makeConstArgs(), plugins.getParameterPlugin(), providers.getMetaAccess(), providers.getSnippetReflection()));
-        GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault();
-        config.setPlugins(plugins);
-
-        // Stubs cannot have optimistic assumptions since they have
-        // to be valid for the entire run of the VM. Nor can they be
-        // evolved or have breakpoints.
-        final StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO);
-        graph.disableInlinedMethodRecording();
-
-        assert SnippetGraphUnderConstruction.get() == null;
-        SnippetGraphUnderConstruction.set(graph);
-        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), config, OptimisticOptimizations.NONE, method).apply(graph);
-        SnippetGraphUnderConstruction.set(null);
-
-        graph.setGuardsStage(GuardsStage.FLOATING_GUARDS);
-        try (Scope s = Debug.scope("LoweringStub", graph)) {
-            new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, new PhaseContext(providers));
-        } catch (Throwable e) {
-            throw Debug.handle(e);
-        }
-
-        return graph;
+        return snippet.getGraph(makeArguments(snippet.info));
     }
 
-    protected boolean checkConstArg(int index, String expectedName) {
-        assert method.getParameterAnnotation(ConstantParameter.class, index) != null : String.format("parameter %d of %s is expected to be constant", index, method.format("%H.%n(%p)"));
-        LocalVariableTable lvt = method.getLocalVariableTable();
-        if (lvt != null) {
-            Local local = lvt.getLocal(index, 0);
-            assert local != null;
-            String actualName = local.getName();
-            assert actualName.equals(expectedName) : String.format("parameter %d of %s is expected to be named %s, not %s", index, method.format("%H.%n(%p)"), expectedName, actualName);
-        }
-        return true;
-    }
-
-    protected Object[] makeConstArgs() {
-        int count = method.getSignature().getParameterCount(false);
-        Object[] args = new Object[count];
-        for (int i = 0; i < args.length; i++) {
-            if (method.getParameterAnnotation(ConstantParameter.class, i) != null) {
-                args[i] = getConstantParameterValue(i, null);
+    /**
+     * Adds the arguments to this snippet stub.
+     */
+    protected Arguments makeArguments(SnippetInfo stub) {
+        Arguments args = new Arguments(stub, GuardsStage.FLOATING_GUARDS, LoweringTool.StandardLoweringStage.HIGH_TIER);
+        for (int i = 0; i < stub.getParameterCount(); i++) {
+            String name = stub.getParameterName(i);
+            if (stub.isConstantParameter(i)) {
+                args.addConst(name, getConstantParameterValue(i, name));
+            } else {
+                assert !stub.isVarargsParameter(i);
+                args.add(name, null);
             }
         }
         return args;
@@ -141,11 +106,11 @@ public abstract class SnippetStub extends Stub implements Snippets {
 
     @Override
     public ResolvedJavaMethod getInstalledCodeOwner() {
-        return method;
+        return snippet.info.getMethod();
     }
 
     @Override
     public String toString() {
-        return "Stub<" + getInstalledCodeOwner().format("%h.%n") + ">";
+        return "Stub<" + format("%h.%n", getInstalledCodeOwner()) + ">";
     }
 }

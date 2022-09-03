@@ -32,7 +32,6 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 
 public class LockEliminationTest extends GraalCompilerTest {
@@ -65,8 +64,8 @@ public class LockEliminationTest extends GraalCompilerTest {
         StructuredGraph graph = getGraph("testSynchronizedSnippet");
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), null));
         new LockEliminationPhase().apply(graph);
-        assertDeepEquals(1, graph.getNodes().filter(MonitorEnterNode.class).count());
-        assertDeepEquals(1, graph.getNodes().filter(MonitorExitNode.class).count());
+        assertEquals(1, graph.getNodes().filter(MonitorEnterNode.class).count());
+        assertEquals(1, graph.getNodes().filter(MonitorExitNode.class).count());
     }
 
     public static void testSynchronizedMethodSnippet(A x) {
@@ -83,15 +82,16 @@ public class LockEliminationTest extends GraalCompilerTest {
         StructuredGraph graph = getGraph("testSynchronizedMethodSnippet");
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), null));
         new LockEliminationPhase().apply(graph);
-        assertDeepEquals(1, graph.getNodes().filter(MonitorEnterNode.class).count());
-        assertDeepEquals(1, graph.getNodes().filter(MonitorExitNode.class).count());
+        assertEquals(1, graph.getNodes().filter(MonitorEnterNode.class).count());
+        assertEquals(1, graph.getNodes().filter(MonitorExitNode.class).count());
     }
 
     private StructuredGraph getGraph(String snippet) {
         Method method = getMethod(snippet);
         StructuredGraph graph = parse(method);
+        PhasePlan phasePlan = getDefaultPhasePlan();
         Assumptions assumptions = new Assumptions(true);
-        HighTierContext context = new HighTierContext(getProviders(), assumptions, null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+        HighTierContext context = new HighTierContext(getProviders(), assumptions, null, phasePlan, OptimisticOptimizations.ALL);
         new CanonicalizerPhase(true).apply(graph, context);
         new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
         new CanonicalizerPhase(true).apply(graph, context);

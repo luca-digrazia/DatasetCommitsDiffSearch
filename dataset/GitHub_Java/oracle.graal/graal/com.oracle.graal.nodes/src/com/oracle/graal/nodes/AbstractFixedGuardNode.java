@@ -23,15 +23,15 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNode implements Simplifiable, GuardingNode {
 
-    @Input(InputType.Condition) private LogicNode condition;
+    @Input private LogicNode condition;
     private final DeoptimizationReason reason;
     private final DeoptimizationAction action;
     private boolean negated;
@@ -46,7 +46,7 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
     }
 
     protected AbstractFixedGuardNode(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
-        super(StampFactory.forVoid());
+        super(StampFactory.dependency());
         this.action = action;
         this.negated = negated;
         this.condition = condition;
@@ -83,11 +83,11 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
         }
     }
 
-    public DeoptimizeNode lowerToIf() {
+    public void lowerToIf(LoweringTool tool) {
         FixedNode next = next();
         setNext(null);
         DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason));
-        deopt.setStateBefore(stateBefore());
+        deopt.setDeoptimizationState(getDeoptimizationState());
         IfNode ifNode;
         AbstractBeginNode noDeoptSuccessor;
         if (negated) {
@@ -101,7 +101,7 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
         this.replaceAtUsages(noDeoptSuccessor);
         GraphUtil.killWithUnusedFloatingInputs(this);
 
-        return deopt;
+        deopt.lower(tool);
     }
 
     @Override
