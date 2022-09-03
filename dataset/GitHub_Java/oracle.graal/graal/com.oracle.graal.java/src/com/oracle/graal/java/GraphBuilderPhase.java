@@ -385,20 +385,25 @@ public class GraphBuilderPhase extends Phase {
         FrameStateBuilder dispatchState = frameState.copy();
         dispatchState.clearStack();
 
-        DispatchBeginNode dispatchBegin;
+        DispatchBeginNode dispatchBegin = currentGraph.add(new DispatchBeginNode());
+        dispatchBegin.setStateAfter(dispatchState.create(bci));
+
         if (exceptionObject == null) {
-            dispatchBegin = currentGraph.add(new ExceptionObjectNode(runtime));
-            dispatchState.apush(dispatchBegin);
+            ExceptionObjectNode newExceptionObject = currentGraph.add(new ExceptionObjectNode(runtime));
+            dispatchState.apush(newExceptionObject);
             dispatchState.setRethrowException(true);
-            dispatchBegin.setStateAfter(dispatchState.create(bci));
+            newExceptionObject.setStateAfter(dispatchState.create(bci));
+
+            FixedNode target = createTarget(dispatchBlock, dispatchState);
+            dispatchBegin.setNext(newExceptionObject);
+            newExceptionObject.setNext(target);
         } else {
-            dispatchBegin = currentGraph.add(new DispatchBeginNode());
-            dispatchBegin.setStateAfter(dispatchState.create(bci));
             dispatchState.apush(exceptionObject);
             dispatchState.setRethrowException(true);
+
+            FixedNode target = createTarget(dispatchBlock, dispatchState);
+            dispatchBegin.setNext(target);
         }
-        FixedNode target = createTarget(dispatchBlock, dispatchState);
-        dispatchBegin.setNext(target);
         return dispatchBegin;
     }
 
@@ -1116,19 +1121,14 @@ public class GraphBuilderPhase extends Phase {
             returnType = returnType.resolve(targetMethod.getDeclaringClass());
         }
         MethodCallTargetNode callTarget = currentGraph.add(new MethodCallTargetNode(invokeKind, targetMethod, args, returnType));
-        createInvokeNode(callTarget, resultType);
-    }
-
-    protected Invoke createInvokeNode(MethodCallTargetNode callTarget, Kind resultType) {
         // be conservative if information was not recorded (could result in endless recompiles
         // otherwise)
         if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE)) {
-            InvokeNode invoke = new InvokeNode(callTarget, bci());
-            ValueNode result = appendWithBCI(currentGraph.add(invoke));
+            ValueNode result = appendWithBCI(currentGraph.add(new InvokeNode(callTarget, bci())));
             frameState.pushReturn(resultType, result);
-            return invoke;
+
         } else {
-            ExceptionObjectNode exceptionEdge = (ExceptionObjectNode) handleException(null, bci());
+            DispatchBeginNode exceptionEdge = handleException(null, bci());
             InvokeWithExceptionNode invoke = currentGraph.add(new InvokeWithExceptionNode(callTarget, exceptionEdge, bci()));
             ValueNode result = append(invoke);
             frameState.pushReturn(resultType, result);
@@ -1139,13 +1139,7 @@ public class GraphBuilderPhase extends Phase {
 
             invoke.setNext(createTarget(nextBlock, frameState));
             invoke.setStateAfter(frameState.create(nextBlock.startBci));
-            return invoke;
         }
-    }
-
-    private void callRegisterFinalizer() {
-        // append a call to the finalizer registration
-        append(currentGraph.add(new RegisterFinalizerNode(frameState.loadLocal(0))));
     }
 
     private void genReturn(ValueNode x) {
@@ -1562,9 +1556,6 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void createReturn() {
-        if (method.isConstructor() && MetaUtil.isJavaLangObject(method.getDeclaringClass())) {
-            callRegisterFinalizer();
-        }
         Kind returnKind = method.getSignature().getReturnKind().getStackKind();
         ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
         assert frameState.stackSize() == 0;
