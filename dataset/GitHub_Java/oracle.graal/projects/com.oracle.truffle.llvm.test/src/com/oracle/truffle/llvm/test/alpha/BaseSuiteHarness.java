@@ -45,7 +45,7 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.oracle.truffle.llvm.test.options.TestOptions;
+import com.oracle.truffle.llvm.test.options.SulongTestOptions;
 import com.oracle.truffle.llvm.test.util.ProcessUtil;
 import com.oracle.truffle.llvm.test.util.ProcessUtil.ProcessResult;
 
@@ -63,7 +63,7 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
             return;
         }
         Path referenceFile = files.get(0);
-        List<Path> testCandidates = Files.walk(getTestDirectory()).filter(isFile).filter(getIsSulongFilter()).collect(Collectors.toList());
+        List<Path> testCandidates = Files.walk(getTestDirectory()).filter(isFile).filter(isSulong).collect(Collectors.toList());
         ProcessResult processResult = ProcessUtil.executeNativeCommand(referenceFile.toAbsolutePath().toString());
         String referenceStdOut = processResult.getStdOutput();
         final int referenceReturnValue = processResult.getReturnValue();
@@ -76,7 +76,7 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
             if (!candidate.toAbsolutePath().toFile().exists()) {
                 fail(getTestName(), new AssertionError("File " + candidate.toAbsolutePath().toFile() + " does not exist."));
             }
-            ProcessResult out = ProcessUtil.executeSulongTestMain(candidate.toAbsolutePath().toFile(), new String[]{});
+            ProcessResult out = ProcessUtil.executeSulongTestMain(candidate.toAbsolutePath().toFile());
             int sulongResult = out.getReturnValue();
             String sulongStdOut = out.getStdOutput();
 
@@ -93,10 +93,6 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
             }
         }
         pass(getTestName());
-    }
-
-    protected Predicate<? super Path> getIsSulongFilter() {
-        return isSulong;
     }
 
     protected static void fail(String testName, AssertionError error) {
@@ -116,7 +112,7 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
 
     @AfterClass
     public static void reportDiscoveryReport() {
-        String testDiscoveryPath = TestOptions.TEST_DISCOVERY_PATH;
+        String testDiscoveryPath = SulongTestOptions.TEST.testDiscoveryPath();
         if (testDiscoveryPath != null) {
             System.out.println("PASSING:");
             System.out.println(passingTests.stream().map(p -> p.toString()).collect(Collectors.joining("\n")));

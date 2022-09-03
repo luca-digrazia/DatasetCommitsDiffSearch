@@ -29,15 +29,14 @@
  */
 package com.oracle.truffle.llvm.test.util;
 
+import com.oracle.truffle.llvm.Sulong;
+import com.oracle.truffle.llvm.pipe.CaptureOutput;
+import com.oracle.truffle.llvm.test.options.SulongTestOptions;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.TimeUnit;
-
-import com.oracle.truffle.llvm.Sulong;
-import com.oracle.truffle.llvm.pipe.CaptureOutput;
-import com.oracle.truffle.llvm.test.options.TestOptions;
 
 public class ProcessUtil {
 
@@ -100,8 +99,8 @@ public class ProcessUtil {
 
     }
 
-    public static ProcessResult executeSulongTestMain(File bitcodeFile, String[] args) throws IOException {
-        if (TestOptions.TEST_AOT_IMAGE == null) {
+    public static ProcessResult executeSulongTestMain(File bitcodeFile, Object... args) throws IOException {
+        if (SulongTestOptions.TEST.testAOTImage() == null) {
             try (CaptureOutput out = new CaptureOutput()) {
                 int result = Sulong.executeMain(bitcodeFile, args);
                 System.out.flush();
@@ -109,9 +108,7 @@ public class ProcessUtil {
                 return new ProcessResult(bitcodeFile.getName(), result, "", stdout);
             }
         } else {
-            String aotArgs = TestOptions.TEST_AOT_ARGS == null ? "" : TestOptions.TEST_AOT_ARGS + " ";
-            String cmdline = TestOptions.TEST_AOT_IMAGE + " " + aotArgs + bitcodeFile.getAbsolutePath() + " " + concatCommand(args);
-            return executeNativeCommand(cmdline);
+            return executeNativeCommand(SulongTestOptions.TEST.testAOTImage() + " " + bitcodeFile.getAbsolutePath() + " " + concatCommand(args));
         }
     }
 

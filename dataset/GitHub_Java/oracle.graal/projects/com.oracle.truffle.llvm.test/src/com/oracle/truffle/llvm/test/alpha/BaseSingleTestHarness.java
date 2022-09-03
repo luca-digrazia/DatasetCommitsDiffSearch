@@ -38,10 +38,8 @@ import java.util.stream.Collectors;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.oracle.truffle.llvm.LLVM;
-import com.oracle.truffle.llvm.pipe.CaptureOutput;
-import com.oracle.truffle.llvm.tools.util.ProcessUtil;
-import com.oracle.truffle.llvm.tools.util.ProcessUtil.ProcessResult;
+import com.oracle.truffle.llvm.test.util.ProcessUtil;
+import com.oracle.truffle.llvm.test.util.ProcessUtil.ProcessResult;
 
 public abstract class BaseSingleTestHarness extends BaseTestHarness {
 
@@ -62,15 +60,13 @@ public abstract class BaseSingleTestHarness extends BaseTestHarness {
                 continue;
             }
 
-            int sulongResult = -1;
-            String sulongStdOut;
-            try (CaptureOutput out = new CaptureOutput()) {
-                if (!candidate.toAbsolutePath().toFile().exists()) {
-                    throw new AssertionError("File " + candidate.toAbsolutePath().toFile() + " does not exist.");
-                }
-                sulongResult = LLVM.executeMain(candidate.toAbsolutePath().toFile(), getArguments(candidate.getParent()));
-                sulongStdOut = out.getResult();
+            if (!candidate.toAbsolutePath().toFile().exists()) {
+                throw new AssertionError("File " + candidate.toAbsolutePath().toFile() + " does not exist.");
             }
+
+            ProcessResult out = ProcessUtil.executeSulongTestMain(candidate.toAbsolutePath().toFile(), getArguments(candidate.getParent()));
+            int sulongResult = out.getReturnValue();
+            String sulongStdOut = out.getStdOutput();
 
             if (sulongResult != (sulongResult & 0xFF)) {
                 Assert.fail("Broken unittest " + getTestDirectory() + ". Test exits with invalid value.");
