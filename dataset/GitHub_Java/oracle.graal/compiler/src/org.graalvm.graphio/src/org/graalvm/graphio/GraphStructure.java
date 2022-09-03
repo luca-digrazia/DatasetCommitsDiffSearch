@@ -28,9 +28,9 @@ import java.util.Map;
 /**
  * Interface that defines structure of a compiler graph. The structure of a graph is composed from
  * nodes with properties, the classes of individual nodes, and ports associated with each node that
- * may the contain edge or edges to other nodes. The structure of a graph is assumed to be immutable
- * for the time of {@link GraphOutput operations} on it.
- * 
+ * may contain edges to other nodes. The structure of a graph is assumed to be immutable for the
+ * time of {@link GraphOutput operations} on it.
+ *
  * @param <G> the type of the (root node of a) graph
  * @param <N> the type of nodes
  * @param <C> the type of node classes
@@ -38,9 +38,9 @@ import java.util.Map;
  */
 public interface GraphStructure<G, N, C, P> {
     /**
-     * Casts the provided object to graph, if possible. If the given object <code>obj</code> can be
-     * seen as a graph or sub-graph of a graph, then return the properly typed instance. Otherwise
-     * return <code>null</code>
+     * Casts {@code obj} to graph, if possible. If the given object <code>obj</code> can be seen as
+     * a graph or sub-graph of a graph, then return the properly typed instance. Otherwise return
+     * <code>null</code>
      *
      * @param currentGraph the currently processed graph
      * @param obj an object to check and view as a graph
@@ -69,8 +69,8 @@ public interface GraphStructure<G, N, C, P> {
     int nodesCount(G graph);
 
     /**
-     * Id of a node. Each node in the graph is uniquely identified by a integer value. If two nodes
-     * have the same id, then they shall be <code>==</code> to each other.
+     * Id of {@code node}. Each node in the graph is uniquely identified by an integer value. If two
+     * nodes have the same id, then they shall be <code>==</code> to each other.
      *
      * @param node the node to query for an id
      * @return the id of the node
@@ -96,15 +96,33 @@ public interface GraphStructure<G, N, C, P> {
     void nodeProperties(G graph, N node, Map<String, ? super Object> properties);
 
     /**
-     * Finds node class for the the provided object to node class, if possible. If the given object
-     * <code>obj</code> is recognized as can be seen as an instance of node class or is a node in
-     * this graph, return the properly typed instance of the node class. Otherwise return
-     * <code>null</code>
+     * Finds a node for {@code obj}, if possible. If the given object <code>obj</code> can be seen
+     * as an instance of node return the properly typed instance of the node class. Otherwise return
+     * <code>null</code>.
+     *
+     * @param obj an object to find node for
+     * @return appropriate graph object or <code>null</code> if the object doesn't represent a node
+     */
+    N node(Object obj);
+
+    /**
+     * Finds a node class for {@code obj}, if possible. If the given object <code>obj</code> can be
+     * seen as an instance of node class return the properly typed instance of the node class.
+     * Otherwise return <code>null</code>.
      *
      * @param obj an object to find node class for
-     * @return appropriate graph object or <code>null</code> if the object doesn't represent a graph
+     * @return appropriate graph object or <code>null</code> if the object doesn't represent a node
+     *         class
      */
     C nodeClass(Object obj);
+
+    /**
+     * Finds a node class for {@code node}.
+     *
+     * @param node an instance of node in this graph
+     * @return the node's node class, never <code>null</code>
+     */
+    C classForNode(N node);
 
     /**
      * The template used to build the name of nodes of this class. The template may use references
@@ -115,17 +133,93 @@ public interface GraphStructure<G, N, C, P> {
      */
     String nameTemplate(C nodeClass);
 
-    P inputPorts(C nodeClass);
+    /**
+     * Java class for a node class.
+     *
+     * @param nodeClass the node class
+     * @return the {@link Class} or other type representation of the node class
+     */
+    Object nodeClassType(C nodeClass);
 
-    P outputPorts(C nodeClass);
+    /**
+     * Input ports of a node class. Each node class has a fixed set of ports where individual edges
+     * can attach to.
+     *
+     * @param nodeClass the node class
+     * @return input ports for the node class
+     */
+    P portInputs(C nodeClass);
 
-    int edgeCount(P port);
+    /**
+     * Output ports of a node class. Each node class has a fixed set of ports from where individual
+     * edges can point to other nodes.
+     *
+     * @param nodeClass the node class
+     * @return output ports for the node class
+     */
+    P portOutputs(C nodeClass);
 
+    /**
+     * The number of edges in a port. The protocol will then call methods
+     * {@link #edgeDirect(java.lang.Object, int)}, {@link #edgeName(java.lang.Object, int)},
+     * {@link #edgeType(java.lang.Object, int)} and
+     * {@link #edgeNodes(java.lang.Object, java.lang.Object, java.lang.Object, int)} for indexes
+     * from <code>0</code> to <code>portSize - 1</code>
+     *
+     * @param port the port
+     * @return number of edges in this port
+     */
+    int portSize(P port);
+
+    /**
+     * Checks whether an edge is direct. Direct edge shall have exactly one
+     * {@linkplain #edgeNodes(java.lang.Object, java.lang.Object, java.lang.Object, int) node} - it
+     * is an error to return more than one for such an edge from the
+     * {@linkplain #edgeNodes(java.lang.Object, java.lang.Object, java.lang.Object, int) method}.
+     *
+     * @param port the port
+     * @param index index from <code>0</code> to {@link #portSize(java.lang.Object)} minus
+     *            <code>1</code>
+     * @return <code>true</code> if only one node can be returned from
+     *         {@link #edgeNodes(java.lang.Object, java.lang.Object, java.lang.Object, int)} method
+     */
     boolean edgeDirect(P port, int index);
 
+    /**
+     * The name of an edge.
+     *
+     * @param port the port
+     * @param index index from <code>0</code> to {@link #portSize(java.lang.Object)} minus
+     *            <code>1</code>
+     * @return the name of the edge
+     */
     String edgeName(P port, int index);
 
+    /**
+     * Type of an edge. The type must be a graph
+     * <q>enum</q> - e.g. either real instance of {@link Enum} subclass, or something that the
+     * {@link GraphOutput.Builder} can recognize as
+     * <q>enum</q>.
+     *
+     * @param port
+     * @param index index from <code>0</code> to {@link #portSize(java.lang.Object)} minus
+     *            <code>1</code>
+     * @return any {@link Enum} representing type of the edge
+     */
     Object edgeType(P port, int index);
 
+    /**
+     * Nodes where the edges for a port lead to/from. This method is called for both
+     * {@link #edgeDirect(java.lang.Object, int) direct/non-direct edges}. In case of a direct edge
+     * the returned collection must have exactly one element.
+     *
+     * @param graph the graph
+     * @param node the node in the graph
+     * @param port port of the node class
+     * @param index index from <code>0</code> to {@link #portSize(java.lang.Object)} minus
+     *            <code>1</code>
+     * @return <code>null</code> if there are no edges associated with given port or collection of
+     *         nodes where to/from the edges lead to
+     */
     Collection<? extends N> edgeNodes(G graph, N node, P port, int index);
 }

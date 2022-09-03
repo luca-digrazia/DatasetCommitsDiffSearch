@@ -33,7 +33,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 
-abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition, Location> implements Closeable {
+abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> implements Closeable {
     private static final Charset UTF8 = Charset.forName("UTF-8");
 
     private static final int CONSTANT_POOL_MAX_SIZE = 8000;
@@ -87,7 +87,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         writeVersion();
     }
 
-    GraphProtocol(GraphProtocol<?, ?, ?, ?, ?, ?, ?, ?, ?, ?> parent) {
+    GraphProtocol(GraphProtocol<?, ?, ?, ?, ?, ?, ?, ?, ?> parent) {
         this.versionMajor = parent.versionMajor;
         this.versionMinor = parent.versionMinor;
         this.constantPool = parent.constantPool;
@@ -254,11 +254,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
 
     protected abstract int findNodeSourcePositionBCI(NodeSourcePosition pos);
 
-    protected abstract Location findLocation(ResolvedJavaMethod method, int bci, NodeSourcePosition pos);
-
-    protected abstract String findLocationFile(Location loc);
-
-    protected abstract int findLocationLine(Location loc);
+    protected abstract StackTraceElement findMethodStackTraceElement(ResolvedJavaMethod method, int bci, NodeSourcePosition pos);
 
     private void writeVersion() throws IOException {
         writeBytesRaw(MAGIC_BYTES);
@@ -554,11 +550,10 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
             writePoolObject(method);
             final int bci = findNodeSourcePositionBCI(pos);
             writeInt(bci);
-            Location ste = findLocation(method, bci, pos);
-            String fileName = ste == null ? null : findLocationFile(ste);
-            if (fileName != null) {
-                writePoolObject(fileName);
-                writeInt(findLocationLine(ste));
+            StackTraceElement ste = findMethodStackTraceElement(method, bci, pos);
+            if (ste != null && ste.getFileName() != null) {
+                writePoolObject(ste.getFileName());
+                writeInt(ste.getLineNumber());
             } else {
                 writePoolObject(null);
             }
