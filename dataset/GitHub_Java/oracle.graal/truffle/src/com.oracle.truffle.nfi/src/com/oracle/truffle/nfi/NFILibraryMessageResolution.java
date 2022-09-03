@@ -38,6 +38,7 @@ import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.nfi.NFILibraryMessageResolutionFactory.CachedLookupSymbolNodeGen;
 import com.oracle.truffle.nfi.NFILibraryMessageResolutionFactory.IdentToStringNodeGen;
@@ -108,7 +109,7 @@ class NFILibraryMessageResolution {
     abstract static class KeysNode extends Node {
 
         public Object access(NFILibrary receiver) {
-            return receiver.getSymbols();
+            return JavaInterop.asTruffleObject(receiver.getSymbols());
         }
     }
 
