@@ -98,11 +98,6 @@ interface REPLClientContext {
     void displayFailReply(String message);
 
     /**
-     * Send a message announcing current execution is being killed.
-     */
-    void displayKillMessage(String message);
-
-    /**
      * Recompute the client's command line prompt.
      */
     void updatePrompt();
