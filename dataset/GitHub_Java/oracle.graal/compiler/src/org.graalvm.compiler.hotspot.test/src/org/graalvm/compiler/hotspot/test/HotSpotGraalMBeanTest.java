@@ -41,7 +41,7 @@ import javax.management.MBeanServer;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 
-import org.graalvm.compiler.debug.DebugOptions;
+import org.graalvm.compiler.debug.GraalDebugConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalMBean;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.test.GraalTest;
@@ -110,7 +110,7 @@ public class HotSpotGraalMBeanTest {
         MBeanInfo info = server.getMBeanInfo(name);
         assertNotNull("Info is found", info);
 
-        MBeanAttributeInfo printCompilation = (MBeanAttributeInfo) findAttributeInfo("PrintCompilation", info);
+        MBeanAttributeInfo printCompilation = findAttributeInfo("PrintCompilation", info);
         assertNotNull("PrintCompilation found", printCompilation);
         assertEquals("true/false", Boolean.class.getName(), printCompilation.getType());
 
@@ -124,9 +124,9 @@ public class HotSpotGraalMBeanTest {
         assertEquals("Changed to on", Boolean.TRUE, after);
     }
 
-    private static Object findAttributeInfo(String attrName, Object info) {
+    private static MBeanAttributeInfo findAttributeInfo(String attrName, MBeanInfo info) {
         MBeanAttributeInfo printCompilation = null;
-        for (MBeanAttributeInfo attr : ((MBeanInfo) info).getAttributes()) {
+        for (MBeanAttributeInfo attr : info.getAttributes()) {
             if (attr.getName().equals(attrName)) {
                 assertTrue("Readable", attr.isReadable());
                 assertTrue("Writable", attr.isWritable());
@@ -157,7 +157,7 @@ public class HotSpotGraalMBeanTest {
         MBeanInfo info = server.getMBeanInfo(name);
         assertNotNull("Info is found", info);
 
-        MBeanAttributeInfo dump = (MBeanAttributeInfo) findAttributeInfo("Dump", info);
+        MBeanAttributeInfo dump = findAttributeInfo("Dump", info);
 
         Attribute dumpTo1 = new Attribute(dump.getName(), 1);
 
@@ -215,7 +215,7 @@ public class HotSpotGraalMBeanTest {
                         "java.util.Arrays", "asList", ":3"
         }, null);
 
-        MBeanAttributeInfo dump = (MBeanAttributeInfo) findAttributeInfo("Dump", info);
+        MBeanAttributeInfo dump = findAttributeInfo("Dump", info);
         Attribute dumpTo1 = new Attribute(dump.getName(), "");
         server.setAttribute(name, dumpTo1);
         Object after = server.getAttribute(name, dump.getName());
@@ -227,14 +227,14 @@ public class HotSpotGraalMBeanTest {
         ResolvedJavaMethod method = metaAccess.lookupJavaMethod(Arrays.class.getMethod("asList", Object[].class));
         final OptionValues forMethod = realBean.optionsFor(unsetDump, method);
         assertNotSame(unsetDump, forMethod);
-        Object nothing = unsetDump.getMap().get(DebugOptions.Dump);
+        Object nothing = unsetDump.getMap().get(GraalDebugConfig.Options.Dump);
         assertEquals("Empty string", "", nothing);
 
-        Object specialValue = forMethod.getMap().get(DebugOptions.Dump);
+        Object specialValue = forMethod.getMap().get(GraalDebugConfig.Options.Dump);
         assertEquals(":3", specialValue);
 
         OptionValues normalMethod = realBean.optionsFor(unsetDump, null);
-        Object noSpecialValue = normalMethod.getMap().get(DebugOptions.Dump);
+        Object noSpecialValue = normalMethod.getMap().get(GraalDebugConfig.Options.Dump);
         assertEquals("Empty string", "", noSpecialValue);
     }
 
