@@ -36,22 +36,23 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.PolyglotContext;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.test.options.TestOptions;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
+import com.oracle.truffle.llvm.context.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 
 @RunWith(Parameterized.class)
 public final class ParserTortureSuite {
 
-    private static final Path GCC_SUITE_DIR = new File(TestOptions.PROJECT_ROOT + "/../cache/tests/gcc.c-torture").toPath();
-    private static final Path GCC_CONFIG_DIR = new File(TestOptions.PROJECT_ROOT + "/../tests/gcc/compileConfigs").toPath();
+    private static final Path GCC_SUITE_DIR = new File(LLVMOptions.ENGINE.projectRoot() + "/../cache/tests/gcc.c-torture").toPath();
+    private static final Path GCC_CONFIG_DIR = new File(LLVMOptions.ENGINE.projectRoot() + "/../tests/gcc/compileConfigs").toPath();
 
     @Parameter(value = 0) public Path path;
     @Parameter(value = 1) public String testName;
@@ -71,9 +72,10 @@ public final class ParserTortureSuite {
             }
 
             try {
-                Engine engine = Engine.create();
-                PolyglotContext context = engine.createPolyglotContext();
-                context.eval(LLVMLanguage.NAME, org.graalvm.polyglot.Source.newBuilder(candidate.toFile()).build());
+                Builder engineBuilder = PolyglotEngine.newBuilder();
+                engineBuilder.config(LLVMLanguage.LLVM_BITCODE_MIME_TYPE, LLVMLanguage.PARSE_ONLY_KEY, true);
+                PolyglotEngine build = engineBuilder.build();
+                build.eval(Source.newBuilder(candidate.toFile()).build());
             } catch (Throwable e) {
                 throw e;
             }

@@ -41,7 +41,6 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -63,7 +62,7 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
         Path referenceFile = Files.walk(getTestDirectory()).filter(isExecutable).collect(Collectors.toList()).get(0);
         List<Path> testCandidates = Files.walk(getTestDirectory()).filter(isFile).filter(isSulong).collect(Collectors.toList());
         ProcessResult processResult = ProcessUtil.executeNativeCommand(referenceFile.toAbsolutePath().toString());
-        String referenceStdOut = getReferenceResult(processResult);
+        String referenceStdOut = processResult.getStdOutput();
         final int referenceReturnValue = processResult.getReturnValue();
 
         for (Path candidate : testCandidates) {
@@ -89,20 +88,11 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
             if (referenceReturnValue != sulongResult) {
                 fail(getTestName(), new AssertionError(testName + " failed. Posix return value missmatch. Expected: " + referenceReturnValue + " but was: " + sulongResult));
             }
-
             if (!referenceStdOut.equals(sulongStdOut)) {
                 fail(getTestName(), new AssertionError(testName + " failed. Output (stdout) missmatch. Expected: " + referenceStdOut + " but was: " + sulongStdOut));
             }
         }
         pass(getTestName());
-    }
-
-    private static String getReferenceResult(ProcessResult processResult) {
-        final StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < LLVMOptions.ENGINE.executionCount(); i++) {
-            builder.append(processResult.getStdOutput());
-        }
-        return builder.toString();
     }
 
     protected static void fail(String testName, AssertionError error) {

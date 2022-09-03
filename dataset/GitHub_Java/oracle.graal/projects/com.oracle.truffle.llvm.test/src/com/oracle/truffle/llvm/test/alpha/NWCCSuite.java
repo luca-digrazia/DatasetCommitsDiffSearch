@@ -33,6 +33,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.Collection;
 
+import org.junit.AfterClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
@@ -44,6 +45,7 @@ import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 public final class NWCCSuite extends BaseSuiteHarness {
 
     private static final Path NWCC_SUITE_DIR = new File(LLVMOptions.ENGINE.projectRoot() + "/../cache/tests/nwcc").toPath();
+    private static final Path NWCC_SOURCE_DIR = new File(LLVMOptions.ENGINE.projectRoot() + "/../tests/nwcc/nwcc_0.8.3").toPath();
     private static final Path NWCC_CONFIG_DIR = new File(LLVMOptions.ENGINE.projectRoot() + "/../tests/nwcc/configs").toPath();
 
     @Parameter(value = 0) public Path path;
@@ -51,7 +53,7 @@ public final class NWCCSuite extends BaseSuiteHarness {
 
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
-        return collectTestCases(NWCC_CONFIG_DIR, NWCC_SUITE_DIR);
+        return collectTestCases(NWCC_CONFIG_DIR, NWCC_SUITE_DIR, NWCC_SOURCE_DIR);
     }
 
     @Override
@@ -64,4 +66,13 @@ public final class NWCCSuite extends BaseSuiteHarness {
         return NWCC_SUITE_DIR;
     }
 
+    @AfterClass
+    public static void printStatistics() {
+        printStatistics("NWCC", NWCC_SOURCE_DIR, NWCC_CONFIG_DIR, f -> true);
+    }
+
+    @Override
+    protected String getTestName() {
+        return testName;
+    }
 }

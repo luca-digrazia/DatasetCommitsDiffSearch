@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
 
 import org.junit.Test;
 
-import com.oracle.truffle.llvm.test.options.TestOptions;
+import com.oracle.truffle.llvm.test.options.SulongTestOptions;
 
 public abstract class BaseTestHarness {
 
@@ -57,6 +57,8 @@ public abstract class BaseTestHarness {
     public static final Predicate<? super Path> isSulong = f -> f.getFileName().toString().endsWith(".bc");
     public static final Predicate<? super Path> isFile = f -> f.toFile().isFile();
 
+    protected abstract Path getSuiteDirectory();
+
     protected abstract Path getTestDirectory();
 
     protected abstract String getTestName();
@@ -66,20 +68,16 @@ public abstract class BaseTestHarness {
 
     /**
      * This function can be overwritten to specify a filter on test file names. E.g. if one wants to
-     * only run unoptimized files on Sulong, use <code> s.endsWith("O0.bc") </code>
+     * only run unoptimized files on Sulong, use <code> s.endsWith("O0.ll") </code>
      *
      * @return a filter predicate
      */
     protected Predicate<String> filterFileName() {
-        if (TestOptions.TEST_FILTER != null && !TestOptions.TEST_FILTER.isEmpty()) {
-            return s -> s.endsWith(TestOptions.TEST_FILTER);
-        } else {
-            return s -> true;
-        }
+        return s -> true;
     }
 
     public static final Collection<Object[]> collectTestCases(Path configPath, Path suiteDir, Path sourceDir) throws AssertionError {
-        String testDiscoveryPath = TestOptions.TEST_DISCOVERY_PATH;
+        String testDiscoveryPath = SulongTestOptions.TEST.testDiscoveryPath();
         if (testDiscoveryPath == null) {
             return collectRegularRun(configPath, suiteDir);
         } else {
@@ -144,12 +142,6 @@ public abstract class BaseTestHarness {
     }
 
     private static Set<Path> getWhiteListEntries(Path configDir) {
-        Predicate<Path> fortranFilter;
-        if (TestOptions.IGNORE_FORTRAN) {
-            fortranFilter = f -> (!f.toString().trim().endsWith(".f90") && !f.toString().trim().endsWith(".F90"));
-        } else {
-            fortranFilter = f -> true;
-        }
         try {
             return Files.walk(configDir).filter(isIncludeFile).flatMap(f -> {
                 try {
@@ -157,7 +149,7 @@ public abstract class BaseTestHarness {
                 } catch (IOException e) {
                     throw new AssertionError("Error creating whitelist.", e);
                 }
-            }).map(s -> Paths.get(s)).filter(fortranFilter).collect(Collectors.toSet());
+            }).map(s -> Paths.get(s)).collect(Collectors.toSet());
         } catch (IOException e) {
             throw new AssertionError("Error creating whitelist.", e);
         }
