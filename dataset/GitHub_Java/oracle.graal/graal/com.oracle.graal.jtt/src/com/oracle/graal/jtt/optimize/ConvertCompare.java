@@ -34,13 +34,4 @@ public class ConvertCompare extends JTTTest {
     public void run0() throws Throwable {
         runTest("test", 0, 2.87f);
     }
-
-    public static boolean testChar(int x) {
-        return ((char) x) == 42;
-    }
-
-    @Test
-    public void run1() {
-        runTest("testChar", 42);
-    }
 }
