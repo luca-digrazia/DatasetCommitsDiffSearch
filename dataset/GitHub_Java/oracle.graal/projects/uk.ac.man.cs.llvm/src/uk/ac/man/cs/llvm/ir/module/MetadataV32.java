@@ -53,7 +53,6 @@ import uk.ac.man.cs.llvm.ir.module.records.DwLangNameRecord;
 import uk.ac.man.cs.llvm.ir.module.records.DwTagRecord;
 import uk.ac.man.cs.llvm.ir.types.IntegerConstantType;
 import uk.ac.man.cs.llvm.ir.types.MetadataConstantType;
-import uk.ac.man.cs.llvm.ir.types.MetadataConstantPointerType;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
 public class MetadataV32 extends Metadata {
@@ -198,7 +197,7 @@ public class MetadataV32 extends Metadata {
     protected void createOldFnNode(long[] args) {
         MetadataArgumentParser parsedArgs = new MetadataArgumentParser(types, symbols, args);
 
-        metadata.add(new MetadataFnNode((MetadataConstantPointerType) parsedArgs.next()));
+        metadata.add(new MetadataFnNode(asInt32(parsedArgs.next())));
     }
 
     protected void createDwNode(MetadataArgumentParser args) {

@@ -37,7 +37,6 @@ import uk.ac.man.cs.llvm.ir.types.IntegerConstantType;
 import uk.ac.man.cs.llvm.ir.types.IntegerType;
 import uk.ac.man.cs.llvm.ir.types.MetaType;
 import uk.ac.man.cs.llvm.ir.types.MetadataConstantType;
-import uk.ac.man.cs.llvm.ir.types.MetadataConstantPointerType;
 import uk.ac.man.cs.llvm.ir.types.PointerType;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
@@ -91,7 +90,8 @@ public class MetadataArgumentParser implements Iterator<Type> {
         } else if (typeOfArgument instanceof MetaType) {
             return new MetadataConstantType(val);
         } else if (typeOfArgument instanceof PointerType) {
-            return new MetadataConstantPointerType((int) val);
+            // TODO: return more suited type
+            return new IntegerConstantType(IntegerType.INTEGER, val); // TODO: check
         } else {
             throw new AssertionError("type not suported yet: " + typeOfArgument);
         }

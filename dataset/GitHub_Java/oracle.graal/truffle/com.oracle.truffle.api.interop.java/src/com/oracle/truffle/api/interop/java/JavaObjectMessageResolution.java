@@ -216,11 +216,7 @@ class JavaObjectMessageResolution {
     @Resolve(message = "KEYS")
     abstract static class PropertiesNode extends Node {
         public Object access(JavaObject receiver) {
-            Class<?> clazz = receiver.clazz;
-            while ((clazz.getModifiers() & Modifier.PUBLIC) == 0) {
-                clazz = clazz.getSuperclass();
-            }
-            final Field[] fields = clazz.getFields();
+            final Field[] fields = receiver.clazz.getFields();
             final String[] names = new String[fields.length];
             for (int i = 0; i < fields.length; i++) {
                 names[i] = fields[i].getName();
