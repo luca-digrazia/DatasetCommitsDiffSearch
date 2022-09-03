@@ -127,22 +127,6 @@ public final class CompileTheWorld {
         }
     }
 
-    public static void println() {
-        println("");
-    }
-
-    public static void println(String format, Object... args) {
-        println(String.format(format, args));
-    }
-
-    public static final boolean LOG = Boolean.getBoolean("graal.compileTheWorldTest.log");
-
-    public static void println(String s) {
-        if (LOG) {
-            TTY.println(s);
-        }
-    }
-
     /**
      * Compile all methods in all classes in the Zip/Jar files passed.
      * 
@@ -157,13 +141,13 @@ public final class CompileTheWorld {
 
             // For now we only compile all methods in all classes in zip/jar files.
             if (!entry.endsWith(".zip") && !entry.endsWith(".jar")) {
-                println("CompileTheWorld : Skipped classes in " + entry);
-                println();
+                TTY.println("CompileTheWorld : Skipped classes in " + entry);
+                TTY.println();
                 continue;
             }
 
-            println("CompileTheWorld : Compiling all classes in " + entry);
-            println();
+            TTY.println("CompileTheWorld : Compiling all classes in " + entry);
+            TTY.println();
 
             URL url = new URL("jar", "", "file:" + entry + "!/");
             ClassLoader loader = new URLClassLoader(new URL[]{url});
@@ -198,13 +182,13 @@ public final class CompileTheWorld {
                         }
                     } catch (Throwable t) {
                         // If something went wrong during pre-loading we just ignore it.
-                        println("Preloading failed for (%d) %s", classFileCounter, className);
+                        TTY.println("Preloading failed for (%d) %s", classFileCounter, className);
                     }
 
                     // Are we compiling this class?
                     HotSpotMetaAccessProvider metaAccess = runtime.getHostProviders().getMetaAccess();
                     if (classFileCounter >= startAt) {
-                        println("CompileTheWorld (%d) : %s", classFileCounter, className);
+                        TTY.println("CompileTheWorld (%d) : %s", classFileCounter, className);
 
                         // Enqueue each constructor/method in the class for compilation.
                         for (Constructor<?> constructor : javaClass.getDeclaredConstructors()) {
@@ -221,14 +205,14 @@ public final class CompileTheWorld {
                         }
                     }
                 } catch (Throwable t) {
-                    println("CompileTheWorld (%d) : Skipping %s", classFileCounter, className);
+                    TTY.println("CompileTheWorld (%d) : Skipping %s", classFileCounter, className);
                 }
             }
             jarFile.close();
         }
 
-        println();
-        println("CompileTheWorld : Done (%d classes, %d methods, %d ms)", classFileCounter, compiledMethodsCounter, compileTime);
+        TTY.println();
+        TTY.println("CompileTheWorld : Done (%d classes, %d methods, %d ms)", classFileCounter, compiledMethodsCounter, compileTime);
     }
 
     /**
@@ -243,7 +227,7 @@ public final class CompileTheWorld {
             method.reprofile();  // makes the method also not-entrant
         } catch (Throwable t) {
             // Catch everything and print a message
-            println("CompileTheWorld (%d) : Error compiling method: %s", classFileCounter, MetaUtil.format("%H.%n(%p):%r", method));
+            TTY.println("CompileTheWorld (%d) : Error compiling method: %s", classFileCounter, MetaUtil.format("%H.%n(%p):%r", method));
             t.printStackTrace(TTY.cachedOut);
         }
     }
