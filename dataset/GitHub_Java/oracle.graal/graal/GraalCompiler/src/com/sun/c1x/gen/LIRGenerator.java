@@ -448,19 +448,38 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     protected FrameState stateBeforeInvoke(Invoke invoke) {
-        Value[] args = new Value[invoke.argumentCount()];
-        for (int i = 0; i < invoke.argumentCount(); i++) {
-            args[i] = invoke.argument(i);
+        FrameState stateAfter = invoke.stateAfter();
+        FrameStateBuilder builder = new FrameStateBuilder(compilation.method, invoke.graph());
+        builder.initializeFrom(stateAfter);
+        if (invoke.kind != CiKind.Void) {
+            builder.pop(invoke.kind);
         }
-        return invoke.stateAfter().duplicateModified(invoke.bci(), invoke.kind/*, args*/);
+        int argumentCount = invoke.argumentCount(); // invoke.arguments() iterable?
+        for (int i = 0; i < argumentCount; i++) {
+            Value arg = invoke.argument(i);
+            if (arg != null) {
+                //builder.push(arg.kind, arg);
+            }
+        }
+        return builder.create(invoke.bci());
     }
 
     protected FrameState stateBeforeInvokeWithArguments(Invoke invoke) {
-        Value[] args = new Value[invoke.argumentCount()];
-        for (int i = 0; i < invoke.argumentCount(); i++) {
-            args[i] = invoke.argument(i);
+
+        FrameState stateAfter = invoke.stateAfter();
+        FrameStateBuilder builder = new FrameStateBuilder(compilation.method, invoke.graph());
+        builder.initializeFrom(stateAfter);
+        if (invoke.kind != CiKind.Void) {
+            builder.pop(invoke.kind);
         }
-        return invoke.stateAfter().duplicateModified(invoke.bci(), invoke.kind, args);
+        int argumentCount = invoke.argumentCount(); // invoke.arguments() iterable?
+        for (int i = 0; i < argumentCount; i++) {
+            Value arg = invoke.argument(i);
+            if (arg != null) {
+                builder.push(arg.kind, arg);
+            }
+        }
+        return builder.create(invoke.bci());
     }
 
     @Override
@@ -976,7 +995,11 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     private FrameState stateBeforeRegisterFinalizer(RegisterFinalizer rf) {
-        return rf.stateAfter().duplicateModified(rf.bci(), CiKind.Void, rf.object());
+        Value object = rf.object();
+        FrameStateBuilder builder = new FrameStateBuilder(compilation.method, rf.graph());
+        builder.initializeFrom(rf.stateAfter());
+        builder.push(object.kind, object);
+        return builder.create(rf.bci());
     }
 
     @Override

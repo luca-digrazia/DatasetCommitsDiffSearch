@@ -166,31 +166,13 @@ public abstract class BlockEnd extends Instruction {
     }
 
     /**
-     * This method reorders the predecessors of the i-th successor in such a way that this BlockEnd is at position backEdgeIndex.
-     */
-    public void reorderSuccessor(int i, int backEdgeIndex) {
-        assert i >= 0 && i < blockSuccessorCount;
-        BlockBegin successor = blockSuccessor(i);
-        if (successor != null) {
-            successors().set(super.successorCount() + SUCCESSOR_COUNT + i, Node.Null);
-            successors().set(super.successorCount() + SUCCESSOR_COUNT + i, successor, backEdgeIndex);
-        }
-    }
-
-    /**
      * Gets this block end's list of successors.
      * @return the successor list
      */
-    @SuppressWarnings({ "unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     public List<BlockBegin> blockSuccessors() {
         List<BlockBegin> list = (List) successors().subList(super.successorCount() + SUCCESSOR_COUNT, super.successorCount() + blockSuccessorCount + SUCCESSOR_COUNT);
         return Collections.unmodifiableList(list);
-    }
-
-    public void clearSuccessors() {
-        for (int i = 0; i < blockSuccessorCount(); i++) {
-            setBlockSuccessor(i, null);
-        }
     }
 
 }

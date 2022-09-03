@@ -89,6 +89,7 @@ public class IR {
     private void buildGraph() {
         // Graph builder must set the startBlock and the osrEntryBlock
         new GraphBuilder(compilation, this, compilation.graph).build();
+        assert startBlock != null;
         verifyAndPrint("After graph building");
 
         if (C1XOptions.PrintCompilation) {
@@ -162,8 +163,6 @@ public class IR {
             bci = source.end().bci();
         }
 
-        int backEdgeIndex = target.predecessors().indexOf(source.end());
-
         // create new successor and mark it for special block order treatment
         BlockBegin newSucc = new BlockBegin(bci, nextBlockNumber(), compilation.graph);
 
@@ -173,7 +172,6 @@ public class IR {
         Goto e = new Goto(target, null, false, compilation.graph);
         newSucc.appendNext(e, bci);
         newSucc.setEnd(e);
-        e.reorderSuccessor(0, backEdgeIndex);
         // setup states
         FrameState s = source.end().stateAfter();
         newSucc.setStateBefore(s);
@@ -187,20 +185,20 @@ public class IR {
         // The ordering needs to be the same, so remove the link that the
         // set_end call above added and substitute the new_sux for this
         // block.
-        target.removePredecessor(newSucc.end());
+        target.removePredecessor(newSucc);
 
         // the successor could be the target of a switch so it might have
         // multiple copies of this predecessor, so substitute the new_sux
         // for the first and delete the rest.
-        List<BlockEnd> list = target.blockPredecessors();
-        int x = list.indexOf(source.end());
-        list.set(x, newSucc.end());
-        newSucc.addPredecessor(source.end());
-        Iterator<BlockEnd> iterator = list.iterator();
+        List<BlockBegin> list = target.blockPredecessors();
+        int x = list.indexOf(source);
+        list.set(x, newSucc);
+        newSucc.addPredecessor(source);
+        Iterator<BlockBegin> iterator = list.iterator();
         while (iterator.hasNext()) {
-            if (iterator.next() == source.end()) {
+            if (iterator.next() == source) {
                 iterator.remove();
-                newSucc.addPredecessor(source.end());
+                newSucc.addPredecessor(source);
             }
         }
         return newSucc;
@@ -209,17 +207,17 @@ public class IR {
     public void replaceBlock(BlockBegin oldBlock, BlockBegin newBlock) {
         assert !oldBlock.isExceptionEntry() : "cannot replace exception handler blocks (yet)";
         for (BlockBegin succ : oldBlock.end().blockSuccessors()) {
-            succ.removePredecessor(oldBlock.end());
+            succ.removePredecessor(oldBlock);
         }
-        for (BlockEnd pred : oldBlock.blockPredecessors()) {
+        for (BlockBegin pred : oldBlock.blockPredecessors()) {
             // substitute the new successor for this block in each predecessor
-            pred.substituteSuccessor(oldBlock, newBlock);
+            pred.end().substituteSuccessor(oldBlock, newBlock);
             // and add each predecessor to the successor
             newBlock.addPredecessor(pred);
         }
         // this block is now disconnected; remove all its incoming and outgoing edges
 //        oldBlock.blockPredecessors().clear();
-//        oldBlock.end().successors().clear();
+//        oldBlock.end().blockSuccessors().clear();
     }
 
     /**
@@ -227,8 +225,8 @@ public class IR {
      * @param block the block to remove from the graph
      */
     public void disconnectFromGraph(BlockBegin block) {
-        for (BlockEnd p : block.blockPredecessors()) {
-            p.blockSuccessors().remove(block);
+        for (BlockBegin p : block.blockPredecessors()) {
+            p.end().blockSuccessors().remove(block);
         }
         for (BlockBegin s : block.end().blockSuccessors()) {
             s.blockPredecessors().remove(block);
