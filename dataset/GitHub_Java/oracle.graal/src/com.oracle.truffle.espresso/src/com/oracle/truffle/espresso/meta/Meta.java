@@ -683,7 +683,6 @@ public final class Meta {
          * and StaticObject.NULL/null. There's no parameter casting based on the method's signature,
          * widening nor narrowing.
          */
-        @CompilerDirectives.TruffleBoundary
         public Object invoke(Object self, Object... args) {
             assert args.length == method.getSignature().getParameterCount(false);
             assert !isStatic() || ((StaticObjectImpl) self).isStatic();
@@ -710,7 +709,6 @@ public final class Meta {
          * Invoke a guest method without parameter/return type conversion. There's no parameter
          * casting based on the method's signature, widening nor narrowing.
          */
-        @CompilerDirectives.TruffleBoundary
         public Object invokeDirect(Object self, Object... args) {
             if (isStatic()) {
                 assert args.length == method.getSignature().getParameterCount(false);
