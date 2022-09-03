@@ -43,22 +43,22 @@ public class ProcessUtil {
 
         private final String originalCommand;
         private final String stdErr;
-        private final String stdOutput;
+        private final String stdInput;
         private final int returnValue;
 
         private ProcessResult(String originalCommand, int returnValue, String stdErr, String stdInput) {
             this.originalCommand = originalCommand;
             this.returnValue = returnValue;
             this.stdErr = stdErr;
-            this.stdOutput = stdInput;
+            this.stdInput = stdInput;
         }
 
         public String getStdErr() {
             return stdErr;
         }
 
-        public String getStdOutput() {
-            return stdOutput;
+        public String getStdInput() {
+            return stdInput;
         }
 
         public int getReturnValue() {
