@@ -31,67 +31,9 @@ import org.junit.Test;
 
 public class PerformanceTruffleInliningTest extends TruffleInliningTest {
 
-// @Test
-// public void testPerformanceRewriteArgs() {
-//        // @formatter:off 
-//        OptimizedCallTarget target = builder.
-//        target("rewrite_nboyer").
-//            calls("Symbol.hasInstance").
-//            calls("sc_Pair").
-//            calls("sc_Pair").
-//            calls("rewrite_nboyer").
-//            calls("rewrite_args_nboyer").
-//            calls("one_way_unify_nboyer").
-//            calls("rewrite_nboyer").
-//            calls("applysubst_nboyer").
-//        target("one_way_unify1_nboyer").
-//            calls("Symbol.hasInstance").
-//            calls("Symbol.hasInstance").
-//            calls("one_way_unify1_nboyer").
-//            calls("sc_assq").
-//            calls("sc_isNumber").
-//            calls("sc_isEqual").
-//            calls("sc_Pair").
-//            calls("sc_Pair").
-//            calls("is_term_equal_nboyer").
-//        target("applysubst_nboyer").
-//            calls("Symbol.hasInstance").
-//            calls("sc_Pair").
-//            calls("sc_Pair").
-//            calls("apply_subst_nboyer").
-//            calls("apply_subst_lst_nboyer").
-//            calls("sc_assq").
-//        target("apply_subst_lst_nboyer").
-//            calls("sc_Pair").
-//            calls("applysubst_nboyer").
-//            calls("sc_Pair").
-//            calls("applysubst_nboyer").
-//            calls("apply_subst_lst_nboyer").
-//        target("is_term_equal_nboyer").
-//            calls("Symbol.hasInstance").
-//            calls("Symbol.hasInstance").
-//            calls("sc_isEqual").
-//        target("sc_Pair").
-//        target("sc_isNumber").
-//        target("sc_isEqual").
-//        target("sc_assq").
-//        target("Symbol.hasInstance").
-//        target("one_way_unify_nboyer").
-//        target("apply_subst_nboyer").
-//        target("rewrite_args_nboyer").
-//            calls("sc_Pair").
-//            calls("rewrite_nboyer").
-//            calls("sc_Pair").
-//            calls("rewrite_nboyer").
-//            calls("rewrite_args_nboyer").
-//        buildTarget();
-//        // @formatter:on 
-// assertDecidingTakesLessThan(target, 100);
-// }
-
     @Test
     public void testThreeTangledRecursions() {
-        // @formatter:off 
+        // @formatter:off
         OptimizedCallTarget target = builder.
                 target("three").
                     calls("three").
@@ -106,13 +48,13 @@ public class PerformanceTruffleInliningTest extends TruffleInliningTest {
                     calls("two").
                     calls("three").
                 buildTarget();
-        // @formatter:on 
+        // @formatter:on
         assertDecidingTakesLessThan(target, 500);
     }
 
     @Test
     public void testFourTangledRecursions() {
-        // @formatter:off 
+        // @formatter:off
         OptimizedCallTarget target = builder.
                 target("four").
                     calls("four").
@@ -134,7 +76,7 @@ public class PerformanceTruffleInliningTest extends TruffleInliningTest {
                     calls("three").
                     calls("four").
                 buildTarget();
-        // @formatter:on 
+        // @formatter:on
         assertDecidingTakesLessThan(target, 500);
     }
 
@@ -172,17 +114,19 @@ public class PerformanceTruffleInliningTest extends TruffleInliningTest {
     public void testHugeGraph() {
         hugeGraphBuilderHelper(10, 4, "1");
         OptimizedCallTarget target = builder.target("main").calls("1").buildTarget();
-        System.out.println(targetCount);
-        System.out.println("BUILDER DONE!");
         assertDecidingTakesLessThan(target, 500);
 
     }
 
     protected void assertDecidingTakesLessThan(OptimizedCallTarget target, long maxDuration) {
-        long duration = executionTime(target);
+        long duration = Long.MAX_VALUE;
+        for (int i = 0; i < 10; i++) {
+            duration = Math.min(executionTime(target), duration);
+        }
         Assert.assertTrue("Took too long: " + TimeUnit.NANOSECONDS.toMillis(duration) + "ms", duration < TimeUnit.MILLISECONDS.toNanos(maxDuration));
     }
 
+    @SuppressWarnings("unused")
     protected long executionTime(OptimizedCallTarget target) {
         long start = System.nanoTime();
         TruffleInlining decisions = new TruffleInlining(target, policy);
