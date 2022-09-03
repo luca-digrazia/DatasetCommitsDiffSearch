@@ -24,7 +24,6 @@ package com.sun.c1x.lir;
 
 import java.util.*;
 
-import com.oracle.max.asm.*;
 import com.sun.c1x.*;
 import com.sun.c1x.asm.*;
 import com.sun.c1x.debug.*;
@@ -39,11 +38,14 @@ import com.sun.cri.xir.CiXirAssembler.XirMark;
 
 /**
  * The {@code LIRAssembler} class definition.
+ *
+ * @author Marcelo Cintra
+ * @author Thomas Wuerthinger
+ * @author Ben L. Titzer
  */
 public abstract class LIRAssembler {
 
     public final C1XCompilation compilation;
-    public final TargetMethodAssembler tasm;
     public final AbstractAssembler asm;
     public final FrameMap frameMap;
     public int registerRestoreEpilogueOffset = -1;
@@ -67,8 +69,7 @@ public abstract class LIRAssembler {
 
     public LIRAssembler(C1XCompilation compilation) {
         this.compilation = compilation;
-        this.tasm = compilation.assembler();
-        this.asm = tasm.asm;
+        this.asm = compilation.masm();
         this.frameMap = compilation.frameMap();
         this.branchTargetBlocks = new ArrayList<BlockBegin>();
         this.xirSlowPath = new ArrayList<SlowPath>();
@@ -97,10 +98,10 @@ public abstract class LIRAssembler {
     public abstract void emitTraps();
 
     public void emitExceptionEntries() {
-        if (tasm.exceptionInfoList == null) {
+        if (asm.exceptionInfoList == null) {
             return;
         }
-        for (ExceptionInfo ilist : tasm.exceptionInfoList) {
+        for (ExceptionInfo ilist : asm.exceptionInfoList) {
             List<ExceptionHandler> handlers = ilist.exceptionHandlers;
 
             for (ExceptionHandler handler : handlers) {
@@ -112,7 +113,7 @@ public abstract class LIRAssembler {
                     if (handler.entryCode() != null && handler.entryCode().instructionsList().size() > 1) {
                         handler.setEntryCodeOffset(codePos());
                         if (C1XOptions.CommentedAssembly) {
-                            tasm.blockComment("Exception adapter block");
+                            asm.blockComment("Exception adapter block");
                         }
                         emitLirList(handler.entryCode());
                     } else {
@@ -156,7 +157,7 @@ public abstract class LIRAssembler {
         assert block.lir() != null : "must have LIR";
         if (C1XOptions.CommentedAssembly) {
             String st = String.format(" block B%d [%d, %d]", block.blockID, block.bci(), block.end().bci());
-            tasm.blockComment(st);
+            asm.blockComment(st);
         }
 
         emitLirList(block.lir());
@@ -169,7 +170,7 @@ public abstract class LIRAssembler {
             if (C1XOptions.CommentedAssembly) {
                 // Only print out branches
                 if (op.code == LIROpcode.Branch) {
-                    tasm.blockComment(op.toStringWithIdPrefix());
+                    asm.blockComment(op.toStringWithIdPrefix());
                 }
             }
             if (C1XOptions.PrintLIRWithAssembly && !TTY.isSuppressed()) {
@@ -219,15 +220,15 @@ public abstract class LIRAssembler {
                 emitCallAlignment(op.code);
                 // fall through
             case ConstDirectCall:
-                if (op.marks != null) {
-                    op.marks.put(XirMark.CALLSITE, tasm.recordMark(null, new Mark[0]));
+               if (op.marks != null) {
+                    op.marks.put(XirMark.CALLSITE, asm.recordMark(null, new Mark[0]));
                 }
                 emitDirectCall(op.target, op.info);
                 break;
             case IndirectCall:
                 emitCallAlignment(op.code);
                 if (op.marks != null) {
-                    op.marks.put(XirMark.CALLSITE, tasm.recordMark(null, new Mark[0]));
+                    op.marks.put(XirMark.CALLSITE, asm.recordMark(null, new Mark[0]));
                 }
                 emitIndirectCall(op.target, op.info, op.targetAddress());
                 break;
@@ -273,7 +274,12 @@ public abstract class LIRAssembler {
                 emitLea(op.operand(), op.result());
                 break;
             case NullCheck:
-                emitNullCheck(op.operand(), op.info);
+                assert op.operand().isRegister();
+                if (C1XOptions.NullCheckUniquePc) {
+                    asm.nop();
+                }
+                asm.recordImplicitException(codePos(), op.info);
+                asm.nullCheck(op.operand().asRegister());
                 break;
             case Lsb:
                 emitSignificantBitOp(false,  op.operand(), op.result());
@@ -281,7 +287,7 @@ public abstract class LIRAssembler {
             case Msb:
                 emitSignificantBitOp(true,  op.operand(), op.result());
                 break;
-            default:
+           default:
                 throw Util.shouldNotReachHere();
         }
     }
@@ -290,6 +296,18 @@ public abstract class LIRAssembler {
         switch (op.code) {
             case Label:
                 throw Util.shouldNotReachHere();
+            case OsrEntry:
+                emitOsrEntry();
+                break;
+            case Here:
+                emitHere(op.result(), op.info, false);
+                break;
+            case Info:
+                emitHere(op.result(), op.info, true);
+                break;
+            case Pause:
+                emitPause();
+                break;
             case Breakpoint:
                 emitBreakpoint();
                 break;
@@ -430,11 +448,13 @@ public abstract class LIRAssembler {
 
     protected abstract void emitLea(CiValue src, CiValue dst);
 
-    protected abstract void emitNullCheck(CiValue src, LIRDebugInfo info);
-
     protected abstract void emitNegate(LIRNegate negate);
 
+    protected abstract void emitHere(CiValue dst, LIRDebugInfo info, boolean infoOnly);
+
     protected abstract void emitMonitorAddress(int monitor, CiValue dst);
+
+    protected abstract void emitPause();
 
     protected abstract void emitStackAllocate(StackBlock src, CiValue dst);
 
@@ -487,6 +507,8 @@ public abstract class LIRAssembler {
     protected abstract void emitCallAlignment(LIROpcode code);
 
     protected abstract void emitMemoryBarriers(int barriers);
+
+    protected abstract void emitOsrEntry();
 
     protected abstract void reg2stack(CiValue src, CiValue dest, CiKind kind);
 

@@ -33,7 +33,12 @@ public enum LIROpcode {
     // @formatter:off
     BeginOp0,
         Label,
+        OsrEntry,
+        Here,
+        Info,
+        Alloca,
         Breakpoint,
+        Pause,
         RuntimeCall,
         Membar,
         Branch,

@@ -24,9 +24,9 @@ package com.sun.c1x.lir;
 
 import java.util.*;
 
-import com.oracle.max.asm.*;
 import com.sun.c1x.*;
 import com.sun.c1x.alloc.*;
+import com.sun.c1x.asm.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.gen.*;
 import com.sun.c1x.globalstub.*;
@@ -41,6 +41,10 @@ import com.sun.cri.xir.*;
 /**
  * This class represents a list of LIR instructions and contains factory methods for creating and appending LIR
  * instructions to this list.
+ *
+ * @author Marcelo Cintra
+ * @author Thomas Wuerthinger
+ * @author Ben L. Titzer
  */
 public final class LIRList {
 
@@ -101,6 +105,10 @@ public final class LIRList {
         append(new LIRMemoryBarrier(barriers));
     }
 
+    public void osrEntry(CiValue osrPointer) {
+        append(new LIROp0(LIROpcode.OsrEntry, osrPointer));
+    }
+
     public void branchDestination(Label lbl) {
         append(new LIRLabel(lbl));
     }
@@ -149,6 +157,14 @@ public final class LIRList {
 
     public void monitorAddress(int monitor, CiValue dst) {
         append(new LIRMonitorAddress(dst, monitor));
+    }
+
+    public void infopoint(LIROpcode opcode, CiValue dst, LIRDebugInfo info) {
+        append(new LIROp0(opcode, dst, info));
+    }
+
+    public void alloca(StackBlock stackBlock, CiValue dst) {
+        append(new LIRStackAllocate(dst, stackBlock));
     }
 
     public void convert(int code, CiValue left, CiValue dst, GlobalStub globalStub) {
@@ -291,6 +307,10 @@ public final class LIRList {
         append(new LIRCall(runtimeCallOp, rtCall, result, arguments, info, null, false, null));
     }
 
+    public void pause() {
+        append(new LIROp0(LIROpcode.Pause));
+    }
+
     public void breakpoint() {
         append(new LIROp0(LIROpcode.Breakpoint));
     }
@@ -398,6 +418,9 @@ public final class LIRList {
         if (x.checkBlockFlag(BlockBegin.BlockFlag.ExceptionEntry)) {
             TTY.print("ex ");
         }
+        if (x.checkBlockFlag(BlockBegin.BlockFlag.SubroutineEntry)) {
+            TTY.print("jsr ");
+        }
         if (x.checkBlockFlag(BlockBegin.BlockFlag.BackwardBranchTarget)) {
             TTY.print("bb ");
         }
@@ -415,7 +438,7 @@ public final class LIRList {
         if (x.numberOfPreds() > 0) {
             TTY.print("preds: ");
             for (int i = 0; i < x.numberOfPreds(); i++) {
-                TTY.print("B%d ", x.predAt(i).begin().blockID);
+                TTY.print("B%d ", x.predAt(i).blockID);
             }
         }
 

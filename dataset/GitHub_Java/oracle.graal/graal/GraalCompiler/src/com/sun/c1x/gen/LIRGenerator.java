@@ -625,9 +625,13 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitNullCheck(NullCheck x) {
+        // TODO: this is suboptimal because it may result in an unnecessary move
         CiValue value = load(x.object());
-        LIRDebugInfo info = stateFor(x);
-        lir.nullCheck(value, info);
+        if (x.canTrap()) {
+            LIRDebugInfo info = stateFor(x);
+            lir.nullCheck(value, info);
+        }
+        x.setOperand(value);
     }
 
     @Override
@@ -1591,7 +1595,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
 
         public boolean requiresNullCheck() {
-            return current == null || true;
+            return current == null || current.canTrap() || current instanceof InstanceOf || current instanceof CheckCast;
         }
 
         public boolean requiresBoundsCheck() {
