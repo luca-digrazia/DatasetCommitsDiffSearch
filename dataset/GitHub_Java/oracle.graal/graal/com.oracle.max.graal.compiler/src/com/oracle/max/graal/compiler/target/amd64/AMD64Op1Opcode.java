@@ -35,14 +35,15 @@ import com.oracle.max.graal.compiler.util.*;
 public enum AMD64Op1Opcode implements LIROpcode {
     INEG, LNEG;
 
-    public LIRInstruction create(CiValue result, CiValue x) {
-        CiValue[] inputs = new CiValue[] {x};
+    public LIRInstruction create(Variable result, CiValue input) {
+        CiValue[] inputs = new CiValue[] {input};
         CiValue[] outputs = new CiValue[] {result};
 
         return new AMD64LIRInstruction(this, outputs, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                emit(tasm, masm, output(0), input(0));
+                AMD64MoveOpcode.move(tasm, masm, output(0), input(0));
+                emit(masm, output(0));
             }
 
             @Override
@@ -57,11 +58,10 @@ public enum AMD64Op1Opcode implements LIROpcode {
         };
     }
 
-    private void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue x) {
-        AMD64MoveOpcode.move(tasm, masm, result, x);
+    private void emit(AMD64MacroAssembler masm, CiValue inputAndResult) {
         switch (this) {
-            case INEG: masm.negl(asIntReg(result)); break;
-            case LNEG: masm.negq(asLongReg(result)); break;
+            case INEG: masm.negl(asIntReg(inputAndResult)); break;
+            case LNEG: masm.negq(asLongReg(inputAndResult)); break;
             default:   throw Util.shouldNotReachHere();
         }
     }

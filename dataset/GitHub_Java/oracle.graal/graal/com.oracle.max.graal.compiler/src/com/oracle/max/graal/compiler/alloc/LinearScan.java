@@ -50,7 +50,6 @@ public final class LinearScan {
 
     final GraalContext context;
     final GraalCompilation compilation;
-    final RiMethod method;
     final LIR ir;
     final LIRGenerator gen;
     final FrameMap frameMap;
@@ -119,7 +118,6 @@ public final class LinearScan {
 
     public LinearScan(GraalCompilation compilation, LIR ir, LIRGenerator gen, FrameMap frameMap) {
         this.context = compilation.compiler.context;
-        this.method = compilation.method;
         this.compilation = compilation;
         this.ir = ir;
         this.gen = gen;
@@ -816,7 +814,7 @@ public final class LinearScan {
     }
 
     private void reportFailure(int numBlocks) {
-        TTY.println(method.toString());
+        TTY.println(compilation.method.toString());
         TTY.println("Error: liveIn set of first block must be empty (when this fails, variables are used before they are defined)");
         TTY.print("affected registers:");
         TTY.println(ir.startBlock().liveIn.toString());
@@ -1341,7 +1339,7 @@ public final class LinearScan {
         notPrecoloredIntervals = result.second;
 
         // allocate cpu registers
-        LinearScanWalker lsw = new LinearScanWalker(this, precoloredIntervals, notPrecoloredIntervals, !compilation.compiler.target.arch.isX86());
+        LinearScanWalker lsw = new LinearScanWalker(this, precoloredIntervals, notPrecoloredIntervals);
         lsw.walk();
         lsw.finishAllocation();
     }

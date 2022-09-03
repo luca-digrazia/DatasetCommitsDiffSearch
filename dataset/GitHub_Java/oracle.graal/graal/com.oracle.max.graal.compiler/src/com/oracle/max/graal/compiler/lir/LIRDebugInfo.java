@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,70 +22,33 @@
  */
 package com.oracle.max.graal.compiler.lir;
 
-import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.value.*;
-import com.sun.cri.ci.*;
+import static com.oracle.max.graal.compiler.lir.LIRInstruction.*;
+import static com.oracle.max.graal.alloc.util.ValueUtil.*;
+
+import java.util.*;
+
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
 
 /**
- * This class represents debugging and deoptimization information attached to a LIR instruction.
+ * This class represents garbage collection and deoptimization information attached to a LIR instruction.
  */
 public class LIRDebugInfo {
+    public final CiFrame topFrame;
+    private final CiVirtualObject[] virtualObjects;
+    private final List<CiStackSlot> pointerSlots;
+    public final LabelRef exceptionEdge;
+    private CiDebugInfo debugInfo;
 
-    public abstract static class ValueLocator {
-        public abstract CiValue getLocation(Value value);
-    }
-
-    public final FrameState state;
-    private LIRBlock exceptionEdge;
-    public CiDebugInfo debugInfo;
-
-    public LIRDebugInfo(FrameState state) {
-        assert state != null;
-        this.state = state;
-    }
-
-    public LIRBlock exceptionEdge() {
-        return exceptionEdge;
-    }
-
-    public void setExceptionEdge(LIRBlock exceptionEdge) {
+    public LIRDebugInfo(CiFrame topFrame, CiVirtualObject[] virtualObjects, List<CiStackSlot> pointerSlots, LabelRef exceptionEdge) {
+        this.topFrame = topFrame;
+        this.virtualObjects = virtualObjects;
+        this.pointerSlots = pointerSlots;
         this.exceptionEdge = exceptionEdge;
     }
 
-    private LIRDebugInfo(LIRDebugInfo info) {
-        this.state = info.state;
-        this.exceptionEdge = info.exceptionEdge;
-    }
-
-    public LIRDebugInfo copy() {
-        return new LIRDebugInfo(this);
-    }
-
-    public void setOop(CiValue location, C1XCompilation compilation, CiBitMap frameRefMap, CiBitMap regRefMap) {
-        CiTarget target = compilation.target;
-        if (location.isAddress()) {
-            CiAddress stackLocation = (CiAddress) location;
-            assert stackLocation.index.isIllegal();
-            if (stackLocation.base == CiRegister.Frame.asValue()) {
-                int offset = stackLocation.displacement;
-                assert offset % target.wordSize == 0 : "must be aligned";
-                int stackMapIndex = offset / target.wordSize;
-                setBit(frameRefMap, stackMapIndex);
-            }
-        } else if (location.isStackSlot()) {
-            CiStackSlot stackSlot = (CiStackSlot) location;
-            assert !stackSlot.inCallerFrame();
-            assert target.spillSlotSize == target.wordSize;
-            setBit(frameRefMap, stackSlot.index());
-        } else {
-            assert location.isRegister() : "objects can only be in a register";
-            CiRegisterValue registerLocation = (CiRegisterValue) location;
-            int reg = registerLocation.reg.number;
-            assert reg >= 0 : "object cannot be in non-object register " + registerLocation.reg;
-            assert reg < target.arch.registerReferenceMapBitCount;
-            setBit(regRefMap, reg);
-        }
+    public boolean hasDebugInfo() {
+        return debugInfo != null;
     }
 
     public CiDebugInfo debugInfo() {
@@ -93,17 +56,72 @@ public class LIRDebugInfo {
         return debugInfo;
     }
 
-    public boolean hasDebugInfo() {
-        return debugInfo != null;
+    /**
+     * Iterates the frame state and calls the {@link ValueProcedure} for every variable.
+     *
+     * @param proc The procedure called for variables.
+     */
+    public void forEachState(ValueProcedure proc) {
+        for (CiFrame cur = topFrame; cur != null; cur = cur.caller()) {
+            processValues(cur.values, proc);
+        }
+        if (virtualObjects != null) {
+            for (CiVirtualObject obj : virtualObjects) {
+                processValues(obj.values(), proc);
+            }
+        }
     }
 
-    public static void setBit(CiBitMap refMap, int bit) {
-        assert !refMap.get(bit) : "Ref map entry " + bit + " is already set.";
-        refMap.set(bit);
+    /**
+     * We filter out constant and illegal values ourself before calling the procedure, so {@link OperandFlag#Constant} and {@link OperandFlag#Illegal} need not be set.
+     */
+    private static final EnumSet<OperandFlag> STATE_FLAGS = EnumSet.of(OperandFlag.Register, OperandFlag.Stack);
+
+    private void processValues(CiValue[] values, ValueProcedure proc) {
+        for (int i = 0; i < values.length; i++) {
+            CiValue value = values[i];
+            if (value instanceof CiMonitorValue) {
+                CiMonitorValue monitor = (CiMonitorValue) value;
+                if (processed(monitor.owner)) {
+                    monitor.owner = proc.doValue(monitor.owner, OperandMode.Alive, STATE_FLAGS);
+                }
+
+            } else if (processed(value)) {
+                values[i] = proc.doValue(value, OperandMode.Alive, STATE_FLAGS);
+            }
+        }
     }
+
+    private boolean processed(CiValue value) {
+        if (isIllegal(value)) {
+            // Ignore dead local variables.
+            return false;
+        } else if (isConstant(value)) {
+            // Ignore constants, the register allocator does not need to see them.
+            return false;
+        } else if (isVirtualObject(value)) {
+            assert Arrays.asList(virtualObjects).contains(value);
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+
+    public void finish(CiBitMap registerRefMap, CiBitMap frameRefMap, FrameMap frameMap) {
+        debugInfo = new CiDebugInfo(topFrame, registerRefMap, frameRefMap);
+
+        // Add additional stack slots for outgoing method parameters.
+        if (pointerSlots != null) {
+            for (CiStackSlot v : pointerSlots) {
+                frameMap.setReference(v, registerRefMap, frameRefMap);
+            }
+        }
+    }
+
 
     @Override
     public String toString() {
-        return state.toString();
+        return debugInfo != null ? debugInfo.toString() : topFrame.toString();
     }
 }

@@ -39,8 +39,8 @@ public enum AMD64ConvertOpcode implements LIROpcode {
     L2F, L2D,
     MOV_I2F, MOV_L2D, MOV_F2I, MOV_D2L;
 
-    public LIRInstruction create(CiValue result, CiValue x) {
-        CiValue[] inputs = new CiValue[] {x};
+    public LIRInstruction create(Variable result, Variable input) {
+        CiValue[] inputs = new CiValue[] {input};
         CiValue[] outputs = new CiValue[] {result};
 
         return new AMD64LIRInstruction(this, outputs, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
@@ -59,35 +59,35 @@ public enum AMD64ConvertOpcode implements LIROpcode {
         };
     }
 
-    private void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue x) {
+    private void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue input) {
         switch (this) {
             case L2I:
-                AMD64MoveOpcode.move(tasm, masm, result, x);
+                AMD64MoveOpcode.move(tasm, masm, result, input);
                 masm.andl(asIntReg(result), 0xFFFFFFFF);
                 break;
             case I2B:
-                AMD64MoveOpcode.move(tasm, masm, result, x);
+                AMD64MoveOpcode.move(tasm, masm, result, input);
                 masm.signExtendByte(asIntReg(result));
                 break;
             case I2C:
-                AMD64MoveOpcode.move(tasm, masm, result, x);
+                AMD64MoveOpcode.move(tasm, masm, result, input);
                 masm.andl(asIntReg(result), 0xFFFF);
                 break;
             case I2S:
-                AMD64MoveOpcode.move(tasm, masm, result, x);
+                AMD64MoveOpcode.move(tasm, masm, result, input);
                 masm.signExtendShort(asIntReg(result));
                 break;
-            case I2L: masm.movslq(asLongReg(result), asIntReg(x)); break;
-            case F2D: masm.cvtss2sd(asDoubleReg(result), asFloatReg(x)); break;
-            case D2F: masm.cvtsd2ss(asFloatReg(result), asDoubleReg(x)); break;
-            case I2F: masm.cvtsi2ssl(asFloatReg(result), asIntReg(x)); break;
-            case I2D: masm.cvtsi2sdl(asDoubleReg(result), asIntReg(x)); break;
-            case L2F: masm.cvtsi2ssq(asFloatReg(result), asLongReg(x)); break;
-            case L2D: masm.cvtsi2sdq(asDoubleReg(result), asLongReg(x)); break;
-            case MOV_I2F: masm.movdl(asFloatReg(result), asIntReg(x)); break;
-            case MOV_L2D: masm.movdq(asDoubleReg(result), asLongReg(x)); break;
-            case MOV_F2I: masm.movdl(asIntReg(result), asFloatReg(x)); break;
-            case MOV_D2L: masm.movdq(asLongReg(result), asDoubleReg(x)); break;
+            case I2L: masm.movslq(asLongReg(result), asIntReg(input)); break;
+            case F2D: masm.cvtss2sd(asDoubleReg(result), asFloatReg(input)); break;
+            case D2F: masm.cvtsd2ss(asFloatReg(result), asDoubleReg(input)); break;
+            case I2F: masm.cvtsi2ssl(asFloatReg(result), asIntReg(input)); break;
+            case I2D: masm.cvtsi2sdl(asDoubleReg(result), asIntReg(input)); break;
+            case L2F: masm.cvtsi2ssq(asFloatReg(result), asLongReg(input)); break;
+            case L2D: masm.cvtsi2sdq(asDoubleReg(result), asLongReg(input)); break;
+            case MOV_I2F: masm.movdl(asFloatReg(result), asIntReg(input)); break;
+            case MOV_L2D: masm.movdq(asDoubleReg(result), asLongReg(input)); break;
+            case MOV_F2I: masm.movdl(asIntReg(result), asFloatReg(input)); break;
+            case MOV_D2L: masm.movdq(asLongReg(result), asDoubleReg(input)); break;
             default: throw Util.shouldNotReachHere();
         }
     }

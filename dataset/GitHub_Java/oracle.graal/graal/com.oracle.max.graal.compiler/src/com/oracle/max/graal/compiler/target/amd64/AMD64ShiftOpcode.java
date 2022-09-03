@@ -33,18 +33,20 @@ import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
 
 public enum AMD64ShiftOpcode implements LIROpcode {
-    ISHL, ISHR, IUSHR,
-    LSHL, LSHR, LUSHR;
+    ISHL, ISHR, UISHR,
+    LSHL, LSHR, ULSHR;
 
-    public LIRInstruction create(CiValue result, CiValue x, CiValue y) {
-        CiValue[] inputs = new CiValue[] {x};
-        CiValue[] alives = new CiValue[] {y};
+    public LIRInstruction create(Variable result, CiValue left, CiValue right) {
+        CiValue[] inputs = new CiValue[] {left};
+        CiValue[] alives = new CiValue[] {right};
         CiValue[] outputs = new CiValue[] {result};
 
         return new AMD64LIRInstruction(this, outputs, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                emit(tasm, masm, output(0), input(0), alive(0));
+                assert !(alive(0) instanceof CiRegisterValue) || asRegister(output(0)) != asRegister(alive(0)) : "result and right must be different registers";
+                AMD64MoveOpcode.move(tasm, masm, output(0), input(0));
+                emit(tasm, masm, output(0), alive(0));
             }
 
             @Override
@@ -61,30 +63,27 @@ public enum AMD64ShiftOpcode implements LIROpcode {
         };
     }
 
-    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiValue x, CiValue y) {
-        assert sameRegister(x, y) || differentRegisters(result, y);
-        AMD64MoveOpcode.move(tasm, masm, result, x);
-
-        CiRegister dst = asRegister(result);
-        if (isRegister(y)) {
-            assert asRegister(y) == AMD64.rcx;
+    protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue leftAndResult, CiValue right) {
+        CiRegister dst = asRegister(leftAndResult);
+        if (isRegister(right)) {
+            assert asRegister(right) == AMD64.rcx;
             switch (this) {
                 case ISHL:  masm.shll(dst); break;
                 case ISHR:  masm.sarl(dst); break;
-                case IUSHR: masm.shrl(dst); break;
+                case UISHR: masm.shrl(dst); break;
                 case LSHL:  masm.shlq(dst); break;
                 case LSHR:  masm.sarq(dst); break;
-                case LUSHR: masm.shrq(dst); break;
+                case ULSHR: masm.shrq(dst); break;
                 default:    throw Util.shouldNotReachHere();
             }
-        } else if (isConstant(y)) {
+        } else if (isConstant(right)) {
             switch (this) {
-                case ISHL:  masm.shll(dst, tasm.asIntConst(y) & 31); break;
-                case ISHR:  masm.sarl(dst, tasm.asIntConst(y) & 31); break;
-                case IUSHR: masm.shrl(dst, tasm.asIntConst(y) & 31); break;
-                case LSHL:  masm.shlq(dst, tasm.asIntConst(y) & 63); break;
-                case LSHR:  masm.sarq(dst, tasm.asIntConst(y) & 63); break;
-                case LUSHR: masm.shrq(dst, tasm.asIntConst(y) & 63); break;
+                case ISHL:  masm.shll(dst, tasm.asIntConst(right) & 31); break;
+                case ISHR:  masm.sarl(dst, tasm.asIntConst(right) & 31); break;
+                case UISHR: masm.shrl(dst, tasm.asIntConst(right) & 31); break;
+                case LSHL:  masm.shlq(dst, tasm.asIntConst(right) & 63); break;
+                case LSHR:  masm.sarq(dst, tasm.asIntConst(right) & 63); break;
+                case ULSHR: masm.shrq(dst, tasm.asIntConst(right) & 63); break;
                 default:   throw Util.shouldNotReachHere();
             }
         } else {

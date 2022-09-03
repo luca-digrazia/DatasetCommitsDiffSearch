@@ -30,6 +30,7 @@ import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.lir.*;
+import com.oracle.max.graal.compiler.util.*;
 
 /**
  */
@@ -192,13 +193,13 @@ final class MoveResolver {
 
     private void insertMove(Interval fromInterval, Interval toInterval) {
         assert fromInterval.operand != toInterval.operand : "from and to interval equal: " + fromInterval;
-        assert fromInterval.kind() == toInterval.kind() : "move between different types";
+        assert Util.archKindsEqual(fromInterval.kind(), toInterval.kind()) : "move between different types";
         assert insertIdx != -1 : "must setup insert position first";
 
         CiValue fromOpr = fromInterval.operand;
         CiValue toOpr = toInterval.operand;
 
-        insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
+        insertionBuffer.append(insertIdx, StandardOpcode.SPILL_MOVE.create(toOpr, fromOpr));
 
         if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.println("MoveResolver: inserted move from %d (%s) to %d (%s)", fromInterval.operandNumber, fromInterval.location(), toInterval.operandNumber, toInterval.location());
@@ -206,11 +207,11 @@ final class MoveResolver {
     }
 
     private void insertMove(CiValue fromOpr, Interval toInterval) {
-        assert fromOpr.kind == toInterval.kind() : "move between different types";
+        assert Util.archKindsEqual(fromOpr.kind, toInterval.kind()) : "move between different types";
         assert insertIdx != -1 : "must setup insert position first";
 
         CiValue toOpr = toInterval.operand;
-        insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
+        insertionBuffer.append(insertIdx, StandardOpcode.SPILL_MOVE.create(toOpr, fromOpr));
 
         if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.print("MoveResolver: inserted move from constant %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
@@ -330,7 +331,7 @@ final class MoveResolver {
         }
 
         assert fromInterval.operand != toInterval.operand : "from and to interval equal: " + fromInterval;
-        assert fromInterval.kind() == toInterval.kind();
+        assert Util.archKindsEqual(fromInterval.kind(), toInterval.kind());
         mappingFrom.add(fromInterval);
         mappingFromOpr.add(CiValue.IllegalValue);
         mappingTo.add(toInterval);

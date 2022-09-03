@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,20 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
+import static com.oracle.max.cri.ci.CiValueUtil.*;
+
+import java.util.*;
+
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ci.CiAddress.Scale;
+import com.oracle.max.cri.ci.CiTargetMethod.JumpTable;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.nodes.calc.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ci.CiAddress.Scale;
-import com.sun.cri.ci.CiTargetMethod.JumpTable;
-import com.sun.cri.ci.CiValue.Formatter;
 
 public class AMD64ControlFlowOpcode {
 
@@ -40,7 +43,7 @@ public class AMD64ControlFlowOpcode {
         LABEL;
 
         public LIRInstruction create(final Label label, final boolean align) {
-            return new AMD64LIRInstruction(this, CiValue.IllegalValue, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
                     if (align) {
@@ -50,7 +53,7 @@ public class AMD64ControlFlowOpcode {
                 }
 
                 @Override
-                public String operationString(Formatter operandFmt) {
+                public String operationString() {
                     return label.toString();
                 }
             };
@@ -64,10 +67,18 @@ public class AMD64ControlFlowOpcode {
         public LIRInstruction create(CiValue input) {
             CiValue[] inputs = new CiValue[] {input};
 
-            return new AMD64LIRInstruction(this, CiValue.IllegalValue, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
                     masm.ret(0);
+                }
+
+                @Override
+                protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+                    if (mode == OperandMode.Input && index == 0) {
+                        return EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
+                    }
+                    throw Util.shouldNotReachHere();
                 }
             };
         }
@@ -86,7 +97,7 @@ public class AMD64ControlFlowOpcode {
                 }
 
                 @Override
-                public String operationString(Formatter operandFmt) {
+                public String operationString() {
                     return  "[" + destination + "]";
                 }
             };
@@ -106,7 +117,7 @@ public class AMD64ControlFlowOpcode {
                 }
 
                 @Override
-                public String operationString(Formatter operandFmt) {
+                public String operationString() {
                     return cond.operator + " [" + destination + "]";
                 }
             };
@@ -121,11 +132,11 @@ public class AMD64ControlFlowOpcode {
             return new LIRBranch(this, cond, unorderedIsTrue, label, info) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm) {
-                    floatJcc(tasm, (AMD64MacroAssembler) tasm.asm, cond, unorderedIsTrue, destination.label());
+                    floatJcc((AMD64MacroAssembler) tasm.asm, cond, unorderedIsTrue, destination.label());
                 }
 
                 @Override
-                public String operationString(Formatter operandFmt) {
+                public String operationString() {
                     return cond.operator + " [" + destination + "]" + (unorderedIsTrue ? " unorderedIsTrue" : " unorderedIsFalse");
                 }
             };
@@ -136,21 +147,19 @@ public class AMD64ControlFlowOpcode {
     public enum TableSwitchOpcode implements LIROpcode {
         TABLE_SWITCH;
 
-        public LIRInstruction create(final int lowKey, final LabelRef defaultTarget, final LabelRef[] targets, CiVariable index, CiVariable scratch) {
+        public LIRInstruction create(final int lowKey, final LabelRef defaultTarget, final LabelRef[] targets, Variable index, Variable scratch) {
             CiValue[] alives = new CiValue[] {index};
             CiValue[] temps = new CiValue[] {scratch};
 
-            return new AMD64LIRInstruction(this, CiValue.IllegalValue, null, LIRInstruction.NO_OPERANDS, alives, temps) {
+            return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, null, LIRInstruction.NO_OPERANDS, alives, temps) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    CiValue index = alive(0);
-                    CiValue scratch = temp(0);
-                    tableswitch(tasm, masm, lowKey, defaultTarget, targets, tasm.asIntReg(index), tasm.asLongReg(scratch));
+                    tableswitch(tasm, masm, lowKey, defaultTarget, targets, asIntReg(alive(0)), asLongReg(temp(0)));
                 }
 
                 @Override
-                public String operationString(Formatter operandFmt) {
-                    StringBuilder buf = new StringBuilder(super.operationString(operandFmt));
+                public String operationString() {
+                    StringBuilder buf = new StringBuilder(super.operationString());
                     buf.append("\ndefault: [").append(defaultTarget).append(']');
                     int key = lowKey;
                     for (LabelRef l : targets) {
@@ -167,26 +176,30 @@ public class AMD64ControlFlowOpcode {
     public enum CondMoveOpcode implements LIROpcode {
         CMOVE;
 
-        public LIRInstruction create(CiVariable result, final Condition condition, CiVariable trueValue, CiValue falseValue) {
+        public LIRInstruction create(Variable result, final Condition condition, Variable trueValue, CiValue falseValue) {
             CiValue[] inputs = new CiValue[] {falseValue};
             CiValue[] alives = new CiValue[] {trueValue};
+            CiValue[] outputs = new CiValue[] {result};
 
-            return new AMD64LIRInstruction(this, result, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, outputs, null, inputs, alives, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    CiValue trueValue = alive(0);
-                    CiValue falseValue = input(0);
-                    cmove(tasm, masm, result(), false, condition, false, trueValue, falseValue);
+                    cmove(tasm, masm, output(0), false, condition, false, alive(0), input(0));
                 }
 
                 @Override
-                public CiValue registerHint() {
-                    return input(0);
+                protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+                    if (mode == OperandMode.Input && index == 0) {
+                        return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+                    } else if (mode == OperandMode.Output && index == 0) {
+                        return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
+                    }
+                    return super.flagsFor(mode, index);
                 }
 
                 @Override
-                public String operationString(Formatter operandFmt) {
-                    return condition.toString() + " " + super.operationString(operandFmt);
+                public String operationString() {
+                    return condition.toString() + " " + super.operationString();
                 }
             };
         }
@@ -196,20 +209,19 @@ public class AMD64ControlFlowOpcode {
     public enum FloatCondMoveOpcode implements LIROpcode {
         FLOAT_CMOVE;
 
-        public LIRInstruction create(CiVariable result, final Condition condition, final boolean unorderedIsTrue, CiVariable trueValue, CiVariable falseValue) {
+        public LIRInstruction create(Variable result, final Condition condition, final boolean unorderedIsTrue, Variable trueValue, Variable falseValue) {
             CiValue[] alives = new CiValue[] {trueValue, falseValue};
+            CiValue[] outputs = new CiValue[] {result};
 
-            return new AMD64LIRInstruction(this, result, null, LIRInstruction.NO_OPERANDS, alives, LIRInstruction.NO_OPERANDS) {
+            return new AMD64LIRInstruction(this, outputs, null, LIRInstruction.NO_OPERANDS, alives, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    CiValue trueValue = alive(0);
-                    CiValue falseValue = alive(1);
-                    cmove(tasm, masm, result(), true, condition, unorderedIsTrue, trueValue, falseValue);
+                    cmove(tasm, masm, output(0), true, condition, unorderedIsTrue, alive(0), alive(1));
                 }
 
                 @Override
-                public String operationString(Formatter operandFmt) {
-                    return condition.toString() + " unordered=" + unorderedIsTrue + " " + super.operationString(operandFmt);
+                public String operationString() {
+                    return condition.toString() + " unordered=" + unorderedIsTrue + " " + super.operationString();
                 }
             };
         }
@@ -272,7 +284,7 @@ public class AMD64ControlFlowOpcode {
         tasm.targetMethod.addAnnotation(jt);
     }
 
-    private static void floatJcc(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Condition condition, boolean unorderedIsTrue, Label label) {
+    private static void floatJcc(AMD64MacroAssembler masm, Condition condition, boolean unorderedIsTrue, Label label) {
         ConditionFlag cond = floatCond(condition);
         Label endLabel = new Label();
         if (unorderedIsTrue && !trueOnUnordered(cond)) {
@@ -302,17 +314,17 @@ public class AMD64ControlFlowOpcode {
     }
 
     private static void cmove(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, ConditionFlag cond, CiValue other) {
-        if (other.isRegister()) {
-            assert tasm.asRegister(other) != tasm.asRegister(result) : "other already overwritten by previous move";
+        if (isRegister(other)) {
+            assert asRegister(other) != asRegister(result) : "other already overwritten by previous move";
             switch (other.kind) {
-                case Int:  masm.cmovl(cond, tasm.asRegister(result), tasm.asRegister(other)); break;
-                case Long: masm.cmovq(cond, tasm.asRegister(result), tasm.asRegister(other)); break;
+                case Int:  masm.cmovl(cond, asRegister(result), asRegister(other)); break;
+                case Long: masm.cmovq(cond, asRegister(result), asRegister(other)); break;
                 default:   throw Util.shouldNotReachHere();
             }
         } else {
             switch (other.kind) {
-                case Int:  masm.cmovl(cond, tasm.asRegister(result), tasm.asAddress(other)); break;
-                case Long: masm.cmovq(cond, tasm.asRegister(result), tasm.asAddress(other)); break;
+                case Int:  masm.cmovl(cond, asRegister(result), tasm.asAddress(other)); break;
+                case Long: masm.cmovq(cond, asRegister(result), tasm.asAddress(other)); break;
                 default:   throw Util.shouldNotReachHere();
             }
         }

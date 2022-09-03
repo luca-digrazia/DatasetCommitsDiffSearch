@@ -42,8 +42,6 @@ import com.oracle.max.graal.compiler.util.*;
  */
 final class LinearScanWalker extends IntervalWalker {
 
-    private final boolean hasCalleeSavedRegisters;
-
     private CiRegister[] availableRegs;
 
     private final int[] usePos;
@@ -52,7 +50,6 @@ final class LinearScanWalker extends IntervalWalker {
     private List<Interval>[] spillIntervals;
 
     private MoveResolver moveResolver; // for ordering spill moves
-
 
     // accessors mapped to same functions in class LinearScan
     int blockCount() {
@@ -67,9 +64,8 @@ final class LinearScanWalker extends IntervalWalker {
         return allocator.blockForId(opId);
     }
 
-    LinearScanWalker(LinearScan allocator, Interval unhandledFixedFirst, Interval unhandledAnyFirst, boolean hasCalleeSavedRegisters) {
+    LinearScanWalker(LinearScan allocator, Interval unhandledFixedFirst, Interval unhandledAnyFirst) {
         super(allocator, unhandledFixedFirst, unhandledAnyFirst);
-        this.hasCalleeSavedRegisters = hasCalleeSavedRegisters;
         moveResolver = new MoveResolver(allocator);
         spillIntervals = Util.uncheckedCast(new List[allocator.registers.length]);
         for (int i = 0; i < allocator.registers.length; i++) {
@@ -793,7 +789,7 @@ final class LinearScanWalker extends IntervalWalker {
 
     boolean noAllocationPossible(Interval interval) {
 
-        if (!hasCalleeSavedRegisters) {
+        if (compilation.compiler.target.arch.isX86()) {
             // fast calculation of intervals that can never get a register because the
             // the next instruction is a call that blocks all registers
             // Note: this does not work if callee-saved registers are available (e.g. on Sparc)

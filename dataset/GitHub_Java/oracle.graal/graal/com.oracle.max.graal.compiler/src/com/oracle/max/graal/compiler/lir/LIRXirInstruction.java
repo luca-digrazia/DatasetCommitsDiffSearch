@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,145 +22,89 @@
  */
 package com.oracle.max.graal.compiler.lir;
 
+import static com.oracle.max.cri.ci.CiValueUtil.*;
+
 import java.util.*;
 
-import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.gen.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
-import com.sun.cri.xir.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
+import com.oracle.max.cri.xir.*;
 
-public class LIRXirInstruction extends LIRInstruction {
+public abstract class LIRXirInstruction extends LIRInstruction {
 
     public final CiValue[] originalOperands;
     public final int outputOperandIndex;
-    public final int[] operandIndices;
+    public final int[] inputOperandIndices;
+    public final int[] tempOperandIndices;
     public final XirSnippet snippet;
     public final RiMethod method;
-    public final int inputTempCount;
-    public final int tempCount;
-    public final int inputCount;
-    public final List<CiValue> pointerSlots;
     public final LIRDebugInfo infoAfter;
+    private LabelRef trueSuccessor;
+    private LabelRef falseSuccessor;
 
-    public LIRXirInstruction(XirSnippet snippet,
+    public LIRXirInstruction(LIROpcode opcode,
+                             XirSnippet snippet,
                              CiValue[] originalOperands,
                              CiValue outputOperand,
-                             int inputTempCount,
-                             int tempCount,
-                             CiValue[] operands,
-                             int[] operandIndices,
+                             CiValue[] inputs, CiValue[] temps,
+                             int[] inputOperandIndices, int[] tempOperandIndices,
                              int outputOperandIndex,
                              LIRDebugInfo info,
                              LIRDebugInfo infoAfter,
-                             RiMethod method,
-                             List<CiValue> pointerSlots) {
-        super(LIROpcode.Xir, outputOperand, info, false, inputTempCount, tempCount, operands);
+                             RiMethod method) {
+        // Note that we register the XIR input operands as Alive, because the XIR specification allows that input operands
+        // are used at any time, even when the temp operands and the actual output operands have already be assigned.
+        super(opcode, isLegal(outputOperand) ? new CiValue[] {outputOperand} : LIRInstruction.NO_OPERANDS, info, LIRInstruction.NO_OPERANDS, inputs, temps);
         this.infoAfter = infoAfter;
-        this.pointerSlots = pointerSlots;
-        assert this.pointerSlots == null || this.pointerSlots.size() >= 0;
         this.method = method;
         this.snippet = snippet;
-        this.operandIndices = operandIndices;
+        this.inputOperandIndices = inputOperandIndices;
+        this.tempOperandIndices = tempOperandIndices;
         this.outputOperandIndex = outputOperandIndex;
         this.originalOperands = originalOperands;
-        this.inputTempCount = inputTempCount;
-        this.tempCount = tempCount;
-        this.inputCount = operands.length - inputTempCount - tempCount;
+        assert isLegal(outputOperand) || outputOperandIndex == -1;
+    }
 
-        C1XMetrics.LIRXIRInstructions++;
+    @Override
+    protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+        if (mode == OperandMode.Alive || mode == OperandMode.Temp) {
+            return EnumSet.of(OperandFlag.Register, OperandFlag.Constant, OperandFlag.Illegal);
+        }
+        return super.flagsFor(mode, index);
+    }
+
+    public void setFalseSuccessor(LabelRef falseSuccessor) {
+        this.falseSuccessor = falseSuccessor;
+    }
+
+
+    public void setTrueSuccessor(LabelRef trueSuccessor) {
+        this.trueSuccessor = trueSuccessor;
+    }
+
+    public LabelRef falseSuccessor() {
+        return falseSuccessor;
+    }
+
+    public LabelRef trueSuccessor() {
+        return trueSuccessor;
     }
 
     public CiValue[] getOperands() {
-        for (int i = 0; i < operandIndices.length; i++) {
-            originalOperands[operandIndices[i]] = operand(i);
+        for (int i = 0; i < inputOperandIndices.length; i++) {
+            originalOperands[inputOperandIndices[i]] = alive(i);
+        }
+        for (int i = 0; i < tempOperandIndices.length; i++) {
+            originalOperands[tempOperandIndices[i]] = temp(i);
         }
         if (outputOperandIndex != -1) {
-            originalOperands[outputOperandIndex] = result();
+            originalOperands[outputOperandIndex] = output(0);
         }
         return originalOperands;
     }
 
-    /**
-     * Emits target assembly code for this instruction.
-     *
-     * @param masm the target assembler
-     */
     @Override
-    public void emitCode(LIRAssembler masm) {
-        masm.emitXir(this);
-    }
-
-     /**
-     * Prints this instruction.
-     */
-    @Override
-    public String operationString(OperandFormatter operandFmt) {
-        return toString(operandFmt);
-    }
-
-    @Override
-    public String toString(OperandFormatter operandFmt) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("XIR: ");
-
-        if (result().isLegal()) {
-            sb.append(operandFmt.format(result()) + " = ");
-        }
-
-        sb.append(snippet.template);
-        sb.append("(");
-        for (int i = 0; i < snippet.arguments.length; i++) {
-            XirArgument a = snippet.arguments[i];
-            if (i > 0) {
-                sb.append(", ");
-            }
-            if (a.constant != null) {
-                sb.append(operandFmt.format(a.constant));
-            } else {
-                Object o = a.object;
-                if (o instanceof LIRItem) {
-                    sb.append(operandFmt.format(((LIRItem) o).result()));
-                } else if (o instanceof CiValue) {
-                    sb.append(operandFmt.format((CiValue) o));
-                } else {
-                    sb.append(o);
-                }
-            }
-        }
-        sb.append(')');
-
-        if (method != null) {
-            sb.append(" method=");
-            sb.append(method.toString());
-        }
-
-
-        for (LIRInstruction.OperandMode mode : LIRInstruction.OPERAND_MODES) {
-            int n = operandCount(mode);
-            if (mode == OperandMode.Output && n <= 1) {
-                // Already printed single output (i.e. result())
-                continue;
-            }
-            if (n != 0) {
-                sb.append(' ').append(mode.name().toLowerCase()).append("=(");
-                HashSet<String> operands = new HashSet<String>();
-                for (int i = 0; i < n; i++) {
-                    String operand = operandFmt.format(operandAt(mode, i));
-                    if (!operands.contains(operand)) {
-                        if (!operands.isEmpty()) {
-                            sb.append(", ");
-                        }
-                        operands.add(operand);
-                        sb.append(operand);
-                    }
-                }
-                sb.append(')');
-            }
-        }
-
-        appendDebugInfo(sb, operandFmt, info);
-
-        return sb.toString();
+    public String name() {
+        return "XIR: " + snippet.template;
     }
 }

@@ -160,20 +160,20 @@ public class AMD64MoveOpcode {
     public enum LoadOpcode implements LIROpcode {
         LOAD;
 
-        public LIRInstruction create(CiValue result, CiValue address, LIRDebugInfo info) {
-            CiValue[] inputs = new CiValue[] {address};
+        public LIRInstruction create(Variable result, CiValue addrBase, CiValue addrIndex, final CiAddress.Scale addrScale, final int addrDisplacement, final CiKind kind, LIRDebugInfo info) {
+            CiValue[] inputs = new CiValue[] {addrBase, addrIndex};
             CiValue[] outputs = new CiValue[] {result};
 
             return new AMD64LIRInstruction(this, outputs, info, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    load(tasm, masm, output(0), (CiAddress) input(0), info);
+                    load(tasm, masm, output(0), new CiAddress(CiKind.Illegal, input(0), input(1), addrScale, addrDisplacement), kind, info);
                 }
 
                 @Override
                 protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-                    if (mode == OperandMode.Input && index == 0) {
-                        return EnumSet.of(OperandFlag.Address);
+                    if (mode == OperandMode.Input && (index == 0 || index == 1)) {
+                        return EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
                     }
                     return super.flagsFor(mode, index);
                 }
@@ -185,20 +185,20 @@ public class AMD64MoveOpcode {
     public enum StoreOpcode implements LIROpcode {
         STORE;
 
-        public LIRInstruction create(CiValue address, CiValue input, LIRDebugInfo info) {
-            CiValue[] inputs = new CiValue[] {address, input};
+        public LIRInstruction create(CiValue addrBase, CiValue addrIndex, final CiAddress.Scale addrScale, final int addrDisplacement, CiValue input, final CiKind kind, LIRDebugInfo info) {
+            CiValue[] inputs = new CiValue[] {addrBase, addrIndex, input};
 
             return new AMD64LIRInstruction(this, LIRInstruction.NO_OPERANDS, info, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    store(tasm, masm, (CiAddress) input(0), input(1), info);
+                    store(tasm, masm, new CiAddress(CiKind.Illegal, input(0), input(1), addrScale, addrDisplacement), input(2), kind, info);
                 }
 
                 @Override
                 protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-                    if (mode == OperandMode.Input && index == 0) {
-                        return EnumSet.of(OperandFlag.Address);
-                    } else if (mode == OperandMode.Input && index == 1) {
+                    if (mode == OperandMode.Input && (index == 0 || index == 1)) {
+                        return EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
+                    } else if (mode == OperandMode.Input && index == 2) {
                         return EnumSet.of(OperandFlag.Register, OperandFlag.Constant);
                     }
                     return super.flagsFor(mode, index);
@@ -208,25 +208,45 @@ public class AMD64MoveOpcode {
     }
 
 
-    public enum LeaOpcode implements LIROpcode {
-        LEA;
+    public enum LeaMemoryOpcode implements LIROpcode {
+        LEA_MEMORY;
 
-        public LIRInstruction create(CiValue result, CiValue address) {
-            CiValue[] inputs = new CiValue[] {address};
+        public LIRInstruction create(Variable result, CiValue addrBase, CiValue addrIndex, final CiAddress.Scale addrScale, final int addrDisplacement) {
+            CiValue[] inputs = new CiValue[] {addrBase, addrIndex};
             CiValue[] outputs = new CiValue[] {result};
 
             return new AMD64LIRInstruction(this, outputs, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    masm.leaq(asLongReg(output(0)), tasm.asAddress(input(0)));
+                    masm.leaq(asLongReg(output(0)), new CiAddress(CiKind.Illegal, input(0), input(1), addrScale, addrDisplacement));
                 }
 
                 @Override
                 protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-                    if (mode == OperandMode.Input && index == 0) {
-                        return EnumSet.of(OperandFlag.Address, OperandFlag.Stack, OperandFlag.Uninitialized);
+                    if (mode == OperandMode.Input && (index == 0 || index == 1)) {
+                        return EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
                     }
                     return super.flagsFor(mode, index);
+                }
+            };
+        }
+    }
+
+
+    // Note: This LIR operation is similar to a LEA, so reusing the LEA op would be desirable.
+    // However, the address that is loaded depends on the stack slot, and the stack slot numbers are
+    // only fixed after register allocation when the number of spill slots is known. Therefore, the address
+    // is not known when the LIR is generated.
+    public enum LeaStackOpcode implements LIROpcode {
+        LEA_STACK;
+
+        public LIRInstruction create(Variable result, final CiStackSlot stackBlock) {
+            CiValue[] outputs = new CiValue[] {result};
+
+            return new AMD64LIRInstruction(this, outputs, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
+                @Override
+                public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+                    masm.leaq(asRegister(output(0)), tasm.asAddress(stackBlock));
                 }
             };
         }
@@ -268,20 +288,20 @@ public class AMD64MoveOpcode {
     public enum CompareAndSwapOpcode implements LIROpcode {
         CAS;
 
-        public LIRInstruction create(CiValue result, CiAddress address, CiValue cmpValue, CiValue newValue) {
-            CiValue[] inputs = new CiValue[] {address, cmpValue, newValue};
+        public LIRInstruction create(CiRegisterValue result, CiValue addrBase, CiValue addrIndex, final CiAddress.Scale addrScale, final int addrDisplacement, CiRegisterValue cmpValue, Variable newValue) {
+            CiValue[] inputs = new CiValue[] {addrBase, addrIndex, cmpValue, newValue};
             CiValue[] outputs = new CiValue[] {result};
 
             return new AMD64LIRInstruction(this, outputs, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
                 @Override
                 public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                    compareAndSwap(tasm, masm, output(0), asAddress(input(0)), input(1), input(2));
+                    compareAndSwap(tasm, masm, output(0), new CiAddress(CiKind.Illegal, input(0), input(1), addrScale, addrDisplacement), input(2), input(3));
                 }
 
                 @Override
                 protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-                    if (mode == OperandMode.Input && index == 0) {
-                        return EnumSet.of(OperandFlag.Address);
+                    if (mode == OperandMode.Input && (index == 0 || index == 1)) {
+                        return EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
                     }
                     return super.flagsFor(mode, index);
                 }
@@ -425,11 +445,11 @@ public class AMD64MoveOpcode {
     }
 
 
-    protected static void load(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiAddress loadAddr, LIRDebugInfo info) {
+    protected static void load(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CiAddress loadAddr, CiKind kind, LIRDebugInfo info) {
         if (info != null) {
             tasm.recordImplicitException(masm.codeBuffer.position(), info);
         }
-        switch (loadAddr.kind) {
+        switch (kind) {
             case Boolean:
             case Byte:   masm.movsxb(asRegister(result),  loadAddr); break;
             case Char:   masm.movzxl(asRegister(result),  loadAddr); break;
@@ -443,13 +463,13 @@ public class AMD64MoveOpcode {
         }
     }
 
-    protected static void store(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiAddress storeAddr, CiValue input, LIRDebugInfo info) {
+    protected static void store(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiAddress storeAddr, CiValue input, CiKind kind, LIRDebugInfo info) {
         if (info != null) {
             tasm.recordImplicitException(masm.codeBuffer.position(), info);
         }
 
         if (isRegister(input)) {
-            switch (storeAddr.kind) {
+            switch (kind) {
                 case Boolean:
                 case Byte:   masm.movb(storeAddr,   asRegister(input)); break;
                 case Char:
@@ -459,11 +479,11 @@ public class AMD64MoveOpcode {
                 case Float:  masm.movflt(storeAddr, asFloatReg(input)); break;
                 case Double: masm.movsd(storeAddr,  asDoubleReg(input)); break;
                 case Object: masm.movq(storeAddr,   asRegister(input)); break;
-                default:     throw Util.shouldNotReachHere();
+                default:     throw Util.shouldNotReachHere("kind=" + kind);
             }
         } else if (isConstant(input)) {
             CiConstant c = (CiConstant) input;
-            switch (storeAddr.kind) {
+            switch (kind) {
                 case Boolean:
                 case Byte:   masm.movb(storeAddr, c.asInt() & 0xFF); break;
                 case Char:
@@ -487,7 +507,7 @@ public class AMD64MoveOpcode {
                     }
                     break;
                 default:
-                    throw Util.shouldNotReachHere();
+                    throw Util.shouldNotReachHere("kind=" + kind);
             }
 
         } else {
