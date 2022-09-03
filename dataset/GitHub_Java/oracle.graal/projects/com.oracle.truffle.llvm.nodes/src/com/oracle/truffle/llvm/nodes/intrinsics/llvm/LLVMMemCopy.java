@@ -33,170 +33,88 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
+import com.oracle.truffle.llvm.runtime.memory.LLVMProfiledMemMove;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 
-@NodeChildren({@NodeChild(type = LLVMExpressionNode.class, value = "destination"), @NodeChild(type = LLVMExpressionNode.class, value = "source"),
-                @NodeChild(type = LLVMExpressionNode.class, value = "length"),
-                @NodeChild(type = LLVMExpressionNode.class, value = "align"), @NodeChild(type = LLVMExpressionNode.class, value = "isVolatile")})
-public abstract class LLVMMemCopy extends LLVMBuiltin {
+public abstract class LLVMMemCopy {
 
-    @Child private LLVMMemMoveNode memMove;
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class, value = "destination"), @NodeChild(type = LLVMExpressionNode.class, value = "source"),
+                    @NodeChild(type = LLVMExpressionNode.class, value = "length"),
+                    @NodeChild(type = LLVMExpressionNode.class, value = "align"), @NodeChild(type = LLVMExpressionNode.class, value = "isVolatile")})
+    public abstract static class LLVMMemI32Copy extends LLVMBuiltin {
 
-    public LLVMMemCopy(LLVMMemMoveNode memMove) {
-        this.memMove = memMove;
-    }
+        private final LLVMProfiledMemMove profiledMemMove = new LLVMProfiledMemMove();
 
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMVirtualAllocationAddress source, int length, int align, boolean isVolatile) {
-        copy(target, source, length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMAddress source, int length, int align, boolean isVolatile) {
-        copy(target, source.getVal(), length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(LLVMAddress target, LLVMVirtualAllocationAddress source, int length, int align, boolean isVolatile) {
-        copy(target.getVal(), source, length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(VirtualFrame frame, LLVMGlobal target, LLVMVirtualAllocationAddress source, int length, int align, boolean isVolatile,
-                    @Cached("toNative()") LLVMToNativeNode globalAccess) {
-        copy(globalAccess.executeWithTarget(frame, target).getVal(), source, length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(VirtualFrame frame, LLVMVirtualAllocationAddress target, LLVMGlobal source, int length, int align, boolean isVolatile,
-                    @Cached("toNative()") LLVMToNativeNode globalAccess) {
-        copy(target, globalAccess.executeWithTarget(frame, source).getVal(), length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMVirtualAllocationAddress source, long length, int align, boolean isVolatile) {
-        copy(target, source, length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMAddress source, long length, int align, boolean isVolatile) {
-        copy(target, source.getVal(), length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(LLVMAddress target, LLVMVirtualAllocationAddress source, long length, int align, boolean isVolatile) {
-        copy(target.getVal(), source, length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(VirtualFrame frame, LLVMGlobal target, LLVMVirtualAllocationAddress source, long length, int align, boolean isVolatile,
-                    @Cached("toNative()") LLVMToNativeNode globalAccess) {
-        copy(globalAccess.executeWithTarget(frame, target).getVal(), source, length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(VirtualFrame frame, LLVMVirtualAllocationAddress target, LLVMGlobal source, long length, int align, boolean isVolatile,
-                    @Cached("toNative()") LLVMToNativeNode globalAccess) {
-        copy(target, globalAccess.executeWithTarget(frame, source).getVal(), length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(VirtualFrame frame, LLVMAddress target, LLVMAddress source, Object length, int align, boolean isVolatile) {
-        memMove.executeWithTarget(frame, target, source, length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(VirtualFrame frame, LLVMGlobal target, LLVMAddress source, Object length, int align, boolean isVolatile,
-                    @Cached("toNative()") LLVMToNativeNode globalAccess) {
-        memMove.executeWithTarget(frame, globalAccess.executeWithTarget(frame, target), source, length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(VirtualFrame frame, LLVMAddress target, LLVMGlobal source, Object length, int align, boolean isVolatile,
-                    @Cached("toNative()") LLVMToNativeNode globalAccess) {
-        memMove.executeWithTarget(frame, target, globalAccess.executeWithTarget(frame, source), length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(VirtualFrame frame, LLVMGlobal target, LLVMGlobal source, Object length, int align, boolean isVolatile,
-                    @Cached("toNative()") LLVMToNativeNode globalAccess1,
-                    @Cached("toNative()") LLVMToNativeNode globalAccess2) {
-        memMove.executeWithTarget(frame, globalAccess1.executeWithTarget(frame, target), globalAccess2.executeWithTarget(frame, source), length);
-        return null;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doVoid(VirtualFrame frame, LLVMTruffleObject target, LLVMTruffleObject source, Object length, int align, boolean isVolatile) {
-        memMove.executeWithTarget(frame, target, source, length);
-        return null;
-    }
-
-    public static void copy(LLVMVirtualAllocationAddress target, long source, long length) {
-        long sourcePointer = source;
-        LLVMVirtualAllocationAddress targetAddress = target;
-        for (long i = 0; i < length; i++) {
-            byte value = LLVMMemory.getI8(sourcePointer);
-            targetAddress.writeI8(value);
-            targetAddress = targetAddress.increment(1);
-            sourcePointer++;
+        @SuppressWarnings("unused")
+        @Specialization
+        public Object executeVoid(LLVMAddress target, LLVMAddress source, int length, int align, boolean isVolatile) {
+            profiledMemMove.memmove(target, source, length);
+            return null;
         }
+
+        @SuppressWarnings("unused")
+        @Specialization
+        public Object executeVoid(LLVMGlobalVariable target, LLVMAddress source, int length, int align, boolean isVolatile, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            profiledMemMove.memmove(globalAccess.getNativeLocation(target), source, length);
+            return null;
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization
+        public Object executeVoid(LLVMAddress target, LLVMGlobalVariable source, int length, int align, boolean isVolatile, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            profiledMemMove.memmove(target, globalAccess.getNativeLocation(source), length);
+            return null;
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization
+        public Object executeVoid(LLVMGlobalVariable target, LLVMGlobalVariable source, int length, int align, boolean isVolatile,
+                        @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess1, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess2) {
+            profiledMemMove.memmove(globalAccess1.getNativeLocation(target), globalAccess2.getNativeLocation(source), length);
+            return null;
+        }
+
     }
 
-    public static void copy(long target, LLVMVirtualAllocationAddress source, long length) {
-        LLVMVirtualAllocationAddress sourcePointer = source;
-        long targetAddress = target;
-        for (long i = 0; i < length; i++) {
-            byte value = sourcePointer.getI8();
-            sourcePointer = sourcePointer.increment(1);
-            LLVMMemory.putI8(targetAddress, value);
-            targetAddress++;
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class, value = "destination"), @NodeChild(type = LLVMExpressionNode.class, value = "source"),
+                    @NodeChild(type = LLVMExpressionNode.class, value = "length"),
+                    @NodeChild(type = LLVMExpressionNode.class, value = "align"), @NodeChild(type = LLVMExpressionNode.class, value = "isVolatile")})
+    public abstract static class LLVMMemI64Copy extends LLVMBuiltin {
+
+        private final LLVMProfiledMemMove profiledMemMove = new LLVMProfiledMemMove();
+
+        @SuppressWarnings("unused")
+        @Specialization
+        public Object executeVoid(LLVMAddress target, LLVMAddress source, long length, int align, boolean isVolatile) {
+            profiledMemMove.memmove(target, source, length);
+            return null;
         }
+
+        @SuppressWarnings("unused")
+        @Specialization
+        public Object executeVoid(LLVMGlobalVariable target, LLVMAddress source, long length, int align, boolean isVolatile, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            profiledMemMove.memmove(globalAccess.getNativeLocation(target), source, length);
+            return null;
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization
+        public Object executeVoid(LLVMAddress target, LLVMGlobalVariable source, long length, int align, boolean isVolatile, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            profiledMemMove.memmove(target, globalAccess.getNativeLocation(source), length);
+            return null;
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization
+        public Object executeVoid(LLVMGlobalVariable target, LLVMGlobalVariable source, long length, int align, boolean isVolatile,
+                        @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess1, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess2) {
+            profiledMemMove.memmove(globalAccess1.getNativeLocation(target), globalAccess2.getNativeLocation(source), length);
+            return null;
+        }
+
     }
 
-    public static void copy(LLVMVirtualAllocationAddress target, LLVMVirtualAllocationAddress source, long length) {
-        LLVMVirtualAllocationAddress sourcePointer = source;
-        LLVMVirtualAllocationAddress targetAddress = target;
-        for (long i = 0; i < length; i++) {
-            byte value = sourcePointer.getI8();
-            sourcePointer = sourcePointer.increment(1);
-            targetAddress.writeI8(value);
-            targetAddress = targetAddress.increment(1);
-        }
-    }
 }

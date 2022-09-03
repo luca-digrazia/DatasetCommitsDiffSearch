@@ -39,11 +39,10 @@ import com.oracle.truffle.llvm.runtime.NativeResolver;
 import com.oracle.truffle.llvm.runtime.global.Container.NativeContainer;
 import com.oracle.truffle.llvm.runtime.global.Container.UninitializedContainer;
 import com.oracle.truffle.llvm.runtime.global.Container.UninitializedManagedContainer;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-public final class LLVMGlobalVariable implements LLVMObjectNativeLibrary.Provider {
+public final class LLVMGlobalVariable {
 
     private final String name;
     @CompilationFinal private Assumption assumption;
@@ -94,12 +93,4 @@ public final class LLVMGlobalVariable implements LLVMObjectNativeLibrary.Provide
         return container instanceof UninitializedContainer;
     }
 
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public LLVMObjectNativeLibrary createLLVMObjectNativeLibrary() {
-        return new LLVMGlobalVariableNative();
-    }
 }

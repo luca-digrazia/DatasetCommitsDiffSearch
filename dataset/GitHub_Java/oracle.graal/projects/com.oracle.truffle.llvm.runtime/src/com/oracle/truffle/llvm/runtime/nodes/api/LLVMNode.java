@@ -29,14 +29,10 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.api;
 
-import com.oracle.truffle.api.instrumentation.StandardTags;
-import java.io.PrintStream;
-
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 public abstract class LLVMNode extends Node {
     public final LLVMContext getContext() {
@@ -49,29 +45,5 @@ public abstract class LLVMNode extends Node {
 
     protected static final LLVMGlobalVariableAccess createGlobalAccess() {
         return new LLVMGlobalVariableAccess();
-    }
-
-    protected static PrintStream debugStream(LLVMContext context) {
-        return SulongEngineOption.getStream(context.getEnv().getOptions().get(SulongEngineOption.DEBUG));
-    }
-
-    protected static boolean debugEnabled(LLVMContext context) {
-        return SulongEngineOption.isTrue(context.getEnv().getOptions().get(SulongEngineOption.DEBUG));
-    }
-
-    protected static PrintStream nativeCallStatisticsStream(LLVMContext context) {
-        return SulongEngineOption.getStream(context.getEnv().getOptions().get(SulongEngineOption.NATIVE_CALL_STATS));
-    }
-
-    protected static boolean nativeCallStatisticsEnabled(LLVMContext context) {
-        return SulongEngineOption.isTrue(context.getEnv().getOptions().get(SulongEngineOption.NATIVE_CALL_STATS));
-    }
-
-    @Override
-    protected boolean isTaggedWith(Class<?> tag) {
-        // only nodes that have a SourceSection attached are considered to be tagged by any
-        // anything, for sulong only those nodes that actually represent source language statements
-        // should have one
-        return tag == StandardTags.StatementTag.class || super.isTaggedWith(tag);
     }
 }

@@ -248,7 +248,7 @@ abstract class LLVMNativeConvertNode extends LLVMNode {
         }
 
         protected LLVMFunctionDescriptor doLookup(LLVMFunctionHandle handle) {
-            return getContext().getFunctionDescriptor(handle);
+            return getContext().lookup(handle);
         }
 
         @Child private NullPointerNode nullPointer;

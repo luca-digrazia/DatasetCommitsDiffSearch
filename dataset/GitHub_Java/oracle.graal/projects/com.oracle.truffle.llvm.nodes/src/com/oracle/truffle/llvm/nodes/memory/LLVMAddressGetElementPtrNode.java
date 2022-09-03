@@ -36,9 +36,9 @@ import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.NodeFields;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
@@ -61,18 +61,6 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    public LLVMVirtualAllocationAddress executeTruffleObject(LLVMVirtualAllocationAddress addr, int val) {
-        int incr = getTypeWidth() * val;
-        return addr.increment(incr);
-    }
-
-    @Specialization
-    public LLVMVirtualAllocationAddress executeTruffleObject(LLVMVirtualAllocationAddress addr, long val) {
-        long incr = getTypeWidth() * val;
-        return addr.increment(incr);
-    }
-
-    @Specialization
     public LLVMAddress executePointee(LLVMGlobalVariable addr, int val, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
         int incr = getTypeWidth() * val;
         return globalAccess.getNativeLocation(addr).increment(incr);
@@ -81,7 +69,7 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
     @Specialization
     public LLVMTruffleObject executeTruffleObject(LLVMTruffleObject addr, int val) {
         int incr = getTypeWidth() * val;
-        return addr.increment(incr, new PointerType(getTargetType()));
+        return new LLVMTruffleObject(addr.getObject(), addr.getOffset() + incr, new PointerType(getTargetType()));
     }
 
     @Specialization
@@ -95,6 +83,12 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
         }
     }
 
+    @Specialization(guards = "notLLVM(addr)")
+    public LLVMTruffleObject executeTruffleObject(TruffleObject addr, int val) {
+        int incr = getTypeWidth() * val;
+        return new LLVMTruffleObject(addr, incr, new PointerType(getTargetType()));
+    }
+
     @Specialization
     public LLVMAddress executePointee(LLVMAddress addr, long val) {
         long incr = getTypeWidth() * val;
@@ -104,7 +98,7 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
     @Specialization
     public LLVMTruffleObject executeTruffleObject(LLVMTruffleObject addr, long val) {
         long incr = getTypeWidth() * val;
-        return addr.increment(incr, new PointerType(getTargetType()));
+        return new LLVMTruffleObject(addr.getObject(), addr.getOffset() + incr, new PointerType(getTargetType()));
     }
 
     @Specialization
@@ -116,6 +110,12 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalAccessError("Cannot do pointer arithmetic with address: " + addr.getValue());
         }
+    }
+
+    @Specialization(guards = "notLLVM(addr)")
+    public LLVMTruffleObject executeTruffleObject(TruffleObject addr, long val) {
+        long incr = getTypeWidth() * val;
+        return new LLVMTruffleObject(addr, incr, new PointerType(getTargetType()));
     }
 
     @Specialization

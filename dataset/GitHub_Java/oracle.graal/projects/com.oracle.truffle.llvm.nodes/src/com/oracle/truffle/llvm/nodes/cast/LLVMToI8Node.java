@@ -47,8 +47,7 @@ import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
@@ -77,7 +76,7 @@ public abstract class LLVMToI8Node extends LLVMExpressionNode {
     @Child private Node isNull = Message.IS_NULL.createNode();
     @Child private Node isBoxed = Message.IS_BOXED.createNode();
     @Child private Node unbox = Message.UNBOX.createNode();
-    @Child private ForeignToLLVM convert = ForeignToLLVM.create(ForeignToLLVMType.I8);
+    @Child private ToLLVMNode convert = ToLLVMNode.createNode(byte.class);
 
     @Specialization(guards = "notLLVM(from)")
     public byte executeTruffleObject(TruffleObject from) {

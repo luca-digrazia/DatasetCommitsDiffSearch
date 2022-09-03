@@ -61,7 +61,6 @@ public abstract class LLVMFloatLoadNode extends LLVMExpressionNode {
             Object value = ForeignAccess.sendRead(foreignRead, addr.getObject(), index);
             return (float) toLLVM.executeWithTarget(value);
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
-            CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);
         }
     }

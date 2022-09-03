@@ -61,7 +61,6 @@ public abstract class LLVMI32LoadNode extends LLVMExpressionNode {
             Object value = ForeignAccess.sendRead(foreignRead, addr.getObject(), index);
             return (int) toLLVM.executeWithTarget(value);
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
-            CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);
         }
     }

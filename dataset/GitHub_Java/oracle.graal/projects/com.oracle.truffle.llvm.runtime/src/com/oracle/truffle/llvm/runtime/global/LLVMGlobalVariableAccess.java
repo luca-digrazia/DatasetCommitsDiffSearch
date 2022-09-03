@@ -31,15 +31,9 @@ package com.oracle.truffle.llvm.runtime.global;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.profiles.ByteValueProfile;
-import com.oracle.truffle.api.profiles.DoubleValueProfile;
-import com.oracle.truffle.api.profiles.FloatValueProfile;
-import com.oracle.truffle.api.profiles.IntValueProfile;
-import com.oracle.truffle.api.profiles.LongValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
@@ -172,30 +166,16 @@ public final class LLVMGlobalVariableAccess extends Node {
         return container.get(global);
     }
 
-    @CompilationFinal private DoubleValueProfile doubleProfile;
-
     public double getDouble(LLVMGlobalVariable global) {
         Container container = getContainer.executeWithTarget(global.getContainer());
         CompilerAsserts.partialEvaluationConstant(container.getClass());
-        double value = container.getDouble(global);
-        if (doubleProfile == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            doubleProfile = DoubleValueProfile.createRawIdentityProfile();
-        }
-        return doubleProfile.profile(value);
+        return container.getDouble(global);
     }
-
-    @CompilationFinal private FloatValueProfile floatProfile;
 
     public float getFloat(LLVMGlobalVariable global) {
         Container container = getContainer.executeWithTarget(global.getContainer());
         CompilerAsserts.partialEvaluationConstant(container.getClass());
-        float value = container.getFloat(global);
-        if (floatProfile == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            floatProfile = FloatValueProfile.createRawIdentityProfile();
-        }
-        return floatProfile.profile(value);
+        return container.getFloat(global);
     }
 
     public short getI16(LLVMGlobalVariable global) {
@@ -210,43 +190,22 @@ public final class LLVMGlobalVariableAccess extends Node {
         return container.getI1(global);
     }
 
-    @CompilationFinal private IntValueProfile intProfile;
-
     public int getI32(LLVMGlobalVariable global) {
         Container container = getContainer.executeWithTarget(global.getContainer());
         CompilerAsserts.partialEvaluationConstant(container.getClass());
-        int value = container.getI32(global);
-        if (intProfile == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            intProfile = IntValueProfile.createIdentityProfile();
-        }
-        return intProfile.profile(value);
+        return container.getI32(global);
     }
-
-    @CompilationFinal private LongValueProfile longProfile;
 
     public long getI64(LLVMGlobalVariable global) {
         Container container = getContainer.executeWithTarget(global.getContainer());
         CompilerAsserts.partialEvaluationConstant(container.getClass());
-        long value = container.getI64(global);
-        if (longProfile == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            longProfile = LongValueProfile.createIdentityProfile();
-        }
-        return longProfile.profile(value);
+        return container.getI64(global);
     }
-
-    @CompilationFinal private ByteValueProfile byteProfile;
 
     public byte getI8(LLVMGlobalVariable global) {
         Container container = getContainer.executeWithTarget(global.getContainer());
         CompilerAsserts.partialEvaluationConstant(container.getClass());
-        byte value = container.getI8(global);
-        if (byteProfile == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            byteProfile = ByteValueProfile.createIdentityProfile();
-        }
-        return byteProfile.profile(value);
+        return container.getI8(global);
     }
 
     public void putTruffleObject(LLVMGlobalVariable global, TruffleObject value) {

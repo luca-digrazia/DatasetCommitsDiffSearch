@@ -36,6 +36,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMPerformance;
 import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
@@ -66,9 +67,7 @@ abstract class LLVMAddressMessageResolutionNode extends Node {
             return (PrimitiveType) ((PointerType) t).getPointeeType();
         } else {
             CompilerDirectives.transferToInterpreter();
-            throw new UnsupportedOperationException(
-                            String.format("Pointer with (currently) unsupported type dereferenced (unsupported: %s) - please only dereference pointers to primitive types from foreign languages (e.g. int*).",
-                                            t.toString()));
+            throw new UnsupportedOperationException(t.toString());
         }
     }
 
@@ -78,9 +77,7 @@ abstract class LLVMAddressMessageResolutionNode extends Node {
             return (PrimitiveType) t;
         } else {
             CompilerDirectives.transferToInterpreter();
-            throw new UnsupportedOperationException(
-                            String.format("Pointer with (currently) unsupported type dereferenced (unsupported: %s) - please only dereference pointers to primitive types from foreign languages (e.g. int*).",
-                                            t.toString()));
+            throw new UnsupportedOperationException(t.toString());
         }
     }
 
@@ -127,6 +124,7 @@ abstract class LLVMAddressMessageResolutionNode extends Node {
 
         @Specialization(replaces = {"doCachedTypeCachedOffset", "doCachedType"})
         public Object doRegular(LLVMTruffleAddress receiver, int index) {
+            LLVMPerformance.warn(this);
             if (receiver.getType() instanceof PointerType && ((PointerType) receiver.getType()).getPointeeType() instanceof PrimitiveType) {
                 return LLVMDataEscapeNode.slowConvert(doRead(receiver, (PrimitiveType) ((PointerType) receiver.getType()).getPointeeType(), index), getPointeeType(receiver), receiver.getContext());
             } else {
@@ -159,9 +157,7 @@ abstract class LLVMAddressMessageResolutionNode extends Node {
                     return LLVMMemory.getDouble(ptr + cachedIndex * DOUBLE_SIZE);
                 default:
                     CompilerDirectives.transferToInterpreter();
-                    throw new UnsupportedOperationException(
-                                    String.format("Pointer with (currently) unsupported type dereferenced (unsupported: %s) - please only dereference pointers to primitive types from foreign languages (I1, I8, I16, I32, I64, float, double).",
-                                                    primitiveType.getPrimitiveKind().toString()));
+                    throw new UnsupportedOperationException();
             }
         }
 
@@ -219,6 +215,7 @@ abstract class LLVMAddressMessageResolutionNode extends Node {
 
         @Specialization(replaces = {"doCachedTypeCachedOffset", "doCachedType"})
         public Object doRegular(LLVMTruffleAddress receiver, int index, Object value) {
+            LLVMPerformance.warn(this);
             if (slowConvert == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 this.slowConvert = insert(ToLLVMNode.createNode(null));
@@ -273,9 +270,7 @@ abstract class LLVMAddressMessageResolutionNode extends Node {
                     break;
                 default:
                     CompilerDirectives.transferToInterpreter();
-                    throw new UnsupportedOperationException(
-                                    String.format("Pointer with (currently) unsupported type dereferenced (unsupported: %s) - please only dereference pointers to primitive types from foreign languages (I1, I8, I16, I32, I64, float, double).",
-                                                    primitiveType.getPrimitiveKind().toString()));
+                    throw new UnsupportedOperationException();
             }
         }
 
@@ -369,6 +364,7 @@ abstract class LLVMAddressMessageResolutionNode extends Node {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException("Index must be 0 for globals!");
             }
+            LLVMPerformance.warn(this);
             if (slowConvert == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 this.slowConvert = insert(ToLLVMNode.createNode(null));
@@ -421,9 +417,7 @@ abstract class LLVMAddressMessageResolutionNode extends Node {
                     break;
                 default:
                     CompilerDirectives.transferToInterpreter();
-                    throw new UnsupportedOperationException(
-                                    String.format("Pointer with (currently) unsupported type dereferenced (unsupported: %s) - please only dereference pointers to primitive types from foreign languages (I1, I8, I16, I32, I64, float, double).",
-                                                    primitiveType.getPrimitiveKind().toString()));
+                    throw new UnsupportedOperationException();
             }
         }
 
