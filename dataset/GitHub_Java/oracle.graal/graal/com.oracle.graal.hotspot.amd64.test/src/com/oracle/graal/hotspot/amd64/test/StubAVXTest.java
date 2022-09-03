@@ -29,7 +29,6 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.graal.api.replacements.Snippet;
 import com.oracle.graal.asm.amd64.AMD64Address;
 import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
 import com.oracle.graal.compiler.common.LIRKind;
@@ -52,6 +51,7 @@ import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.replacements.Snippet;
 
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.amd64.AMD64.CPUFeature;
