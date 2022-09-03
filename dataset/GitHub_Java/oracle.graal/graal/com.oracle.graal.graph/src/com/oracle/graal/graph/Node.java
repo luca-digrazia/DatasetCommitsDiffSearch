@@ -56,8 +56,6 @@ import com.oracle.graal.nodeinfo.*;
 @NodeInfo
 public abstract class Node implements Cloneable, Formattable {
 
-    public final static boolean USE_GENERATED_NODES = Boolean.getBoolean("graal.useGeneratedNodes");
-
     static final int DELETED_ID_START = -1000000000;
     static final int INITIAL_ID = -1;
     static final int ALIVE_ID_START = 0;
@@ -169,8 +167,7 @@ public abstract class Node implements Cloneable, Formattable {
     public static final int NOT_ITERABLE = -1;
 
     public Node() {
-        assert USE_GENERATED_NODES == (getClass().getAnnotation(GeneratedNode.class) != null) : getClass() + " is not a generated Node class - forgot @" + NodeInfo.class.getSimpleName() +
-                        " on class declaration?";
+        assert getClass().getAnnotation(GeneratedNode.class) != null : getClass() + " is not a generated Node class - forgot @" + NodeInfo.class.getSimpleName() + " on class declaration?";
         init();
     }
 
@@ -891,7 +888,7 @@ public abstract class Node implements Cloneable, Formattable {
      * @returns true if this node has no inputs and no successors
      */
     public boolean isLeafNode() {
-        return USE_GENERATED_NODES || getNodeClass().isLeafNode();
+        return true;
     }
 
     protected void afterClone(@SuppressWarnings("unused") Node other) {
