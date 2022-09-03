@@ -94,12 +94,12 @@ public final class LocationMarker {
      * Merge outSet with in-set of successors.
      */
     private boolean updateOutBlock(AbstractBlock<?> block) {
-        ReferenceMap union = frameMap.initReferenceMap(true);
-        block.getSuccessors().forEach(succ -> union.updateUnion(liveInMap.get(succ)));
+        ReferenceMap merged = frameMap.initReferenceMap(true);
+        block.getSuccessors().forEach(succ -> merged.mergeMaps(liveInMap.get(succ)));
         ReferenceMap outSet = liveOutMap.get(block);
         // check if changed
-        if (outSet == null || !union.equals(outSet)) {
-            liveOutMap.put(block, union);
+        if (outSet == null || !merged.equals(outSet)) {
+            liveOutMap.put(block, merged);
             return true;
         }
         return false;

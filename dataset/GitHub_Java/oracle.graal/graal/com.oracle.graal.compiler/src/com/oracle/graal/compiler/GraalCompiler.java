@@ -84,13 +84,13 @@ public class GraalCompiler {
          */
         @Option(help = "Pattern for method(s) to which intrinsification (if available) will be applied. " +
                        "By default, all available intrinsifications are applied except for methods matched " +
-                       "by IntrinsificationsDisabled. See MethodFilter class for pattern syntax.", type = OptionType.Debug)
+                       "by IntrinsificationsDisabled. See MethodFilter class for pattern syntax.")
         public static final OptionValue<String> IntrinsificationsEnabled = new OptionValue<>(null);
         /**
          * @see MethodFilter
          */
         @Option(help = "Pattern for method(s) to which intrinsification will not be applied. " +
-                       "See MethodFilter class for pattern syntax.", type = OptionType.Debug)
+                       "See MethodFilter class for pattern syntax.")
         public static final OptionValue<String> IntrinsificationsDisabled = new OptionValue<>(null);
         // @formatter:on
 
@@ -323,6 +323,7 @@ public class GraalCompiler {
         }
         try (Scope ds = Debug.scope("BackEnd", lir)) {
             FrameMapBuilder frameMapBuilder = backend.newFrameMapBuilder(registerConfig);
+            frameMapBuilder.requireMapping(lir);
             LIRGenerationResult lirGenRes = backend.newLIRGenerationResult(lir, frameMapBuilder, graph.method(), stub);
             LIRGeneratorTool lirGen = backend.newLIRGenerator(cc, lirGenRes);
             NodeLIRBuilderTool nodeLirGen = backend.newNodeLIRBuilder(graph, lirGen);
@@ -350,20 +351,25 @@ public class GraalCompiler {
             try (Scope s = Debug.scope("Allocator", nodeLirGen)) {
                 if (backend.shouldAllocateRegisters()) {
                     LinearScan.allocate(target, lirGenRes);
+                } else if (!LocationMarker.Options.UseLocationMarker.getValue()) {
+                    // build frame map for targets that do not allocate registers
+                    lirGenRes.buildFrameMap();
                 }
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
 
-            try (Scope s1 = Debug.scope("BuildFrameMap")) {
-                // build frame map
-                lirGenRes.buildFrameMap(new SimpleStackSlotAllocator());
-                Debug.dump(lir, "After FrameMap building");
-            }
-            try (Scope s1 = Debug.scope("MarkLocations")) {
-                if (backend.shouldAllocateRegisters()) {
-                    // currently we mark locations only if we do register allocation
-                    LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
+            if (LocationMarker.Options.UseLocationMarker.getValue()) {
+                try (Scope s1 = Debug.scope("BuildFrameMap")) {
+                    // build frame map
+                    lirGenRes.buildFrameMap();
+                    Debug.dump(lir, "After FrameMap building");
+                }
+                try (Scope s1 = Debug.scope("MarkLocations")) {
+                    if (backend.shouldAllocateRegisters()) {
+                        // currently we mark locations only if we do register allocation
+                        LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
+                    }
                 }
             }
 
