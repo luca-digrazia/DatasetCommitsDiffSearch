@@ -24,15 +24,20 @@
  */
 package com.oracle.truffle.api.interop.java.test;
 
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.java.JavaInterop;
-import java.util.Random;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import java.util.Random;
+
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Ignore;
+import org.junit.Test;
+
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.java.JavaInterop;
+
+@Ignore("Convert into a microbenchmark!")
 public class JavaInteropSpeedTest {
     private static final int REPEAT = 10000;
     private static int[] arr;
@@ -41,6 +46,7 @@ public class JavaInteropSpeedTest {
 
     @BeforeClass
     public static void beforeTesting() {
+        InstrumentationTestMode.set(true);
         arr = initArray(REPEAT);
         for (int i = 0; i < 1000; i++) {
             JavaInteropSpeedTest t = new JavaInteropSpeedTest();
@@ -48,6 +54,11 @@ public class JavaInteropSpeedTest {
             t.doMinMaxWithInterOp();
             t.assertSame();
         }
+    }
+
+    @AfterClass
+    public static void after() {
+        InstrumentationTestMode.set(false);
     }
 
     private int mmInOp;
@@ -92,7 +103,7 @@ public class JavaInteropSpeedTest {
         if (javaTime < 1) {
             javaTime = 1;
         }
-        if (interopTime > 6 * javaTime) {
+        if (interopTime > 10 * javaTime) {
             fail("Interop took too long: " + interopTime + " ms, while java only " + javaTime + " ms");
         }
     }
