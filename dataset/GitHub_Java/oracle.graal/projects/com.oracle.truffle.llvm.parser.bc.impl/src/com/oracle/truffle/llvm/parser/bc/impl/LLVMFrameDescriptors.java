@@ -29,18 +29,59 @@
  */
 package com.oracle.truffle.llvm.parser.bc.impl;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.AllocateInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.BinaryOperationInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.BranchInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.CallInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.CastInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.CompareInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ConditionalBranchInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ExtractElementInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ExtractValueInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.GetElementPointerInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.IndirectBranchInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.InsertElementInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.InsertValueInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.LoadInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.PhiInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ReturnInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.SelectInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ShuffleVectorInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.StoreInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.SwitchInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.SwitchOldInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.UnreachableInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ValueInstruction;
+import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.VoidCallInstruction;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMControlFlowAnalysis.LLVMControlFlow;
 
-import uk.ac.man.cs.llvm.ir.model.*;
-import uk.ac.man.cs.llvm.ir.model.elements.*;
-import uk.ac.man.cs.llvm.ir.types.Type;
+import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMFrameIDs;
+import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionBlock;
+import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
+import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
+import com.oracle.truffle.llvm.parser.base.model.functions.FunctionParameter;
+import com.oracle.truffle.llvm.parser.base.model.visitors.FunctionVisitor;
+import com.oracle.truffle.llvm.parser.base.model.globals.GlobalAlias;
+import com.oracle.truffle.llvm.parser.base.model.globals.GlobalConstant;
+import com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable;
+import com.oracle.truffle.llvm.parser.base.model.visitors.InstructionVisitor;
+import com.oracle.truffle.llvm.parser.base.model.Model;
+import com.oracle.truffle.llvm.parser.base.model.visitors.ModelVisitor;
+import com.oracle.truffle.llvm.parser.base.model.types.MetaType;
+import com.oracle.truffle.llvm.parser.base.model.types.Type;
 
-public class LLVMFrameDescriptors {
+public final class LLVMFrameDescriptors {
 
     public static LLVMFrameDescriptors generate(Model model) {
         LLVMControlFlowAnalysis cfg = LLVMControlFlowAnalysis.generate(model);
@@ -54,9 +95,9 @@ public class LLVMFrameDescriptors {
 
     private final Map<String, FrameDescriptor> descriptors;
 
-    private final Map<String, Map<Block, List<FrameSlot>>> slots;
+    private final Map<String, Map<InstructionBlock, List<FrameSlot>>> slots;
 
-    private LLVMFrameDescriptors(Map<String, FrameDescriptor> descriptors, Map<String, Map<Block, List<FrameSlot>>> slots) {
+    private LLVMFrameDescriptors(Map<String, FrameDescriptor> descriptors, Map<String, Map<InstructionBlock, List<FrameSlot>>> slots) {
         this.descriptors = descriptors;
         this.slots = slots;
     }
@@ -69,7 +110,7 @@ public class LLVMFrameDescriptors {
         return descriptors.values().iterator().next(); /* Any will do */
     }
 
-    public Map<Block, List<FrameSlot>> getSlots(String method) {
+    public Map<InstructionBlock, List<FrameSlot>> getSlots(String method) {
         return slots.get(method);
     }
 
@@ -79,9 +120,9 @@ public class LLVMFrameDescriptors {
 
         private final Map<String, FrameDescriptor> descriptors = new HashMap<>();
 
-        private final Map<String, Map<Block, List<FrameSlot>>> slots = new HashMap<>();
+        private final Map<String, Map<InstructionBlock, List<FrameSlot>>> slots = new HashMap<>();
 
-        public LLVMFrameDescriptorsVisitor(LLVMControlFlowAnalysis cfg) {
+        LLVMFrameDescriptorsVisitor(LLVMControlFlowAnalysis cfg) {
             this.cfg = cfg;
         }
 
@@ -89,8 +130,12 @@ public class LLVMFrameDescriptors {
             return descriptors;
         }
 
-        public Map<String, Map<Block, List<FrameSlot>>> getSlots() {
+        public Map<String, Map<InstructionBlock, List<FrameSlot>>> getSlots() {
             return slots;
+        }
+
+        @Override
+        public void visit(GlobalAlias alias) {
         }
 
         @Override
@@ -100,6 +145,7 @@ public class LLVMFrameDescriptors {
         @Override
         public void visit(GlobalVariable variable) {
         }
+
         @Override
         public void visit(FunctionDeclaration method) {
         }
@@ -107,16 +153,19 @@ public class LLVMFrameDescriptors {
         @Override
         public void visit(FunctionDefinition method) {
             FrameDescriptor frame = new FrameDescriptor();
-            frame.addFrameSlot(LLVMBitcodeHelper.FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
-            frame.addFrameSlot(LLVMBitcodeHelper.STACK_ADDRESS_FRAME_SLOT_ID, FrameSlotKind.Object);
+            if (method.getReturnType() != MetaType.VOID) {
+                frame.addFrameSlot(LLVMFrameIDs.FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
+            }
+            frame.addFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID, FrameSlotKind.Object);
 
             for (FunctionParameter parameter : method.getParameters()) {
-                frame.addFrameSlot(parameter.getName(), LLVMBitcodeHelper.toFrameSlotKind(parameter.getType()));
+                frame.addFrameSlot(parameter.getName(), parameter.getType().getFrameSlotKind());
             }
 
             LLVMFrameDescriptorsFunctionVisitor visitor = new LLVMFrameDescriptorsFunctionVisitor(frame, cfg.dependencies(method.getName()));
 
             method.accept(visitor);
+            visitor.finish();
 
             descriptors.put(method.getName(), frame);
             slots.put(method.getName(), visitor.getSlotMap());
@@ -133,25 +182,36 @@ public class LLVMFrameDescriptors {
 
         private LLVMControlFlow cfg;
 
-        private final Map<Block, List<FrameSlot>> map = new HashMap<>();
+        private final Map<InstructionBlock, List<FrameSlot>> map = new HashMap<>();
 
-        private Block entry = null;
+        private InstructionBlock entry = null;
 
-        private LLVMFrameDescriptorsFunctionVisitor(FrameDescriptor frame, LLVMControlFlow cfg) {
+        private final List<InstructionBlock> unvisited = new ArrayList<>();
+
+        LLVMFrameDescriptorsFunctionVisitor(FrameDescriptor frame, LLVMControlFlow cfg) {
             this.frame = frame;
             this.cfg = cfg;
         }
 
-        private List<Block> getNondominatingBlocks(Block block) {
-            List<Block> nondominating = new ArrayList<>();
+        void finish() {
+            // if a program terminates execution solely by invoking 'exit()' some blocks may
+            // otherwise never get visited, this is just a dirty fix for now since we will need to
+            // rewrite stack allocation for lifetime analysis later anyways
+            for (final InstructionBlock block : unvisited) {
+                block.accept(this);
+            }
+        }
+
+        private List<InstructionBlock> getNondominatingBlocks(InstructionBlock block) {
+            List<InstructionBlock> nondominating = new ArrayList<>();
             if (block != entry) {
                 getNondominatingBlocksWorker(block, entry, nondominating);
             }
             return nondominating;
         }
 
-        private void getNondominatingBlocksWorker(Block dominator, Block block, List<Block> nondominating) {
-            for (Block blk : cfg.successor(block)) {
+        private void getNondominatingBlocksWorker(InstructionBlock dominator, InstructionBlock block, List<InstructionBlock> nondominating) {
+            for (InstructionBlock blk : cfg.successor(block)) {
                 if (!nondominating.contains(blk) && !dominator.equals(blk)) {
                     nondominating.add(blk);
                     getNondominatingBlocksWorker(dominator, blk, nondominating);
@@ -159,19 +219,20 @@ public class LLVMFrameDescriptors {
             }
         }
 
-        public Map<Block, List<FrameSlot>> getSlotMap() {
+        public Map<InstructionBlock, List<FrameSlot>> getSlotMap() {
             return map;
         }
 
-        public List<FrameSlot> getSlots(Block block) {
+        public List<FrameSlot> getSlots(InstructionBlock block) {
             int count = frame.getSize();
 
+            unvisited.remove(block);
             block.accept(this);
 
             return new ArrayList<>(frame.getSlots().subList(count, frame.getSize()));
         }
 
-        private boolean isDominating(Block dominator, Block block) {
+        private boolean isDominating(InstructionBlock dominator, InstructionBlock block) {
             if (dominator.equals(block)) {
                 return true;
             }
@@ -179,26 +240,27 @@ public class LLVMFrameDescriptors {
         }
 
         @Override
-        public void visit(Block block) {
+        public void visit(InstructionBlock block) {
             if (entry == null) {
                 entry = block;
             }
-            List<Block> processed = new ArrayList<>();
+            unvisited.add(block);
+            List<InstructionBlock> processed = new ArrayList<>();
             List<FrameSlot> slots = new ArrayList<>();
-            Deque<Block> currentQueue = new ArrayDeque<>();
-            Set<Block> successors = cfg.successor(block);
+            Deque<InstructionBlock> currentQueue = new ArrayDeque<>();
+            Set<InstructionBlock> successors = cfg.successor(block);
             currentQueue.push(block);
             while (!currentQueue.isEmpty()) {
-                Block blk = currentQueue.pop();
+                InstructionBlock blk = currentQueue.pop();
                 processed.add(blk);
                 boolean dominates = false;
-                for (Block successor : successors) {
+                for (InstructionBlock successor : successors) {
                     dominates |= isDominating(blk, successor);
                 }
                 if (!dominates) {
                     slots.addAll(getSlots(blk));
-                    Set<Block> predecessors = cfg.predecessor(blk);
-                    for (Block predecessor : predecessors) {
+                    Set<InstructionBlock> predecessors = cfg.predecessor(blk);
+                    for (InstructionBlock predecessor : predecessors) {
                         if (!processed.contains(predecessor)) {
                             currentQueue.push(predecessor);
                         }
@@ -210,12 +272,12 @@ public class LLVMFrameDescriptors {
 
         @Override
         public void visit(AllocateInstruction allocate) {
-            frame.findOrAddFrameSlot(allocate.getName(), LLVMBitcodeHelper.toFrameSlotKind(allocate.getType()));
+            findOrAddFrameSlot(allocate);
         }
 
         @Override
         public void visit(BinaryOperationInstruction operation) {
-            frame.findOrAddFrameSlot(operation.getName(), LLVMBitcodeHelper.toFrameSlotKind(operation.getType()));
+            findOrAddFrameSlot(operation);
         }
 
         @Override
@@ -224,17 +286,17 @@ public class LLVMFrameDescriptors {
 
         @Override
         public void visit(CallInstruction call) {
-            frame.findOrAddFrameSlot(call.getName(), LLVMBitcodeHelper.toFrameSlotKind(call.getType()));
+            findOrAddFrameSlot(call);
         }
 
         @Override
         public void visit(CastInstruction cast) {
-            frame.findOrAddFrameSlot(cast.getName(), LLVMBitcodeHelper.toFrameSlotKind(cast.getType()));
+            findOrAddFrameSlot(cast);
         }
 
         @Override
         public void visit(CompareInstruction compare) {
-            frame.findOrAddFrameSlot(compare.getName(), LLVMBitcodeHelper.toFrameSlotKind(compare.getType()));
+            findOrAddFrameSlot(compare);
         }
 
         @Override
@@ -243,17 +305,17 @@ public class LLVMFrameDescriptors {
 
         @Override
         public void visit(ExtractElementInstruction extract) {
-            frame.findOrAddFrameSlot(extract.getName(), LLVMBitcodeHelper.toFrameSlotKind(extract.getType()));
+            findOrAddFrameSlot(extract);
         }
 
         @Override
         public void visit(ExtractValueInstruction extract) {
-            frame.findOrAddFrameSlot(extract.getName(), LLVMBitcodeHelper.toFrameSlotKind(extract.getType()));
+            findOrAddFrameSlot(extract);
         }
 
         @Override
         public void visit(GetElementPointerInstruction gep) {
-            frame.findOrAddFrameSlot(gep.getName(), LLVMBitcodeHelper.toFrameSlotKind(gep.getType()));
+            findOrAddFrameSlot(gep);
         }
 
         @Override
@@ -262,22 +324,22 @@ public class LLVMFrameDescriptors {
 
         @Override
         public void visit(InsertElementInstruction insert) {
-            frame.findOrAddFrameSlot(insert.getName(), LLVMBitcodeHelper.toFrameSlotKind(insert.getType()));
+            findOrAddFrameSlot(insert);
         }
 
         @Override
         public void visit(InsertValueInstruction insert) {
-            frame.findOrAddFrameSlot(insert.getName(), LLVMBitcodeHelper.toFrameSlotKind(insert.getType()));
+            findOrAddFrameSlot(insert);
         }
 
         @Override
         public void visit(LoadInstruction load) {
-            frame.findOrAddFrameSlot(load.getName(), LLVMBitcodeHelper.toFrameSlotKind(load.getType()));
+            findOrAddFrameSlot(load);
         }
 
         @Override
         public void visit(PhiInstruction phi) {
-            frame.findOrAddFrameSlot(phi.getName(), LLVMBitcodeHelper.toFrameSlotKind(phi.getType()));
+            findOrAddFrameSlot(phi);
         }
 
         @Override
@@ -286,12 +348,12 @@ public class LLVMFrameDescriptors {
 
         @Override
         public void visit(SelectInstruction select) {
-            frame.findOrAddFrameSlot(select.getName(), LLVMBitcodeHelper.toFrameSlotKind(select.getType()));
+            findOrAddFrameSlot(select);
         }
 
         @Override
         public void visit(ShuffleVectorInstruction shuffle) {
-            frame.findOrAddFrameSlot(shuffle.getName(), LLVMBitcodeHelper.toFrameSlotKind(shuffle.getType()));
+            findOrAddFrameSlot(shuffle);
         }
 
         @Override
@@ -312,6 +374,10 @@ public class LLVMFrameDescriptors {
 
         @Override
         public void visit(VoidCallInstruction call) {
+        }
+
+        private void findOrAddFrameSlot(ValueInstruction val) {
+            frame.findOrAddFrameSlot(val.getName(), val.getType().getFrameSlotKind());
         }
     }
 }

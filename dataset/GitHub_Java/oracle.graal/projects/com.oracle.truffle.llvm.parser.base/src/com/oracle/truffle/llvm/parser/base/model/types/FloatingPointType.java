@@ -99,7 +99,12 @@ public enum FloatingPointType implements Type {
     }
 
     @Override
-    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+    public int sizeof() {
+        return width / Byte.SIZE;
+    }
+
+    @Override
+    public int getAlignmentByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
         if (targetDataLayout != null) {
             return targetDataLayout.getBitAlignment(llvmBaseType) / Byte.SIZE;
         } else {
@@ -108,7 +113,7 @@ public enum FloatingPointType implements Type {
     }
 
     @Override
-    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+    public int getSizeByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
         return Math.max(1, width / Byte.SIZE);
     }
 
