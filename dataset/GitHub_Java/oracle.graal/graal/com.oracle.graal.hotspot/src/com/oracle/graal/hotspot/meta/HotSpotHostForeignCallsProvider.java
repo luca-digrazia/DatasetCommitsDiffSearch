@@ -55,7 +55,6 @@ import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.STAC
 import static com.oracle.graal.hotspot.HotSpotHostBackend.DEOPTIMIZATION_HANDLER;
 import static com.oracle.graal.hotspot.HotSpotHostBackend.UNCOMMON_TRAP_HANDLER;
 import static com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider.RuntimeCalls.CREATE_ARRAY_STORE_EXCEPTION;
-import static com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider.RuntimeCalls.CREATE_CLASS_CAST_EXCEPTION;
 import static com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider.RuntimeCalls.CREATE_NULL_POINTER_EXCEPTION;
 import static com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider.RuntimeCalls.CREATE_OUT_OF_BOUNDS_EXCEPTION;
 import static com.oracle.graal.hotspot.replacements.AssertionSnippets.ASSERTION_VM_MESSAGE_C;
@@ -94,7 +93,6 @@ import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.stubs.ArrayStoreExceptionStub;
-import com.oracle.graal.hotspot.stubs.ClassCastExceptionStub;
 import com.oracle.graal.hotspot.stubs.CreateExceptionStub;
 import com.oracle.graal.hotspot.stubs.ExceptionHandlerStub;
 import com.oracle.graal.hotspot.stubs.NewArrayStub;
@@ -272,7 +270,6 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         link(new UnwindExceptionToCallerStub(providers, registerStubCall(UNWIND_EXCEPTION_TO_CALLER, NOT_REEXECUTABLE, SAFEPOINT, any())));
         link(new VerifyOopStub(providers, registerStubCall(VERIFY_OOP, REEXECUTABLE, LEAF_NOFP, NO_LOCATIONS)));
         link(new ArrayStoreExceptionStub(providers, registerStubCall(CREATE_ARRAY_STORE_EXCEPTION, REEXECUTABLE, SAFEPOINT, any())));
-        link(new ClassCastExceptionStub(providers, registerStubCall(CREATE_CLASS_CAST_EXCEPTION, REEXECUTABLE, SAFEPOINT, any())));
         link(new NullPointerExceptionStub(providers, registerStubCall(CREATE_NULL_POINTER_EXCEPTION, REEXECUTABLE, SAFEPOINT, any())));
         link(new OutOfBoundsExceptionStub(providers, registerStubCall(CREATE_OUT_OF_BOUNDS_EXCEPTION, REEXECUTABLE, SAFEPOINT, any())));
 
