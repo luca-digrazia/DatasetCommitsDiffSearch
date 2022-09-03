@@ -48,10 +48,8 @@ import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.serviceprovider.GraalServices;
 import com.oracle.graal.truffle.debug.CompilationStatisticsListener;
 import com.oracle.graal.truffle.debug.PrintCallTargetProfiling;
-import com.oracle.graal.truffle.debug.TraceCompilationASTListener;
 import com.oracle.graal.truffle.debug.TraceCompilationCallTreeListener;
 import com.oracle.graal.truffle.debug.TraceCompilationFailureListener;
 import com.oracle.graal.truffle.debug.TraceCompilationListener;
@@ -64,7 +62,6 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.CompilerOptions;
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
@@ -86,7 +83,7 @@ import jdk.vm.ci.code.stack.StackIntrospection;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.SpeculationLog;
+import jdk.vm.ci.services.Services;
 
 public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
@@ -124,13 +121,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     private final Supplier<GraalRuntime> graalRuntime;
     private final GraalTVMCI tvmci = new GraalTVMCI();
 
-    /**
-     * Utility method that casts the singleton {@link TruffleRuntime}.
-     */
-    public static GraalTruffleRuntime getRuntime() {
-        return (GraalTruffleRuntime) Truffle.getRuntime();
-    }
-
     public GraalTruffleRuntime(Supplier<GraalRuntime> graalRuntime) {
         this.graalRuntime = graalRuntime;
     }
@@ -150,7 +140,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     }
 
     private static <T extends PrioritizedServiceProvider> T loadPrioritizedServiceProvider(Class<T> clazz) {
-        Iterable<T> providers = GraalServices.load(clazz);
+        Iterable<T> providers = Services.load(clazz);
         T bestFactory = null;
         for (T factory : providers) {
             if (bestFactory == null) {
@@ -178,7 +168,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         TraceSplittingListener.install(this);
         PrintCallTargetProfiling.install(this);
         CompilationStatisticsListener.install(this);
-        TraceCompilationASTListener.install(this);
         installShutdownHooks();
         compilationNotify.notifyStartup(this);
     }
@@ -369,10 +358,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
             }
         }
     }
-
-    public abstract SpeculationLog createSpeculationLog();
-
-    public abstract RootCallTarget createCallTarget(RootNode root, SpeculationLog speculationLog);
 
     public abstract RootCallTarget createClonedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode root);
 

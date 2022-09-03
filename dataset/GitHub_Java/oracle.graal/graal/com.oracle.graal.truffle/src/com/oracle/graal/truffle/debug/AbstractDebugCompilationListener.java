@@ -31,7 +31,6 @@ import com.oracle.graal.truffle.GraalTruffleRuntime;
 import com.oracle.graal.truffle.OptimizedCallTarget;
 import com.oracle.graal.truffle.OptimizedDirectCallNode;
 import com.oracle.graal.truffle.TruffleInlining;
-import com.oracle.truffle.api.frame.Frame;
 
 public abstract class AbstractDebugCompilationListener implements GraalTruffleCompilationListener {
 
@@ -65,10 +64,6 @@ public abstract class AbstractDebugCompilationListener implements GraalTruffleCo
 
     @Override
     public void notifyCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph, CompilationResult result) {
-    }
-
-    @Override
-    public void notifyCompilationDeoptimized(OptimizedCallTarget target, Frame frame) {
     }
 
     @Override

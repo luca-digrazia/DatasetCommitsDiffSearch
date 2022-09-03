@@ -22,14 +22,16 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleInlining;
 
-import java.util.*;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.truffle.GraalTruffleRuntime;
+import com.oracle.graal.truffle.OptimizedCallTarget;
+import com.oracle.graal.truffle.TruffleInlining;
+import com.oracle.graal.truffle.TruffleInliningDecision;
+import com.oracle.graal.truffle.TruffleInliningProfile;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.truffle.*;
-
-public class TraceInliningListener extends AbstractDebugCompilationListener {
+public final class TraceInliningListener extends AbstractDebugCompilationListener {
 
     private TraceInliningListener() {
     }
@@ -41,35 +43,26 @@ public class TraceInliningListener extends AbstractDebugCompilationListener {
     }
 
     @Override
-    public void notifyCompilationTruffleTierFinished(OptimizedCallTarget target, StructuredGraph graph) {
-        TruffleInlining inlining = target.getInlining();
-        if (inlining == null) {
+    public void notifyCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph) {
+        if (inliningDecision == null) {
             return;
         }
 
-        log(0, "inline start", target.toString(), target.getDebugProperties());
-        logInliningDecisionRecursive(inlining, 1);
-        log(0, "inline done", target.toString(), target.getDebugProperties());
+        log(0, "inline start", target.toString(), target.getDebugProperties(null));
+        logInliningDecisionRecursive(target, inliningDecision, 1);
+        log(0, "inline done", target.toString(), target.getDebugProperties(inliningDecision));
     }
 
-    private static void logInliningDecisionRecursive(TruffleInlining result, int depth) {
-        for (TruffleInliningDecision decision : result) {
+    private void logInliningDecisionRecursive(OptimizedCallTarget target, TruffleInlining inliningDecision, int depth) {
+        for (TruffleInliningDecision decision : inliningDecision) {
             TruffleInliningProfile profile = decision.getProfile();
             boolean inlined = decision.isInline();
             String msg = inlined ? "inline success" : "inline failed";
-            logInlinedImpl(msg, decision.getProfile().getCallNode(), profile, depth);
+            log(depth, msg, decision.getProfile().getCallNode().getCurrentCallTarget().toString(), profile.getDebugProperties());
             if (inlined) {
-                logInliningDecisionRecursive(decision, depth + 1);
+                logInliningDecisionRecursive(target, decision, depth + 1);
             }
         }
-    }
-
-    private static void logInlinedImpl(String status, OptimizedDirectCallNode callNode, TruffleInliningProfile profile, int depth) {
-        Map<String, Object> properties = new LinkedHashMap<>();
-        if (profile != null) {
-            properties.putAll(profile.getDebugProperties());
-        }
-        log((depth * 2), status, callNode.getCurrentCallTarget().toString(), properties);
     }
 
 }

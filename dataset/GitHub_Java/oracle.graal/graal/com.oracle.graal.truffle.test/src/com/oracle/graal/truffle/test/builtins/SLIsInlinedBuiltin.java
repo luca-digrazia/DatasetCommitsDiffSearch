@@ -39,7 +39,6 @@ import com.oracle.graal.truffle.TruffleInliningDecision;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.sl.runtime.SLFunction;
@@ -69,10 +68,7 @@ public abstract class SLIsInlinedBuiltin extends SLGraalRuntimeBuiltin {
 
             @Override
             public void notifyCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph) {
-            }
 
-            @Override
-            public void notifyCompilationDeoptimized(OptimizedCallTarget target, Frame frame) {
             }
 
             @Override
@@ -115,6 +111,11 @@ public abstract class SLIsInlinedBuiltin extends SLGraalRuntimeBuiltin {
 
             }
         });
+    }
+
+    SLIsInlinedBuiltin() {
+        super(SLIsInlinedBuiltin.class);
+
     }
 
     @Specialization

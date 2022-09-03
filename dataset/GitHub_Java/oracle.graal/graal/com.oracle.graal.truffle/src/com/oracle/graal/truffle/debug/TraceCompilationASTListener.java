@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,21 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleCompilationAST;
 
-import java.io.*;
-import java.util.*;
+import java.util.List;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.truffle.*;
-import com.oracle.graal.truffle.TruffleInlining.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.nodes.NodeUtil.*;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.truffle.GraalTruffleRuntime;
+import com.oracle.graal.truffle.OptimizedCallTarget;
+import com.oracle.graal.truffle.TruffleInlining;
+import com.oracle.graal.truffle.TruffleInlining.CallTreeNodeVisitor;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeClass;
+import com.oracle.truffle.api.nodes.NodeFieldAccessor;
 
-public class TraceCompilationASTListener extends AbstractDebugCompilationListener {
+public final class TraceCompilationASTListener extends AbstractDebugCompilationListener {
 
     public static void install(GraalTruffleRuntime runtime) {
         if (TraceTruffleCompilationAST.getValue()) {
@@ -43,30 +45,32 @@ public class TraceCompilationASTListener extends AbstractDebugCompilationListene
     }
 
     @Override
-    public void notifyCompilationSuccess(OptimizedCallTarget target, StructuredGraph graph, CompilationResult result) {
-        log(0, "opt AST", target.toString(), target.getDebugProperties());
-        printCompactTree(new PrintWriter(OUT), target);
+    public void notifyCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph, CompilationResult result) {
+        log(0, "opt AST", target.toString(), target.getDebugProperties(inliningDecision));
+        printCompactTree(target, inliningDecision);
     }
 
-    private static void printCompactTree(PrintWriter p, OptimizedCallTarget target) {
+    private static void printCompactTree(OptimizedCallTarget target, TruffleInlining inliningDecision) {
         target.accept(new CallTreeNodeVisitor() {
 
+            @Override
             public boolean visit(List<TruffleInlining> decisionStack, Node node) {
                 if (node == null) {
                     return true;
                 }
                 int level = CallTreeNodeVisitor.getNodeDepth(decisionStack, node);
+                StringBuilder indent = new StringBuilder();
                 for (int i = 0; i < level; i++) {
-                    p.print("  ");
+                    indent.append("  ");
                 }
                 Node parent = node.getParent();
 
                 if (parent == null) {
-                    p.println(node.getClass().getSimpleName());
+                    OptimizedCallTarget.log(String.format("%s%s", indent, node.getClass().getSimpleName()));
                 } else {
                     String fieldName = "unknownField";
-                    NodeField[] fields = NodeClass.get(parent.getClass()).getFields();
-                    for (NodeField field : fields) {
+                    NodeFieldAccessor[] fields = NodeClass.get(parent).getFields();
+                    for (NodeFieldAccessor field : fields) {
                         Object value = field.loadValue(parent);
                         if (value == node) {
                             fieldName = field.getName();
@@ -82,15 +86,11 @@ public class TraceCompilationASTListener extends AbstractDebugCompilationListene
                             }
                         }
                     }
-                    p.print(fieldName);
-                    p.print(" = ");
-                    p.println(node.getClass().getSimpleName());
+                    OptimizedCallTarget.log(String.format("%s%s = %s", indent, fieldName, node.getClass().getSimpleName()));
                 }
-                p.flush();
                 return true;
             }
 
-        }, true);
+        }, inliningDecision);
     }
-
 }

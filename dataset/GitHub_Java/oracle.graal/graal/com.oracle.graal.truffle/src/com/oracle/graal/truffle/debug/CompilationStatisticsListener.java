@@ -38,8 +38,6 @@ import java.util.stream.StreamSupport;
 
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.truffle.AbstractCompilationProfile;
-import com.oracle.graal.truffle.DefaultCompilationProfile;
 import com.oracle.graal.truffle.GraalTruffleRuntime;
 import com.oracle.graal.truffle.OptimizedCallTarget;
 import com.oracle.graal.truffle.OptimizedDirectCallNode;
@@ -124,18 +122,7 @@ public final class CompilationStatisticsListener extends AbstractDebugCompilatio
         if (firstCompilation == 0) {
             firstCompilation = System.nanoTime();
         }
-        DefaultCompilationProfile profile = getDefaultCompilationProfile(target);
-        if (profile != null) {
-            timeToQueue.accept(System.nanoTime() - profile.getTimestamp());
-        }
-    }
-
-    private static DefaultCompilationProfile getDefaultCompilationProfile(OptimizedCallTarget target) {
-        AbstractCompilationProfile profile = target.getCompilationProfile();
-        if (profile instanceof DefaultCompilationProfile) {
-            return (DefaultCompilationProfile) profile;
-        }
-        return null;
+        timeToQueue.accept(System.nanoTime() - target.getCompilationProfile().getTimestamp());
     }
 
     @Override
@@ -162,11 +149,8 @@ public final class CompilationStatisticsListener extends AbstractDebugCompilatio
         local.compilationStarted = System.nanoTime();
         compilationLocal.set(local);
 
-        DefaultCompilationProfile profile = getDefaultCompilationProfile(target);
-        if (profile != null) {
-            deferCompilations.accept(profile.getDeferredCount());
-            timeToCompilation.accept(local.compilationStarted - profile.getTimestamp());
-        }
+        deferCompilations.accept(target.getCompilationProfile().getDeferedCount());
+        timeToCompilation.accept(local.compilationStarted - target.getCompilationProfile().getTimestamp());
     }
 
     @Override

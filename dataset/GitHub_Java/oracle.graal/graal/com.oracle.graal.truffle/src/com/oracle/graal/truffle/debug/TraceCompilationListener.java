@@ -34,7 +34,6 @@ import com.oracle.graal.truffle.GraalTruffleRuntime;
 import com.oracle.graal.truffle.OptimizedCallTarget;
 import com.oracle.graal.truffle.OptimizedDirectCallNode;
 import com.oracle.graal.truffle.TruffleInlining;
-import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.source.SourceSection;
 
 public final class TraceCompilationListener extends AbstractDebugCompilationListener {
@@ -84,11 +83,6 @@ public final class TraceCompilationListener extends AbstractDebugCompilationList
         LocalCompilation compilation = new LocalCompilation();
         compilation.timeCompilationStarted = System.nanoTime();
         currentCompilation.set(compilation);
-    }
-
-    @Override
-    public void notifyCompilationDeoptimized(OptimizedCallTarget target, Frame frame) {
-        log(0, "opt deopt", target.toString(), target.getDebugProperties(null));
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,24 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleCompilationCallTree;
 
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.truffle.*;
-import com.oracle.graal.truffle.TruffleInlining.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.truffle.GraalTruffleRuntime;
+import com.oracle.graal.truffle.OptimizedCallTarget;
+import com.oracle.graal.truffle.OptimizedDirectCallNode;
+import com.oracle.graal.truffle.OptimizedIndirectCallNode;
+import com.oracle.graal.truffle.TruffleInlining;
+import com.oracle.graal.truffle.TruffleInlining.CallTreeNodeVisitor;
+import com.oracle.graal.truffle.TruffleInliningDecision;
+import com.oracle.truffle.api.nodes.Node;
 
-public class TraceCompilationCallTreeListener extends AbstractDebugCompilationListener {
+public final class TraceCompilationCallTreeListener extends AbstractDebugCompilationListener {
 
     private TraceCompilationCallTreeListener() {
     }
@@ -44,14 +51,15 @@ public class TraceCompilationCallTreeListener extends AbstractDebugCompilationLi
     }
 
     @Override
-    public void notifyCompilationSuccess(OptimizedCallTarget target, StructuredGraph graph, CompilationResult result) {
-        log(0, "opt call tree", target.toString(), target.getDebugProperties());
-        logTruffleCallTree(target);
+    public void notifyCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph, CompilationResult result) {
+        log(0, "opt call tree", target.toString(), target.getDebugProperties(inliningDecision));
+        logTruffleCallTree(target, inliningDecision);
     }
 
-    private static void logTruffleCallTree(OptimizedCallTarget compilable) {
+    private static void logTruffleCallTree(OptimizedCallTarget compilable, TruffleInlining inliningDecision) {
         CallTreeNodeVisitor visitor = new CallTreeNodeVisitor() {
 
+            @Override
             public boolean visit(List<TruffleInlining> decisionStack, Node node) {
                 if (node instanceof OptimizedDirectCallNode) {
                     OptimizedDirectCallNode callNode = ((OptimizedDirectCallNode) node);
@@ -62,19 +70,18 @@ public class TraceCompilationCallTreeListener extends AbstractDebugCompilationLi
                         dispatched = "";
                     }
                     Map<String, Object> properties = new LinkedHashMap<>();
-                    addASTSizeProperty(callNode.getCurrentCallTarget(), properties);
-                    properties.putAll(callNode.getCurrentCallTarget().getDebugProperties());
-                    properties.put("Stamp", callNode.getCurrentCallTarget().getArgumentStamp());
-                    log((depth * 2), "opt call tree", callNode.getCurrentCallTarget().toString() + dispatched, properties);
+                    addASTSizeProperty(callNode.getCurrentCallTarget(), inliningDecision, properties);
+                    properties.putAll(callNode.getCurrentCallTarget().getDebugProperties(inliningDecision));
+                    log(depth, "opt call tree", callNode.getCurrentCallTarget().toString() + dispatched, properties);
                 } else if (node instanceof OptimizedIndirectCallNode) {
                     int depth = decisionStack == null ? 0 : decisionStack.size() - 1;
-                    log((depth * 2), "opt call tree", "<indirect>", new LinkedHashMap<String, Object>());
+                    log(depth, "opt call tree", "<indirect>", new LinkedHashMap<String, Object>());
                 }
                 return true;
             }
 
         };
-        compilable.accept(visitor, true);
+        compilable.accept(visitor, inliningDecision);
     }
 
 }
