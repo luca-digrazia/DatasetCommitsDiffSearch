@@ -120,18 +120,26 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMBooleanNuller;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMByteNuller;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMDoubleNull;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMFloatNuller;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMIntNuller;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMLongNuller;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMObjectNuller;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMStatementNode;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionBodyNode;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMBlockNode;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMBlockNode.LLVMBlockControlFlowNode;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMBlockNode.LLVMBlockNoControlFlowNode;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMBooleanNuller;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMByteNuller;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMDoubleNull;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMFloatNuller;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMIntNuller;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMLongNuller;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMObjectNuller;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMWrappedStatementNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
@@ -173,6 +181,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
 
     private static final TypeResolver typeResolver = new TypeResolver();
     private FrameDescriptor frameDescriptor;
+    private LLVMContext currentContext;
     private FrameDescriptor globalFrameDescriptor;
     private List<LLVMNode> functionEpilogue;
     private Map<FunctionHeader, Map<String, Integer>> functionToLabelMapping;
@@ -188,44 +197,21 @@ public class LLVMVisitor implements LLVMParserRuntime {
 
     private NativeLookup nativeLookup;
 
-    private Object[] mainArgs;
-
-    private Source sourceFile;
-
-    public LLVMVisitor(LLVMOptimizationConfiguration optimizationConfiguration, Object[] mainArgs, Source sourceFile) {
+    public LLVMVisitor(LLVMContext context, LLVMOptimizationConfiguration optimizationConfiguration) {
+        currentContext = context;
         this.optimizationConfiguration = optimizationConfiguration;
-        this.mainArgs = mainArgs;
-        this.sourceFile = sourceFile;
         LLVMTypeHelper.setParserRuntime(this);
     }
 
-    public class ParserResult {
-
-        private final RootCallTarget mainFunction;
-        private final Map<LLVMFunction, RootCallTarget> parsedFunctions;
-
-        public ParserResult(RootCallTarget mainFunction, Map<LLVMFunction, RootCallTarget> parsedFunctions) {
-            this.mainFunction = mainFunction;
-            this.parsedFunctions = parsedFunctions;
-        }
-
-        public RootCallTarget getMainFunction() {
-            return mainFunction;
-        }
-
-        public Map<LLVMFunction, RootCallTarget> getParsedFunctions() {
-            return parsedFunctions;
-        }
-    }
-
-    public ParserResult getMain(Model model, NodeFactoryFacade facade) {
-        Map<LLVMFunction, RootCallTarget> parsedFunctions = visit(model, facade);
+    public RootCallTarget getMain(Model model, NodeFactoryFacade facade) {
+        visit(model, facade);
+        currentContext.getFunctionRegistry();
         LLVMFunction mainFunction = LLVMFunction.createFromName("@main");
-        RootCallTarget mainCallTarget = parsedFunctions.get(mainFunction);
+        RootCallTarget mainCallTarget = currentContext.getFunctionRegistry().lookup(mainFunction);
         int argParamCount = mainFunction.getLlvmParamTypes().length;
         RootNode globalFunction;
         LLVMNode[] staticInits = globalNodes.toArray(new LLVMNode[globalNodes.size()]);
-        int argsCount = mainArgs.length + 1;
+        int argsCount = currentContext.getMainArguments().length + 1;
         if (argParamCount == 0) {
             globalFunction = factoryFacade.createGlobalRootNode(staticInits, mainCallTarget, deallocations);
         } else {
@@ -233,8 +219,8 @@ public class LLVMVisitor implements LLVMParserRuntime {
                 globalFunction = factoryFacade.createGlobalRootNode(staticInits, mainCallTarget, deallocations, argsCount);
             } else {
                 Object[] args = new Object[argsCount];
-                args[0] = sourceFile;
-                System.arraycopy(mainArgs, 0, args, 1, mainArgs.length);
+                args[0] = currentContext.getSourceFile();
+                System.arraycopy(currentContext.getMainArguments(), 0, args, 1, currentContext.getMainArguments().length);
                 LLVMParserAsserts.assertNoNullElement(args);
                 LLVMAddress allocatedArgsStartAddress = getArgsAsStringArray(args);
                 // Checkstyle: stop magic number check
@@ -251,7 +237,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
             }
         }
         RootCallTarget wrappedCallTarget = Truffle.getRuntime().createCallTarget(wrapMainFunction(Truffle.getRuntime().createCallTarget(globalFunction)));
-        return new ParserResult(wrappedCallTarget, parsedFunctions);
+        return wrappedCallTarget;
     }
 
     private RootNode wrapMainFunction(RootCallTarget mainCallTarget) {
@@ -285,7 +271,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         return stringArgs;
     }
 
-    public Map<LLVMFunction, RootCallTarget> visit(Model model, NodeFactoryFacade facade) {
+    public List<LLVMFunction> visit(Model model, NodeFactoryFacade facade) {
         this.factoryFacade = facade;
         List<EObject> objects = model.eContents();
         List<LLVMFunction> functions = new ArrayList<>();
@@ -324,10 +310,11 @@ public class LLVMVisitor implements LLVMParserRuntime {
                 throw new AssertionError(object);
             }
         }
+        currentContext.getFunctionRegistry().register(functionCallTargets);
         List<LLVMNode> globalVarNodes = addGlobalVars(this, staticVars);
         globalNodes.addAll(globalVarNodes);
         deallocations = globalDeallocations.toArray(new LLVMAddress[globalDeallocations.size()]);
-        return functionCallTargets;
+        return functions;
     }
 
     private static void setTargetInfo(List<EObject> objects) {
@@ -479,11 +466,12 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMAttributeVisitor.visitFunctionHeader(def.getHeader());
         labelList = getBlockLabelIndexMapping(def);
         List<LLVMNode> formalParameters = getFormalParametersInit(def);
-        LLVMExpressionNode block = getFunctionBlockStatements(def);
+        LLVMBlockNode block = getFunctionBlockStatements(def);
         String functionName = def.getHeader().getName();
+        LLVMFunctionBodyNode functionBodyNode = new LLVMFunctionBodyNode(block, retSlot);
         LLVMNode[] beforeFunction = formalParameters.toArray(new LLVMNode[formalParameters.size()]);
         LLVMNode[] afterFunction = functionEpilogue.toArray(new LLVMNode[functionEpilogue.size()]);
-        RootNode rootNode = factoryFacade.createFunctionStartNode(block, beforeFunction, afterFunction, frameDescriptor, functionName);
+        LLVMFunctionStartNode rootNode = new LLVMFunctionStartNode(functionBodyNode, beforeFunction, afterFunction, frameDescriptor, functionName);
         if (LLVMOptions.printFunctionASTs()) {
             NodeUtil.printTree(System.out, rootNode);
         }
@@ -493,16 +481,16 @@ public class LLVMVisitor implements LLVMParserRuntime {
         return function;
     }
 
-    private LLVMExpressionNode getFunctionBlockStatements(FunctionDef def) {
+    private LLVMBlockNode getFunctionBlockStatements(FunctionDef def) {
         List<LLVMNode> allFunctionNodes = new ArrayList<>();
         int currentIndex = 0;
         int[] basicBlockIndices = new int[def.getBasicBlocks().size()];
         int i = 0;
         for (BasicBlock basicBlock : def.getBasicBlocks()) {
-            LLVMNode statementNodes = visitBasicBlock(basicBlock);
-            basicBlockIndices[i++] = currentIndex;
-            currentIndex++;
-            allFunctionNodes.add(statementNodes);
+            List<LLVMNode> statementNodes = visitBasicBlock(basicBlock);
+            currentIndex += statementNodes.size();
+            basicBlockIndices[i++] = currentIndex - 1;
+            allFunctionNodes.addAll(statementNodes);
         }
         LLVMStackFrameNuller[][] indexToSlotNuller = new LLVMStackFrameNuller[currentIndex][];
         i = 0;
@@ -517,7 +505,28 @@ public class LLVMVisitor implements LLVMParserRuntime {
             LLVMParserAsserts.assertNoNullElement(deadSlots);
             indexToSlotNuller[basicBlockIndices[i++]] = getSlotNullerNode(deadSlots);
         }
-        return factoryFacade.createFunctionBlockNode(retSlot, allFunctionNodes, indexToSlotNuller);
+        int size = allFunctionNodes.size();
+        boolean lastStatementIsControl = allFunctionNodes.get(size - 1) instanceof LLVMStatementNode;
+        if (!lastStatementIsControl) {
+            throw new IllegalStateException("last statement in basic block should be control statement");
+        }
+        boolean containsControlFlow = size != 1 && allFunctionNodes.stream().limit(allFunctionNodes.size() - 1).anyMatch(node -> node instanceof LLVMStatementNode);
+        if (containsControlFlow) {
+            LLVMStatementNode[] statements = new LLVMStatementNode[allFunctionNodes.size()];
+            for (i = 0; i < allFunctionNodes.size(); i++) {
+                LLVMNode currentNode = allFunctionNodes.get(i);
+                if (currentNode instanceof LLVMStatementNode) {
+                    statements[i] = (LLVMStatementNode) currentNode;
+                } else {
+                    final int successorIndex = i + 1;
+                    statements[i] = new LLVMWrappedStatementNode(currentNode, successorIndex);
+                }
+            }
+            LLVMParserAsserts.assertNoNullElement(statements);
+            return new LLVMBlockControlFlowNode(statements, indexToSlotNuller);
+        } else {
+            return new LLVMBlockNoControlFlowNode(allFunctionNodes.toArray(new LLVMNode[allFunctionNodes.size()]));
+        }
     }
 
     private static LLVMStackFrameNuller[] getSlotNullerNode(FrameSlot[] deadSlots) {
@@ -589,7 +598,8 @@ public class LLVMVisitor implements LLVMParserRuntime {
         HashMap<String, Integer> labels = new HashMap<>();
         for (BasicBlock basicBlock : functionDef.getBasicBlocks()) {
             labels.put(basicBlock.getName(), labelIndex);
-            labelIndex++;
+            int nrInstructions = basicBlock.getInstructions().size();
+            labelIndex += nrInstructions;
         }
         return labels;
     }
@@ -602,7 +612,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
 
     private BasicBlock currentBasicBlock;
 
-    private LLVMNode visitBasicBlock(BasicBlock basicBlock) {
+    private List<LLVMNode> visitBasicBlock(BasicBlock basicBlock) {
         currentBasicBlock = basicBlock;
         List<LLVMNode> statements = new ArrayList<>(basicBlock.getInstructions().size());
         for (Instruction instr : basicBlock.getInstructions()) {
@@ -611,11 +621,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
                 statements.add(instruction);
             }
         }
-        LLVMNode[] statementNodes = new LLVMNode[statements.size() - 1];
-        System.arraycopy(statements.toArray(new LLVMNode[statementNodes.length]), 0, statementNodes, 0, statementNodes.length);
-        LLVMParserAsserts.assertNoNullElement(statementNodes);
-        LLVMNode terminatorNode = statements.get(statements.size() - 1);
-        return factoryFacade.createBasicBlockNode(statementNodes, terminatorNode);
+        return statements;
     }
 
     private List<LLVMNode> visitInstruction(Instruction instr) {
