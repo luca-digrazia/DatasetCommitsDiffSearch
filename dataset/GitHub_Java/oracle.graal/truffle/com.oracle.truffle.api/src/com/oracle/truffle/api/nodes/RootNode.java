@@ -181,7 +181,7 @@ public abstract class RootNode extends Node {
     /**
      * @since 0.8 or earlier
      * @deprecated No replacement. Changing {@link CallTarget} of an existing {@link RootNode} isn't
-     *             a supported operation
+     *             supported operation
      */
     @Deprecated
     public final void setCallTarget(RootCallTarget callTarget) {
