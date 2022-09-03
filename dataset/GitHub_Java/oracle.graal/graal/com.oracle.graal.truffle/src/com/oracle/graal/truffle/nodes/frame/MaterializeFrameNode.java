@@ -23,7 +23,6 @@
 package com.oracle.graal.truffle.nodes.frame;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.truffle.*;
 
@@ -35,11 +34,7 @@ public class MaterializeFrameNode extends FixedWithNextNode implements IterableN
 
     @Input private ValueNode frame;
 
-    public static MaterializeFrameNode create(ValueNode frame) {
-        return new MaterializeFrameNodeGen(frame);
-    }
-
-    protected MaterializeFrameNode(ValueNode frame) {
+    public MaterializeFrameNode(ValueNode frame) {
         super(frame.stamp());
         this.frame = frame;
     }

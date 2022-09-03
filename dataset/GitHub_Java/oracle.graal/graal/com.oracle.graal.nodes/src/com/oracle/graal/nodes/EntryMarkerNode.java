@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -38,7 +37,7 @@ public class EntryMarkerNode extends AbstractBeginNode implements IterableNodeTy
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(LIRGeneratorTool gen) {
         throw new GraalInternalError("OnStackReplacementNode should not survive");
     }
 }

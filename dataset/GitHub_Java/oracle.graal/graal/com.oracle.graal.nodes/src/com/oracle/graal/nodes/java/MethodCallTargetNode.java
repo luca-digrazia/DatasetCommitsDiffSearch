@@ -26,8 +26,8 @@ import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Canonicalizable {
@@ -125,7 +125,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (!isStatic()) {
             ValueNode receiver = receiver();
             if (receiver != null && ObjectStamp.isExactType(receiver) && ObjectStamp.typeOrNull(receiver) != null) {
@@ -160,7 +160,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
         if (targetMethod() == null) {
             return "??Invalid!";
         }
-        return MetaUtil.format("%h.%n", targetMethod());
+        return targetMethod().getName();
     }
 
     public static MethodCallTargetNode find(StructuredGraph graph, ResolvedJavaMethod method) {

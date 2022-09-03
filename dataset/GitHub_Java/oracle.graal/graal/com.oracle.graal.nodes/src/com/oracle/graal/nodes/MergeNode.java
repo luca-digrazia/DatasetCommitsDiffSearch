@@ -27,7 +27,6 @@ import static com.oracle.graal.graph.iterators.NodePredicates.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
@@ -90,7 +89,7 @@ public class MergeNode extends BeginStateSplitNode implements IterableNodeType, 
             }
             ValueNode removedValue = phi.valueAt(predIndex);
             phi.removeInput(predIndex);
-            if (removedValue != null && removedValue.isAlive() && removedValue.recordsUsages() && removedValue.usages().isEmpty() && GraphUtil.isFloatingNode().apply(removedValue)) {
+            if (removedValue != null && removedValue.isAlive() && removedValue.usages().isEmpty() && GraphUtil.isFloatingNode().apply(removedValue)) {
                 GraphUtil.killWithUnusedFloatingInputs(removedValue);
             }
         }

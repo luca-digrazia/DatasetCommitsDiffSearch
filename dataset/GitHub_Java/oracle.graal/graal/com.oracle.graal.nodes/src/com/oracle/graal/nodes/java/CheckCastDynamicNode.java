@@ -23,6 +23,7 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -31,7 +32,7 @@ import com.oracle.graal.nodes.type.*;
  * Implements a type check where the type being checked is loaded at runtime. This is used, for
  * instance, to implement an object array store check.
  */
-public final class CheckCastDynamicNode extends FixedWithNextNode implements Canonicalizable, Lowerable {
+public final class CheckCastDynamicNode extends FixedWithNextNode implements Canonicalizable, Lowerable, IterableNodeType {
 
     @Input private ValueNode object;
     @Input private ValueNode hub;

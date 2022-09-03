@@ -24,9 +24,7 @@ package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -55,11 +53,6 @@ public final class FloatingReadNode extends FloatingAccessNode implements Iterab
         return lastLocationAccess;
     }
 
-    public void setLastLocationAccess(Node newlla) {
-        updateUsages(lastLocationAccess, newlla);
-        lastLocationAccess = newlla;
-    }
-
     @Override
     public void generate(LIRGeneratorTool gen) {
         Value address = location().generateAddress(gen, gen.operand(object()));
@@ -67,31 +60,12 @@ public final class FloatingReadNode extends FloatingAccessNode implements Iterab
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         return ReadNode.canonicalizeRead(this, location(), object(), tool, isCompressible());
     }
 
     @Override
     public Access asFixedNode() {
         return graph().add(new ReadNode(object(), nullCheckLocation(), stamp(), getGuard(), getBarrierType(), isCompressible()));
-    }
-
-    private static boolean isMemoryCheckPoint(Node n) {
-        return n instanceof MemoryCheckpoint.Single || n instanceof MemoryCheckpoint.Multi;
-    }
-
-    private static boolean isMemoryPhi(Node n) {
-        return n instanceof PhiNode && ((PhiNode) n).type() == PhiType.Memory;
-    }
-
-    private static boolean isMemoryProxy(Node n) {
-        return n instanceof ProxyNode && ((ProxyNode) n).type() == PhiType.Memory;
-    }
-
-    @Override
-    public boolean verify() {
-        Node lla = lastLocationAccess();
-        assert lla == null || isMemoryCheckPoint(lla) || isMemoryPhi(lla) || isMemoryProxy(lla) : "lastLocationAccess of " + this + " should be a MemoryCheckpoint, but is " + lla;
-        return super.verify();
     }
 }

@@ -22,10 +22,11 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
@@ -45,7 +46,7 @@ public final class GuardNode extends FloatingGuardedNode implements Canonicaliza
 
     @Input private LogicNode condition;
     private final DeoptimizationReason reason;
-    private DeoptimizationAction action;
+    private final DeoptimizationAction action;
     private boolean negated;
 
     public GuardNode(LogicNode condition, GuardingNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated) {
@@ -90,7 +91,7 @@ public final class GuardNode extends FloatingGuardedNode implements Canonicaliza
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (condition() instanceof LogicNegationNode) {
             LogicNegationNode negation = (LogicNegationNode) condition();
             return graph().unique(new GuardNode(negation.getInput(), getGuard(), reason, action, !negated));
@@ -107,8 +108,4 @@ public final class GuardNode extends FloatingGuardedNode implements Canonicaliza
     public void negate() {
         negated = !negated;
     }
-
-    public void setAction(DeoptimizationAction invalidaterecompile) {
-        this.action = invalidaterecompile;
-}
 }

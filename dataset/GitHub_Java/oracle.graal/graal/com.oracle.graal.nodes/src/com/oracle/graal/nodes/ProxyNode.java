@@ -22,10 +22,8 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -42,9 +40,9 @@ public class ProxyNode extends FloatingNode implements IterableNodeType, ValueNu
     @Input(notDataflow = true) private AbstractBeginNode proxyPoint;
     @Input private ValueNode value;
     private final PhiType type;
-    private final LocationIdentity identity;
+    private final Object identity;
 
-    public ProxyNode(ValueNode value, AbstractBeginNode exit, PhiType type, LocationIdentity identity) {
+    public ProxyNode(ValueNode value, AbstractBeginNode exit, PhiType type, Object identity) {
         super(type == PhiType.Value ? value.stamp() : type.stamp);
         this.type = type;
         this.identity = identity;
@@ -70,7 +68,7 @@ public class ProxyNode extends FloatingNode implements IterableNodeType, ValueNu
         return type;
     }
 
-    public LocationIdentity getIdentity() {
+    public Object getIdentity() {
         assert type != PhiType.Value;
         return identity;
     }
@@ -89,7 +87,7 @@ public class ProxyNode extends FloatingNode implements IterableNodeType, ValueNu
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (type == PhiType.Value && value.isConstant()) {
             return value;
         }
@@ -114,7 +112,7 @@ public class ProxyNode extends FloatingNode implements IterableNodeType, ValueNu
         return graph.unique(new ProxyNode(value, exit, PhiType.Value, null));
     }
 
-    public static ProxyNode forMemory(ValueNode value, AbstractBeginNode exit, LocationIdentity location, StructuredGraph graph) {
+    public static ProxyNode forMemory(ValueNode value, AbstractBeginNode exit, Object location, StructuredGraph graph) {
         return graph.unique(new ProxyNode(value, exit, PhiType.Memory, location));
     }
 

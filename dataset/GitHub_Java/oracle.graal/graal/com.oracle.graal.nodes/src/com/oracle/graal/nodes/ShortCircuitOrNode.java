@@ -23,12 +23,12 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodes.spi.*;
 
 public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, Canonicalizable {
 
-    @Input(InputType.Condition) private LogicNode x;
-    @Input(InputType.Condition) private LogicNode y;
+    @Input private LogicNode x;
+    @Input private LogicNode y;
     private boolean xNegated;
     private boolean yNegated;
     private double shortCircuitProbability;
@@ -69,14 +69,14 @@ public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, C
         LogicNode xCond = x;
         boolean xNeg = xNegated;
         while (xCond instanceof LogicNegationNode) {
-            xCond = ((LogicNegationNode) xCond).getValue();
+            xCond = ((LogicNegationNode) xCond).getInput();
             xNeg = !xNeg;
         }
 
         LogicNode yCond = y;
         boolean yNeg = yNegated;
         while (yCond instanceof LogicNegationNode) {
-            yCond = ((LogicNegationNode) yCond).getValue();
+            yCond = ((LogicNegationNode) yCond).getInput();
             yNeg = !yNeg;
         }
 
@@ -88,7 +88,7 @@ public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, C
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public LogicNode canonical(CanonicalizerTool tool) {
         ShortCircuitOrNode ret = canonicalizeNegation();
         if (ret != null) {
             return ret;

@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Logic node that negates its argument.
@@ -40,8 +40,7 @@ public class LogicNegationNode extends LogicNode implements Canonicalizable, Ite
         return input;
     }
 
-    @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (input instanceof LogicNegationNode) {
             return ((LogicNegationNode) input).getInput();
         } else {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,37 +20,39 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.nodes;
+package com.oracle.graal.truffle.nodes.typesystem;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-/**
- * Unwinds the current frame to an exception handler in the caller frame.
- */
-public final class UnwindNode extends ControlSinkNode implements Lowerable, LIRLowerable, IterableNodeType {
+public final class UnsafeCustomizationNode extends FloatingNode implements LIRLowerable, com.oracle.graal.graph.IterableNodeType {
 
-    @Input private ValueNode exception;
+    @Input private ValueNode receiver;
+    private final Object customType;
+    private final Object locationIdentity;
 
-    public ValueNode exception() {
-        return exception;
+    public UnsafeCustomizationNode(ValueNode receiver, Object customType, Object locationIdentity) {
+        super(StampFactory.object());
+        this.receiver = receiver;
+        this.customType = customType;
+        this.locationIdentity = locationIdentity;
     }
 
-    public UnwindNode(ValueNode exception) {
-        super(StampFactory.forVoid());
-        assert exception == null || exception.kind() == Kind.Object;
-        this.exception = exception;
+    public ValueNode getReceiver() {
+        return receiver;
     }
 
-    @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.emitUnwind(gen.operand(exception()));
+    public Object getCustomType() {
+        return customType;
     }
 
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+    public Object getLocationIdentity() {
+        return locationIdentity;
+    }
+
+    public void generate(LIRGeneratorTool generator) {
+        generator.setResult(this, generator.operand(receiver));
     }
 }

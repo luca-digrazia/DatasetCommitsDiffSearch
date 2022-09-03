@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -59,7 +58,7 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
     }
 
     public NewFrameNode(ValueNode descriptor, ValueNode caller, ValueNode arguments) {
-        this(StampFactory.exactNonNull(FRAME_TYPE), descriptor, caller, arguments);
+        this(StampFactory.declaredNonNull(FRAME_TYPE), descriptor, caller, arguments);
     }
 
     public ValueNode getDescriptor() {
@@ -147,7 +146,7 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
         ResolvedJavaField primitiveLocalsField = findField(frameFields, "primitiveLocals");
         ResolvedJavaField tagsField = findField(frameFields, "tags");
 
-        VirtualObjectNode virtualFrame = new VirtualInstanceNode(frameType, frameFields, false);
+        VirtualObjectNode virtualFrame = new VirtualOnlyInstanceNode(frameType, frameFields);
         VirtualObjectNode virtualFrameObjectArray = new VirtualArrayNode((ResolvedJavaType) localsField.getType().getComponentType(), frameSize);
         VirtualObjectNode virtualFramePrimitiveArray = new VirtualArrayNode((ResolvedJavaType) primitiveLocalsField.getType().getComponentType(), frameSize);
         VirtualObjectNode virtualFrameTagArray = new VirtualArrayNode((ResolvedJavaType) tagsField.getType().getComponentType(), frameSize);
@@ -186,14 +185,8 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
     }
 
     private ValueNode initialValue(FrameSlotKind kind) {
-        Kind graalKind = null;
+        Kind graalKind = Kind.Long;
         switch (kind) {
-            case Boolean:
-                graalKind = Kind.Boolean;
-                break;
-            case Byte:
-                graalKind = Kind.Byte;
-                break;
             case Int:
                 graalKind = Kind.Int;
                 break;
@@ -203,24 +196,16 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
             case Float:
                 graalKind = Kind.Float;
                 break;
-            case Long:
-                graalKind = Kind.Long;
+            case Boolean:
+                graalKind = Kind.Boolean;
                 break;
-            case Object:
-                graalKind = Kind.Object;
-                break;
-            case Illegal:
-                graalKind = Kind.Long;
-                break;
-            default:
-                throw new IllegalStateException("Unexpected frame slot kind: " + kind);
         }
 
         return ConstantNode.defaultForKind(graalKind, graph());
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (usages().isEmpty()) {
             return null;
         } else {

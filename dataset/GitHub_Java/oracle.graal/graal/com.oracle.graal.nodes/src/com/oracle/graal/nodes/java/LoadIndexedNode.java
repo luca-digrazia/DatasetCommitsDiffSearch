@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -32,12 +31,11 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code LoadIndexedNode} represents a read from an element of an array.
  */
-@NodeInfo
-public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable {
+public final class LoadIndexedNode extends AccessIndexedNode implements IterableNodeType, Virtualizable {
 
     /**
      * Creates a new LoadIndexedNode.
-     *
+     * 
      * @param array the instruction producing the array
      * @param index the instruction producing the index
      * @param elementKind the element type
@@ -47,7 +45,7 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable 
     }
 
     private static Stamp createStamp(ValueNode array, Kind kind) {
-        ResolvedJavaType type = StampTool.typeOrNull(array);
+        ResolvedJavaType type = ObjectStamp.typeOrNull(array);
         if (kind == Kind.Object && type != null) {
             return StampFactory.declared(type.getComponentType());
         } else {

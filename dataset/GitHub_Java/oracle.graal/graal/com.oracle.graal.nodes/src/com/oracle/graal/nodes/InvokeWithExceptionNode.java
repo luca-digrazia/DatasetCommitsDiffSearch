@@ -248,14 +248,4 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Iterabl
         updateUsages(this.guard == null ? null : this.guard.asNode(), guard == null ? null : guard.asNode());
         this.guard = guard;
     }
-
-    @Override
-    public FrameState getState() {
-        if (deoptState != null) {
-            assert stateAfter() == null;
-            return deoptState;
-        } else {
-            return stateAfter();
-        }
-    }
 }

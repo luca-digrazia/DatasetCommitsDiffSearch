@@ -81,11 +81,6 @@ public class GraphBuilderPhase extends Phase {
 
     protected StructuredGraph currentGraph;
 
-    /**
-     * Head of placeholder list.
-     */
-    protected BlockPlaceholderNode placeholders;
-
     private final MetaAccessProvider runtime;
     private ConstantPool constantPool;
     private ResolvedJavaMethod method;
@@ -114,24 +109,13 @@ public class GraphBuilderPhase extends Phase {
     /**
      * Node that marks the begin of block during bytecode parsing. When a block is identified the
      * first time as a jump target, the placeholder is created and used as the successor for the
-     * jump. When the block is seen the second time, a {@link MergeNode} is created to correctly
-     * merge the now two different predecessor states.
+     * jump. When the block is seen the second time, a MergeNode is created to correctly merge the
+     * now two different predecessor states.
      */
-    private static class BlockPlaceholderNode extends FixedWithNextNode {
+    private static class BlockPlaceholderNode extends FixedWithNextNode implements IterableNodeType {
 
-        // Cannot be explicitly declared as a Node type since it is not an input;
-        // would cause the !NODE_CLASS.isAssignableFrom(type) guarantee
-        // in NodeClass.FieldScanner.scanField() to fail.
-        private final Object nextPlaceholder;
-
-        public BlockPlaceholderNode(GraphBuilderPhase builder) {
+        public BlockPlaceholderNode() {
             super(StampFactory.forVoid());
-            nextPlaceholder = builder.placeholders;
-            builder.placeholders = this;
-        }
-
-        BlockPlaceholderNode nextPlaceholder() {
-            return (BlockPlaceholderNode) nextPlaceholder;
         }
     }
 
@@ -216,13 +200,16 @@ public class GraphBuilderPhase extends Phase {
             lastInstr = genMonitorEnter(methodSynchronizedObject);
         }
         frameState.clearNonLiveLocals(blockMap.startBlock.localsLiveIn);
-        ((StateSplit) lastInstr).setStateAfter(frameState.create(0));
 
         if (graphBuilderConfig.eagerInfopointMode()) {
-            InfopointNode ipn = currentGraph.add(new InfopointNode(InfopointReason.METHOD_START, frameState.create(0)));
+            ((StateSplit) lastInstr).setStateAfter(frameState.create(0));
+            InfopointNode ipn = currentGraph.add(new InfopointNode(InfopointReason.METHOD_START));
             lastInstr.setNext(ipn);
             lastInstr = ipn;
         }
+
+        // finish the start block
+        ((StateSplit) lastInstr).setStateAfter(frameState.create(0));
 
         currentBlock = blockMap.startBlock;
         blockMap.startBlock.entryState = frameState;
@@ -249,12 +236,9 @@ public class GraphBuilderPhase extends Phase {
         connectLoopEndToBegin();
 
         // remove Placeholders
-        for (BlockPlaceholderNode n = placeholders; n != null; n = n.nextPlaceholder()) {
-            if (!n.isDeleted()) {
-                currentGraph.removeFixed(n);
-            }
+        for (BlockPlaceholderNode n : currentGraph.getNodes(BlockPlaceholderNode.class)) {
+            currentGraph.removeFixed(n);
         }
-        placeholders = null;
 
         // remove dead FrameStates
         for (Node n : currentGraph.getNodes(FrameState.class)) {
@@ -321,7 +305,6 @@ public class GraphBuilderPhase extends Phase {
      * @param type the unresolved type of the constant
      */
     protected void handleUnresolvedLoadConstant(JavaType type) {
-        assert !graphBuilderConfig.eagerResolving();
         append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
         frameState.push(Kind.Object, appendConstant(Constant.NULL_OBJECT));
     }
@@ -331,7 +314,6 @@ public class GraphBuilderPhase extends Phase {
      * @param object the object value whose type is being checked against {@code type}
      */
     protected void handleUnresolvedCheckCast(JavaType type, ValueNode object) {
-        assert !graphBuilderConfig.eagerResolving();
         append(new FixedGuardNode(currentGraph.unique(new IsNullNode(object)), Unresolved, InvalidateRecompile));
         frameState.apush(appendConstant(Constant.NULL_OBJECT));
     }
@@ -341,8 +323,7 @@ public class GraphBuilderPhase extends Phase {
      * @param object the object value whose type is being checked against {@code type}
      */
     protected void handleUnresolvedInstanceOf(JavaType type, ValueNode object) {
-        assert !graphBuilderConfig.eagerResolving();
-        BlockPlaceholderNode successor = currentGraph.add(new BlockPlaceholderNode(this));
+        BlockPlaceholderNode successor = currentGraph.add(new BlockPlaceholderNode());
         DeoptimizeNode deopt = currentGraph.add(new DeoptimizeNode(InvalidateRecompile, Unresolved));
         append(new IfNode(currentGraph.unique(new IsNullNode(object)), successor, deopt, 1));
         lastInstr = successor;
@@ -353,7 +334,6 @@ public class GraphBuilderPhase extends Phase {
      * @param type the type being instantiated
      */
     protected void handleUnresolvedNewInstance(JavaType type) {
-        assert !graphBuilderConfig.eagerResolving();
         append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
         frameState.apush(appendConstant(Constant.NULL_OBJECT));
     }
@@ -363,7 +343,6 @@ public class GraphBuilderPhase extends Phase {
      * @param length the length of the array
      */
     protected void handleUnresolvedNewObjectArray(JavaType type, ValueNode length) {
-        assert !graphBuilderConfig.eagerResolving();
         append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
         frameState.apush(appendConstant(Constant.NULL_OBJECT));
     }
@@ -373,7 +352,6 @@ public class GraphBuilderPhase extends Phase {
      * @param dims the dimensions for the multi-array
      */
     protected void handleUnresolvedNewMultiArray(JavaType type, ValueNode[] dims) {
-        assert !graphBuilderConfig.eagerResolving();
         append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
         frameState.apush(appendConstant(Constant.NULL_OBJECT));
     }
@@ -383,7 +361,6 @@ public class GraphBuilderPhase extends Phase {
      * @param receiver the object containing the field or {@code null} if {@code field} is static
      */
     protected void handleUnresolvedLoadField(JavaField field, ValueNode receiver) {
-        assert !graphBuilderConfig.eagerResolving();
         Kind kind = field.getKind();
         append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
         frameState.push(kind.getStackKind(), appendConstant(Constant.defaultForKind(kind)));
@@ -395,7 +372,6 @@ public class GraphBuilderPhase extends Phase {
      * @param receiver the object containing the field or {@code null} if {@code field} is static
      */
     protected void handleUnresolvedStoreField(JavaField field, ValueNode value, ValueNode receiver) {
-        assert !graphBuilderConfig.eagerResolving();
         append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
     }
 
@@ -404,12 +380,10 @@ public class GraphBuilderPhase extends Phase {
      * @param type
      */
     protected void handleUnresolvedExceptionType(Representation representation, JavaType type) {
-        assert !graphBuilderConfig.eagerResolving();
         append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
     }
 
     protected void handleUnresolvedInvoke(JavaMethod javaMethod, InvokeKind invokeKind) {
-        assert !graphBuilderConfig.eagerResolving();
         boolean withReceiver = invokeKind != InvokeKind.Static;
         append(new DeoptimizeNode(InvalidateRecompile, Unresolved));
         frameState.popArguments(javaMethod.getSignature().getParameterSlots(withReceiver), javaMethod.getSignature().getParameterCount(withReceiver));
@@ -951,8 +925,8 @@ public class GraphBuilderPhase extends Phase {
         if (ObjectStamp.isObjectNonNull(receiver.stamp())) {
             return;
         }
-        BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode(this));
-        BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode(this));
+        BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
+        BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
         append(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 0.01));
         lastInstr = falseSucc;
 
@@ -975,8 +949,8 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void emitBoundsCheck(ValueNode index, ValueNode length) {
-        BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode(this));
-        BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode(this));
+        BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
+        BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
         append(new IfNode(currentGraph.unique(new IntegerBelowThanNode(index, length)), trueSucc, falseSucc, 0.99));
         lastInstr = trueSucc;
 
@@ -1173,7 +1147,7 @@ public class GraphBuilderPhase extends Phase {
         }
         if (invokeKind != InvokeKind.Static) {
             emitExplicitExceptions(args[0], null);
-            if (invokeKind != InvokeKind.Special && this.optimisticOpts.useTypeCheckHints()) {
+            if (invokeKind != InvokeKind.Special) {
                 JavaTypeProfile profile = profilingInfo.getTypeProfile(bci());
                 args[0] = TypeProfileProxyNode.create(args[0], profile);
             }
@@ -1474,7 +1448,7 @@ public class GraphBuilderPhase extends Phase {
             // This is the first time we see this block as a branch target.
             // Create and return a placeholder that later can be replaced with a MergeNode when we
             // see this block again.
-            block.firstInstruction = currentGraph.add(new BlockPlaceholderNode(this));
+            block.firstInstruction = currentGraph.add(new BlockPlaceholderNode());
             Target target = checkLoopExit(block.firstInstruction, block, state);
             FixedNode result = target.fixed;
             block.entryState = target.state == state ? state.copy() : target.state;
@@ -1627,13 +1601,19 @@ public class GraphBuilderPhase extends Phase {
         ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
         assert frameState.stackSize() == 0;
 
+        if (Modifier.isSynchronized(method.getModifiers())) {
+            append(new ValueAnchorNode(true, x));
+            assert !frameState.rethrowException();
+        }
+
         synchronizedEpilogue(FrameState.AFTER_BCI);
         if (frameState.lockDepth() != 0) {
             throw new BailoutException("unbalanced monitors");
         }
 
         if (graphBuilderConfig.eagerInfopointMode()) {
-            append(new InfopointNode(InfopointReason.METHOD_END, frameState.create(FrameState.AFTER_BCI)));
+            InfopointNode ipn = append(new InfopointNode(InfopointReason.METHOD_END));
+            ipn.setStateAfter(frameState.create(FrameState.AFTER_BCI));
         }
 
         append(new ReturnNode(x));
@@ -1663,9 +1643,9 @@ public class GraphBuilderPhase extends Phase {
         if (initialized && graphBuilderConfig.getSkippedExceptionTypes() != null) {
             ResolvedJavaType resolvedCatchType = (ResolvedJavaType) catchType;
             for (ResolvedJavaType skippedType : graphBuilderConfig.getSkippedExceptionTypes()) {
-                if (skippedType.isAssignableFrom(resolvedCatchType)) {
-                    append(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
-                    return;
+                initialized &= !skippedType.isAssignableFrom(resolvedCatchType);
+                if (!initialized) {
+                    break;
                 }
             }
         }
@@ -1748,7 +1728,8 @@ public class GraphBuilderPhase extends Phase {
             if (graphBuilderConfig.eagerInfopointMode() && lnt != null) {
                 currentLineNumber = lnt.getLineNumber(bci);
                 if (currentLineNumber != previousLineNumber) {
-                    append(new InfopointNode(InfopointReason.LINE_NUMBER, frameState.create(bci)));
+                    InfopointNode ipn = append(new InfopointNode(InfopointReason.LINE_NUMBER));
+                    ipn.setStateAfter(frameState.create(bci));
                     previousLineNumber = currentLineNumber;
                 }
             }

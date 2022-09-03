@@ -23,18 +23,17 @@
 package com.oracle.graal.nodes.virtual;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-@NodeInfo
 public abstract class VirtualObjectNode extends ValueNode implements LIRLowerable, IterableNodeType {
 
     private boolean hasIdentity;
 
-    public VirtualObjectNode(ResolvedJavaType type, boolean hasIdentity) {
-        super(StampFactory.exactNonNull(type));
+    public VirtualObjectNode(boolean hasIdentity) {
+        super(StampFactory.virtual());
         this.hasIdentity = hasIdentity;
     }
 
@@ -89,10 +88,10 @@ public abstract class VirtualObjectNode extends ValueNode implements LIRLowerabl
      * {@link AllocatedObjectNode} then this node will be attached to a {@link CommitAllocationNode}
      * , otherwise the node will just be added to the graph.
      */
-    public abstract ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks);
+    public abstract ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, int[] locks);
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(LIRGeneratorTool gen) {
         // nothing to do...
     }
 }
