@@ -23,11 +23,11 @@
 package com.oracle.graal.truffle.test;
 
 import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.SourceStackTrace;
 
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.oracle.graal.code.SourceStackTrace;
 import com.oracle.graal.replacements.PEGraphDecoder;
 import com.oracle.graal.truffle.OptimizedCallTarget;
 import com.oracle.graal.truffle.test.nodes.AbstractTestNode;
@@ -83,15 +83,9 @@ public class SimplePartialEvaluationTest extends PartialEvaluationTest {
         } catch (SourceStackTrace t) {
             // Expected verification error occurred.
             StackTraceElement[] trace = t.getStackTrace();
-            assertStack(trace[0], "com.oracle.graal.truffle.test.nodes.NeverPartOfCompilationTestNode", "execute", "NeverPartOfCompilationTestNode.java");
-            assertStack(trace[1], "com.oracle.graal.truffle.test.nodes.RootTestNode", "execute", "RootTestNode.java");
+            Assert.assertTrue(trace[0].toString().startsWith("com.oracle.graal.truffle.test.nodes.NeverPartOfCompilationTestNode.execute(NeverPartOfCompilationTestNode.java:"));
+            Assert.assertTrue(trace[1].toString().startsWith("com.oracle.graal.truffle.test.nodes.RootTestNode.execute(RootTestNode.java:"));
         }
-    }
-
-    private static void assertStack(StackTraceElement stack, String className, String methodName, String fileName) {
-        Assert.assertEquals(className, stack.getClassName());
-        Assert.assertEquals(methodName, stack.getMethodName());
-        Assert.assertEquals(fileName, stack.getFileName());
     }
 
     @Test

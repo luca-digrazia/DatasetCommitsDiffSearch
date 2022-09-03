@@ -29,10 +29,19 @@ import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
 
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -90,16 +99,6 @@ import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.phases.common.inlining.info.InlineInfo;
 import com.oracle.graal.phases.common.instrumentation.nodes.InstrumentationNode;
-
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class InliningUtil {
 
@@ -473,21 +472,14 @@ public class InliningUtil {
     @SuppressWarnings("try")
     private static void updateSourcePositions(Invoke invoke, StructuredGraph inlineGraph, Map<Node, Node> duplicates) {
         if (inlineGraph.mayHaveNodeSourcePosition() && invoke.stateAfter() != null) {
-            if (invoke.asNode().getNodeSourcePosition() == null) {
-                // Temporarily ignore the assert below.
-                return;
-            }
-
             JavaConstant constantReceiver = invoke.getInvokeKind().hasReceiver() ? invoke.getReceiver().asJavaConstant() : null;
-            NodeSourcePosition invokePos = invoke.asNode().getNodeSourcePosition();
-            assert invokePos != null : "missing source information";
-
-            Map<NodeSourcePosition, NodeSourcePosition> posMap = new HashMap<>();
+            NodeSourcePosition outerPos = new NodeSourcePosition(constantReceiver, FrameState.toSourcePosition(invoke.stateAfter().outerFrameState()),
+                            invoke.stateAfter().method(), invoke.bci());
             for (Entry<Node, Node> entry : duplicates.entrySet()) {
                 NodeSourcePosition pos = entry.getKey().getNodeSourcePosition();
                 if (pos != null) {
-                    NodeSourcePosition callerPos = pos.addCaller(constantReceiver, invokePos);
-                    entry.getValue().setNodeSourcePosition(posMap.putIfAbsent(callerPos, callerPos));
+                    NodeSourcePosition newPos = pos.addCaller(outerPos);
+                    entry.getValue().setNodeSourcePosition(newPos);
                 }
             }
         }
