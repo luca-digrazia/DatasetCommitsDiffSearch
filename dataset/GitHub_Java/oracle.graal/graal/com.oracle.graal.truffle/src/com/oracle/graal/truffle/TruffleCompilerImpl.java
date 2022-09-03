@@ -27,22 +27,21 @@ import static com.oracle.graal.compiler.GraalCompiler.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.meta.Assumptions.Assumption;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
-import com.oracle.graal.api.meta.Assumptions.Assumption;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
@@ -64,6 +63,7 @@ public class TruffleCompilerImpl {
     private final Backend backend;
     private final GraphBuilderConfiguration config;
     private final RuntimeProvider runtime;
+    private final TruffleCache truffleCache;
     private final GraalTruffleCompilationListener compilationNotify;
 
     // @formatter:off
@@ -76,7 +76,7 @@ public class TruffleCompilerImpl {
         StringIndexOutOfBoundsException.class,
         ClassCastException.class
     };
-    // @formatter:on
+    // @formatter:off
 
     public static final OptimisticOptimizations Optimizations = OptimisticOptimizations.ALL.remove(OptimisticOptimizations.Optimization.UseExceptionProbability,
                     OptimisticOptimizations.Optimization.RemoveNeverExecutedCode, OptimisticOptimizations.Optimization.UseTypeCheckedInlining, OptimisticOptimizations.Optimization.UseTypeCheckHints);
@@ -86,20 +86,28 @@ public class TruffleCompilerImpl {
         this.runtime = Graal.getRequiredCapability(RuntimeProvider.class);
         this.compilationNotify = graalTruffleRuntime.getCompilationNotify();
         this.backend = runtime.getHostBackend();
+        Replacements truffleReplacements = graalTruffleRuntime.getReplacements();
         Providers backendProviders = backend.getProviders();
         ConstantReflectionProvider constantReflection = new TruffleConstantReflectionProvider(backendProviders.getConstantReflection(), backendProviders.getMetaAccess());
+        if (!TruffleCompilerOptions.FastPE.getValue()) {
+            backendProviders = backendProviders.copyWith(truffleReplacements);
+        }
         this.providers = backendProviders.copyWith(constantReflection);
         this.suites = backend.getSuites().getDefaultSuites();
         this.lirSuites = backend.getSuites().getDefaultLIRSuites();
 
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
+        GraphBuilderConfiguration eagerConfig = GraphBuilderConfiguration.getEagerDefault().withSkippedExceptionTypes(skippedExceptionTypes);
 
-        GraphBuilderPhase phase = (GraphBuilderPhase) backend.getSuites().getDefaultGraphBuilderSuite().findPhase(GraphBuilderPhase.class).previous();
-        InvocationPlugins invocationPlugins = new InvocationPlugins(phase.getGraphBuilderConfig().getPlugins().getInvocationPlugins());
-        Plugins plugins = new Plugins(invocationPlugins);
-        this.config = GraphBuilderConfiguration.getDefault(plugins).withSkippedExceptionTypes(skippedExceptionTypes);
+        this.config = GraphBuilderConfiguration.getDefault().withSkippedExceptionTypes(skippedExceptionTypes);
+        if (TruffleCompilerOptions.FastPE.getValue()) {
+            GraphBuilderPhase phase = (GraphBuilderPhase) backend.getSuites().getDefaultGraphBuilderSuite().findPhase(GraphBuilderPhase.class).previous();
+            this.config.getPlugins().getInvocationPlugins().setDefaults(phase.getGraphBuilderConfig().getPlugins().getInvocationPlugins());
+        }
 
-        this.partialEvaluator = new PartialEvaluator(providers, config, Graal.getRequiredCapability(SnippetReflectionProvider.class));
+        this.truffleCache = new TruffleCacheImpl(providers, eagerConfig, TruffleCompilerImpl.Optimizations);
+
+        this.partialEvaluator = new PartialEvaluator(providers, config, truffleCache, Graal.getRequiredCapability(SnippetReflectionProvider.class));
 
         if (Debug.isEnabled()) {
             DebugEnvironment.initialize(System.out);
@@ -160,8 +168,8 @@ public class TruffleCompilerImpl {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
             CompilationResult compilationResult = new CompilationResult(name);
-            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), graphBuilderSuite, Optimizations, getProfilingInfo(graph), speculationLog, suites, lirSuites,
-                            compilationResult, CompilationResultBuilderFactory.Default);
+            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, graphBuilderSuite, Optimizations, getProfilingInfo(graph), speculationLog, suites,
+                            lirSuites, compilationResult, CompilationResultBuilderFactory.Default);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
