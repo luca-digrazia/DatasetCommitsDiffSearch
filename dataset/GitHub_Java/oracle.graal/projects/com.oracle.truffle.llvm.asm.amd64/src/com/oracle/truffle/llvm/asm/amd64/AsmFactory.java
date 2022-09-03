@@ -202,10 +202,7 @@ import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteValueNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.syscall.LLVMAMD64SyscallNodeGen;
 import com.oracle.truffle.llvm.nodes.cast.LLVMToAddressNodeGen;
 import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeFactory.LLVMToI16NoZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeFactory.LLVMToI16ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI1NodeGen.LLVMToI1NoZeroExtNodeGen;
 import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeGen.LLVMToI32NoZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeGen.LLVMToI32ZeroExtNodeGen;
 import com.oracle.truffle.llvm.nodes.cast.LLVMToI64NodeGen.LLVMToI64NoZeroExtNodeGen;
 import com.oracle.truffle.llvm.nodes.cast.LLVMToI64NodeGen.LLVMToI64ZeroExtNodeGen;
 import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeGen.LLVMToI8NoZeroExtNodeGen;
@@ -289,9 +286,6 @@ class AsmFactory {
         int outIndex = 0;
 
         for (String token : tokens) {
-            if (token.isEmpty()) {
-                continue;
-            }
             boolean isTilde = false;
             boolean isInput = true;
             boolean isOutput = false;
@@ -1126,7 +1120,7 @@ class AsmFactory {
             }
             case "cmpxchg": {
                 if (dstType instanceof PointerType) {
-                    // treat pointers as I64
+                    // dstType = PrimitiveType.I64;
                     dstPrimitiveType = PrimitiveKind.I64;
                 }
                 if (dstType instanceof PrimitiveType || dstType instanceof PointerType) {
@@ -1328,45 +1322,17 @@ class AsmFactory {
             case "movq":
                 out = srcA;
                 break;
-            case "movsbw":
-                srcA = getOperandLoad(PrimitiveType.I8, a);
-                out = LLVMToI16NoZeroExtNodeGen.create(srcA);
-                break;
-            case "movsbl":
-                srcA = getOperandLoad(PrimitiveType.I8, a);
-                out = LLVMToI32NoZeroExtNodeGen.create(srcA);
-                break;
             case "movsbq":
                 srcA = getOperandLoad(PrimitiveType.I8, a);
                 out = LLVMToI64NoZeroExtNodeGen.create(srcA);
-                break;
-            case "movswl":
-                srcA = getOperandLoad(PrimitiveType.I16, a);
-                out = LLVMToI32NoZeroExtNodeGen.create(srcA);
                 break;
             case "movswq":
                 srcA = getOperandLoad(PrimitiveType.I16, a);
                 out = LLVMToI64NoZeroExtNodeGen.create(srcA);
                 break;
-            case "movslq":
-                srcA = getOperandLoad(PrimitiveType.I32, a);
-                out = LLVMToI64NoZeroExtNodeGen.create(srcA);
-                break;
-            case "movzbw":
-                srcA = getOperandLoad(PrimitiveType.I8, a);
-                out = LLVMToI16ZeroExtNodeGen.create(srcA);
-                break;
-            case "movzbl":
-                srcA = getOperandLoad(PrimitiveType.I8, a);
-                out = LLVMToI32ZeroExtNodeGen.create(srcA);
-                break;
             case "movzbq":
                 srcA = getOperandLoad(PrimitiveType.I8, a);
                 out = LLVMToI64ZeroExtNodeGen.create(srcA);
-                break;
-            case "movzwl":
-                srcA = getOperandLoad(PrimitiveType.I16, a);
-                out = LLVMToI32ZeroExtNodeGen.create(srcA);
                 break;
             case "movzwq":
                 srcA = getOperandLoad(PrimitiveType.I16, a);
@@ -1771,7 +1737,7 @@ class AsmFactory {
             this.result = StructLiteralNodeGen.create(retOffsets, retTypes, writeNodes, valueNodes, addr);
         }
 
-        todoRegisters.remove("rsp"); // rsp is initialized to stack pointer; ignore it here
+        todoRegisters.remove("rsp");
         // initialize registers
         for (String register : todoRegisters) {
             if (register.startsWith("$")) {
@@ -1793,8 +1759,7 @@ class AsmFactory {
 
         // copy stack pointer
         LLVMExpressionNode stackPointer = LLVMArgNodeGen.create(0);
-        FrameSlot stackSlot = frameDescriptor.addFrameSlot(LLVMStack.FRAME_ID);
-        stackSlot.setKind(FrameSlotKind.Long);
+        frameDescriptor.addFrameSlot(LLVMStack.FRAME_ID);
         arguments.add(LLVMWriteI64NodeGen.create(stackPointer, frameDescriptor.findFrameSlot(LLVMStack.FRAME_ID), sourceSection));
 
         LLVMExpressionNode node = LLVMToAddressNodeGen.create(stackPointer, PrimitiveType.I64);
@@ -1808,8 +1773,6 @@ class AsmFactory {
             return LLVMToAddressNodeGen.create(register, PrimitiveType.I64);
         }
         switch (((PrimitiveType) retType).getPrimitiveKind()) {
-            case I1:
-                return LLVMToI1NoZeroExtNodeGen.create(register);
             case I8:
                 return LLVMToI8NoZeroExtNodeGen.create(register);
             case I16:
