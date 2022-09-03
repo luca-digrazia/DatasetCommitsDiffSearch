@@ -22,22 +22,25 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import java.lang.reflect.InvocationTargetException;
-
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.espresso.impl.Method;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 
-public class IntrinsicReflectionRootNode extends EspressoRootNode {
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 
-    private final java.lang.reflect.Method reflectMethod;
+public class IntrinsicReflectionRootNode extends RootNode implements LinkedNode {
 
-    public IntrinsicReflectionRootNode(java.lang.reflect.Method reflectMethod, Method method) {
-        super(method);
-        this.reflectMethod = reflectMethod;
+    private final Method method;
+    private Meta.Method originalMethod;
+
+    public IntrinsicReflectionRootNode(EspressoLanguage language, Method method) {
+        super(language);
+        this.method = method;
     }
 
     @Override
@@ -60,8 +63,17 @@ public class IntrinsicReflectionRootNode extends EspressoRootNode {
         }
     }
 
-    @TruffleBoundary
+    @CompilerDirectives.TruffleBoundary
     private Object callIntrinsic(Object... args) throws InvocationTargetException, IllegalAccessException {
-        return reflectMethod.invoke(null, args);
+        return method.invoke(null, args);
+    }
+
+    @Override
+    public Meta.Method getOriginalMethod() {
+        return originalMethod;
+    }
+
+    public void setOriginalMethod(Meta.Method originalMethod) {
+        this.originalMethod = originalMethod;
     }
 }

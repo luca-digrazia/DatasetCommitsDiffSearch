@@ -22,8 +22,8 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.espresso.bytecode.OperandStack;
 import com.oracle.truffle.espresso.impl.MethodInfo;
 
 public final class InvokeSpecialNode extends InvokeNode {
@@ -36,12 +36,11 @@ public final class InvokeSpecialNode extends InvokeNode {
     }
 
     @Override
-    public void invoke(final VirtualFrame frame) {
+    public void invoke(OperandStack stack) {
         // TODO(peterssen): Constant fold this check.
-        EspressoRootNode root = (EspressoRootNode) getParent();
-        nullCheck(root.peekReceiver(frame, method));
-        Object[] arguments = root.popArguments(frame, true, method.getSignature());
+        nullCheck(stack.peekReceiver(method));
+        Object[] arguments = stack.popArguments(true, method.getSignature());
         Object result = directCallNode.call(arguments);
-        root.pushKind(frame, result, method.getSignature().getReturnTypeDescriptor().toKind());
+        stack.pushKind(result, method.getSignature().getReturnTypeDescriptor().toKind());
     }
 }
