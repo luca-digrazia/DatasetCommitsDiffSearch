@@ -133,10 +133,9 @@ public class ReplacementsImpl implements Replacements {
         }
         StructuredGraph graph = graphs.get(substitute);
         if (graph == null) {
-            graph = makeGraph(substitute, original, substitute, inliningPolicy(substitute), FrameStateProcessing.None);
-            graph.freeze();
-            graphs.putIfAbsent(substitute, graph);
+            graphs.putIfAbsent(substitute, makeGraph(substitute, original, substitute, inliningPolicy(substitute), FrameStateProcessing.None));
             graph = graphs.get(substitute);
+            graph.freeze();
         }
         assert graph.isFrozen();
         return graph;
@@ -201,9 +200,7 @@ public class ReplacementsImpl implements Replacements {
                     }
                 }
             }
-            // We don't have per method guards for macro substitutions but at least respect the
-            // defaultGuard if there is one.
-            if (macroSubstitution != null && (defaultGuard == null || defaultGuard.execute())) {
+            if (macroSubstitution != null) {
                 String originalName = originalName(substituteMethod, macroSubstitution.value());
                 JavaSignature originalSignature = originalSignature(substituteMethod, macroSubstitution.signature(), macroSubstitution.isStatic());
                 Member originalMethod = originalMethod(classSubstitution, macroSubstitution.optional(), originalName, originalSignature);
@@ -452,7 +449,7 @@ public class ReplacementsImpl implements Replacements {
 
                 for (MethodCallTargetNode callTarget : graph.getNodes(MethodCallTargetNode.class)) {
                     ResolvedJavaMethod callee = callTarget.targetMethod();
-                    if (callee.equals(recursiveEntry)) {
+                    if (callee == recursiveEntry) {
                         if (isInlinableSnippet(substitutedMethod)) {
                             final StructuredGraph originalGraph = buildInitialGraph(substitutedMethod);
                             InliningUtil.inline(callTarget.invoke(), originalGraph, true);
