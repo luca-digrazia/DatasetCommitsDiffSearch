@@ -32,26 +32,12 @@ package com.oracle.truffle.llvm.nodes.impl.op.compare;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI1Node;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 
 @NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMAddressNode.class)})
 public abstract class LLVMAddressCompareNode extends LLVMI1Node {
-
-    public abstract static class LLVMAddressEqNode extends LLVMAddressCompareNode {
-        @Specialization
-        public boolean executeI1(LLVMAddress val1, LLVMAddress val2) {
-            return val1.equals(val2);
-        }
-
-        @Specialization
-        public boolean executeI1(TruffleObject val1, TruffleObject val2) {
-            return val1 == val2;
-        }
-
-    }
 
     public abstract static class LLVMAddressUltNode extends LLVMAddressCompareNode {
         @Specialization
@@ -79,19 +65,6 @@ public abstract class LLVMAddressCompareNode extends LLVMI1Node {
         public boolean executeI1(LLVMAddress val1, LLVMAddress val2) {
             return val1.unsignedLessEquals(val2);
         }
-    }
-
-    public abstract static class LLVMAddressNeNode extends LLVMAddressCompareNode {
-        @Specialization
-        public boolean executeI1(LLVMAddress val1, LLVMAddress val2) {
-            return !val1.equals(val2);
-        }
-
-        @Specialization
-        public boolean executeI1(TruffleObject val1, TruffleObject val2) {
-            return val1 != val2;
-        }
-
     }
 
     public abstract static class LLVMAddressSleNode extends LLVMAddressCompareNode {
