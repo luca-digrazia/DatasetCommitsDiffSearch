@@ -26,23 +26,25 @@ import org.junit.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.asm.test.*;
 
-public class SimpleAssemblerTest extends AssemblerTest {
+public class SimpleAssemblerTest extends AssemblerTest<AMD64MacroAssembler> {
+
+    @Override
+    protected AMD64MacroAssembler createAssembler(TargetDescription target, RegisterConfig registerConfig) {
+        return new AMD64MacroAssembler(target, registerConfig);
+    }
 
     @Test
     public void intTest() {
-        CodeGenTest test = new CodeGenTest() {
+        CodeGenTest<AMD64Assembler> test = new CodeGenTest<AMD64Assembler>() {
 
             @Override
-            public Buffer generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig) {
-                AMD64Assembler asm = new AMD64Assembler(target, registerConfig);
+            public void generateCode(CompilationResult compResult, AMD64Assembler asm, RegisterConfig registerConfig) {
                 Register ret = registerConfig.getReturnRegister(Kind.Int);
                 asm.movl(ret, 8472);
                 asm.ret(0);
-                return asm.codeBuffer;
             }
         };
         assertReturn("intStub", test, 8472);
@@ -50,16 +52,14 @@ public class SimpleAssemblerTest extends AssemblerTest {
 
     @Test
     public void doubleTest() {
-        CodeGenTest test = new CodeGenTest() {
+        CodeGenTest<AMD64MacroAssembler> test = new CodeGenTest<AMD64MacroAssembler>() {
 
             @Override
-            public Buffer generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig) {
-                AMD64MacroAssembler asm = new AMD64MacroAssembler(target, registerConfig);
+            public void generateCode(CompilationResult compResult, AMD64MacroAssembler asm, RegisterConfig registerConfig) {
                 Register ret = registerConfig.getReturnRegister(Kind.Double);
                 compResult.recordDataReference(asm.codeBuffer.position(), Constant.forDouble(84.72), 8, false);
                 asm.movdbl(ret, Address.Placeholder);
                 asm.ret(0);
-                return asm.codeBuffer;
             }
         };
         assertReturn("doubleStub", test, 84.72);
