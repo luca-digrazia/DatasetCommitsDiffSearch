@@ -25,15 +25,20 @@ package com.oracle.truffle.sl.nodes.local;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.sl.nodes.*;
 
 /**
  * Node to write a local variable to a function's {@link VirtualFrame frame}. The Truffle frame API
  * allows to store primitive values of all Java primitive types, and Object values.
  */
-@NodeChild(value = "valueNode")
+@NodeChild("valueNode")
 @NodeField(name = "slot", type = FrameSlot.class)
 public abstract class SLWriteLocalVariableNode extends SLExpressionNode {
+
+    public SLWriteLocalVariableNode(SourceSection src) {
+        super(src);
+    }
 
     /**
      * Returns the descriptor of the accessed local variable. The implementation of this method is
@@ -44,16 +49,16 @@ public abstract class SLWriteLocalVariableNode extends SLExpressionNode {
     /**
      * Specialized method to write a primitive {@code long} value. This is only possible if the
      * local variable also has currently the type {@code long}, therefore a Truffle DSL
-     * {@link #isLongKind() custom guard} is specified.
+     * {@link #isLongKind(VirtualFrame) custom guard} is specified.
      */
-    @Specialization(guards = "isLongKind")
-    protected long write(VirtualFrame frame, long value) {
+    @Specialization(guards = "isLongKind(frame)")
+    protected long writeLong(VirtualFrame frame, long value) {
         frame.setLong(getSlot(), value);
         return value;
     }
 
-    @Specialization(guards = "isBooleanKind")
-    protected boolean write(VirtualFrame frame, boolean value) {
+    @Specialization(guards = "isBooleanKind(frame)")
+    protected boolean writeBoolean(VirtualFrame frame, boolean value) {
         frame.setBoolean(getSlot(), value);
         return value;
     }
@@ -61,14 +66,14 @@ public abstract class SLWriteLocalVariableNode extends SLExpressionNode {
     /**
      * Generic write method that works for all possible types.
      * <p>
-     * Why is this method annotated with {@link Specialization} and not {@link Generic}? For a
-     * {@link Generic} method, the Truffle DSL generated code would try all other specializations
+     * Why is this method annotated with {@link Specialization} and not {@link Fallback}? For a
+     * {@link Fallback} method, the Truffle DSL generated code would try all other specializations
      * first before calling this method. We know that all these specializations would fail their
      * guards, so there is no point in calling them. Since this method takes a value of type
      * {@link Object}, it is guaranteed to never fail, i.e., once we are in this specialization the
      * node will never be re-specialized.
      */
-    @Specialization
+    @Specialization(contains = {"writeLong", "writeBoolean"})
     protected Object write(VirtualFrame frame, Object value) {
         if (getSlot().getKind() != FrameSlotKind.Object) {
             /*
@@ -86,11 +91,13 @@ public abstract class SLWriteLocalVariableNode extends SLExpressionNode {
     /**
      * Guard function that the local variable has the type {@code long}.
      */
-    protected boolean isLongKind() {
+    @SuppressWarnings("unused")
+    protected boolean isLongKind(VirtualFrame frame) {
         return isKind(FrameSlotKind.Long);
     }
 
-    protected boolean isBooleanKind() {
+    @SuppressWarnings("unused")
+    protected boolean isBooleanKind(VirtualFrame frame) {
         return isKind(FrameSlotKind.Boolean);
     }
 
