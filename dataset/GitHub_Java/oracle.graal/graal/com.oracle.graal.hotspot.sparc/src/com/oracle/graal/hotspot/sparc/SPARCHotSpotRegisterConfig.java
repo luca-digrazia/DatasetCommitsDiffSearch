@@ -95,6 +95,11 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
 
     private final CalleeSaveLayout csl;
 
+    /**
+     * Offset where the extended arguments resides in the stack.
+     */
+    private final int extendedArgumentOffset = 16 * 8;
+
     private static Register findRegister(String name, Register[] all) {
         for (Register reg : all) {
             if (reg.name.equals(name)) {
@@ -195,7 +200,7 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
 
         int currentGeneral = 0;
         int currentFloating = 0;
-        int currentStackOffset = 0;
+        int currentStackOffset = extendedArgumentOffset;
 
         for (int i = 0; i < parameterTypes.length; i++) {
             final Kind kind = parameterTypes[i].getKind();
@@ -235,14 +240,8 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
             }
 
             if (locations[i] == null) {
-                // Stack slot is always aligned to its size in bytes
-                int typeSize = target.getSizeInBytes(kind);
-                int modulus = currentStackOffset % typeSize;
-                if (modulus != 0) {
-                    currentStackOffset += typeSize - modulus;
-                }
                 locations[i] = StackSlot.get(target.getLIRKind(kind.getStackKind()), currentStackOffset, !type.out);
-                currentStackOffset += typeSize;
+                currentStackOffset += Math.max(target.getSizeInBytes(kind), target.wordSize);
             }
         }
 
