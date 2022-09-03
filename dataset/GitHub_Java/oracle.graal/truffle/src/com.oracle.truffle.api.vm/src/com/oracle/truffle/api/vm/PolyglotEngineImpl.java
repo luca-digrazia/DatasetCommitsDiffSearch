@@ -71,7 +71,6 @@ import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.ThreadsListener;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
-import org.graalvm.polyglot.io.FileSystem;
 
 @SuppressWarnings("deprecation")
 class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractEngineImpl implements com.oracle.truffle.api.vm.PolyglotImpl.VMObject {
@@ -703,14 +702,8 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     static PolyglotEngineImpl preInitialize(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, ClassLoader contextClassLoader) {
         final PolyglotEngineImpl engine = new PolyglotEngineImpl(impl, out, err, in, new HashMap<>(), 0, null, false, true, contextClassLoader, true, true);
         synchronized (engine) {
-            try {
-                engine.preInitializedContext = PolyglotContextImpl.preInitialize(engine);
-                engine.addContext(engine.preInitializedContext);
-            } finally {
-                // Reset language homes from native-image compilatio time, will be recomputed in
-                // image execution time
-                LanguageCache.resetNativeImageCacheLanguageHomes();
-            }
+            engine.preInitializedContext = PolyglotContextImpl.preInitialize(engine);
+            engine.addContext(engine.preInitializedContext);
         }
         return engine;
     }
@@ -873,8 +866,8 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     @Override
     @SuppressWarnings({"all"})
     public synchronized Context createContext(OutputStream out, OutputStream err, InputStream in, boolean allowHostAccess,
-                    boolean allowCreateThread, boolean allowHostIO, boolean allowHostClassLoading,
-                    Predicate<String> classFilter, Map<String, String> options, Map<String, String[]> arguments, String[] onlyLanguages, FileSystem fileSystem) {
+                    boolean allowCreateThread, Predicate<String> classFilter,
+                    Map<String, String> options, Map<String, String[]> arguments, String[] onlyLanguages) {
         checkState();
         if (boundEngine && preInitializedContext == null && !contexts.isEmpty()) {
             throw new IllegalArgumentException("Automatically created engines cannot be used to create more than one context. " +
@@ -887,18 +880,12 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         } else {
             allowedLanguages = new HashSet<>(Arrays.asList(onlyLanguages));
         }
-        final FileSystem fs;
-        if (allowHostIO) {
-            fs = fileSystem != null ? fileSystem : FileSystems.getDefaultFileSystem();
-        } else {
-            fs = FileSystems.newNoIOFileSystem();
-        }
         PolyglotContextImpl contextImpl = preInitializedContext;
         preInitializedContext = null;
         if (contextImpl != null) {
             boolean patchResult;
             try {
-                patchResult = contextImpl.patch(out, err, in, allowHostAccess, allowCreateThread, allowHostClassLoading, classFilter, options, arguments, allowedLanguages, fs);
+                patchResult = contextImpl.patch(out, err, in, allowHostAccess, allowCreateThread, classFilter, options, arguments, allowedLanguages);
             } catch (RuntimeException re) {
                 contextImpl.closeImpl(false, false);
                 PolyglotContextImpl.disposeStaticContext(null);
@@ -911,7 +898,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             }
         }
         if (contextImpl == null) {
-            contextImpl = new PolyglotContextImpl(this, out, err, in, allowHostAccess, allowCreateThread, allowHostClassLoading, classFilter, options, arguments, allowedLanguages, fs);
+            contextImpl = new PolyglotContextImpl(this, out, err, in, allowHostAccess, allowCreateThread, classFilter, options, arguments, allowedLanguages);
             addContext(contextImpl);
         }
         Context api = impl.getAPIAccess().newContext(contextImpl);

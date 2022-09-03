@@ -58,7 +58,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleContext;
-import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.Frame;
@@ -76,7 +75,6 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.ComputeInExecutor.Info;
 import com.oracle.truffle.api.vm.PolyglotRootNode.EvalRootNode;
-import org.graalvm.polyglot.io.FileSystem;
 
 /**
  * @since 0.9
@@ -950,7 +948,7 @@ public class PolyglotEngine {
                     localEnv = env;
                     if (localEnv == null && create) {
                         localEnv = VMAccessor.LANGUAGE.createEnv(this, shared.getLanguageEnsureInitialized(), engine().out, engine().err, engine().in,
-                                        getArgumentsForLanguage(), new OptionValuesImpl(null, shared.options), new String[0], FileSystems.newNoIOFileSystem(null));
+                                        getArgumentsForLanguage(), new OptionValuesImpl(null, shared.options), new String[0]);
                         this.env = localEnv;
                         context = VMAccessor.LANGUAGE.createEnvContext(localEnv);
                         VMAccessor.LANGUAGE.postInitEnv(localEnv);
@@ -1050,11 +1048,6 @@ public class PolyglotEngine {
             Object vmObject = VMAccessor.LANGUAGE.getVMObject(info);
             Instrument instrument = (Instrument) vmObject;
             return instrument.lookup(serviceClass);
-        }
-
-        @Override
-        public void addToHostClassPath(Object vmObject, TruffleFile entries) {
-            // not supported
         }
 
         @Override
@@ -1481,16 +1474,6 @@ public class PolyglotEngine {
         @Override
         public Class<? extends TruffleLanguage<?>> getLanguageClass(LanguageInfo language) {
             return ((PolyglotRuntime.LanguageShared) VMAccessor.NODES.getEngineObject(language)).cache.getLanguageClass();
-        }
-
-        @Override
-        public boolean isDefaultFileSystem(FileSystem fs) {
-            return false;
-        }
-
-        @Override
-        public String getLanguageHome(Object engineObject) {
-            return ((PolyglotRuntime.LanguageShared) engineObject).cache.getLanguageHome();
         }
     }
 }
