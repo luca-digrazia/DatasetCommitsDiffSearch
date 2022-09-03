@@ -517,7 +517,7 @@ final class DIScopeBuilder {
         return new LazySourceSectionImpl(sources, path, (int) startLine, (int) startCol, needsRange);
     }
 
-    private static Source asSource(Map<Path, Source> sources, Path path) {
+    private static Source asSource(Map<String, Source> sources, String path) {
         if (sources.containsKey(path)) {
             return sources.get(path);
         } else if (path == null) {
@@ -537,13 +537,6 @@ final class DIScopeBuilder {
         if (source == null) {
             final String sourceText = STDIN_FILENAME.equals(path) ? STDIN_SOURCE_TEXT : path;
             source = Source.newBuilder(sourceText).mimeType(MIMETYPE_UNAVAILABLE).name(sourceText).build();
-        }
-
-        if (source == null) {
-            try {
-                source = Source.newBuilder(path).mimeType(MIMETYPE_UNAVAILABLE).name(path).build();
-            } catch (Throwable ignored) {
-            }
         }
 
         sources.put(path, source);
