@@ -29,7 +29,6 @@ import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.java.*;
 import com.oracle.max.graal.nodes.spi.*;
-import com.oracle.max.graal.nodes.util.*;
 
 /**
  * The {@code InvokeNode} represents all kinds of method calls.
@@ -71,9 +70,7 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
     @Override
     public Map<Object, Object> getDebugProperties() {
         Map<Object, Object> debugProperties = super.getDebugProperties();
-        if (callTarget != null && callTarget.targetMethod() != null) {
-            debugProperties.put("targetMethod", CiUtil.format("%h.%n(%p)", callTarget.targetMethod()));
-        }
+        debugProperties.put("targetMethod", CiUtil.format("%h.%n(%p)", callTarget.targetMethod()));
         return debugProperties;
     }
 
@@ -87,9 +84,6 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
         if (verbosity == Verbosity.Long) {
             return super.toString(Verbosity.Short) + "(bci=" + bci() + ")";
         } else if (verbosity == Verbosity.Name) {
-            if (callTarget == null || callTarget.targetMethod() == null) {
-                return "Invoke#??Invalid!";
-            }
             return "Invoke#" + callTarget.targetMethod().name();
         } else {
             return super.toString(verbosity);
@@ -123,15 +117,7 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
             assert kind() == CiKind.Void && usages().isEmpty();
             ((StructuredGraph) graph()).removeFixed(this);
         } else {
-            if (node instanceof FixedWithNextNode) {
-                ((StructuredGraph) graph()).replaceFixedWithFixed(this, (FixedWithNextNode) node);
-            } else if (node instanceof DeoptimizeNode) {
-                this.replaceAtPredecessors(node);
-                this.replaceAtUsages(null);
-                GraphUtil.killCFG(this);
-            } else {
-                ((StructuredGraph) graph()).replaceFixed(this, node);
-            }
+            ((StructuredGraph) graph()).replaceFixed(this, node);
         }
         call.safeDelete();
         if (stateAfter.usages().isEmpty()) {

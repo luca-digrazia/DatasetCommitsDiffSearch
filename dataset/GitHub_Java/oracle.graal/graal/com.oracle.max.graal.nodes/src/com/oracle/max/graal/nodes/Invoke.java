@@ -52,8 +52,4 @@ public interface Invoke extends StateSplit {
     boolean useForInlining();
 
     void setUseForInlining(boolean value);
-
-    boolean megamorph();
-
-    void setMegamorph(boolean megamorph);
 }
