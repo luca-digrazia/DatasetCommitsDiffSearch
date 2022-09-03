@@ -27,14 +27,13 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.*;
 
-public final class LinearScanPhase extends AllocationPhase {
+public final class LinearScanPhase extends LIRMidTierPhase {
 
     @Override
-    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory) {
-        new LinearScan(target, lirGenRes, spillMoveFactory).allocate();
+    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
+        new LinearScan(target, lirGenRes).allocate();
     }
 
 }

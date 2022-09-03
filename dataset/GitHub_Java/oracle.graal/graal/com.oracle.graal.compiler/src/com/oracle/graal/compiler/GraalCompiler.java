@@ -342,7 +342,7 @@ public class GraalCompiler {
                 throw Debug.handle(e);
             }
 
-            try (Scope s = Debug.scope("LIRTier", nodeLirGen)) {
+            try (Scope s = Debug.scope("LowLevelTier", nodeLirGen)) {
                 return emitLowLevel(target, codeEmittingOrder, linearScanOrder, lirGenRes, lirGen, lirSuites);
             } catch (Throwable e) {
                 throw Debug.handle(e);
