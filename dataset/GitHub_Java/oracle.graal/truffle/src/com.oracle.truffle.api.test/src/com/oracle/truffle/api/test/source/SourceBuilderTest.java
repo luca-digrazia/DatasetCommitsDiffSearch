@@ -331,7 +331,7 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
     @Test
     public void noIOWhenContentSpecified() {
         setupEnv();
-        File file = new File("some.tjs");
+        File file = new File("some.js");
 
         String text = "// Hello";
         final TruffleFile truffleFile = languageEnv.getTruffleFile(file.getAbsolutePath());
@@ -340,20 +340,20 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
         assertEquals("The content has been changed", text, source.getCharacters());
         assertNotNull("Mime type specified", source.getMimeType());
         assertTrue("Recognized as JavaScript", source.getMimeType().equals("text/javascript"));
-        assertEquals("some.tjs", source.getName());
+        assertEquals("some.js", source.getName());
     }
 
     @Test
     public void fromTextWithFileURI() {
-        File file = new File("some.tjs");
+        File file = new File("some.js");
 
         String text = "// Hello";
 
-        Source source = Source.newBuilder("lang", text, "another.tjs").uri(file.toURI()).build();
+        Source source = Source.newBuilder("lang", text, "another.js").uri(file.toURI()).build();
         assertEquals("The content has been changed", text, source.getCharacters());
         assertNull("Mime type not specified", source.getMimeType());
         assertNull("Null MIME type", source.getMimeType());
-        assertEquals("another.tjs", source.getName());
+        assertEquals("another.js", source.getName());
         assertEquals("Using the specified URI", file.toURI(), source.getURI());
     }
 
@@ -438,18 +438,18 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
         File sample = File.createTempFile("sample", ".jar");
         sample.deleteOnExit();
         JarOutputStream os = new JarOutputStream(new FileOutputStream(sample));
-        os.putNextEntry(new ZipEntry("x.tjs"));
+        os.putNextEntry(new ZipEntry("x.js"));
         byte[] bytes = "Hi!".getBytes("UTF-8");
         os.write(bytes);
         os.closeEntry();
         os.close();
 
-        URL resource = new URL("jar:" + sample.toURI() + "!/x.tjs");
+        URL resource = new URL("jar:" + sample.toURI() + "!/x.js");
         assertNotNull("Resource found", resource);
         assertEquals("JAR protocol", "jar", resource.getProtocol());
         Source s = Source.newBuilder("TestJS", resource).build();
         Assert.assertArrayEquals(bytes, s.getBytes().toByteArray());
-        assertEquals("x.tjs", s.getName());
+        assertEquals("x.js", s.getName());
 
         sample.delete();
     }
@@ -554,8 +554,8 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
     @Test
     public void subSourceFromTwoFiles() throws Exception {
         setupEnv();
-        File f1 = File.createTempFile("subSource", ".tjs").getCanonicalFile();
-        File f2 = File.createTempFile("subSource", ".tjs").getCanonicalFile();
+        File f1 = File.createTempFile("subSource", ".js").getCanonicalFile();
+        File f2 = File.createTempFile("subSource", ".js").getCanonicalFile();
 
         try (FileWriter w = new FileWriter(f1)) {
             w.write("function test() {\n" + "  return 1;\n" + "}\n");
@@ -659,7 +659,7 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
 
     }
 
-    @Registration(id = "TestJS", name = "", byteMimeTypes = "application/test-js")
+    @Registration(id = "TestJS", name = "", byteMimeTypes = "application/javascript")
     public static class TestJSLanguage extends ProxyLanguage {
 
     }
