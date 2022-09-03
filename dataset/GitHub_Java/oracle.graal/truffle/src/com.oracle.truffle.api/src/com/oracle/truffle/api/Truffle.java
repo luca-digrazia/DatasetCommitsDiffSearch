@@ -63,9 +63,7 @@ public class Truffle {
                 selectedAccess = access;
             } else {
                 if (selectedAccess.getPriority() == access.getPriority()) {
-                    throw new InternalError(String.format("Providers for %s with same priority %d: %s vs. %s",
-                                    TruffleRuntimeAccess.class.getName(), access.getPriority(),
-                                    selectedAccess.getClass().getName(), access.getClass().getName()));
+                    throw new InternalError(String.format("Multiple %s providers with same priority found", TruffleRuntimeAccess.class.getName()));
                 }
                 if (selectedAccess.getPriority() < access.getPriority()) {
                     selectedAccess = access;
