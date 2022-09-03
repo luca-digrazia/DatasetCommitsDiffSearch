@@ -133,9 +133,6 @@ public class OptimizedOSRLoopNodeTest {
         assertNotCompiled(rootNode.getOSRTarget()); // now deoptimized
         executeNoCallTarget(rootNode, OSR_INVALIDATION_REPROFILE + 1);
         assertCompiled(rootNode.getOSRTarget());
-        executeNoCallTarget(rootNode, 1); // maybe deoptimizing
-        executeNoCallTarget(rootNode, OSR_INVALIDATION_REPROFILE + 1);
-        assertCompiled(rootNode.getOSRTarget());
         executeNoCallTarget(rootNode, 1); // not deoptimizing
         assertCompiled(rootNode.getOSRTarget());
         Assert.assertTrue(rootNode.wasRepeatingCalledCompiled());
@@ -487,7 +484,6 @@ public class OptimizedOSRLoopNodeTest {
             final OptimizedCallTarget compiledLoop = loop.getCompiledOSRLoop();
 
             Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<Void>() {
-                @Override
                 public Void visitFrame(FrameInstance frameInstance) {
                     Assert.assertNotSame(compiledLoop, frameInstance.getCallTarget());
                     return null;
@@ -574,7 +570,6 @@ public class OptimizedOSRLoopNodeTest {
 
         boolean compiled;
 
-        @Override
         public boolean executeRepeating(VirtualFrame frame) {
             try {
                 if (invalidationCounter >= 0) {
