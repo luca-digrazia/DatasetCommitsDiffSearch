@@ -63,10 +63,11 @@ public @interface APIOption {
     String[] defaultValue() default {};
 
     /**
-     * If a {@code fixedValue} is provided the {@link APIOption} will not accept custom option
-     * values and instead always use the specified value.
+     * If a {@code defaultValue} is provided and {@code defaultValueFinal} is set to true the
+     * {@link APIOption} will not accept custom option values and always use the specified
+     * {@code defaultValue}.
      */
-    String[] fixedValue() default {};
+    boolean defaultValueFinal() default false;
 
     /**
      * APIOptionKind can be used to customize how an {@link APIOption} gets rewritten to its

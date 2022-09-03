@@ -140,8 +140,6 @@ final class APIOptionCollector implements Feature {
                                     String.format("Boolean APIOption %s(%s) cannot use APIOptionKind.Paths", apiOptionName, rawOptionName));
                     VMError.guarantee(apiAnnotation.defaultValue().length == 0,
                                     String.format("Boolean APIOption %s(%s) cannot use APIOption.defaultValue", apiOptionName, rawOptionName));
-                    VMError.guarantee(apiAnnotation.fixedValue().length == 0,
-                                    String.format("Boolean APIOption %s(%s) cannot use APIOption.fixedValue", apiOptionName, rawOptionName));
                     builderOption += apiAnnotation.kind().equals(APIOptionKind.Negated) ? "-" : "+";
                     builderOption += rawOptionName;
                     booleanOption = true;
@@ -150,15 +148,12 @@ final class APIOptionCollector implements Feature {
                                     String.format("Non-boolean APIOption %s(%s) cannot use APIOptionKind.Negated", apiOptionName, rawOptionName));
                     VMError.guarantee(apiAnnotation.defaultValue().length <= 1,
                                     String.format("APIOption %s(%s) cannot have more than one APIOption.defaultValue", apiOptionName, rawOptionName));
-                    VMError.guarantee(apiAnnotation.fixedValue().length <= 1,
-                                    String.format("APIOption %s(%s) cannot have more than one APIOption.fixedValue", apiOptionName, rawOptionName));
-                    VMError.guarantee(apiAnnotation.fixedValue().length == 0 && apiAnnotation.defaultValue().length == 0 ||
-                                    (apiAnnotation.fixedValue().length > 0) ^ (apiAnnotation.defaultValue().length > 0),
-                                    String.format("APIOption %s(%s) APIOption.defaultValue and APIOption.fixedValue cannot be combined", apiOptionName, rawOptionName));
                     builderOption += rawOptionName;
                     builderOption += "=";
                 }
-
+                String defaultValue = apiAnnotation.defaultValue().length == 0 ? null : apiAnnotation.defaultValue()[0];
+                VMError.guarantee(apiAnnotation.defaultValueFinal() ? defaultValue != null : true,
+                                String.format("APIOption %s(%s) APIOption.defaultValueFinal can only be set when APIOption.defaultValue is used", apiOptionName, rawOptionName));
                 String helpText = optionDescriptor.getHelp();
                 if (!apiAnnotation.customHelp().isEmpty()) {
                     helpText = apiAnnotation.customHelp();
@@ -169,18 +164,9 @@ final class APIOptionCollector implements Feature {
                 if (!apiOptionName.startsWith("-")) {
                     apiOptionName = "--" + apiOptionName;
                 }
-
-                String defaultValue = null;
-                if (apiAnnotation.defaultValue().length > 0) {
-                    defaultValue = apiAnnotation.defaultValue()[0];
-                }
-                if (apiAnnotation.fixedValue().length > 0) {
-                    defaultValue = apiAnnotation.fixedValue()[0];
-                }
-
                 options.put(apiOptionName,
                                 new APIOptionHandler.OptionInfo(builderOption, defaultValue, helpText, apiAnnotation.kind().equals(APIOptionKind.Paths),
-                                                booleanOption || apiAnnotation.fixedValue().length > 0));
+                                                booleanOption || apiAnnotation.defaultValueFinal()));
             }
         } catch (NoSuchFieldException e) {
             /* Does not qualify as APIOption */
