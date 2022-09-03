@@ -2066,7 +2066,9 @@ public class BytecodeParser implements GraphBuilderContext {
         if (plugin != null) {
 
             if (intrinsicContext != null && intrinsicContext.isCallToOriginal(targetMethod)) {
-                // Self recursive intrinsic means the original method should be called.
+                // Self recursive intrinsic means the original
+                // method should be called.
+                assert !targetMethod.hasBytecodes() : "TODO: when does this happen?";
                 return false;
             }
 
@@ -3230,22 +3232,22 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected double getProfileProbability(boolean negate) {
+        double probability;
         if (profilingInfo == null) {
-            return 0.5;
-        }
-
-        assert assertAtIfBytecode();
-        double probability = profilingInfo.getBranchTakenProbability(bci());
-
-        if (probability < 0) {
-            assert probability == -1 : "invalid probability";
-            debug.log("missing probability in %s at bci %d", code, bci());
-            return 0.5;
-        }
-
-        if (negate && shouldComplementProbability()) {
-            // the probability coming from profile is about the original condition
-            probability = 1 - probability;
+            probability = 0.5;
+        } else {
+            assert assertAtIfBytecode();
+            probability = profilingInfo.getBranchTakenProbability(bci());
+            if (probability < 0) {
+                assert probability == -1 : "invalid probability";
+                debug.log("missing probability in %s at bci %d", code, bci());
+                probability = 0.5;
+            } else {
+                if (negate) {
+                    // the probability coming from profile is about the original condition
+                    probability = 1 - probability;
+                }
+            }
         }
         return probability;
     }
@@ -3287,10 +3289,7 @@ public class BytecodeParser implements GraphBuilderContext {
             BciBlock tmpBlock = trueBlock;
             trueBlock = falseBlock;
             falseBlock = tmpBlock;
-            if (shouldComplementProbability()) {
-                // the probability coming from profile is about the original condition
-                probability = 1 - probability;
-            }
+            probability = 1 - probability;
             condition = logicNegationNode.getValue();
         }
 
@@ -3350,14 +3349,6 @@ public class BytecodeParser implements GraphBuilderContext {
             postProcessIfNode(ifNode);
             append(ifNode);
         }
-    }
-
-    /**
-     * Hook for subclasses to decide whether the IfNode probability should be complemented during
-     * conversion to Graal IR.
-     */
-    protected boolean shouldComplementProbability() {
-        return true;
     }
 
     /**
