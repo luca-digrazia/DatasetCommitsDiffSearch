@@ -48,12 +48,13 @@ import com.oracle.truffle.api.vm.PolyglotEngine.Language;
 abstract class PolyglotRootNode extends RootNode {
 
     private static final CallTarget VOID_TARGET = new CallTarget() {
+        @Override
         public Object call(Object... arguments) {
             return arguments[0];
         }
     };
 
-    protected final PolyglotEngine engine;
+    final PolyglotEngine engine;
 
     PolyglotRootNode(PolyglotEngine engine) {
         super(TruffleLanguage.class, null, null);
@@ -109,8 +110,9 @@ abstract class PolyglotRootNode extends RootNode {
                 engineObject.assertEngine(engine);
                 args[i] = engineObject.getDelegate();
             }
-            // TODO use node based API to call into JavaInterop.asTruffleValue
-            args[i] = JavaInterop.asTruffleValue(args[i]);
+            if (args[i] != null && !isPrimitiveType(args[i].getClass())) {
+                args[i] = JavaInterop.asTruffleObject(args[i]);
+            }
         }
     }
 
@@ -125,11 +127,13 @@ abstract class PolyglotRootNode extends RootNode {
     private static final class ForeignSendRootNode extends PolyglotRootNode {
         @Child private ConvertNode returnConvertNode;
         @Child private Node messageNode;
+        @Child private Node toJavaNode;
 
         ForeignSendRootNode(PolyglotEngine engine, Message message) {
             super(engine);
             this.returnConvertNode = new ConvertNode();
             this.messageNode = message.createNode();
+            this.toJavaNode = Access.JAVA_INTEROP.createToJavaNode();
         }
 
         @Override
@@ -144,8 +148,7 @@ abstract class PolyglotRootNode extends RootNode {
     }
 
     private static final class AsJavaRootNode extends PolyglotRootNode {
-        @Child private ConvertNode returnConvertNode;
-        @Child private Node executeNode;
+        @Child private Node toJavaNode;
 
         private final Class<? extends TruffleObject> receiverType;
 
@@ -154,17 +157,19 @@ abstract class PolyglotRootNode extends RootNode {
         AsJavaRootNode(PolyglotEngine engine, Class<? extends TruffleObject> receiverType) {
             super(engine);
             this.receiverType = receiverType;
-            this.returnConvertNode = new ConvertNode();
+            this.toJavaNode = Access.JAVA_INTEROP.createToJavaNode();
         }
 
         @Override
         protected Object executeImpl(VirtualFrame frame) {
             Object[] args = frame.getArguments();
-            final Class<?> targetType = (Class<?>) args[0];
-            final TruffleObject value = receiverType.cast(args[1]);
-
-            // TODO use a node based API to call into JavaInteorp.
-            return JavaInterop.asJavaObject(targetType, value);
+            final Class<?> targetType = (Class<?>) args[1];
+            if (receiverType.isInstance(args[0])) {
+                final TruffleObject value = receiverType.cast(args[0]);
+                return Access.JAVA_INTEROP.toJava(toJavaNode, targetType, value);
+            } else {
+                throw new ClassCastException();
+            }
         }
 
     }
@@ -223,6 +228,8 @@ abstract class PolyglotRootNode extends RootNode {
         private final Language language;
         private final Source source;
 
+        private static final Object NULL_VALUE = JavaInterop.asTruffleValue(null);
+
         private EvalRootNode(PolyglotEngine engine, Language language, Source source) {
             super(engine);
             this.source = source;
@@ -242,7 +249,7 @@ abstract class PolyglotRootNode extends RootNode {
             // TODO null is not valid value, wrap it using java interop
             // we should make this a strong check.
             if (result == null) {
-                result = JavaInterop.asTruffleValue(null);
+                result = NULL_VALUE;
             }
             return result;
         }

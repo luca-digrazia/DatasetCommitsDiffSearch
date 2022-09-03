@@ -25,11 +25,11 @@
 package com.oracle.truffle.api.interop.java;
 
 import java.util.List;
-import java.util.Map;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -40,6 +40,7 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import java.util.Map;
 
 abstract class ToJavaNode extends Node {
     @Child private Node isExecutable = Message.IS_EXECUTABLE.createNode();
@@ -114,13 +115,13 @@ abstract class ToJavaNode extends Node {
         if (foreignObject == null) {
             return null;
         }
-        if (isNull) {
-            return null;
-        }
         if (clazz.isInstance(foreignObject)) {
             obj = foreignObject;
         } else {
             if (!clazz.isInterface()) {
+                if (isNull) {
+                    return null;
+                }
                 throw new ClassCastException();
             }
             if (clazz == List.class && hasSize) {
@@ -146,8 +147,9 @@ abstract class ToJavaNode extends Node {
         @Node.Child private Node foreignAccess;
         @Node.Child private ToJavaNode toJava;
 
-        TemporaryRoot(Node foreignAccess) {
-            super(null);
+        @SuppressWarnings("rawtypes")
+        TemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess) {
+            super(lang, null, null);
             this.foreignAccess = foreignAccess;
             this.toJava = ToJavaNodeGen.create();
         }
@@ -172,8 +174,7 @@ abstract class ToJavaNode extends Node {
             if (type == null) {
                 return raw;
             }
-            Object real = JavaInterop.ACCESSOR.engine().findOriginalObject(raw);
-            return toJava.execute(real, type);
+            return toJava.execute(raw, type);
         }
     }
 
