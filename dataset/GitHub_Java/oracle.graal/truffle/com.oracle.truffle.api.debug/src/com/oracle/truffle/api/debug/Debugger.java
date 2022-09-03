@@ -44,6 +44,7 @@ import com.oracle.truffle.api.frame.FrameInstanceVisitor;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.Accessor;
+import com.oracle.truffle.api.instrument.SyntaxTag;
 import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.instrumentation.ExecutionEventListener;
@@ -224,10 +225,10 @@ public final class Debugger {
      * @throws IOException if the breakpoint already set
      * @since 0.9
      */
-    @SuppressWarnings({"static-method", "deprecation"})
+    @SuppressWarnings("static-method")
     @Deprecated
     @TruffleBoundary
-    public Breakpoint setTagBreakpoint(int ignoreCount, com.oracle.truffle.api.instrument.SyntaxTag tag, boolean oneShot) throws IOException {
+    public Breakpoint setTagBreakpoint(int ignoreCount, SyntaxTag tag, boolean oneShot) throws IOException {
         throw new UnsupportedOperationException();
     }
 
@@ -871,7 +872,7 @@ public final class Debugger {
             try {
                 // Pass control to the debug client with current execution suspended
                 SuspendedEvent event = new SuspendedEvent(Debugger.this, haltedEventContext.getInstrumentedNode(), haltedFrame, contextStack, recentWarnings);
-                AccessorDebug.engineAccess().dispatchEvent(engine, event);
+                ACCESSOR.dispatchEvent(engine, event);
                 if (event.isKillPrepared()) {
                     trace("KILL");
                     throw new KillException();
@@ -969,9 +970,9 @@ public final class Debugger {
     Object evalInContext(SuspendedEvent ev, String code, FrameInstance frameInstance) throws IOException {
         try {
             if (frameInstance == null) {
-                return AccessorDebug.langs().evalInContext(engine, ev, code, currentDebugContext.haltedEventContext.getInstrumentedNode(), currentDebugContext.haltedFrame);
+                return ACCESSOR.evalInContext(engine, ev, code, currentDebugContext.haltedEventContext.getInstrumentedNode(), currentDebugContext.haltedFrame);
             } else {
-                return AccessorDebug.langs().evalInContext(engine, ev, code, frameInstance.getCallNode(), frameInstance.getFrame(FrameAccess.MATERIALIZE, true).materialize());
+                return ACCESSOR.evalInContext(engine, ev, code, frameInstance.getCallNode(), frameInstance.getFrame(FrameAccess.MATERIALIZE, true).materialize());
             }
         } catch (KillException kex) {
             throw new IOException("Evaluation was killed.", kex);
@@ -979,17 +980,6 @@ public final class Debugger {
     }
 
     static final class AccessorDebug extends Accessor {
-        static Accessor.Nodes nodesAccess() {
-            return ACCESSOR.nodes();
-        }
-
-        static Accessor.LanguageSupport langs() {
-            return ACCESSOR.languageSupport();
-        }
-
-        static Accessor.EngineSupport engineAccess() {
-            return ACCESSOR.engineSupport();
-        }
 
         @Override
         protected Closeable executionStart(Object vm, final int currentDepth, final boolean initializeDebugger, final Source s) {
@@ -997,9 +987,9 @@ public final class Debugger {
             final Debugger[] debugger = {find(engine, initializeDebugger)};
             if (debugger[0] != null) {
                 debugger[0].executionStarted(currentDepth, s);
-                engineAccess().dispatchEvent(engine, new ExecutionEvent(debugger[0]));
+                ACCESSOR.dispatchEvent(engine, new ExecutionEvent(debugger[0]));
             } else {
-                engineAccess().dispatchEvent(engine, new ExecutionEvent(new Callable<Debugger>() {
+                ACCESSOR.dispatchEvent(engine, new ExecutionEvent(new Callable<Debugger>() {
                     @Override
                     public Debugger call() throws Exception {
                         if (debugger[0] == null) {
@@ -1021,9 +1011,25 @@ public final class Debugger {
         }
 
         @SuppressWarnings("rawtypes")
+        @Override
+        protected Class<? extends TruffleLanguage> findLanguage(Node node) {
+            return super.findLanguage(node);
+        }
+
+        @Override
+        protected void dispatchEvent(Object vm, Object event) {
+            super.dispatchEvent(vm, event);
+        }
+
+        @Override
+        protected Object evalInContext(Object vm, Object ev, String code, Node node, MaterializedFrame frame) throws IOException {
+            return super.evalInContext(vm, ev, code, node, frame);
+        }
+
+        @SuppressWarnings("rawtypes")
+        @Override
         protected CallTarget parse(Class<? extends TruffleLanguage> languageClass, Source code, Node context, String... argumentNames) throws IOException {
-            final TruffleLanguage<?> truffleLanguage = engineSupport().findLanguageImpl(null, languageClass, code.getMimeType());
-            return languageSupport().parse(truffleLanguage, code, context, argumentNames);
+            return super.parse(languageClass, code, context, argumentNames);
         }
     }
 
