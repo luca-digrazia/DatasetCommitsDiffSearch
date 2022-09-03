@@ -70,7 +70,6 @@ import com.oracle.svm.jni.JNIObjectHandles;
 import com.oracle.svm.jni.JNIThreadLocalHandles;
 import com.oracle.svm.jni.JNIThreadLocalPendingException;
 import com.oracle.svm.jni.JNIThreadLocalPinnedObjects;
-import com.oracle.svm.jni.JNIThreadOwnedMonitors;
 import com.oracle.svm.jni.access.JNIAccessFeature;
 import com.oracle.svm.jni.access.JNIAccessibleMethod;
 import com.oracle.svm.jni.access.JNIAccessibleMethodDescriptor;
@@ -915,8 +914,6 @@ final class JNIFunctions {
             throw VMError.unsupportedFeature("Using JNI MonitorEnter and MonitorExit on java.lang.Class objects is currently not supported");
         }
         MonitorUtils.monitorEnter(obj);
-        assert Thread.holdsLock(obj);
-        JNIThreadOwnedMonitors.entered(obj);
         return JNIErrors.JNI_OK();
     }
 
@@ -937,7 +934,6 @@ final class JNIFunctions {
             throw new IllegalMonitorStateException();
         }
         MonitorUtils.monitorExit(obj);
-        JNIThreadOwnedMonitors.exited(obj);
         return JNIErrors.JNI_OK();
     }
 
