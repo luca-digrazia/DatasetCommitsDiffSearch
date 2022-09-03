@@ -79,7 +79,6 @@ final class AMD64HotSpotReturnOp extends AMD64HotSpotEpilogueBlockEndOp implemen
         leaveFrameAndRestoreRbp(crb, masm);
         if (!isStub) {
             if (requiresReservedStackAccessCheck) {
-                assert scratchForSafepointOnReturn != null;
                 HotSpotForeignCallsProvider foreignCalls = (HotSpotForeignCallsProvider) crb.foreignCalls;
 
                 Label noReserved = new Label();
@@ -95,11 +94,11 @@ final class AMD64HotSpotReturnOp extends AMD64HotSpotEpilogueBlockEndOp implemen
                 assert cc.getArgumentCount() == 1;
                 Register arg0 = ((RegisterValue) cc.getArgument(0)).getRegister();
                 masm.movq(arg0, thread);
-                AMD64Call.directCall(crb, masm, enableStackReservedZone, scratchForSafepointOnReturn, false, null);
+                AMD64Call.directCall(crb, masm, enableStackReservedZone, null, false, null);
                 if (stackAdjust > 0) {
                     masm.addq(rsp, stackAdjust);
                 }
-                AMD64Call.directJmp(crb, masm, foreignCalls.lookupForeignCall(THROW_DELAYED_STACKOVERFLOW_ERROR), scratchForSafepointOnReturn);
+                AMD64Call.directJmp(crb, masm, foreignCalls.lookupForeignCall(THROW_DELAYED_STACKOVERFLOW_ERROR));
                 masm.bind(noReserved);
             }
 
