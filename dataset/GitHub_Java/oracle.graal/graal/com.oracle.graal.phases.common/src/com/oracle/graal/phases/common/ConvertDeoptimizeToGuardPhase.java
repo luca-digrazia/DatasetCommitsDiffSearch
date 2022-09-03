@@ -47,7 +47,6 @@ import com.oracle.graal.phases.*;
  *
  */
 public class ConvertDeoptimizeToGuardPhase extends Phase {
-    private SimplifierTool simplifierTool = GraphUtil.getDefaultSimplifier(null, null, null, false);
 
     private static BeginNode findBeginNode(FixedNode startNode) {
         return GraphUtil.predecessorIterable(startNode).filter(BeginNode.class).first();
@@ -59,9 +58,10 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         if (graph.getNodes(DeoptimizeNode.class).isEmpty()) {
             return;
         }
+        SimplifierTool simplifierTool = GraphUtil.getDefaultSimplifier(null, null, null, false);
         for (DeoptimizeNode d : graph.getNodes(DeoptimizeNode.class)) {
             assert d.isAlive();
-            visitDeoptBegin(BeginNode.prevBegin(d), d.action(), d.reason(), graph);
+            visitDeoptBegin(BeginNode.prevBegin(d), d.action(), d.reason(), graph, simplifierTool);
         }
 
         for (FixedGuardNode fixedGuard : graph.getNodes(FixedGuardNode.class)) {
@@ -94,7 +94,7 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
                         }
                         if (xs[i].getKind() != Kind.Object && ys[i].getKind() != Kind.Object &&
                                         compare.condition().foldCondition(xs[i], ys[i], null, compare.unorderedIsTrue()) == fixedGuard.isNegated()) {
-                            visitDeoptBegin(BeginNode.prevBegin(mergePredecessor), fixedGuard.getAction(), fixedGuard.getReason(), graph);
+                            visitDeoptBegin(BeginNode.prevBegin(mergePredecessor), fixedGuard.getAction(), fixedGuard.getReason(), graph, simplifierTool);
                         }
                     }
                 }
@@ -104,7 +104,7 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         new DeadCodeEliminationPhase().apply(graph);
     }
 
-    private void visitDeoptBegin(BeginNode deoptBegin, DeoptimizationAction deoptAction, DeoptimizationReason deoptReason, StructuredGraph graph) {
+    private void visitDeoptBegin(BeginNode deoptBegin, DeoptimizationAction deoptAction, DeoptimizationReason deoptReason, StructuredGraph graph, SimplifierTool simplifierTool) {
         if (deoptBegin instanceof MergeNode) {
             MergeNode mergeNode = (MergeNode) deoptBegin;
             Debug.log("Visiting %s", mergeNode);
@@ -112,17 +112,17 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
             while (mergeNode.isAlive()) {
                 AbstractEndNode end = mergeNode.forwardEnds().first();
                 BeginNode newBeginNode = findBeginNode(end);
-                visitDeoptBegin(newBeginNode, deoptAction, deoptReason, graph);
+                visitDeoptBegin(newBeginNode, deoptAction, deoptReason, graph, simplifierTool);
             }
             assert next.isAlive();
             BeginNode newBeginNode = findBeginNode(next);
-            visitDeoptBegin(newBeginNode, deoptAction, deoptReason, graph);
+            visitDeoptBegin(newBeginNode, deoptAction, deoptReason, graph, simplifierTool);
             return;
         } else if (deoptBegin.predecessor() instanceof IfNode) {
             IfNode ifNode = (IfNode) deoptBegin.predecessor();
             BeginNode otherBegin = ifNode.trueSuccessor();
             LogicNode conditionNode = ifNode.condition();
-            FixedGuardNode guard = graph.add(FixedGuardNode.create(conditionNode, deoptReason, deoptAction, deoptBegin == ifNode.trueSuccessor()));
+            FixedGuardNode guard = graph.add(new FixedGuardNode(conditionNode, deoptReason, deoptAction, deoptBegin == ifNode.trueSuccessor()));
             FixedWithNextNode pred = (FixedWithNextNode) ifNode.predecessor();
             BeginNode survivingSuccessor;
             if (deoptBegin == ifNode.trueSuccessor()) {
@@ -160,7 +160,7 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         FixedNode next = deoptPred.next();
 
         if (!(next instanceof DeoptimizeNode)) {
-            DeoptimizeNode newDeoptNode = graph.add(DeoptimizeNode.create(deoptAction, deoptReason));
+            DeoptimizeNode newDeoptNode = graph.add(new DeoptimizeNode(deoptAction, deoptReason));
             deoptPred.setNext(newDeoptNode);
             assert deoptPred == newDeoptNode.predecessor();
             GraphUtil.killCFG(next);
