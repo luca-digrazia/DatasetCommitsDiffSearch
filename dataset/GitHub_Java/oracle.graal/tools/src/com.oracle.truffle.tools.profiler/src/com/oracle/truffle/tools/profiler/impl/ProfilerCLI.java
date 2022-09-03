@@ -28,10 +28,10 @@ import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.tools.utils.json.JSONObject;
 import org.graalvm.options.OptionType;
 
 import java.io.File;
+import java.io.PrintStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -85,7 +85,7 @@ abstract class ProfilerCLI {
                 public boolean test(Source source) {
                     boolean internal = (internals || !source.isInternal());
                     boolean file = testWildcardExpressions(source.getPath(), filterFile);
-                    boolean mimeType = filterLanguage.equals("") || filterLanguage.equals(source.getMimeType());
+                    boolean mimeType = filterLanguage.equals("") || source.getMimeType().equals(filterLanguage);
                     return internal && file && mimeType;
                 }
             });
@@ -228,26 +228,90 @@ abstract class ProfilerCLI {
         return s.toString();
     }
 
-    static JSONObject sourceSectionToJSON(SourceSection sourceSection) {
-        JSONObject sourceSectionJson = new JSONObject();
-        if (sourceSection != null) {
-            Source source = sourceSection.getSource();
-            if (source != null) {
-                if (source.getLanguage() != null) {
-                    sourceSectionJson.put("language", source.getLanguage().toString());
-                }
-                String path = source.getPath();
-                if (path != null) {
-                    sourceSectionJson.put("path", path);
+    static class JSONPrinter {
+
+        final PrintStream out;
+
+        public JSONPrinter(PrintStream out) {
+            this.out = out;
+        }
+
+        void startObject() {
+            out.print('{');
+        }
+
+        void endObject() {
+            out.print('}');
+        }
+
+        void startArray() {
+            out.print('[');
+        }
+
+        void endArray() {
+            out.print(']');
+        }
+
+        void printKey(String key) {
+            out.print("\"" + key + "\":");
+        }
+
+        void printKeyValue(String key, String value) {
+            out.print("\"" + key + "\":\"" + value + "\"");
+        }
+
+        void printKeyValue(String key, int value) {
+            out.print("\"" + key + "\":" + value + "");
+        }
+
+        void printKeyValue(String key, long value) {
+            out.print("\"" + key + "\":" + value + "");
+        }
+
+        void comma() {
+            out.print(',');
+        }
+
+        void printTimeStampArray(List<Long> times) {
+            out.print('[');
+            int i = 0;
+            for (Long time : times) {
+                out.print(time);
+                if (i++ < times.size() - 1) {
+                    out.print(',');
                 }
             }
-            sourceSectionJson.put("source_name", sourceSection.getSource().getName());
-            sourceSectionJson.put("start_line", sourceSection.getStartLine());
-            sourceSectionJson.put("end_line", sourceSection.getEndLine());
-            sourceSectionJson.put("start_column", sourceSection.getStartColumn());
-            sourceSectionJson.put("end_column", sourceSection.getEndColumn());
+            out.print("]");
         }
-        return sourceSectionJson;
+
+        void printKeyValue(String key, boolean value) {
+            out.print("\"" + key + "\":" + value + "");
+        }
+
+        void printSourceSection(SourceSection sourceSection) {
+            if (sourceSection != null) {
+                printKey("source_section");
+                startObject();
+                Source source = sourceSection.getSource();
+                if (source != null) {
+                    if (source.getLanguage() != null) {
+                        printKeyValue("language", source.getLanguage().toString());
+                        comma();
+                    }
+                    printKeyValue("path", source.getPath());
+                    comma();
+                }
+                printKeyValue("start_line", sourceSection.getStartLine());
+                comma();
+                printKeyValue("end_line", sourceSection.getEndLine());
+                comma();
+                printKeyValue("start_column", sourceSection.getStartColumn());
+                comma();
+                printKeyValue("end_column", sourceSection.getEndColumn());
+                endObject();
+            }
+        }
+
     }
 
     static class SourceLocation {

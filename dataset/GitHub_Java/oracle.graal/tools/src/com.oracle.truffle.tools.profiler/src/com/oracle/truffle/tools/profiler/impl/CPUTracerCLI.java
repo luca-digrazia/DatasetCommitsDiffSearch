@@ -27,8 +27,6 @@ package com.oracle.truffle.tools.profiler.impl;
 import com.oracle.truffle.api.Option;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.tools.profiler.CPUTracer;
-import com.oracle.truffle.tools.utils.json.JSONArray;
-import com.oracle.truffle.tools.utils.json.JSONObject;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionType;
@@ -70,7 +68,7 @@ class CPUTracerCLI extends ProfilerCLI {
 
     @Option(name = "TraceCalls", help = "Capture calls when tracing (default:false).", category = OptionCategory.USER) static final OptionKey<Boolean> TRACE_CALLS = new OptionKey<>(false);
 
-    @Option(name = "TraceInternal", help = "Trace internal elements (default:false).", category = OptionCategory.DEBUG) static final OptionKey<Boolean> TRACE_INTERNAL = new OptionKey<>(false);
+    @Option(name = "TraceInternal", help = "Trace internal elements (default:false).", category = OptionCategory.USER) static final OptionKey<Boolean> TRACE_INTERNAL = new OptionKey<>(false);
 
     @Option(name = "FilterRootName", help = "Wildcard filter for program roots. (eg. Math.*, default:*).", category = OptionCategory.USER) static final OptionKey<Object[]> FILTER_ROOT = new OptionKey<>(
                     new Object[0], WILDCARD_FILTER_TYPE);
@@ -97,22 +95,34 @@ class CPUTracerCLI extends ProfilerCLI {
     }
 
     private static void printTracerJson(PrintStream out, CPUTracer tracer) {
-        JSONObject output = new JSONObject();
-        output.put("tool", CPUTracerInstrument.ID);
-        output.put("version", CPUTracerInstrument.VERSION);
+        JSONPrinter printer = new JSONPrinter(out);
+        printer.startObject();
+        printer.printKeyValue("tool", CPUTracerInstrument.ID);
+        printer.comma();
+        printer.printKeyValue("version", CPUTracerInstrument.VERSION);
+        printer.comma();
+        printer.printKey("profile");
         List<CPUTracer.Payload> payloads = new ArrayList<>(tracer.getPayloads());
-        JSONArray profile = new JSONArray();
+        printer.startArray();
+        int i = 0;
         for (CPUTracer.Payload payload : payloads) {
-            JSONObject entry = new JSONObject();
-            entry.put("root_name", payload.getRootName());
-            entry.put("source_section", sourceSectionToJSON(payload.getSourceSection()));
-            entry.put("count", payload.getCount());
-            entry.put("interpreted_count", payload.getCountInterpreted());
-            entry.put("compiled_count", payload.getCountCompiled());
-            profile.put(entry);
+            printer.startObject();
+            printer.printKeyValue("root_name", payload.getRootName());
+            printer.comma();
+            printer.printSourceSection(payload.getSourceSection());
+            printer.comma();
+            printer.printKeyValue("count", payload.getCount());
+            printer.comma();
+            printer.printKeyValue("interpreted_count", payload.getCountInterpreted());
+            printer.comma();
+            printer.printKeyValue("compiled_count", payload.getCountCompiled());
+            printer.endObject();
+            if (i++ < payloads.size() - 1) {
+                printer.comma();
+            }
         }
-        output.put("profile", profile);
-        out.println(output.toString());
+        printer.endArray();
+        printer.endObject();
     }
 
     static void printTracerHistogram(PrintStream out, CPUTracer tracer) {
