@@ -22,8 +22,6 @@
  */
 package org.graalvm.compiler.phases.common;
 
-import static org.graalvm.compiler.nodes.StaticDeoptimizingNode.mergeActions;
-
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -32,7 +30,6 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.collections.MapCursor;
 import org.graalvm.collections.Pair;
-import org.graalvm.compiler.core.common.cfg.AbstractControlFlowGraph;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.BinaryOp;
@@ -95,7 +92,6 @@ import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
 
-import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.TriState;
 
@@ -150,8 +146,8 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
     }
 
     protected ControlFlowGraph.RecursiveVisitor<?> createVisitor(StructuredGraph graph, @SuppressWarnings("unused") ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodes,
-                    NodeMap<Block> nodeToBlock, PhaseContext context) {
-        return new Instance(graph, blockToNodes, nodeToBlock, context);
+                    @SuppressWarnings("unused") NodeMap<Block> nodeToBlock, PhaseContext context) {
+        return new Instance(graph, blockToNodes, context);
     }
 
     public static class MoveGuardsUpwards implements ControlFlowGraph.RecursiveVisitor<Block> {
@@ -248,7 +244,6 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
     public static class Instance implements ControlFlowGraph.RecursiveVisitor<Integer> {
         protected final NodeMap<InfoElement> map;
         protected final BlockMap<List<Node>> blockToNodes;
-        protected final NodeMap<Block> nodeToBlock;
         protected final CanonicalizerTool tool;
         protected final NodeStack undoOperations;
         protected final StructuredGraph graph;
@@ -260,11 +255,10 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
          */
         private Deque<DeoptimizingGuard> pendingTests;
 
-        public Instance(StructuredGraph graph, BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, PhaseContext context) {
+        public Instance(StructuredGraph graph, BlockMap<List<Node>> blockToNodes, PhaseContext context) {
             this.graph = graph;
             this.debug = graph.getDebug();
             this.blockToNodes = blockToNodes;
-            this.nodeToBlock = nodeToBlock;
             this.undoOperations = new NodeStack();
             this.map = graph.createNodeMap();
             pendingTests = new ArrayDeque<>();
@@ -620,7 +614,7 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
          * never be replaced with a pi node via canonicalization).
          */
         private static Stamp getOtherSafeStamp(ValueNode x) {
-            if (x.isConstant() || x.graph().isAfterFixedReadPhase()) {
+            if (x.isConstant()) {
                 return x.stamp(NodeView.DEFAULT);
             }
             return x.stamp(NodeView.DEFAULT).unrestricted();
@@ -639,23 +633,6 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
             return recursiveFoldStamp(node);
         }
 
-        /**
-         * Look for a preceding guard whose condition is implied by {@code thisGuard}. If we find
-         * one, try to move this guard just above that preceding guard so that we can fold it:
-         * 
-         * <pre>
-         *     guard(C1); // preceding guard
-         *     ...
-         *     guard(C2); // thisGuard
-         * </pre>
-         * 
-         * If C2 => C1, transform to:
-         * 
-         * <pre>
-         *     guard(C2);
-         *     ...
-         * </pre>
-         */
         protected boolean foldPendingTest(DeoptimizingGuard thisGuard, ValueNode original, Stamp newStamp, GuardRewirer rewireGuardFunction) {
             for (DeoptimizingGuard pendingGuard : pendingTests) {
                 LogicNode pendingCondition = pendingGuard.getCondition();
@@ -684,9 +661,12 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                 if (result.isKnown()) {
                     /*
                      * The test case be folded using the information available but the test can only
-                     * be moved up if we're sure there's no schedule dependence.
+                     * be moved up if we're sure there's no schedule dependence. For now limit it to
+                     * the original node and constants.
                      */
-                    if (canScheduleAbove(thisGuard.getCondition(), pendingGuard.asNode(), original) && foldGuard(thisGuard, pendingGuard, result.toBoolean(), newStamp, rewireGuardFunction)) {
+                    InputFilter v = new InputFilter(original);
+                    thisGuard.getCondition().applyInputs(v);
+                    if (v.ok && foldGuard(thisGuard, pendingGuard, newStamp, rewireGuardFunction)) {
                         return true;
                     }
                 }
@@ -694,61 +674,19 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
             return false;
         }
 
-        private boolean canScheduleAbove(Node n, Node target, ValueNode knownToBeAbove) {
-            Block targetBlock = nodeToBlock.get(target);
-            Block testBlock = nodeToBlock.get(n);
-            if (targetBlock != null && testBlock != null) {
-                if (targetBlock == testBlock) {
-                    for (FixedNode fixed : targetBlock.getNodes()) {
-                        if (fixed == n) {
-                            return true;
-                        } else if (fixed == target) {
-                            return false;
-                        }
-                    }
-                } else if (AbstractControlFlowGraph.dominates(testBlock, targetBlock)) {
-                    return true;
-                }
-                return false;
-            }
-            InputFilter v = new InputFilter(knownToBeAbove);
-            n.applyInputs(v);
-            return v.ok;
-        }
-
-        protected boolean foldGuard(DeoptimizingGuard thisGuard, DeoptimizingGuard otherGuard, boolean outcome, Stamp guardedValueStamp, GuardRewirer rewireGuardFunction) {
-            DeoptimizationAction action = mergeActions(otherGuard.getAction(), thisGuard.getAction());
-            if (action != null && otherGuard.getSpeculation() == thisGuard.getSpeculation()) {
+        protected boolean foldGuard(DeoptimizingGuard thisGuard, DeoptimizingGuard otherGuard, Stamp guardedValueStamp, GuardRewirer rewireGuardFunction) {
+            if (otherGuard.getAction() == thisGuard.getAction() && otherGuard.getSpeculation() == thisGuard.getSpeculation()) {
                 LogicNode condition = (LogicNode) thisGuard.getCondition().copyWithInputs();
-                /*
-                 * We have ...; guard(C1); guard(C2);...
-                 *
-                 * Where the first guard is `otherGuard` and the second one `thisGuard`.
-                 *
-                 * Depending on `outcome`, we have C2 => C1 or C2 => !C1.
-                 *
-                 * - If C2 => C1, `mustDeopt` below is false and we transform to ...; guard(C2); ...
-                 *
-                 * - If C2 => !C1, `mustDeopt` is true and we transform to ..; guard(C1); deopt;
-                 */
-                // for the second case, the action of the deopt is copied from there:
-                thisGuard.setAction(action);
                 GuardRewirer rewirer = (guard, result, innerGuardedValueStamp, newInput) -> {
-                    // `result` is `outcome`, `guard` is `otherGuard`
-                    boolean mustDeopt = result == otherGuard.isNegated();
-                    if (rewireGuardFunction.rewire(guard, mustDeopt == thisGuard.isNegated(), innerGuardedValueStamp, newInput)) {
-                        if (!mustDeopt) {
-                            otherGuard.setCondition(condition, thisGuard.isNegated());
-                            otherGuard.setAction(action);
-                            otherGuard.setReason(thisGuard.getReason());
-                        }
+                    if (rewireGuardFunction.rewire(guard, result, innerGuardedValueStamp, newInput)) {
+                        otherGuard.setCondition(condition, thisGuard.isNegated());
                         return true;
                     }
                     condition.safeDelete();
                     return false;
                 };
                 // Move the later test up
-                return rewireGuards(otherGuard, outcome, null, guardedValueStamp, rewirer);
+                return rewireGuards(otherGuard, !thisGuard.isNegated(), null, guardedValueStamp, rewirer);
             }
             return false;
         }
@@ -830,6 +768,16 @@ public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
                 }
             } else if (node instanceof BinaryOpLogicNode) {
                 BinaryOpLogicNode binaryOpLogicNode = (BinaryOpLogicNode) node;
+                infoElement = getInfoElements(binaryOpLogicNode);
+                while (infoElement != null) {
+                    if (infoElement.getStamp().equals(StampFactory.contradiction())) {
+                        return rewireGuards(infoElement.getGuard(), false, infoElement.getProxifiedInput(), null, rewireGuardFunction);
+                    } else if (infoElement.getStamp().equals(StampFactory.tautology())) {
+                        return rewireGuards(infoElement.getGuard(), true, infoElement.getProxifiedInput(), null, rewireGuardFunction);
+                    }
+                    infoElement = nextElement(infoElement);
+                }
+
                 ValueNode x = binaryOpLogicNode.getX();
                 ValueNode y = binaryOpLogicNode.getY();
                 infoElement = getInfoElements(x);

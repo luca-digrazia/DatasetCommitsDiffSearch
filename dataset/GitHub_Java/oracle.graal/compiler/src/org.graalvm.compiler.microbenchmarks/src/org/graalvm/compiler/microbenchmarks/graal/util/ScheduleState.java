@@ -51,10 +51,10 @@ public class ScheduleState extends GraphState {
 
     @Override
     protected StructuredGraph preprocessOriginal(StructuredGraph structuredGraph) {
-        StructuredGraph g = super.preprocessOriginal(structuredGraph);
+        StructuredGraph graph = super.preprocessOriginal(structuredGraph);
         GraalState graal = new GraalState();
         PhaseSuite<HighTierContext> highTier = graal.backend.getSuites().getDefaultSuites(graal.options).getHighTier();
-        highTier.apply(g, new HighTierContext(graal.providers, graal.backend.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL));
-        return g;
+        highTier.apply(graph, new HighTierContext(graal.providers, graal.backend.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL));
+        return graph;
     }
 }

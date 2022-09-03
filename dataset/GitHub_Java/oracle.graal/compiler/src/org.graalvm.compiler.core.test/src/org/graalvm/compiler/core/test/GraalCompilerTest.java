@@ -22,7 +22,6 @@
  */
 package org.graalvm.compiler.core.test;
 
-import static java.lang.reflect.Modifier.isStatic;
 import static jdk.vm.ci.runtime.JVMCICompiler.INVOCATION_ENTRY_BCI;
 import static org.graalvm.compiler.nodes.ConstantNode.getConstantNodes;
 import static org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
@@ -48,7 +47,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
-import jdk.vm.ci.meta.JavaConstant;
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.api.test.Graal;
@@ -933,8 +931,7 @@ public abstract class GraalCompilerTest extends GraalTest {
      */
     @SuppressWarnings("try")
     protected InstalledCode getCode(final ResolvedJavaMethod installedCodeOwner, StructuredGraph graph, boolean forceCompile, boolean installAsDefault, OptionValues options) {
-        boolean useCache = !forceCompile && getArgumentToBind() == null;
-        if (useCache && graph == null) {
+        if (!forceCompile && graph == null) {
             InstalledCode cached = cache.get(installedCodeOwner);
             if (cached != null) {
                 if (cached.isValid()) {
@@ -967,7 +964,7 @@ public abstract class GraalCompilerTest extends GraalTest {
                             throw new GraalError("Could not install code for " + installedCodeOwner.format("%H.%n(%p)"));
                         }
                     } catch (BailoutException e) {
-                        if (retry < BAILOUT_RETRY_LIMIT && graph == null && !e.isPermanent()) {
+                        if (retry <= BAILOUT_RETRY_LIMIT && graph == null && !e.isPermanent()) {
                             // retry (if there is no predefined graph)
                             TTY.println(String.format("Restart compilation %s (%s) due to a non-permanent bailout!", installedCodeOwner, id));
                             continue;
@@ -981,7 +978,7 @@ public abstract class GraalCompilerTest extends GraalTest {
                 throw debug.handle(e);
             }
 
-            if (useCache) {
+            if (!forceCompile) {
                 cache.put(installedCodeOwner, installedCode);
             }
             return installedCode;
@@ -1246,31 +1243,10 @@ public abstract class GraalCompilerTest extends GraalTest {
         DebugContext debug = graph.getDebug();
         try (DebugContext.Scope ds = debug.scope("Parsing", javaMethod, graph)) {
             graphBuilderSuite.apply(graph, getDefaultHighTierContext());
-            Object[] args = getArgumentToBind();
-            if (args != null) {
-                bindArguments(graph, args);
-            }
             return graph;
         } catch (Throwable e) {
             throw debug.handle(e);
         }
-    }
-
-    protected void bindArguments(StructuredGraph graph, Object[] argsToBind) {
-        ResolvedJavaMethod m = graph.method();
-        Object receiver = isStatic(m.getModifiers()) ? null : this;
-        Object[] args = argsWithReceiver(receiver, argsToBind);
-        JavaType[] parameterTypes = m.toParameterTypes();
-        assert parameterTypes.length == args.length;
-        for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
-            JavaConstant c = getSnippetReflection().forBoxed(parameterTypes[param.index()].getJavaKind(), args[param.index()]);
-            ConstantNode replacement = ConstantNode.forConstant(c, getMetaAccess(), graph);
-            param.replaceAtUsages(replacement);
-        }
-    }
-
-    protected Object[] getArgumentToBind() {
-        return null;
     }
 
     protected PhaseSuite<HighTierContext> getEagerGraphBuilderSuite() {

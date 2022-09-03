@@ -600,7 +600,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             }
         } else if (a instanceof CompareNode) {
             CompareNode compareA = (CompareNode) a;
-            Condition conditionA = compareA.condition().asCondition();
+            Condition conditionA = compareA.condition();
             if (compareA.unorderedIsTrue()) {
                 return false;
             }
@@ -614,7 +614,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                     return false;
                 }
                 Condition comparableCondition = null;
-                Condition conditionB = compareB.condition().asCondition();
+                Condition conditionB = compareB.condition();
                 if (compareB.getX() == compareA.getX() && compareB.getY() == compareA.getY()) {
                     comparableCondition = conditionB;
                 } else if (compareB.getX() == compareA.getY() && compareB.getY() == compareA.getX()) {
