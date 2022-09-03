@@ -26,6 +26,7 @@ import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.phases.*;
@@ -71,9 +72,9 @@ public class HotSpotSuitesProvider implements SuitesProvider {
 
     }
 
-    public HotSpotSuitesProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, Replacements replacements) {
+    public HotSpotSuitesProvider(HotSpotGraalRuntimeProvider runtime) {
         this.runtime = runtime;
-        this.defaultGraphBuilderSuite = createGraphBuilderSuite(metaAccess, constantReflection, replacements);
+        this.defaultGraphBuilderSuite = createGraphBuilderSuite();
         this.defaultSuites = new DerivedOptionValue<>(new SuitesSupplier());
         this.defaultLIRSuites = new DerivedOptionValue<>(new LIRSuitesSupplier());
     }
@@ -105,40 +106,51 @@ public class HotSpotSuitesProvider implements SuitesProvider {
         return ret;
     }
 
-    protected PhaseSuite<HighTierContext> createGraphBuilderSuite(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, Replacements replacements) {
+    protected PhaseSuite<HighTierContext> createGraphBuilderSuite() {
         PhaseSuite<HighTierContext> suite = new PhaseSuite<>();
         GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault();
-        if (InlineDuringParsing.getValue()) {
-            config.setLoadFieldPlugin(new LoadFieldPlugin() {
-                public boolean apply(GraphBuilderContext builder, ValueNode receiver, ResolvedJavaField field) {
-                    if (receiver.isConstant()) {
-                        JavaConstant asJavaConstant = receiver.asJavaConstant();
-                        return tryConstantFold(builder, metaAccess, constantReflection, field, asJavaConstant);
-                    }
-                    return false;
+        config.setInlineInvokePlugin(new InlineInvokePlugin() {
+            public ResolvedJavaMethod getInlinedMethod(GraphBuilderContext builder, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType, int depth) {
+                if (GraalOptions.InlineDuringParsing.getValue() && method.getCode().length <= GraalOptions.TrivialInliningSize.getValue() &&
+                                depth < GraalOptions.InlineDuringParsingMaxDepth.getValue()) {
+                    return method;
                 }
+                return null;
+            }
+        });
+        config.setLoadFieldPlugin(new LoadFieldPlugin() {
+            public boolean apply(GraphBuilderContext builder, ValueNode receiver, ResolvedJavaField field) {
+                if (receiver.isConstant()) {
+                    JavaConstant asJavaConstant = receiver.asJavaConstant();
+                    return tryConstantFold(builder, runtime.getHostProviders().getMetaAccess(), runtime.getHostProviders().getConstantReflection(), field, asJavaConstant);
+                }
+                return false;
+            }
 
-                public boolean apply(GraphBuilderContext builder, ResolvedJavaField staticField) {
-                    return tryConstantFold(builder, metaAccess, constantReflection, staticField, null);
-                }
-            });
-            config.setInlineInvokePlugin(new InlineInvokePlugin() {
-                public ResolvedJavaMethod getInlinedMethod(GraphBuilderContext builder, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType, int depth) {
+            public boolean apply(GraphBuilderContext builder, ResolvedJavaField staticField) {
+                return tryConstantFold(builder, runtime.getHostProviders().getMetaAccess(), runtime.getHostProviders().getConstantReflection(), staticField, null);
+            }
+        });
+        config.setInlineInvokePlugin(new InlineInvokePlugin() {
+            public ResolvedJavaMethod getInlinedMethod(GraphBuilderContext builder, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType, int depth) {
+                if (GraalOptions.InlineDuringParsing.getValue()) {
                     if (builder.parsingReplacement()) {
                         if (method.getAnnotation(MethodSubstitution.class) != null) {
+                            HotSpotProviders providers = runtime.getHostProviders();
+                            Replacements replacements = providers.getReplacements();
                             ResolvedJavaMethod subst = replacements.getMethodSubstitutionMethod(method);
                             if (subst != null) {
                                 return subst;
                             }
                         }
                     }
-                    if (method.hasBytecodes() && method.getCode().length <= TrivialInliningSize.getValue() && depth < InlineDuringParsingMaxDepth.getValue()) {
+                    if (method.hasBytecodes() && method.getCode().length <= GraalOptions.TrivialInliningSize.getValue() && depth < GraalOptions.InlineDuringParsingMaxDepth.getValue()) {
                         return method;
                     }
-                    return null;
                 }
-            });
-        }
+                return null;
+            }
+        });
         suite.appendPhase(new GraphBuilderPhase(config));
         return suite;
     }

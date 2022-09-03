@@ -33,16 +33,13 @@ import com.oracle.graal.nodes.*;
  * Interface for managing replacements.
  */
 public interface Replacements {
-    // Disabled until bug in support for this is fixed.
-    boolean SELF_RECURSIVE_INTRINSICS_ENABLED = false;
 
     /**
      * Gets the snippet graph derived from a given method.
      *
-     * @param args arguments to the snippet if available, otherwise {@code null}
      * @return the snippet graph, if any, that is derived from {@code method}
      */
-    StructuredGraph getSnippet(ResolvedJavaMethod method, Object[] args);
+    StructuredGraph getSnippet(ResolvedJavaMethod method);
 
     /**
      * Gets the snippet graph derived from a given method.
@@ -50,10 +47,9 @@ public interface Replacements {
      * @param recursiveEntry if the snippet contains a call to this method, it's considered as
      *            recursive call and won't be processed for {@linkplain MethodSubstitution
      *            substitutions} or {@linkplain MacroSubstitution macro nodes}.
-     * @param args arguments to the snippet if available, otherwise {@code null}
      * @return the snippet graph, if any, that is derived from {@code method}
      */
-    StructuredGraph getSnippet(ResolvedJavaMethod method, ResolvedJavaMethod recursiveEntry, Object[] args);
+    StructuredGraph getSnippet(ResolvedJavaMethod method, ResolvedJavaMethod recursiveEntry);
 
     /**
      * Registers a method as snippet.
