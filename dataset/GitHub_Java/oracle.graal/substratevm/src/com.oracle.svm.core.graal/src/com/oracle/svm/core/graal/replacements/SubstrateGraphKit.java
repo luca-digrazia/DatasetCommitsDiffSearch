@@ -84,7 +84,6 @@ public class SubstrateGraphKit extends GraphKit {
     public SubstrateGraphKit(DebugContext debug, ResolvedJavaMethod stubMethod, Providers providers, WordTypes wordTypes, GraphBuilderConfiguration.Plugins graphBuilderPlugins,
                     CompilationIdentifier compilationId) {
         super(new StructuredGraph.Builder(debug.getOptions(), debug).method(stubMethod).compilationId(compilationId).build(), providers, wordTypes, graphBuilderPlugins);
-        assert wordTypes != null : "Support for Word types is mandatory";
         frameState = new FrameStateBuilder(this, stubMethod, graph);
         frameState.disableKindVerification();
         frameState.initializeForMethodStart(null, true, graphBuilderPlugins);
