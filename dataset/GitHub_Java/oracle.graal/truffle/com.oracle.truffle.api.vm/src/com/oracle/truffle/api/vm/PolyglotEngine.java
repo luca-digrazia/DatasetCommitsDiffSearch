@@ -499,10 +499,10 @@ public class PolyglotEngine {
             }
         });
         exceptionCheck(result);
-        return createValue(lang, result, ready);
+        return createValue(lang[0], result, ready);
     }
 
-    Value createValue(TruffleLanguage[] lang, Object[] result, CountDownLatch ready) {
+    Value createValue(TruffleLanguage lang, Object[] result, CountDownLatch ready) {
         return new Value(lang, result, ready);
     }
 
@@ -583,7 +583,7 @@ public class PolyglotEngine {
         } else {
             ready.countDown();
         }
-        return obj[0] == null ? null : createValue(lang, obj, ready);
+        return obj[0] == null ? null : createValue(lang[0], obj, ready);
     }
 
     private void findGlobalSymbolImpl(Object[] obj, String globalName, TruffleLanguage<?>[] lang, CountDownLatch ready) {
@@ -675,12 +675,12 @@ public class PolyglotEngine {
      * running on behind.
      */
     public class Value {
-        private final TruffleLanguage<?>[] language;
+        private final TruffleLanguage<?> language;
         private final Object[] result;
         private final CountDownLatch ready;
         private CallTarget target;
 
-        Value(TruffleLanguage<?>[] language, Object[] result, CountDownLatch ready) {
+        Value(TruffleLanguage<?> language, Object[] result, CountDownLatch ready) {
             this.language = language;
             this.result = result;
             this.ready = ready;
@@ -729,12 +729,8 @@ public class PolyglotEngine {
                 }
             }
             if (representation == String.class) {
-                final Class<? extends TruffleLanguage> clazz = language[0].getClass();
-                Object unwrapped = obj;
-                while (unwrapped instanceof EngineTruffleObject) {
-                    unwrapped = ((EngineTruffleObject) obj).getDelegate();
-                }
-                return representation.cast(SPI.toString(language[0], findEnv(clazz), unwrapped));
+                final Class<? extends TruffleLanguage> clazz = language.getClass();
+                return representation.cast(SPI.toString(language, findEnv(clazz), obj));
             }
             if (representation.isInstance(obj)) {
                 return representation.cast(obj);
@@ -777,8 +773,8 @@ public class PolyglotEngine {
             try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
                 List<Object> arr = new ArrayList<>();
                 if (thiz == null) {
-                    if (language[0] != null) {
-                        Object global = SPI.languageGlobal(SPI.findLanguage(PolyglotEngine.this, language[0].getClass()));
+                    if (language != null) {
+                        Object global = SPI.languageGlobal(SPI.findLanguage(PolyglotEngine.this, language.getClass()));
                         if (global != null) {
                             arr.add(global);
                         }
@@ -790,7 +786,7 @@ public class PolyglotEngine {
                 for (;;) {
                     try {
                         if (target == null) {
-                            target = SymbolInvokerImpl.createCallTarget(language[0], result[0], arr.toArray());
+                            target = SymbolInvokerImpl.createCallTarget(language, result[0], arr.toArray());
                         }
                         res[0] = target.call(arr.toArray());
                         break;
@@ -895,7 +891,7 @@ public class PolyglotEngine {
             checkThread();
 
             Object[] res = {SPI.languageGlobal(getEnv(true)), null};
-            return res[0] == null ? null : new Value(new TruffleLanguage[]{info.getImpl(true)}, res, null);
+            return res[0] == null ? null : new Value(info.getImpl(true), res, null);
         }
 
         /**
