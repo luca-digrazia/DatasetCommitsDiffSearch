@@ -114,7 +114,6 @@ public class InliningData {
     private final int maxMethodPerInlining;
     private final CanonicalizerPhase canonicalizer;
     private final InliningPolicy inliningPolicy;
-    private final StructuredGraph rootGraph;
 
     private int maxGraphs;
 
@@ -125,7 +124,6 @@ public class InliningData {
         this.canonicalizer = canonicalizer;
         this.inliningPolicy = inliningPolicy;
         this.maxGraphs = 1;
-        this.rootGraph = rootGraph;
 
         invocationQueue.push(new MethodInvocation(null, 1.0, 1.0, null));
         graphQueue.push(new CallsiteHolderExplorable(rootGraph, 1.0, 1.0, null));
@@ -735,11 +733,7 @@ public class InliningData {
              */
             popInvocation();
             try (Debug.Scope s = Debug.scope("Inlining", inliningContext())) {
-                if (tryToInline(currentInvocation, inliningDepth() + 1)) {
-                    // Report real progress only if we inline into the root graph
-                    return currentGraph().graph() == rootGraph;
-                }
-                return false;
+                return tryToInline(currentInvocation, inliningDepth() + 1);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
