@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,24 +29,15 @@
  */
 package com.oracle.truffle.llvm.parser;
 
-import java.io.PrintStream;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
-import org.graalvm.collections.EconomicMap;
-
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
+import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionParameter;
+import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.AllocateInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.BinaryOperationInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.BranchInstruction;
@@ -79,10 +70,20 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchInstructi
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchOldInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.TerminatingInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnreachableInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstruction;
 import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import org.graalvm.collections.EconomicMap;
 
 public final class LLVMLivenessAnalysis {
 
@@ -107,21 +108,21 @@ public final class LLVMLivenessAnalysis {
         return frameSlotIdToIndex.get(identifier);
     }
 
-    public static LLVMLivenessAnalysisResult computeLiveness(FrameDescriptor frame, Map<InstructionBlock, List<LLVMPhiManager.Phi>> phis, FunctionDefinition functionDefinition,
-                    PrintStream logLivenessStream) {
+    public static LLVMLivenessAnalysisResult computeLiveness(FrameDescriptor frame, LLVMContext context, Map<InstructionBlock, List<LLVMPhiManager.Phi>> phis, FunctionDefinition functionDefinition) {
         LLVMLivenessAnalysis analysis = new LLVMLivenessAnalysis(functionDefinition, frame);
 
         List<InstructionBlock> blocks = functionDefinition.getBlocks();
         BlockInfo[] blockInfos = analysis.initializeGenKill(phis, blocks);
         ArrayList<InstructionBlock>[] predecessors = computePredecessors(blocks);
         int processedBlocks = iterateToFixedPoint(blocks, frame, blockInfos, predecessors);
-        if (logLivenessStream != null) {
-            analysis.printIntermediateResult(logLivenessStream, blocks, blockInfos, processedBlocks);
+        boolean printStatistics = SulongEngineOption.isTrue(context.getEnv().getOptions().get(SulongEngineOption.PRINT_LIFE_TIME_ANALYSIS_STATS));
+        if (printStatistics) {
+            analysis.printIntermediateResult(context, blocks, blockInfos, processedBlocks);
         }
 
         LLVMLivenessAnalysisResult result = analysis.computeLivenessAnalysisResult(blocks, blockInfos, predecessors);
-        if (logLivenessStream != null) {
-            analysis.printResult(logLivenessStream, blocks, result);
+        if (printStatistics) {
+            analysis.printResult(context, blocks, result);
         }
         return result;
     }
@@ -144,14 +145,8 @@ public final class LLVMLivenessAnalysis {
                 if (instruction instanceof PhiInstruction) {
                     processPhiWrite((PhiInstruction) instruction, blockInfo);
                 } else {
-                    instruction.accept(readVisitor);
-                    int frameSlotIndex = resolve(instruction);
-                    if (frameSlotIndex >= 0) {
-                        blockInfo.defs.set(frameSlotIndex);
-                        if (!blockInfo.gen.get(frameSlotIndex)) {
-                            blockInfo.kill.set(frameSlotIndex);
-                        }
-                    }
+                    processReads(readVisitor, instruction);
+                    processWrite(instruction, blockInfo);
                 }
             }
 
@@ -360,6 +355,20 @@ public final class LLVMLivenessAnalysis {
         return false;
     }
 
+    private static void processReads(LLVMLivenessReadVisitor readVisitor, Instruction instruction) {
+        instruction.accept(readVisitor);
+    }
+
+    private void processWrite(SymbolImpl symbol, BlockInfo blockInfo) {
+        int frameSlotIndex = resolve(symbol);
+        if (frameSlotIndex >= 0) {
+            blockInfo.defs.set(frameSlotIndex);
+            if (!blockInfo.gen.get(frameSlotIndex)) {
+                blockInfo.kill.set(frameSlotIndex);
+            }
+        }
+    }
+
     private void processRead(SymbolImpl symbol, BlockInfo blockInfo) {
         int frameSlotIndex = resolve(symbol);
         processRead(blockInfo, frameSlotIndex);
@@ -389,7 +398,7 @@ public final class LLVMLivenessAnalysis {
     }
 
     private int resolve(SymbolImpl symbol) {
-        if (symbol instanceof FunctionParameter || symbol instanceof ValueInstruction) {
+        if (symbol instanceof ValueSymbol && !(symbol instanceof GlobalValueSymbol || symbol instanceof FunctionDefinition || symbol instanceof FunctionDeclaration)) {
             String name = ((ValueSymbol) symbol).getName();
             assert name != null;
             return getFrameSlotIndex(name);
@@ -397,7 +406,103 @@ public final class LLVMLivenessAnalysis {
         return -1;
     }
 
-    private final class LLVMLivenessReadVisitor extends LLVMLocalReadVisitor {
+    private void printIntermediateResult(LLVMContext context, List<InstructionBlock> blocks, BlockInfo[] blockInfos, int processedBlocks) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(functionDefinition.getName());
+        builder.append(" (processed ");
+        builder.append(processedBlocks);
+        builder.append(" blocks - CFG has ");
+        builder.append(blocks.size());
+        builder.append(" blocks)\n");
+        for (int i = 0; i < blockInfos.length; i++) {
+            BlockInfo blockInfo = blockInfos[i];
+            builder.append("Basic block ");
+            builder.append(i);
+            builder.append(" (");
+            builder.append(blocks.get(i).getName());
+            builder.append(")\n");
+
+            builder.append("  In:      ");
+            builder.append(formatLocals(blockInfo.in));
+            builder.append("\n");
+
+            builder.append("  Gen:     ");
+            builder.append(formatLocals(blockInfo.gen));
+            builder.append("\n");
+
+            builder.append("  Kill:    ");
+            builder.append(formatLocals(blockInfo.kill));
+            builder.append("\n");
+
+            builder.append("  Def:     ");
+            builder.append(formatLocals(blockInfo.defs));
+            builder.append("\n");
+
+            builder.append("  PhiDefs: ");
+            builder.append(formatLocals(blockInfo.phiDefs));
+            builder.append("\n");
+
+            builder.append("  PhiUses: ");
+            builder.append(formatLocals(blockInfo.phiUses));
+            builder.append("\n");
+
+            builder.append("  Out:     ");
+            builder.append(formatLocals(blockInfo.out));
+            builder.append("\n");
+        }
+
+        SulongEngineOption.getStream(context.getEnv().getOptions().get(SulongEngineOption.PRINT_LIFE_TIME_ANALYSIS_STATS)).println(builder.toString());
+    }
+
+    private void printResult(LLVMContext context, List<InstructionBlock> blocks, LLVMLivenessAnalysisResult result) {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < blocks.size(); i++) {
+            builder.append("Basic block ");
+            builder.append(i);
+            builder.append(" (");
+            builder.append(blocks.get(i).getName());
+            builder.append(")\n");
+
+            builder.append("  NullableBefore: ");
+            builder.append(formatLocals(result.nullableBeforeBlock[i]));
+            builder.append("\n");
+
+            builder.append("  NullableWithin:  ");
+            builder.append(formatLocalNullers(result.nullableWithinBlock[i]));
+            builder.append("\n");
+
+            builder.append("  NullableAfter:  ");
+            builder.append(formatLocals(result.nullableAfterBlock[i]));
+            builder.append("\n");
+        }
+
+        SulongEngineOption.getStream(context.getEnv().getOptions().get(SulongEngineOption.PRINT_LIFE_TIME_ANALYSIS_STATS)).println(builder.toString());
+    }
+
+    private String formatLocals(BitSet bitSet) {
+        StringBuilder result = new StringBuilder();
+        int bitIndex = -1;
+        while ((bitIndex = bitSet.nextSetBit(bitIndex + 1)) >= 0) {
+            if (result.length() > 0) {
+                result.append(", ");
+            }
+            result.append(frameSlots[bitIndex].getIdentifier());
+        }
+        return result.toString();
+    }
+
+    private static Object formatLocalNullers(ArrayList<NullerInformation> nullers) {
+        StringBuilder result = new StringBuilder();
+        for (NullerInformation nuller : nullers) {
+            if (result.length() > 0) {
+                result.append(", ");
+            }
+            result.append(nuller.frameSlot.getIdentifier());
+        }
+        return result.toString();
+    }
+
+    private class LLVMLivenessReadVisitor extends LLVMLocalReadVisitor {
         private final BlockInfo blockInfo;
 
         LLVMLivenessReadVisitor(BlockInfo blockInfo) {
@@ -410,7 +515,7 @@ public final class LLVMLivenessAnalysis {
         }
     }
 
-    private final class LLVMNullerReadVisitor extends LLVMLocalReadVisitor {
+    private class LLVMNullerReadVisitor extends LLVMLocalReadVisitor {
         private final int[] lastInstructionIndexTouchingLocal;
         private int instructionIndex;
 
@@ -690,101 +795,5 @@ public final class LLVMLivenessAnalysis {
         public BitSet[] getNullableAfterBlock() {
             return nullableAfterBlock;
         }
-    }
-
-    private void printIntermediateResult(PrintStream logLivenessStream, List<InstructionBlock> blocks, BlockInfo[] blockInfos, int processedBlocks) {
-        StringBuilder builder = new StringBuilder();
-        builder.append(functionDefinition.getName());
-        builder.append(" (processed ");
-        builder.append(processedBlocks);
-        builder.append(" blocks - CFG has ");
-        builder.append(blocks.size());
-        builder.append(" blocks)\n");
-        for (int i = 0; i < blockInfos.length; i++) {
-            BlockInfo blockInfo = blockInfos[i];
-            builder.append("Basic block ");
-            builder.append(i);
-            builder.append(" (");
-            builder.append(blocks.get(i).getName());
-            builder.append(")\n");
-
-            builder.append("  In:      ");
-            builder.append(formatLocals(blockInfo.in));
-            builder.append("\n");
-
-            builder.append("  Gen:     ");
-            builder.append(formatLocals(blockInfo.gen));
-            builder.append("\n");
-
-            builder.append("  Kill:    ");
-            builder.append(formatLocals(blockInfo.kill));
-            builder.append("\n");
-
-            builder.append("  Def:     ");
-            builder.append(formatLocals(blockInfo.defs));
-            builder.append("\n");
-
-            builder.append("  PhiDefs: ");
-            builder.append(formatLocals(blockInfo.phiDefs));
-            builder.append("\n");
-
-            builder.append("  PhiUses: ");
-            builder.append(formatLocals(blockInfo.phiUses));
-            builder.append("\n");
-
-            builder.append("  Out:     ");
-            builder.append(formatLocals(blockInfo.out));
-            builder.append("\n");
-        }
-
-        logLivenessStream.println(builder.toString());
-    }
-
-    private void printResult(PrintStream logLivenessStream, List<InstructionBlock> blocks, LLVMLivenessAnalysisResult result) {
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < blocks.size(); i++) {
-            builder.append("Basic block ");
-            builder.append(i);
-            builder.append(" (");
-            builder.append(blocks.get(i).getName());
-            builder.append(")\n");
-
-            builder.append("  NullableBefore: ");
-            builder.append(formatLocals(result.nullableBeforeBlock[i]));
-            builder.append("\n");
-
-            builder.append("  NullableWithin:  ");
-            builder.append(formatLocalNullers(result.nullableWithinBlock[i]));
-            builder.append("\n");
-
-            builder.append("  NullableAfter:  ");
-            builder.append(formatLocals(result.nullableAfterBlock[i]));
-            builder.append("\n");
-        }
-
-        logLivenessStream.println(builder.toString());
-    }
-
-    private String formatLocals(BitSet bitSet) {
-        StringBuilder result = new StringBuilder();
-        int bitIndex = -1;
-        while ((bitIndex = bitSet.nextSetBit(bitIndex + 1)) >= 0) {
-            if (result.length() > 0) {
-                result.append(", ");
-            }
-            result.append(frameSlots[bitIndex].getIdentifier());
-        }
-        return result.toString();
-    }
-
-    private static Object formatLocalNullers(ArrayList<NullerInformation> nullers) {
-        StringBuilder result = new StringBuilder();
-        for (NullerInformation nuller : nullers) {
-            if (result.length() > 0) {
-                result.append(", ");
-            }
-            result.append(nuller.frameSlot.getIdentifier());
-        }
-        return result.toString();
     }
 }
