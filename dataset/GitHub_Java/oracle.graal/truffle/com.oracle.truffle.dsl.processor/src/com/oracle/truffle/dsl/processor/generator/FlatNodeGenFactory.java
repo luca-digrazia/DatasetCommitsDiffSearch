@@ -64,6 +64,7 @@ import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.Introspection;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
+import com.oracle.truffle.api.dsl.internal.DSLOptions;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.Node.Child;
@@ -108,7 +109,6 @@ import com.oracle.truffle.dsl.processor.model.TypeSystemData;
 import com.oracle.truffle.dsl.processor.parser.SpecializationGroup;
 import com.oracle.truffle.dsl.processor.parser.SpecializationGroup.TypeGuard;
 
-@SuppressWarnings("deprecation")
 public class FlatNodeGenFactory {
 
     private static final String METHOD_FALLBACK_GUARD = "fallbackGuard_";
@@ -123,7 +123,7 @@ public class FlatNodeGenFactory {
     private final NodeData node;
     private final TypeSystemData typeSystem;
     private final TypeMirror genericType;
-    private final com.oracle.truffle.api.dsl.internal.DSLOptions options;
+    private final DSLOptions options;
     private final Set<TypeMirror> expectedTypes = new HashSet<>();
     private List<SpecializationData> reachableSpecializations;
 
@@ -974,20 +974,17 @@ public class FlatNodeGenFactory {
         List<CodeTree> values = new ArrayList<>();
 
         for (NodeExecutionData execution : node.getChildExecutions()) {
-            NodeChildData child = execution.getChild();
-            LocalVariable var = frameState.getValue(execution);
-            LocalVariable shortCircuit = frameState.getShortCircuit(execution);
-            if (shortCircuit != null) {
-                builder.string("null");
-                values.add(shortCircuit.createReference());
-            }
-            if (child != null) {
+            if (execution.getChild() != null) {
+                LocalVariable var = frameState.getValue(execution);
+                LocalVariable shortCircuit = frameState.getShortCircuit(execution);
+                if (shortCircuit != null) {
+                    builder.string("null");
+                    values.add(shortCircuit.createReference());
+                }
                 builder.string("this.", nodeFieldName(execution));
-            } else {
-                builder.string("null");
-            }
-            if (var != null) {
-                values.add(var.createReference());
+                if (var != null) {
+                    values.add(var.createReference());
+                }
             }
         }
         builder.end();
