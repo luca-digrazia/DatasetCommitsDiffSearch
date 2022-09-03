@@ -58,7 +58,6 @@ import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64BsrNodeFactory.LLVMAMD64BsrqNo
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64BsrNodeFactory.LLVMAMD64BsrwNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64BswapNodeFactory.LLVMAMD64BswaplNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64BswapNodeFactory.LLVMAMD64BswapqNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64ClearFlagNode;
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64CmpNodeFactory.LLVMAMD64CmpbNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64CmpNodeFactory.LLVMAMD64CmplNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64CmpNodeFactory.LLVMAMD64CmpqNodeGen;
@@ -161,7 +160,6 @@ import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64ShrNodeFactory.LLVMAMD64ShrqNo
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64ShrNodeFactory.LLVMAMD64ShrwNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64StoreFlagsFactory.LLVMAMD64SahfNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64StoreFlagsFactory.LLVMAMD64WriteFlagswNodeGen;
-import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64StosNodeFactory.LLVMAMD64StosbNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64SubNodeFactory.LLVMAMD64SubbNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64SubNodeFactory.LLVMAMD64SublNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.LLVMAMD64SubNodeFactory.LLVMAMD64SubqNodeGen;
@@ -406,10 +404,8 @@ class AsmFactory {
 
     void createOperation(String operation) {
         switch (operation) {
-            case "cld":
-                statements.add(new LLVMAMD64ClearFlagNode(getFlagWrite(LLVMAMD64Flags.DF)));
-                break;
             case "clc":
+            case "cld":
             case "cli":
             case "cmc":
                 statements.add(new LLVMUnsupportedInlineAssemblerNode(sourceLocation, "Unsupported operation: " + operation));
@@ -491,14 +487,6 @@ class AsmFactory {
                 LLVMExpressionNode r9 = getOperandLoad(PrimitiveType.I64, new AsmRegisterOperand("r9"));
                 LLVMExpressionNode syscall = LLVMAMD64SyscallNodeGen.create(rax, rdi, rsi, rdx, r10, r8, r9);
                 statements.add(getOperandStore(PrimitiveType.I64, new AsmRegisterOperand("rax"), syscall));
-                break;
-            }
-            case "stosb": {
-                LLVMExpressionNode al = getOperandLoad(PrimitiveType.I8, new AsmRegisterOperand("al"));
-                LLVMExpressionNode rdi = getOperandLoad(PrimitiveType.I64, new AsmRegisterOperand("rdi"));
-                LLVMExpressionNode df = getFlag(LLVMAMD64Flags.DF);
-                LLVMAMD64WriteValueNode writeRDI = getStore(PrimitiveType.I64, new AsmRegisterOperand("rdi"));
-                statements.add(LLVMAMD64StosbNodeGen.create(writeRDI, al, rdi, df));
                 break;
             }
             default:
@@ -2091,8 +2079,7 @@ class AsmFactory {
             LLVMExpressionNode register = LLVMAMD64ReadRegisterNodeGen.create(frame);
             int shift = op.getShift();
             LLVMExpressionNode out = null;
-            assert (type instanceof PointerType && op.getType() == PrimitiveType.I64) || (op.getType() instanceof PointerType && type == PrimitiveType.I64) ||
-                            (type == op.getType());
+            assert type == op.getType();
             switch (((PrimitiveType) op.getType()).getPrimitiveKind()) {
                 case I8:
                     out = LLVMI8ToR64NodeGen.create(shift, register, from);
