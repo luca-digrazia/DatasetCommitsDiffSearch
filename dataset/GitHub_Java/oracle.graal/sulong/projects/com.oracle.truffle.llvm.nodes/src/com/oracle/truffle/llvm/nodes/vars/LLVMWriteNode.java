@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.nodes.vars;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
@@ -43,7 +44,15 @@ import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
-import com.oracle.truffle.llvm.runtime.vector.LLVMVector;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
 @NodeChild(value = "valueNode", type = LLVMExpressionNode.class)
 public abstract class LLVMWriteNode extends LLVMStatementNode {
@@ -194,6 +203,11 @@ public abstract class LLVMWriteNode extends LLVMStatementNode {
         }
 
         @Specialization
+        protected void writeAddress(VirtualFrame frame, long value) {
+            frame.setObject(slot, LLVMNativePointer.create(value));
+        }
+
+        @Fallback
         protected void writeObject(VirtualFrame frame, Object value) {
             frame.setObject(slot, value);
         }
@@ -205,7 +219,42 @@ public abstract class LLVMWriteNode extends LLVMStatementNode {
         }
 
         @Specialization
-        protected void writeVector(VirtualFrame frame, LLVMVector value) {
+        protected void writeVector(VirtualFrame frame, LLVMDoubleVector value) {
+            frame.setObject(slot, value);
+        }
+
+        @Specialization
+        protected void writeVector(VirtualFrame frame, LLVMFloatVector value) {
+            frame.setObject(slot, value);
+        }
+
+        @Specialization
+        protected void writeVector(VirtualFrame frame, LLVMI16Vector value) {
+            frame.setObject(slot, value);
+        }
+
+        @Specialization
+        protected void writeVector(VirtualFrame frame, LLVMI1Vector value) {
+            frame.setObject(slot, value);
+        }
+
+        @Specialization
+        protected void writeVector(VirtualFrame frame, LLVMI32Vector value) {
+            frame.setObject(slot, value);
+        }
+
+        @Specialization
+        protected void writeVector(VirtualFrame frame, LLVMI64Vector value) {
+            frame.setObject(slot, value);
+        }
+
+        @Specialization
+        protected void writeVector(VirtualFrame frame, LLVMPointerVector value) {
+            frame.setObject(slot, value);
+        }
+
+        @Specialization
+        protected void writeVector(VirtualFrame frame, LLVMI8Vector value) {
             frame.setObject(slot, value);
         }
     }
