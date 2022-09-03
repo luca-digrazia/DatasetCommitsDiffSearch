@@ -280,13 +280,10 @@ public abstract class KernelTester {
     }
 
     /**
-     * Tests two floating point values for equality.
+     * This isEqualsFP method allows subclass to override what FP equality means for this particular
+     * unit test.
      */
     public boolean isEqualsFP(double first, double second) {
-        // Special case for checking whether expected and actual values are both NaNs.
-        if (Double.isNaN(first) && Double.isNaN(second)) {
-            return true;
-        }
         return first == second;
     }
 
