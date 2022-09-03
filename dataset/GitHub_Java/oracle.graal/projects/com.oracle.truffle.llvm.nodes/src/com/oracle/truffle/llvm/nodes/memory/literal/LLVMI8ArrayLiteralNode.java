@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -36,13 +36,12 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMForeignWriteNode;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMForeignWriteNodeGen;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMTypesGen;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 @NodeChild(value = "address", type = LLVMExpressionNode.class)
 public abstract class LLVMI8ArrayLiteralNode extends LLVMExpressionNode {
@@ -56,36 +55,31 @@ public abstract class LLVMI8ArrayLiteralNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    protected LLVMAddress write(VirtualFrame frame, LLVMGlobalVariable global,
-                    @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        return writeI8(frame, globalAccess.getNativeLocation(global));
-    }
-
-    @Specialization
     @ExplodeLoop
-    protected LLVMAddress writeI8(VirtualFrame frame, LLVMAddress addr) {
-        long currentPtr = addr.getVal();
+    protected LLVMNativePointer writeI8(VirtualFrame frame, LLVMNativePointer addr,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        long currentPtr = addr.asNative();
         for (int i = 0; i < values.length; i++) {
-            byte currentValue = values[i].executeI8(frame);
-            LLVMMemory.putI8(currentPtr, currentValue);
+            byte currentValue = LLVMTypesGen.asByte(values[i].executeGeneric(frame));
+            memory.putI8(currentPtr, currentValue);
             currentPtr += stride;
         }
         return addr;
     }
 
     protected LLVMForeignWriteNode createForeignWrite() {
-        return LLVMForeignWriteNodeGen.create(PrimitiveType.I8, 1);
+        return LLVMForeignWriteNodeGen.create(ForeignToLLVMType.I8);
     }
 
     @Specialization
     @ExplodeLoop
-    protected LLVMTruffleObject foreignWriteI8(VirtualFrame frame, LLVMTruffleObject addr,
+    protected LLVMManagedPointer foreignWriteI8(VirtualFrame frame, LLVMManagedPointer addr,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
-        LLVMTruffleObject currentPtr = addr;
+        LLVMManagedPointer currentPtr = addr;
         for (int i = 0; i < values.length; i++) {
-            byte currentValue = values[i].executeI8(frame);
-            foreignWrite.execute(frame, currentPtr, currentValue);
-            currentPtr = currentPtr.increment(stride, currentPtr.getType());
+            byte currentValue = LLVMTypesGen.asByte(values[i].executeGeneric(frame));
+            foreignWrite.execute(currentPtr, currentValue);
+            currentPtr = currentPtr.increment(stride);
         }
         return addr;
     }

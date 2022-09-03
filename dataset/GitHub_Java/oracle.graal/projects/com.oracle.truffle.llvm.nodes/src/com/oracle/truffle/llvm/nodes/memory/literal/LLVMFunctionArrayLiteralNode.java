@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -36,12 +36,15 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMForeignWriteNode;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMForeignWriteNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 @NodeChild(value = "address", type = LLVMExpressionNode.class)
 public abstract class LLVMFunctionArrayLiteralNode extends LLVMExpressionNode {
@@ -55,25 +58,47 @@ public abstract class LLVMFunctionArrayLiteralNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    protected LLVMAddress write(VirtualFrame frame, LLVMGlobalVariable global, @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        return writeDouble(frame, globalAccess.getNativeLocation(global));
-    }
-
-    @Specialization
     @ExplodeLoop
-    protected LLVMAddress writeDouble(VirtualFrame frame, LLVMAddress addr) {
-        long currentPtr = addr.getVal();
+    protected LLVMNativePointer handleAddress(VirtualFrame frame, LLVMNativePointer array,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        long currentPtr = array.asNative();
         for (int i = 0; i < values.length; i++) {
             try {
                 LLVMFunctionDescriptor currentValue = (LLVMFunctionDescriptor) values[i].executeTruffleObject(frame);
-                LLVMHeap.putFunctionPointer(currentPtr, currentValue.getFunctionPointer());
+                memory.putFunctionPointer(currentPtr, toNative.executeWithTarget(currentValue).asNative());
                 currentPtr += stride;
             } catch (UnexpectedResultException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException(e);
             }
         }
-        return addr;
+        return array;
     }
 
+    @Specialization
+    @ExplodeLoop
+    protected LLVMManagedPointer handleTruffleObject(VirtualFrame frame, LLVMManagedPointer array,
+                    @Cached("createForeignWrites()") LLVMForeignWriteNode[] foreignWrites) {
+        LLVMManagedPointer currentPtr = array;
+        for (int i = 0; i < values.length; i++) {
+            try {
+                LLVMFunctionDescriptor currentValue = (LLVMFunctionDescriptor) values[i].executeTruffleObject(frame);
+                foreignWrites[i].execute(currentPtr, currentValue);
+                currentPtr = currentPtr.increment(stride);
+            } catch (UnexpectedResultException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(e);
+            }
+        }
+        return array;
+    }
+
+    protected LLVMForeignWriteNode[] createForeignWrites() {
+        LLVMForeignWriteNode[] writes = new LLVMForeignWriteNode[values.length];
+        for (int i = 0; i < writes.length; i++) {
+            writes[i] = LLVMForeignWriteNodeGen.create(ForeignToLLVMType.POINTER);
+        }
+        return writes;
+    }
 }

@@ -149,11 +149,12 @@ public abstract class LLVMObjectAccessFactory {
         @Child private Node read = Message.READ.createNode();
         @Child private ForeignToLLVM toLLVM;
 
-        private final ForeignToLLVMType type;
+        private final int elementAccessSize;
         private final boolean acceptDynamicObject;
 
         FallbackReadNode(ForeignToLLVMType type, boolean acceptDynamicObject) {
-            this.type = type;
+            this.elementAccessSize = type.getSizeInBytes();
+            this.toLLVM = ForeignToLLVM.create(type);
             this.acceptDynamicObject = acceptDynamicObject;
         }
 
@@ -168,16 +169,8 @@ public abstract class LLVMObjectAccessFactory {
 
         @Override
         public Object executeRead(Object obj, long offset) throws InteropException {
-            Object foreign = ForeignAccess.sendRead(read, (TruffleObject) obj, offset / type.getSizeInBytes());
-            return getToLLVM().executeWithTarget(foreign);
-        }
-
-        private ForeignToLLVM getToLLVM() {
-            if (toLLVM == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                toLLVM = insert(getNodeFactory().createForeignToLLVM(type));
-            }
-            return toLLVM;
+            Object foreign = ForeignAccess.sendRead(read, (TruffleObject) obj, offset / elementAccessSize);
+            return toLLVM.executeWithTarget(foreign);
         }
     }
 

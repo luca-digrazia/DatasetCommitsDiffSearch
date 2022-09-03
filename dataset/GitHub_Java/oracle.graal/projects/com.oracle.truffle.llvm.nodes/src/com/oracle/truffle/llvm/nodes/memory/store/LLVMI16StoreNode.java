@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,53 +32,49 @@ package com.oracle.truffle.llvm.nodes.memory.store;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-public abstract class LLVMI16StoreNode extends LLVMStoreNode {
+public abstract class LLVMI16StoreNode extends LLVMStoreNodeCommon {
 
     public LLVMI16StoreNode() {
-        super(PrimitiveType.I16, I16_SIZE_IN_BYTES);
+        this(null);
+    }
+
+    public LLVMI16StoreNode(LLVMSourceLocation sourceLocation) {
+        super(sourceLocation);
     }
 
     @Specialization
-    protected Object doOp(LLVMGlobalVariable address, short value,
-                    @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        globalAccess.putI16(address, value);
-        return null;
+    protected void doOp(LLVMVirtualAllocationAddress address, short value,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        address.writeI16(memory, value);
+    }
+
+    @Specialization(guards = "!isAutoDerefHandle(addr)")
+    protected void doOp(LLVMNativePointer addr, short value) {
+        getLLVMMemoryCached().putI16(addr, value);
     }
 
     @Specialization
-    protected Object doOp(LLVMVirtualAllocationAddress address, short value) {
-        address.writeI16(value);
-        return null;
+    protected void doOpManaged(LLVMManagedPointer address, short value) {
+        getForeignWriteNode(ForeignToLLVMType.I16).execute(address, value);
+    }
+
+    @Specialization(guards = "isAutoDerefHandle(addr)")
+    protected void doOpDerefHandle(LLVMNativePointer addr, short value) {
+        doOpManaged(getDerefHandleGetReceiverNode().execute(addr), value);
     }
 
     @Specialization
-    protected Object doOp(LLVMAddress address, short value) {
-        LLVMMemory.putI16(address, value);
-        return null;
-    }
-
-    @Specialization
-    protected Object doOp(VirtualFrame frame, LLVMTruffleObject address, short value,
-                    @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
-        foreignWrite.execute(frame, address, value);
-        return null;
-    }
-
-    @Specialization
-    protected Object doOp(LLVMBoxedPrimitive address, short value) {
+    protected void doOp(LLVMBoxedPrimitive address, short value) {
         if (address.getValue() instanceof Long) {
-            LLVMMemory.putI16((long) address.getValue(), value);
-            return null;
+            getLLVMMemoryCached().putI16((long) address.getValue(), value);
         } else {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalAccessError("Cannot access address: " + address.getValue());

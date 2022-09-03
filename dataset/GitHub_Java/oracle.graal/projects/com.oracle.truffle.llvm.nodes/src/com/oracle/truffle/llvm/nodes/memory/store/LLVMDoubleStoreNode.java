@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,60 +31,53 @@ package com.oracle.truffle.llvm.nodes.memory.store;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@NodeChild(type = LLVMExpressionNode.class, value = "valueNode")
-public abstract class LLVMDoubleStoreNode extends LLVMStoreNode {
+public abstract class LLVMDoubleStoreNode extends LLVMStoreNodeCommon {
 
-    public LLVMDoubleStoreNode(SourceSection source) {
-        super(PrimitiveType.DOUBLE, source);
+    public LLVMDoubleStoreNode() {
+        this(null);
+    }
+
+    public LLVMDoubleStoreNode(LLVMSourceLocation sourceLocation) {
+        super(sourceLocation);
+    }
+
+    @Specialization(guards = "!isAutoDerefHandle(addr)")
+    protected void doOp(LLVMNativePointer addr, double value) {
+        getLLVMMemoryCached().putDouble(addr, value);
+    }
+
+    @Specialization(guards = "isAutoDerefHandle(addr)")
+    protected void doOpDerefHandle(LLVMNativePointer addr, double value) {
+        doOpManaged(getDerefHandleGetReceiverNode().execute(addr), value);
     }
 
     @Specialization
-    public Object execute(LLVMGlobalVariable address, double value, @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        globalAccess.putDouble(address, value);
-        return null;
+    protected void doOp(LLVMVirtualAllocationAddress address, double value,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        address.writeDouble(memory, value);
     }
 
     @Specialization
-    public Object execute(LLVMAddress address, double value) {
-        LLVMMemory.putDouble(address, value);
-        return null;
+    protected void doOpManaged(LLVMManagedPointer address, double value) {
+        getForeignWriteNode(ForeignToLLVMType.DOUBLE).execute(address, value);
     }
 
     @Specialization
-    public Object execute(LLVMVirtualAllocationAddress address, double value) {
-        address.writeDouble(value);
-        return null;
-    }
-
-    @Specialization
-    public Object execute(LLVMTruffleObject address, double value, @Cached(value = "getContext()") LLVMContext context) {
-        doForeignAccess(address, LLVMExpressionNode.DOUBLE_SIZE_IN_BYTES, value, context);
-        return null;
-    }
-
-    @Specialization
-    public Object execute(LLVMBoxedPrimitive address, double value) {
+    protected void doOp(LLVMBoxedPrimitive address, double value) {
         if (address.getValue() instanceof Long) {
-            LLVMMemory.putDouble((long) address.getValue(), value);
-            return null;
+            getLLVMMemoryCached().putDouble((long) address.getValue(), value);
         } else {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalAccessError("Cannot access address: " + address.getValue());
         }
     }
-
 }

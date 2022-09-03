@@ -123,12 +123,12 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
         }
 
         @Override
-        public LLVMObjectReadNode createReadNode() {
+        public LLVMObjectReadNode createReadNode(ForeignToLLVMType type) {
             return new ManagedReadNode();
         }
 
         @Override
-        public LLVMObjectWriteNode createWriteNode() {
+        public LLVMObjectWriteNode createWriteNode(ForeignToLLVMType type) {
             return new ManagedWriteNode();
         }
     }
@@ -141,7 +141,7 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
         }
 
         @Override
-        public Object executeRead(Object obj, long offset, ForeignToLLVMType type) throws InteropException {
+        public Object executeRead(Object obj, long offset) throws InteropException {
             assert offset % LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES == 0 : "invalid offset";
             long idx = offset / LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES;
             return ((ManagedMallocObject) obj).get((int) idx);
@@ -156,7 +156,7 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
         }
 
         @Override
-        public void executeWrite(Object obj, long offset, Object value, ForeignToLLVMType type) throws InteropException {
+        public void executeWrite(Object obj, long offset, Object value) throws InteropException {
             assert offset % LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES == 0 : "invalid offset";
             long idx = offset / LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES;
             ((ManagedMallocObject) obj).set((int) idx, value);

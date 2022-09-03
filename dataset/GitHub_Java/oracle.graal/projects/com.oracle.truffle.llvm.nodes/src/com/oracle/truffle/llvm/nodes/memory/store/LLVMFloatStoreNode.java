@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,60 +31,53 @@ package com.oracle.truffle.llvm.nodes.memory.store;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@NodeChild(type = LLVMExpressionNode.class, value = "valueNode")
-public abstract class LLVMFloatStoreNode extends LLVMStoreNode {
+public abstract class LLVMFloatStoreNode extends LLVMStoreNodeCommon {
 
-    public LLVMFloatStoreNode(SourceSection source) {
-        super(PrimitiveType.FLOAT, source);
+    public LLVMFloatStoreNode() {
+        this(null);
+    }
+
+    public LLVMFloatStoreNode(LLVMSourceLocation sourceLocation) {
+        super(sourceLocation);
+    }
+
+    @Specialization(guards = "!isAutoDerefHandle(addr)")
+    protected void doOp(LLVMNativePointer addr, float value) {
+        getLLVMMemoryCached().putFloat(addr, value);
+    }
+
+    @Specialization(guards = "isAutoDerefHandle(addr)")
+    protected void doOpDerefHandle(LLVMNativePointer addr, float value) {
+        doOpManaged(getDerefHandleGetReceiverNode().execute(addr), value);
     }
 
     @Specialization
-    public Object execute(LLVMGlobalVariable address, float value, @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        globalAccess.putFloat(address, value);
-        return null;
+    protected void doOp(LLVMVirtualAllocationAddress address, float value,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        address.writeFloat(memory, value);
     }
 
     @Specialization
-    public Object execute(LLVMAddress address, float value) {
-        LLVMMemory.putFloat(address, value);
-        return null;
+    protected void doOpManaged(LLVMManagedPointer address, float value) {
+        getForeignWriteNode(ForeignToLLVMType.FLOAT).execute(address, value);
     }
 
     @Specialization
-    public Object execute(LLVMVirtualAllocationAddress address, float value) {
-        address.writeFloat(value);
-        return null;
-    }
-
-    @Specialization
-    public Object execute(LLVMTruffleObject address, float value, @Cached(value = "getContext()") LLVMContext context) {
-        doForeignAccess(address, LLVMExpressionNode.FLOAT_SIZE_IN_BYTES, value, context);
-        return null;
-    }
-
-    @Specialization
-    public Object execute(LLVMBoxedPrimitive address, float value) {
+    protected void doOp(LLVMBoxedPrimitive address, float value) {
         if (address.getValue() instanceof Long) {
-            LLVMMemory.putFloat((long) address.getValue(), value);
-            return null;
+            getLLVMMemoryCached().putFloat((long) address.getValue(), value);
         } else {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalAccessError("Cannot access address: " + address.getValue());
         }
     }
-
 }

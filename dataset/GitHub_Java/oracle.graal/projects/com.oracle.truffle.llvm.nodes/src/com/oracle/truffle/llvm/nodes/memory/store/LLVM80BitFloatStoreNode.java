@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.nodes.memory.store;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
@@ -59,12 +58,10 @@ public abstract class LLVM80BitFloatStoreNode extends LLVMStoreNodeCommon {
 
     // TODO (chaeubl): we could store this in a more efficient way (short + long)
     @Specialization
-    @ExplodeLoop
     protected void doForeign(LLVMManagedPointer address, LLVM80BitFloat value) {
         byte[] bytes = value.getBytes();
-        assert bytes.length == LLVM80BitFloat.BYTE_WIDTH;
         LLVMManagedPointer currentPtr = address;
-        for (int i = 0; i < LLVM80BitFloat.BYTE_WIDTH; i++) {
+        for (int i = 0; i < bytes.length; i++) {
             getForeignWriteNode(ForeignToLLVMType.I8).execute(currentPtr, bytes[i]);
             currentPtr = currentPtr.increment(I8_SIZE_IN_BYTES);
         }
