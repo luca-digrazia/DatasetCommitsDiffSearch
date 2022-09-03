@@ -84,7 +84,7 @@ public class ObjectStamp extends Stamp {
             return otherStamp.meet(this);
         }
         if (!(otherStamp instanceof ObjectStamp)) {
-            return StampFactory.illegal(Kind.Illegal);
+            return StampFactory.illegal();
         }
         ObjectStamp other = (ObjectStamp) otherStamp;
         ResolvedJavaType meetType;
@@ -149,14 +149,14 @@ public class ObjectStamp extends Stamp {
             return otherStamp.join(this);
         }
         if (!(otherStamp instanceof ObjectStamp)) {
-            return StampFactory.illegal(Kind.Illegal);
+            return StampFactory.illegal();
         }
         ObjectStamp other = (ObjectStamp) otherStamp;
         ResolvedJavaType joinType;
         boolean joinAlwaysNull = alwaysNull || other.alwaysNull;
         boolean joinNonNull = nonNull || other.nonNull;
         if (joinAlwaysNull && joinNonNull) {
-            return StampFactory.illegal(Kind.Object);
+            return StampFactory.illegal();
         }
         boolean joinExactType = exactType || other.exactType;
         if (type == other.type) {
@@ -164,7 +164,7 @@ public class ObjectStamp extends Stamp {
         } else if (type == null && other.type == null) {
             joinType = null;
             if (joinExactType) {
-                return StampFactory.illegal(Kind.Object);
+                return StampFactory.illegal();
             }
         } else if (type == null) {
             joinType = other.type;
@@ -196,10 +196,10 @@ public class ObjectStamp extends Stamp {
         }
         if (joinAlwaysNull) {
             if (joinNonNull) {
-                return StampFactory.illegal(Kind.Object);
+                return StampFactory.illegal();
             }
         } else if (joinExactType && Modifier.isAbstract(joinType.getModifiers()) && !joinType.isArray()) {
-            return StampFactory.illegal(Kind.Object);
+            return StampFactory.illegal();
         }
         if (joinType == type && joinExactType == exactType && joinNonNull == nonNull && joinAlwaysNull == alwaysNull) {
             return this;
