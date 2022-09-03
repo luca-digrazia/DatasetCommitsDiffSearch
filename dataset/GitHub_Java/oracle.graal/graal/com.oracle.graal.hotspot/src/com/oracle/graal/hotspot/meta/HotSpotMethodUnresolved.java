@@ -34,7 +34,7 @@ public final class HotSpotMethodUnresolved extends HotSpotMethod {
     protected JavaType holder;
 
     public HotSpotMethodUnresolved(String name, String signature, JavaType holder) {
-        super(name);
+        this.name = name;
         this.holder = holder;
         this.signature = new HotSpotSignature(signature);
     }
