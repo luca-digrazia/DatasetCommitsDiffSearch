@@ -36,15 +36,14 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.tiers.*;
 
 /**
  * This class is a phase that looks for opportunities for tail duplication. The static method
- * {@link #tailDuplicate(MergeNode, TailDuplicationDecision, List, PhaseContext, CanonicalizerPhase)}
- * can also be used to drive tail duplication from other places, e.g., inlining.
+ * {@link #tailDuplicate(MergeNode, TailDuplicationDecision, List, PhaseContext)} can also be used
+ * to drive tail duplication from other places, e.g., inlining.
  */
 public class TailDuplicationPhase extends BasePhase<PhaseContext> {
 
@@ -53,8 +52,6 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
      */
     private static final DebugMetric metricDuplicationConsidered = Debug.metric("DuplicationConsidered");
     private static final DebugMetric metricDuplicationPerformed = Debug.metric("DuplicationPerformed");
-
-    private final CanonicalizerPhase canonicalizer;
 
     /**
      * This interface is used by tail duplication to let clients decide if tail duplication should
@@ -132,10 +129,6 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
         }
     };
 
-    public TailDuplicationPhase(CanonicalizerPhase canonicalizer) {
-        this.canonicalizer = canonicalizer;
-    }
-
     @Override
     protected void run(StructuredGraph graph, PhaseContext phaseContext) {
         NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure(graph).apply();
@@ -144,7 +137,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
         // duplication.
         for (MergeNode merge : graph.getNodes(MergeNode.class).snapshot()) {
             if (!(merge instanceof LoopBeginNode) && nodeProbabilities.get(merge) >= TailDuplicationProbability.getValue()) {
-                tailDuplicate(merge, DEFAULT_DECISION, null, phaseContext, canonicalizer);
+                tailDuplicate(merge, DEFAULT_DECISION, null, phaseContext);
             }
         }
     }
@@ -166,23 +159,20 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
      *            {@link PiNode} in the duplicated branch that corresponds to the entry.
      * @param phaseContext
      */
-    public static boolean tailDuplicate(MergeNode merge, TailDuplicationDecision decision, List<GuardedValueNode> replacements, PhaseContext phaseContext, CanonicalizerPhase canonicalizer) {
+    public static boolean tailDuplicate(MergeNode merge, TailDuplicationDecision decision, List<GuardedValueNode> replacements, PhaseContext phaseContext) {
         assert !(merge instanceof LoopBeginNode);
         assert replacements == null || replacements.size() == merge.forwardEndCount();
         FixedNode fixed = merge;
         int fixedCount = 0;
         while (fixed instanceof FixedWithNextNode) {
             fixed = ((FixedWithNextNode) fixed).next();
-            if (fixed instanceof CommitAllocationNode) {
-                return false;
-            }
             fixedCount++;
         }
         if (fixedCount > 1) {
             metricDuplicationConsidered.increment();
             if (decision.doTransform(merge, fixedCount)) {
                 metricDuplicationPerformed.increment();
-                new DuplicationOperation(merge, replacements, canonicalizer).duplicate(phaseContext);
+                new DuplicationOperation(merge, replacements).duplicate(phaseContext);
                 return true;
             }
         }
@@ -200,8 +190,6 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
         private final HashMap<ValueNode, PhiNode> bottomPhis = new HashMap<>();
         private final List<GuardedValueNode> replacements;
 
-        private final CanonicalizerPhase canonicalizer;
-
         /**
          * Initializes the tail duplication operation without actually performing any work.
          * 
@@ -209,11 +197,10 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
          * @param replacements A list of replacement {@link PiNode}s, or null. If this is non-null,
          *            then the size of the list needs to match the number of end nodes at the merge.
          */
-        public DuplicationOperation(MergeNode merge, List<GuardedValueNode> replacements, CanonicalizerPhase canonicalizer) {
+        public DuplicationOperation(MergeNode merge, List<GuardedValueNode> replacements) {
             this.merge = merge;
             this.replacements = replacements;
             this.graph = merge.graph();
-            this.canonicalizer = canonicalizer;
         }
 
         /**
@@ -264,11 +251,11 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
             for (final AbstractEndNode forwardEnd : merge.forwardEnds()) {
                 Map<Node, Node> duplicates;
                 if (replacements == null || replacements.get(endIndex) == null) {
-                    duplicates = graph.addDuplicates(duplicatedNodes, graph, duplicatedNodes.size(), (DuplicationReplacement) null);
+                    duplicates = graph.addDuplicates(duplicatedNodes, (DuplicationReplacement) null);
                 } else {
                     HashMap<Node, Node> replace = new HashMap<>();
                     replace.put(replacements.get(endIndex).object(), replacements.get(endIndex));
-                    duplicates = graph.addDuplicates(duplicatedNodes, graph, duplicatedNodes.size(), replace);
+                    duplicates = graph.addDuplicates(duplicatedNodes, replace);
                 }
                 for (Map.Entry<ValueNode, PhiNode> phi : bottomPhis.entrySet()) {
                     phi.getValue().initializeValueAt(merge.forwardEndIndex(forwardEnd), (ValueNode) duplicates.get(phi.getKey()));
@@ -302,7 +289,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
                     phi.setMerge(mergeAfter);
                 }
             }
-            canonicalizer.applyIncremental(graph, phaseContext, startMark);
+            new CanonicalizerPhase.Instance(phaseContext.getRuntime(), phaseContext.getAssumptions(), !AOTCompilation.getValue(), graph.getNewNodes(startMark), null).apply(graph);
             Debug.dump(graph, "After tail duplication at %s", merge);
         }
 
@@ -313,7 +300,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
          * @return The new {@link ValueAnchorNode} that was created.
          */
         private ValueAnchorNode addValueAnchor() {
-            ValueAnchorNode anchor = graph.add(new ValueAnchorNode(null));
+            ValueAnchorNode anchor = graph.add(new ValueAnchorNode());
             graph.addAfterFixed(merge, anchor);
             for (Node usage : merge.usages().snapshot()) {
                 if (usage instanceof PhiNode && ((PhiNode) usage).merge() == merge) {
@@ -480,7 +467,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
                             // introduce a new phi
                             PhiNode newPhi = bottomPhis.get(node);
                             if (newPhi == null) {
-                                newPhi = graph.addWithoutUnique(new PhiNode(node.kind(), newBottomMerge));
+                                newPhi = graph.add(new PhiNode(node.kind(), newBottomMerge));
                                 bottomPhis.put(node, newPhi);
                                 newPhi.addInput(node);
                             }
