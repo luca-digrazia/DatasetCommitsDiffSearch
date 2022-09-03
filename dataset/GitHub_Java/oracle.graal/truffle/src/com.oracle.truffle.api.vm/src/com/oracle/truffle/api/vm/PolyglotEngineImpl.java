@@ -31,7 +31,6 @@ import static com.oracle.truffle.api.vm.VMAccessor.SPI;
 
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -79,7 +78,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
 
     private static final Map<PolyglotEngineImpl, Void> ENGINES = Collections.synchronizedMap(new WeakHashMap<>());
     private static volatile boolean shutdownHookInitialized = false;
-    private static final boolean DEBUG_MISSING_CLOSE = Boolean.getBoolean("polyglotimpl.DebugMissingClose");
 
     Engine api; // effectively final
     final Object instrumentationHandler;
@@ -107,7 +105,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     final OptionValuesImpl compilerOptionValues;
     final ClassLoader contextClassLoader;
     final boolean boundEngine;
-    final Exception createdLocation = DEBUG_MISSING_CLOSE ? new Exception() : null;
     private final Set<PolyglotContextImpl> contexts = new LinkedHashSet<>();
 
     PolyglotLanguage hostLanguage;
@@ -457,7 +454,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                     }
                 }
             }
-            ENGINES.remove(this);
             closed = true;
         }
     }
@@ -516,21 +512,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         public void run() {
             PolyglotEngineImpl[] engines = ENGINES.keySet().toArray(new PolyglotEngineImpl[0]);
             for (PolyglotEngineImpl engine : engines) {
-                if (DEBUG_MISSING_CLOSE) {
-                    PrintStream out = System.out;
-                    out.println("Missing close on vm shutdown: ");
-                    out.print(" InitializedLanguages:");
-                    for (PolyglotContextImpl context : engine.contexts) {
-                        for (PolyglotLanguageContext langContext : context.contexts) {
-                            if (langContext.env != null) {
-                                out.print(langContext.language.getId());
-                                out.print(", ");
-                            }
-                        }
-                    }
-                    out.println();
-                    engine.createdLocation.printStackTrace();
-                }
                 if (engine != null) {
                     engine.ensureClosed(false, true);
                 }

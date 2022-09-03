@@ -483,7 +483,8 @@ public final class Engine implements AutoCloseable {
 
                 if (engine == null) {
                     try {
-                        Class<? extends AbstractPolyglotImpl> polyglotClass = Class.forName("com.oracle.truffle.api.vm.PolyglotImpl").asSubclass(AbstractPolyglotImpl.class);
+                        @SuppressWarnings("unchecked")
+                        Class<? extends AbstractPolyglotImpl> polyglotClass = (Class<? extends AbstractPolyglotImpl>) Class.forName("com.oracle.truffle.api.vm.PolyglotImpl");
                         Constructor<? extends AbstractPolyglotImpl> constructor = polyglotClass.getDeclaredConstructor();
                         constructor.setAccessible(true);
                         engine = constructor.newInstance();

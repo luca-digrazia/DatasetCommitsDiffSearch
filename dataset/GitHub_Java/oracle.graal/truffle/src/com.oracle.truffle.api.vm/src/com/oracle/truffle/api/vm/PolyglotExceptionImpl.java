@@ -44,9 +44,9 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractExceptionImpl;
 
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleStackTraceElement;
-import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.vm.PolyglotImpl.VMObject;
+import com.oracle.truffle.api.vm.PolyglotValue.EngineUnsupportedException;
 
 final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObject {
 
@@ -95,9 +95,9 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
             }
             if (section != null) {
                 com.oracle.truffle.api.source.Source truffleSource = section.getSource();
-                String language = truffleSource.getLanguage();
-                PolyglotLanguageContext sourceContext = languageContext.context.findLanguageContext(language, truffleSource.getMimeType(), false);
-                if (language == null && sourceContext != null) {
+                PolyglotLanguageContext sourceContext = languageContext.context.findLanguageContext(truffleSource.getMimeType(), false);
+                String language = null;
+                if (sourceContext != null) {
                     language = sourceContext.language.getId();
                 }
                 Source source = getAPIAccess().newSource(language, truffleSource);
@@ -150,7 +150,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
     @Override
     public Throwable asHostException() {
         if (!(exception instanceof HostException)) {
-            throw new PolyglotUnsupportedException(
+            throw new EngineUnsupportedException(
                             String.format("Unsupported operation %s.%s. You can ensure that the operation is supported using %s.%s.",
                                             PolyglotException.class.getSimpleName(), "asHostException()",
                                             PolyglotException.class.getSimpleName(), "isHostException()"));
@@ -350,7 +350,6 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
 
         private static final String POLYGLOT_PACKAGE = Engine.class.getPackage().getName();
         private static final String PROXY_PACKAGE = PolyglotProxy.class.getName();
-        private static final String JAVA_INTEROP_PACKAGE = JavaInterop.class.getName().substring(0, JavaInterop.class.getName().lastIndexOf('.') + 1);
 
         final PolyglotExceptionImpl impl;
         final Iterator<TruffleStackTraceElement> guestFrames;
@@ -469,7 +468,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObj
         }
 
         static boolean isGuestToHost(StackTraceElement element) {
-            return element.getClassName().startsWith(PROXY_PACKAGE) || element.getClassName().startsWith(JAVA_INTEROP_PACKAGE);
+            return element.getClassName().startsWith(PROXY_PACKAGE);
         }
 
     }
