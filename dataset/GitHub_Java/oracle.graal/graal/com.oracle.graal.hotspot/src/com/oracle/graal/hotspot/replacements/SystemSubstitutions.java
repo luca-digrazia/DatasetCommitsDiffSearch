@@ -23,16 +23,14 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.nodes.*;
 
 /**
  * Substitutions for {@link java.lang.System} methods.
@@ -40,8 +38,8 @@ import com.oracle.graal.replacements.nodes.*;
 @ClassSubstitution(java.lang.System.class)
 public class SystemSubstitutions {
 
-    public static final ForeignCallDescriptor JAVA_TIME_MILLIS = new ForeignCallDescriptor("javaTimeMillis", long.class);
-    public static final ForeignCallDescriptor JAVA_TIME_NANOS = new ForeignCallDescriptor("javaTimeNanos", long.class);
+    public static final Descriptor JAVA_TIME_MILLIS = new Descriptor("javaTimeMillis", false, long.class);
+    public static final Descriptor JAVA_TIME_NANOS = new Descriptor("javaTimeNanos", false, long.class);
 
     @MacroSubstitution(macro = ArrayCopyNode.class)
     public static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length);
@@ -56,19 +54,6 @@ public class SystemSubstitutions {
         return callLong(JAVA_TIME_NANOS);
     }
 
-    public static class SystemIdentityHashCodeNode extends PureFunctionMacroNode {
-
-        public SystemIdentityHashCodeNode(Invoke invoke) {
-            super(invoke);
-        }
-
-        @Override
-        protected Constant evaluate(Constant param, MetaAccessProvider metaAccess) {
-            return param.isNull() ? null : Constant.forInt(System.identityHashCode(param.asObject()));
-        }
-    }
-
-    @MacroSubstitution(macro = SystemIdentityHashCodeNode.class)
     @MethodSubstitution
     public static int identityHashCode(Object x) {
         if (probability(NOT_FREQUENT_PROBABILITY, x == null)) {
@@ -78,8 +63,8 @@ public class SystemSubstitutions {
         return computeHashCode(x);
     }
 
-    @NodeIntrinsic(value = ForeignCallNode.class, setStampFromReturnType = true)
-    public static long callLong(@ConstantNodeParameter ForeignCallDescriptor descriptor) {
+    @NodeIntrinsic(value = CRuntimeCall.class, setStampFromReturnType = true)
+    public static long callLong(@ConstantNodeParameter Descriptor descriptor) {
         if (descriptor == JAVA_TIME_MILLIS) {
             return System.currentTimeMillis();
         }

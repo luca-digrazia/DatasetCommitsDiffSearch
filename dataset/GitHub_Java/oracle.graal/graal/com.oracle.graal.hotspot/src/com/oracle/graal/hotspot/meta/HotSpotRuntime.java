@@ -31,16 +31,17 @@ import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.hotspot.nodes.MonitorEnterStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorExitStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
+import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
 import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
+import static com.oracle.graal.hotspot.nodes.VerifyOopStubCall.*;
 import static com.oracle.graal.hotspot.nodes.WriteBarrierPostStubCall.*;
 import static com.oracle.graal.hotspot.nodes.WriteBarrierPreStubCall.*;
-import static com.oracle.graal.hotspot.replacements.MonitorSnippets.*;
 import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
-import static com.oracle.graal.hotspot.replacements.ThreadSubstitutions.*;
 import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.*;
 import static com.oracle.graal.hotspot.stubs.NewArrayStub.*;
 import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
@@ -94,7 +95,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
     public static final ForeignCallDescriptor OSR_MIGRATION_END = new ForeignCallDescriptor("OSR_migration_end", void.class, long.class);
     public static final ForeignCallDescriptor IDENTITY_HASHCODE = new ForeignCallDescriptor("identity_hashcode", int.class, Object.class);
-    public static final ForeignCallDescriptor VERIFY_OOP = new ForeignCallDescriptor("verify_oop", Object.class, Object.class);
 
     public final HotSpotVMConfig config;
 
