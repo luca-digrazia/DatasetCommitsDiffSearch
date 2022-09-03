@@ -24,24 +24,22 @@
  */
 package com.oracle.truffle.api.vm;
 
-import java.io.IOException;
-import java.io.InterruptedIOException;
 import java.util.concurrent.Executor;
 
 abstract class ComputeInExecutor<R> implements Runnable {
-    private final Executor executor;
+    private final Info executor;
     private R result;
     private Throwable exception;
     private boolean started;
     private boolean done;
 
-    protected ComputeInExecutor(Executor executor) {
+    protected ComputeInExecutor(Info executor) {
         this.executor = executor;
     }
 
-    protected abstract R compute() throws IOException;
+    protected abstract R compute();
 
-    public final R get() throws IOException {
+    public final R get() {
         perform();
         if (executor != null) {
             waitForDone();
@@ -50,23 +48,22 @@ abstract class ComputeInExecutor<R> implements Runnable {
         return result;
     }
 
-    private void waitForDone() throws InterruptedIOException {
+    private void waitForDone() {
         synchronized (this) {
             while (!done) {
                 try {
                     wait();
                 } catch (InterruptedException ex) {
-                    throw new InterruptedIOException(ex.getMessage());
                 }
             }
         }
     }
 
-    private void exceptionCheck() throws IOException, RuntimeException {
-        if (exception instanceof IOException) {
-            throw (IOException) exception;
-        }
+    private void exceptionCheck() throws RuntimeException {
         if (exception instanceof RuntimeException) {
+            if (exception instanceof IllegalStateException) {
+                throw new IllegalStateException(exception);
+            }
             throw (RuntimeException) exception;
         }
         if (exception != null) {
@@ -74,25 +71,32 @@ abstract class ComputeInExecutor<R> implements Runnable {
         }
     }
 
-    public final void perform() throws IOException {
+    public final void perform() {
         if (started) {
             return;
         }
         started = true;
         if (executor == null) {
             run();
+            exceptionCheck();
         } else {
             executor.execute(this);
         }
-        exceptionCheck();
     }
 
     @Override
     public final void run() {
         try {
+            if (executor != null) {
+                executor.checkThread();
+            }
             result = compute();
         } catch (Exception ex) {
-            exception = ex;
+            if (ex.getClass() == RuntimeException.class && ex.getCause() != null) {
+                exception = ex.getCause();
+            } else {
+                exception = ex;
+            }
         } finally {
             if (executor != null) {
                 synchronized (this) {
@@ -108,5 +112,32 @@ abstract class ComputeInExecutor<R> implements Runnable {
     @Override
     public final String toString() {
         return "value=" + result + ",exception=" + exception + ",computed=" + done;
+    }
+
+    public static Info wrap(Executor executor) {
+        return executor == null ? null : new Info(executor);
+    }
+
+    static final class Info {
+        private final Executor executor;
+        private Thread runThread;
+
+        private Info(Executor executor) {
+            this.executor = executor;
+        }
+
+        void execute(ComputeInExecutor<?> compute) {
+            executor.execute(compute);
+        }
+
+        private synchronized void checkThread() {
+            if (runThread == null) {
+                runThread = Thread.currentThread();
+            } else {
+                if (runThread != Thread.currentThread()) {
+                    throw new IllegalStateException("Currently executing in " + Thread.currentThread() + " while previously running in " + runThread + " that isn't allowed");
+                }
+            }
+        }
     }
 }
