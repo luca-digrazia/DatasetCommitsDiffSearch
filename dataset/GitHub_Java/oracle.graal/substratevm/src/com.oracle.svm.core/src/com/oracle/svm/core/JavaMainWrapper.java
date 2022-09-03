@@ -145,7 +145,6 @@ public class JavaMainWrapper {
         }
         mainArgs = args;
 
-        int exitCode;
         try {
             if (SubstrateOptions.ParseRuntimeOptions.getValue()) {
                 /*
@@ -163,18 +162,8 @@ public class JavaMainWrapper {
              */
             ImageSingletons.lookup(JavaMainSupport.class).javaMainHandle.invokeExact(args);
 
-            /* The application terminated normally. */
-            exitCode = 0;
-
         } catch (Throwable ex) {
             JavaThreads.dispatchUncaughtException(Thread.currentThread(), ex);
-
-            /*
-             * The application terminated with exception. Note that the exit code is set to 1 even
-             * if an uncaught exception handler is registered. This behavior is the same on the Java
-             * HotSpot VM.
-             */
-            exitCode = 1;
 
         } finally {
             /*
@@ -190,7 +179,7 @@ public class JavaMainWrapper {
 
             Counter.logValues();
         }
-        return exitCode;
+        return 0;
     }
 
     /**

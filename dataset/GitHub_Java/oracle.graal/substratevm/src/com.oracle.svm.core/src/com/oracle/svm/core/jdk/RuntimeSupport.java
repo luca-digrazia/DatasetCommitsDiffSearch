@@ -38,9 +38,8 @@ import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.svm.core.CompilerCommandPlugin;
 import com.oracle.svm.core.util.VMError;
-import org.graalvm.nativeimage.impl.VMRuntimeSupport;
 
-public final class RuntimeSupport implements VMRuntimeSupport {
+public final class RuntimeSupport {
 
     /** A list of startup hooks. */
     private AtomicReference<Runnable[]> startupHooks;
@@ -84,7 +83,6 @@ public final class RuntimeSupport implements VMRuntimeSupport {
         addHook(startupHooks, hook);
     }
 
-    @Override
     public void executeStartupHooks() {
         executeHooks(startupHooks);
     }
@@ -176,7 +174,7 @@ public final class RuntimeSupport implements VMRuntimeSupport {
         throw new IllegalArgumentException("Could not find SVM command with the name " + cmd);
     }
 
-    @Override
+    @SuppressWarnings("static-method")
     public void shutdown() {
         Target_java_lang_Shutdown.shutdown();
     }
