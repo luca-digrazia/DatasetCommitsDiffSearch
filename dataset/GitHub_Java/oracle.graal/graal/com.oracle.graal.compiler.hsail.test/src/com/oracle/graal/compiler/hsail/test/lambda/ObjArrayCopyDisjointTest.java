@@ -27,23 +27,23 @@ import com.oracle.graal.compiler.hsail.test.infra.*;
 import org.junit.*;
 
 /**
- * Tests creating a new String using {@link String#substring(int, int)}.
+ * Tests {@link System#arraycopy} for object arrays where dest and src type are same, no overlap.
  */
-public class StringSubstringTest extends GraalKernelTester {
+public class ObjArrayCopyDisjointTest extends GraalKernelTester {
 
-    final static int NUM = 50;
-    String inputString;
-    @Result String[] resultString = new String[NUM];
+    final static int MAXOUTSIZ = 100;
+    final static int NUM = 20;
+
+    @Result String[][] outArray = new String[NUM][MAXOUTSIZ];
+    String[] inArray = new String[NUM + MAXOUTSIZ];
 
     @Override
     public void runTest() {
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < NUM + 10; i++) {
-            builder.append(i);
+        for (int i = 0; i < inArray.length; i++) {
+            inArray[i] = Integer.toString(i * 1111);
         }
-        inputString = builder.toString();
         dispatchLambdaKernel(NUM, (gid) -> {
-            resultString[gid] = inputString.substring(gid, gid + 10);
+            System.arraycopy(inArray, gid, outArray[gid], 0, MAXOUTSIZ);
         });
     }
 

@@ -27,23 +27,24 @@ import com.oracle.graal.compiler.hsail.test.infra.*;
 import org.junit.*;
 
 /**
- * Tests creating a new String using {@link String#substring(int, int)}.
+ * Tests copying a byte array where src and dest overlap.
  */
-public class StringSubstringTest extends GraalKernelTester {
+public class ByteArrayCopyConjointTest extends GraalKernelTester {
 
-    final static int NUM = 50;
-    String inputString;
-    @Result String[] resultString = new String[NUM];
+    final static int MAXOUTSIZ = 100;
+    final static int NUM = 20;
+
+    @Result byte[][] outArray = new byte[NUM][MAXOUTSIZ];
 
     @Override
     public void runTest() {
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < NUM + 10; i++) {
-            builder.append(i);
+        for (int i = 0; i < NUM; i++) {
+            for (int j = 0; j < outArray[i].length; j++) {
+                outArray[i][j] = (byte) (i + j);
+            }
         }
-        inputString = builder.toString();
         dispatchLambdaKernel(NUM, (gid) -> {
-            resultString[gid] = inputString.substring(gid, gid + 10);
+            System.arraycopy(outArray[gid], 0, outArray[gid], gid % NUM, NUM);
         });
     }
 
