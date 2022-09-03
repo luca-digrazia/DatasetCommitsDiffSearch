@@ -65,7 +65,8 @@ final class JavaFunctionObject implements TruffleObject {
         if (obj == null) {
             return "null";
         }
-        String typeName = obj.getClass().getTypeName();
+        String typeName = "";
+        typeName = obj.getClass().getTypeName();
         return typeName + "." + method.getName();
     }
 

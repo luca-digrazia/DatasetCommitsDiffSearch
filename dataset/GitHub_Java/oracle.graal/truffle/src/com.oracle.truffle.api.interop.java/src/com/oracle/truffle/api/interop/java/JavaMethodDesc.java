@@ -26,4 +26,15 @@ package com.oracle.truffle.api.interop.java;
 
 interface JavaMethodDesc {
     String getName();
+
+    JavaMethodDesc[] getOverloads();
+
+    default boolean isInternal() {
+        return false;
+    }
+
+    boolean isMethod();
+
+    boolean isConstructor();
+
 }

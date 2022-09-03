@@ -1282,8 +1282,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
         @Override
         public boolean isHostObject(Object receiver) {
-            // TODO temporary allow proxies as host objects GR-8034
-            return isJava || isProxy;
+            return isJava;
         }
 
         @Override
@@ -1303,10 +1302,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
         @Override
         public Object asHostObject(Object receiver) {
             TruffleObject castReceiver = (TruffleObject) receiver;
-            // TODO temporary allow proxies as host objects GR-8034
-            if (isProxy) {
-                return PolyglotProxy.toProxyHostObject((TruffleObject) receiver);
-            } else if (isJava) {
+            if (isJava) {
                 return JavaInterop.asJavaObject(castReceiver);
             } else {
                 return super.asHostObject(receiver);
