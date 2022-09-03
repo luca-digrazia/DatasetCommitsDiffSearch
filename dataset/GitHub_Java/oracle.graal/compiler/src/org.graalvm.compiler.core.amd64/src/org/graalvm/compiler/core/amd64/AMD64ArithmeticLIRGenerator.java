@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -125,6 +125,7 @@ import org.graalvm.compiler.lir.amd64.vector.AMD64VectorBinary;
 import org.graalvm.compiler.lir.amd64.vector.AMD64VectorBinary.AVXBinaryOp;
 import org.graalvm.compiler.lir.amd64.vector.AMD64VectorUnary;
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGenerator;
+import org.graalvm.compiler.lir.gen.LIRGenerator;
 
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.amd64.AMD64.CPUFeature;
@@ -149,11 +150,41 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
 
     private static final RegisterValue RCX_I = AMD64.rcx.asValue(LIRKind.value(AMD64Kind.DWORD));
 
-    public AMD64ArithmeticLIRGenerator(AllocatableValue nullRegisterValue) {
+    public AMD64ArithmeticLIRGenerator(AllocatableValue nullRegisterValue, Maths maths) {
         this.nullRegisterValue = nullRegisterValue;
+        this.maths = maths == null ? new Maths() {
+        } : maths;
     }
 
     private final AllocatableValue nullRegisterValue;
+    private final Maths maths;
+
+    /**
+     * Interface for emitting LIR for selected {@link Math} routines. A {@code null} return value
+     * for any method in this interface means the caller must emit the LIR itself.
+     */
+    public interface Maths {
+
+        @SuppressWarnings("unused")
+        default Variable emitLog(LIRGenerator gen, Value input, boolean base10) {
+            return null;
+        }
+
+        @SuppressWarnings("unused")
+        default Variable emitCos(LIRGenerator gen, Value input) {
+            return null;
+        }
+
+        @SuppressWarnings("unused")
+        default Variable emitSin(LIRGenerator gen, Value input) {
+            return null;
+        }
+
+        @SuppressWarnings("unused")
+        default Variable emitTan(LIRGenerator gen, Value input) {
+            return null;
+        }
+    }
 
     @Override
     public Variable emitNegate(Value inputVal) {
@@ -1070,26 +1101,46 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
 
     @Override
     public Value emitMathLog(Value input, boolean base10) {
+        LIRGenerator gen = getLIRGen();
+        Variable result = maths.emitLog(gen, input, base10);
+        if (result != null) {
+            return result;
+        }
         if (base10) {
-            return new AMD64MathLog10Op().emitLIRWrapper(getLIRGen(), input);
+            return new AMD64MathLog10Op().emitLIRWrapper(gen, input);
         } else {
-            return new AMD64MathLogOp().emitLIRWrapper(getLIRGen(), input);
+            return new AMD64MathLogOp().emitLIRWrapper(gen, input);
         }
     }
 
     @Override
     public Value emitMathCos(Value input) {
-        return new AMD64MathCosOp().emitLIRWrapper(getLIRGen(), input);
+        LIRGenerator gen = getLIRGen();
+        Variable result = maths.emitCos(gen, input);
+        if (result == null) {
+            return new AMD64MathCosOp().emitLIRWrapper(gen, input);
+        }
+        return result;
     }
 
     @Override
     public Value emitMathSin(Value input) {
-        return new AMD64MathSinOp().emitLIRWrapper(getLIRGen(), input);
+        LIRGenerator gen = getLIRGen();
+        Variable result = maths.emitSin(gen, input);
+        if (result == null) {
+            return new AMD64MathSinOp().emitLIRWrapper(gen, input);
+        }
+        return result;
     }
 
     @Override
     public Value emitMathTan(Value input) {
-        return new AMD64MathTanOp().emitLIRWrapper(getLIRGen(), input);
+        LIRGenerator gen = getLIRGen();
+        Variable result = maths.emitTan(gen, input);
+        if (result == null) {
+            return new AMD64MathTanOp().emitLIRWrapper(gen, input);
+        }
+        return result;
     }
 
     @Override
