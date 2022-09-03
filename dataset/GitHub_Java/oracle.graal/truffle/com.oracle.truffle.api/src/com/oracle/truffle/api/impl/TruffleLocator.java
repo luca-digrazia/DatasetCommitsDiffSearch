@@ -24,11 +24,12 @@
  */
 package com.oracle.truffle.api.impl;
 
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
+
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleRuntime;
 
 /**
  * Locator that allows the users of the Truffle API to find implementations of languages to be
@@ -57,24 +58,23 @@ public abstract class TruffleLocator {
         for (TruffleLocator test : allLocators) {
             test.locate(response);
         }
-        if (found.isEmpty()) {
-            ClassLoader l = TruffleLocator.class.getClassLoader();
-            if (l == null) {
-                l = ClassLoader.getSystemClassLoader();
-            }
-            found.add(l);
-        }
+        found.add(ClassLoader.getSystemClassLoader());
+        found.add(TruffleLocator.class.getClassLoader());
         return found;
     }
 
     /**
-     * Utility method to load a class from one of the located classloaders.
+     * Utility method to load a class from one of the located classloaders. Please note that this
+     * method is used in tests using reflection. Do not remove.
      *
      * @param name class to search for
      * @return the class or <code>null</code> if none of the loaders knows the class
      */
     static Class<?> loadClass(String name) {
         for (ClassLoader loader : loaders()) {
+            if (loader == null) {
+                continue;
+            }
             try {
                 return loader.loadClass(name);
             } catch (ClassNotFoundException ex) {
