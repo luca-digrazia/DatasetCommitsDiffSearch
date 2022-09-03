@@ -28,10 +28,10 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
@@ -41,9 +41,10 @@ import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
+import com.oracle.graal.lir.alloc.lsra.*;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.lir.stackslotalloc.*;
 import com.oracle.graal.phases.*;
 
 public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, BaselineFrameStateBuilder> implements BytecodeParserTool {
@@ -79,7 +80,11 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
         this.setCurrentFrameState(frameState);
     }
 
-    protected LIRGenerationResult build() {
+    public LIRGenerationResult getLIRGenerationResult() {
+        return lirGenRes;
+    }
+
+    protected void build() {
         if (PrintProfilingInformation.getValue()) {
             TTY.println("Profiling info for " + method.format("%H.%n(%p)"));
             TTY.println(MetaUtil.indent(profilingInfo.toString(method, CodeUtil.NEW_LINE), "  "));
@@ -107,7 +112,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             frameState.clearNonLiveLocals(blockMap.startBlock, liveness, true);
 
             currentBlock = blockMap.startBlock;
-            blockMap.startBlock.setEntryState(0, frameState);
+            blockMap.startBlock.entryState = frameState;
             if (blockMap.startBlock.isLoopHeader) {
                 throw GraalInternalError.unimplemented("Handle start block as loop header");
             }
@@ -118,8 +123,8 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             BaselineControlFlowGraph cfg = BaselineControlFlowGraph.compute(blockMap);
 
             // create the LIR
-            List<BciBlock> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blockMap.getBlocks().length, blockMap.startBlock);
-            List<BciBlock> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blockMap.getBlocks().length, blockMap.startBlock);
+            List<? extends AbstractBlock<?>> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blockMap.getBlocks().length, blockMap.startBlock);
+            List<? extends AbstractBlock<?>> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blockMap.getBlocks().length, blockMap.startBlock);
             LIR lir = new LIR(cfg, linearScanOrder, codeEmittingOrder);
 
             RegisterConfig registerConfig = null;
@@ -145,11 +150,21 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
                     throw Debug.handle(e);
                 }
 
-                try (Scope s = Debug.scope("LIRTier", this)) {
-                    LIRSuites lirSuites = backend.getSuites().getDefaultLIRSuites();
-                    return GraalCompiler.emitLowLevel(target, codeEmittingOrder, linearScanOrder, lirGenRes, gen, lirSuites);
-                } catch (Throwable e) {
-                    throw Debug.handle(e);
+                try (Scope s = Debug.scope("Allocator")) {
+                    if (backend.shouldAllocateRegisters()) {
+                        LinearScan.allocate(target, lirGenRes);
+                    }
+                }
+                try (Scope s1 = Debug.scope("BuildFrameMap")) {
+                    // build frame map
+                    lirGenRes.buildFrameMap(new SimpleStackSlotAllocator());
+                    Debug.dump(lir, "After FrameMap building");
+                }
+                try (Scope s1 = Debug.scope("MarkLocations")) {
+                    if (backend.shouldAllocateRegisters()) {
+                        // currently we mark locations only if we do register allocation
+                        LocationMarker.markLocations(lirGenRes);
+                    }
                 }
 
             } catch (Throwable e) {
@@ -609,15 +624,15 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
                  */
                 moveConstantsToVariables();
             }
-            block.setEntryState(0, frameState.copy());
-            block.getEntryState(0).clearNonLiveLocals(block, liveness, true);
+            block.entryState = frameState.copy();
+            block.entryState.clearNonLiveLocals(block, liveness, true);
 
             Debug.log("createTarget %s: first visit", block);
             return;
         }
 
         // We already saw this block before, so we have to merge states.
-        if (!((BaselineFrameStateBuilder) block.getEntryState(0)).isCompatibleWith(frameState)) {
+        if (!((BaselineFrameStateBuilder) block.entryState).isCompatibleWith(frameState)) {
             throw new BailoutException("stacks do not match; bytecodes would not verify");
         }
 
@@ -625,7 +640,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             assert currentBlock == null || currentBlock.getId() >= block.getId() : "must be backward branch";
             if (currentBlock != null && currentBlock.numNormalSuccessors() == 1) {
                 // this is the only successor of the current block so we can adjust
-                adaptFramestate((BaselineFrameStateBuilder) block.getEntryState(0));
+                adaptFramestate((BaselineFrameStateBuilder) block.entryState);
                 return;
             }
             GraalInternalError.unimplemented("Loops not yet supported");
@@ -639,7 +654,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
          */
         if (currentBlock != null && currentBlock.numNormalSuccessors() == 1) {
             // this is the only successor of the current block so we can adjust
-            adaptFramestate((BaselineFrameStateBuilder) block.getEntryState(0));
+            adaptFramestate((BaselineFrameStateBuilder) block.entryState);
             return;
         }
         GraalInternalError.unimplemented("second block visit not yet implemented");
@@ -700,7 +715,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
     }
 
     protected void processBlock(BciBlock block) {
-        frameState = (BaselineFrameStateBuilder) block.getEntryState(0);
+        frameState = (BaselineFrameStateBuilder) block.entryState;
         setCurrentFrameState(frameState);
         currentBlock = block;
         iterateBytecodesForBlock(block);
@@ -730,7 +745,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
              * We need to preserve the frame state builder of the loop header so that we can merge
              * values for phi functions, so make a copy of it.
              */
-            block.setEntryState(0, frameState.copy());
+            block.entryState = frameState.copy();
 
         }
         int endBCI = stream.endBCI();
