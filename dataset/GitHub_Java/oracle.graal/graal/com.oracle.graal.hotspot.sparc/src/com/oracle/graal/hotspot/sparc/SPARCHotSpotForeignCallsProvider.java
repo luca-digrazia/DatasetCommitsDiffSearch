@@ -39,7 +39,7 @@ public class SPARCHotSpotForeignCallsProvider extends HotSpotHostForeignCallsPro
 
     private final Value[] nativeABICallerSaveRegisters;
 
-    public SPARCHotSpotForeignCallsProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, CodeCacheProvider codeCache, Value[] nativeABICallerSaveRegisters) {
+    public SPARCHotSpotForeignCallsProvider(HotSpotGraalRuntime runtime, MetaAccessProvider metaAccess, CodeCacheProvider codeCache, Value[] nativeABICallerSaveRegisters) {
         super(runtime, metaAccess, codeCache);
         this.nativeABICallerSaveRegisters = nativeABICallerSaveRegisters;
     }
@@ -52,14 +52,14 @@ public class SPARCHotSpotForeignCallsProvider extends HotSpotHostForeignCallsPro
         // The calling convention for the exception handler stub is (only?) defined in
         // TemplateInterpreterGenerator::generate_throw_exception()
         // in templateInterpreter_sparc.cpp around line 1925
-        RegisterValue outgoingException = o0.asValue(target.getLIRKind(Kind.Object));
-        RegisterValue outgoingExceptionPc = o1.asValue(target.getLIRKind(word));
-        RegisterValue incomingException = i0.asValue(target.getLIRKind(Kind.Object));
-        RegisterValue incomingExceptionPc = i1.asValue(LIRKind.value(word));
+        RegisterValue outgoingException = o0.asValue(Kind.Object);
+        RegisterValue outgoingExceptionPc = o1.asValue(word);
+        RegisterValue incomingException = i0.asValue(Kind.Object);
+        RegisterValue incomingExceptionPc = i1.asValue(word);
         CallingConvention outgoingExceptionCc = new CallingConvention(0, ILLEGAL, outgoingException, outgoingExceptionPc);
         CallingConvention incomingExceptionCc = new CallingConvention(0, ILLEGAL, incomingException, incomingExceptionPc);
-        register(new HotSpotForeignCallLinkageImpl(EXCEPTION_HANDLER, 0L, PRESERVES_REGISTERS, LEAF_NOFP, outgoingExceptionCc, incomingExceptionCc, NOT_REEXECUTABLE, ANY_LOCATION));
-        register(new HotSpotForeignCallLinkageImpl(EXCEPTION_HANDLER_IN_CALLER, JUMP_ADDRESS, PRESERVES_REGISTERS, LEAF_NOFP, outgoingExceptionCc, incomingExceptionCc, NOT_REEXECUTABLE, ANY_LOCATION));
+        register(new HotSpotForeignCallLinkage(EXCEPTION_HANDLER, 0L, PRESERVES_REGISTERS, LEAF_NOFP, outgoingExceptionCc, incomingExceptionCc, NOT_REEXECUTABLE, ANY_LOCATION));
+        register(new HotSpotForeignCallLinkage(EXCEPTION_HANDLER_IN_CALLER, JUMP_ADDRESS, PRESERVES_REGISTERS, LEAF_NOFP, outgoingExceptionCc, incomingExceptionCc, NOT_REEXECUTABLE, ANY_LOCATION));
 
         link(new SPARCDeoptimizationStub(providers, target, registerStubCall(DEOPTIMIZATION_HANDLER, REEXECUTABLE, LEAF, NO_LOCATIONS)));
         link(new SPARCUncommonTrapStub(providers, target, registerStubCall(UNCOMMON_TRAP_HANDLER, REEXECUTABLE, LEAF, NO_LOCATIONS)));
