@@ -70,6 +70,10 @@ final class LiteralSourceImpl extends Content {
     }
 
     @Override
+    void reset() {
+    }
+
+    @Override
     public int hashCode() {
         return Objects.hash(name, code);
     }

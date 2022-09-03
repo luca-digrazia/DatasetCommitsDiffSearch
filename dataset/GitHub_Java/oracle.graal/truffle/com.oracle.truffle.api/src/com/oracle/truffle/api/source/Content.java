@@ -63,7 +63,6 @@ abstract class Content {
         throw new UnsupportedOperationException();
     }
 
-    @Override
     public final boolean equals(Object obj) {
         if (getClass() != obj.getClass()) {
             return false;
@@ -73,10 +72,5 @@ abstract class Content {
             return true;
         }
         return Objects.equals(code, other.code);
-    }
-
-    @Override
-    public int hashCode() {
-        return getHashKey().hashCode();
     }
 }
