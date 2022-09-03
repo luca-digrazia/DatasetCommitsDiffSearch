@@ -45,7 +45,7 @@ import org.graalvm.options.OptionType;
 
 import com.oracle.svm.core.annotate.AnnotateOriginal;
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.annotate.RestrictHeapAccess;
+import com.oracle.svm.core.annotate.MustNotAllocate;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.util.VMError;
 
@@ -76,9 +76,6 @@ public class RuntimeOptionValues extends ModifiableOptionValues {
 class RuntimeOptionsSupportImpl implements RuntimeOptionsSupport {
     @Override
     public void set(String optionName, Object value) {
-        if (setXOption(optionName)) {
-            return;
-        }
         if (!RuntimeOptionValues.singleton().getAllOptionNames().contains(optionName)) {
             throw new RuntimeException("Unknown option: " + optionName);
         }
@@ -164,27 +161,6 @@ class RuntimeOptionsSupportImpl implements RuntimeOptionsSupport {
 
         return Long.parseLong(valueString) * scale;
     }
-
-    /*
-     * Parse from an `-X` option, from a name and a value (e.g., from "mx2g"). Returns true if
-     * successful, false otherwise. Throws an exception if the option was recognized, but the value
-     * was not a number.
-     */
-    private static boolean setXOption(String keyAndValue) {
-        /* A hack to parse `-X` options from a String value. */
-        for (XOptions.XFlag xFlag : XOptions.singleton().getXFlags()) {
-            if (keyAndValue.startsWith(xFlag.getName())) {
-                final String valueString = keyAndValue.substring(xFlag.getName().length());
-                try {
-                    XOptions.singleton().parseFromValueString(xFlag, valueString);
-                    return true;
-                } catch (NumberFormatException nfe) {
-                    throw new RuntimeException("Invalid option '" + xFlag.getPrefixAndName() + valueString + "' does not specify a valid number.");
-                }
-            }
-        }
-        return false;
-    }
 }
 
 /**
@@ -203,6 +179,6 @@ class OptionAccessFeature implements Feature {
 final class Target_org_graalvm_compiler_options_OptionKey {
 
     @AnnotateOriginal
-    @RestrictHeapAccess(access = RestrictHeapAccess.Access.UNRESTRICTED, overridesCallers = true, reason = "Static analysis imprecision makes all hashCode implementations reachable from this method")
+    @MustNotAllocate(list = MustNotAllocate.WHITELIST, reason = "Static analysis imprecision makes all hashCode implementations reachable from this method")
     native Object getValue(OptionValues values);
 }
