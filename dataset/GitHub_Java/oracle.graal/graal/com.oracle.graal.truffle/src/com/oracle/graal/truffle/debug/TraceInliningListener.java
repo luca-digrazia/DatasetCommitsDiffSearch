@@ -24,6 +24,8 @@ package com.oracle.graal.truffle.debug;
 
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
+import java.util.*;
+
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.truffle.*;
 
@@ -55,11 +57,19 @@ public final class TraceInliningListener extends AbstractDebugCompilationListene
             TruffleInliningProfile profile = decision.getProfile();
             boolean inlined = decision.isInline();
             String msg = inlined ? "inline success" : "inline failed";
-            log(depth, msg, decision.getProfile().getCallNode().getCurrentCallTarget().toString(), profile.getDebugProperties());
+            logInlinedImpl(msg, decision.getProfile().getCallNode(), profile, depth);
             if (inlined) {
                 logInliningDecisionRecursive(decision, depth + 1);
             }
         }
+    }
+
+    private static void logInlinedImpl(String status, OptimizedDirectCallNode callNode, TruffleInliningProfile profile, int depth) {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        if (profile != null) {
+            properties.putAll(profile.getDebugProperties());
+        }
+        log(depth, status, callNode.getCurrentCallTarget().toString(), properties);
     }
 
 }
