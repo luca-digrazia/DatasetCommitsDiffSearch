@@ -35,7 +35,6 @@ import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.FieldLocationIdentity;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
-import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.ProxyNode;
@@ -47,8 +46,8 @@ import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.extended.GuardedNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.extended.UnsafeAccessNode;
-import org.graalvm.compiler.nodes.extended.RawLoadNode;
-import org.graalvm.compiler.nodes.extended.RawStoreNode;
+import org.graalvm.compiler.nodes.extended.UnsafeLoadNode;
+import org.graalvm.compiler.nodes.extended.UnsafeStoreNode;
 import org.graalvm.compiler.nodes.java.AccessFieldNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.compiler.nodes.java.StoreFieldNode;
@@ -146,8 +145,8 @@ public final class ReadEliminationClosure extends EffectsClosure<ReadElimination
                 processIdentity(state, write.getLocationIdentity());
             }
         } else if (node instanceof UnsafeAccessNode) {
-            if (node instanceof RawLoadNode) {
-                RawLoadNode load = (RawLoadNode) node;
+            if (node instanceof UnsafeLoadNode) {
+                UnsafeLoadNode load = (UnsafeLoadNode) node;
                 if (load.getLocationIdentity().isSingle()) {
                     ValueNode object = GraphUtil.unproxify(load.object());
                     UnsafeLoadCacheEntry identifier = new UnsafeLoadCacheEntry(object, load.offset(), load.getLocationIdentity());
@@ -161,8 +160,8 @@ public final class ReadEliminationClosure extends EffectsClosure<ReadElimination
                     }
                 }
             } else {
-                assert node instanceof RawStoreNode;
-                RawStoreNode write = (RawStoreNode) node;
+                assert node instanceof UnsafeStoreNode;
+                UnsafeStoreNode write = (UnsafeStoreNode) node;
                 if (write.getLocationIdentity().isSingle()) {
                     ValueNode object = GraphUtil.unproxify(write.object());
                     UnsafeLoadCacheEntry identifier = new UnsafeLoadCacheEntry(object, write.offset(), write.getLocationIdentity());
@@ -253,7 +252,7 @@ public final class ReadEliminationClosure extends EffectsClosure<ReadElimination
         }
 
         @Override
-        protected void merge(List<ReadEliminationBlockState> states, FrameState frameState) {
+        protected void merge(List<ReadEliminationBlockState> states) {
             MapCursor<CacheEntry<?>, ValueNode> cursor = states.get(0).readCache.getEntries();
             while (cursor.advance()) {
                 CacheEntry<?> key = cursor.getKey();
