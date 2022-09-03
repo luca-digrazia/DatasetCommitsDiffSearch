@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,41 +22,94 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.Type;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.amd64.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_20;
 
-public class AMD64RawNativeCallNode extends FixedWithNextNode implements LIRGenLowerable {
+import com.oracle.graal.compiler.amd64.AMD64NodeLIRBuilder;
+import com.oracle.graal.compiler.common.type.RawPointerStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-    private final Constant functionPointer;
-    @Input private final NodeInputList<ValueNode> args;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Value;
 
-    public AMD64RawNativeCallNode(Kind returnType, Constant functionPointer, ValueNode[] args) {
-        super(StampFactory.forKind(returnType));
+@NodeInfo(cycles = CYCLES_UNKNOWN, cyclesRationale = "Native call is a block hole", size = SIZE_20)
+public final class AMD64RawNativeCallNode extends FixedWithNextNode implements LIRLowerable {
+    public static final NodeClass<AMD64RawNativeCallNode> TYPE = NodeClass.create(AMD64RawNativeCallNode.class);
+
+    protected final JavaConstant functionPointer;
+    @Input NodeInputList<ValueNode> args;
+
+    public AMD64RawNativeCallNode(JavaKind returnType, JavaConstant functionPointer, ValueNode[] args) {
+        super(TYPE, StampFactory.forKind(returnType));
         this.functionPointer = functionPointer;
         this.args = new NodeInputList<>(this, args);
     }
 
+    private static class PointerType implements JavaType {
+
+        @Override
+        public String getName() {
+            return "void*";
+        }
+
+        @Override
+        public JavaType getComponentType() {
+            return null;
+        }
+
+        @Override
+        public JavaType getArrayClass() {
+            return null;
+        }
+
+        @Override
+        public JavaKind getJavaKind() {
+            // native pointers and java objects use the same registers in the calling convention
+            return JavaKind.Object;
+        }
+
+        @Override
+        public ResolvedJavaType resolve(ResolvedJavaType accessingClass) {
+            return null;
+        }
+    }
+
+    private static JavaType toJavaType(Stamp stamp, MetaAccessProvider metaAccess) {
+        if (stamp instanceof RawPointerStamp) {
+            return new PointerType();
+        } else {
+            return stamp.javaType(metaAccess);
+        }
+    }
+
     @Override
-    public void generate(NodeLIRGenerator generator) {
-        AMD64NodeLIRGenerator gen = (AMD64NodeLIRGenerator) generator;
+    public void generate(NodeLIRBuilderTool generator) {
+        AMD64NodeLIRBuilder gen = (AMD64NodeLIRBuilder) generator;
         Value[] parameter = new Value[args.count()];
         JavaType[] parameterTypes = new JavaType[args.count()];
         for (int i = 0; i < args.count(); i++) {
             parameter[i] = generator.operand(args.get(i));
-            parameterTypes[i] = args.get(i).stamp().javaType(gen.getLIRGeneratorTool().getMetaAccess());
+            parameterTypes[i] = toJavaType(args.get(i).stamp(), gen.getLIRGeneratorTool().getMetaAccess());
         }
-        ResolvedJavaType returnType = stamp().javaType(gen.getLIRGeneratorTool().getMetaAccess());
-        CallingConvention cc = generator.getLIRGeneratorTool().getCodeCache().getRegisterConfig().getCallingConvention(Type.NativeCall, returnType, parameterTypes,
-                        generator.getLIRGeneratorTool().target(), false);
-        ((AMD64LIRGenerator) gen.getLIRGeneratorTool()).emitCCall(functionPointer.asLong(), cc, parameter, countFloatingTypeArguments(args));
-        if (this.getKind() != Kind.Void) {
+        JavaType returnType = toJavaType(stamp(), gen.getLIRGeneratorTool().getMetaAccess());
+        CallingConvention cc = generator.getLIRGeneratorTool().getCodeCache().getRegisterConfig().getCallingConvention(HotSpotCallingConventionType.NativeCall, returnType, parameterTypes,
+                        generator.getLIRGeneratorTool());
+        gen.getLIRGeneratorTool().emitCCall(functionPointer.asLong(), cc, parameter, countFloatingTypeArguments(args));
+        if (this.getStackKind() != JavaKind.Void) {
             generator.setResult(this, gen.getLIRGeneratorTool().emitMove(cc.getReturn()));
         }
     }
@@ -64,7 +117,7 @@ public class AMD64RawNativeCallNode extends FixedWithNextNode implements LIRGenL
     private static int countFloatingTypeArguments(NodeInputList<ValueNode> args) {
         int count = 0;
         for (ValueNode n : args) {
-            if (n.getKind() == Kind.Double || n.getKind() == Kind.Float) {
+            if (n.getStackKind() == JavaKind.Double || n.getStackKind() == JavaKind.Float) {
                 count++;
             }
         }
