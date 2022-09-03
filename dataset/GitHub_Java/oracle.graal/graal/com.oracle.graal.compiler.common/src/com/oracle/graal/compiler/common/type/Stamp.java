@@ -40,7 +40,7 @@ public abstract class Stamp {
     public abstract ResolvedJavaType javaType(MetaAccessProvider metaAccess);
 
     public boolean alwaysDistinct(Stamp other) {
-        return join(other).isIllegal();
+        return !join(other).isLegal();
     }
 
     /**
@@ -106,13 +106,6 @@ public abstract class Stamp {
     public abstract boolean isLegal();
 
     /**
-     * Tests whether this stamp represents an illegal value.
-     */
-    public final boolean isIllegal() {
-        return !isLegal();
-    }
-
-    /**
      * If this stamp represents a single value, the methods returns this single value. It returns
      * null otherwise.
      *
@@ -130,27 +123,17 @@ public abstract class Stamp {
 
     /**
      * Tries to improve this stamp with the stamp given as parameter. If successful, returns the new
-     * improved stamp. Otherwise, returns a stamp equal to this.
-     *
-     * @param other the stamp that should be used to improve this stamp
-     * @return the newly improved stamp or a stamp equal to {@code this} if an improvement was not
-     *         possible
-     */
-    public abstract Stamp improveWith(Stamp other);
-
-    /**
-     * Tries to improve this stamp with the stamp given as parameter. If successful, returns the new
      * improved stamp. Otherwise, returns null.
      *
      * @param other the stamp that should be used to improve this stamp
-     * @return the newly improved stamp or {@code null} if an improvement was not possible
+     * @return the newly improved stamp of null if an improvement was not possible
      */
-    public final Stamp tryImproveWith(Stamp other) {
-        Stamp improved = improveWith(other);
-        if (improved.equals(this)) {
+    public Stamp tryImprove(Stamp other) {
+        Stamp newStamp = this.join(other);
+        if (newStamp.equals(this)) {
             return null;
         }
-        return improved;
+        return newStamp;
     }
 
     public boolean neverDistinct(Stamp other) {
