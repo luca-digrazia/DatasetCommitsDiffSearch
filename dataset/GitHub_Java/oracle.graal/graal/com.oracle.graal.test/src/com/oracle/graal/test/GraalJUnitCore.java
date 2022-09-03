@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.test;
 
-import java.io.*;
 import java.util.*;
 
 import junit.runner.*;
@@ -30,8 +29,6 @@ import junit.runner.*;
 import org.junit.internal.*;
 import org.junit.runner.*;
 import org.junit.runner.notification.*;
-import org.junit.runners.*;
-import org.junit.runners.model.*;
 
 public class GraalJUnitCore {
 
@@ -54,20 +51,14 @@ public class GraalJUnitCore {
         List<Failure> missingClasses = new ArrayList<>();
         boolean verbose = false;
         boolean enableTiming = false;
-        boolean failFast = false;
         boolean color = false;
         boolean eagerStackTrace = false;
         boolean gcAfterTest = false;
-
-        String[] expandedArgs = expandArgs(args);
-        for (int i = 0; i < expandedArgs.length; i++) {
-            String each = expandedArgs[i];
+        for (String each : args) {
             if (each.charAt(0) == '-') {
                 // command line arguments
                 if (each.contentEquals("-JUnitVerbose")) {
                     verbose = true;
-                } else if (each.contentEquals("-JUnitFailFast")) {
-                    failFast = true;
                 } else if (each.contentEquals("-JUnitEnableTiming")) {
                     enableTiming = true;
                 } else if (each.contentEquals("-JUnitColor")) {
@@ -112,13 +103,12 @@ public class GraalJUnitCore {
                 }
             }
         }
-        final GraalTextListener textListener;
+        GraalJUnitRunListener graalListener;
         if (!verbose) {
-            textListener = new GraalTextListener(system);
+            graalListener = new GraalTextListener(system);
         } else {
-            textListener = new GraalVerboseTextListener(system);
+            graalListener = new GraalVerboseTextListener(system);
         }
-        GraalJUnitRunListener graalListener = textListener;
         if (enableTiming) {
             graalListener = new TimingDecorator(graalListener);
         }
@@ -138,84 +128,10 @@ public class GraalJUnitCore {
         } else {
             request = Request.method(classes.get(0), methodName);
         }
-        if (failFast) {
-            Runner runner = request.getRunner();
-            if (runner instanceof ParentRunner) {
-                ParentRunner<?> parentRunner = (ParentRunner<?>) runner;
-                parentRunner.setScheduler(new RunnerScheduler() {
-                    public void schedule(Runnable childStatement) {
-                        if (textListener.getLastFailure() == null) {
-                            childStatement.run();
-                        }
-                    }
-
-                    public void finished() {
-                    }
-                });
-            } else {
-                system.out().println("Unexpected Runner subclass " + runner.getClass().getName() + " - fail fast not supported");
-            }
-        }
         Result result = junitCore.run(request);
         for (Failure each : missingClasses) {
             result.getFailures().add(each);
         }
         System.exit(result.wasSuccessful() ? 0 : 1);
-    }
-
-    /**
-     * Expand any arguments starting with @ and return the resulting argument array.
-     *
-     * @param args
-     * @return the expanded argument array
-     */
-    private static String[] expandArgs(String[] args) {
-        List<String> result = null;
-        for (int i = 0; i < args.length; i++) {
-            String arg = args[i];
-            if (arg.length() > 0 && arg.charAt(0) == '@') {
-                if (result == null) {
-                    result = new ArrayList<>();
-                    for (int j = 0; j < i; j++) {
-                        result.add(args[j]);
-                    }
-                    expandArg(arg.substring(1), result);
-                }
-            } else if (result != null) {
-                result.add(arg);
-            }
-        }
-        return result != null ? result.toArray(new String[0]) : args;
-    }
-
-    /**
-     * Add each line from {@code filename} to the list {@code args}.
-     *
-     * @param filename
-     * @param args
-     */
-    private static void expandArg(String filename, List<String> args) {
-        BufferedReader br = null;
-        try {
-            br = new BufferedReader(new FileReader(filename));
-
-            String buf;
-            while ((buf = br.readLine()) != null) {
-                args.add(buf);
-            }
-            br.close();
-        } catch (IOException ioe) {
-            ioe.printStackTrace();
-            System.exit(2);
-        } finally {
-            try {
-                if (br != null) {
-                    br.close();
-                }
-            } catch (IOException ioe) {
-                ioe.printStackTrace();
-                System.exit(3);
-            }
-        }
     }
 }
