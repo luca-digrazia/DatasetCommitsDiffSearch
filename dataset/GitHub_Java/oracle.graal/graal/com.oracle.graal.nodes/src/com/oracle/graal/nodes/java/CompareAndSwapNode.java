@@ -85,7 +85,7 @@ public class CompareAndSwapNode extends AbstractStateSplit implements StateSplit
     }
 
     @Override
-    public boolean isCompressible() {
+    public boolean compressible() {
         return compressible;
     }
 

@@ -101,7 +101,7 @@ public abstract class FloatingAccessNode extends FloatingGuardedNode implements 
     }
 
     @Override
-    public boolean isCompressible() {
+    public boolean compressible() {
         return compressible;
     }
 

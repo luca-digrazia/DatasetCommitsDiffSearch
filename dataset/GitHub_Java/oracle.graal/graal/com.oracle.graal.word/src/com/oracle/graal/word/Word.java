@@ -73,11 +73,7 @@ public abstract class Word implements Signed, Unsigned, Pointer {
     }
      // @formatter:on
 
-    /*
-     * Outside users should use the different signed() and unsigned() methods to ensure proper
-     * expansion of 32-bit values on 64-bit systems.
-     */
-    private static Word box(long val) {
+    public static Word box(long val) {
         return HostedWord.boxLong(val);
     }
 
@@ -427,12 +423,6 @@ public abstract class Word implements Signed, Unsigned, Pointer {
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.EQ)
-    public boolean equal(ComparableWord val) {
-        return equal((Word) val);
-    }
-
-    @Override
-    @Operation(opcode = Opcode.COMPARISON, condition = Condition.EQ)
     public boolean equal(Signed val) {
         return equal((Word) val);
     }
@@ -452,12 +442,6 @@ public abstract class Word implements Signed, Unsigned, Pointer {
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.EQ)
     public boolean equal(Word val) {
         return unbox() == val.unbox();
-    }
-
-    @Override
-    @Operation(opcode = Opcode.COMPARISON, condition = Condition.NE)
-    public boolean notEqual(ComparableWord val) {
-        return notEqual((Word) val);
     }
 
     @Override
@@ -669,7 +653,9 @@ public abstract class Word implements Signed, Unsigned, Pointer {
 
     @Override
     @Operation(opcode = Opcode.READ)
-    public native Object readObject(WordBase offset, LocationIdentity locationIdentity);
+    public Object readObject(WordBase offset, LocationIdentity locationIdentity) {
+        return unsafe.getObject(null, add((Word) offset).unbox());
+    }
 
     @Override
     @Operation(opcode = Opcode.READ)
