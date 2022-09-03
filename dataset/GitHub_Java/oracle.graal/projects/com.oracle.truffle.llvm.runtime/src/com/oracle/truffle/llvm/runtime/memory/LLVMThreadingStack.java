@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime.memory;
 
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
-import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.oracle.truffle.api.Assumption;
@@ -45,7 +44,7 @@ public final class LLVMThreadingStack {
     private final Thread defaultThread;
     private final LLVMStack defaultStack;
 
-    private final HashMap<Long, LLVMStack> threadToStack = new HashMap<>();
+    private final ConcurrentHashMap<Long, LLVMStack> threadToStack = new ConcurrentHashMap<>();
 
     private final ReferenceQueue<Thread> threadsQueue = new ReferenceQueue<>();
 
@@ -83,57 +82,45 @@ public final class LLVMThreadingStack {
         }
     }
 
-    public void checkThread() {
-        if (singleThreading.isValid()) {
-            Thread currentThread = Thread.currentThread();
-            if (currentThread != defaultThread) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                synchronized (this) {
-                    // recheck under lock as a race condition can still happen
-                    if (singleThreading.isValid()) {
-                        singleThreading.invalidate();
-
-                        Thread stackGC = new Thread(new StackGCThread(), "sulongStackGC");
-                        stackGC.setDaemon(true);
-                        stackGC.start();
-                    }
-                }
-            }
-        }
-    }
-
     @SuppressWarnings("unused")
-    public LLVMStack getStack() {
+    public synchronized LLVMStack getStack() {
+        Thread currentThread = Thread.currentThread();
         if (singleThreading.isValid()) {
-            assert Thread.currentThread() == defaultThread;
-            return defaultStack;
-        } else {
-            Thread currentThread = Thread.currentThread();
             if (currentThread == defaultThread) {
                 return defaultStack;
             } else {
-                synchronized (this) {
-                    if (threadToStack.containsKey(currentThread.getId())) {
-                        return threadToStack.get(currentThread.getId());
-                    } else {
-                        LLVMStack newStack = new LLVMStack();
-                        threadToStack.put(currentThread.getId(), newStack);
-                        new ReferenceWithCleanup(currentThread);
-                        return newStack;
-                    }
-                }
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                singleThreading.invalidate();
+                LLVMStack newStack = new LLVMStack();
+                threadToStack.put(currentThread.getId(), newStack);
+                new ReferenceWithCleanup(currentThread);
+
+                Thread stackGC = new Thread(new StackGCThread(), "sulongStackGC");
+                stackGC.setDaemon(true);
+                stackGC.start();
+
+                return newStack;
+            }
+        } else {
+            if (currentThread == defaultThread) {
+                return defaultStack;
+            } else if (threadToStack.containsKey(currentThread.getId())) {
+                return threadToStack.get(currentThread.getId());
+            } else {
+                LLVMStack newStack = new LLVMStack();
+                threadToStack.put(currentThread.getId(), newStack);
+                new ReferenceWithCleanup(currentThread);
+                return newStack;
             }
         }
     }
 
-    public void freeStacks() {
+    public synchronized void freeStacks() {
         CompilerAsserts.neverPartOfCompilation();
-        synchronized (this) {
-            defaultStack.free();
-            for (LLVMStack s : threadToStack.values()) {
-                if (!s.isFreed()) {
-                    s.free();
-                }
+        defaultStack.free();
+        for (LLVMStack s : threadToStack.values()) {
+            if (!s.isFreed()) {
+                s.free();
             }
         }
     }

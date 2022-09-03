@@ -31,21 +31,19 @@ package com.oracle.truffle.llvm.nodes.memory;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.NodeFields;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
+import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 @NodeFields({@NodeField(type = int.class, name = "size"), @NodeField(type = int.class, name = "alignment"), @NodeField(type = Type.class, name = "symbolType")})
 public abstract class LLVMAllocInstruction extends LLVMExpressionNode {
+
+    @CompilationFinal protected LLVMThreadingStack threadingStack;
 
     abstract int getSize();
 
@@ -53,18 +51,15 @@ public abstract class LLVMAllocInstruction extends LLVMExpressionNode {
 
     abstract Type getSymbolType();
 
-    @CompilationFinal private FrameSlot stackPointer;
-
-    protected FrameSlot getStackPointerSlot() {
-        if (stackPointer == null) {
+    public LLVMThreadingStack getThreadingStack() {
+        if (threadingStack == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            stackPointer = getRootNode().getFrameDescriptor().findFrameSlot(LLVMStack.FRAME_ID);
+            threadingStack = getContext().getThreadingStack();
         }
-        return stackPointer;
+        return threadingStack;
     }
 
     public abstract static class LLVMAllocaConstInstruction extends LLVMAllocInstruction {
-
         @CompilationFinal(dimensions = 1) private Type[] types = null;
         @CompilationFinal(dimensions = 1) private int[] offsets = null;
 
@@ -76,8 +71,8 @@ public abstract class LLVMAllocInstruction extends LLVMExpressionNode {
             this.offsets = offsets;
         }
 
-        public Type[] getTypes() {
-            return types;
+        public Type getType(int i) {
+            return types[i];
         }
 
         public int[] getOffsets() {
@@ -89,25 +84,23 @@ public abstract class LLVMAllocInstruction extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected LLVMAddress doOp(VirtualFrame frame,
-                        @Cached("getLLVMMemory()") LLVMMemory memory) {
-            return LLVMAddress.fromLong(LLVMStack.allocateStackMemory(frame, memory, getStackPointerSlot(), getSize(), getAlignment()));
+        public LLVMAddress execute() {
+            return LLVMAddress.fromLong(getThreadingStack().getStack().allocateStackMemory(getSize(), getAlignment()));
         }
+
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMAllocaInstruction extends LLVMAllocInstruction {
-
         @Specialization
-        protected LLVMAddress doOp(VirtualFrame frame, int nr,
-                        @Cached("getLLVMMemory()") LLVMMemory memory) {
-            return LLVMAddress.fromLong(LLVMStack.allocateStackMemory(frame, memory, getStackPointerSlot(), getSize() * nr, getAlignment()));
+        public LLVMAddress execute(int nr) {
+            return LLVMAddress.fromLong(getThreadingStack().getStack().allocateStackMemory(getSize() * nr, getAlignment()));
         }
 
         @Specialization
-        protected LLVMAddress doOp(VirtualFrame frame, long nr,
-                        @Cached("getLLVMMemory()") LLVMMemory memory) {
-            return LLVMAddress.fromLong(LLVMStack.allocateStackMemory(frame, memory, getStackPointerSlot(), (int) (getSize() * nr), getAlignment()));
+        public LLVMAddress execute(long nr) {
+            return LLVMAddress.fromLong(getThreadingStack().getStack().allocateStackMemory((int) (getSize() * nr), getAlignment()));
         }
     }
+
 }

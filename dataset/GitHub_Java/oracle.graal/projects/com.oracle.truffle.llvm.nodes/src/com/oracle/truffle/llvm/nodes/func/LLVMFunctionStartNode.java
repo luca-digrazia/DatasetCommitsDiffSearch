@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,39 +29,55 @@
  */
 package com.oracle.truffle.llvm.nodes.func;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.nodes.base.LLVMFrameNullerUtil;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-
-import java.util.HashMap;
-import java.util.Map;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStackFrameNuller;
 
 public class LLVMFunctionStartNode extends RootNode {
 
     @Child private LLVMExpressionNode node;
-    @CompilationFinal(dimensions = 1) FrameSlot[] frameSlotsToInitialize;
+    @Children private final LLVMExpressionNode[] copyArgumentsToFrame;
+    @Children private final LLVMStackFrameNuller[] nullers;
     private final String name;
     private final int explicitArgumentsCount;
     private final DebugInformation debugInformation;
 
-    public LLVMFunctionStartNode(SourceSection sourceSection, LLVMLanguage language, LLVMExpressionNode node,
-                    FrameDescriptor frameDescriptor, String name, int explicitArgumentsCount, String originalName, Source bcSource, LLVMSourceLocation location) {
+    /*
+     * Encapsulation of these 3 objects keeps memory footprint low in case no debug info is
+     * available.
+     */
+    private static final class DebugInformation {
+        private final SourceSection sourceSection;
+        private final String originalName;
+        private final Source bcSource;
+
+        DebugInformation(SourceSection sourceSection, String originalName, Source bcSource) {
+            this.sourceSection = sourceSection;
+            this.originalName = originalName;
+            this.bcSource = bcSource;
+        }
+    }
+
+    public LLVMFunctionStartNode(SourceSection sourceSection, LLVMLanguage language, LLVMExpressionNode node, LLVMExpressionNode[] copyArgumentsToFrame,
+                    FrameDescriptor frameDescriptor,
+                    String name, LLVMStackFrameNuller[] initNullers, int explicitArgumentsCount, String originalName, Source bcSource) {
         super(language, frameDescriptor);
-        this.debugInformation = new DebugInformation(sourceSection, originalName, bcSource, location);
+        this.debugInformation = new DebugInformation(sourceSection, originalName, bcSource);
         this.explicitArgumentsCount = explicitArgumentsCount;
         this.node = node;
+        this.copyArgumentsToFrame = copyArgumentsToFrame;
+        this.nullers = initNullers;
         this.name = name;
-        this.frameSlotsToInitialize = frameDescriptor.getSlots().toArray(new FrameSlot[0]);
     }
 
     @Override
@@ -69,17 +85,55 @@ public class LLVMFunctionStartNode extends RootNode {
         return debugInformation.sourceSection;
     }
 
+    @CompilationFinal private LLVMThreadingStack threadingStack;
+
+    private LLVMThreadingStack getThreadingStack() {
+        if (threadingStack == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            threadingStack = getLanguage(LLVMLanguage.class).getContextReference().get().getThreadingStack();
+        }
+        return threadingStack;
+    }
+
     @Override
     public Object execute(VirtualFrame frame) {
-        nullStack(frame);
-        Object result = node.executeGeneric(frame);
-        return result;
+        long basePointer = getThreadingStack().getStack().getStackPointer();
+        try {
+
+            nullStack(frame);
+            copyArgumentsToFrame(frame);
+            Object result = node.executeGeneric(frame);
+
+            return result;
+        } finally {
+            assert assertDestroyStack(basePointer);
+            getThreadingStack().getStack().setStackPointer(basePointer);
+        }
+    }
+
+    /*
+     * Allows us to find broken stackpointers immediately because old stackregions are destroyed.
+     */
+    private boolean assertDestroyStack(long basePointer) {
+        long currSp = getThreadingStack().getStack().getStackPointer();
+        long size = basePointer - currSp;
+        LLVMMemory.memset(currSp, size, (byte) 0xFF);
+        return true;
     }
 
     @ExplodeLoop
     private void nullStack(VirtualFrame frame) {
-        for (FrameSlot frameSlot : frameSlotsToInitialize) {
-            LLVMFrameNullerUtil.nullFrameSlot(frame, frameSlot);
+        for (LLVMStackFrameNuller nuller : nullers) {
+            if (nuller != null) {
+                nuller.nullifySlot(frame);
+            }
+        }
+    }
+
+    @ExplodeLoop
+    private void copyArgumentsToFrame(VirtualFrame frame) {
+        for (LLVMExpressionNode n : copyArgumentsToFrame) {
+            n.executeGeneric(frame);
         }
     }
 
@@ -90,9 +144,6 @@ public class LLVMFunctionStartNode extends RootNode {
 
     @Override
     public String getName() {
-        if (debugInformation.originalName != null) {
-            return debugInformation.originalName;
-        }
         return name;
     }
 
@@ -104,48 +155,7 @@ public class LLVMFunctionStartNode extends RootNode {
         return debugInformation.originalName;
     }
 
-    public String getBcName() {
-        return name;
-    }
-
     public Source getBcSource() {
         return debugInformation.bcSource;
-    }
-
-    @Override
-    @TruffleBoundary
-    public Map<String, Object> getDebugProperties() {
-        final HashMap<String, Object> properties = new HashMap<>();
-        if (debugInformation.sourceSection != null) {
-            properties.put("sourceSection", debugInformation.sourceSection);
-        }
-        if (debugInformation.originalName != null) {
-            properties.put("originalName", debugInformation.originalName);
-        }
-        if (debugInformation.bcSource != null) {
-            properties.put("bcSource", debugInformation.bcSource);
-        }
-        if (debugInformation.sourceLocation != null) {
-            properties.put("sourceLocation", debugInformation.sourceLocation);
-        }
-        return properties;
-    }
-
-    /*
-     * Encapsulation of these 4 objects keeps memory footprint low in case no debug info is
-     * available.
-     */
-    private static final class DebugInformation {
-        private final SourceSection sourceSection;
-        private final String originalName;
-        private final Source bcSource;
-        private final LLVMSourceLocation sourceLocation;
-
-        DebugInformation(SourceSection sourceSection, String originalName, Source bcSource, LLVMSourceLocation sourceLocation) {
-            this.sourceSection = sourceSection;
-            this.originalName = originalName;
-            this.bcSource = bcSource;
-            this.sourceLocation = sourceLocation;
-        }
     }
 }

@@ -32,11 +32,8 @@ package com.oracle.truffle.llvm.runtime.memory;
 import java.lang.reflect.Field;
 
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameUtil;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 
 import sun.misc.Unsafe;
@@ -45,8 +42,6 @@ import sun.misc.Unsafe;
  * Implements a stack that grows from the top to the bottom.
  */
 public final class LLVMStack {
-
-    public static final String FRAME_ID = "<stackpointer>";
 
     private static final long STACK_SIZE_KB = LLVMOptions.ENGINE.stackSize();
 
@@ -76,8 +71,8 @@ public final class LLVMStack {
         allocate(STACK_SIZE_BYTE);
     }
 
-    @TruffleBoundary
     private void allocate(final long stackSize) {
+        CompilerAsserts.neverPartOfCompilation();
         if (!isFreed) {
             throw new AssertionError("previously not deallocated");
         }
@@ -93,23 +88,15 @@ public final class LLVMStack {
     }
 
     public long getStackPointer() {
-        long sp = this.stackPointer;
-        assert assertStackPointer();
-        return sp;
-    }
-
-    private boolean assertStackPointer() {
-        boolean azzert = stackPointer != 0;
-        stackPointer = 0;
-        return azzert;
+        return stackPointer;
     }
 
     public void setStackPointer(long pointer) {
         this.stackPointer = pointer;
     }
 
-    @TruffleBoundary
     public void free() {
+        CompilerAsserts.neverPartOfCompilation();
         if (isFreed) {
             throw new AssertionError("already freed");
         }
@@ -122,14 +109,16 @@ public final class LLVMStack {
 
     public static final int NO_ALIGNMENT_REQUIREMENTS = 1;
 
-    public static long allocateStackMemory(VirtualFrame frame, FrameSlot stackPointerSlot, final long size, final int alignment) {
+    public long allocateStackMemory(final long size, final int alignment) {
         assert size >= 0;
         assert alignment != 0 && powerOfTwo(alignment);
-        long stackPointer = FrameUtil.getLongSafe(frame, stackPointerSlot);
-        assert stackPointer != 0;
         final long alignedAllocation = (stackPointer - size) & -alignment;
         assert alignedAllocation <= stackPointer;
-        frame.setLong(stackPointerSlot, alignedAllocation);
+        stackPointer = alignedAllocation;
+        if (stackPointer < lowerBounds) {
+            CompilerDirectives.transferToInterpreter();
+            throw new StackOverflowError("stack overflow");
+        }
         return alignedAllocation;
     }
 

@@ -105,11 +105,11 @@ public class LLVMContext {
 
     public static final class DestructorStackElement {
         private final LLVMFunctionDescriptor destructor;
-        private final long thiz;
+        private final LLVMAddress thiz;
 
         public DestructorStackElement(LLVMFunctionDescriptor destructor, LLVMAddress thiz) {
             this.destructor = destructor;
-            this.thiz = thiz.getVal();
+            this.thiz = thiz;
         }
 
         public LLVMFunctionDescriptor getDestructor() {
@@ -117,7 +117,7 @@ public class LLVMContext {
         }
 
         public LLVMAddress getThiz() {
-            return LLVMAddress.fromLong(thiz);
+            return thiz;
         }
     }
 
@@ -389,8 +389,8 @@ public class LLVMContext {
         return nativeLookup;
     }
 
-    public static String getNativeSignature(FunctionType type, int skipArguments) {
-        return NativeLookup.prepareSignature(type, skipArguments);
+    public static String getNativeSignature(FunctionType type) {
+        return NativeLookup.prepareSignature(type);
     }
 
 }

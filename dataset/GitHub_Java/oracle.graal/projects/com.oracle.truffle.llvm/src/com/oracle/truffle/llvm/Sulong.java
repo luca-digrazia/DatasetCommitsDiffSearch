@@ -243,14 +243,9 @@ public final class Sulong extends LLVMLanguage {
                     }
                 }
                 if (!context.isParseOnly()) {
-                    context.getThreadingStack().checkThread();
-                    long stackPointer = context.getThreadingStack().getStack().getStackPointer();
-                    result.getGlobalVarInits().call(stackPointer);
-                    context.getThreadingStack().getStack().setStackPointer(stackPointer);
+                    result.getGlobalVarInits().call();
                     for (RootCallTarget constructorFunction : result.getConstructorFunctions()) {
-                        stackPointer = context.getThreadingStack().getStack().getStackPointer();
-                        constructorFunction.call(stackPointer);
-                        context.getThreadingStack().getStack().setStackPointer(stackPointer);
+                        constructorFunction.call(result.getConstructorFunctions());
                     }
                 }
             }
@@ -277,16 +272,11 @@ public final class Sulong extends LLVMLanguage {
 
             @Override
             public void disposeContext(LLVMContext context) {
-                context.getThreadingStack().checkThread();
                 for (RootCallTarget destructorFunction : context.getDestructorFunctions()) {
-                    long stackPointer = context.getThreadingStack().getStack().getStackPointer();
-                    destructorFunction.call(stackPointer);
-                    context.getThreadingStack().getStack().setStackPointer(stackPointer);
+                    destructorFunction.call(destructorFunction);
                 }
                 for (RootCallTarget destructor : context.getGlobalVarDeallocs()) {
-                    long stackPointer = context.getThreadingStack().getStack().getStackPointer();
-                    destructor.call(stackPointer);
-                    context.getThreadingStack().getStack().setStackPointer(stackPointer);
+                    destructor.call();
                 }
                 context.getThreadingStack().freeStacks();
             }
