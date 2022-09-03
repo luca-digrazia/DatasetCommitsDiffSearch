@@ -106,16 +106,20 @@ public class SecurityServicesFeature implements Feature {
         RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.util.UUID$Holder"));
 
         /*
-         * The classes bellow have a static final SecureRandom field. Note that if the classes are
-         * not found as reachable by the analaysis registering them form class initialization rerun
-         * doesn't have any effect.
+         * This class has a static final SecureRandom field which can be accessed via a public API
+         * and can leak in third party code.
          */
         RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("sun.security.jca.JCAUtil$CachedSecureRandomHolder"));
-        RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("com.sun.crypto.provider.SunJCE$SecureRandomHolder"));
-        RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("sun.security.krb5.Confounder"));
-        RuntimeClassInitialization.rerunClassInitialization(javax.net.ssl.SSLContext.class);
 
         if (SubstrateOptions.EnableAllSecurityServices.getValue()) {
+            /*
+             * These classes also have a static final SecureRandom fields but can only be used when
+             * all security services are enabled.
+             */
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("com.sun.crypto.provider.SunJCE$SecureRandomHolder"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("sun.security.krb5.Confounder"));
+            RuntimeClassInitialization.rerunClassInitialization(javax.net.ssl.SSLContext.class);
+
             /* Prepare SunEC native library access. */
             prepareSunEC();
         }
