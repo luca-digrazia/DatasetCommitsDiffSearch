@@ -27,7 +27,6 @@ package com.oracle.truffle.api.debug;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -61,24 +60,82 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 
 /**
- * Represents a single session in the {@link Debugger} which notifies a callback whenever the
- * stepping is enabled or a breakpoint is hit. A session is created using
- * {@link Debugger#startSession(SuspendedCallback)} with a {@link SuspendedCallback callback}. For
- * each breakpoint or manual suspension the provided callback is notified. A breakpoint can be
- * installed using {@link #install(Breakpoint)} and are local to a session. Manual suspensions can
- * be performed in three different ways:
+ * Client access to {@link PolyglotEngine} {@linkplain Debugger debugging services}.
+ *
+ * <h4>Session lifetime</h4>
+ * <p>
  * <ul>
- * <li>{@link #suspendNextExecution()} suspends the next execution on the first thread that is
- * encountered.</li>
+ * <li>A {@link PolyglotEngine} debugging client
+ * {@linkplain Debugger#startSession(SuspendedCallback) requests} a new {@linkplain DebuggerSession
+ * session} from the {@linkplain Debugger#find(PolyglotEngine) engine's Debugger}.</li>
+ *
+ * <li>A client uses a session to request suspension of guest language execution threads, for
+ * example by setting breakpoints or stepping.</li>
+ *
+ * <li>When a session suspends a guest language execution thread, it passes its client a new
+ * {@link SuspendedEvent} via synchronous {@linkplain SuspendedCallback callback} on the execution
+ * thread.</li>
+ *
+ * <li>A suspended guest language execution thread resumes language execution only after the client
+ * callback returns.</li>
+ *
+ * <li>Sessions that are no longer needed should be {@linkplain #close() closed}; a closed session
+ * has no further affect on engine execution.</li>
  * </ul>
+ * </p>
+ *
+ * <h4>Debugging requests</h4>
  * <p>
- * Whenever one or multiple breakpoints hit at the same location as a manual suspension then both
- * events are merged into a single one. {@link SuspendedEvent#getBreakpoints()} can be used to find
- * out which breakpoints did hit. Whenever a debugger session is closed no further suspended events
- * will be generated.
+ * Session clients can manage guest language execution in several ways:
+ * <ul>
+ * <li>{@linkplain #install(Breakpoint) Install} a newly created {@link Breakpoint}.</li>
+ *
+ * <li>{@linkplain #suspendNextExecution() Request} suspension of the next execution on the first
+ * thread that is encountered.</li>
+ *
+ * <li>Request a stepping action (e.g. {@linkplain SuspendedEvent#prepareStepInto(int) step into},
+ * {@linkplain SuspendedEvent#prepareStepOver(int) step over},
+ * {@linkplain SuspendedEvent#prepareKill() kill}) on a suspended execution thread, to take effect
+ * after the client callback returns.</li>
+ * </ul>
+ * </p>
+ *
+ * <h4>Event merging</h4>
  * <p>
- * Breakpoints and suspensions are local to a particular session and do not affect other sessions.
- * In other words, multiple sessions can be created and be used independent of each other.
+ * A session may suspend a guest language execution thread in response to more than one request from
+ * its client. For example:
+ * <ul>
+ * <li>A stepping action may land where a breakpoint is installed.</li>
+ * <li>Multiple installed breakpoints may apply to a particular location.</li>
+ * </ul>
+ * In such cases the client receives a single <em>merged</em> event. A call to
+ * {@linkplain SuspendedEvent#getBreakpoints()} lists all breakpoints (possibly none) that apply to
+ * the suspended event's location.</li>
+ * </p>
+ *
+ * <h4>Multiple sessions</h4>
+ * <p>
+ * There can be multiple sessions associated with a single engine, which are independent of one
+ * another in the following ways:
+ * <ul>
+ * <li>Breakpoints created by a session are not visible to clients of other sessions.</li>
+ *
+ * <li>A client receives no notification when guest language execution threads are suspended by
+ * sessions other than its own.</li>
+ *
+ * <li>Events are <em>not merged</em> across sessions. For example, when a guest language execution
+ * thread hits a location where two sessions have installed breakpoints, each session notifies its
+ * client with a new {@link SuspendedEvent} instance.</li>
+ * </ul>
+ * Because all sessions can control engine execution, some interactions are inherently possible. For
+ * example:
+ * <ul>
+ * <li>A session's client can {@linkplain SuspendedEvent#prepareKill() kill} an execution at just
+ * about any time.</li>
+ * <li>A session's client can <em>starve</em> execution by not returning from the synchronous
+ * {@linkplain SuspendedCallback callback} on the guest language execution thread.</li>
+ * </ul>
+ * </p>
  * <p>
  * Usage example: {@link DebuggerSessionSnippets#example}
  *
@@ -112,34 +169,24 @@ public final class DebuggerSession implements Closeable {
     private volatile boolean suspendNext;
     private boolean suspendAll;
     private final StableBoolean stepping = new StableBoolean(false);
+    private final StableBoolean breakpointsActive = new StableBoolean(true);
 
-    /*
-     * Legacy mode for backwards compatibility. Legacy mode means that recursive events will be
-     * dispatched and stepping bindings will be added and removed when they are needed. Since the
-     * legacy session is always active we don't want to keep the stepping bindings active all the
-     * time as we want for regular sessions, which can be closed.
-     */
-    // TODO remove when deprecated event dispatching is removed
-    private final boolean legacy;
     private final int sessionId;
 
     private volatile boolean closed;
 
-    DebuggerSession(Debugger debugger, SuspendedCallback callback, boolean legacy) {
+    DebuggerSession(Debugger debugger, SuspendedCallback callback) {
         this.sessionId = SESSIONS.incrementAndGet();
         this.debugger = debugger;
         this.callback = callback;
         SourceSectionFilter filter = SourceSectionFilter.newBuilder().tagIs(DebuggerTags.AlwaysHalt.class).build();
-        this.alwaysHaltBreakpoint = new Breakpoint(new BreakpointLocation(null, -1, -1), filter, false);
+        this.alwaysHaltBreakpoint = new Breakpoint(BreakpointLocation.ANY, filter, false);
         this.alwaysHaltBreakpoint.setEnabled(true);
         this.alwaysHaltBreakpoint.install(this);
-        this.legacy = legacy;
         if (Debugger.TRACE) {
             trace("open with callback %s", callback);
         }
-        if (!legacy) {
-            addBindings();
-        }
+        addBindings();
     }
 
     private void trace(String msg, Object... parameters) {
@@ -306,14 +353,6 @@ public final class DebuggerSession implements Closeable {
         }
 
         stepping.set(needsStepping);
-
-        if (legacy) {
-            if (needsStepping) {
-                addBindings();
-            } else {
-                removeBindings();
-            }
-        }
     }
 
     private void addBindings() {
@@ -369,8 +408,8 @@ public final class DebuggerSession implements Closeable {
     }
 
     /**
-     * Returns all the breakpoints in the order they were installed. Breakpoints which were
-     * {@link Breakpoint#dispose() disposed} are automatically removed from this list.
+     * Returns all breakpoints in the order they were installed. {@link Breakpoint#dispose()
+     * Disposed} breakpoints are automatically removed from this list.
      *
      * @since 0.17
      */
@@ -388,40 +427,40 @@ public final class DebuggerSession implements Closeable {
         return Collections.unmodifiableList(b);
     }
 
-    /*
-     * Deprecation Note: Usually you want to return unmodifiable collections instead of mutable
-     * collections in APIs. Also sorting does not really make sense, in the new session based API
-     * installation order is a lot simpler and the client can use its own breakpoint sorting if they
-     * want.
+    /**
+     * Set whether breakpoints are active in this session. This has no effect on breakpoints
+     * enabled/disabled state. Breakpoints need to be active to actually break the execution. The
+     * breakpoints are active by default.
      *
-     * TODO remove this when deprecated APIs are removed.
+     * @param active <code>true</code> to make all breakpoints active, <code>false</code> to make
+     *            all breakpoints inactive.
+     * @since 0.24
      */
-    Collection<Breakpoint> getLegacyBreakpoints() {
-        if (closed) {
-            throw new IllegalStateException("session already closed");
-        }
-
-        List<Breakpoint> sortedBreakpoints;
-        synchronized (breakpoints) {
-            // need to synchronize manually breakpoints are iterated which is not
-            // synchronized by default.
-            sortedBreakpoints = new ArrayList<>(this.breakpoints);
-        }
-        Collections.sort(sortedBreakpoints, Breakpoint.COMPARATOR);
-
-        // unfortunately spec says that we need to return a modifiable list
-        // should we deprecate that?
-        return sortedBreakpoints;
+    public void setBreakpointsActive(boolean active) {
+        breakpointsActive.set(active);
     }
 
     /**
-     * Installs a new breakpoint for this session. When the breakpoint is hit then the
-     * {@link SuspendedCallback callback} for this session is notified. To find out which breakpoint
-     * was hit {@link SuspendedEvent#getBreakpoints()} can be used. If the session is closed then an
-     * {@link IllegalStateException} is thrown.
+     * Test whether breakpoints are active in this session. Breakpoints do not break execution when
+     * not active.
      *
-     * @param breakpoint the breakpoint to install
-     * @return the breakpoint instance that was passed in.
+     * @since 0.24
+     */
+    public boolean isBreakpointsActive() {
+        return breakpointsActive.get();
+    }
+
+    /**
+     * Adds a new breakpoint to this session and makes it capable of suspending execution.
+     * <p>
+     * The breakpoint suspends execution by making a {@link SuspendedCallback callback} to this
+     * session, together with an event description that includes
+     * {@linkplain SuspendedEvent#getBreakpoints() which breakpoint(s)} were hit.
+     *
+     * @param breakpoint a new breakpoint
+     * @return the installed breakpoint
+     * @throws IllegalStateException if the session has been closed
+     *
      * @since 0.17
      */
     public synchronized Breakpoint install(Breakpoint breakpoint) {
@@ -445,7 +484,6 @@ public final class DebuggerSession implements Closeable {
 
     synchronized void disposeBreakpoint(Breakpoint breakpoint) {
         breakpoints.remove(breakpoint);
-        debugger.disposeBreakpoint(breakpoint);
         if (Debugger.TRACE) {
             trace("disposed breakpoint %s", breakpoint);
         }
@@ -455,7 +493,7 @@ public final class DebuggerSession implements Closeable {
     void notifyCallback(DebuggerNode source, MaterializedFrame frame, Object returnValue, BreakpointConditionFailure conditionFailure) {
         Thread currentThread = Thread.currentThread();
         SuspendedEvent event = currentSuspendedEventMap.get(currentThread);
-        if (!legacy && event != null) {
+        if (event != null) {
             if (Debugger.TRACE) {
                 trace("ignored suspended reason: recursive from source:%s context:%s location:%s", source, source.getContext(), source.getSteppingLocation());
             }
@@ -508,7 +546,7 @@ public final class DebuggerSession implements Closeable {
         List<Breakpoint> breaks = null;
         for (DebuggerNode node : nodes) {
             Breakpoint breakpoint = node.getBreakpoint();
-            if (breakpoint == null) {
+            if (breakpoint == null || !isBreakpointsActive()) {
                 continue; // not a breakpoint node
             }
             boolean hit = true;
@@ -572,7 +610,7 @@ public final class DebuggerSession implements Closeable {
         }
 
         SteppingStrategy strategy = suspendedEvent.getNextStrategy();
-        if (!legacy && !strategy.isKill()) {
+        if (!strategy.isKill()) {
             // suspend(...) has been called during SuspendedEvent notification. this is only
             // possible in non-legacy mode.
             SteppingStrategy currentStrategy = getSteppingStrategy(currentThread);
@@ -600,7 +638,10 @@ public final class DebuggerSession implements Closeable {
             if (stepping.get()) {
                 EventBinding<? extends ExecutionEventNodeFactory> localStatementBinding = statementBinding;
                 if (localStatementBinding != null) {
-                    nodes.add((DebuggerNode) context.lookupExecutionEventNode(localStatementBinding));
+                    DebuggerNode node = (DebuggerNode) context.lookupExecutionEventNode(localStatementBinding);
+                    if (node != null) {
+                        nodes.add(node);
+                    }
                 }
             }
             if (!breakpoints.isEmpty()) {
@@ -665,7 +706,7 @@ public final class DebuggerSession implements Closeable {
                 frame = ev.getMaterializedFrame();
             } else {
                 node = frameInstance.getCallNode();
-                frame = frameInstance.getFrame(FrameAccess.MATERIALIZE, true).materialize();
+                frame = frameInstance.getFrame(FrameAccess.MATERIALIZE).materialize();
             }
             return Debugger.ACCESSOR.evalInContext(ev.getSession().getDebugger().getSourceVM(), node, frame, code);
         } catch (KillException kex) {
@@ -766,7 +807,7 @@ public final class DebuggerSession implements Closeable {
 
 class DebuggerSessionSnippets {
 
-    public void example() throws IOException {
+    public void example() {
         // @formatter:off
         // BEGIN: DebuggerSessionSnippets#example
         PolyglotEngine engine = PolyglotEngine.newBuilder().build();
