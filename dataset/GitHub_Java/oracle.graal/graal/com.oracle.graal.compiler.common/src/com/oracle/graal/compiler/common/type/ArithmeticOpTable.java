@@ -354,10 +354,6 @@ public final class ArithmeticOpTable {
          * Apply the operation to a {@link Stamp}.
          */
         public abstract Stamp foldStamp(Stamp stamp);
-
-        public UnaryOp<T> unwrap() {
-            return this;
-        }
     }
 
     /**
@@ -483,10 +479,6 @@ public final class ArithmeticOpTable {
             return null;
         }
 
-        public BinaryOp<T> unwrap() {
-            return this;
-        }
-
         @Override
         public String toString() {
             if (associative) {
@@ -513,11 +505,6 @@ public final class ArithmeticOpTable {
 
         public FloatConvert getFloatConvert() {
             return op;
-        }
-
-        @Override
-        public FloatConvertOp unwrap() {
-            return this;
         }
     }
 
@@ -551,9 +538,5 @@ public final class ArithmeticOpTable {
         public abstract Constant foldConstant(int inputBits, int resultBits, Constant value);
 
         public abstract Stamp foldStamp(int inputBits, int resultBits, Stamp stamp);
-
-        public IntegerConvertOp<T> unwrap() {
-            return this;
-        }
     }
 }
