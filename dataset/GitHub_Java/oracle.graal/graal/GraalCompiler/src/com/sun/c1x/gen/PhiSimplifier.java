@@ -22,74 +22,71 @@
  */
 package com.sun.c1x.gen;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.graph.*;
 import com.sun.c1x.ir.*;
-import com.sun.c1x.value.*;
 
 /**
  * The {@code PhiSimplifier} class is a helper class that can reduce phi instructions.
- *
- * @author Ben L. Titzer
  */
-public final class PhiSimplifier implements BlockClosure {
+public final class PhiSimplifier {
 
-    final IR ir;
+    private NodeBitMap visited;
+    private NodeBitMap cannotSimplify;
 
     public PhiSimplifier(IR ir) {
-        this.ir = ir;
-        ir.getHIRStartBlock().iterateAnyOrder(this, false);
-    }
+        Graph graph = ir.compilation.graph;
+        visited = graph.createNodeBitMap();
+        cannotSimplify = graph.createNodeBitMap();
 
-    /**
-     * This method is called for each block and processes any phi statements in the block.
-     * @param block the block to apply the simplification to
-     */
-    public void apply(BlockBegin block) {
-        FrameState state = block.stateBefore();
-        for (int i = 0; i < state.stackSize(); i++) {
-            simplify(state.stackAt(i));
-        }
-        for (int i = 0; i < state.localsSize(); i++) {
-            simplify(state.localAt(i));
+        for (Node n : graph.getNodes()) {
+            if (n instanceof Phi) {
+                simplify((Phi) n);
+            }
         }
     }
 
-    Value simplify(Value x) {
+    private Value simplify(Value x) {
         if (x == null || !(x instanceof Phi)) {
             return x;
         }
         Phi phi = (Phi) x;
-        if (phi.checkFlag(Value.Flag.PhiCannotSimplify)) {
+
+        if (phi.valueCount() == 1 && !cannotSimplify.isMarked(phi)) {
+            return (Value) phi.replace(phi.valueAt(0));
+        }
+
+        if (cannotSimplify.isMarked(phi)) {
             // already tried, cannot simplify this phi
             return phi;
-        } else if (phi.checkFlag(Value.Flag.PhiVisited)) {
+        } else if (visited.isMarked(phi)) {
             // break cycles in phis
             return phi;
-        } else if (phi.isIllegal()) {
+        } else if (phi.isDead()) {
             // don't bother with illegals
             return phi;
         } else {
             // attempt to simplify the phi by recursively simplifying its operands
-            phi.setFlag(Value.Flag.PhiVisited);
+            visited.mark(phi);
             Value phiSubst = null;
-            int max = phi.phiInputCount();
+            int max = phi.valueCount();
             boolean cannotSimplify = false;
             for (int i = 0; i < max; i++) {
-                Value oldInstr = phi.inputAt(i);
+                Value oldInstr = phi.valueAt(i);
 
-                if (oldInstr == null || oldInstr.isIllegal() || oldInstr.isDeadPhi()) {
+                if (oldInstr == null || (oldInstr instanceof Phi && ((Phi) oldInstr).isDead())) {
                     // if one operand is illegal, make the entire phi illegal
                     phi.makeDead();
-                    phi.clearFlag(Value.Flag.PhiVisited);
+                    visited.clear(phi);
                     return phi;
                 }
 
                 Value newInstr = simplify(oldInstr);
 
-                if (newInstr == null || newInstr.isIllegal() || newInstr.isDeadPhi()) {
+                if (newInstr == null || (newInstr instanceof Phi && ((Phi) newInstr).isDead())) {
                     // if the subst instruction is illegal, make the entire phi illegal
                     phi.makeDead();
-                    phi.clearFlag(Value.Flag.PhiVisited);
+                    visited.clear(phi);
                     return phi;
                 }
 
@@ -107,14 +104,17 @@ public final class PhiSimplifier implements BlockClosure {
                 }
             }
             if (cannotSimplify) {
-                phi.setFlag(Value.Flag.PhiCannotSimplify);
-                phi.clearFlag(Value.Flag.PhiVisited);
+                this.cannotSimplify.mark(phi);
+                visited.clear(phi);
                 return phi;
             }
 
             // successfully simplified the phi
             assert phiSubst != null : "illegal phi function";
-            phi.clearFlag(Value.Flag.PhiVisited);
+            visited.clear(phi);
+
+            phi.replace(phiSubst);
+
             return phiSubst;
         }
     }

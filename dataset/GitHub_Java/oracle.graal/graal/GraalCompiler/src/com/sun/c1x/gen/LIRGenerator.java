@@ -34,7 +34,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.max.asm.*;
 import com.sun.c1x.*;
 import com.sun.c1x.alloc.*;
-import com.sun.c1x.alloc.OperandPool.VariableFlag;
+import com.sun.c1x.alloc.OperandPool.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.globalstub.*;
 import com.sun.c1x.graph.*;
@@ -43,16 +43,10 @@ import com.sun.c1x.lir.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.bytecode.*;
-import com.sun.cri.bytecode.Bytecodes.MemoryBarriers;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
-import com.sun.cri.xir.CiXirAssembler.XirConstant;
-import com.sun.cri.xir.CiXirAssembler.XirInstruction;
-import com.sun.cri.xir.CiXirAssembler.XirOperand;
-import com.sun.cri.xir.CiXirAssembler.XirParameter;
-import com.sun.cri.xir.CiXirAssembler.XirRegister;
-import com.sun.cri.xir.CiXirAssembler.XirTemp;
 import com.sun.cri.xir.*;
+import com.sun.cri.xir.CiXirAssembler.*;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
@@ -264,7 +258,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                 }
             }
         }
-        if (block.blockSuccessors().size() >= 1 && (block.getInstructions().size() == 0  || !jumpsToNextBlock(block.getInstructions().get(block.getInstructions().size() - 1)))) {
+        if (block.blockSuccessors().size() == 1 && (block.getInstructions().size() == 0  || !(block.getInstructions().get(block.getInstructions().size() - 1) instanceof BlockEnd))) {
             moveToPhi();
             block.lir().jump(block.blockSuccessors().get(0));
         }
@@ -276,10 +270,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         block.setLastState(lastState);
         this.currentBlock = null;
         blockDoEpilog();
-    }
-
-    private static boolean jumpsToNextBlock(Node node) {
-        return node instanceof BlockEnd;
     }
 
     @Override
@@ -415,7 +405,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
-    public void visitAnchor(Anchor x) {
+    public void visitGoto(Anchor x) {
         setNoResult(x);
 
         // emit phi-instruction moves after safepoint since this simplifies
@@ -464,12 +454,11 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     private int getBeforeInvokeBci(Invoke invoke) {
-        /*int length = 3;
+        int length = 3;
         if (invoke.opcode() == Bytecodes.INVOKEINTERFACE) {
             length += 2;
         }
-        return invoke.stateAfter().bci - length;*/
-        return invoke.bci;
+        return invoke.stateAfter().bci - length;
     }
 
     @Override
@@ -1280,7 +1269,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             Phi phi = (Phi) suxVal;
 
             // curVal can be null without phi being null in conjunction with inlining
-            if (!phi.isDeadPhi() && curVal != null && curVal != phi) {
+            if (!phi.isDead() && curVal != null && curVal != phi) {
 
                 assert phis.contains(phi);
                 if (phi.valueAt(predIndex) != curVal) {
@@ -1288,7 +1277,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                 }
                 assert phi.valueAt(predIndex) == curVal : "curVal=" + curVal + "valueAt(" + predIndex + ")=" + phi.valueAt(predIndex);
 
-                assert !phi.isIllegal() : "illegal phi cannot be marked as live";
+                assert !phi.isDead() : "illegal phi cannot be marked as live";
                 if (curVal instanceof Phi) {
                     operandForPhi((Phi) curVal);
                 }
@@ -1343,7 +1332,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
                     PhiResolver resolver = new PhiResolver(this);
                     for (Phi phi : phis) {
-                        if (!phi.isDeadPhi()) {
+                        if (!phi.isDead()) {
                             Value curVal = phi.valueAt(predIndex);
                             if (curVal != null && curVal != phi) {
                                 if (curVal instanceof Phi) {
@@ -1389,7 +1378,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     private CiValue operandForPhi(Phi phi) {
-        assert !phi.isDeadPhi();
+        assert !phi.isDead();
         if (phi.operand().isIllegal()) {
             // allocate a variable for this phi
             CiVariable operand = newVariable(phi.kind);
@@ -1459,7 +1448,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         for (int index = 0; index < state.localsSize(); index++) {
             final Value value = state.localAt(index);
             if (value != null) {
-                if (!value.isIllegal()) {
+                if (!(value instanceof Phi && ((Phi) value).isDead())) {
                     walkStateValue(value);
                 }
             }
@@ -1468,7 +1457,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     private void walkStateValue(Value value) {
         if (value != null) {
-            if (value instanceof Phi && !value.isIllegal()) {
+            if (value instanceof Phi && !((Phi) value).isDead()) {
                 // phi's are special
                 operandForPhi((Phi) value);
             } else if (value.operand().isIllegal()) {

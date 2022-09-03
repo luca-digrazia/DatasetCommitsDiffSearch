@@ -192,10 +192,4 @@ public final class Constant extends Value {
         return value.name();
     }
 
-    @Override
-    public Node copy(Graph into) {
-        Constant x = new Constant(value, into);
-        x.setNonNull(isNonNull());
-        return x;
-    }
 }

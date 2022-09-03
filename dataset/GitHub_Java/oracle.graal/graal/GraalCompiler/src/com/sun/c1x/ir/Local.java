@@ -95,7 +95,6 @@ public final class Local extends Value {
     public Node copy(Graph into) {
         Local x = new Local(kind, index, into);
         x.setDeclaredType(declaredType());
-        x.setNonNull(isNonNull());
         return x;
     }
 
