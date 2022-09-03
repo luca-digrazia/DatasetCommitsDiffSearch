@@ -48,7 +48,7 @@ import com.oracle.max.criutils.*;
  */
 public class VMToCompilerImpl implements VMToCompiler {
 
-    private final HotSpotGraalRuntime graalRuntime;
+    private final HotSpotGraalRuntime compiler;
     private IntrinsifyArrayCopyPhase intrinsifyArrayCopy;
 
     public final HotSpotTypePrimitive typeBoolean;
@@ -68,7 +68,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     private PrintStream log = System.out;
 
     public VMToCompilerImpl(HotSpotGraalRuntime compiler) {
-        this.graalRuntime = compiler;
+        this.compiler = compiler;
 
         typeBoolean = new HotSpotTypePrimitive(Kind.Boolean);
         typeChar = new HotSpotTypePrimitive(Kind.Char);
@@ -105,10 +105,9 @@ public class VMToCompilerImpl implements VMToCompiler {
             Debug.setConfig(hotspotDebugConfig);
         }
         // Install intrinsics.
-        GraalCompiler compiler = graalRuntime.getCompiler();
-        final HotSpotRuntime runtime = (HotSpotRuntime) compiler.runtime;
+        final HotSpotRuntime runtime = (HotSpotRuntime) compiler.getCompiler().runtime;
         if (GraalOptions.Intrinsify) {
-            Debug.scope("InstallSnippets", new Object[] {new DebugDumpScope("InstallSnippets"), compiler}, new Runnable() {
+            Debug.scope("InstallSnippets", new DebugDumpScope("InstallSnippets"), new Runnable() {
 
                 @Override
                 public void run() {
@@ -215,18 +214,18 @@ public class VMToCompilerImpl implements VMToCompiler {
         CompilationStatistics.clear("bootstrap");
 
         TTY.println(" in %d ms", System.currentTimeMillis() - startTime);
-        if (graalRuntime.getCache() != null) {
-            graalRuntime.getCache().clear();
+        if (compiler.getCache() != null) {
+            compiler.getCache().clear();
         }
         System.gc();
         CompilationStatistics.clear("bootstrap2");
-        MethodEntryCounters.printCounters(graalRuntime);
+        MethodEntryCounters.printCounters(compiler);
     }
 
     private void enqueue(Method m) throws Throwable {
-        JavaMethod javaMethod = graalRuntime.getRuntime().getResolvedJavaMethod(m);
-        assert !Modifier.isAbstract(((HotSpotResolvedJavaMethod) javaMethod).accessFlags()) && !Modifier.isNative(((HotSpotResolvedJavaMethod) javaMethod).accessFlags()) : javaMethod;
-        compileMethod((HotSpotResolvedJavaMethod) javaMethod, 0, false, 10);
+        JavaMethod riMethod = compiler.getRuntime().getResolvedJavaMethod(m);
+        assert !Modifier.isAbstract(((HotSpotResolvedJavaMethod) riMethod).accessFlags()) && !Modifier.isNative(((HotSpotResolvedJavaMethod) riMethod).accessFlags()) : riMethod;
+        compileMethod((HotSpotResolvedJavaMethod) riMethod, 0, false, 10);
     }
 
     private static void shutdownCompileQueue(ThreadPoolExecutor queue) throws InterruptedException {
@@ -286,7 +285,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             }
         }
         CompilationStatistics.clear("final");
-        MethodEntryCounters.printCounters(graalRuntime);
+        MethodEntryCounters.printCounters(compiler);
         HotSpotXirGenerator.printCounters(TTY.out().out());
         CheckCastSnippets.printCounters(TTY.out().out());
     }
@@ -375,7 +374,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
             final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
             int id = compileTaskIds.incrementAndGet();
-            CompilationTask task = CompilationTask.create(graalRuntime, createPhasePlan(optimisticOpts), optimisticOpts, method, id, priority);
+            CompilationTask task = CompilationTask.create(compiler, createPhasePlan(optimisticOpts), optimisticOpts, method, id, priority);
             if (blocking) {
                 task.runCompilation();
             } else {
@@ -413,7 +412,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             HotSpotResolvedJavaType resolved = (HotSpotResolvedJavaType) holder;
             return resolved.createRiField(name, type, offset, flags);
         }
-        return new UnresolvedField(holder, name, type);
+        return new BaseUnresolvedField(holder, name, type);
     }
 
     @Override
@@ -484,7 +483,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
     public PhasePlan createPhasePlan(OptimisticOptimizations optimisticOpts) {
         PhasePlan phasePlan = new PhasePlan();
-        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(graalRuntime.getRuntime(), GraphBuilderConfiguration.getDefault(), optimisticOpts);
+        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(compiler.getRuntime(), GraphBuilderConfiguration.getDefault(), optimisticOpts);
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
         if (GraalOptions.Intrinsify) {
             phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
