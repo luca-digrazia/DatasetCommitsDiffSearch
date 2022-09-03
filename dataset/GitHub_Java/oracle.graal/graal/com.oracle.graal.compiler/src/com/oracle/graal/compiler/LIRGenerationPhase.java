@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.compiler;
 
-import static com.oracle.graal.compiler.common.BackendOptions.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.gen.*;
@@ -64,7 +63,7 @@ public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGeneratio
             emitBlock(nodeLirBuilder, lirGenRes, (Block) b, graph, schedule.getBlockToNodesMap());
         }
         context.lirGen.beforeRegisterAllocation();
-        assert !ConstructionSSAlirDuringLirBuilding.getValue() || SSAUtils.verifySSAForm(lirGenRes.getLIR());
+        assert !SSA_LIR.getValue() || SSAUtils.verifySSAForm(lirGenRes.getLIR());
     }
 
     private static void emitBlock(NodeLIRBuilderTool nodeLirGen, LIRGenerationResult lirGenRes, Block b, StructuredGraph graph, BlockMap<List<Node>> blockMap) {
