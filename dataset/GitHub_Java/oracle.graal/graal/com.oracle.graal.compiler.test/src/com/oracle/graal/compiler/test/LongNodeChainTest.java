@@ -22,24 +22,18 @@
  */
 package com.oracle.graal.compiler.test;
 
-import jdk.vm.ci.meta.JavaConstant;
+import org.junit.*;
 
-import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
-
-import org.junit.Assert;
-import org.junit.Test;
-
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.AddNode;
-import com.oracle.graal.nodes.debug.OpaqueNode;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.debug.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
-import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.phases.tiers.*;
 
 public class LongNodeChainTest extends GraalCompilerTest {
 
@@ -54,8 +48,8 @@ public class LongNodeChainTest extends GraalCompilerTest {
     }
 
     private void longAddChain(boolean reverse) {
-        HighTierContext context = getDefaultHighTierContext();
-        StructuredGraph graph = new StructuredGraph(AllowAssumptions.NO, INVALID_COMPILATION_ID);
+        HighTierContext context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+        StructuredGraph graph = new StructuredGraph(AllowAssumptions.NO);
         ValueNode constant = graph.unique(ConstantNode.forPrimitive(JavaConstant.INT_1));
         ValueNode value = null;
         if (reverse) {
@@ -83,7 +77,7 @@ public class LongNodeChainTest extends GraalCompilerTest {
             new SchedulePhase(s).apply(graph);
         }
 
-        new CanonicalizerPhase().apply(graph, context);
+        new CanonicalizerPhase(false).apply(graph, context);
         JavaConstant asConstant = (JavaConstant) returnNode.result().asConstant();
         Assert.assertEquals(N + 1, asConstant.asInt());
     }
