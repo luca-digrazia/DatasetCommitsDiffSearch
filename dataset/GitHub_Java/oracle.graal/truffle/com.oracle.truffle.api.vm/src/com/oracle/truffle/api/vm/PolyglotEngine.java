@@ -683,10 +683,10 @@ public class PolyglotEngine {
 
     @SuppressWarnings("unchecked")
     void dispatch(Object ev, int type) {
-        if (type == Accessor.EngineSupport.EXECUTION_EVENT) {
+        if (type == 1) {
             dispatchExecutionEvent(ev);
         }
-        if (type == Accessor.EngineSupport.SUSPENDED_EVENT) {
+        if (type == 2) {
             dispatchSuspendedEvent(ev);
         }
         Class clazz = ev.getClass();

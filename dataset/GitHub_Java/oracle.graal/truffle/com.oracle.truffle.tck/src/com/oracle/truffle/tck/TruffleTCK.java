@@ -28,7 +28,6 @@ import com.oracle.truffle.tck.impl.LongBinaryOperation;
 import com.oracle.truffle.tck.impl.ObjectBinaryOperation;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Random;
@@ -228,7 +227,7 @@ public abstract class TruffleTCK {
 
     /**
      * Name of function to add two numbers together. The symbol will be invoked with two parameters
-     * of <code>type1</code> and <code>type2</code> and expects result of type {@link Number}
+     * of <code>type1</code> and <code>type2</code> and expects result of type {@link Number} 
      * which's {@link Number#intValue()} is equivalent of <code>param1 + param2</code>. As some
      * languages may have different operations for different types of numbers, the actual types are
      * passed to the method and the implementation can decide to return different symbol based on
@@ -1473,19 +1472,7 @@ public abstract class TruffleTCK {
     }
 
     private static Object unwrapTruffleObject(Object obj) {
-        try {
-            if (obj instanceof TruffleObject) {
-                Class<?> eto = Class.forName("com.oracle.truffle.api.vm.EngineTruffleObject");
-                if (eto.isInstance(obj)) {
-                    final Field field = eto.getDeclaredField("delegate");
-                    field.setAccessible(true);
-                    return field.get(obj);
-                }
-            }
-            return obj;
-        } catch (Exception ex) {
-            throw new IllegalStateException(ex);
-        }
+        return obj;
     }
 
     interface CompoundObject {
