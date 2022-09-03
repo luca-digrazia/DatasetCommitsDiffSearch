@@ -24,22 +24,19 @@
  */
 package com.oracle.truffle.tools.profiler.impl;
 
-
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
+import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.PolyglotRuntime;
 import com.oracle.truffle.tools.profiler.CPUTracer;
-import org.graalvm.options.OptionCategory;
-import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 
 import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * The {@linkplain TruffleInstrument instrument} for the CPU tracer.
  *
- * @since 0.29
+ * @since 0.30
  */
 @TruffleInstrument.Registration(id = CPUTracerInstrument.ID, name = "CPU Tracer", version = "0.1", services = {CPUTracer.class})
 public class CPUTracerInstrument extends TruffleInstrument {
@@ -47,7 +44,7 @@ public class CPUTracerInstrument extends TruffleInstrument {
     /**
      * Default constructor.
      *
-     * @since 0.29
+     * @since 0.30
      */
     public CPUTracerInstrument() {
     }
@@ -55,13 +52,22 @@ public class CPUTracerInstrument extends TruffleInstrument {
     /**
      * A string used to identify the tracer, i.e. as the name of the tool.
      *
-     * @since 0.29
+     * @since 0.30
      */
     public static final String ID = "cputracer";
-    private static CPUTracer tracer;
+    private CPUTracer tracer;
     private static ProfilerToolFactory<CPUTracer> factory;
 
+    /**
+     * Sets the factory which instantiates the {@link CPUTracer}.
+     *
+     * @param factory the factory which instantiates the {@link CPUTracer}.
+     * @since 0.30
+     */
     public static void setFactory(ProfilerToolFactory<CPUTracer> factory) {
+        if (factory == null || !factory.getClass().getName().startsWith("com.oracle.truffle.tools.profiler")) {
+            throw new IllegalArgumentException("Wrong factory: " + factory);
+        }
         CPUTracerInstrument.factory = factory;
     }
 
@@ -71,13 +77,30 @@ public class CPUTracerInstrument extends TruffleInstrument {
             Class.forName(CPUTracer.class.getName(), true, CPUTracer.class.getClassLoader());
         } catch (ClassNotFoundException ex) {
             // Can not happen
+            throw new AssertionError();
         }
     }
+
+    /**
+     * Does a lookup in the runtime instruments of the engine and returns an instance of the
+     * {@link CPUTracer}.
+     * 
+     * @since 0.30
+     */
+    public static CPUTracer getTracer(PolyglotEngine engine) {
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get(ID);
+        if (instrument == null) {
+            throw new IllegalStateException("Tracer is not installed.");
+        }
+        instrument.setEnabled(true);
+        return instrument.lookup(CPUTracer.class);
+    }
+
     /**
      * Called to create the Instrument.
      *
      * @param env environment information for the instrument
-     * @since 0.29
+     * @since 0.30
      */
     @Override
     protected void onCreate(Env env) {
@@ -102,30 +125,18 @@ public class CPUTracerInstrument extends TruffleInstrument {
 
     /**
      * @return A list of the options provided by the {@link CPUTracer}.
-     * @since 0.29
+     * @since 0.30
      */
     @Override
     protected OptionDescriptors getOptionDescriptors() {
-        List<OptionDescriptor> descriptors = new ArrayList<>();
-        descriptors.add(OptionDescriptor.newBuilder(CPUTracerCLI.ENABLED, ID).category(OptionCategory.USER).help("Enable the CPU tracer (default: false).").build());
-        descriptors.add(OptionDescriptor.newBuilder(CPUTracerCLI.TRACE_ROOTS, ID + ".TraceRoots").category(OptionCategory.USER).help("Capture roots when tracing (default:true).").build());
-        descriptors.add(OptionDescriptor.newBuilder(CPUTracerCLI.TRACE_STATEMENTS, ID + ".TraceStatements").category(OptionCategory.USER).help("Capture statements when tracing (default:false).").build());
-        descriptors.add(OptionDescriptor.newBuilder(CPUTracerCLI.TRACE_CALLS, ID + ".TraceCalls").category(OptionCategory.USER).help("Capture calls when tracing (default:false).").build());
-        descriptors.add(OptionDescriptor.newBuilder(CPUTracerCLI.TRACE_INTERNAL, ID + ".TraceInternal").category(OptionCategory.USER).help("Trace internal elements (default:false).").build());
-        descriptors.add(OptionDescriptor.newBuilder(CPUTracerCLI.FILTER_ROOT, ID + ".FilterRootName").category(OptionCategory.USER).help(
-                "Wildcard filter for program roots. (eg. Math.*, default:*).").build());
-        descriptors.add(OptionDescriptor.newBuilder(CPUTracerCLI.FILTER_FILE, ID + ".FilterFile").category(OptionCategory.USER).help(
-                "Wildcard filter for source file paths. (eg. *program*.sl, default:*).").build());
-        descriptors.add(OptionDescriptor.newBuilder(CPUTracerCLI.FILTER_LANGUAGE, ID + ".FilterLanguage").category(OptionCategory.USER).help(
-                "Only profile languages with mime-type. (eg. +, default:no filter).").build());
-        return OptionDescriptors.create(descriptors);
+        return new CPUTracerCLIOptionDescriptors();
     }
 
     /**
      * Called when the Instrument is to be disposed.
      *
      * @param env environment information for the instrument
-     * @since 0.29
+     * @since 0.30
      */
     @Override
     protected void onDispose(Env env) {

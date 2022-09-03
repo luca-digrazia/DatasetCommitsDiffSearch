@@ -26,19 +26,15 @@ package com.oracle.truffle.tools.profiler.impl;
 
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
+import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.PolyglotRuntime;
 import com.oracle.truffle.tools.profiler.CPUSampler;
-import com.oracle.truffle.tools.profiler.CPUTracer;
-import org.graalvm.options.OptionCategory;
-import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * The {@linkplain TruffleInstrument instrument} for the CPU sampler.
  *
- * @since 0.29
+ * @since 0.30
  */
 @TruffleInstrument.Registration(id = CPUSamplerInstrument.ID, name = "CPU Sampler", version = "0.1", services = {CPUSampler.class})
 public class CPUSamplerInstrument extends TruffleInstrument {
@@ -46,7 +42,7 @@ public class CPUSamplerInstrument extends TruffleInstrument {
     /**
      * Default constructor.
      *
-     * @since 0.29
+     * @since 0.30
      */
     public CPUSamplerInstrument() {
     }
@@ -54,14 +50,22 @@ public class CPUSamplerInstrument extends TruffleInstrument {
     /**
      * A string used to identify the sampler, i.e. as the name of the tool.
      *
-     * @since 0.29
+     * @since 0.30
      */
     public static final String ID = "cpusampler";
-    private static CPUSampler sampler;
-    OptionDescriptors descriptors = null;
+    private CPUSampler sampler;
     private static ProfilerToolFactory<CPUSampler> factory;
 
+    /**
+     * Sets the factory which instantiates the {@link CPUSampler}.
+     *
+     * @param factory the factory which instantiates the {@link CPUSampler}.
+     * @since 0.30
+     */
     public static void setFactory(ProfilerToolFactory<CPUSampler> factory) {
+        if (factory == null || !factory.getClass().getName().startsWith("com.oracle.truffle.tools.profiler")) {
+            throw new IllegalArgumentException("Wrong factory: " + factory);
+        }
         CPUSamplerInstrument.factory = factory;
     }
 
@@ -71,14 +75,30 @@ public class CPUSamplerInstrument extends TruffleInstrument {
             Class.forName(CPUSampler.class.getName(), true, CPUSampler.class.getClassLoader());
         } catch (ClassNotFoundException ex) {
             // Can not happen
+            throw new AssertionError();
         }
+    }
+
+    /**
+     * Does a lookup in the runtime instruments of the engine and returns an instance of the
+     * {@link CPUSampler}.
+     * 
+     * @since 0.30
+     */
+    public static CPUSampler getSampler(PolyglotEngine engine) {
+        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get(ID);
+        if (instrument == null) {
+            throw new IllegalStateException("Sampler is not installed.");
+        }
+        instrument.setEnabled(true);
+        return instrument.lookup(CPUSampler.class);
     }
 
     /**
      * Called to create the Instrument.
      *
      * @param env environment information for the instrument
-     * @since 0.29
+     * @since 0.30
      */
     @Override
     protected void onCreate(Env env) {
@@ -88,15 +108,15 @@ public class CPUSamplerInstrument extends TruffleInstrument {
             sampler.setDelay(env.getOptions().get(CPUSamplerCLI.DELAY_PERIOD));
             sampler.setStackLimit(env.getOptions().get(CPUSamplerCLI.STACK_LIMIT));
             sampler.setFilter(getSourceSectionFilter(env));
-            sampler.setExcludeInlinedRoots(env.getOptions().get(CPUSamplerCLI.MODE) == CPUSamplerCLI.Mode.COMPILED);
+            sampler.setMode(env.getOptions().get(CPUSamplerCLI.MODE));
             sampler.setCollecting(true);
         }
         env.registerService(sampler);
     }
 
     private static SourceSectionFilter getSourceSectionFilter(Env env) {
-        CPUSamplerCLI.Mode mode = env.getOptions().get(CPUSamplerCLI.MODE);
-        final boolean statements = mode == CPUSamplerCLI.Mode.STATEMENTS;
+        final CPUSampler.Mode mode = env.getOptions().get(CPUSamplerCLI.MODE);
+        final boolean statements = mode == CPUSampler.Mode.STATEMENTS;
         final boolean internals = env.getOptions().get(CPUSamplerCLI.SAMPLE_INTERNAL);
         final Object[] filterRootName = env.getOptions().get(CPUSamplerCLI.FILTER_ROOT);
         final Object[] filterFile = env.getOptions().get(CPUSamplerCLI.FILTER_FILE);
@@ -106,41 +126,23 @@ public class CPUSamplerInstrument extends TruffleInstrument {
 
     /**
      * @return All the {@link OptionDescriptors options} provided by the {@link CPUSampler}.
-     * @since 0.29
+     * @since 0.30
      */
     @Override
     protected OptionDescriptors getOptionDescriptors() {
-        List<OptionDescriptor> descriptorList = new ArrayList<>();
-        descriptorList.add(OptionDescriptor.newBuilder(CPUSamplerCLI.ENABLED, ID).category(OptionCategory.USER).help("Enable the CPU sampler.").build());
-        descriptorList.add(OptionDescriptor.newBuilder(CPUSamplerCLI.SAMPLE_PERIOD, ID + ".Period").category(OptionCategory.USER).help("Period in milliseconds to sample the stack.").build());
-        descriptorList.add(OptionDescriptor.newBuilder(CPUSamplerCLI.DELAY_PERIOD, ID + ".Delay").category(OptionCategory.USER).help("Delay the sampling for this many milliseconds (default: 0).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(CPUSamplerCLI.STACK_LIMIT, ID + ".StackLimit").category(OptionCategory.USER).help("Maximum number of maximum stack elements.").build());
-        descriptorList.add(OptionDescriptor.newBuilder(CPUSamplerCLI.OUTPUT, ID + ".Output").category(OptionCategory.USER).help("Print a 'histogram' or 'calltree' as output (default:HISTOGRAM).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(CPUSamplerCLI.MODE, ID + ".Mode").category(OptionCategory.USER).help(
-                "Describes level of sampling detail. NOTE: Increased detail can lead to reduced accuracy. Modes:" + System.lineSeparator() +
-                        "'compiled' - samples roots excluding inlined functions (default)" + System.lineSeparator() + "'roots' - samples roots including inlined functions" +
-                        System.lineSeparator() + "'statements' - samples all statements.").build());
-        descriptorList.add(OptionDescriptor.newBuilder(CPUSamplerCLI.SAMPLE_INTERNAL, ID + ".SampleInternal").category(OptionCategory.USER).help("Capture internal elements (default:false).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(CPUSamplerCLI.FILTER_ROOT, ID + ".FilterRootName").category(OptionCategory.USER).help(
-                "Wildcard filter for program roots. (eg. Math.*, default:*).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(CPUSamplerCLI.FILTER_FILE, ID + ".FilterFile").category(OptionCategory.USER).help(
-                "Wildcard filter for source file paths. (eg. *program*.sl, default:*).").build());
-        descriptorList.add(OptionDescriptor.newBuilder(CPUSamplerCLI.FILTER_LANGUAGE, ID + ".FilterLanguage").category(OptionCategory.USER).help(
-                "Only profile languages with mime-type. (eg. +, default:no filter).").build());
-        descriptors = OptionDescriptors.create(descriptorList);
-        return descriptors;
+        return new CPUSamplerCLIOptionDescriptors();
     }
 
     /**
      * Called when the Instrument is to be disposed.
      *
      * @param env environment information for the instrument
-     * @since 0.29
+     * @since 0.30
      */
     @Override
     protected void onDispose(Env env) {
         if (env.getOptions().get(CPUSamplerCLI.ENABLED)) {
-            CPUSamplerCLI.handleOutput(env, sampler, descriptors);
+            CPUSamplerCLI.handleOutput(env, sampler);
         }
         sampler.close();
     }
