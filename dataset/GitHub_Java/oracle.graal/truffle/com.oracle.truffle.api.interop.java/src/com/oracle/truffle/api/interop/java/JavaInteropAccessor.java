@@ -49,8 +49,4 @@ final class JavaInteropAccessor extends Accessor {
         };
     }
 
-    InteropSupport interop() {
-        return interopSupport();
-    }
-
 }

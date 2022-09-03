@@ -56,8 +56,8 @@ final class PolyglotCache {
         return cache.execute;
     }
 
-    CallTarget lookupComputation(Class<?> key, RootNode computation) {
-        Cache cache = lookupCache(key);
+    CallTarget lookupComputation(RootNode computation) {
+        Cache cache = lookupCache(void.class);
         if (cache.computation == null && computation != null) {
             cache.computation = Truffle.getRuntime().createCallTarget(computation);
         }

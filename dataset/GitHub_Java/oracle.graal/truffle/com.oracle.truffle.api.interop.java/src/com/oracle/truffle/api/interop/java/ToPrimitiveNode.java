@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.api.interop.java;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
@@ -32,25 +31,15 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 
 final class ToPrimitiveNode extends Node {
-    private static final ToPrimitiveNode INSTANCE = new ToPrimitiveNode();
 
     @Child Node isBoxedNode;
     @Child Node hasSizeNode;
     @Child Node unboxNode;
 
-    private ToPrimitiveNode() {
+    ToPrimitiveNode() {
         this.isBoxedNode = Message.IS_BOXED.createNode();
         this.hasSizeNode = Message.HAS_SIZE.createNode();
         this.unboxNode = Message.UNBOX.createNode();
-    }
-
-    static ToPrimitiveNode create() {
-        return new ToPrimitiveNode();
-    }
-
-    static ToPrimitiveNode shared() {
-        CompilerAsserts.neverPartOfCompilation();
-        return INSTANCE;
     }
 
     boolean isPrimitive(Object attr) {
