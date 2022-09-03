@@ -29,16 +29,32 @@
  */
 package com.oracle.truffle.llvm.nodes.impl.memory.load;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionRegistry;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVM80BitFloatNode;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMIVarBitNode;
+import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleManagedMalloc.ManagedMallocObject;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMGlobalVariableDescriptorGuards;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
+import com.oracle.truffle.llvm.types.LLVMTruffleObject;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 import com.oracle.truffle.llvm.types.memory.LLVMMemory;
@@ -67,21 +83,94 @@ public abstract class LLVMDirectLoadNode {
     }
 
     @NodeChild(type = LLVMAddressNode.class)
+    @NodeField(type = LLVMFunctionRegistry.class, name = "functionRegistry")
     public abstract static class LLVMFunctionDirectLoadNode extends LLVMFunctionNode {
 
+        public abstract LLVMFunctionRegistry getFunctionRegistry();
+
         @Specialization
-        public LLVMFunction executeAddress(LLVMAddress addr) {
-            return LLVMHeap.getFunction(addr);
+        public LLVMFunctionDescriptor executeAddress(LLVMAddress addr) {
+            return (LLVMFunctionDescriptor) getFunctionRegistry().createFromIndex(LLVMHeap.getFunctionIndex(addr));
         }
     }
 
-    @NodeChild(type = LLVMAddressNode.class)
+    @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMAddressDirectLoadNode extends LLVMAddressNode {
 
         @Specialization
         public LLVMAddress executeAddress(LLVMAddress addr) {
             return LLVMMemory.getAddress(addr);
         }
+
+        @Specialization
+        public Object executeManagedMalloc(ManagedMallocObject addr) {
+            return addr.get(0);
+        }
+
+        @Specialization(guards = "objectIsManagedMalloc(addr)")
+        public Object executeIndirectedManagedMalloc(LLVMTruffleObject addr) {
+            return ((ManagedMallocObject) addr.getObject()).get((int) (addr.getOffset() / LLVMAddressNode.BYTE_SIZE));
+        }
+
+        @Specialization(guards = "!objectIsManagedMalloc(addr)")
+        public Object executeIndirectedForeign(VirtualFrame frame, LLVMTruffleObject addr, @Cached("createForeignReadNode()") Node foreignRead) {
+            try {
+                return ForeignAccess.sendRead(foreignRead, frame, addr.getObject(), addr.getOffset());
+            } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+                throw new UnsupportedOperationException(e);
+            }
+        }
+
+        @Specialization(guards = "!isManagedMalloc(addr)")
+        public Object executeForeign(VirtualFrame frame, TruffleObject addr, @Cached("createForeignReadNode()") Node foreignRead) {
+            try {
+                return ForeignAccess.sendRead(foreignRead, frame, addr, 0);
+            } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+                throw new UnsupportedOperationException(e);
+            }
+        }
+
+        protected boolean objectIsManagedMalloc(LLVMTruffleObject addr) {
+            return addr.getObject() instanceof ManagedMallocObject;
+        }
+
+        protected boolean isManagedMalloc(TruffleObject addr) {
+            return addr instanceof ManagedMallocObject;
+        }
+
+        protected Node createForeignReadNode() {
+            return Message.READ.createNode();
+        }
+    }
+
+    @ImportStatic(LLVMGlobalVariableDescriptorGuards.class)
+    public abstract static class LLVMGlobalVariableDirectLoadNode extends LLVMAddressNode {
+
+        protected final LLVMGlobalVariableDescriptor descriptor;
+
+        public LLVMGlobalVariableDirectLoadNode(LLVMGlobalVariableDescriptor descriptor) {
+            this.descriptor = descriptor;
+        }
+
+        @Specialization(guards = "needsTransition(frame, descriptor)")
+        public LLVMAddress executeTransition(VirtualFrame frame) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            descriptor.transition(false, false);
+            return executeNative(frame);
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization(guards = "isNative(frame, descriptor)")
+        public LLVMAddress executeNative(VirtualFrame frame) {
+            return LLVMMemory.getAddress(descriptor.getNativeStorage());
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization(guards = "isManaged(frame, descriptor)")
+        public Object executeManaged(VirtualFrame frame) {
+            return descriptor.getManagedStorage();
+        }
+
     }
 
     @NodeChild(type = LLVMAddressNode.class)
