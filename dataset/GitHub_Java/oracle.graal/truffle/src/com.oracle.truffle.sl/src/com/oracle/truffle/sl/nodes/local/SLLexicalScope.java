@@ -40,6 +40,7 @@
  */
 package com.oracle.truffle.sl.nodes.local;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -62,9 +63,9 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.sl.nodes.SLEvalRootNode;
 import com.oracle.truffle.sl.nodes.SLStatementNode;
 import com.oracle.truffle.sl.nodes.controlflow.SLBlockNode;
+import com.oracle.truffle.sl.runtime.SLBigNumber;
 
 /**
  * Simple language lexical scope. There can be a block scope, or function scope.
@@ -80,7 +81,7 @@ public final class SLLexicalScope {
 
     /**
      * Create a new block SL lexical scope.
-     *
+     * 
      * @param current the current node
      * @param block a nearest block enclosing the current node
      * @param parentBlock a next parent block
@@ -94,7 +95,7 @@ public final class SLLexicalScope {
 
     /**
      * Create a new functional SL lexical scope.
-     *
+     * 
      * @param current the current node, or <code>null</code> when it would be above the block
      * @param block a nearest block enclosing the current node
      * @param root a functional root node for top-most block
@@ -114,7 +115,7 @@ public final class SLLexicalScope {
             block = findChildrenBlock(node);
             if (block == null) {
                 // Corrupted SL AST, no block was found
-                assert node.getRootNode() instanceof SLEvalRootNode : "Corrupted SL AST under " + node;
+                assert false : "Corrupted SL AST under " + node;
                 return new SLLexicalScope(null, null, (SLBlockNode) null);
             }
             node = null; // node is above the block
@@ -176,6 +177,23 @@ public final class SLLexicalScope {
             }
         }
         return parent;
+    }
+
+    private static Object getInteropValue(Object value) {
+        if (value instanceof BigInteger) {
+            return new SLBigNumber((BigInteger) value);
+        } else {
+            return value;
+        }
+    }
+
+    private static Object getRawValue(Object interopValue, Object oldValue) {
+        if (interopValue instanceof SLBigNumber) {
+            if (oldValue instanceof BigInteger) {
+                return ((SLBigNumber) interopValue).getValue();
+            }
+        }
+        return interopValue;
     }
 
     /**
@@ -252,7 +270,7 @@ public final class SLLexicalScope {
         // Variables are slot-based.
         // To collect declared variables, traverse the block's AST and find slots associated
         // with SLWriteLocalVariableNode. The traversal stops when we hit the current node.
-        Map<String, FrameSlot> slots = new LinkedHashMap<>(4);
+        Map<String, FrameSlot> slots = new LinkedHashMap<>(1 << 2);
         NodeUtil.forEachChild(varsBlock, new NodeVisitor() {
             @Override
             public boolean visit(Node node) {
@@ -284,7 +302,7 @@ public final class SLLexicalScope {
         // Arguments are pushed to frame slots at the beginning of the function block.
         // To collect argument slots, search for SLReadArgumentNode inside of
         // SLWriteLocalVariableNode.
-        Map<String, FrameSlot> args = new LinkedHashMap<>(4);
+        Map<String, FrameSlot> args = new LinkedHashMap<>(1 << 2);
         NodeUtil.forEachChild(block, new NodeVisitor() {
 
             private SLWriteLocalVariableNode wn; // The current write node containing a slot
@@ -338,15 +356,6 @@ public final class SLLexicalScope {
         @MessageResolution(receiverType = VariablesMapObject.class)
         static final class VariablesMapMessageResolution {
 
-            @Resolve(message = "HAS_KEYS")
-            abstract static class VarsMapHasKeysNode extends Node {
-
-                public Object access(VariablesMapObject varMap) {
-                    assert varMap != null;
-                    return true;
-                }
-            }
-
             @Resolve(message = "KEYS")
             abstract static class VarsMapKeysNode extends Node {
 
@@ -374,7 +383,7 @@ public final class SLLexicalScope {
                         } else {
                             value = varMap.frame.getValue(slot);
                         }
-                        return value;
+                        return getInteropValue(value);
                     }
                 }
             }
@@ -392,14 +401,17 @@ public final class SLLexicalScope {
                         throw UnknownIdentifierException.raise(name);
                     } else {
                         if (varMap.args != null && varMap.args.length > slot.getIndex()) {
-                            varMap.args[slot.getIndex()] = value;
+                            Object valueOld = varMap.args[slot.getIndex()];
+                            varMap.args[slot.getIndex()] = getRawValue(value, valueOld);
                         } else {
-                            varMap.frame.setObject(slot, value);
+                            Object valueOld = varMap.frame.getValue(slot);
+                            varMap.frame.setObject(slot, getRawValue(value, valueOld));
                         }
                         return value;
                     }
                 }
             }
+
         }
     }
 

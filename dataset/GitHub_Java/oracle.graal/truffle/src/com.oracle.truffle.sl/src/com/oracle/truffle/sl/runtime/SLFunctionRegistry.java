@@ -51,6 +51,7 @@ import java.util.Set;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
@@ -59,6 +60,7 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.sl.SLLanguage;
+import com.oracle.truffle.sl.nodes.SLRootNode;
 import com.oracle.truffle.sl.parser.Parser;
 
 /**
@@ -91,14 +93,15 @@ public final class SLFunctionRegistry {
      * node. If the function did not exist before, it defines the function. If the function existed
      * before, it redefines the function and the old implementation is discarded.
      */
-    public SLFunction register(String name, RootCallTarget callTarget) {
+    public SLFunction register(String name, SLRootNode rootNode) {
         SLFunction function = lookup(name, true);
+        RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         function.setCallTarget(callTarget);
         return function;
     }
 
-    public void register(Map<String, RootCallTarget> newFunctions) {
-        for (Map.Entry<String, RootCallTarget> entry : newFunctions.entrySet()) {
+    public void register(Map<String, SLRootNode> newFunctions) {
+        for (Map.Entry<String, SLRootNode> entry : newFunctions.entrySet()) {
             register(entry.getKey(), entry.getValue());
         }
     }
@@ -142,15 +145,6 @@ public final class SLFunctionRegistry {
 
         @MessageResolution(receiverType = FunctionsObject.class)
         static final class FunctionsObjectMessageResolution {
-
-            @Resolve(message = "HAS_KEYS")
-            abstract static class FunctionsObjectHasKeysNode extends Node {
-
-                @SuppressWarnings("unused")
-                public Object access(FunctionsObject fo) {
-                    return true;
-                }
-            }
 
             @Resolve(message = "KEYS")
             abstract static class FunctionsObjectKeysNode extends Node {
