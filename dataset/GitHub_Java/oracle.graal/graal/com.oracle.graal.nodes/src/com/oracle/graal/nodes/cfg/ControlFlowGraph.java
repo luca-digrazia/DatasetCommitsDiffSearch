@@ -31,12 +31,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
-    /**
-     * Don't allow probability values to be become too small as this makes frequency calculations
-     * large enough that they can overflow the range of a double. This commonly happens with
-     * infinite loops within infinite loops.
-     */
-    public static final double MIN_PROBABILITY = 0.000001;
 
     public final StructuredGraph graph;
 
@@ -227,8 +221,8 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                     }
                 }
             }
-            if (probability > 1. / MIN_PROBABILITY) {
-                probability = 1. / MIN_PROBABILITY;
+            if (probability > 1. / Double.MIN_NORMAL) {
+                probability = 1. / Double.MIN_NORMAL;
             }
             block.setPredecessors(predecessors);
             block.setProbability(probability);
