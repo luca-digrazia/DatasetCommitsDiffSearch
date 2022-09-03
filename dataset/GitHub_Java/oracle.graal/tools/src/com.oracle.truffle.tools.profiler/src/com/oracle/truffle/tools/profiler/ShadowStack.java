@@ -28,10 +28,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -84,46 +84,16 @@ final class ShadowStack {
                     logger.warning("Instrumented node " + instrumentedNode + " has null SourceSection.");
                     return null;
                 }
-                return new StackPushPopNode(ShadowStack.this, instrumenter, context, compiledOnly);
+                boolean isRoot = instrumenter.queryTags(instrumentedNode).contains(StandardTags.RootTag.class);
+                return new StackPushPopNode(ShadowStack.this, new SourceLocation(instrumenter, context), compiledOnly, isRoot);
             }
         });
-    }
-
-    ArrayList<StackTraceEntry> getInitialStack(Node instrumentedNode) {
-        ArrayList<StackTraceEntry> sourceLocations = new ArrayList<>();
-        reconstructStack(sourceLocations, instrumentedNode, sourceSectionFilter, initInstrumenter);
-        Truffle.getRuntime().iterateFrames(frame -> {
-            Node node = frame.getCallNode();
-            if (node != null) {
-                reconstructStack(sourceLocations, node, sourceSectionFilter, initInstrumenter);
-            }
-            return null;
-        });
-        Collections.reverse(sourceLocations);
-        return sourceLocations;
-    }
-
-    private static void reconstructStack(ArrayList<StackTraceEntry> sourceLocations, Node node, SourceSectionFilter sourceSectionFilter, Instrumenter instrumenter) {
-        if (node == null || sourceSectionFilter == null) {
-            return;
-        }
-        // We exclude the node itself as it will be pushed on the stack by the StackPushPopNode
-        Node current = node.getParent();
-        while (current != null) {
-            if (sourceSectionFilter.includes(current) && current.getSourceSection() != null) {
-                sourceLocations.add(new StackTraceEntry(instrumenter, current, StackTraceEntry.STATE_INTERPRETED));
-            }
-            current = current.getParent();
-        }
     }
 
     private static class StackPushPopNode extends ExecutionEventNode {
 
         private final ShadowStack profilerStack;
-
-        private final StackTraceEntry compilationRootLocation;
-        private final StackTraceEntry compiledLocation;
-        private final StackTraceEntry interpretedLocation;
+        private final SourceLocation location;
 
         private final Thread cachedThread;
         private final ThreadLocalStack cachedStack;
@@ -132,13 +102,11 @@ final class ShadowStack {
         @CompilationFinal final boolean isAttachedToRootTag;
         @CompilationFinal final boolean ignoreInlinedRoots;
 
-        StackPushPopNode(ShadowStack profilerStack, Instrumenter instrumenter, EventContext context, boolean ignoreInlinedRoots) {
+        StackPushPopNode(ShadowStack profilerStack, SourceLocation location, boolean ignoreInlinedRoots, boolean isAttachedToRootTag) {
             this.profilerStack = profilerStack;
             this.cachedThread = Thread.currentThread();
-            this.interpretedLocation = new StackTraceEntry(instrumenter, context, StackTraceEntry.STATE_INTERPRETED);
-            this.compiledLocation = new StackTraceEntry(interpretedLocation, StackTraceEntry.STATE_COMPILED);
-            this.compilationRootLocation = new StackTraceEntry(interpretedLocation, StackTraceEntry.STATE_COMPILATION_ROOT);
-            this.isAttachedToRootTag = context.hasTag(StandardTags.RootTag.class);
+            this.location = location;
+            this.isAttachedToRootTag = isAttachedToRootTag;
             this.ignoreInlinedRoots = ignoreInlinedRoots;
             this.cachedStack = getStack();
         }
@@ -152,21 +120,20 @@ final class ShadowStack {
         }
 
         private void doOnEnter() {
-            StackTraceEntry location = CompilerDirectives.inInterpreter() ? interpretedLocation : (CompilerDirectives.inCompilationRoot() ? compiledLocation : compilationRootLocation);
             if (seenOtherThreads) {
-                pushSlow(location);
+                pushSlow(CompilerDirectives.inCompiledCode());
             } else if (cachedThread == Thread.currentThread()) {
-                cachedStack.push(location);
+                cachedStack.push(location, CompilerDirectives.inCompiledCode());
             } else {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 seenOtherThreads = true;
-                pushSlow(location);
+                pushSlow(false);
             }
         }
 
         @TruffleBoundary
-        private void pushSlow(StackTraceEntry location) {
-            getStack().push(location);
+        private void pushSlow(boolean inCompiledCode) {
+            getStack().push(location, inCompiledCode);
         }
 
         @Override
@@ -186,29 +153,29 @@ final class ShadowStack {
                     // inlined root.
                     // Than there should be no stack pop until we exit the original compilation
                     // root.
-                    // Not needed if stack overflowed
-                    if (!getStack().hasStackOverflowed() &&
-                            getStack().top().getInstrumentedNode() != interpretedLocation.getInstrumentedNode()) {
-
+                    if (!getStack().top().equals(location)) {
                         return;
                     }
                 }
             }
+            doOnReturnValue();
+        }
 
+        private void doOnReturnValue() {
             if (seenOtherThreads) {
-                popSlow(compiledLocation);
+                popSlow();
             } else if (cachedThread == Thread.currentThread()) {
-                cachedStack.pop(compiledLocation);
+                cachedStack.pop();
             } else {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 seenOtherThreads = true;
-                popSlow(compiledLocation);
+                popSlow();
             }
         }
 
         @TruffleBoundary
-        private void popSlow(StackTraceEntry entry) {
-            getStack().pop(entry);
+        private void popSlow() {
+            getStack().pop();
         }
 
         @TruffleBoundary
@@ -216,8 +183,7 @@ final class ShadowStack {
             Thread currentThread = Thread.currentThread();
             ThreadLocalStack stack = profilerStack.stacks.get(currentThread);
             if (stack == null) {
-                stack = profilerStack.new ThreadLocalStack(currentThread, profilerStack.stackLimit,
-                                compiledLocation.getInstrumentedNode());
+                stack = new ThreadLocalStack(currentThread, profilerStack.stackLimit, profilerStack.sourceSectionFilter, profilerStack.initInstrumenter, location.getInstrumentedNode());
                 ThreadLocalStack prevStack = profilerStack.stacks.putIfAbsent(currentThread, stack);
                 if (prevStack != null) {
                     stack = prevStack;
@@ -233,7 +199,7 @@ final class ShadowStack {
 
     }
 
-    final class ThreadLocalStack {
+    static final class ThreadLocalStack {
 
         /*
          * Window in which we look ahead and before the current stack index to find the potentially
@@ -242,33 +208,32 @@ final class ShadowStack {
         private static final int CORRECTION_WINDOW = 5;
 
         private final Thread thread;
-        private final StackTraceEntry[] stack;
+        private final SourceLocation[] stack;
+        private final boolean[] compiledStack;
 
         private boolean stackOverflowed = false;
         @CompilationFinal private Assumption noStackOverflowedAssumption = Truffle.getRuntime().createAssumption();
 
         private int stackIndex;
-        @CompilationFinal private int initialStackLength;
-        @CompilationFinal private Assumption initialStackLengthStable;
 
-        ThreadLocalStack(Thread thread, int stackLimit, Node instrumentedNode) {
+        ThreadLocalStack(Thread thread, int stackLimit, SourceSectionFilter sourceSectionFilter, Instrumenter instrumenter, Node instrumentedNode) {
             this.thread = thread;
-            ArrayList<StackTraceEntry> init = getInitialStack(instrumentedNode);
-            this.initialStackLength = init.size();
-            this.initialStackLengthStable = initialStackLength > 0 ? Truffle.getRuntime().createAssumption("initial stack length stable") : null;
-            this.stack = init.toArray(new StackTraceEntry[stackLimit]);
+            ArrayList<SourceLocation> init = getInitialStack(sourceSectionFilter, instrumentedNode, instrumenter);
+            this.stack = init.toArray(new SourceLocation[stackLimit]);
             this.stackIndex = init.size() - 1;
+            this.compiledStack = new boolean[stackLimit];
             // In case we are running in CompiledOnly mode, the assumption is never checked in the
             // Interpreter so call is needed to resolve the method.
             noStackOverflowedAssumption.isValid();
         }
 
-        void push(StackTraceEntry element) {
+        void push(SourceLocation element, boolean inCompiledCode) {
             if (noStackOverflowedAssumption.isValid()) {
                 int index = stackIndex + 1;
                 if (index < stack.length) {
                     assert index >= 0;
                     stack[index] = element;
+                    compiledStack[index] = inCompiledCode;
                 } else {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     noStackOverflowedAssumption.invalidate();
@@ -278,81 +243,36 @@ final class ShadowStack {
             }
         }
 
-        void pop(StackTraceEntry location) {
+        void pop() {
             if (noStackOverflowedAssumption.isValid()) {
                 int index = stackIndex;
                 if (index >= 0 && index < stack.length) {
-                    if (initialStackLength > 0 && index <= initialStackLength && initialStackLengthStable.isValid()) {
-                        CompilerDirectives.transferToInterpreter();
-                        /*
-                         * The initial stack needs to be reconstructed on every pop that pops into
-                         * the initial stack.
-                         */
-                        List<StackTraceEntry> reconstructedStack = getInitialStack(location.getInstrumentedNode());
-                        for (int i = 0; i < reconstructedStack.size(); i++) {
-                            stack[i] = reconstructedStack.get(i);
-                        }
-                        for (int i = reconstructedStack.size(); i < initialStackLength; i++) {
-                            stack[i] = null;
-                        }
-                        stackIndex = reconstructedStack.size() - 1;
-                        if (reconstructedStack.size() != initialStackLength) {
-                            initialStackLengthStable.invalidate();
-                            initialStackLength = reconstructedStack.size();
-                            initialStackLengthStable = initialStackLength > 0 ? Truffle.getRuntime().createAssumption("initial stack length stable") : null;
-                        }
-                    } else {
-                        stack[index] = null;
-                        stackIndex = index - 1;
-                    }
+                    stack[index] = null;
                 } else {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     noStackOverflowedAssumption.invalidate();
                     stackOverflowed = true;
-                    stackIndex = index - 1;
                 }
-
+                stackIndex = index - 1;
             }
         }
 
-        StackTraceEntry top() {
-            return stack[stackIndex];
+        SourceLocation top() {
+            CompilerAsserts.neverPartOfCompilation();
+            int index = stackIndex;
+            return stack[index];
         }
 
-        StackTraceEntry[] getStack() {
-            StackTraceEntry[] localStack = stack;
-            int localStackIndex = stackIndex;
-            if (localStackIndex == -1) {
-                // nothing on the stack
-                return null;
-            }
-
-            int length = localStackIndex + 1;
-            if (length > localStack.length) {
-                // stack was out of stack limit
-                length = localStack.length;
-            }
-
-            // make a quick copy to minimize retries
-            localStack = Arrays.copyOf(localStack, Math.min(length + CORRECTION_WINDOW, localStack.length));
-
-            for (int i = 0; i < localStack.length; i++) {
-                // find the first null hole in the stack and use it as new corrected top of
-                // stack index
-                if (localStack[i] == null) {
-                    length = i;
-                    break;
-                }
-            }
-
-            if (localStack.length != length) {
-                localStack = Arrays.copyOf(localStack, length);
-            }
-            return localStack;
+        SourceLocation[] getStack() {
+            return stack;
         }
 
         Thread getThread() {
             return thread;
+        }
+
+        boolean[] getCompiledStack() {
+            return compiledStack;
         }
 
         int getStackIndex() {
@@ -363,5 +283,87 @@ final class ShadowStack {
             return stackOverflowed;
         }
 
+        private static ArrayList<SourceLocation> getInitialStack(SourceSectionFilter sourceSectionFilter, Node instrumentedNode, Instrumenter instrumenter) {
+            ArrayList<SourceLocation> sourceLocations = new ArrayList<>();
+            reconstructStack(sourceLocations, instrumentedNode, sourceSectionFilter, instrumenter);
+            Truffle.getRuntime().iterateFrames(frame -> {
+                Node node = frame.getCallNode();
+                if (node != null) {
+                    reconstructStack(sourceLocations, node, sourceSectionFilter, instrumenter);
+                }
+                return null;
+            });
+            Collections.reverse(sourceLocations);
+            return sourceLocations;
+        }
+
+        private static void reconstructStack(ArrayList<SourceLocation> sourceLocations, Node node, SourceSectionFilter sourceSectionFilter, Instrumenter instrumenter) {
+            if (node == null || sourceSectionFilter == null) {
+                return;
+            }
+            // We exclude the node itself as it will be pushed on the stack by the StackPushPopNode
+            Node current = node.getParent();
+            while (current != null) {
+                if (sourceSectionFilter.includes(current) && current.getSourceSection() != null) {
+                    sourceLocations.add(new SourceLocation(instrumenter, current));
+                }
+                current = current.getParent();
+            }
+        }
+
+        static final class CorrectedStackInfo {
+
+            static CorrectedStackInfo build(ThreadLocalStack stack) {
+                SourceLocation[] localStack = stack.getStack();
+                boolean[] localCompiled = stack.getCompiledStack();
+                int localStackIndex = stack.getStackIndex();
+                if (localStackIndex == -1) {
+                    // nothing on the stack
+                    return null;
+                }
+
+                int length = localStackIndex + 1;
+                if (length > localStack.length) {
+                    // stack was out of stack limit
+                    length = localStack.length;
+                }
+
+                // make a quick copy to minimize retries
+                localStack = Arrays.copyOf(localStack, Math.min(length + CORRECTION_WINDOW, localStack.length));
+                localCompiled = Arrays.copyOf(localCompiled, Math.min(length + CORRECTION_WINDOW, localStack.length));
+
+                for (int i = 0; i < localStack.length; i++) {
+                    // find the first null hole in the stack and use it as new corrected top of
+                    // stack index
+                    if (localStack[i] == null) {
+                        length = i;
+                        break;
+                    }
+                }
+                return new CorrectedStackInfo(localStack, localCompiled, length);
+            }
+
+            private CorrectedStackInfo(SourceLocation[] stack, boolean[] compiledStack, int length) {
+                this.stack = stack;
+                this.compiledStack = compiledStack;
+                this.length = length;
+            }
+
+            SourceLocation[] getStack() {
+                return stack;
+            }
+
+            boolean[] getCompiledStack() {
+                return compiledStack;
+            }
+
+            int getLength() {
+                return length;
+            }
+
+            SourceLocation[] stack;
+            boolean[] compiledStack;
+            int length;
+        }
     }
 }

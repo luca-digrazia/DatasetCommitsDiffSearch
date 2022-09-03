@@ -59,7 +59,7 @@ import com.oracle.truffle.tools.profiler.impl.ProfilerToolFactory;
  * intervals, i.e. the state of the stack is copied and saved into trees of {@linkplain ProfilerNode
  * nodes}, which represent the profile of the execution.
  * <p>
- * Usage example: {@codesnippet CPUSamplerSnippets#example}
+ * Usage example: {@link CPUSamplerSnippets#example}
  *
  * @since 0.30
  */
@@ -498,7 +498,7 @@ public final class CPUSampler implements Closeable {
         this.stacksBinding = this.shadowStack.install(env.getInstrumenter(), combine(f, mode), mode == Mode.EXCLUDE_INLINED_ROOTS);
 
         this.samplerTask = new SamplingTimerTask();
-        this.samplerThread.schedule(samplerTask, delay, period);
+        this.samplerThread.schedule(samplerTask, 0, period);
 
     }
 
@@ -543,8 +543,14 @@ public final class CPUSampler implements Closeable {
 
     private class SamplingTimerTask extends TimerTask {
 
+        int runcount = 0;
+
         @Override
         public void run() {
+            runcount++;
+            if (runcount < delay / period) {
+                return;
+            }
             if (delaySamplingUntilNonInternalLangInit && !nonInternalLanguageContextInitialized) {
                 return;
             }
