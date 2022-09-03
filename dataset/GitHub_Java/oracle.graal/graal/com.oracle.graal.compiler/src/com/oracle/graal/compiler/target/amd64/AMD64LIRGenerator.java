@@ -66,7 +66,6 @@ import com.oracle.graal.lir.amd64.AMD64Move.MoveToRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.NullCheckOp;
 import com.oracle.graal.lir.amd64.AMD64Move.SpillMoveOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreOp;
-import com.oracle.graal.nodes.DeoptimizeNode.DeoptAction;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -498,20 +497,16 @@ public class AMD64LIRGenerator extends LIRGenerator {
         return result;
     }
 
+
     @Override
-    public void emitDeoptimizeOn(Condition cond, DeoptAction action, Object deoptInfo) {
-        assert cond != null;
+    public void emitDeoptimizeOn(Condition cond, RiDeoptAction action, RiDeoptReason reason, Object deoptInfo) {
         LIRDebugInfo info = state();
-        LabelRef stubEntry = createDeoptStub(action, info, deoptInfo);
-        append(new BranchOp(cond, stubEntry, info));
-    }
-
-
-    @Override
-    public void emitDeoptimize(DeoptAction action, Object deoptInfo, long leafGraphId) {
-        LIRDebugInfo info = state(leafGraphId);
-        LabelRef stubEntry = createDeoptStub(action, info, deoptInfo);
-        append(new JumpOp(stubEntry, info));
+        LabelRef stubEntry = createDeoptStub(action, reason, info, deoptInfo);
+        if (cond != null) {
+            append(new BranchOp(cond, stubEntry, info));
+        } else {
+            append(new JumpOp(stubEntry, info));
+        }
     }
 
     @Override
@@ -551,18 +546,18 @@ public class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected LabelRef createDeoptStub(DeoptAction action, LIRDebugInfo info, Object deoptInfo) {
+    protected LabelRef createDeoptStub(RiDeoptAction action, RiDeoptReason reason, LIRDebugInfo info, Object deoptInfo) {
         assert info.topFrame.bci >= 0 : "invalid bci for deopt framestate";
-        AMD64DeoptimizationStub stub = new AMD64DeoptimizationStub(action, info, deoptInfo);
+        AMD64DeoptimizationStub stub = new AMD64DeoptimizationStub(action, reason, info, deoptInfo);
         lir.deoptimizationStubs.add(stub);
         return LabelRef.forLabel(stub.label);
     }
 
     @Override
-    protected void emitNullCheckGuard(NullCheckNode node, long leafGraphId) {
+    protected void emitNullCheckGuard(NullCheckNode node) {
         assert !node.expectedNull;
         Variable value = load(operand(node.object()));
-        LIRDebugInfo info = state(leafGraphId);
+        LIRDebugInfo info = state();
         append(new NullCheckOp(value, info));
     }
 

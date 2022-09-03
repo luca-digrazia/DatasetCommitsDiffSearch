@@ -33,7 +33,7 @@ import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 
-public class AMD64DeoptimizationStub extends AMD64Code {
+public class AMD64DeoptimizationStub extends AMD64SlowPath {
     public final Label label = new Label();
     public final LIRDebugInfo info;
     public final RiDeoptAction action;
@@ -67,10 +67,5 @@ public class AMD64DeoptimizationStub extends AMD64Code {
         // TODO Make this an explicit calling convention instead of using a scratch register
         AMD64Call.directCall(tasm, masm, CiRuntimeCall.Deoptimize, info);
         AMD64Call.shouldNotReachHere(tasm, masm);
-    }
-
-    @Override
-    public String description() {
-        return "deopt stub[reason=" + reason + ", action=" + action + "]";
     }
 }

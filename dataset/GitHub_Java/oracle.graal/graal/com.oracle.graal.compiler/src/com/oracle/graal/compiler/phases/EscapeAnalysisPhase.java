@@ -76,7 +76,7 @@ public class EscapeAnalysisPhase extends Phase {
         }
 
         @Override
-        public boolean merge(MergeNode merge, List<BlockExitState> withStates) {
+        public boolean merge(MergeNode merge, Collection<BlockExitState> withStates) {
             PhiNode vobjPhi = null;
             PhiNode[] valuePhis = new PhiNode[fieldState.length];
             for (BlockExitState other : withStates) {
@@ -129,7 +129,7 @@ public class EscapeAnalysisPhase extends Phase {
         }
 
         @Override
-        public void loopEnds(LoopBeginNode loopBegin, List<BlockExitState> loopEndStates) {
+        public void loopEnds(LoopBeginNode loopBegin, Collection<BlockExitState> loopEndStates) {
             while (!(virtualObjectField instanceof PhiNode)) {
                 virtualObjectField = ((VirtualObjectFieldNode) virtualObjectField).lastState();
             }
@@ -214,15 +214,13 @@ public class EscapeAnalysisPhase extends Phase {
     private final CiTarget target;
     private final GraalRuntime runtime;
     private final CiAssumptions assumptions;
-    private final GraphCache cache;
     private final PhasePlan plan;
     private final OptimisticOptimizations optimisticOpts;
 
-    public EscapeAnalysisPhase(CiTarget target, GraalRuntime runtime, CiAssumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
+    public EscapeAnalysisPhase(CiTarget target, GraalRuntime runtime, CiAssumptions assumptions, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
         this.runtime = runtime;
         this.target = target;
         this.assumptions = assumptions;
-        this.cache = cache;
         this.plan = plan;
         this.optimisticOpts = optimisticOpts;
     }
@@ -391,7 +389,7 @@ public class EscapeAnalysisPhase extends Phase {
             if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
                 TTY.println("Trying inlining to get a non-escaping object for %s", node);
             }
-            new InliningPhase(target, runtime, invokes, assumptions, cache, plan, optimisticOpts).apply(graph);
+            new InliningPhase(target, runtime, invokes, assumptions, plan, optimisticOpts).apply(graph);
             new DeadCodeEliminationPhase().apply(graph);
             if (node.isDeleted()) {
                 if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
