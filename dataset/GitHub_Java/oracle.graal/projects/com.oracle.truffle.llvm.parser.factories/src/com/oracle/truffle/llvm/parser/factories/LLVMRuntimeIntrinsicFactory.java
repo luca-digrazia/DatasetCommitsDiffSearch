@@ -128,15 +128,15 @@ public class LLVMRuntimeIntrinsicFactory {
     }
 
     protected Map<String, NodeFactory<? extends LLVMNode>> getFactories() {
-        intrinsifyAbortIntrinsics();
+        intrinsifyAbortIntrinsics(intrinsics);
         if (optConfig.intrinsifyCLibraryFunctions()) {
-            intrinsifyMathFunctions();
+            intrinsifyMathFunctions(intrinsics);
         }
-        intrinsifyInteropIntrinsics();
+        intrinsifyInteropIntrinsics(intrinsics);
         return intrinsics;
     }
 
-    protected void intrinsifyInteropIntrinsics() {
+    protected static void intrinsifyInteropIntrinsics(Map<String, NodeFactory<? extends LLVMNode>> intrinsics) {
         intrinsics.put("@truffle_import", LLVMTruffleImportFactory.getInstance());
         intrinsics.put("@truffle_import_cached", LLVMTruffleImportCachedFactory.getInstance());
         intrinsics.put("@truffle_address_to_function", LLVMTruffleAddressToFunctionFactory.getInstance());
@@ -220,8 +220,9 @@ public class LLVMRuntimeIntrinsicFactory {
      * by <code>atexit</code>) could not be executed. Additionally, a failing JUnit test would then
      * also exit the process instead of executing the remaining test cases.
      *
+     * @param intrinsics
      */
-    protected void intrinsifyAbortIntrinsics() {
+    protected static void intrinsifyAbortIntrinsics(Map<String, NodeFactory<? extends LLVMNode>> intrinsics) {
         // Fortran
         intrinsics.put("@_gfortran_abort", LLVMAbortFactory.getInstance());
         // C
@@ -235,7 +236,7 @@ public class LLVMRuntimeIntrinsicFactory {
      * especially make sense when Graal intrinsifies the corresponding Java method calls, e.g.
      * {@link java.lang.Math#exp(double)}.
      */
-    protected void intrinsifyMathFunctions() {
+    protected static void intrinsifyMathFunctions(Map<String, NodeFactory<? extends LLVMNode>> intrinsics) {
         intrinsics.put("@sqrt", LLVMSqrtFactory.getInstance());
         intrinsics.put("@log", LLVMLogFactory.getInstance());
         intrinsics.put("@log10", LLVMLog10Factory.getInstance());
