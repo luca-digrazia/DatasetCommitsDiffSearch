@@ -98,9 +98,8 @@ public class LLVMGlobalRootNode extends RootNode {
             return e.getReturnCode();
         } catch (SulongRuntimeException e) {
             CompilerDirectives.transferToInterpreter();
+            System.err.println();
             e.getCStackTrace().printCStackTrace();
-            throw e;
-        } catch (Throwable e) {
             throw e;
         } finally {
             getContext().getThreadingStack().getStack().setStackPointer(basePointer);

@@ -33,16 +33,16 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMTruffleImportCached extends LLVMIntrinsic {
 
-    @Child protected ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.POINTER);
+    @Child protected ToLLVMNode toLLVM = ToLLVMNode.createNode(TruffleObject.class);
 
     protected Object resolve(String name) {
         return toLLVM.executeWithTarget(importSymbol(name));
@@ -50,7 +50,7 @@ public abstract class LLVMTruffleImportCached extends LLVMIntrinsic {
 
     @TruffleBoundary
     public Object importSymbol(String id) {
-        return getContext().getEnv().importSymbol(id);
+        return getLLVMLanguage().getEnvironment().importSymbol(id);
     }
 
     protected static String getString(LLVMAddress value) {

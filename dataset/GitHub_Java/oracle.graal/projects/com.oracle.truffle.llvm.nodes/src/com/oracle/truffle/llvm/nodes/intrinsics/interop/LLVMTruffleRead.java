@@ -42,25 +42,26 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMPerformance;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public abstract class LLVMTruffleRead extends LLVMIntrinsic {
 
     private static void checkLLVMTruffleObject(LLVMTruffleObject value) {
-        if (value.getOffset() != 0) {
+        if (value.getOffset() != 0 || value.getName() != null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new IllegalAccessError("Pointee must be unmodified");
         }
     }
 
-    private static Object doRead(TruffleObject value, LLVMAddress id, Node foreignRead, ForeignToLLVM toLLVM) {
+    private static Object doRead(TruffleObject value, LLVMAddress id, Node foreignRead, ToLLVMNode toLLVM) {
         String name = LLVMTruffleIntrinsicUtil.readString(id);
         return doRead(value, name, foreignRead, toLLVM);
     }
 
-    private static Object doRead(TruffleObject value, String name, Node foreignRead, ForeignToLLVM toLLVM) {
+    private static Object doRead(TruffleObject value, String name, Node foreignRead, ToLLVMNode toLLVM) {
         try {
             Object rawValue = ForeignAccess.sendRead(foreignRead, value, name);
             return toLLVM.executeWithTarget(rawValue);
@@ -70,7 +71,7 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
         }
     }
 
-    private static Object doReadIdx(TruffleObject value, int id, Node foreignRead, ForeignToLLVM toLLVM) {
+    private static Object doReadIdx(TruffleObject value, int id, Node foreignRead, ToLLVMNode toLLVM) {
         try {
             Object rawValue = ForeignAccess.sendRead(foreignRead, value, id);
             return toLLVM.executeWithTarget(rawValue);
@@ -84,9 +85,9 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
     public abstract static class LLVMTruffleReadFromName extends LLVMTruffleRead {
 
         @Child protected Node foreignRead = Message.READ.createNode();
-        @Child protected ForeignToLLVM toLLVM;
+        @Child protected ToLLVMNode toLLVM;
 
-        public LLVMTruffleReadFromName(ForeignToLLVM toLLVM) {
+        public LLVMTruffleReadFromName(ToLLVMNode toLLVM) {
             this.toLLVM = toLLVM;
         }
 
@@ -101,6 +102,7 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
         @Specialization
         public Object executeIntrinsic(LLVMTruffleObject value, LLVMAddress id) {
             checkLLVMTruffleObject(value);
+            LLVMPerformance.warn(this);
             return doRead(value.getObject(), id, foreignRead, toLLVM);
         }
 
@@ -113,6 +115,7 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
 
         @Specialization
         public Object executeIntrinsic(TruffleObject value, LLVMAddress id) {
+            LLVMPerformance.warn(this);
             return doRead(value, id, foreignRead, toLLVM);
         }
     }
@@ -121,9 +124,9 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
     public abstract static class LLVMTruffleReadFromIndex extends LLVMTruffleRead {
 
         @Child protected Node foreignRead = Message.READ.createNode();
-        @Child protected ForeignToLLVM toLLVM;
+        @Child protected ToLLVMNode toLLVM;
 
-        public LLVMTruffleReadFromIndex(ForeignToLLVM toLLVM) {
+        public LLVMTruffleReadFromIndex(ToLLVMNode toLLVM) {
             this.toLLVM = toLLVM;
         }
 

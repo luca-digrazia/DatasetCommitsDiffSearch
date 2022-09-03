@@ -90,7 +90,7 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
     }
 
     protected LLVMFunctionDescriptor lookupFunction(LLVMFunctionHandle function) {
-        return getContext().getFunctionDescriptor(function);
+        return getContext().lookup(function);
     }
 
     protected LLVMDispatchNode createCachedDispatch() {

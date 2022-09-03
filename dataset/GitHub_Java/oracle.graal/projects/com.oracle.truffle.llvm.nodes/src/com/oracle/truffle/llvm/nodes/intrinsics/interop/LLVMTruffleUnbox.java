@@ -40,16 +40,16 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
 public abstract class LLVMTruffleUnbox extends LLVMIntrinsic {
 
     @Child private Node foreignUnbox = Message.UNBOX.createNode();
-    @Child private ForeignToLLVM toLLVM;
+    @Child private ToLLVMNode toLLVM;
 
-    public LLVMTruffleUnbox(ForeignToLLVM toLLVMNode) {
+    public LLVMTruffleUnbox(ToLLVMNode toLLVMNode) {
         this.toLLVM = toLLVMNode;
     }
 
@@ -65,7 +65,7 @@ public abstract class LLVMTruffleUnbox extends LLVMIntrinsic {
     }
 
     private static void checkLLVMTruffleObject(LLVMTruffleObject value) {
-        if (value.getOffset() != 0) {
+        if (value.getOffset() != 0 || value.getName() != null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new IllegalAccessError("Pointee must be unmodified");
         }
