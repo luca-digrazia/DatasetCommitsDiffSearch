@@ -24,6 +24,7 @@ package com.oracle.graal.phases.graph;
 
 import java.util.*;
 
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.nodes.*;
 
