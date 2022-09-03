@@ -49,13 +49,24 @@ import static jdk.vm.ci.sparc.SPARCKind.XWORD;
 
 import java.util.Set;
 
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.sparc.SPARC;
+import jdk.vm.ci.sparc.SPARC.CPUFeature;
+import jdk.vm.ci.sparc.SPARCKind;
+
 import com.oracle.graal.asm.sparc.SPARCAddress;
 import com.oracle.graal.asm.sparc.SPARCAssembler;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.type.DataPointerConstant;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
@@ -65,17 +76,6 @@ import com.oracle.graal.lir.StandardOp.NullCheck;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
 import com.oracle.graal.lir.VirtualStackSlot;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.sparc.SPARC;
-import jdk.vm.ci.sparc.SPARC.CPUFeature;
-import jdk.vm.ci.sparc.SPARCKind;
 
 public class SPARCMove {
 
@@ -222,7 +222,7 @@ public class SPARCMove {
                 if (inputKind == WORD) {
                     masm.movwtos(asRegister(input, WORD), asRegister(result, SINGLE));
                 } else {
-                    throw GraalError.shouldNotReachHere("inputKind: " + inputKind);
+                    throw JVMCIError.shouldNotReachHere("inputKind: " + inputKind);
                 }
             } else if (resultKind == DOUBLE) {
                 if (inputKind == WORD) {
@@ -240,7 +240,7 @@ public class SPARCMove {
                 if (resultKind == XWORD) {
                     masm.movdtox(asRegister(input, DOUBLE), asRegister(result, XWORD));
                 } else {
-                    throw GraalError.shouldNotReachHere();
+                    throw JVMCIError.shouldNotReachHere();
                 }
             }
         }
@@ -348,7 +348,7 @@ public class SPARCMove {
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             // HotSpot for SPARC requires at least word alignment
             SPARCAddress addr = (SPARCAddress) crb.recordDataReferenceInCode(data, max(SPARCKind.WORD.getSizeInBytes(), data.getAlignment()));
-            assert addr == masm.getPlaceholder(-1);
+            assert addr == masm.getPlaceholder();
             final boolean forceRelocatable = true;
             Register dstReg = asRegister(result);
             masm.setx(0, dstReg, forceRelocatable);
@@ -508,7 +508,7 @@ public class SPARCMove {
             super(TYPE, SIZE, kind, address, state);
             this.input = input;
             if (!input.isDefaultForKind()) {
-                throw GraalError.shouldNotReachHere("Can only store null constants to memory");
+                throw JVMCIError.shouldNotReachHere("Can only store null constants to memory");
             }
         }
 
@@ -538,7 +538,7 @@ public class SPARCMove {
             } else if (isStackSlot(result)) {
                 reg2stack(crb, masm, result, input, delaySlotLir);
             } else {
-                throw GraalError.shouldNotReachHere("Result is a: " + result);
+                throw JVMCIError.shouldNotReachHere("Result is a: " + result);
             }
         } else if (isStackSlot(input)) {
             if (isRegister(result)) {
@@ -547,7 +547,7 @@ public class SPARCMove {
             } else if (isStackSlot(result)) {
                 stack2stack(crb, masm, result, input, delaySlotLir);
             } else {
-                throw GraalError.shouldNotReachHere("Result is a: " + result);
+                throw JVMCIError.shouldNotReachHere("Result is a: " + result);
             }
         } else if (isJavaConstant(input)) {
             JavaConstant constant = asJavaConstant(input);
@@ -556,10 +556,10 @@ public class SPARCMove {
             } else if (isStackSlot(result)) {
                 const2stack(crb, masm, result, constantTableBase, delaySlotLir, constant);
             } else {
-                throw GraalError.shouldNotReachHere("Result is a: " + result);
+                throw JVMCIError.shouldNotReachHere("Result is a: " + result);
             }
         } else {
-            throw GraalError.shouldNotReachHere();
+            throw JVMCIError.shouldNotReachHere();
         }
     }
 
@@ -611,7 +611,7 @@ public class SPARCMove {
         } else if (isDoubleFloatRegister(src) && isDoubleFloatRegister(dst)) {
             masm.fsrc2d(src, dst);
         } else {
-            throw GraalError.shouldNotReachHere(String.format("Trying to move between register domains src: %s dst: %s", src, dst));
+            throw JVMCIError.shouldNotReachHere(String.format("Trying to move between register domains src: %s dst: %s", src, dst));
         }
     }
 
@@ -653,7 +653,7 @@ public class SPARCMove {
                         masm.or(g0, input.asInt(), resultRegister);
                     } else {
                         if (constantTableBase.equals(g0)) {
-                            throw GraalError.shouldNotReachHere();
+                            throw JVMCIError.shouldNotReachHere();
                         } else {
                             loadFromConstantTable(crb, masm, byteCount, constantTableBase, input, resultRegister, delaySlotLir);
                         }
@@ -714,7 +714,7 @@ public class SPARCMove {
                     }
                     break;
                 default:
-                    throw GraalError.shouldNotReachHere("missing: " + input.getJavaKind());
+                    throw JVMCIError.shouldNotReachHere("missing: " + input.getJavaKind());
             }
         }
     }
@@ -730,7 +730,7 @@ public class SPARCMove {
                 masm.casx(asRegister(address), asRegister(cmpValue), asRegister(newValue));
                 break;
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 
