@@ -163,23 +163,12 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     public final Object callDirect(Object... args) {
         compilationProfile.reportDirectCall();
         profileArguments(args);
-        try {
-            Object result = doInvoke(args);
-            Class<?> klass = profiledReturnType;
-            if (klass != null && CompilerDirectives.inCompiledCode() && profiledReturnTypeAssumption.isValid()) {
-                result = FrameWithoutBoxing.unsafeCast(result, klass, true, true);
-            }
-            return result;
-        } catch (Throwable t) {
-            t = exceptionProfile.profile(t);
-            if (t instanceof RuntimeException) {
-                throw (RuntimeException) t;
-            } else if (t instanceof Error) {
-                throw (Error) t;
-            } else {
-                throw new RuntimeException(t);
-            }
+        Object result = doInvoke(args);
+        Class<?> klass = profiledReturnType;
+        if (klass != null && CompilerDirectives.inCompiledCode() && profiledReturnTypeAssumption.isValid()) {
+            result = FrameWithoutBoxing.unsafeCast(result, klass, true, true);
         }
+        return result;
     }
 
     public final Object callInlined(Object... arguments) {
@@ -249,7 +238,18 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     protected Object doInvoke(Object[] args) {
-        return callBoundary(args);
+        try {
+            return callBoundary(args);
+        } catch (Throwable t) {
+            t = exceptionProfile.profile(t);
+            if (t instanceof RuntimeException) {
+                throw (RuntimeException) t;
+            } else if (t instanceof Error) {
+                throw (Error) t;
+            } else {
+                throw new RuntimeException(t);
+            }
+        }
     }
 
     @TruffleCallBoundary
@@ -458,7 +458,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     @Override
-    public boolean nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
+    public void nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
         CompilerAsserts.neverPartOfCompilation();
         if (isValid()) {
             invalidate(newNode, reason);
@@ -470,7 +470,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         if (cancelInstalledTask(newNode, reason)) {
             compilationProfile.reportInvalidated();
         }
-        return false;
     }
 
     public void accept(NodeVisitor visitor, boolean includeInlinedNodes) {
