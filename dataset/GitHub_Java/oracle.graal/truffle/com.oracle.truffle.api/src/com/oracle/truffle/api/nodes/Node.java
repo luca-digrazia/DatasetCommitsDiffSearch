@@ -69,7 +69,12 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     protected Node() {
+        this(null);
+    }
+
+    protected Node(SourceSection sourceSection) {
         CompilerAsserts.neverPartOfCompilation();
+        this.sourceSection = sourceSection;
         this.nodeClass = NodeClass.get(getClass());
         if (TruffleOptions.TraceASTJSON) {
             JSONHelper.dumpNewNode(this);
@@ -77,23 +82,10 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     /**
-     * @deprecated if your node provides source section, override {@link #getSourceSection()} to
-     *             return it - this constructor will be removed
-     * @param sourceSection
-     */
-    @Deprecated
-    protected Node(SourceSection sourceSection) {
-        this();
-        this.sourceSection = sourceSection;
-    }
-
-    /**
-     * @deprecated if your node provides source section, override {@link #getSourceSection()} to
-     *             return it - this method will be removed
+     * Assigns a link to a guest language source section to this node.
      *
      * @param section the object representing a section in guest language source code
      */
-    @Deprecated
     public void assignSourceSection(SourceSection section) {
         if (sourceSection != null) {
             // Patch this test during the transition to constructor-based
@@ -127,31 +119,14 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     /**
-     * @deprecated if your node provides source section, override {@link #getSourceSection()} to
-     *             return it - this method will be removed
-     * 
-     *             Clears any previously assigned guest language source code from this node.
+     * Clears any previously assigned guest language source code from this node.
      */
-    @Deprecated
     public void clearSourceSection() {
         this.sourceSection = null;
     }
 
     /**
-     * Retrieves the segment of guest language source code that is represented by this Node. The
-     * default implementation of this method returns <code>null</code>. If your node represents a
-     * segment of the source code, override this method and return a <code>final</code> or
-     * {@link CompilationFinal} field in your node to the caller.
-     *
-     * To define node with <em>fixed</em> {@link SourceSection} that doesn't change after node
-     * construction use:
-     *
-     * {@codesnippet source.section.fixed}
-     *
-     * To create a node which can associate and change the {@link SourceSection} later at any point
-     * of time use:
-     *
-     * {@codesnippet source.section.mutable}
+     * Retrieves the segment of guest language source code that is represented by this Node.
      *
      * @return the source code represented by this Node
      */
@@ -167,12 +142,11 @@ public abstract class Node implements NodeInterface, Cloneable {
      * @return an approximation of the source code represented by this Node
      */
     @ExplodeLoop
-    public final SourceSection getEncapsulatingSourceSection() {
+    public SourceSection getEncapsulatingSourceSection() {
         Node current = this;
         while (current != null) {
-            final SourceSection currentSection = current.getSourceSection();
-            if (currentSection != null) {
-                return currentSection;
+            if (current.sourceSection != null) {
+                return current.sourceSection;
             }
             current = current.parent;
         }
@@ -456,9 +430,6 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     public final void atomic(Runnable closure) {
         RootNode rootNode = getRootNode();
-        // Major Assumption: parent is never null after a node got adopted
-        // it is never reset to null, and thus, rootNode is always reachable.
-        // GIL: used for nodes that are replace in ASTs that are not yet adopted
         synchronized (rootNode != null ? rootNode : GIL) {
             assert enterAtomic();
             try {
@@ -472,9 +443,6 @@ public abstract class Node implements NodeInterface, Cloneable {
     public final <T> T atomic(Callable<T> closure) {
         try {
             RootNode rootNode = getRootNode();
-            // Major Assumption: parent is never null after a node got adopted
-            // it is never reset to null, and thus, rootNode is always reachable.
-            // GIL: used for nodes that are replace in ASTs that are not yet adopted
             synchronized (rootNode != null ? rootNode : GIL) {
                 assert enterAtomic();
                 try {

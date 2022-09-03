@@ -75,7 +75,7 @@ public class GraphPrintVisitor implements Closeable {
         private final int id;
         private final Map<String, Object> properties;
 
-        NodeElement(int id) {
+        public NodeElement(int id) {
             super();
             this.id = id;
             this.properties = new LinkedHashMap<>();
@@ -96,7 +96,7 @@ public class GraphPrintVisitor implements Closeable {
         private final int index;
         private final String label;
 
-        EdgeElement(NodeElement from, NodeElement to, int index, String label) {
+        public EdgeElement(NodeElement from, NodeElement to, int index, String label) {
             this.from = from;
             this.to = to;
             this.index = index;
@@ -142,7 +142,7 @@ public class GraphPrintVisitor implements Closeable {
         private static final XMLOutputFactory XML_OUTPUT_FACTORY = XMLOutputFactory.newInstance();
         private final XMLStreamWriter xmlstream;
 
-        XMLImpl(OutputStream outputStream) {
+        protected XMLImpl(OutputStream outputStream) {
             try {
                 this.xmlstream = XML_OUTPUT_FACTORY.createXMLStreamWriter(outputStream);
             } catch (XMLStreamException | FactoryConfigurationError e) {
@@ -435,11 +435,11 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    final NodeElement getElementByObject(Object obj) {
+    protected NodeElement getElementByObject(Object obj) {
         return nodeMap.get(obj);
     }
 
-    final void createElementForNode(Object node) {
+    protected void createElementForNode(Object node) {
         boolean exists = nodeMap.containsKey(node);
         if (!exists) {
             int nodeId = !exists ? oldOrNextId(node) : nextId();
@@ -461,7 +461,7 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    final void setNodeProperty(Object node, String propertyName, Object value) {
+    protected void setNodeProperty(Object node, String propertyName, Object value) {
         NodeElement nodeElem = getElementByObject(node);
         nodeElem.getProperties().put(propertyName, value);
     }
@@ -486,7 +486,7 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    final void connectNodes(Object a, Object b, String label) {
+    protected void connectNodes(Object a, Object b, String label) {
         NodeElement fromNode = getElementByObject(a);
         NodeElement toNode = getElementByObject(b);
         if (fromNode == null || toNode == null) {

@@ -58,7 +58,11 @@ public abstract class SpecializationNode extends Node {
 
     @Child protected SpecializationNode next;
 
-    private final int index;
+    final int index;
+
+    public SpecializationNode() {
+        this(-1);
+    }
 
     public SpecializationNode(int index) {
         this.index = index;
