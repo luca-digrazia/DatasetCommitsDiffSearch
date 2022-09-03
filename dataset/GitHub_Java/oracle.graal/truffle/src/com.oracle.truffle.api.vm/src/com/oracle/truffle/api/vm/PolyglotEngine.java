@@ -1015,8 +1015,7 @@ public class PolyglotEngine {
 
         @Override
         public boolean isNativeAccessAllowed(Object vmObject, Env env) {
-            // now way to specify access rights with legacy PolyglotEngine
-            return true;
+            return false;
         }
 
         @Override

@@ -39,7 +39,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
-import java.util.logging.Handler;
 
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Context;
@@ -101,8 +100,6 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract StackFrame newPolyglotStackTraceElement(PolyglotException e, AbstractStackFrameImpl impl);
 
-        public abstract Handler newStreamLogHandler(OutputStream out);
-
     }
 
     // shared SPI
@@ -118,7 +115,7 @@ public abstract class AbstractPolyglotImpl {
     }
 
     public abstract Engine buildEngine(OutputStream out, OutputStream err, InputStream in, Map<String, String> arguments, long timeout, TimeUnit timeoutUnit, boolean sandbox,
-                    long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean boundEngine, Handler logHandler);
+                    long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean boundEngine);
 
     public abstract void preInitializeEngine();
 
@@ -137,7 +134,7 @@ public abstract class AbstractPolyglotImpl {
             this.engineImpl = engineImpl;
         }
 
-        public abstract Source build(String language, Object origin, URI uri, String name, CharSequence content, boolean interactive, boolean internal, boolean cached) throws IOException;
+        public abstract Source build(String language, Object origin, URI uri, String name, CharSequence content, boolean interactive, boolean internal) throws IOException;
 
         public abstract String getName(Object impl);
 
@@ -226,15 +223,15 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract Value eval(String language, Object sourceImpl);
 
-        public abstract Engine getEngineImpl(Context sourceContext);
+        public abstract Engine getEngineImpl();
 
-        public abstract void close(Context sourceContext, boolean interuptExecution);
+        public abstract void close(boolean interuptExecution);
 
         public abstract Value asValue(Object hostValue);
 
-        public abstract void explicitEnter(Context sourceContext);
+        public abstract void explicitEnter();
 
-        public abstract void explicitLeave(Context sourceContext);
+        public abstract void explicitLeave();
 
         public abstract Value getBindings(String language);
 
@@ -253,7 +250,7 @@ public abstract class AbstractPolyglotImpl {
 
         // Runtime
 
-        public abstract void close(Engine sourceEngine, boolean cancelIfExecuting);
+        public abstract void ensureClosed(boolean cancelIfExecuting, boolean ignoreCloseFailure);
 
         public abstract Map<String, Instrument> getInstruments();
 
@@ -265,7 +262,7 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract Context createContext(OutputStream out, OutputStream err, InputStream in, boolean allowHostAccess, boolean allowNativeAccess,
                         boolean allowCreateThread, boolean allowHostIO, boolean allowHostClassLoading, Predicate<String> classFilter, Map<String, String> options, Map<String, String[]> arguments,
-                        String[] onlyLanguages, FileSystem fileSystem, Handler logHandler);
+                        String[] onlyLanguages, FileSystem fileSystem);
 
         public abstract String getImplementationName();
 
@@ -366,6 +363,8 @@ public abstract class AbstractPolyglotImpl {
         public abstract String getId();
 
         public abstract OptionDescriptors getOptions();
+
+        public abstract Engine getEngineAPI();
 
     }
 
@@ -637,9 +636,5 @@ public abstract class AbstractPolyglotImpl {
     }
 
     public abstract Class<?> loadLanguageClass(String className);
-
-    public Context getCurrentContext() {
-        throw new IllegalStateException("No current context is available. Make sure the Java method is invoked by a Graal guest language or a context is entered using Context.enter().");
-    }
 
 }
