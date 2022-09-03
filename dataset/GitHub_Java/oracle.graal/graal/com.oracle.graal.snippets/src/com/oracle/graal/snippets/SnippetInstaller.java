@@ -56,7 +56,6 @@ public class SnippetInstaller {
     private final TargetDescription target;
     private final Assumptions assumptions;
     private final BoxingMethodPool pool;
-    private final Thread owner;
 
     /**
      * A graph cache used by this installer to avoid using the compiler
@@ -72,7 +71,6 @@ public class SnippetInstaller {
         this.assumptions = assumptions;
         this.pool = new BoxingMethodPool(runtime);
         this.graphCache = new HashMap<>();
-        this.owner = Thread.currentThread();
     }
 
     /**
@@ -103,7 +101,6 @@ public class SnippetInstaller {
      * {@linkplain ResolvedJavaMethod#getCompilerStorage() compiler storage} of each original method.
      */
     public void installSubstitutions(Class<?> substitutions) {
-        assert owner == Thread.currentThread() : "substitution installation must be single threaded";
         ClassSubstitution classSubstitution = substitutions.getAnnotation(ClassSubstitution.class);
         for (Method substituteMethod : substitutions.getDeclaredMethods()) {
             MethodSubstitution methodSubstitution = substituteMethod.getAnnotation(MethodSubstitution.class);
@@ -125,11 +122,6 @@ public class SnippetInstaller {
         }
     }
 
-    // These fields are used to detect calls from the substitute method to the original method.
-    ResolvedJavaMethod substitute;
-    ResolvedJavaMethod original;
-    boolean substituteCallsOriginal;
-
     /**
      * Installs a method substitution.
      *
@@ -137,18 +129,12 @@ public class SnippetInstaller {
      * @param substituteMethod the substitute method
      */
     protected void installSubstitution(Method originalMethod, Method substituteMethod) {
-        substitute = runtime.lookupJavaMethod(substituteMethod);
-        original = runtime.lookupJavaMethod(originalMethod);
-        try {
-            //System.out.println("substitution: " + MetaUtil.format("%H.%n(%p)", original) + " --> " + MetaUtil.format("%H.%n(%p)", substitute));
-            StructuredGraph graph = makeGraph(substitute, inliningPolicy(substitute), true);
-            Object oldValue = original.getCompilerStorage().put(Graph.class, graph);
-            assert oldValue == null;
-        } finally {
-            substitute = null;
-            original = null;
-            substituteCallsOriginal = false;
-        }
+        ResolvedJavaMethod substitute = runtime.lookupJavaMethod(substituteMethod);
+        ResolvedJavaMethod original = runtime.lookupJavaMethod(originalMethod);
+        //System.out.println("substitution: " + MetaUtil.format("%H.%n(%p)", original) + " --> " + MetaUtil.format("%H.%n(%p)", substitute));
+        StructuredGraph graph = makeGraph(substitute, inliningPolicy(substitute), true);
+        Object oldValue = original.getCompilerStorage().put(Graph.class, graph);
+        assert oldValue == null;
     }
 
     private SnippetInliningPolicy inliningPolicy(ResolvedJavaMethod method) {
@@ -175,7 +161,7 @@ public class SnippetInstaller {
 
                 new SnippetIntrinsificationPhase(runtime, pool, SnippetTemplate.hasConstantParameter(method)).apply(graph);
 
-                if (isSubstitution && !substituteCallsOriginal) {
+                if (isSubstitution) {
                     // TODO (ds) remove the constraint of only processing substitutions
                     // once issues with the arraycopy snippets have been resolved
                     new SnippetFrameStateCleanupPhase().apply(graph);
@@ -217,28 +203,13 @@ public class SnippetInstaller {
         for (Invoke invoke : graph.getInvokes()) {
             MethodCallTargetNode callTarget = invoke.methodCallTarget();
             ResolvedJavaMethod callee = callTarget.targetMethod();
-            if (callee == substitute) {
-                final StructuredGraph originalGraph = new StructuredGraph(original);
-                new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(originalGraph);
-                InliningUtil.inline(invoke, originalGraph, true);
-
-                // TODO the inlined frame states still show the call from the substitute to the original.
-                // If this poses a problem, a phase should added to fix up these frame states.
-
+            if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) && policy.shouldInline(callee, method)) {
+                StructuredGraph targetGraph = parseGraph(callee, policy);
+                InliningUtil.inline(invoke, targetGraph, true);
                 Debug.dump(graph, "after inlining %s", callee);
                 if (GraalOptions.OptCanonicalizer) {
+                    new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
                     new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-                }
-                substituteCallsOriginal = true;
-            } else {
-                if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) && policy.shouldInline(callee, method)) {
-                    StructuredGraph targetGraph = parseGraph(callee, policy);
-                    InliningUtil.inline(invoke, targetGraph, true);
-                    Debug.dump(graph, "after inlining %s", callee);
-                    if (GraalOptions.OptCanonicalizer) {
-                        new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
-                        new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-                    }
                 }
             }
         }
