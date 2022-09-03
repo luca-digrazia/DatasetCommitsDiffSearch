@@ -69,7 +69,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
     private final TruffleCache truffleCache;
     private final ThreadPoolExecutor compileQueue;
 
-    private static final Class[] SKIPPED_EXCEPTION_CLASSES = new Class[]{UnexpectedResultException.class, SlowPathException.class, ArithmeticException.class};
+    private static final Class[] SKIPPED_EXCEPTION_CLASSES = new Class[]{SlowPathException.class, UnexpectedResultException.class, ArithmeticException.class};
 
     public static final OptimisticOptimizations Optimizations = OptimisticOptimizations.ALL.remove(OptimisticOptimizations.Optimization.UseExceptionProbability,
                     OptimisticOptimizations.Optimization.RemoveNeverExecutedCode, OptimisticOptimizations.Optimization.UseTypeCheckedInlining, OptimisticOptimizations.Optimization.UseTypeCheckHints);
@@ -169,24 +169,11 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         if (TraceTruffleCompilation.getValue()) {
             int nodeCountTruffle = NodeUtil.countNodes(compilable.getRootNode(), null, true);
             byte[] code = compiledMethod.getCode();
-            Map<String, Object> properties = new LinkedHashMap<>();
-            properties.put("", String.format("%8x", compilable.hashCode()));
-            properties.put("Nodes", nodeCountTruffle);
-            properties.put("Time", String.format("%5.0f(%4.0f+%-4.0f)ms", //
-                            (timeCompilationFinished - timeCompilationStarted) / 1e6, //
-                            (timePartialEvaluationFinished - timeCompilationStarted) / 1e6, //
-                            (timeCompilationFinished - timePartialEvaluationFinished) / 1e6));
-            properties.put("Nodes", String.format("%5d/%5d", nodeCountPartialEval, nodeCountLowered));
-            properties.put("CodeSize", code != null ? code.length : 0);
-            properties.put("Source", formatSourceSection(compilable.getRootNode().getSourceSection()));
-
-            OptimizedCallTarget.logOptimized(compilable, properties);
+            OUT.printf("[truffle] optimized %-50s %x |Nodes %7d |Time %5.0f(%4.0f+%-4.0f)ms |Nodes %5d/%5d |CodeSize %d\n", compilable.getRootNode(), compilable.hashCode(), nodeCountTruffle,
+                            (timeCompilationFinished - timeCompilationStarted) / 1e6, (timePartialEvaluationFinished - timeCompilationStarted) / 1e6,
+                            (timeCompilationFinished - timePartialEvaluationFinished) / 1e6, nodeCountPartialEval, nodeCountLowered, code != null ? code.length : 0);
         }
         return compiledMethod;
-    }
-
-    private static String formatSourceSection(SourceSection sourceSection) {
-        return sourceSection != null ? sourceSection.toString() : "n/a";
     }
 
     private void printInlineTree(RootNode rootNode) {
@@ -237,8 +224,8 @@ public class TruffleCompilerImpl implements TruffleCompiler {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
             CompilationResult compilationResult = new CompilationResult(name);
-            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, createGraphBuilderSuite(), Optimizations, getProfilingInfo(graph), speculationLog,
-                            suites, false, compilationResult, CompilationResultBuilderFactory.Default);
+            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, createGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph),
+                            speculationLog, suites, false, compilationResult, CompilationResultBuilderFactory.Default);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
