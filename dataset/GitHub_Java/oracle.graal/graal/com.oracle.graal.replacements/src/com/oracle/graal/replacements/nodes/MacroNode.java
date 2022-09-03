@@ -22,11 +22,7 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static jdk.internal.jvmci.code.BytecodeFrame.*;
-import jdk.internal.jvmci.common.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.jvmci.code.BytecodeFrame.*;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.type.*;
@@ -41,6 +37,10 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Macro nodes can be used to temporarily replace an invoke. They can, for example, be used to
@@ -205,7 +205,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
         InvokeNode invoke = graph().add(new InvokeNode(callTarget, bci));
         if (stateAfter() != null) {
             invoke.setStateAfter(stateAfter().duplicate());
-            if (getStackKind() != Kind.Void) {
+            if (getKind() != Kind.Void) {
                 invoke.stateAfter().replaceFirstInput(this, invoke);
             }
         }
