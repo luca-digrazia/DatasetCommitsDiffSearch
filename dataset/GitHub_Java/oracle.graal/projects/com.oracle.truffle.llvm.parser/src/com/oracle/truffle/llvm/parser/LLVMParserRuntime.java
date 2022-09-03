@@ -33,12 +33,14 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceModel;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.enums.Linkage;
@@ -53,10 +55,10 @@ import com.oracle.truffle.llvm.parser.model.target.TargetDataLayout;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
 import com.oracle.truffle.llvm.parser.util.Pair;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMScope;
+import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
@@ -69,6 +71,7 @@ import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 public final class LLVMParserRuntime {
     private static final String CONSTRUCTORS_VARNAME = "@llvm.global_ctors";
@@ -81,6 +84,9 @@ public final class LLVMParserRuntime {
     public static LLVMParserResult parse(Source source, ExternalLibrary library, BitcodeParserResult parserResult, LLVMLanguage language, LLVMContext context,
                     NodeFactory nodeFactory) {
         ModelModule model = parserResult.getModel();
+        StackAllocation stack = parserResult.getStackAllocation();
+        LLVMPhiManager phiManager = parserResult.getPhis();
+        LLVMLabelList labels = parserResult.getLabels();
         TargetDataLayout layout = model.getTargetDataLayout();
         assert layout != null;
 
@@ -90,11 +96,10 @@ public final class LLVMParserRuntime {
         DataLayoutConverter.DataSpecConverterImpl targetDataLayout = DataLayoutConverter.getConverter(layout.getDataLayout());
         context.setDataLayoutConverter(targetDataLayout);
 
-        LLVMParserRuntime runtime = new LLVMParserRuntime(source, library, language, context, nodeFactory, module.getAliases());
+        LLVMParserRuntime runtime = new LLVMParserRuntime(source, library, language, context, stack, nodeFactory, module.getAliases());
+        runtime.registerFunctions(phiManager, labels, module.getFunctions());
 
-        runtime.registerFunctions(model);
-
-        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, runtime.getGlobalFrameDescriptor());
+        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, labels);
         LLVMExpressionNode[] globals = runtime.createGlobalVariableInitializationNodes(symbolResolver, module.getGlobals());
         RootNode globalVarInits = nodeFactory.createStaticInitsRootNode(runtime, globals);
         RootCallTarget globalVarInitsTarget = Truffle.getRuntime().createCallTarget(globalVarInits);
@@ -106,15 +111,16 @@ public final class LLVMParserRuntime {
         RootCallTarget destructorFunctions = runtime.getDestructors(module.getGlobals());
 
         if (context.getEnv().getOptions().get(SulongEngineOption.ENABLE_LVI)) {
+            final SourceModel sourceModel = model.getSourceModel();
             final LLVMSourceContext sourceContext = context.getSourceContext();
 
-            model.getSourceGlobals().forEach((symbol, irValue) -> {
+            sourceModel.getGlobals().forEach((symbol, irValue) -> {
                 final LLVMExpressionNode node = symbolResolver.resolve(irValue);
                 final LLVMDebugValue value = nodeFactory.createDebugStaticValue(node);
                 sourceContext.registerStatic(symbol, value);
             });
 
-            model.getSourceStaticMembers().forEach(((type, symbol) -> {
+            sourceModel.getStaticMembers().forEach(((type, symbol) -> {
                 final LLVMExpressionNode node = symbolResolver.resolve(symbol);
                 final LLVMDebugValue value = nodeFactory.createDebugStaticValue(node);
                 type.setValue(value);
@@ -139,34 +145,35 @@ public final class LLVMParserRuntime {
     private final ExternalLibrary library;
     private final LLVMLanguage language;
     private final LLVMContext context;
+    private final StackAllocation stack;
     private final NodeFactory nodeFactory;
     private final Map<GlobalAlias, SymbolImpl> aliases;
     private final List<LLVMExpressionNode> deallocations;
     private final LLVMScope scope;
-    private final FrameDescriptor rootFrame;
 
-    private LLVMParserRuntime(Source source, ExternalLibrary library, LLVMLanguage language, LLVMContext context, NodeFactory nodeFactory, Map<GlobalAlias, SymbolImpl> aliases) {
+    private LLVMParserRuntime(Source source, ExternalLibrary library, LLVMLanguage language, LLVMContext context, StackAllocation stack, NodeFactory nodeFactory,
+                    Map<GlobalAlias, SymbolImpl> aliases) {
         this.source = source;
         this.library = library;
         this.context = context;
+        this.stack = stack;
         this.nodeFactory = nodeFactory;
         this.language = language;
         this.aliases = aliases;
         this.deallocations = new ArrayList<>();
         this.scope = LLVMScope.createFileScope(context);
-        this.rootFrame = StackManager.createRootFrame();
     }
 
     public ExternalLibrary getLibrary() {
         return library;
     }
 
-    private void registerFunctions(ModelModule model) {
-        for (FunctionDefinition function : model.getDefinedFunctions()) {
-            registerFunction(function, model);
+    private void registerFunctions(LLVMPhiManager phiManager, LLVMLabelList labels, List<FunctionDefinition> functions) {
+        for (FunctionDefinition function : functions) {
+            registerFunction(phiManager, labels, function);
         }
 
-        for (Map.Entry<GlobalAlias, SymbolImpl> entry : aliases.entrySet()) {
+        for (Entry<GlobalAlias, SymbolImpl> entry : aliases.entrySet()) {
             GlobalAlias alias = entry.getKey();
             SymbolImpl value = entry.getValue();
             if (value instanceof FunctionDefinition) {
@@ -175,11 +182,12 @@ public final class LLVMParserRuntime {
         }
     }
 
-    private void registerFunction(FunctionDefinition function, ModelModule model) {
+    private void registerFunction(LLVMPhiManager phiManager, LLVMLabelList labels, FunctionDefinition function) {
         LLVMFunctionDescriptor functionDescriptor = scope.lookupOrCreateFunction(context, function.getName(), !Linkage.isFileLocal(function.getLinkage()),
                         index -> LLVMFunctionDescriptor.createDescriptor(context, library, function.getName(), function.getType(), index));
         boolean replaceExistingFunction = checkReplaceExistingFunction(functionDescriptor);
-        LazyToTruffleConverterImpl lazyConverter = new LazyToTruffleConverterImpl(this, context, nodeFactory, function, source, model.getFunctionParser(function), model.getFunctionProcessor());
+        LazyToTruffleConverterImpl lazyConverter = new LazyToTruffleConverterImpl(this, context, nodeFactory, function, source, stack.getFrame(function.getName()),
+                        phiManager.getPhiMap(function.getName()), labels.labels(function.getName()));
         functionDescriptor.declareInSulong(lazyConverter, Linkage.isWeak(function.getLinkage()), replaceExistingFunction);
     }
 
@@ -324,7 +332,7 @@ public final class LLVMParserRuntime {
             final LLVMExpressionNode functionLoadTarget = nodeFactory.createTypedElementPointer(this, loadedStruct, oneLiteralNode, indexedTypeLength, functionType);
             final LLVMExpressionNode loadedFunction = nodeFactory.createLoad(this, functionType, functionLoadTarget);
             final LLVMExpressionNode[] argNodes = new LLVMExpressionNode[]{
-                            nodeFactory.createFrameRead(this, PointerType.VOID, rootFrame.findFrameSlot(LLVMStack.FRAME_ID))};
+                            nodeFactory.createFrameRead(this, new PointerType(VoidType.INSTANCE), stack.getRootFrame().findFrameSlot(LLVMStack.FRAME_ID))};
             final LLVMExpressionNode functionCall = nodeFactory.createFunctionCall(this, loadedFunction, argNodes, functionType, null);
 
             final StructureConstant structorDefinition = (StructureConstant) arrayConstant.getElement(i);
@@ -344,12 +352,16 @@ public final class LLVMParserRuntime {
         return deallocations.toArray(new LLVMExpressionNode[deallocations.size()]);
     }
 
+    public LLVMExpressionNode allocateFunctionLifetime(Type type, int size, int alignment) {
+        return nodeFactory.createAlloca(this, type, size, alignment);
+    }
+
     public LLVMExpressionNode getGlobalAddress(LLVMSymbolReadResolver symbolResolver, GlobalValueSymbol var) {
         return getGlobalVariable(symbolResolver, var);
     }
 
     public FrameDescriptor getGlobalFrameDescriptor() {
-        return rootFrame;
+        return stack.getRootFrame();
     }
 
     public void addDestructor(LLVMExpressionNode destructorNode) {

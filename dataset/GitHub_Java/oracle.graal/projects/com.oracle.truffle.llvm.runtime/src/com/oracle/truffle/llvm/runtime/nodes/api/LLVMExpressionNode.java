@@ -158,7 +158,7 @@ public abstract class LLVMExpressionNode extends LLVMNode {
     }
 
     public static boolean notLLVM(TruffleObject object) {
-        return !(object instanceof LLVMFunctionDescriptor || object instanceof LLVMAddress ||
+        return !(object instanceof LLVMFunctionDescriptor ||
                         object instanceof LLVMTruffleAddress || object instanceof LLVMSharedGlobalVariable);
     }
 }
