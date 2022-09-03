@@ -24,8 +24,6 @@ package com.oracle.truffle.codegen.processor.node;
 
 import java.util.*;
 
-import javax.lang.model.type.*;
-
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
@@ -35,22 +33,20 @@ public class SpecializationData extends TemplateMethod {
 
     private final int order;
     private final boolean generic;
-    private final boolean polymorphic;
     private final boolean uninitialized;
     private final List<SpecializationThrowsData> exceptions;
     private List<String> guardDefinitions = Collections.emptyList();
     private List<GuardData> guards = Collections.emptyList();
     private List<ShortCircuitData> shortCircuits;
     private List<String> assumptions = Collections.emptyList();
+    private boolean useSpecializationsForGeneric = true;
     private NodeData node;
-    private boolean reachable;
 
     public SpecializationData(TemplateMethod template, int order, List<SpecializationThrowsData> exceptions) {
         super(template);
         this.order = order;
         this.generic = false;
         this.uninitialized = false;
-        this.polymorphic = false;
         this.exceptions = exceptions;
 
         for (SpecializationThrowsData exception : exceptions) {
@@ -58,25 +54,12 @@ public class SpecializationData extends TemplateMethod {
         }
     }
 
-    public SpecializationData(TemplateMethod template, boolean generic, boolean uninitialized, boolean polymorphic) {
+    public SpecializationData(TemplateMethod template, boolean generic, boolean uninitialized) {
         super(template);
         this.order = Specialization.DEFAULT_ORDER;
         this.generic = generic;
         this.uninitialized = uninitialized;
-        this.polymorphic = polymorphic;
         this.exceptions = Collections.emptyList();
-    }
-
-    public void setReachable(boolean reachable) {
-        this.reachable = reachable;
-    }
-
-    public boolean isReachable() {
-        return reachable;
-    }
-
-    public boolean isPolymorphic() {
-        return polymorphic;
     }
 
     @Override
@@ -89,30 +72,6 @@ public class SpecializationData extends TemplateMethod {
             sinks.addAll(guards);
         }
         return sinks;
-    }
-
-    public boolean isGenericSpecialization(ProcessorContext context) {
-        if (isGeneric()) {
-            return true;
-        }
-        if (hasRewrite(context)) {
-            return false;
-        }
-
-        for (ActualParameter parameter : getParameters()) {
-            if (!parameter.getSpecification().isSignature()) {
-                continue;
-            }
-            NodeChildData child = getNode().findChild(parameter.getSpecification().getName());
-            if (child == null) {
-                continue;
-            }
-            if (!parameter.getTypeSystemType().isGeneric()) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     public boolean hasRewrite(ProcessorContext context) {
@@ -134,10 +93,6 @@ public class SpecializationData extends TemplateMethod {
             if (type.hasUnexpectedValue(context)) {
                 return true;
             }
-            if (type.getReturnType().getTypeSystemType().needsCastTo(context, parameter.getTypeSystemType())) {
-                return true;
-            }
-
         }
         return false;
     }
@@ -215,6 +170,14 @@ public class SpecializationData extends TemplateMethod {
         return shortCircuits;
     }
 
+    void setUseSpecializationsForGeneric(boolean useSpecializationsForGeneric) {
+        this.useSpecializationsForGeneric = useSpecializationsForGeneric;
+    }
+
+    public boolean isUseSpecializationsForGeneric() {
+        return useSpecializationsForGeneric;
+    }
+
     public List<String> getAssumptions() {
         return assumptions;
     }
@@ -239,13 +202,7 @@ public class SpecializationData extends TemplateMethod {
 
     @Override
     public String toString() {
-        return String.format("%s [id = %s, method = %s, guards = %s, signature = %s]", getClass().getSimpleName(), getId(), getMethod(), getGuards(), getSignature());
+        return String.format("%s [id = %s, method = %s, guards = %s]", getClass().getSimpleName(), getId(), getMethod(), getGuards());
     }
 
-    public void forceFrame(TypeMirror frameType) {
-        if (getParameters().isEmpty() || !Utils.typeEquals(getParameters().get(0).getType(), frameType)) {
-            ParameterSpec frameSpec = getSpecification().findParameterSpec("frame");
-            getParameters().add(0, new ActualParameter(frameSpec, frameType, -1, false));
-        }
-    }
 }

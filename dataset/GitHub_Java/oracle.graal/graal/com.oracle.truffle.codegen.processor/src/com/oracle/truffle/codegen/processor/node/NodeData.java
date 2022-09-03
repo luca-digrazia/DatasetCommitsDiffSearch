@@ -51,8 +51,6 @@ public class NodeData extends Template {
     private List<ShortCircuitData> shortCircuits;
     private List<String> assumptions;
 
-    private String shortName;
-
     public NodeData(TypeElement type, String id) {
         super(type, null, null);
         this.nodeId = id;
@@ -72,14 +70,6 @@ public class NodeData extends Template {
         this.fields = splitSource.fields;
         this.children = splitSource.children;
         this.assumptions = splitSource.assumptions;
-    }
-
-    void setShortName(String shortName) {
-        this.shortName = shortName;
-    }
-
-    public String getShortName() {
-        return shortName;
     }
 
     public boolean isSplitByMethodName() {
