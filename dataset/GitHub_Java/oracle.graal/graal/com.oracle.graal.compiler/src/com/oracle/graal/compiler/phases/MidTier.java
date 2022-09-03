@@ -34,10 +34,7 @@ import com.oracle.graal.virtual.phases.ea.*;
 public class MidTier extends PhaseSuite<MidTierContext> {
 
     public MidTier() {
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        if (ImmutableCode.getValue()) {
-            canonicalizer.disableReadCanonicalization();
-        }
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue());
 
         if (OptPushThroughPi.getValue()) {
             appendPhase(new PushThroughPiPhase());
@@ -67,7 +64,7 @@ public class MidTier extends PhaseSuite<MidTierContext> {
         }
 
         if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
-            appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, false));
+            appendPhase(new IterativeConditionalEliminationPhase(canonicalizer));
         }
 
         if (OptEliminatePartiallyRedundantGuards.getValue()) {
