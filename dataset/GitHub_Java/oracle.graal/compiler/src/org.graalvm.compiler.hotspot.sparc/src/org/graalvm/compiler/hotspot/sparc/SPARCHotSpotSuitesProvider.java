@@ -22,7 +22,6 @@
  * questions.
  */
 package org.graalvm.compiler.hotspot.sparc;
-
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotSuitesProvider;
@@ -36,7 +35,6 @@ import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.phases.tiers.SuitesCreator;
 
 import java.util.ListIterator;
-
 /**
  * Subclass to factor out management of address lowering.
  */
@@ -44,7 +42,7 @@ public class SPARCHotSpotSuitesProvider extends HotSpotSuitesProvider {
 
     private final AddressLoweringPhase.AddressLowering addressLowering;
 
-    public SPARCHotSpotSuitesProvider(SuitesCreator defaultSuitesCreator, GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, AddressLoweringPhase.AddressLowering addressLowering) {
+    public SPARCHotSpotSuitesProvider(SuitesCreator defaultSuitesCreator, GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, AddressLoweringPhase.AddressLowering addressLowering)  {
         super(defaultSuitesCreator, config, runtime);
         this.addressLowering = addressLowering;
     }

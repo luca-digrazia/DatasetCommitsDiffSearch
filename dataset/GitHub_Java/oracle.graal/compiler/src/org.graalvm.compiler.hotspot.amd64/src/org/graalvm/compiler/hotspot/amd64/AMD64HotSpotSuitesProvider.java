@@ -22,7 +22,6 @@
  * questions.
  */
 package org.graalvm.compiler.hotspot.amd64;
-
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotSuitesProvider;
@@ -36,7 +35,6 @@ import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.phases.tiers.SuitesCreator;
 
 import java.util.ListIterator;
-
 /**
  * Subclass to factor out management of address lowering.
  */
