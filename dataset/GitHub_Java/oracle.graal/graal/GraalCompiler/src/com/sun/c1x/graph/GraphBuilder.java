@@ -83,7 +83,7 @@ public final class GraphBuilder {
 
     private final BytecodeStream stream;           // the bytecode stream
     // bci-to-block mapping
-    private BlockBegin[] blockList;
+    private BlockMap blockMap;
 
     // the constant pool
     private final RiConstantPool constantPool;
@@ -151,36 +151,17 @@ public final class GraphBuilder {
         graph.root().setStart(startBlock);
 
         // 2. compute the block map, setup exception handlers and get the entrypoint(s)
-        BlockMap blockMap = compilation.getBlockMap(rootMethod);
-
-        blockList = new BlockBegin[rootMethod.code().length];
-        for (int i = 0; i < blockMap.blocks.size(); i++) {
-            BlockMap.Block block = blockMap.blocks.get(i);
-            BlockBegin blockBegin = new BlockBegin(block.startBci, ir.nextBlockNumber(), graph);
-            if (block.isExceptionEntry) {
-                blockBegin.setBlockFlag(BlockBegin.BlockFlag.ExceptionEntry);
-            }
-            if (block.isLoopHeader) {
-                blockBegin.setBlockFlag(BlockBegin.BlockFlag.ParserLoopHeader);
-            }
-            blockBegin.setDepthFirstNumber(blockBegin.blockID);
-            blockList[block.startBci] = blockBegin;
-        }
-
-        BlockBegin stdEntry = blockList[0];
+        blockMap = compilation.getBlockMap(rootMethod);
+        BlockBegin stdEntry = blockMap.get(0);
         curBlock = startBlock;
 
         RiExceptionHandler[] handlers = rootMethod.exceptionHandlers();
         if (handlers != null && handlers.length > 0) {
             exceptionHandlers = new ArrayList<ExceptionHandler>(handlers.length);
             for (RiExceptionHandler ch : handlers) {
-                BlockBegin entry = blockAtOrNull(ch.handlerBCI());
-                // entry == null means that the exception handler is unreachable according to the BlockMap conservative analysis
-                if (entry != null) {
-                    ExceptionHandler h = new ExceptionHandler(ch);
-                    h.setEntryBlock(entry);
-                    exceptionHandlers.add(h);
-                }
+                ExceptionHandler h = new ExceptionHandler(ch);
+                h.setEntryBlock(blockAt(h.handler.handlerBCI()));
+                exceptionHandlers.add(h);
             }
             flags |= Flag.HasHandler.mask;
         }
@@ -559,8 +540,14 @@ public final class GraphBuilder {
         RiType type = constantPool().lookupType(cpi, CHECKCAST);
         boolean isInitialized = type.isResolved();
         Value typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, isInitialized, cpi, frameState.create(bci()));
-        CheckCast c = new CheckCast(type, typeInstruction, frameState.apop(), graph);
-        frameState.apush(append(c));
+        Instruction result;
+        Value object = frameState.apop();
+        if (typeInstruction != null) {
+            result = new CheckCast(type, typeInstruction, object, graph);
+        } else {
+            result = Constant.forObject(null, graph);
+        }
+        frameState.apush(append(result));
     }
 
     private void genInstanceOf() {
@@ -569,8 +556,14 @@ public final class GraphBuilder {
         boolean isInitialized = type.isResolved();
         //System.out.println("instanceof : type.isResolved() = " + type.isResolved() + "; type.isInitialized() = " + type.isInitialized());
         Value typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, isInitialized, cpi, frameState.create(bci()));
-        InstanceOf i = new InstanceOf(type, typeInstruction, frameState.apop(), graph);
-        frameState.ipush(append(i));
+        Instruction result;
+        Value object = frameState.apop();
+        if (typeInstruction != null) {
+            result = new InstanceOf(type, typeInstruction, object, graph);
+        } else {
+            result = Constant.forInt(0, graph);
+        }
+        frameState.ipush(append(result));
     }
 
     void genNewInstance(int cpi) {
@@ -624,9 +617,8 @@ public final class GraphBuilder {
         if (!field.isResolved()) {
             stateBefore = frameState.create(bci());
         }
-        LoadField load = new LoadField(frameState.apop(), field, graph);
+        LoadField load = new LoadField(frameState.apop(), field, stateBefore, graph);
         appendOptimizedLoadField(field.kind(), load);
-        load.setStateBefore(stateBefore);
     }
 
     private void genPutField(int cpi, RiField field) {
@@ -653,9 +645,11 @@ public final class GraphBuilder {
             frameState.push(constantValue.kind.stackKind(), appendConstant(constantValue));
         } else {
             Value container = genTypeOrDeopt(RiType.Representation.StaticFields, holder, isInitialized, cpi, stateBefore);
-            LoadField load = new LoadField(container, field, graph);
+            if (container == null) {
+                container = Constant.forObject(null, graph);
+            }
+            LoadField load = new LoadField(container, field, stateBefore, graph);
             appendOptimizedLoadField(field.kind(), load);
-            load.setStateBefore(stateBefore);
         }
     }
 
@@ -664,22 +658,22 @@ public final class GraphBuilder {
         FrameState stateBefore = frameState.create(bci());
         Value container = genTypeOrDeopt(RiType.Representation.StaticFields, holder, field.isResolved(), cpi, stateBefore);
         Value value = frameState.pop(field.kind().stackKind());
-        StoreField store = new StoreField(container, field, value, graph);
-        appendOptimizedStoreField(store);
-        if (!field.isResolved()) {
-            store.setStateBefore(stateBefore);
+        if (container != null) {
+            StoreField store = new StoreField(container, field, value, graph);
+            appendOptimizedStoreField(store);
+            if (!field.isResolved()) {
+                store.setStateBefore(stateBefore);
+            }
         }
     }
 
     private Value genTypeOrDeopt(RiType.Representation representation, RiType holder, boolean initialized, int cpi, FrameState stateBefore) {
-        Value holderInstr;
         if (initialized) {
-            holderInstr = appendConstant(holder.getEncoding(representation));
+            return appendConstant(holder.getEncoding(representation));
         } else {
             append(new Deoptimize(graph, stateBefore));
-            holderInstr = append(Constant.forObject(null, graph));
+            return null;
         }
-        return holderInstr;
     }
 
     private void appendOptimizedStoreField(StoreField store) {
@@ -969,7 +963,7 @@ public final class GraphBuilder {
     }
 
     private BlockBegin blockAtOrNull(int bci) {
-        return blockList[bci];
+        return blockMap.get(bci);
     }
 
     private BlockBegin blockAt(int bci) {
