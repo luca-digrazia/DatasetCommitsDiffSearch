@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -41,6 +41,7 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.ConditionProfile;
@@ -52,10 +53,8 @@ import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMIRFunction;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
@@ -78,18 +77,8 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
         return derefHandleGetReceiverNode;
     }
 
-    @CompilationFinal private LLVMMemory cachedMemory;
-
-    private LLVMMemory getLLVMMemoryCached() {
-        if (cachedMemory == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            cachedMemory = getLLVMMemory();
-        }
-        return cachedMemory;
-    }
-
     protected boolean isAutoDerefHandle(LLVMNativePointer addr) {
-        return getLLVMMemoryCached().isDerefHandleMemory(addr.asNative());
+        return getLLVMMemory().isDerefHandleMemory(addr.asNative());
     }
 
     protected abstract static class DecoratedRoot extends RootNode {
@@ -132,9 +121,9 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
         @Child private LLVMDispatchNode funcCallNode;
         @Child private DirectCallNode wrapperCallNode;
 
-        private final Object func;
+        private final TruffleObject func;
 
-        protected ForeignDecoratedRoot(TruffleLanguage<?> language, FunctionType type, Object func, LLVMFunctionDescriptor wrapper) {
+        protected ForeignDecoratedRoot(TruffleLanguage<?> language, FunctionType type, TruffleObject func, LLVMFunctionDescriptor wrapper) {
             super(language);
             this.funcCallNode = LLVMDispatchNodeGen.create(type);
             this.func = func;
@@ -210,15 +199,15 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
     private Object decorate(LLVMFunctionDescriptor function, LLVMFunctionDescriptor wrapperFunction) {
         assert function != null && wrapperFunction != null;
         FunctionType newFunctionType = new FunctionType(wrapperFunction.getType().getReturnType(), function.getType().getArgumentTypes(), function.getType().isVarargs());
-        NativeDecoratedRoot decoratedRoot = new NativeDecoratedRoot(lookupLanguageReference(LLVMLanguage.class).get(), function, wrapperFunction);
+        NativeDecoratedRoot decoratedRoot = new NativeDecoratedRoot(getLLVMLanguage(), function, wrapperFunction);
         return registerRoot(function.getLibrary(), newFunctionType, decoratedRoot);
     }
 
     @TruffleBoundary
-    private Object decorateForeign(Object function, LLVMFunctionDescriptor wrapperFunction) {
+    private Object decorateForeign(TruffleObject function, LLVMFunctionDescriptor wrapperFunction) {
         assert function != null && wrapperFunction != null;
         FunctionType newFunctionType = new FunctionType(wrapperFunction.getType().getReturnType(), Type.EMPTY_ARRAY, true);
-        DecoratedRoot decoratedRoot = new ForeignDecoratedRoot(lookupLanguageReference(LLVMLanguage.class).get(), newFunctionType, function, wrapperFunction);
+        DecoratedRoot decoratedRoot = new ForeignDecoratedRoot(getLLVMLanguage(), newFunctionType, function, wrapperFunction);
         return registerRoot(wrapperFunction.getLibrary(), newFunctionType, decoratedRoot);
     }
 
@@ -228,14 +217,14 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
         return LLVMManagedPointer.create(wrappedFunction);
     }
 
-    protected static boolean isForeignFunction(Object object) {
+    protected static boolean isForeignFunction(TruffleObject object) {
         return object instanceof LLVMTypedForeignObject;
     }
 
     private LLVMContext getContext() {
         if (contextRef == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            contextRef = lookupContextReference(LLVMLanguage.class);
+            contextRef = getContextReference();
         }
         return contextRef.get();
     }
