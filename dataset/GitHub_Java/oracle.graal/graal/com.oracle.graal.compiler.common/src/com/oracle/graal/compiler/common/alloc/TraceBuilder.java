@@ -93,7 +93,7 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
 
     private TraceBuilder(List<T> blocks) {
         processed = new BitSet(blocks.size());
-        worklist = createQueue();
+        worklist = new PriorityQueue<T>(TraceBuilder::compare);
         assert (worklist != null);
 
         blocked = new int[blocks.size()];
@@ -103,12 +103,7 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private PriorityQueue<T> createQueue() {
-        return (PriorityQueue<T>) new PriorityQueue<AbstractBlockBase<?>>(TraceBuilder::compare);
-    }
-
-    private static int compare(AbstractBlockBase<?> a, AbstractBlockBase<?> b) {
+    private static <T extends AbstractBlockBase<T>> int compare(T a, T b) {
         return Double.compare(b.probability(), a.probability());
     }
 
