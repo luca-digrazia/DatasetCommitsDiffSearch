@@ -2794,8 +2794,6 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private void createExceptionDispatch(ExceptionDispatchBlock block) {
-        lastInstr = finishInstruction(lastInstr, frameState);
-
         assert frameState.stackSize() == 1 : frameState;
         if (block.handler.isCatchAll()) {
             assert block.getSuccessorCount() == 1;

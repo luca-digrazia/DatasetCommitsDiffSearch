@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,7 +29,6 @@ import static org.graalvm.compiler.nodes.ConstantNode.getConstantNodes;
 import java.util.HashSet;
 import java.util.List;
 
-import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -67,6 +64,7 @@ import org.graalvm.compiler.phases.graph.ReentrantNodeIterator.NodeIteratorClosu
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
+import org.graalvm.util.EconomicMap;
 
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
@@ -129,9 +127,9 @@ public class ReplaceConstantNodesPhase extends BasePhase<PhaseContext> {
             if (type.getElementalType().isPrimitive()) {
                 return false;
             }
-            return ((HotSpotResolvedObjectType) (type.getElementalType())).getFingerprint() != 0;
+            return ((HotSpotResolvedObjectType) (type.getElementalType())).getFingerprint() == 0;
         }
-        return ((HotSpotResolvedObjectType) type).getFingerprint() != 0;
+        return ((HotSpotResolvedObjectType) type).getFingerprint() == 0;
     }
 
     /**
