@@ -27,25 +27,25 @@ import static com.oracle.graal.lir.LIRValueUtil.isVariable;
 import static com.oracle.graal.lir.alloc.trace.TraceLinearScan.isVariableOrRegister;
 import static com.oracle.graal.lir.alloc.trace.TraceRegisterAllocationPhase.Options.TraceRAshareSpillInformation;
 import static com.oracle.graal.lir.alloc.trace.TraceRegisterAllocationPhase.Options.TraceRAuseInterTraceHints;
-import static jdk.vm.ci.code.ValueUtil.asRegisterValue;
-import static jdk.vm.ci.code.ValueUtil.asStackSlot;
-import static jdk.vm.ci.code.ValueUtil.isIllegal;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static jdk.internal.jvmci.code.ValueUtil.asRegisterValue;
+import static jdk.internal.jvmci.code.ValueUtil.asStackSlot;
+import static jdk.internal.jvmci.code.ValueUtil.isIllegal;
+import static jdk.internal.jvmci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isStackSlot;
 
 import java.util.BitSet;
 import java.util.EnumSet;
 import java.util.List;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.BailoutException;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.RegisterValue;
+import jdk.internal.jvmci.code.StackSlot;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.Value;
 
 import com.oracle.graal.compiler.common.alloc.ComputeBlockOrder;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
@@ -637,24 +637,22 @@ final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanAllocati
          *         all reload-locations in case the interval of this instruction is spilled.
          *         Currently this can only be a {@link JavaConstant}.
          */
-        private JavaConstant getMaterializedValue(LIRInstruction op, Value operand, TraceInterval interval) {
+        private static JavaConstant getMaterializedValue(LIRInstruction op, Value operand, TraceInterval interval) {
             if (op instanceof LoadConstantOp) {
                 LoadConstantOp move = (LoadConstantOp) op;
                 if (move.getConstant() instanceof JavaConstant) {
-                    if (!allocator.neverSpillConstants()) {
-                        /*
-                         * Check if the interval has any uses which would accept an stack location
-                         * (priority == ShouldHaveRegister). Rematerialization of such intervals can
-                         * result in a degradation, because rematerialization always inserts a
-                         * constant load, even if the value is not needed in a register.
-                         */
-                        UsePosList usePosList = interval.usePosList();
-                        int numUsePos = usePosList.size();
-                        for (int useIdx = 0; useIdx < numUsePos; useIdx++) {
-                            TraceInterval.RegisterPriority priority = usePosList.registerPriority(useIdx);
-                            if (priority == TraceInterval.RegisterPriority.ShouldHaveRegister) {
-                                return null;
-                            }
+                    /*
+                     * Check if the interval has any uses which would accept an stack location
+                     * (priority == ShouldHaveRegister). Rematerialization of such intervals can
+                     * result in a degradation, because rematerialization always inserts a constant
+                     * load, even if the value is not needed in a register.
+                     */
+                    UsePosList usePosList = interval.usePosList();
+                    int numUsePos = usePosList.size();
+                    for (int useIdx = 0; useIdx < numUsePos; useIdx++) {
+                        TraceInterval.RegisterPriority priority = usePosList.registerPriority(useIdx);
+                        if (priority == TraceInterval.RegisterPriority.ShouldHaveRegister) {
+                            return null;
                         }
                     }
                     return (JavaConstant) move.getConstant();
