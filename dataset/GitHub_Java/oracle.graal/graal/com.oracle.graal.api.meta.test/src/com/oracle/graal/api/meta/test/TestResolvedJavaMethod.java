@@ -77,6 +77,22 @@ public class TestResolvedJavaMethod extends MethodUniverse {
         }
     }
 
+    /**
+     * @see ResolvedJavaMethod#getCompiledCodeSize()
+     */
+    @Test
+    public void getCompiledCodeSizeTest() {
+        for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
+            ResolvedJavaMethod m = e.getValue();
+            int size = m.getCompiledCodeSize();
+            if (isAbstract(m.getModifiers())) {
+                assertTrue(size == 0);
+            } else {
+                assertTrue(size >= 0);
+            }
+        }
+    }
+
     @Test
     public void getModifiersTest() {
         for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {

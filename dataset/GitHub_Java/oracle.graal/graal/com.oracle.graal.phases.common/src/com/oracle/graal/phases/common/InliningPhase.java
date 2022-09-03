@@ -91,6 +91,14 @@ public class InliningPhase extends AbstractInliningPhase {
         return inliningCount;
     }
 
+    public static void storeStatisticsAfterLowTier(StructuredGraph graph) {
+        ResolvedJavaMethod method = graph.method();
+        if (method != null) {
+            CompiledMethodInfo info = compiledMethodInfo(graph.method());
+            info.setLowLevelNodeCount(graph.getNodeCount());
+        }
+    }
+
     @Override
     protected void run(final StructuredGraph graph, final HighTierContext context) {
         final InliningData data = new InliningData(graph, context.getAssumptions());
@@ -273,7 +281,7 @@ public class InliningPhase extends AbstractInliningPhase {
     }
 
     private static StructuredGraph getCachedGraph(ResolvedJavaMethod method, HighTierContext context) {
-        if (context.getGraphCache() != null) {
+        if (CacheGraphs.getValue() && context.getGraphCache() != null) {
             StructuredGraph cachedGraph = context.getGraphCache().get(method);
             if (cachedGraph != null) {
                 return cachedGraph;
@@ -296,10 +304,19 @@ public class InliningPhase extends AbstractInliningPhase {
             canonicalizer.apply(newGraph, context);
         }
 
-        if (hasMatureProfilingInfo && context.getGraphCache() != null) {
-            context.getGraphCache().put(newGraph.method(), newGraph.copy());
+        if (CacheGraphs.getValue() && context.getGraphCache() != null) {
+            context.getGraphCache().put(newGraph.copy(), hasMatureProfilingInfo);
         }
         return newGraph;
+    }
+
+    private static synchronized CompiledMethodInfo compiledMethodInfo(ResolvedJavaMethod m) {
+        CompiledMethodInfo info = (CompiledMethodInfo) m.getCompilerStorage().get(CompiledMethodInfo.class);
+        if (info == null) {
+            info = new CompiledMethodInfo();
+            m.getCompilerStorage().put(CompiledMethodInfo.class, info);
+        }
+        return info;
     }
 
     private abstract static class AbstractInliningPolicy implements InliningPolicy {
@@ -354,12 +371,7 @@ public class InliningPhase extends AbstractInliningPhase {
         protected static int previousLowLevelGraphSize(InlineInfo info) {
             int size = 0;
             for (int i = 0; i < info.numberOfMethods(); i++) {
-                ResolvedJavaMethod m = info.methodAt(i);
-                ProfilingInfo profile = m.getProfilingInfo();
-                int compiledGraphSize = profile.getCompilerIRSize(StructuredGraph.class);
-                if (compiledGraphSize > 0) {
-                    size += compiledGraphSize;
-                }
+                size += compiledMethodInfo(info.methodAt(i)).lowLevelNodeCount();
             }
             return size;
         }
@@ -851,5 +863,22 @@ public class InliningPhase extends AbstractInliningPhase {
         public String toString() {
             return (graph != null ? MetaUtil.format("%H.%n(%p)", method()) : "<null method>") + remainingInvokes;
         }
+    }
+
+    private static class CompiledMethodInfo {
+
+        private int lowLevelNodes;
+
+        public CompiledMethodInfo() {
+        }
+
+        public int lowLevelNodeCount() {
+            return lowLevelNodes;
+        }
+
+        public void setLowLevelNodeCount(int lowLevelNodes) {
+            this.lowLevelNodes = lowLevelNodes;
+        }
+
     }
 }

@@ -1317,8 +1317,6 @@ public class InliningUtil {
         FixedNode invokeNode = invoke.asNode();
         StructuredGraph graph = invokeNode.graph();
         assert inlineGraph.getGuardsStage().ordinal() >= graph.getGuardsStage().ordinal();
-        assert !invokeNode.graph().isAfterFloatingReadPhase() : "inline isn't handled correctly after floating reads phase";
-
         Kind returnKind = invokeNode.kind();
 
         FrameState stateAfter = invoke.stateAfter();
@@ -1434,7 +1432,7 @@ public class InliningUtil {
                     } else {
                         // only handle the outermost frame states
                         if (frameState.outerFrameState() == null) {
-                            assert frameState.bci == FrameState.INVALID_FRAMESTATE_BCI || frameState.method().equals(inlineGraph.method());
+                            assert frameState.bci == FrameState.INVALID_FRAMESTATE_BCI || frameState.method() == inlineGraph.method();
                             if (outerFrameState == null) {
                                 outerFrameState = stateAfter.duplicateModified(invoke.bci(), stateAfter.rethrowException(), invokeNode.kind());
                                 outerFrameState.setDuringCall(true);
@@ -1545,7 +1543,7 @@ public class InliningUtil {
 
     public static FixedWithNextNode inlineMacroNode(Invoke invoke, ResolvedJavaMethod concrete, Class<? extends FixedWithNextNode> macroNodeClass) throws GraalInternalError {
         StructuredGraph graph = invoke.asNode().graph();
-        if (!concrete.equals(((MethodCallTargetNode) invoke.callTarget()).targetMethod())) {
+        if (((MethodCallTargetNode) invoke.callTarget()).targetMethod() != concrete) {
             assert ((MethodCallTargetNode) invoke.callTarget()).invokeKind() != InvokeKind.Static;
             InliningUtil.replaceInvokeCallTarget(invoke, graph, InvokeKind.Special, concrete);
         }

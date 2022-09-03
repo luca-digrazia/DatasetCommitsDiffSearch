@@ -185,9 +185,6 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget {
      */
     boolean canBeInlined();
 
-    /**
-     * Returns {@code true} if the inlining of this method should be forced.
-     */
     boolean shouldBeInlined();
 
     /**
