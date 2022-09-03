@@ -27,7 +27,7 @@ import static jdk.internal.jvmci.code.ValueUtil.*;
 import java.util.*;
 
 import jdk.internal.jvmci.code.*;
-import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.debug.*;
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.cfg.*;
@@ -95,7 +95,6 @@ final class FixPointIntervalBuilder {
         return false;
     }
 
-    @SuppressWarnings("try")
     private void processBlock(AbstractBlockBase<?> block, Deque<AbstractBlockBase<?>> worklist) {
         if (updateOutBlock(block)) {
             try (Indent indent = Debug.logAndIndent("handle block %s", block)) {
@@ -123,7 +122,6 @@ final class FixPointIntervalBuilder {
         }
     }
 
-    @SuppressWarnings("try")
     private void printLiveSet(String label, BitSet liveSet) {
         if (Debug.isLogEnabled()) {
             try (Indent indent = Debug.logAndIndent(label)) {
@@ -172,7 +170,6 @@ final class FixPointIntervalBuilder {
          * Process all values of an instruction bottom-up, i.e. definitions before usages. Values
          * that start or end at the current operation are not included.
          */
-        @SuppressWarnings("try")
         private void processInstructionBottomUp(LIRInstruction op) {
             try (Indent indent = Debug.logAndIndent("handle op %d, %s", op.id(), op)) {
                 // kills
