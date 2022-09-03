@@ -22,20 +22,22 @@
  */
 package org.graalvm.compiler.truffle.phases;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import jdk.vm.ci.meta.JavaConstant;
+import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
-import org.graalvm.compiler.truffle.TruffleCallBoundary;
 import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 
 /**
- * Instruments calls to {@link TruffleCallBoundary}-annotated methods in the graph, by adding
- * execution counters to respective callsites. If this phase is enabled, the runtime outputs a
- * summary of all such compiled callsites and their execution counts, when the program exits.
+ * Instruments calls to {@link TruffleBoundary}-annotated methods in the graph, by adding execution
+ * counters to respective callsites. If this phase is enabled, the runtime outputs a summary of all
+ * such compiled callsites and their execution counts, when the program exits.
  *
  * The phase is enabled with the following flag:
  *
@@ -60,11 +62,15 @@ import org.graalvm.compiler.truffle.TruffleCompilerOptions;
  */
 public class InstrumentTruffleBoundariesPhase extends InstrumentPhase {
 
+    public InstrumentTruffleBoundariesPhase(OptionValues options, SnippetReflectionProvider snippetReflection, Instrumentation instrumentation) {
+        super(options, snippetReflection, instrumentation);
+    }
+
     @Override
     protected void instrumentGraph(StructuredGraph graph, HighTierContext context, JavaConstant tableConstant) {
         for (Node n : graph.getNodes()) {
-            if (n instanceof Invoke && ((Invoke) n).callTarget().targetMethod().isAnnotationPresent(TruffleCallBoundary.class)) {
-                Instrumentation.Point p = getOrCreatePoint(n);
+            if (n instanceof Invoke && ((Invoke) n).callTarget().targetMethod().isAnnotationPresent(TruffleBoundary.class)) {
+                Point p = getOrCreatePoint(n);
                 if (p != null) {
                     insertCounter(graph, context, tableConstant, (FixedWithNextNode) n.predecessor(), p.slotIndex(0));
                 }
@@ -78,21 +84,16 @@ public class InstrumentTruffleBoundariesPhase extends InstrumentPhase {
     }
 
     @Override
-    protected String instrumentationFilter() {
-        return TruffleCompilerOptions.TruffleInstrumentBoundariesFilter.getValue();
+    protected boolean instrumentPerInlineSite(OptionValues options) {
+        return TruffleCompilerOptions.TruffleInstrumentBoundariesPerInlineSite.getValue(options);
     }
 
     @Override
-    protected boolean instrumentPerInlineSite() {
-        return TruffleCompilerOptions.TruffleInstrumentBoundariesPerInlineSite.getValue();
-    }
-
-    @Override
-    protected Instrumentation.Point createPoint(int id, int startIndex, Node n) {
+    protected Point createPoint(int id, int startIndex, Node n) {
         return new BoundaryPoint(id, startIndex, n.getNodeSourcePosition());
     }
 
-    public static class BoundaryPoint extends Instrumentation.Point {
+    public class BoundaryPoint extends Point {
         BoundaryPoint(int id, int rawIndex, NodeSourcePosition position) {
             super(id, rawIndex, position);
         }
@@ -103,13 +104,13 @@ public class InstrumentTruffleBoundariesPhase extends InstrumentPhase {
         }
 
         @Override
-        public boolean isPrettified() {
-            return TruffleCompilerOptions.TruffleInstrumentBoundariesPretty.getValue() && TruffleCompilerOptions.TruffleInstrumentBoundariesPerInlineSite.getValue();
+        public boolean isPrettified(OptionValues options) {
+            return TruffleCompilerOptions.TruffleInstrumentBoundariesPerInlineSite.getValue(options);
         }
 
         @Override
         public long getHotness() {
-            return ACCESS_TABLE[rawIndex];
+            return getInstrumentation().getAccessTable()[rawIndex];
         }
 
         @Override
