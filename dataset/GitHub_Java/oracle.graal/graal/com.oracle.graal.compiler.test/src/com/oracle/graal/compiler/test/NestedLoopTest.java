@@ -22,18 +22,15 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.jvmci.debug.*;
 
 public class NestedLoopTest extends GraalCompilerTest {
 
@@ -142,7 +139,7 @@ public class NestedLoopTest extends GraalCompilerTest {
 
     private void test(String snippet, int rootExits, int nestedExits, int innerExits) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
-        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+        Debug.dump(graph, "Graph");
         ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, true, true);
 
         Assert.assertEquals(3, cfg.getLoops().size());
@@ -162,7 +159,7 @@ public class NestedLoopTest extends GraalCompilerTest {
         Assert.assertEquals(rootExits, rootLoop.getExits().size());
         Assert.assertEquals(nestedExits, nestedLoop.getExits().size());
         Assert.assertEquals(innerExits, innerMostLoop.getExits().size());
-        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+        Debug.dump(graph, "Graph");
     }
 
     private static boolean contains(Loop<Block> loop, Invoke node, ControlFlowGraph cfg) {
