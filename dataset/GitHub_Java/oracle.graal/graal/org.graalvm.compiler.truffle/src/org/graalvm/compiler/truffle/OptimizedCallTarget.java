@@ -242,12 +242,11 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     private synchronized void initialize() {
         if (compilationProfile == null) {
-            GraalTVMCI tvmci = runtime().getTvmci();
-            if (sourceCallTarget == null && rootNode.isCloningAllowed() && !tvmci.isCloneUninitializedSupported(rootNode)) {
+            if (sourceCallTarget == null && rootNode.isCloningAllowed() && !rootNode.isCloneUninitializedSupported()) {
                 // We are the source CallTarget, so make a copy.
                 this.uninitializedRootNode = cloneRootNode(rootNode);
             }
-            tvmci.onFirstExecution(this);
+            runtime().getTvmci().onFirstExecution(this);
             this.compilationProfile = createCompilationProfile();
         }
     }
@@ -313,10 +312,9 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     private static RootNode cloneRootNode(RootNode root) {
         assert root.isCloningAllowed();
-        GraalTVMCI tvmci = runtime().getTvmci();
-        if (tvmci.isCloneUninitializedSupported(root)) {
+        if (root.isCloneUninitializedSupported()) {
             assert root == null;
-            return tvmci.cloneUnitialized(root);
+            return root.cloneUninitialized();
         } else {
             return NodeUtil.cloneNode(root);
         }
