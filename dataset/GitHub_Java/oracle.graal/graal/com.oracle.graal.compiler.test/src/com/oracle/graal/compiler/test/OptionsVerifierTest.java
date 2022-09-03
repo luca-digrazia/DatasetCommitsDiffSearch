@@ -82,7 +82,7 @@ public class OptionsVerifierTest {
 
         Classpath() throws IOException {
             List<String> names = new ArrayList<>(Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)));
-            if (GraalTest.Java8OrEarlier) {
+            if (GraalTest.JDK8OrEarlier) {
                 names.addAll(Arrays.asList(System.getProperty("sun.boot.class.path").split(File.pathSeparator)));
             } else {
                 names.addAll(Arrays.asList(System.getProperty("jdk.module.path").split(File.pathSeparator)));
@@ -120,15 +120,13 @@ public class OptionsVerifierTest {
                     assert e instanceof URLClassLoader;
                     URLClassLoader ucl = (URLClassLoader) e;
                     try (InputStream in = ucl.getResourceAsStream(classFilePath)) {
-                        if (in != null) {
-                            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                            int nRead;
-                            byte[] data = new byte[1024];
-                            while ((nRead = in.read(data, 0, data.length)) != -1) {
-                                buffer.write(data, 0, nRead);
-                            }
-                            return buffer.toByteArray();
+                        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                        int nRead;
+                        byte[] data = new byte[1024];
+                        while ((nRead = in.read(data, 0, data.length)) != -1) {
+                            buffer.write(data, 0, nRead);
                         }
+                        return buffer.toByteArray();
                     }
                 }
             }
