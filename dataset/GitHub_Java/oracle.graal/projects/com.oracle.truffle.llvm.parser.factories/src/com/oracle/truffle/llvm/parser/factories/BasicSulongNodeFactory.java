@@ -55,7 +55,6 @@ import com.oracle.truffle.llvm.nodes.func.LLVMResumeNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMTypeIdForExceptionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMFAbsNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMPowNodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleGetArgNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMByteSwapFactory.LLVMByteSwapI16NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMByteSwapFactory.LLVMByteSwapI32NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMByteSwapFactory.LLVMByteSwapI64NodeGen;
@@ -77,8 +76,6 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMReturnAddressNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMStackRestoreNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMStackSaveNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMTrapNodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMCopySignFactory.LLVMCopySignDoubleFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMCopySignFactory.LLVMCopySignFloatFactory;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowI32NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.bit.CountLeadingZeroesNodeFactory.CountLeadingZeroesI32NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.bit.CountLeadingZeroesNodeFactory.CountLeadingZeroesI64NodeGen;
@@ -178,8 +175,8 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     }
 
     @Override
-    public LLVMExpressionNode createStore(LLVMParserRuntime runtime, LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type, SourceSection source) {
-        return LLVMMemoryReadWriteFactory.createStore(runtime, pointerNode, valueNode, type, source);
+    public LLVMExpressionNode createStore(LLVMParserRuntime runtime, LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type) {
+        return LLVMMemoryReadWriteFactory.createStore(runtime, pointerNode, valueNode, type);
     }
 
     @Override
@@ -198,13 +195,13 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     }
 
     @Override
-    public LLVMControlFlowNode createRetVoid(LLVMParserRuntime runtime, SourceSection source) {
-        return LLVMFunctionFactory.createRetVoid(runtime, source);
+    public LLVMControlFlowNode createRetVoid(LLVMParserRuntime runtime) {
+        return LLVMFunctionFactory.createRetVoid(runtime);
     }
 
     @Override
-    public LLVMControlFlowNode createNonVoidRet(LLVMParserRuntime runtime, LLVMExpressionNode retValue, Type resolvedType, SourceSection source) {
-        return LLVMFunctionFactory.createNonVoidRet(runtime, retValue, resolvedType, source);
+    public LLVMControlFlowNode createNonVoidRet(LLVMParserRuntime runtime, LLVMExpressionNode retValue, Type resolvedType) {
+        return LLVMFunctionFactory.createNonVoidRet(runtime, retValue, resolvedType);
     }
 
     @Override
@@ -213,8 +210,8 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     }
 
     @Override
-    public LLVMExpressionNode createFunctionCall(LLVMParserRuntime runtime, LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, FunctionType type, SourceSection sourceSection) {
-        return LLVMFunctionFactory.createFunctionCall(functionNode, argNodes, type, sourceSection);
+    public LLVMExpressionNode createFunctionCall(LLVMParserRuntime runtime, LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, FunctionType type) {
+        return LLVMFunctionFactory.createFunctionCall(functionNode, argNodes, type);
     }
 
     @Override
@@ -223,8 +220,8 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     }
 
     @Override
-    public LLVMExpressionNode createFrameWrite(LLVMParserRuntime runtime, Type llvmType, LLVMExpressionNode result, FrameSlot slot, SourceSection sourceSection) {
-        return LLVMFrameReadWriteFactory.createFrameWrite(llvmType, result, slot, sourceSection);
+    public LLVMExpressionNode createFrameWrite(LLVMParserRuntime runtime, Type llvmType, LLVMExpressionNode result, FrameSlot slot) {
+        return LLVMFrameReadWriteFactory.createFrameWrite(llvmType, result, slot);
     }
 
     @Override
@@ -278,25 +275,25 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     }
 
     @Override
-    public LLVMControlFlowNode createIndirectBranch(LLVMParserRuntime runtime, LLVMExpressionNode value, int[] labelTargets, LLVMExpressionNode[][] phiWrites, SourceSection source) {
-        return LLVMBranchFactory.createIndirectBranch(value, labelTargets, phiWrites, source);
+    public LLVMControlFlowNode createIndirectBranch(LLVMParserRuntime runtime, LLVMExpressionNode value, int[] labelTargets, LLVMExpressionNode[] phiWrites) {
+        return LLVMBranchFactory.createIndirectBranch(value, labelTargets, phiWrites);
     }
 
     @Override
-    public LLVMControlFlowNode createSwitch(LLVMParserRuntime runtime, LLVMExpressionNode cond, int[] successors, LLVMExpressionNode[] cases,
-                    PrimitiveType llvmType, LLVMExpressionNode[][] phiWriteNodes, SourceSection source) {
-        return LLVMSwitchFactory.createSwitch(cond, successors, cases, llvmType, phiWriteNodes, source);
+    public LLVMControlFlowNode createSwitch(LLVMParserRuntime runtime, LLVMExpressionNode cond, int defaultLabel, int[] otherLabels, LLVMExpressionNode[] cases,
+                    PrimitiveType llvmType, LLVMExpressionNode[] phiWriteNodes) {
+        return LLVMSwitchFactory.createSwitch(cond, defaultLabel, otherLabels, cases, llvmType, phiWriteNodes);
     }
 
     @Override
     public LLVMControlFlowNode createConditionalBranch(LLVMParserRuntime runtime, int trueIndex, int falseIndex, LLVMExpressionNode conditionNode, LLVMExpressionNode[] truePhiWriteNodes,
-                    LLVMExpressionNode[] falsePhiWriteNodes, SourceSection sourceSection) {
-        return LLVMBranchFactory.createConditionalBranch(trueIndex, falseIndex, conditionNode, truePhiWriteNodes, falsePhiWriteNodes, sourceSection);
+                    LLVMExpressionNode[] falsePhiWriteNodes) {
+        return LLVMBranchFactory.createConditionalBranch(trueIndex, falseIndex, conditionNode, truePhiWriteNodes, falsePhiWriteNodes);
     }
 
     @Override
-    public LLVMControlFlowNode createUnconditionalBranch(LLVMParserRuntime runtime, int unconditionalIndex, LLVMExpressionNode[] phiWrites, SourceSection source) {
-        return LLVMBranchFactory.createUnconditionalBranch(unconditionalIndex, phiWrites, source);
+    public LLVMControlFlowNode createUnconditionalBranch(LLVMParserRuntime runtime, int unconditionalIndex, LLVMExpressionNode[] phiWrites) {
+        return LLVMBranchFactory.createUnconditionalBranch(unconditionalIndex, phiWrites);
     }
 
     @Override
@@ -398,27 +395,26 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     }
 
     @Override
-    public LLVMExpressionNode createInlineAssemblerExpression(LLVMParserRuntime runtime, String asmExpression, String asmFlags, LLVMExpressionNode[] args, Type[] argTypes, Type retType,
-                    SourceSection sourceSection) {
+    public LLVMExpressionNode createInlineAssemblerExpression(LLVMParserRuntime runtime, String asmExpression, String asmFlags, LLVMExpressionNode[] args, Type[] argTypes, Type retType) {
         Parser asmParser = new Parser(asmExpression, asmFlags, args, argTypes, retType);
         LLVMInlineAssemblyRootNode assemblyRoot = asmParser.Parse();
         LLVMFunctionDescriptor asm = LLVMFunctionDescriptor.create(runtime.getContext(), "<asm>", new FunctionType(MetaType.UNKNOWN, new Type[0], false), -1);
         asm.declareInSulong(Truffle.getRuntime().createCallTarget(assemblyRoot));
         LLVMFunctionLiteralNode asmFunction = LLVMFunctionLiteralNodeGen.create(asm);
 
-        LLVMCallNode callNode = new LLVMCallNode(new FunctionType(MetaType.UNKNOWN, argTypes, false), asmFunction, args, sourceSection);
+        LLVMCallNode callNode = new LLVMCallNode(new FunctionType(MetaType.UNKNOWN, argTypes, false), asmFunction, args);
         if (retType instanceof VoidType) {
             return callNode;
         } else if (retType instanceof StructureType) {
             return LLVMStructCallUnboxNodeGen.create(callNode);
         } else if (retType instanceof PointerType) {
-            return new LLVMFunctionUnsupportedInlineAssemblerNode(sourceSection);
+            return new LLVMFunctionUnsupportedInlineAssemblerNode();
         } else if (retType instanceof PointerType) {
-            return new LLVMAddressUnsupportedInlineAssemblerNode(sourceSection);
+            return new LLVMAddressUnsupportedInlineAssemblerNode();
         } else if (retType instanceof PrimitiveType) {
             switch (((PrimitiveType) retType).getPrimitiveKind()) {
                 case I1:
-                    return new LLVMI1UnsupportedInlineAssemblerNode(sourceSection);
+                    return new LLVMI1UnsupportedInlineAssemblerNode();
                 case I8:
                     return LLVMI8CallUnboxNodeGen.create(callNode);
                 case I16:
@@ -428,11 +424,11 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
                 case I64:
                     return LLVMI64CallUnboxNodeGen.create(callNode);
                 case FLOAT:
-                    return new LLVMFloatUnsupportedInlineAssemblerNode(sourceSection);
+                    return new LLVMFloatUnsupportedInlineAssemblerNode();
                 case DOUBLE:
-                    return new LLVMDoubleUnsupportedInlineAssemblerNode(sourceSection);
+                    return new LLVMDoubleUnsupportedInlineAssemblerNode();
                 case X86_FP80:
-                    return new LLVM80BitFloatUnsupportedInlineAssemblerNode(sourceSection);
+                    return new LLVM80BitFloatUnsupportedInlineAssemblerNode();
                 default:
                     throw new AssertionError(retType);
             }
@@ -547,10 +543,10 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
 
     @Override
     public LLVMControlFlowNode createFunctionInvoke(LLVMParserRuntime runtime, LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, FunctionType type,
-                    FrameSlot returnValueSlot, FrameSlot exceptionValueSlot, int normalIndex, int unwindIndex, LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes,
-                    SourceSection sourceSection) {
-        return LLVMFunctionFactory.createFunctionInvoke(functionNode, argNodes, type, returnValueSlot, exceptionValueSlot, normalIndex, unwindIndex, normalPhiWriteNodes, unwindPhiWriteNodes,
-                        sourceSection);
+                    FrameSlot returnValueSlot, FrameSlot exceptionValueSlot, int normalIndex, int unwindIndex, LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes) {
+        return LLVMFunctionFactory.createFunctionInvoke(functionNode, argNodes, type, returnValueSlot, exceptionValueSlot, normalIndex, unwindIndex,
+                        normalPhiWriteNodes,
+                        unwindPhiWriteNodes);
     }
 
     @Override
@@ -583,8 +579,8 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     }
 
     @Override
-    public LLVMControlFlowNode createResumeInstruction(LLVMParserRuntime runtime, FrameSlot exceptionSlot, SourceSection source) {
-        return new LLVMResumeNode(exceptionSlot, source);
+    public LLVMControlFlowNode createResumeInstruction(LLVMParserRuntime runtime, FrameSlot exceptionSlot) {
+        return new LLVMResumeNode(exceptionSlot);
     }
 
     @Override
@@ -595,7 +591,7 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     }
 
     @Override
-    public LLVMExpressionNode createLLVMBuiltin(Symbol target, LLVMExpressionNode[] args, FrameSlot stack, int callerArgumentCount, SourceSection sourceSection) {
+    public LLVMExpressionNode createLLVMBuiltin(Symbol target, LLVMExpressionNode[] args, FrameSlot stack, int callerArgumentCount) {
         /*
          * This LLVM Builtins are *not* function intrinsics. Builtins replace statements that look
          * like function calls but are actually LLVM intrinsics. An example is llvm.stackpointer.
@@ -606,82 +602,78 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
         if (target instanceof FunctionDeclaration) {
             FunctionDeclaration declaration = (FunctionDeclaration) target;
             if (declaration.getName().startsWith("@llvm.")) {
-                return getLLVMBuiltin(declaration.getName(), args, stack, callerArgumentCount, sourceSection);
-            } else if (declaration.getName().equals("@truffle_get_arg")) {
-                // this function accesses the frame directly
-                // it must therefore not be hidden behind a call target
-                return LLVMTruffleGetArgNodeGen.create(args[1], sourceSection);
+                return getLLVMBuiltin(declaration.getName(), args, stack, callerArgumentCount);
             }
         }
         return null;
     }
 
-    protected LLVMExpressionNode getLLVMBuiltin(String name, LLVMExpressionNode[] args, FrameSlot stack, int callerArgumentCount, SourceSection sourceSection) {
+    protected LLVMExpressionNode getLLVMBuiltin(String name, LLVMExpressionNode[] args, FrameSlot stack, int callerArgumentCount) {
         switch (name) {
             case "@llvm.memset.p0i8.i32":
-                return LLVMMemSetI32NodeGen.create(args[1], args[2], args[3], args[4], args[5], sourceSection);
+                return LLVMMemSetI32NodeGen.create(args[1], args[2], args[3], args[4], args[5]);
             case "@llvm.memset.p0i8.i64":
-                return LLVMMemSetI64NodeGen.create(args[1], args[2], args[3], args[4], args[5], sourceSection);
+                return LLVMMemSetI64NodeGen.create(args[1], args[2], args[3], args[4], args[5]);
             case "@llvm.donothing":
-                return LLVMNoOpNodeGen.create(sourceSection);
+                return LLVMNoOpNodeGen.create();
             case "@llvm.prefetch":
-                return LLVMPrefetchNodeGen.create(args[1], args[2], args[3], args[4], sourceSection);
+                return LLVMPrefetchNodeGen.create(args[1], args[2], args[3], args[4]);
             case "@llvm.ctlz.i32":
-                return CountLeadingZeroesI32NodeGen.create(args[1], args[2], sourceSection);
+                return CountLeadingZeroesI32NodeGen.create(args[1], args[2]);
             case "@llvm.ctlz.i64":
-                return CountLeadingZeroesI64NodeGen.create(args[1], args[2], sourceSection);
+                return CountLeadingZeroesI64NodeGen.create(args[1], args[2]);
             case "@llvm.memcpy.p0i8.p0i8.i64":
-                return LLVMMemI64CopyNodeGen.create(args[1], args[2], args[3], args[4], args[5], sourceSection);
+                return LLVMMemI64CopyNodeGen.create(args[1], args[2], args[3], args[4], args[5]);
             case "@llvm.memcpy.p0i8.p0i8.i32":
-                return LLVMMemI32CopyNodeGen.create(args[1], args[2], args[3], args[4], args[5], sourceSection);
+                return LLVMMemI32CopyNodeGen.create(args[1], args[2], args[3], args[4], args[5]);
             case "@llvm.ctpop.i32":
-                return CountSetBitsI32NodeGen.create(args[1], sourceSection);
+                return CountSetBitsI32NodeGen.create(args[1]);
             case "@llvm.ctpop.i64":
-                return CountSetBitsI64NodeGen.create(args[1], sourceSection);
+                return CountSetBitsI64NodeGen.create(args[1]);
             case "@llvm.cttz.i32":
-                return CountTrailingZeroesI32NodeGen.create(args[1], args[2], sourceSection);
+                return CountTrailingZeroesI32NodeGen.create(args[1], args[2]);
             case "@llvm.cttz.i64":
-                return CountTrailingZeroesI64NodeGen.create(args[1], args[2], sourceSection);
+                return CountTrailingZeroesI64NodeGen.create(args[1], args[2]);
             case "@llvm.trap":
-                return LLVMTrapNodeGen.create(sourceSection);
+                return LLVMTrapNodeGen.create();
             case "@llvm.bswap.i16":
-                return LLVMByteSwapI16NodeGen.create(args[1], sourceSection);
+                return LLVMByteSwapI16NodeGen.create(args[1]);
             case "@llvm.bswap.i32":
-                return LLVMByteSwapI32NodeGen.create(args[1], sourceSection);
+                return LLVMByteSwapI32NodeGen.create(args[1]);
             case "@llvm.bswap.i64":
-                return LLVMByteSwapI64NodeGen.create(args[1], sourceSection);
+                return LLVMByteSwapI64NodeGen.create(args[1]);
             case "@llvm.memmove.p0i8.p0i8.i64":
-                return LLVMMemMoveI64NodeGen.create(args[1], args[2], args[3], args[4], args[5], sourceSection);
+                return LLVMMemMoveI64NodeGen.create(args[1], args[2], args[3], args[4], args[5]);
             case "@llvm.pow.f32":
-                return LLVMPowNodeGen.create(args[1], args[2], sourceSection);
+                return LLVMPowNodeGen.create(args[1], args[2]);
             case "@llvm.pow.f64":
-                return LLVMPowNodeGen.create(args[1], args[2], sourceSection);
+                return LLVMPowNodeGen.create(args[1], args[2]);
             case "@llvm.powi.f64":
-                return LLVMPowNodeGen.create(args[1], args[2], sourceSection);
+                return LLVMPowNodeGen.create(args[1], args[2]);
             case "@llvm.powi.f32":
-                return LLVMPowNodeGen.create(args[1], args[2], sourceSection);
+                return LLVMPowNodeGen.create(args[1], args[2]);
             case "@llvm.fabs.f64":
-                return LLVMFAbsNodeGen.create(args[1], sourceSection);
+                return LLVMFAbsNodeGen.create(args[1]);
             case "@llvm.returnaddress":
-                return LLVMReturnAddressNodeGen.create(args[1], sourceSection);
+                return LLVMReturnAddressNodeGen.create(args[1]);
             case "@llvm.lifetime.start":
-                return LLVMLifetimeStartNodeGen.create(args[1], args[2], sourceSection);
+                return LLVMLifetimeStartNodeGen.create(args[1], args[2]);
             case "@llvm.lifetime.end":
-                return LLVMLifetimeEndNodeGen.create(args[1], args[2], sourceSection);
+                return LLVMLifetimeEndNodeGen.create(args[1], args[2]);
             case "@llvm.uadd.with.overflow.i32":
-                return LLVMUAddWithOverflowI32NodeGen.create(args[2], args[3], args[1], sourceSection);
+                return LLVMUAddWithOverflowI32NodeGen.create(args[2], args[3], args[1]);
             case "@llvm.stacksave":
-                return LLVMStackSaveNodeGen.create(args[0], sourceSection);
+                return LLVMStackSaveNodeGen.create(args[0]);
             case "@llvm.stackrestore":
-                return LLVMStackRestoreNodeGen.create(args[1], sourceSection, stack);
+                return LLVMStackRestoreNodeGen.create(args[1], stack);
             case "@llvm.frameaddress":
-                return LLVMFrameAddressNodeGen.create(args[1], sourceSection, stack);
+                return LLVMFrameAddressNodeGen.create(args[1], stack);
             case "@llvm.va_start":
-                return new LLVMX86_64BitVAStart(callerArgumentCount, args[1], stack, sourceSection);
+                return new LLVMX86_64BitVAStart(callerArgumentCount, args[1], stack);
             case "@llvm.va_end":
-                return new LLVMX86_64BitVAEnd(args[1], sourceSection);
+                return new LLVMX86_64BitVAEnd(args[1]);
             case "@llvm.va_copy":
-                return LLVMX86_64BitVACopyNodeGen.create(args[1], args[2], sourceSection, callerArgumentCount);
+                return LLVMX86_64BitVACopyNodeGen.create(args[1], args[2], callerArgumentCount);
             case "@llvm.eh.sjlj.longjmp":
             case "@llvm.eh.sjlj.setjmp":
                 throw new LLVMUnsupportedException(UnsupportedReason.SET_JMP_LONG_JMP);
@@ -713,30 +705,25 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
 
                 };
             case "@llvm.eh.typeid.for":
-                return new LLVMTypeIdForExceptionNode(args[1], sourceSection);
+                return new LLVMTypeIdForExceptionNode(args[1]);
             case "@llvm.expect.i1": {
                 boolean expectedValue = args[2].executeI1(null);
                 LLVMExpressionNode actualValueNode = args[1];
-                return LLVMExpectI1NodeGen.create(expectedValue, actualValueNode, sourceSection);
+                return LLVMExpectI1NodeGen.create(expectedValue, actualValueNode);
             }
             case "@llvm.expect.i32": {
                 int expectedValue = args[2].executeI32(null);
                 LLVMExpressionNode actualValueNode = args[1];
-                return LLVMExpectI32NodeGen.create(expectedValue, actualValueNode, sourceSection);
+                return LLVMExpectI32NodeGen.create(expectedValue, actualValueNode);
             }
             case "@llvm.expect.i64": {
                 long expectedValue = args[2].executeI64(null);
                 LLVMExpressionNode actualValueNode = args[1];
-                return LLVMExpectI64NodeGen.create(expectedValue, actualValueNode, sourceSection);
+                return LLVMExpectI64NodeGen.create(expectedValue, actualValueNode);
             }
             case "@llvm.objectsize.i64.p0i8":
             case "@llvm.objectsize.i64":
-                return LLVMI64ObjectSizeNodeGen.create(args[1], args[2], sourceSection);
-            case "@llvm.copysign.f32":
-                return LLVMCopySignFloatFactory.create(args[0], args[1]);
-            case "@llvm.copysign.f64":
-                return LLVMCopySignDoubleFactory.create(args[0], args[1]);
-
+                return LLVMI64ObjectSizeNodeGen.create(args[1], args[2]);
             default:
                 throw new IllegalStateException("Missing LLVM builtin: " + name);
         }

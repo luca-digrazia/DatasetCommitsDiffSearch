@@ -38,7 +38,6 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.base.LLVMFrameUtil;
 import com.oracle.truffle.llvm.nodes.func.LLVMCallNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
@@ -53,12 +52,11 @@ import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-public final class LLVMX86_64BitVAStart extends LLVMExpressionNode {
+public class LLVMX86_64BitVAStart extends LLVMExpressionNode {
 
     private static final int LONG_DOUBLE_SIZE = 16;
     private final int numberOfExplicitArguments;
     private final FrameSlot stackpointer;
-    private final SourceSection sourceSection;
     @Child private LLVMExpressionNode target;
     @Child private LLVMForceLLVMAddressNode targetToAddress;
     @Child private Node isBoxedNode = Message.IS_BOXED.createNode();
@@ -74,7 +72,7 @@ public final class LLVMX86_64BitVAStart extends LLVMExpressionNode {
         return stack;
     }
 
-    public LLVMX86_64BitVAStart(int numberOfExplicitArguments, LLVMExpressionNode target, FrameSlot stackpointer, SourceSection sourceSection) {
+    public LLVMX86_64BitVAStart(int numberOfExplicitArguments, LLVMExpressionNode target, FrameSlot stackpointer) {
         if (numberOfExplicitArguments < 0) {
             throw new AssertionError();
         }
@@ -82,7 +80,6 @@ public final class LLVMX86_64BitVAStart extends LLVMExpressionNode {
         this.target = target;
         this.targetToAddress = getForceLLVMAddressNode();
         this.stackpointer = stackpointer;
-        this.sourceSection = sourceSection;
     }
 
     private enum VarArgArea {
@@ -166,11 +163,6 @@ public final class LLVMX86_64BitVAStart extends LLVMExpressionNode {
         }
 
         return null;
-    }
-
-    @Override
-    public SourceSection getSourceSection() {
-        return sourceSection;
     }
 
     private static Object[] getRealArguments(VirtualFrame frame) {

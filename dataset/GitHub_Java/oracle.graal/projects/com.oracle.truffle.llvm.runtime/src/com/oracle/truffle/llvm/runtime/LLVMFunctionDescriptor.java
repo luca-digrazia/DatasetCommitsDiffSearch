@@ -48,7 +48,7 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
 
     private final String functionName;
     private final FunctionType type;
-    private final long functionId;
+    private final int functionId;
     private final LLVMContext context;
 
     @CompilationFinal private Function function;
@@ -146,11 +146,7 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
             } else {
                 TruffleObject nativeFunction;
                 if (!descriptor.isNullFunction()) {
-                    NativeLookup nativeLookup = descriptor.context.getNativeLookup();
-                    if (nativeLookup == null) {
-                        throw new AssertionError("The NativeLookup is disabled. Failed to look up the function " + descriptor.getName() + ".");
-                    }
-                    nativeFunction = nativeLookup.getNativeFunction(descriptor.getName());
+                    nativeFunction = descriptor.context.getNativeLookup().getNativeFunction(descriptor.getName());
                 } else {
                     nativeFunction = null;
                 }
@@ -189,9 +185,8 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
         return function;
     }
 
-    private LLVMFunctionDescriptor(LLVMContext context, String name, FunctionType type, long functionId) {
+    private LLVMFunctionDescriptor(LLVMContext context, String name, FunctionType type, int functionId) {
         CompilerAsserts.neverPartOfCompilation();
-        assert LLVMFunction.isSulongFunctionPointer(functionId);
         this.context = context;
         this.functionName = name;
         this.type = type;
@@ -200,9 +195,8 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
         this.function = new UnresolvedFunction();
     }
 
-    public static LLVMFunctionDescriptor createDescriptor(LLVMContext context, String name, FunctionType type, long functionId) {
-        assert (functionId & LLVMFunction.UPPER_MASK) == 0;
-        LLVMFunctionDescriptor func = new LLVMFunctionDescriptor(context, name, type, LLVMFunction.tagSulongFunctionPointer(functionId));
+    public static LLVMFunctionDescriptor create(LLVMContext context, String name, FunctionType type, int functionId) {
+        LLVMFunctionDescriptor func = new LLVMFunctionDescriptor(context, name, type, functionId);
         return func;
     }
 
@@ -264,13 +258,12 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
      * @return the function's index
      */
     @Override
-    public long getFunctionPointer() {
+    public int getFunctionIndex() {
         return functionId;
     }
 
-    @Override
     public boolean isNullFunction() {
-        return LLVMFunction.getSulongFunctionIndex(functionId) == 0;
+        return functionId == 0;
     }
 
     @Override
@@ -284,12 +277,12 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
 
     @Override
     public int compareTo(LLVMFunctionDescriptor o) {
-        return Long.compare(functionId, o.getFunctionPointer());
+        return Integer.compare(functionId, o.getFunctionIndex());
     }
 
     @Override
     public int hashCode() {
-        return (int) functionId;
+        return functionId;
     }
 
     @Override
@@ -298,7 +291,7 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
             return false;
         } else {
             LLVMFunctionDescriptor other = (LLVMFunctionDescriptor) obj;
-            return getFunctionPointer() == other.getFunctionPointer();
+            return getFunctionIndex() == other.getFunctionIndex();
         }
     }
 
