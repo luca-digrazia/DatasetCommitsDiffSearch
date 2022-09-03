@@ -58,9 +58,8 @@ import org.graalvm.compiler.lir.StandardOp.SaveRegistersOp;
 import org.graalvm.compiler.lir.SwitchStrategy;
 import org.graalvm.compiler.lir.Variable;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.options.OptionValue;
 
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CodeCacheProvider;
@@ -85,9 +84,9 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     public static class Options {
         // @formatter:off
         @Option(help = "Print HIR along side LIR as the latter is generated", type = OptionType.Debug)
-        public static final OptionKey<Boolean> PrintIRWithLIR = new OptionKey<>(false);
+        public static final OptionValue<Boolean> PrintIRWithLIR = new OptionValue<>(false);
         @Option(help = "The trace level for the LIR generator", type = OptionType.Debug)
-        public static final OptionKey<Integer> TraceLIRGeneratorLevel = new OptionKey<>(0);
+        public static final OptionValue<Integer> TraceLIRGeneratorLevel = new OptionValue<>(0);
         // @formatter:on
     }
 
@@ -102,17 +101,11 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     protected final ArithmeticLIRGenerator arithmeticLIRGen;
     private final MoveFactory moveFactory;
 
-    private final boolean printIrWithLir;
-    private final int traceLIRGeneratorLevel;
-
     public LIRGenerator(LIRKindTool lirKindTool, ArithmeticLIRGenerator arithmeticLIRGen, MoveFactory moveFactory, CodeGenProviders providers, LIRGenerationResult res) {
         this.lirKindTool = lirKindTool;
         this.arithmeticLIRGen = arithmeticLIRGen;
         this.res = res;
         this.providers = providers;
-        OptionValues options = res.getLIR().getOptions();
-        this.printIrWithLir = !TTY.isSuppressed() && Options.PrintIRWithLIR.getValue(options);
-        this.traceLIRGeneratorLevel = TTY.isSuppressed() ? 0 : Options.TraceLIRGeneratorLevel.getValue(options);
 
         assert arithmeticLIRGen.lirGen == null;
         arithmeticLIRGen.lirGen = this;
@@ -302,7 +295,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     @Override
     public <I extends LIRInstruction> I append(I op) {
-        if (printIrWithLir) {
+        if (Options.PrintIRWithLIR.getValue() && !TTY.isSuppressed()) {
             TTY.println(op.toStringWithIdPrefix());
             TTY.println();
         }
@@ -329,7 +322,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         }
 
         private void doBlockStart() {
-            if (printIrWithLir) {
+            if (Options.PrintIRWithLIR.getValue()) {
                 TTY.print(currentBlock.toString());
             }
 
@@ -339,17 +332,17 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
             append(new LabelOp(new Label(currentBlock.getId()), currentBlock.isAligned()));
 
-            if (traceLIRGeneratorLevel >= 1) {
+            if (Options.TraceLIRGeneratorLevel.getValue() >= 1) {
                 TTY.println("BEGIN Generating LIR for block B" + currentBlock.getId());
             }
         }
 
         private void doBlockEnd() {
-            if (traceLIRGeneratorLevel >= 1) {
+            if (Options.TraceLIRGeneratorLevel.getValue() >= 1) {
                 TTY.println("END Generating LIR for block B" + currentBlock.getId());
             }
 
-            if (printIrWithLir) {
+            if (Options.PrintIRWithLIR.getValue()) {
                 TTY.println();
             }
             currentBlock = null;
