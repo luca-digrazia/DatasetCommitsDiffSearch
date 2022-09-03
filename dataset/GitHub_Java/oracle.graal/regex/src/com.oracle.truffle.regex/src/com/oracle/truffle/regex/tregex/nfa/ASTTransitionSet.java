@@ -49,12 +49,16 @@ public class ASTTransitionSet implements TransitionSet, Iterable<ASTTransition> 
     public ASTTransitionSet createMerged(TransitionSet other) {
         ArrayList<ASTTransition> merged = new ArrayList<>(transitions);
         ASTTransitionSet ret = new ASTTransitionSet(merged);
-        ret.addAll(other);
+        ret.merge(other);
         return ret;
     }
 
     @Override
     public void addAll(TransitionSet other) {
+        merge(other);
+    }
+
+    private void merge(TransitionSet other) {
         for (ASTTransition t : (ASTTransitionSet) other) {
             if (!transitions.contains(t)) {
                 transitions.add(t);
