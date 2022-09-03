@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,7 +40,9 @@ import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterAttributes;
 import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.StackSlotValue;
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.code.VirtualStackSlot;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.LIRKind;
@@ -59,11 +61,10 @@ import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.ValueConsumer;
 import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.VirtualStackSlot;
 import com.oracle.graal.lir.alloc.trace.TraceLinearScanAllocationPhase.TraceLinearScanAllocationContext;
 import com.oracle.graal.lir.framemap.FrameMapBuilder;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 
 /**
  * An implementation of the linear scan register allocator algorithm described in <a
@@ -75,7 +76,8 @@ final class TraceLinearScan {
 
     private static final TraceLinearScanRegisterAllocationPhase TRACE_LINEAR_SCAN_REGISTER_ALLOCATION_PHASE = new TraceLinearScanRegisterAllocationPhase();
     private static final TraceLinearScanAssignLocationsPhase TRACE_LINEAR_SCAN_ASSIGN_LOCATIONS_PHASE = new TraceLinearScanAssignLocationsPhase();
-    private static final TraceLinearScanEliminateSpillMovePhase TRACE_LINEAR_SCAN_ELIMINATE_SPILL_MOVE_PHASE = new TraceLinearScanEliminateSpillMovePhase();
+    // TODO (je) use!
+    @SuppressWarnings("unused") private static final TraceLinearScanEliminateSpillMovePhase TRACE_LINEAR_SCAN_ELIMINATE_SPILL_MOVE_PHASE = new TraceLinearScanEliminateSpillMovePhase();
     private static final TraceLinearScanResolveDataFlowPhase TRACE_LINEAR_SCAN_RESOLVE_DATA_FLOW_PHASE = new TraceLinearScanResolveDataFlowPhase();
     private static final TraceLinearScanLifetimeAnalysisPhase TRACE_LINEAR_SCAN_LIFETIME_ANALYSIS_PHASE = new TraceLinearScanLifetimeAnalysisPhase();
 
@@ -119,7 +121,7 @@ final class TraceLinearScan {
     private final RegisterAttributes[] registerAttributes;
     private final Register[] registers;
     private final RegisterAllocationConfig regAllocConfig;
-    private final MoveFactory moveFactory;
+    private final SpillMoveFactory moveFactory;
 
     private final BlockMap<BlockData> blockData;
 
@@ -172,7 +174,7 @@ final class TraceLinearScan {
     protected final TraceBuilderResult<?> traceBuilderResult;
     private final boolean neverSpillConstants;
 
-    protected TraceLinearScan(TargetDescription target, LIRGenerationResult res, MoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig,
+    protected TraceLinearScan(TargetDescription target, LIRGenerationResult res, SpillMoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig,
                     List<? extends AbstractBlockBase<?>> sortedBlocks, TraceBuilderResult<?> traceBuilderResult, boolean neverSpillConstants) {
         this.ir = res.getLIR();
         this.moveFactory = spillMoveFactory;
@@ -201,7 +203,7 @@ final class TraceLinearScan {
         return result;
     }
 
-    public MoveFactory getSpillMoveFactory() {
+    public SpillMoveFactory getSpillMoveFactory() {
         return moveFactory;
     }
 
@@ -689,7 +691,7 @@ final class TraceLinearScan {
         throw new BailoutException("LinearScan: interval is null");
     }
 
-    static AllocatableValue canonicalSpillOpr(TraceInterval interval) {
+    static StackSlotValue canonicalSpillOpr(TraceInterval interval) {
         assert interval.spillSlot() != null : "canonical spill slot not set";
         return interval.spillSlot();
     }
@@ -714,8 +716,8 @@ final class TraceLinearScan {
     }
 
     @SuppressWarnings("try")
-    protected <B extends AbstractBlockBase<B>> void allocate(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, MoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig) {
+    protected <B extends AbstractBlockBase<B>> void allocate(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
+                    SpillMoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig) {
 
         /*
          * This is the point to enable debug logging for the whole register allocation.
@@ -734,10 +736,6 @@ final class TraceLinearScan {
                 // resolve intra-trace data-flow
                 TRACE_LINEAR_SCAN_RESOLVE_DATA_FLOW_PHASE.apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
                 Debug.dump(TraceRegisterAllocationPhase.TRACE_DUMP_LEVEL, sortedBlocks(), "%s", TRACE_LINEAR_SCAN_RESOLVE_DATA_FLOW_PHASE.getName());
-
-                // eliminate spill moves
-                TRACE_LINEAR_SCAN_ELIMINATE_SPILL_MOVE_PHASE.apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
-                Debug.dump(TraceRegisterAllocationPhase.TRACE_DUMP_LEVEL, sortedBlocks(), "%s", TRACE_LINEAR_SCAN_ELIMINATE_SPILL_MOVE_PHASE.getName());
 
                 TRACE_LINEAR_SCAN_ASSIGN_LOCATIONS_PHASE.apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
 
