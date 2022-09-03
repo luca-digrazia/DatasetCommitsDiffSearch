@@ -53,12 +53,13 @@ public class CanonicalizerPhase extends Phase {
             }
         };
         for (Node node : nodeWorkList) {
-            if (node instanceof Canonicalizable) {
+            CanonicalizerOp op = node.lookup(CanonicalizerOp.class);
+            if (op != null) {
                 if (GraalOptions.TraceCanonicalizer) {
                     TTY.println("Canonicalizer: work on " + node);
                 }
                 graph.mark();
-                Node canonical = ((Canonicalizable) node).canonical(reProcess);
+                Node canonical = op.canonical(node, reProcess);
                 if (canonical != node) {
                     node.replaceAndDelete(canonical);
                     nodeWorkList.replaced(canonical, node, false, EdgeType.USAGES);
@@ -75,7 +76,7 @@ public class CanonicalizerPhase extends Phase {
         void reProccess(Node n);
     }
 
-    public interface Canonicalizable {
-        Node canonical(NotifyReProcess reProcess);
+    public interface CanonicalizerOp extends Op {
+        Node canonical(Node node, NotifyReProcess reProcess);
     }
 }

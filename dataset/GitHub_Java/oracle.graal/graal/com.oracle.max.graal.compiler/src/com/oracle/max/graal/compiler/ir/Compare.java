@@ -39,12 +39,9 @@ import com.sun.cri.ci.*;
  * into variants that do not materialize the value (CompareIf, CompareGuard...)
  *
  */
-public final class Compare extends BooleanNode implements Node.GlobalValueNumberable {
+public final class Compare extends BooleanNode {
     @Input private Value x;
     @Input private Value y;
-
-    @Data private Condition condition;
-    @Data private boolean unorderedIsTrue;
 
     public Value x() {
         return x;
@@ -64,6 +61,9 @@ public final class Compare extends BooleanNode implements Node.GlobalValueNumber
         this.y = x;
     }
 
+    private Condition condition;
+    private boolean unorderedIsTrue;
+
     /**
      * Constructs a new Compare instruction.
      * @param x the instruction producing the first input to the instruction
@@ -77,6 +77,15 @@ public final class Compare extends BooleanNode implements Node.GlobalValueNumber
         this.condition = condition;
         setX(x);
         setY(y);
+    }
+
+    @Override
+    public boolean valueEqual(Node i) {
+        if (i instanceof Compare) {
+            Compare compare = (Compare) i;
+            return compare.condition == condition && compare.unorderedIsTrue == unorderedIsTrue;
+        }
+        return super.valueEqual(i);
     }
 
     /**

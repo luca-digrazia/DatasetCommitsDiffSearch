@@ -23,9 +23,8 @@
 package com.oracle.max.graal.compiler.phases;
 
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.ir.Phi.PhiType;
+import com.oracle.max.graal.compiler.ir.Conditional.ConditionalStructure;
 import com.oracle.max.graal.compiler.schedule.*;
-import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 
 
@@ -70,22 +69,7 @@ public class ConvertConditionalPhase extends Phase {
                 condition = ((NegateBooleanNode) condition).value();
             }
             if (!(condition instanceof Compare || condition instanceof IsNonNull || condition instanceof NegateBooleanNode || condition instanceof Constant)) {
-                If ifNode = new If(conditional.condition(), 0.5, graph);
-                EndNode trueEnd = new EndNode(graph);
-                EndNode falseEnd = new EndNode(graph);
-                ifNode.setTrueSuccessor(trueEnd);
-                ifNode.setFalseSuccessor(falseEnd);
-                Merge merge = new Merge(graph);
-                merge.addEnd(trueEnd);
-                merge.addEnd(falseEnd);
-                Phi phi = new Phi(conditional.kind, merge, PhiType.Value, graph);
-                phi.addInput(conditional.trueValue());
-                phi.addInput(conditional.falseValue());
-                //recreate framestate
-                FrameState stateDuring = conditional.stateDuring();
-                FrameStateBuilder builder = new FrameStateBuilder(stateDuring);
-                builder.push(phi.kind, phi);
-                merge.setStateAfter(builder.create(stateDuring.bci));
+                ConditionalStructure conditionalStructure = Conditional.createConditionalStructure(condition, conditional.trueValue(), conditional.falseValue());
                 // schedule the if...
                 if (schedule == null) {
                     schedule = new IdentifyBlocksPhase(false, false);
@@ -93,45 +77,12 @@ public class ConvertConditionalPhase extends Phase {
                 }
                 schedule.assignBlockToNode(conditional);
                 Block block = schedule.getNodeToBlock().get(conditional);
-                FixedNodeWithNext prev;
-                Node firstNode = block.firstNode();
-                if (firstNode instanceof Merge) {
-                    prev = (Merge) firstNode;
-                } else if (firstNode instanceof EndNode) {
-                    EndNode end = (EndNode) firstNode;
-                    Node pred = end.predecessor();
-                    Anchor anchor = new Anchor(graph);
-                    pred.replaceFirstSuccessor(end, anchor);
-                    anchor.setNext(end);
-                    prev = anchor;
-                } else if (firstNode instanceof StartNode) {
-                    StartNode start = (StartNode) firstNode;
-                    Anchor anchor = new Anchor(graph);
-                    Node next = start.next();
-                    start.setNext(null);
-                    anchor.setNext((FixedNode) next);
-                    start.setNext(anchor);
-                    prev = anchor;
-                } else if (firstNode instanceof If) {
-                    Node pred = firstNode.predecessor();
-                    Anchor anchor = new Anchor(graph);
-                    pred.replaceFirstSuccessor(firstNode, anchor);
-                    anchor.setNext((If) firstNode);
-                    prev = anchor;
-                } else {
-                    prev = (FixedNodeWithNext) firstNode;
-                }
+                Anchor prev = block.createAnchor();
                 FixedNode next = prev.next();
                 prev.setNext(null);
-                merge.setNext(next);
-                prev.setNext(ifNode);
-                conditional.replaceAndDelete(phi);
-            } else {
-                FrameState stateDuring = conditional.stateDuring();
-                conditional.setStateDuring(null);
-                if (stateDuring != null && stateDuring.usages().size() == 0) {
-                    stateDuring.delete();
-                }
+                conditionalStructure.merge.setNext(next);
+                prev.setNext(conditionalStructure.ifNode);
+                conditional.replaceAndDelete(conditionalStructure.phi);
             }
         }
     }
