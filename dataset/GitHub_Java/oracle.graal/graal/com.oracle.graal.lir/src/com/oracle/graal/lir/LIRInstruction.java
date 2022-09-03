@@ -22,16 +22,15 @@
  */
 package com.oracle.graal.lir;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandMode.*;
-
 import java.lang.annotation.*;
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import com.oracle.graal.debug.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandMode.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.asm.*;
 
 /**
@@ -263,44 +262,44 @@ public abstract class LIRInstruction {
 
     // InstructionValueConsumers
     public final void visitEachInput(InstructionValueConsumer proc) {
-        instructionClass.visitEachUse(this, proc);
+        instructionClass.forEachUse(this, proc);
     }
 
     public final void visitEachAlive(InstructionValueConsumer proc) {
-        instructionClass.visitEachAlive(this, proc);
+        instructionClass.forEachAlive(this, proc);
     }
 
     public final void visitEachTemp(InstructionValueConsumer proc) {
-        instructionClass.visitEachTemp(this, proc);
+        instructionClass.forEachTemp(this, proc);
     }
 
     public final void visitEachOutput(InstructionValueConsumer proc) {
-        instructionClass.visitEachDef(this, proc);
+        instructionClass.forEachDef(this, proc);
     }
 
     public final void visitEachState(InstructionValueConsumer proc) {
-        instructionClass.visitEachState(this, proc);
+        instructionClass.forEachState(this, proc);
     }
 
     // ValueConsumers
     public final void visitEachInput(ValueConsumer proc) {
-        instructionClass.visitEachUse(this, proc);
+        instructionClass.forEachUse(this, proc);
     }
 
     public final void visitEachAlive(ValueConsumer proc) {
-        instructionClass.visitEachAlive(this, proc);
+        instructionClass.forEachAlive(this, proc);
     }
 
     public final void visitEachTemp(ValueConsumer proc) {
-        instructionClass.visitEachTemp(this, proc);
+        instructionClass.forEachTemp(this, proc);
     }
 
     public final void visitEachOutput(ValueConsumer proc) {
-        instructionClass.visitEachDef(this, proc);
+        instructionClass.forEachDef(this, proc);
     }
 
     public final void visitEachState(ValueConsumer proc) {
-        instructionClass.visitEachState(this, proc);
+        instructionClass.forEachState(this, proc);
     }
 
     @SuppressWarnings("unused")

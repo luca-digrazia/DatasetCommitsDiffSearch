@@ -213,9 +213,7 @@ public final class LocationMarker extends AllocationPhase {
                     LIRKind kind = operand.getLIRKind();
                     if (shouldProcessValue(operand) && !kind.isValue() && !kind.isDerivedReference()) {
                         // no need to insert values and derived reference
-                        if (Debug.isLogEnabled()) {
-                            Debug.log("set operand: %s", operand);
-                        }
+                        Debug.log("set operand: %s", operand);
                         frameMap.setReference(operand, currentSet);
                     }
                 }
@@ -224,9 +222,7 @@ public final class LocationMarker extends AllocationPhase {
             ValueConsumer defConsumer = new ValueConsumer() {
                 public void visitValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                     if (shouldProcessValue(operand)) {
-                        if (Debug.isLogEnabled()) {
-                            Debug.log("clear operand: %s", operand);
-                        }
+                        Debug.log("clear operand: %s", operand);
                         frameMap.clearReference(operand, currentSet);
                     } else {
                         assert isIllegal(operand) || operand.getPlatformKind() != Kind.Illegal || mode == OperandMode.TEMP : String.format(
