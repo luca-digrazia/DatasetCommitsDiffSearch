@@ -27,7 +27,6 @@ import java.util.*;
 import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 
-import com.oracle.truffle.api.dsl.internal.*;
 import com.oracle.truffle.dsl.processor.*;
 import com.oracle.truffle.dsl.processor.java.*;
 
@@ -43,18 +42,10 @@ public class TypeSystemData extends Template {
     private List<TypeCheckData> checks;
 
     private TypeMirror genericType;
-    private TypeData booleanType;
     private TypeData voidType;
 
-    private DSLOptions options;
-
-    public TypeSystemData(ProcessorContext context, TypeElement templateType, AnnotationMirror annotation, DSLOptions options) {
-        super(context, templateType, annotation);
-        this.options = options;
-    }
-
-    public DSLOptions getOptions() {
-        return options;
+    public TypeSystemData(ProcessorContext context, TypeElement templateType, AnnotationMirror annotation) {
+        super(context, templateType, null, annotation);
     }
 
     @Override
@@ -205,18 +196,6 @@ public class TypeSystemData extends Template {
         return null;
     }
 
-    public boolean hasImplicitSourceTypes(TypeData targetType) {
-        if (getImplicitCasts() == null) {
-            return false;
-        }
-        for (ImplicitCastData cast : getImplicitCasts()) {
-            if (cast.getTargetType() == targetType) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public List<TypeData> lookupSourceTypes(TypeData type) {
         List<TypeData> sourceTypes = new ArrayList<>();
         sourceTypes.add(type);
@@ -229,14 +208,6 @@ public class TypeSystemData extends Template {
         }
         Collections.sort(sourceTypes);
         return sourceTypes;
-    }
-
-    public TypeData getBooleanType() {
-        return booleanType;
-    }
-
-    public void setBooleanType(TypeData booleanType) {
-        this.booleanType = booleanType;
     }
 
 }

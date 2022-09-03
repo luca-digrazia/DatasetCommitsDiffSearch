@@ -32,12 +32,10 @@ import javax.lang.model.type.*;
 import javax.lang.model.util.*;
 
 import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.internal.*;
 import com.oracle.truffle.dsl.processor.generator.*;
 import com.oracle.truffle.dsl.processor.java.*;
 import com.oracle.truffle.dsl.processor.model.*;
 
-@DSLOptions
 public class TypeSystemParser extends AbstractParser<TypeSystemData> {
 
     public static final List<Class<? extends Annotation>> ANNOTATIONS = Arrays.asList(TypeSystem.class, ExpectError.class);
@@ -51,13 +49,7 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
     protected TypeSystemData parse(Element element, AnnotationMirror mirror) {
         TypeElement templateType = (TypeElement) element;
         AnnotationMirror templateTypeAnnotation = mirror;
-        DSLOptions options = element.getAnnotation(DSLOptions.class);
-        if (options == null) {
-            options = TypeSystemParser.class.getAnnotation(DSLOptions.class);
-        }
-        assert options != null;
-
-        TypeSystemData typeSystem = new TypeSystemData(context, templateType, templateTypeAnnotation, options);
+        TypeSystemData typeSystem = new TypeSystemData(context, templateType, templateTypeAnnotation);
 
         // annotation type on class path!?
         TypeElement annotationTypeElement = processingEnv.getElementUtils().getTypeElement(getAnnotationType().getCanonicalName());
@@ -85,14 +77,9 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
         if (typeSystem.hasErrors()) {
             return typeSystem;
         }
+
         typeSystem.setGenericType(genericType);
         typeSystem.setVoidType(voidType);
-
-        TypeData booleanType = typeSystem.findTypeData(context.getType(boolean.class));
-        if (booleanType == null) {
-            booleanType = new TypeData(typeSystem, types.size(), null, context.getType(boolean.class), context.getType(Boolean.class));
-        }
-        typeSystem.setBooleanType(booleanType);
 
         verifyExclusiveMethodAnnotation(typeSystem, TypeCast.class, TypeCheck.class);
 
