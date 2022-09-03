@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.printer;
 
-import static java.lang.Character.toLowerCase;
-
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,7 +31,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-import com.oracle.graal.bytecode.BytecodeDisassembler;
+import jdk.vm.ci.code.DebugInfo;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaUtil;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.alloc.Trace;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
@@ -42,8 +46,10 @@ import com.oracle.graal.compiler.gen.NodeLIRBuilder;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeBitMap;
 import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.graph.NodePosIterator;
 import com.oracle.graal.graph.Position;
 import com.oracle.graal.java.BciBlockMapping;
+import com.oracle.graal.java.BytecodeDisassembler;
 import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.debug.IntervalDumper;
@@ -63,13 +69,6 @@ import com.oracle.graal.nodes.ValuePhiNode;
 import com.oracle.graal.nodes.calc.FloatingNode;
 import com.oracle.graal.nodes.cfg.Block;
 import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-
-import jdk.vm.ci.code.DebugInfo;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaUtil;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Value;
 
 /**
  * Utility for printing Graal IR at various compilation phases.
@@ -362,9 +361,9 @@ class CFGPrinter extends CompilationPrinter {
             out.print(entry.getKey().toString()).print(": ").print(entry.getValue() == null ? "[null]" : entry.getValue().toString()).println();
         }
         out.println("=== Inputs ===");
-        printNamedNodes(node, node.inputPositions().iterator(), "", "\n", null);
+        printNamedNodes(node, node.inputs().iterator(), "", "\n", null);
         out.println("=== Succesors ===");
-        printNamedNodes(node, node.successorPositions().iterator(), "", "\n", null);
+        printNamedNodes(node, node.successors().iterator(), "", "\n", null);
         out.println("=== Usages ===");
         if (!node.hasNoUsages()) {
             for (Node usage : node.usages()) {
@@ -378,8 +377,8 @@ class CFGPrinter extends CompilationPrinter {
 
         out.print("instruction ");
         out.print(HOVER_START).print(node.getNodeClass().shortName()).print(HOVER_SEP).print(node.getClass().getName()).print(HOVER_END).print(" ");
-        printNamedNodes(node, node.inputPositions().iterator(), "", "", "#NDF");
-        printNamedNodes(node, node.successorPositions().iterator(), "#", "", "#NDF");
+        printNamedNodes(node, node.inputs().iterator(), "", "", "#NDF");
+        printNamedNodes(node, node.successors().iterator(), "#", "", "#NDF");
         for (Map.Entry<Object, Object> entry : props.entrySet()) {
             String key = entry.getKey().toString();
             if (key.startsWith("data.") && !key.equals("data.stamp")) {
@@ -389,10 +388,10 @@ class CFGPrinter extends CompilationPrinter {
         out.print(COLUMN_END).print(' ').println(COLUMN_END);
     }
 
-    private void printNamedNodes(Node node, Iterator<Position> iter, String prefix, String suffix, String hideSuffix) {
+    private void printNamedNodes(Node node, NodePosIterator iter, String prefix, String suffix, String hideSuffix) {
         int lastIndex = -1;
         while (iter.hasNext()) {
-            Position pos = iter.next();
+            Position pos = iter.nextPosition();
             if (hideSuffix != null && pos.getName().endsWith(hideSuffix)) {
                 continue;
             }
@@ -517,7 +516,7 @@ class CFGPrinter extends CompilationPrinter {
             if (value.getStackKind() == JavaKind.Illegal) {
                 prefix = "v";
             } else {
-                prefix = String.valueOf(toLowerCase(value.getStackKind().getTypeChar()));
+                prefix = String.valueOf(value.getStackKind().getTypeChar());
             }
         } else {
             prefix = "?";
@@ -541,25 +540,15 @@ class CFGPrinter extends CompilationPrinter {
 
     IntervalVisitor intervalVisitor = new IntervalVisitor() {
 
-        /**
-         * @return a formatted description of the operand that the C1Visualizer can handle.
-         */
-        String getFormattedOperand(Value operand) {
-            String s = operand.toString();
-            int last = s.lastIndexOf('|');
-            assert last != -1;
-            return s.substring(0, last) + "|" + operand.getPlatformKind().getTypeChar();
-        }
-
         @Override
-        public void visitIntervalStart(Value parentOperand, Value splitOperand, Value location, Value hint, String typeName) {
-            out.printf("%s %s ", getFormattedOperand(splitOperand), typeName);
+        public void visitIntervalStart(Object parentOperand, Object splitOperand, Object location, Object hint, String typeName, char typeChar) {
+            out.printf("%s %s ", splitOperand, typeName);
             if (location != null) {
-                out.printf("\"[%s]\"", getFormattedOperand(location));
+                out.printf("\"[%s|%c]\"", location, typeChar);
             } else {
-                out.printf("\"[%s]\"", getFormattedOperand(splitOperand));
+                out.printf("\"[%s|%c]\"", splitOperand, typeChar);
             }
-            out.printf(" %s %s ", getFormattedOperand(parentOperand), hint != null ? getFormattedOperand(hint) : -1);
+            out.printf("%s %s ", parentOperand, hint != null ? hint : -1);
         }
 
         @Override

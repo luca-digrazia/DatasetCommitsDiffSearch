@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
+import jdk.vm.ci.meta.Value;
+
 import java.util.List;
 
 import com.oracle.graal.compiler.common.alloc.Trace;
@@ -32,11 +34,9 @@ import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 
-import jdk.vm.ci.meta.Value;
-
 public class TraceUtil {
 
-    public static AbstractBlockBase<?> getBestTraceInterPredecessor(TraceBuilderResult traceResult, AbstractBlockBase<?> block) {
+    public static AbstractBlockBase<?> getBestTraceInterPredecessor(TraceBuilderResult<?> traceResult, AbstractBlockBase<?> block) {
         AbstractBlockBase<?> bestPred = null;
         int bestTraceId = traceResult.getTraceForBlock(block).getId();
         for (AbstractBlockBase<?> pred : block.getPredecessors()) {
@@ -59,7 +59,7 @@ public class TraceUtil {
         return (ShadowedRegisterValue) value;
     }
 
-    public static boolean isTrivialTrace(LIR lir, Trace trace) {
+    public static boolean isTrivialTrace(LIR lir, Trace<? extends AbstractBlockBase<?>> trace) {
         if (trace.size() != 1) {
             return false;
         }
