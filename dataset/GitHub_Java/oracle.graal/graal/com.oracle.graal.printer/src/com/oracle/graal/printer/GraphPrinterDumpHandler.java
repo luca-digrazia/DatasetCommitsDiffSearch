@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.io.*;
@@ -33,6 +32,7 @@ import java.text.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.phases.schedule.*;
@@ -151,8 +151,8 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 // Check for method scopes that must be closed since the previous dump.
                 for (int i = 0; i < previousInlineContext.size(); ++i) {
                     if (i >= inlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
-                        for (int inlineDepth = previousInlineContext.size() - 1; inlineDepth >= i; --inlineDepth) {
-                            closeScope(inlineDepth);
+                        for (int j = previousInlineContext.size() - 1; j >= i; --j) {
+                            closeScope();
                         }
                         break;
                     }
@@ -161,8 +161,8 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 // Check for method scopes that must be opened since the previous dump.
                 for (int i = 0; i < inlineContext.size(); ++i) {
                     if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
-                        for (int inlineDepth = i; inlineDepth < inlineContext.size(); ++inlineDepth) {
-                            openScope(inlineContext.get(inlineDepth), inlineDepth);
+                        for (int j = i; j < inlineContext.size(); ++j) {
+                            openScope(inlineContext.get(j), j == 0);
                         }
                         break;
                     }
@@ -191,11 +191,11 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
 
     private static List<String> getInlineContext() {
         List<String> result = new ArrayList<>();
-        Object lastMethodOrGraph = null;
+        Object last = null;
         for (Object o : Debug.context()) {
-            JavaMethod method = asJavaMethod(o);
+            JavaMethod method = GraalDebugConfig.asJavaMethod(o);
             if (method != null) {
-                if (lastMethodOrGraph == null || asJavaMethod(lastMethodOrGraph) != method) {
+                if (last != method) {
                     result.add(MetaUtil.format("%H::%n(%p)", method));
                 } else {
                     // This prevents multiple adjacent method context objects for the same method
@@ -211,9 +211,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                     result.add(debugDumpScope.name);
                 }
             }
-            if (o instanceof JavaMethod || o instanceof Graph) {
-                lastMethodOrGraph = o;
-            }
+            last = o;
         }
         if (result.isEmpty()) {
             result.add("Top Scope");
@@ -231,8 +229,8 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
         return result;
     }
 
-    private void openScope(String name, int inlineDepth) {
-        String prefix = inlineDepth == 0 ? Thread.currentThread().getName() + ":" : "";
+    private void openScope(String name, boolean showThread) {
+        String prefix = showThread ? Thread.currentThread().getName() + ":" : "";
         try {
             printer.beginGroup(prefix + name, name, Debug.contextLookup(ResolvedJavaMethod.class), -1);
         } catch (IOException e) {
@@ -241,8 +239,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
         }
     }
 
-    private void closeScope(int inlineDepth) {
-        dumpIds[inlineDepth] = 0;
+    private void closeScope() {
         try {
             printer.endGroup();
         } catch (IOException e) {
@@ -253,8 +250,8 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
 
     @Override
     public void close() {
-        for (int inlineDepth = 0; inlineDepth < previousInlineContext.size(); inlineDepth++) {
-            closeScope(inlineDepth);
+        for (int i = 0; i < previousInlineContext.size(); i++) {
+            closeScope();
         }
         if (printer != null) {
             printer.close();
