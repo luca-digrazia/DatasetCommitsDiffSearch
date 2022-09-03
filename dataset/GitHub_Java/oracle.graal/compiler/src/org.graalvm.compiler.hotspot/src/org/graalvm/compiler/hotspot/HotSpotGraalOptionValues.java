@@ -30,12 +30,14 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
-import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.options.OptionValuesAccess;
 import org.graalvm.compiler.options.OptionsParser;
+import org.graalvm.compiler.serviceprovider.ServiceProvider;
+import org.graalvm.util.EconomicMap;
 
 import jdk.vm.ci.common.InitTimer;
 
@@ -43,7 +45,8 @@ import jdk.vm.ci.common.InitTimer;
  * The {@link #HOTSPOT_OPTIONS} value contains the options values initialized in a HotSpot VM. The
  * values are set via system properties with the {@value #GRAAL_OPTION_PROPERTY_PREFIX} prefix.
  */
-public class HotSpotGraalOptionValues {
+@ServiceProvider(OptionValuesAccess.class)
+public class HotSpotGraalOptionValues implements OptionValuesAccess {
 
     /**
      * The name of the system property specifying a file containing extra Graal option settings.
@@ -127,5 +130,10 @@ public class HotSpotGraalOptionValues {
             OptionsParser.parseOptions(optionSettings, values, loader);
             return new OptionValues(values);
         }
+    }
+
+    @Override
+    public OptionValues getOptions() {
+        return HOTSPOT_OPTIONS;
     }
 }

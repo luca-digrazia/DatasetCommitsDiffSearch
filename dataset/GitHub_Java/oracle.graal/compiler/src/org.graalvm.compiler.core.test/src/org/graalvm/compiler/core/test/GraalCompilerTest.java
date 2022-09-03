@@ -71,7 +71,6 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.nodes.BreakpointNode;
-import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.FrameState;
@@ -154,7 +153,14 @@ import jdk.vm.ci.meta.SpeculationLog;
  * <p>
  * These tests will be run by the {@code mx unittest} command.
  */
-@AddExports({"java.base/jdk.internal.org.objectweb.asm", "java.base/jdk.internal.org.objectweb.asm.tree"})
+@AddExports({"jdk.internal.vm.ci/jdk.vm.ci.meta",
+                "jdk.internal.vm.ci/jdk.vm.ci.services",
+                "jdk.internal.vm.ci/jdk.vm.ci.code",
+                "jdk.internal.vm.ci/jdk.vm.ci.runtime",
+                "jdk.internal.vm.ci/jdk.vm.ci.services",
+                "jdk.internal.vm.compiler/*",
+                "java.base/jdk.internal.org.objectweb.asm",
+                "java.base/jdk.internal.org.objectweb.asm.tree"})
 public abstract class GraalCompilerTest extends GraalTest {
 
     /**
@@ -1190,31 +1196,14 @@ public abstract class GraalCompilerTest extends GraalTest {
     private StructuredGraph parse1(ResolvedJavaMethod javaMethod, PhaseSuite<HighTierContext> graphBuilderSuite, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId,
                     OptionValues options) {
         assert javaMethod.getAnnotation(Test.class) == null : "shouldn't parse method with @Test annotation: " + javaMethod;
-        // @formatter:off
-        StructuredGraph graph = new StructuredGraph.Builder(options, allowAssumptions).
-                        method(javaMethod).
-                        speculationLog(getSpeculationLog()).
-                        useProfilingInfo(true).
-                        compilationId(compilationId).
-                        cancellable(getCancellable(javaMethod)).
-                        build();
-        // @formatter:on
+        StructuredGraph graph = new StructuredGraph.Builder(options, allowAssumptions).method(javaMethod).speculationLog(getSpeculationLog()).useProfilingInfo(true).compilationId(
+                        compilationId).build();
         try (Scope ds = Debug.scope("Parsing", javaMethod, graph)) {
             graphBuilderSuite.apply(graph, getDefaultHighTierContext());
             return graph;
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
-    }
-
-    /**
-     * Gets the cancellable that should be associated with a graph being created by any of the
-     * {@code parse...()} methods.
-     *
-     * @param method the method being parsed into a graph
-     */
-    protected Cancellable getCancellable(ResolvedJavaMethod method) {
-        return null;
     }
 
     protected Plugins getDefaultGraphBuilderPlugins() {

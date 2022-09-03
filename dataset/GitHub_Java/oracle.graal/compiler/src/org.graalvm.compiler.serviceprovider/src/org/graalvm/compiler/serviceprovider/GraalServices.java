@@ -54,18 +54,14 @@ public final class GraalServices {
      * @param other all JVMCI packages will be opened to the module defining this class
      */
     public static void openJVMCITo(Class<?> other) {
-        Object jvmci = getModule(Services.class);
-        Object otherModule = getModule(other);
+        Object jvmci = getModule.invoke(Services.class);
+        Object otherModule = getModule.invoke(other);
         if (jvmci != otherModule) {
-            Set<String> packages = getPackages(jvmci);
+            Set<String> packages = getPackages.invoke(jvmci);
             for (String pkg : packages) {
-                boolean opened = isOpenTo(jvmci, pkg, otherModule);
+                boolean opened = isOpenTo.invoke(jvmci, pkg, otherModule);
                 if (!opened) {
-                    try {
-                        addOpens.invoke(jvmci, pkg, otherModule);
-                    } catch (Throwable throwable) {
-                        throw new InternalError(throwable);
-                    }
+                    addOpens.invoke(jvmci, pkg, otherModule);
                 }
             }
         }

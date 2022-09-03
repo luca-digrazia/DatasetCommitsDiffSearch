@@ -22,8 +22,7 @@
  */
 package org.graalvm.compiler.serviceprovider;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
@@ -49,9 +48,7 @@ public final class JDK9Method {
 
     public JDK9Method(Class<?> declaringClass, String name, Class<?>... parameterTypes) {
         try {
-            Method method = declaringClass.getMethod(name, parameterTypes);
-            this.methodHandle = MethodHandles.lookup().unreflect(method);
-            this.isStatic = Modifier.isStatic(method.getModifiers());
+            this.method = declaringClass.getMethod(name, parameterTypes);
         } catch (Exception e) {
             throw new InternalError(e);
         }
@@ -62,9 +59,11 @@ public final class JDK9Method {
      */
     public static final boolean Java8OrEarlier = JAVA_SPECIFICATION_VERSION <= 8;
 
-    public final MethodHandle methodHandle;
+    public final Method method;
 
-    private final boolean isStatic;
+    public Class<?> getReturnType() {
+        return method.getReturnType();
+    }
 
     /**
      * {@code Class.getModule()}.
@@ -97,10 +96,10 @@ public final class JDK9Method {
     @SuppressWarnings("unchecked")
     public <T> T invokeStatic(Object... args) {
         checkAvailability();
-        assert isStatic;
+        assert Modifier.isStatic(method.getModifiers());
         try {
-            return (T) methodHandle.invoke(args);
-        } catch (Throwable e) {
+            return (T) method.invoke(null, args);
+        } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
             throw new InternalError(e);
         }
     }
@@ -111,37 +110,29 @@ public final class JDK9Method {
     @SuppressWarnings("unchecked")
     public <T> T invoke(Object receiver, Object... args) {
         checkAvailability();
-        assert !isStatic;
+        assert !Modifier.isStatic(method.getModifiers());
         try {
-            return (T) methodHandle.invoke(receiver, args);
-        } catch (Throwable e) {
+            return (T) method.invoke(receiver, args);
+        } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
             throw new InternalError(e);
         }
     }
 
     private void checkAvailability() throws InternalError {
-        if (methodHandle == null) {
+        if (method == null) {
             throw new InternalError("Cannot use Module API on JDK " + JAVA_SPECIFICATION_VERSION);
         }
     }
 
-    public static final Class<?> MODULE_CLASS;
-
     static {
         if (JAVA_SPECIFICATION_VERSION >= 9) {
-            try {
-                MODULE_CLASS = Class.class.getMethod("getModule").getReturnType();
-
-                getModule = new JDK9Method(Class.class, "getModule");
-                getPackages = new JDK9Method(MODULE_CLASS, "getPackages");
-                addOpens = new JDK9Method(MODULE_CLASS, "addOpens", String.class, MODULE_CLASS);
-                getResourceAsStream = new JDK9Method(MODULE_CLASS, "getResourceAsStream", String.class);
-                isOpenTo = new JDK9Method(MODULE_CLASS, "isOpen", String.class, MODULE_CLASS);
-            } catch (NoSuchMethodException e) {
-                throw new InternalError(e);
-            }
+            getModule = new JDK9Method(Class.class, "getModule");
+            Class<?> moduleClass = getModule.getReturnType();
+            getPackages = new JDK9Method(moduleClass, "getPackages");
+            addOpens = new JDK9Method(moduleClass, "addOpens", String.class, moduleClass);
+            getResourceAsStream = new JDK9Method(moduleClass, "getResourceAsStream", String.class);
+            isOpenTo = new JDK9Method(moduleClass, "isOpen", String.class, moduleClass);
         } else {
-            MODULE_CLASS = null;
             JDK9Method unavailable = new JDK9Method();
             getModule = unavailable;
             getPackages = unavailable;
@@ -152,7 +143,6 @@ public final class JDK9Method {
     }
 
     private JDK9Method() {
-        methodHandle = null;
-        isStatic = false;
+        method = null;
     }
 }

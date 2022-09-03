@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,7 +28,8 @@ import static org.graalvm.compiler.test.JLModule.uncheckedAddExports;
 import java.lang.reflect.Method;
 
 import org.graalvm.compiler.core.test.GraalCompilerTest;
-import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -53,15 +52,14 @@ public class ConstantPoolSubstitutionsTests extends GraalCompilerTest {
     @SuppressWarnings("try")
     protected StructuredGraph test(final String snippet) {
         ResolvedJavaMethod method = getMetaAccess().lookupJavaMethod(getMethod(snippet));
-        DebugContext debug = getDebugContext();
-        try (DebugContext.Scope s = debug.scope("ConstantPoolSubstitutionsTests", method)) {
+        try (Scope s = Debug.scope("ConstantPoolSubstitutionsTests", method)) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
             compile(graph.method(), graph);
             assertNotInGraph(graph, Invoke.class);
-            debug.dump(DebugContext.BASIC_LEVEL, graph, snippet);
+            Debug.dump(Debug.BASIC_LEVEL, graph, snippet);
             return graph;
         } catch (Throwable e) {
-            throw debug.handle(e);
+            throw Debug.handle(e);
         }
     }
 
@@ -75,8 +73,7 @@ public class ConstantPoolSubstitutionsTests extends GraalCompilerTest {
     }
 
     private static Object getConstantPoolForObject() {
-        String miscPackage = Java8OrEarlier ? "sun.misc"
-                        : (Java11OrEarlier ? "jdk.internal.misc" : "jdk.internal.access");
+        String miscPackage = Java8OrEarlier ? "sun.misc" : "jdk.internal.misc";
         try {
             Class<?> sharedSecretsClass = Class.forName(miscPackage + ".SharedSecrets");
             Class<?> javaLangAccessClass = Class.forName(miscPackage + ".JavaLangAccess");
@@ -115,11 +112,7 @@ public class ConstantPoolSubstitutionsTests extends GraalCompilerTest {
             Object javaBaseModule = JLModule.fromClass(String.class);
             Object cModule = JLModule.fromClass(c);
             uncheckedAddExports(javaBaseModule, "jdk.internal.reflect", cModule);
-            if (Java11OrEarlier) {
-                uncheckedAddExports(javaBaseModule, "jdk.internal.misc", cModule);
-            } else {
-                uncheckedAddExports(javaBaseModule, "jdk.internal.access", cModule);
-            }
+            uncheckedAddExports(javaBaseModule, "jdk.internal.misc", cModule);
         }
     }
 

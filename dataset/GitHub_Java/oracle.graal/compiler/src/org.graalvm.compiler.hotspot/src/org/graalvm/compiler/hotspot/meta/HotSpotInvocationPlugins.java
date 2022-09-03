@@ -24,11 +24,9 @@ package org.graalvm.compiler.hotspot.meta;
 
 import static org.graalvm.compiler.serviceprovider.JDK9Method.Java8OrEarlier;
 
-import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Type;
 import java.util.Set;
 
-import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
@@ -44,6 +42,7 @@ import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.phases.tiers.CompilerConfiguration;
 import org.graalvm.compiler.replacements.nodes.MacroNode;
 import org.graalvm.compiler.serviceprovider.JDK9Method;
+import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaType;
 import jdk.vm.ci.meta.JavaKind;
@@ -123,14 +122,14 @@ final class HotSpotInvocationPlugins extends InvocationPlugins {
      * of its module dependencies are trusted.
      */
     @Override
-    public boolean canBeIntrinsified(ResolvedJavaType declaringClass) {
+    protected boolean canBeIntrinsified(ResolvedJavaType declaringClass) {
         if (declaringClass instanceof HotSpotResolvedJavaType) {
             Class<?> javaClass = ((HotSpotResolvedJavaType) declaringClass).mirror();
             if (Java8OrEarlier) {
                 ClassLoader cl = javaClass.getClassLoader();
                 return cl == null || cl == getClass().getClassLoader() || cl == extLoader;
             } else {
-                Object module = JDK9Method.getModule(javaClass);
+                Object module = JDK9Method.getModule.invoke(javaClass);
                 return trustedModules.contains(module);
             }
         }
@@ -149,35 +148,34 @@ final class HotSpotInvocationPlugins extends InvocationPlugins {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static EconomicSet<Object> initTrustedModules(CompilerConfiguration compilerConfiguration) throws GraalError {
         try {
             EconomicSet<Object> res = EconomicSet.create();
-            Object compilerConfigurationModule = JDK9Method.getModule(compilerConfiguration.getClass());
+            Object compilerConfigurationModule = JDK9Method.getModule.invoke(compilerConfiguration.getClass());
             res.add(compilerConfigurationModule);
             Class<?> moduleClass = compilerConfigurationModule.getClass();
-            Object layer = JDK9Method.lookupMethodHandle(moduleClass, "getLayer").invoke(compilerConfigurationModule);
+            Object layer = new JDK9Method(moduleClass, "getLayer").invoke(compilerConfigurationModule);
             Class<? extends Object> layerClass = layer.getClass();
-            MethodHandle getName = JDK9Method.lookupMethodHandle(moduleClass, "getName");
-            Set<Object> modules = (Set<Object>) JDK9Method.lookupMethodHandle(layerClass, "modules").invoke(layer);
-            Object descriptor = JDK9Method.lookupMethodHandle(moduleClass, "getDescriptor").invoke(compilerConfigurationModule);
+            JDK9Method getName = new JDK9Method(moduleClass, "getName");
+            Set<Object> modules = new JDK9Method(layerClass, "modules").invoke(layer);
+            Object descriptor = new JDK9Method(moduleClass, "getDescriptor").invoke(compilerConfigurationModule);
             Class<?> moduleDescriptorClass = descriptor.getClass();
-            Set<Object> requires = (Set<Object>) JDK9Method.lookupMethodHandle(moduleDescriptorClass, "requires").invoke(descriptor);
-            MethodHandle requireNameGetter = null;
+            Set<Object> requires = new JDK9Method(moduleDescriptorClass, "requires").invoke(descriptor);
+            JDK9Method requireNameGetter = null;
             for (Object require : requires) {
                 if (requireNameGetter == null) {
-                    requireNameGetter = JDK9Method.lookupMethodHandle(require.getClass(), "name");
+                    requireNameGetter = new JDK9Method(require.getClass(), "name");
                 }
-                String name = (String) requireNameGetter.invoke(require);
+                String name = requireNameGetter.invoke(require);
                 for (Object module : modules) {
-                    String moduleName = (String) getName.invoke(module);
+                    String moduleName = getName.invoke(module);
                     if (moduleName.equals(name)) {
                         res.add(module);
                     }
                 }
             }
             return res;
-        } catch (Throwable e) {
+        } catch (Exception e) {
             throw new GraalError(e);
         }
     }
