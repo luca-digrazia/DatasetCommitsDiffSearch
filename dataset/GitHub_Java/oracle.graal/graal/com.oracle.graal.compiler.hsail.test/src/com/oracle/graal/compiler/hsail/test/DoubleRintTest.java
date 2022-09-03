@@ -23,60 +23,54 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import org.junit.Test;
+import org.junit.*;
+
 import com.oracle.graal.compiler.hsail.test.infra.*;
 
 /**
- * Tests intrinsic for calls to Math.abs(float). Generates an abs_f32 instruction.
+ * Tests intrinsic for Math.rint(). Generates an rint_f64 instruction.
  */
-public class FloatAbsTest extends GraalKernelTester {
+public class DoubleRintTest extends GraalKernelTester {
 
-    static final int num = 40;
-    // Output array storing the results of calling Math.abs().
-    @Result protected float[] outArray = new float[num];
+    static final int size = 64;
+    @Result double[] out = new double[size];
 
     /**
-     * The static "kernel" method we will be testing. This method calls Math.abs() on an element of
+     * The static "kernel" method we will be testing. This method calls Math.rint() on an element of
      * an input array and writes the result to the corresponding index of an output array. By
      * convention the gid is the last parameter.
      * 
      * @param out the output array.
-     * @param ina the input array.
+     * @param in the input array.
      * @param gid the parameter used to index into the input and output arrays.
      */
-    public static void run(float[] out, float[] ina, int gid) {
-        out[gid] = Math.abs(ina[gid]);
+    public static void run(double[] out, double[] in, int gid) {
+        out[gid] = Math.rint(in[gid]);
     }
 
     /**
-     * Tests the HSAIL code generated for this unit test by comparing the result of executing this
-     * code with the result of executing a sequential Java version of this unit test.
-     */
-    @Test
-    public void test() {
-        super.testGeneratedHsail();
-    }
-
-    /**
-     * Initializes the input and output arrays passed to the run routine.
+     * Initialize input arrays.
      * 
-     * @param in the input array.
+     * @param in the input array
      */
-    void setupArrays(float[] in) {
-        for (int i = 0; i < num; i++) {
-            // Initialize array with positive and negative values as well as corner cases.
+    void setupArrays(double[] in) {
+        // Initialize input array with a mix of positive and negative values and corner cases.
+        for (int i = 0; i < size; i++) {
             if (i == 1) {
-                in[i] = Float.NaN;
+                in[i] = Double.NaN;
             } else if (i == 2) {
-                in[i] = Float.NEGATIVE_INFINITY;
+                in[i] = Double.NEGATIVE_INFINITY;
             } else if (i == 3) {
-                in[i] = Float.POSITIVE_INFINITY;
+                in[i] = Double.POSITIVE_INFINITY;
+
             } else if (i == 4) {
-                in[i] = -0;
+                in[i] = 0.0;
+            } else if (i == 5) {
+                in[i] = -0.0;
             } else {
-                in[i] = i < num / 2 ? i : -i;
+                in[i] = i < size / 2 ? i + 0.5 : -i - 0.6;
             }
-            outArray[i] = 0;
+            out[i] = 0;
         }
     }
 
@@ -85,8 +79,17 @@ public class FloatAbsTest extends GraalKernelTester {
      */
     @Override
     public void runTest() {
-        float[] inArray = new float[num];
+        double[] inArray = new double[size];
         setupArrays(inArray);
-        dispatchMethodKernel(num, outArray, inArray);
+        dispatchMethodKernel(size, out, inArray);
+    }
+
+    /**
+     * Tests the HSAIL code generated for this unit test by comparing the result of executing this
+     * code with the result of executing a sequential Java version of this unit test.
+     */
+    @Test
+    public void test() {
+        testGeneratedHsail();
     }
 }

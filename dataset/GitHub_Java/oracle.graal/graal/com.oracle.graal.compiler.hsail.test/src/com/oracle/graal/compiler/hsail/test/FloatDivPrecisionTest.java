@@ -23,9 +23,8 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import org.junit.*;
-
-import com.oracle.graal.compiler.hsail.test.infra.*;
+import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
+import org.junit.Test;
 
 /**
  * This test (originally derived from a discrepancy seen in Mandel) showed a difference in the
