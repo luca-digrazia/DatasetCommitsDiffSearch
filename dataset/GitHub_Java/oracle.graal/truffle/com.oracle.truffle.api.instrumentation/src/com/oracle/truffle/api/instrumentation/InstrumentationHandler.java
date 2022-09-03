@@ -30,7 +30,6 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.lang.ref.WeakReference;
 import java.util.AbstractCollection;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -81,7 +80,7 @@ final class InstrumentationHandler {
     /*
      * Fast lookup of instrumenter instances based on a key provided by the accessor.
      */
-    private final ConcurrentHashMap<Object, AbstractInstrumenter> instrumenterMap = new ConcurrentHashMap<>();
+    private final Map<Object, AbstractInstrumenter> instrumenterMap = new ConcurrentHashMap<>();
 
     /* Has the instrumentation framework been initialized? */
     private volatile boolean instrumentationInitialized;
@@ -153,11 +152,16 @@ final class InstrumentationHandler {
     }
 
     void disposeInstrumenter(Object key, boolean cleanupRequired) {
-        AbstractInstrumenter disposedInstrumenter = instrumenterMap.remove(key);
+        if (TRACE) {
+            trace("BEGIN: Dispose instrumenter %n", key);
+        }
+
+        AbstractInstrumenter disposedInstrumenter = instrumenterMap.get(key);
         if (disposedInstrumenter != null) {
-            if (TRACE) {
-                trace("BEGIN: Dispose instrumenter %n", key);
-            }
+            instrumenterMap.remove(key);
+        }
+
+        if (disposedInstrumenter != null) {
             disposedInstrumenter.dispose();
 
             if (cleanupRequired) {
@@ -169,9 +173,10 @@ final class InstrumentationHandler {
                 disposeBindingsBulk(filterBindingsForInstrumenter(sourceSectionBindings, disposedInstrumenter));
                 disposeBindingsBulk(filterBindingsForInstrumenter(sourceBindings, disposedInstrumenter));
             }
-            if (TRACE) {
-                trace("END: Disposed instrumenter %n", key);
-            }
+        }
+
+        if (TRACE) {
+            trace("END: Disposed instrumenter %n", key);
         }
     }
 
@@ -183,6 +188,12 @@ final class InstrumentationHandler {
 
     Instrumenter forLanguage(TruffleLanguage.Env context, TruffleLanguage<?> language) {
         return new LanguageClientInstrumenter<>(language, context);
+    }
+
+    void detachLanguage(Object context) {
+        if (instrumenterMap.containsKey(context)) {
+            disposeInstrumenter(context, false);
+        }
     }
 
     <T> EventBinding<T> addExecutionBinding(EventBinding<T> binding) {
@@ -347,13 +358,13 @@ final class InstrumentationHandler {
     }
 
     private void addInstrumenter(Object key, AbstractInstrumenter instrumenter) throws AssertionError {
-        Object previousKey = instrumenterMap.putIfAbsent(key, instrumenter);
-        if (previousKey != null) {
+        if (instrumenterMap.containsKey(key)) {
             return;
         }
         if (instrumentationInitialized) {
             instrumenter.initialize();
         }
+        instrumenterMap.put(key, instrumenter);
     }
 
     private static Collection<EventBinding<?>> filterBindingsForInstrumenter(Collection<EventBinding<?>> bindings, AbstractInstrumenter instrumenter) {
@@ -1239,7 +1250,7 @@ final class InstrumentationHandler {
             @Override
             public void detachLanguageFromInstrumentation(Object vm, com.oracle.truffle.api.TruffleLanguage.Env env) {
                 InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(vm);
-                instrumentationHandler.disposeInstrumenter(langAccess().findContext(env), false);
+                instrumentationHandler.detachLanguage(langAccess().findContext(env));
             }
 
             @Override
