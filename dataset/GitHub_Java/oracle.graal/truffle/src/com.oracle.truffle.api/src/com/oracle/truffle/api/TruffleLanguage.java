@@ -1382,6 +1382,21 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
+         * Adds an entry to the Java host class loader. All classes looked up with
+         * {@link #lookupHostSymbol(String)} will lookup classes with this new entry. If the entry
+         * was already added then calling this method again for the same entry has no effect. Given
+         * entry must not be <code>null</code>.
+         *
+         * @throws SecurityException if the file is not {@link TruffleFile#isReadable() readable}.
+         * @since 1.0
+         */
+        @TruffleBoundary
+        public void addToHostClassPath(TruffleFile entry) {
+            Objects.requireNonNull(entry);
+            AccessAPI.engineAccess().addToHostClassPath(vmObject, entry);
+        }
+
+        /**
          * Looks up a Java class in the top-most scope the host environment. Returns
          * <code>null</code> if no symbol was found or the symbol was not accessible. Symbols might
          * not be accessible if a
@@ -2055,16 +2070,35 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public Object evalInContext(Source source, Node node, final MaterializedFrame mFrame) {
-            LanguageInfo info = node.getRootNode().getLanguageInfo();
-            assert info != null;
-            CallTarget target = API.nodes().getLanguageSpi(info).parse(source, node, mFrame);
+        public Object evalInContext(String code, Node node, final MaterializedFrame mFrame) {
+            RootNode rootNode = node.getRootNode();
+            if (rootNode == null) {
+                throw new IllegalArgumentException("Cannot evaluate in context using a node that is not yet adopated using a RootNode.");
+            }
+
+            LanguageInfo info = rootNode.getLanguageInfo();
+            if (info == null) {
+                throw new IllegalArgumentException("Cannot evaluate in context using a without an associated TruffleLanguage.");
+            }
+
+            final Source source = Source.newBuilder(code).name("eval in context").language(info.getId()).mimeType("content/unknown").build();
+            ExecutableNode fragment = null;
+            CallTarget target = null;
+            fragment = API.nodes().getLanguageSpi(info).parseInline(source, node, mFrame);
+            if (fragment == null) {
+                target = API.nodes().getLanguageSpi(info).parse(source, node, mFrame);
+            }
+
             try {
-                if (target instanceof RootCallTarget) {
-                    RootNode exec = ((RootCallTarget) target).getRootNode();
-                    return exec.execute(mFrame);
+                if (fragment != null) {
+                    return fragment.execute(mFrame);
                 } else {
-                    throw new IllegalStateException("" + target);
+                    if (target instanceof RootCallTarget) {
+                        RootNode exec = ((RootCallTarget) target).getRootNode();
+                        return exec.execute(mFrame);
+                    } else {
+                        throw new IllegalStateException("" + target);
+                    }
                 }
             } catch (Exception ex) {
                 if (ex instanceof RuntimeException) {

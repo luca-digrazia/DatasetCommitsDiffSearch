@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
@@ -53,7 +52,6 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.source.Source;
 
 @SuppressWarnings("deprecation")
 final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
@@ -62,7 +60,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
 
     final PolyglotContextImpl context;
     final PolyglotLanguage language;
-    volatile Map<Source, CallTarget> sourceCache;
+    final Map<Object, CallTarget> sourceCache = new ConcurrentHashMap<>();
     final Map<String, Object> config;
     final boolean eventsEnabled;
     volatile Map<Class<?>, PolyglotValue> valueCache;
@@ -100,14 +98,6 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         PolyglotValue.createDefaultValueCaches(this);
         nullValue = toHostValue(toGuestValue(null));
         defaultValueCache = new PolyglotValue.Default(this);
-
-        assert language.isInitialized();
-        Map<Source, CallTarget> languageSourceCache = language.sourceCache;
-        if (languageSourceCache != null) {
-            this.sourceCache = languageSourceCache;
-        } else {
-            this.sourceCache = new ConcurrentHashMap<>();
-        }
     }
 
     Object getContextImpl() {
@@ -158,27 +148,15 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         return env != null && initialized;
     }
 
-    CallTarget parseCached(PolyglotLanguage accessingLanguage, com.oracle.truffle.api.source.Source source, String[] argumentNames) throws AssertionError {
-        ensureInitialized(accessingLanguage);
-        assert this.sourceCache != null;
-
-        if (argumentNames == null || argumentNames.length == 0) {
-            return this.sourceCache.computeIfAbsent(source, new Function<Source, CallTarget>() {
-                public CallTarget apply(Source t) {
-                    return parseImpl(t, null);
-                }
-
-            });
-        } else {
-            // cache is not implemented for argument names
-            return parseImpl(source, argumentNames);
-        }
-    }
-
-    private CallTarget parseImpl(com.oracle.truffle.api.source.Source t, String[] argumentNames) throws AssertionError {
-        CallTarget target = LANGUAGE.parse(requireEnv(), t, null, argumentNames);
+    CallTarget parseCached(com.oracle.truffle.api.source.Source source) throws AssertionError {
+        CallTarget target = sourceCache.get(source);
         if (target == null) {
-            throw new AssertionError(String.format("Parsing resulted in a null CallTarget for %s.", t));
+            ensureInitialized(null);
+            target = LANGUAGE.parse(requireEnv(), source, null);
+            if (target == null) {
+                throw new AssertionError(String.format("Parsing resulted in a null CallTarget for %s.", source));
+            }
+            sourceCache.put(source, target);
         }
         return target;
     }
@@ -332,7 +310,6 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                 if (!initialized) {
                     initialized = true; // Allow language use during initialization
                     try {
-
                         if (!context.inContextPreInitialization) {
                             LANGUAGE.initializeThread(env, Thread.currentThread());
                         }
