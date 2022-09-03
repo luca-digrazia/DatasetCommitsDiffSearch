@@ -35,7 +35,6 @@ import static com.oracle.graal.hotspot.nodes.NewArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
-import static com.oracle.graal.hotspot.phases.OnStackReplacementPhase.*;
 import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
 import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.*;
 import static com.oracle.graal.hotspot.stubs.IdentityHashCodeStub.*;
@@ -44,7 +43,6 @@ import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
 import static com.oracle.graal.hotspot.stubs.NewMultiArrayStub.*;
 import static com.oracle.graal.hotspot.stubs.RegisterFinalizerStub.*;
 import static com.oracle.graal.hotspot.stubs.ThreadIsInterruptedStub.*;
-import static com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub.*;
 import static com.oracle.graal.java.GraphBuilderPhase.RuntimeCalls.*;
 import static com.oracle.graal.nodes.java.RegisterFinalizerNode.*;
 import static com.oracle.graal.replacements.Log.*;
@@ -89,6 +87,8 @@ import com.oracle.graal.word.*;
  * HotSpot implementation of {@link GraalCodeCacheProvider}.
  */
 public abstract class HotSpotRuntime implements GraalCodeCacheProvider, DisassemblerProvider, BytecodeDisassemblerProvider {
+
+    public static final Descriptor OSR_MIGRATION_END = new Descriptor("OSR_migration_end", true, void.class, long.class);
 
     public final HotSpotVMConfig config;
 
@@ -225,19 +225,10 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         /*           temps */ null,
                         /*             ret */ ret(Kind.Void));
 
-        addCRuntimeCall(EXCEPTION_HANDLER_FOR_PC, config.exceptionHandlerForPcAddress,
+        addCRuntimeCall(EXCEPTION_HANDLER_FOR_PC, config.handleExceptionForPcAddress,
                         /*             ret */ ret(word),
                         /* arg0:    thread */ nativeCallingConvention(word));
 
-        addStubCall(UNWIND_EXCEPTION_TO_CALLER,
-                        /*             ret */ ret(Kind.Void),
-                        /* arg0: exception */ javaCallingConvention(Kind.Object,
-                    /* arg1: returnAddress */                       word));
-
-        addCRuntimeCall(EXCEPTION_HANDLER_FOR_RETURN_ADDRESS, config.exceptionHandlerForReturnAddressAddress,
-                        /*             ret */ ret(word),
-                        /* arg0:    thread */ nativeCallingConvention(word,
-                    /* arg1: returnAddress */                         word));
         addStubCall(REGISTER_FINALIZER,
                         /*             ret */ ret(Kind.Void),
                         /* arg0:    object */ javaCallingConvention(Kind.Object));
@@ -383,23 +374,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         return addRuntimeCall(descriptor, 0L, null, ret, args);
     }
 
-    /**
-     * Registers the details for a jump to a target that has a signature (i.e. expects arguments in
-     * specified locations).
-     * 
-     * @param descriptor name and signature of the jump target
-     * @param args where arguments are passed to the call
-     */
-    protected RuntimeCallTarget addJump(Descriptor descriptor, AllocatableValue... args) {
-        return addRuntimeCall(descriptor, HotSpotRuntimeCallTarget.JUMP_ADDRESS, null, ret(Kind.Void), args);
-    }
-
-    /**
-     * Registers the details for a call to a runtime C/C++ function.
-     * 
-     * @param descriptor name and signature of the call
-     * @param args where arguments are passed to the call
-     */
     protected RuntimeCallTarget addCRuntimeCall(Descriptor descriptor, long address, AllocatableValue ret, AllocatableValue... args) {
         return addRuntimeCall(descriptor, address, true, null, ret, args);
     }
@@ -485,7 +459,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         registerStub(new ThreadIsInterruptedStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(THREAD_IS_INTERRUPTED)));
         registerStub(new IdentityHashCodeStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(IDENTITY_HASHCODE)));
         registerStub(new ExceptionHandlerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(EXCEPTION_HANDLER)));
-        registerStub(new UnwindExceptionToCallerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(UNWIND_EXCEPTION_TO_CALLER)));
     }
 
     private void registerStub(Stub stub) {
@@ -868,6 +841,30 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             graph.removeFixed(commit);
         } else if (n instanceof CheckCastNode) {
             checkcastSnippets.lower((CheckCastNode) n, tool);
+        } else if (n instanceof OSRStartNode) {
+            OSRStartNode osrStart = (OSRStartNode) n;
+            StartNode newStart = graph.add(new StartNode());
+            LocalNode buffer = graph.unique(new LocalNode(0, StampFactory.forKind(wordKind())));
+            RuntimeCallNode migrationEnd = graph.add(new RuntimeCallNode(OSR_MIGRATION_END, buffer));
+            migrationEnd.setStateAfter(osrStart.stateAfter());
+
+            newStart.setNext(migrationEnd);
+            FixedNode next = osrStart.next();
+            osrStart.setNext(null);
+            migrationEnd.setNext(next);
+            graph.setStart(newStart);
+
+            // mirroring the calculations in c1_GraphBuilder.cpp (setup_osr_entry_block)
+            int localsOffset = (graph.method().getMaxLocals() - 1) * 8;
+            for (OSRLocalNode osrLocal : graph.getNodes(OSRLocalNode.class)) {
+                int size = FrameStateBuilder.stackSlots(osrLocal.kind());
+                int offset = localsOffset - (osrLocal.index() + size - 1) * 8;
+                UnsafeLoadNode load = graph.add(new UnsafeLoadNode(buffer, offset, ConstantNode.forInt(0, graph), osrLocal.kind()));
+                osrLocal.replaceAndDelete(load);
+                graph.addBeforeFixed(migrationEnd, load);
+            }
+            osrStart.replaceAtUsages(newStart);
+            osrStart.safeDelete();
         } else if (n instanceof CheckCastDynamicNode) {
             checkcastSnippets.lower((CheckCastDynamicNode) n);
         } else if (n instanceof InstanceOfNode) {

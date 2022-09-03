@@ -22,11 +22,9 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.type.*;
 
-@NodeInfo
 public abstract class AbstractLocalNode extends FloatingNode {
 
     private final int index;
@@ -38,7 +36,7 @@ public abstract class AbstractLocalNode extends FloatingNode {
 
     /**
      * Gets the index of this local in the array of parameters. This is NOT the JVM local index.
-     *
+     * 
      * @return the index
      */
     public int index() {
