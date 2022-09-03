@@ -26,12 +26,9 @@ package com.oracle.graal.hotspot.hsail;
 import sun.misc.*;
 
 import com.oracle.graal.api.code.*;
-
 import static com.oracle.graal.api.code.ValueUtil.asConstant;
 import static com.oracle.graal.api.code.ValueUtil.isConstant;
-
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.hsail.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.*;
@@ -52,8 +49,8 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator {
 
     private final HotSpotVMConfig config;
 
-    public HSAILHotSpotLIRGenerator(StructuredGraph graph, Providers providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        super(graph, providers, cc, lirGenRes);
+    public HSAILHotSpotLIRGenerator(StructuredGraph graph, Providers providers, HotSpotVMConfig config, FrameMap frameMap, CallingConvention cc, LIR lir) {
+        super(graph, providers, frameMap, cc, lir);
         this.config = config;
     }
 
@@ -101,8 +98,8 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator {
      */
     @Override
     public void visitCompareAndSwap(LoweredCompareAndSwapNode node, Value address) {
-        Kind kind = node.getNewValue().kind();
-        assert kind == node.getExpectedValue().kind();
+        Kind kind = node.getNewValue().getKind();
+        assert kind == node.getExpectedValue().getKind();
         Variable expected = load(operand(node.getExpectedValue()));
         Variable newValue = load(operand(node.getNewValue()));
         HSAILAddressValue addressValue = asAddressValue(address);
@@ -120,7 +117,7 @@ public class HSAILHotSpotLIRGenerator extends HSAILLIRGenerator {
         } else {
             append(new CompareAndSwapOp(casResult, addressValue, expected, newValue));
         }
-        Variable nodeResult = newVariable(node.kind());
+        Variable nodeResult = newVariable(node.getKind());
         append(new CondMoveOp(mapKindToCompareOp(kind), casResult, expected, nodeResult, Condition.EQ, Constant.INT_1, Constant.INT_0));
         setResult(node, nodeResult);
     }

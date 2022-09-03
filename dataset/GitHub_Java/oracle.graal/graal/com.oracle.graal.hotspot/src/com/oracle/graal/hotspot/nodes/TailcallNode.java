@@ -30,17 +30,17 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
  * Performs a tail call to the specified target compiled method, with the parameter taken from the
  * supplied FrameState.
  */
-public class TailcallNode extends FixedWithNextNode implements LIRGenResLowerable {
+public class TailcallNode extends FixedWithNextNode implements LIRLowerable {
 
     @Input private FrameState frameState;
     @Input private ValueNode target;
@@ -57,15 +57,17 @@ public class TailcallNode extends FixedWithNextNode implements LIRGenResLowerabl
         this.frameState = frameState;
     }
 
-    public void generate(LIRGenerator gen, LIRGenerationResult res) {
+    @Override
+    public void generate(LIRGeneratorTool generator) {
+        LIRGenerator gen = (LIRGenerator) generator;
         HotSpotVMConfig config = runtime().getConfig();
         ResolvedJavaMethod method = frameState.method();
         boolean isStatic = Modifier.isStatic(method.getModifiers());
 
         JavaType[] signature = MetaUtil.signatureToTypes(method.getSignature(), isStatic ? null : method.getDeclaringClass());
-        CallingConvention cc = res.getFrameMap().registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, null, signature, gen.target(), false);
+        CallingConvention cc = gen.getFrameMap().registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, null, signature, gen.target(), false);
         List<ValueNode> parameters = new ArrayList<>();
-        for (int i = 0, slot = 0; i < cc.getArgumentCount(); i++, slot += HIRFrameStateBuilder.stackSlots(frameState.localAt(slot).kind())) {
+        for (int i = 0, slot = 0; i < cc.getArgumentCount(); i++, slot += HIRFrameStateBuilder.stackSlots(frameState.localAt(slot).getKind())) {
             parameters.add(frameState.localAt(slot));
         }
         Value[] args = gen.visitInvokeArguments(cc, parameters);

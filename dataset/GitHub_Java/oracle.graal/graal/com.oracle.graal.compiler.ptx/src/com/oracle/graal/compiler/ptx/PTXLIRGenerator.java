@@ -89,11 +89,11 @@ public class PTXLIRGenerator extends LIRGenerator {
         }
     }
 
-    public PTXLIRGenerator(StructuredGraph graph, Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        super(graph, providers, cc, lirGenRes);
-        lirGenRes.getLIR().setSpillMoveFactory(new PTXSpillMoveFactory());
+    public PTXLIRGenerator(StructuredGraph graph, Providers providers, FrameMap frameMap, CallingConvention cc, LIR lir) {
+        super(graph, providers, frameMap, cc, lir);
+        lir.setSpillMoveFactory(new PTXSpillMoveFactory());
         int callVariables = cc.getArgumentCount() + (cc.getReturn().equals(Value.ILLEGAL) ? 0 : 1);
-        lirGenRes.getLIR().setFirstVariableNumber(callVariables);
+        lir.setFirstVariableNumber(callVariables);
         nextPredRegNum = 0;
     }
 
@@ -137,7 +137,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     @Override
     public void emitPrologue(StructuredGraph graph) {
         // Need to emit .param directives based on incoming arguments and return value
-        CallingConvention incomingArguments = getCallingConvention();
+        CallingConvention incomingArguments = cc;
         Object returnObject = incomingArguments.getReturn();
         AllocatableValue[] params = incomingArguments.getArguments();
         int argCount = incomingArguments.getArgumentCount();
@@ -926,7 +926,7 @@ public class PTXLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitNullCheck(ValueNode v, DeoptimizingNode deopting) {
-        assert v.kind() == Kind.Object;
+        assert v.getKind() == Kind.Object;
         append(new PTXMove.NullCheckOp(load(operand(v)), state(deopting)));
     }
 
@@ -983,7 +983,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     public void visitReturn(ReturnNode x) {
         AllocatableValue operand = Value.ILLEGAL;
         if (x.result() != null) {
-            operand = resultOperandFor(x.result().kind());
+            operand = resultOperandFor(x.result().getKind());
             // Load the global memory address from return parameter
             Variable loadVar = emitLoadReturnAddress(operand.getKind(), operand, null);
             // Store result in global memory whose location is loadVar

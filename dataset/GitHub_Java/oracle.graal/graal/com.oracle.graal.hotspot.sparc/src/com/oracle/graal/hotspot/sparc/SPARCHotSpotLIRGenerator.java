@@ -51,10 +51,12 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSpotLIRGenerator {
 
     private final HotSpotVMConfig config;
+    private final Object stub;
 
-    public SPARCHotSpotLIRGenerator(StructuredGraph graph, HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        super(graph, providers, cc, lirGenRes);
+    public SPARCHotSpotLIRGenerator(StructuredGraph graph, Object stub, HotSpotProviders providers, HotSpotVMConfig config, FrameMap frameMap, CallingConvention cc, LIR lir) {
+        super(graph, providers, frameMap, cc, lir);
         this.config = config;
+        this.stub = stub;
     }
 
     @Override
@@ -67,27 +69,27 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
      * deoptimization. The return address slot in the callee is overwritten with the address of a
      * deoptimization stub.
      */
-    private StackSlot deoptimizationRescueSlot;
+    StackSlot deoptimizationRescueSlot;
 
     @Override
     protected DebugInfoBuilder createDebugInfoBuilder(NodeMap<Value> nodeOperands) {
-        HotSpotLockStack lockStack = new HotSpotLockStack(res.getFrameMap(), Kind.Long);
+        HotSpotLockStack lockStack = new HotSpotLockStack(getFrameMap(), Kind.Long);
         return new HotSpotDebugInfoBuilder(nodeOperands, lockStack);
     }
 
     @Override
     public StackSlot getLockSlot(int lockDepth) {
-        return ((HotSpotDebugInfoBuilder) getDebugInfoBuilder()).lockStack().makeLockSlot(lockDepth);
+        return ((HotSpotDebugInfoBuilder) debugInfoBuilder).lockStack().makeLockSlot(lockDepth);
     }
 
     @Override
     protected boolean needOnlyOopMaps() {
         // Stubs only need oop maps
-        return getStub() != null;
+        return stub != null;
     }
 
-    public Stub getStub() {
-        return ((SPARCHotSpotLIRGenerationResult) res).getStub();
+    Stub getStub() {
+        return (Stub) stub;
     }
 
     @Override
@@ -122,8 +124,8 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     @Override
     public void visitDirectCompareAndSwap(DirectCompareAndSwapNode x) {
-        Kind kind = x.newValue().kind();
-        assert kind == x.expectedValue().kind();
+        Kind kind = x.newValue().getKind();
+        assert kind == x.expectedValue().getKind();
 
         Variable address = load(operand(x.object()));
         Value offset = operand(x.offset());
@@ -143,7 +145,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
         append(new CompareAndSwapOp(address, cmpValue, newValue));
 
-        Variable result = newVariable(x.kind());
+        Variable result = newVariable(x.getKind());
         emitMove(result, newValue);
         setResult(x, result);
     }
@@ -321,9 +323,5 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     public void emitPrefetchAllocate(ValueNode address, ValueNode distance) {
         SPARCAddressValue addr = emitAddress(operand(address), 0, loadNonConst(operand(distance)), 1);
         append(new SPARCPrefetchOp(addr, config.allocatePrefetchInstr));
-    }
-
-    public StackSlot getDeoptimizationRescueSlot() {
-        return deoptimizationRescueSlot;
     }
 }

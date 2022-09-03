@@ -1,8 +1,11 @@
 package com.oracle.graal.baseline;
 
+import static com.oracle.graal.nodes.ValueNodeUtil.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.nodes.*;
 
 public class LIRFrameStateBuilder extends AbstractFrameStateBuilder<Variable> {
 
@@ -10,7 +13,7 @@ public class LIRFrameStateBuilder extends AbstractFrameStateBuilder<Variable> {
     private final Variable[] stack;
     private Variable[] lockedObjects;
 
-    public LIRFrameStateBuilder(ResolvedJavaMethod method) {
+    public LIRFrameStateBuilder(ResolvedJavaMethod method, boolean eagerResolve) {
         super(method);
 
         this.locals = new Variable[method.getMaxLocals()];

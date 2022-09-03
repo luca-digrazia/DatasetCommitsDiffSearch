@@ -520,7 +520,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
             // mirroring the calculations in c1_GraphBuilder.cpp (setup_osr_entry_block)
             int localsOffset = (graph.method().getMaxLocals() - 1) * 8;
             for (OSRLocalNode osrLocal : graph.getNodes(OSRLocalNode.class)) {
-                int size = FrameStateBuilder.stackSlots(osrLocal.getKind());
+                int size = HIRFrameStateBuilder.stackSlots(osrLocal.getKind());
                 int offset = localsOffset - (osrLocal.index() + size - 1) * 8;
                 IndexedLocationNode location = IndexedLocationNode.create(ANY_LOCATION, osrLocal.getKind(), offset, ConstantNode.forLong(0, graph), graph, 1);
                 ReadNode load = graph.add(new ReadNode(buffer, location, osrLocal.stamp(), BarrierType.NONE, false));
@@ -700,9 +700,9 @@ public class HotSpotLoweringProvider implements LoweringProvider {
 
     public int getScalingFactor(Kind kind) {
         if (useCompressedOops() && kind == Kind.Object) {
-            return this.runtime.getTarget().getSizeInBytes(Kind.Int);
+            return this.runtime.getTarget().arch.getSizeInBytes(Kind.Int);
         } else {
-            return this.runtime.getTarget().getSizeInBytes(kind);
+            return this.runtime.getTarget().arch.getSizeInBytes(kind);
         }
     }
 
@@ -757,7 +757,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
         ValueNode arrayLength = readArrayLength(n.graph(), array, tool.getConstantReflection());
         if (arrayLength == null) {
             Stamp stamp = StampFactory.positiveInt();
-            ReadNode readArrayLength = g.add(new ReadNode(array, ConstantLocationNode.create(ARRAY_LENGTH_LOCATION, Kind.Int, runtime.getConfig().arrayLengthOffset, g), stamp, BarrierType.NONE, false));
+            ReadNode readArrayLength = g.add(new ReadNode(array, ConstantLocationNode.create(FINAL_LOCATION, Kind.Int, runtime.getConfig().arrayLengthOffset, g), stamp, BarrierType.NONE, false));
             g.addBeforeFixed(n, readArrayLength);
             readArrayLength.setGuard(createNullCheck(array, readArrayLength, tool));
             arrayLength = readArrayLength;
