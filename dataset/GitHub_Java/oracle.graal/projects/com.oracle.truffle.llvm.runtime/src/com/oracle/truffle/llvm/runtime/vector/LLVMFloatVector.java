@@ -43,6 +43,10 @@ public final class LLVMFloatVector extends LLVMVector {
         this.vector = vector;
     }
 
+    public float[] getValues() {
+        return vector;
+    }
+
     public float getValue(int index) {
         return vector[index];
     }

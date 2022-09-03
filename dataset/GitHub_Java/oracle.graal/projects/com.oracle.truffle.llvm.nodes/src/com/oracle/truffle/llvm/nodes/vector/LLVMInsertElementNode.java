@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,102 +30,141 @@
 package com.oracle.truffle.llvm.nodes.vector;
 
 import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMDoubleVectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMFloatVectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI16VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI1VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI32VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI64VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI8VectorNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.vector.LLVMDoubleVector;
-import com.oracle.truffle.llvm.types.vector.LLVMFloatVector;
-import com.oracle.truffle.llvm.types.vector.LLVMI16Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI1Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI32Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI64Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI8Vector;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
-public abstract class LLVMInsertElementNode {
+@NodeChild(type = LLVMExpressionNode.class)
+@NodeChild(type = LLVMExpressionNode.class, value = "element")
+@NodeChild(type = LLVMExpressionNode.class, value = "index")
+@NodeField(name = "vectorLength", type = int.class)
+public abstract class LLVMInsertElementNode extends LLVMExpressionNode {
 
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMI1VectorNode.class), @NodeChild(type = LLVMI1Node.class, value = "element"),
-                    @NodeChild(type = LLVMI32Node.class, value = "index")})
-    public abstract static class LLVMI1InsertElementNode extends LLVMI1VectorNode {
+    protected abstract int getVectorLength();
 
+    public abstract static class LLVMI1InsertElementNode extends LLVMInsertElementNode {
         @Specialization
-        public LLVMI1Vector executeI1(LLVMAddress address, LLVMI1Vector vector, boolean element, int index) {
-            return vector.insert(address, element, index);
+        @ExplodeLoop
+        protected LLVMI1Vector doI1(LLVMI1Vector vector, boolean element, int index) {
+            assert vector.getLength() == getVectorLength();
+            boolean[] result = new boolean[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = vector.getValue(i);
+            }
+            result[index] = element;
+            return LLVMI1Vector.create(result);
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMI8VectorNode.class), @NodeChild(type = LLVMI8Node.class, value = "element"),
-                    @NodeChild(type = LLVMI32Node.class, value = "index")})
-    public abstract static class LLVMI8InsertElementNode extends LLVMI8VectorNode {
-
+    public abstract static class LLVMI8InsertElementNode extends LLVMInsertElementNode {
         @Specialization
-        public LLVMI8Vector executeI8(LLVMAddress address, LLVMI8Vector vector, byte element, int index) {
-            return vector.insert(address, element, index);
+        @ExplodeLoop
+        protected LLVMI8Vector doI8(LLVMI8Vector vector, byte element, int index) {
+            assert vector.getLength() == getVectorLength();
+            byte[] result = new byte[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = vector.getValue(i);
+            }
+            result[index] = element;
+            return LLVMI8Vector.create(result);
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMI16VectorNode.class), @NodeChild(type = LLVMI16Node.class, value = "element"),
-                    @NodeChild(type = LLVMI32Node.class, value = "index")})
-    public abstract static class LLVMI16InsertElementNode extends LLVMI16VectorNode {
-
+    public abstract static class LLVMI16InsertElementNode extends LLVMInsertElementNode {
         @Specialization
-        public LLVMI16Vector executeI16(LLVMAddress address, LLVMI16Vector vector, short element, int index) {
-            return vector.insert(address, element, index);
+        @ExplodeLoop
+        protected LLVMI16Vector doI16(LLVMI16Vector vector, short element, int index) {
+            assert vector.getLength() == getVectorLength();
+            short[] result = new short[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = vector.getValue(i);
+            }
+            result[index] = element;
+            return LLVMI16Vector.create(result);
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMI32VectorNode.class), @NodeChild(type = LLVMI32Node.class, value = "element"),
-                    @NodeChild(type = LLVMI32Node.class, value = "index")})
-    public abstract static class LLVMI32InsertElementNode extends LLVMI32VectorNode {
-
+    public abstract static class LLVMI32InsertElementNode extends LLVMInsertElementNode {
         @Specialization
-        public LLVMI32Vector executeI32(LLVMAddress address, LLVMI32Vector vector, int element, int index) {
-            return vector.insert(address, element, index);
+        @ExplodeLoop
+        protected LLVMI32Vector doI32(LLVMI32Vector vector, int element, int index) {
+            assert vector.getLength() == getVectorLength();
+            int[] result = new int[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = vector.getValue(i);
+            }
+            result[index] = element;
+            return LLVMI32Vector.create(result);
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMI64VectorNode.class), @NodeChild(type = LLVMI64Node.class, value = "element"),
-                    @NodeChild(type = LLVMI32Node.class, value = "index")})
-    public abstract static class LLVMI64InsertElementNode extends LLVMI64VectorNode {
+    public abstract static class LLVMI64InsertElementNode extends LLVMInsertElementNode {
+        @Specialization
+        @ExplodeLoop
+        protected LLVMI64Vector doI64(LLVMI64Vector vector, long element, int index) {
+            assert vector.getLength() == getVectorLength();
+            long[] result = new long[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = vector.getValue(i);
+            }
+            result[index] = element;
+            return LLVMI64Vector.create(result);
+        }
 
         @Specialization
-        public LLVMI64Vector executeI64(LLVMAddress address, LLVMI64Vector vector, long element, int index) {
-            return vector.insert(address, element, index);
+        @ExplodeLoop
+        protected LLVMPointerVector doPointer(LLVMPointerVector vector, LLVMPointer element, int index) {
+            assert vector.getLength() == getVectorLength();
+            LLVMPointer[] result = new LLVMPointer[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = vector.getValue(i);
+            }
+            result[index] = element;
+            return LLVMPointerVector.create(result);
+        }
+
+        @Specialization
+        protected LLVMPointerVector doPointer(LLVMPointerVector vector, long element, int index) {
+            return doPointer(vector, LLVMNativePointer.create(element), index);
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMFloatVectorNode.class), @NodeChild(type = LLVMFloatNode.class, value = "element"),
-                    @NodeChild(type = LLVMI32Node.class, value = "index")})
-    public abstract static class LLVMFloatInsertElementNode extends LLVMFloatVectorNode {
-
+    public abstract static class LLVMFloatInsertElementNode extends LLVMInsertElementNode {
         @Specialization
-        public LLVMFloatVector executeFloat(LLVMAddress address, LLVMFloatVector vector, float element, int index) {
-            return vector.insert(address, element, index);
+        @ExplodeLoop
+        protected LLVMFloatVector doFloat(LLVMFloatVector vector, float element, int index) {
+            assert vector.getLength() == getVectorLength();
+            float[] result = new float[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = vector.getValue(i);
+            }
+            result[index] = element;
+            return LLVMFloatVector.create(result);
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMDoubleVectorNode.class), @NodeChild(type = LLVMDoubleNode.class, value = "element"),
-                    @NodeChild(type = LLVMI32Node.class, value = "index")})
-    public abstract static class LLVMDoubleInsertElementNode extends LLVMDoubleVectorNode {
-
+    public abstract static class LLVMDoubleInsertElementNode extends LLVMInsertElementNode {
         @Specialization
-        public LLVMDoubleVector executeDouble(LLVMAddress address, LLVMDoubleVector vector, double element, int index) {
-            return vector.insert(address, element, index);
+        @ExplodeLoop
+        protected LLVMDoubleVector doDouble(LLVMDoubleVector vector, double element, int index) {
+            assert vector.getLength() == getVectorLength();
+            double[] result = new double[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = vector.getValue(i);
+            }
+            result[index] = element;
+            return LLVMDoubleVector.create(result);
         }
     }
-
 }

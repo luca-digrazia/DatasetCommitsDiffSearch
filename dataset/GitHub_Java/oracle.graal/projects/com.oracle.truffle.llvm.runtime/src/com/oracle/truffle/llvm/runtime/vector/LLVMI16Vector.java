@@ -43,6 +43,10 @@ public final class LLVMI16Vector extends LLVMVector {
         this.vector = vector;
     }
 
+    public short[] getValues() {
+        return vector;
+    }
+
     public short getValue(int index) {
         return vector[index];
     }

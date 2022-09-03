@@ -43,6 +43,10 @@ public final class LLVMDoubleVector extends LLVMVector {
         this.vector = vector;
     }
 
+    public double[] getValues() {
+        return vector;
+    }
+
     public double getValue(int index) {
         return vector[index];
     }

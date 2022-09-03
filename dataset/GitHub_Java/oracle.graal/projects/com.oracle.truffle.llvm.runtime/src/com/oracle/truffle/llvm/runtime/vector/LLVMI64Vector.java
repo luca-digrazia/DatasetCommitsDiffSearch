@@ -43,6 +43,10 @@ public final class LLVMI64Vector extends LLVMVector {
         this.vector = vector;
     }
 
+    public long[] getValues() {
+        return vector;
+    }
+
     public long getValue(int index) {
         return vector[index];
     }
