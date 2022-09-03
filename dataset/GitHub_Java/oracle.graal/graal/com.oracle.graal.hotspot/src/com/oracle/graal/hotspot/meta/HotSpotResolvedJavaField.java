@@ -24,7 +24,6 @@
 package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.api.meta.MetaUtil.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
@@ -110,12 +109,12 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         if (receiver == null) {
             assert Modifier.isStatic(flags);
             if (holder.isInitialized()) {
-                return graalRuntime().getRuntime().readUnsafeConstant(getKind(), holder.mirror(), offset);
+                return HotSpotGraalRuntime.getInstance().getRuntime().readUnsafeConstant(getKind(), holder.mirror(), offset);
             }
             return null;
         } else {
             assert !Modifier.isStatic(flags);
-            return graalRuntime().getRuntime().readUnsafeConstant(getKind(), receiver.asObject(), offset);
+            return HotSpotGraalRuntime.getInstance().getRuntime().readUnsafeConstant(getKind(), receiver.asObject(), offset);
         }
     }
 
