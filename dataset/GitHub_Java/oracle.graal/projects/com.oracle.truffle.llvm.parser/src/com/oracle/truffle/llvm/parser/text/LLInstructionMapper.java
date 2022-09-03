@@ -43,7 +43,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.DbgValueInstruc
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.FenceInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.IndirectBranchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ReadModifyWriteInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ResumeInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ReturnInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.StoreInstruction;
@@ -100,20 +99,6 @@ final class LLInstructionMapper {
             }
         }
 
-        private void checkUnnamedInstruction(Instruction inst, String... opCodes) {
-            final LLSourceMap.Instruction expected = llInstructions.peekFirst();
-            if (expected == null) {
-                return;
-            }
-
-            for (String opCode : opCodes) {
-                if (opCode.equals(expected.getDescriptor())) {
-                    inst.setSourceLocation(toLocation(expected));
-                    llInstructions.pollFirst();
-                }
-            }
-        }
-
         @Override
         public void visit(BranchInstruction inst) {
             checkUnnamedInstruction("br", inst);
@@ -156,7 +141,7 @@ final class LLInstructionMapper {
 
         @Override
         public void visit(VoidCallInstruction inst) {
-            checkUnnamedInstruction(inst, "tail", "musttail", "notail", "call");
+            checkUnnamedInstruction("call", inst);
         }
 
         @Override
@@ -176,17 +161,12 @@ final class LLInstructionMapper {
 
         @Override
         public void visit(DbgDeclareInstruction inst) {
-            checkUnnamedInstruction(inst, "tail", "call");
+            checkUnnamedInstruction("call", inst);
         }
 
         @Override
         public void visit(DbgValueInstruction inst) {
-            checkUnnamedInstruction(inst, "tail", "call");
-        }
-
-        @Override
-        public void visit(ReadModifyWriteInstruction inst) {
-            checkUnnamedInstruction("atomicrmw", inst);
+            checkUnnamedInstruction("call", inst);
         }
 
         @Override

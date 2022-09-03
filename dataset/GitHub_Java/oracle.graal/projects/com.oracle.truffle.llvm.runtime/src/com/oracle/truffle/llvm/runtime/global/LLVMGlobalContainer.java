@@ -182,19 +182,25 @@ public final class LLVMGlobalContainer implements LLVMObjectAccess, LLVMInternal
     }
 
     @Override
-    public LLVMObjectReadNode createReadNode() {
-        return new LLVMGlobalContainerReadNode();
+    public LLVMObjectReadNode createReadNode(ForeignToLLVMType type) {
+        return new LLVMGlobalContainerReadNode(type);
     }
 
     @Override
-    public LLVMObjectWriteNode createWriteNode() {
-        return new LLVMGlobalContainerWriteNode();
+    public LLVMObjectWriteNode createWriteNode(ForeignToLLVMType type) {
+        return new LLVMGlobalContainerWriteNode(type);
     }
 
     static class LLVMGlobalContainerReadNode extends LLVMObjectReadNode {
 
+        private final ForeignToLLVMType type;
+
         @Child private LLVMToNativeNode toNative;
         @CompilationFinal private LLVMMemory memory;
+
+        LLVMGlobalContainerReadNode(ForeignToLLVMType type) {
+            this.type = type;
+        }
 
         @Override
         public boolean canAccess(Object obj) {
@@ -202,7 +208,7 @@ public final class LLVMGlobalContainer implements LLVMObjectAccess, LLVMInternal
         }
 
         @Override
-        public Object executeRead(Object obj, long offset, ForeignToLLVMType type) throws InteropException {
+        public Object executeRead(Object obj, long offset) throws InteropException {
             LLVMGlobalContainer container = (LLVMGlobalContainer) obj;
 
             if (container.address == 0) {
@@ -250,8 +256,15 @@ public final class LLVMGlobalContainer implements LLVMObjectAccess, LLVMInternal
     }
 
     static class LLVMGlobalContainerWriteNode extends LLVMObjectWriteNode {
+
+        private final ForeignToLLVMType type;
+
         @Child private LLVMToNativeNode toNative;
         @CompilationFinal private LLVMMemory memory;
+
+        LLVMGlobalContainerWriteNode(ForeignToLLVMType type) {
+            this.type = type;
+        }
 
         @Override
         public boolean canAccess(Object obj) {
@@ -259,7 +272,7 @@ public final class LLVMGlobalContainer implements LLVMObjectAccess, LLVMInternal
         }
 
         @Override
-        public void executeWrite(Object obj, long offset, Object value, ForeignToLLVMType type) throws InteropException {
+        public void executeWrite(Object obj, long offset, Object value) throws InteropException {
             LLVMGlobalContainer container = (LLVMGlobalContainer) obj;
 
             if (container.address == 0) {

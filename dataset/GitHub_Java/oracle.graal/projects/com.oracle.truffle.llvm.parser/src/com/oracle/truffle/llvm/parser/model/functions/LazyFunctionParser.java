@@ -34,6 +34,7 @@ import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.listeners.Function;
 import com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInfoFunctionProcessor;
 import com.oracle.truffle.llvm.parser.scanner.LLVMScanner;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.parser.text.LLSourceBuilder;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 

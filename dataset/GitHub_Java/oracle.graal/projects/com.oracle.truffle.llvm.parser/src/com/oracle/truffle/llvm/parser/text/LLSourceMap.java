@@ -82,7 +82,7 @@ final class LLSourceMap {
             final SourceSection endSection = llSource.createSection(endLine);
             final int charLength = endSection.getCharEndIndex() - startCharIndex;
             final SourceSection totalSection = llSource.createSection(startCharIndex, charLength);
-            return LLVMSourceLocation.create(sourceMap.getGlobalScope(runtime.getFileScope()), LLVMSourceLocation.Kind.FUNCTION, name, new LLSourceSection(totalSection), null);
+            return LLVMSourceLocation.create(sourceMap.getGlobalScope(runtime.getFileScope()), LLVMSourceLocation.Kind.FUNCTION, name, totalSection, null);
         }
     }
 
@@ -100,7 +100,7 @@ final class LLSourceMap {
 
         LLVMSourceLocation toSourceLocation(Source llSource, LLVMSourceLocation parent) {
             final SourceSection sourceSection = llSource.createSection(line);
-            return LLVMSourceLocation.create(parent, LLVMSourceLocation.Kind.LINE, LOCATION_SCOPE_TITLE, new LLSourceSection(sourceSection), null);
+            return LLVMSourceLocation.create(parent, LLVMSourceLocation.Kind.LINE, LOCATION_SCOPE_TITLE, sourceSection, null);
         }
 
         String getDescriptor() {
@@ -128,7 +128,7 @@ final class LLSourceMap {
         globals.add(name);
     }
 
-    private LLVMSourceLocation getGlobalScope(LLVMScope moduleScope) {
+    LLVMSourceLocation getGlobalScope(LLVMScope moduleScope) {
         if (globalScope == null) {
             globalScope = LLVMSourceLocation.createLLModule(llSource.getName(), llSource.createSection(0, llSource.getLength()));
         }
