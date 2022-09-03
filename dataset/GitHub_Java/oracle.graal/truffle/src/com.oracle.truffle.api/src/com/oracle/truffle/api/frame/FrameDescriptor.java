@@ -371,12 +371,7 @@ public final class FrameDescriptor implements Cloneable {
      * @since 0.8 or earlier
      */
     public int getSize() {
-        if (CompilerDirectives.inCompiledCode()) {
-            if (!this.version.isValid()) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-            }
-        }
-        return this.size;
+        return size;
     }
 
     /**
