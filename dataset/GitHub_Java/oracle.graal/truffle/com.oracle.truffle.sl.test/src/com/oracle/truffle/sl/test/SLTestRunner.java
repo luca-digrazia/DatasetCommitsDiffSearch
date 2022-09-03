@@ -2,49 +2,95 @@
  * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.sl.test;
 
-import java.io.*;
-import java.nio.charset.*;
-import java.nio.file.*;
-import java.nio.file.attribute.*;
-import java.util.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.net.URL;
+import java.nio.charset.Charset;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
-import org.junit.*;
-import org.junit.internal.*;
-import org.junit.runner.*;
-import org.junit.runner.manipulation.*;
-import org.junit.runner.notification.*;
-import org.junit.runners.*;
-import org.junit.runners.model.*;
+import org.junit.Assert;
+import org.junit.Assume;
+import org.junit.internal.TextListener;
+import org.junit.runner.Description;
+import org.junit.runner.JUnitCore;
+import org.junit.runner.Result;
+import org.junit.runner.manipulation.Filter;
+import org.junit.runner.manipulation.NoTestsRemainException;
+import org.junit.runner.notification.Failure;
+import org.junit.runner.notification.RunNotifier;
+import org.junit.runners.ParentRunner;
+import org.junit.runners.model.InitializationError;
 
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.vm.*;
-import com.oracle.truffle.sl.*;
-import com.oracle.truffle.sl.builtins.*;
+import com.oracle.truffle.api.dsl.NodeFactory;
+import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.sl.SLException;
+import com.oracle.truffle.sl.SLLanguage;
+import com.oracle.truffle.sl.SLMain;
+import com.oracle.truffle.sl.builtins.SLBuiltinNode;
+import com.oracle.truffle.sl.parser.Parser;
+import com.oracle.truffle.sl.runtime.SLContext;
+import com.oracle.truffle.sl.runtime.SLFunction;
+import com.oracle.truffle.sl.runtime.SLNull;
+import com.oracle.truffle.sl.runtime.SLUndefinedNameException;
 import com.oracle.truffle.sl.test.SLTestRunner.TestCase;
 
-public final class SLTestRunner extends ParentRunner<TestCase> {
-
-    private static int repeats = 1;
+public class SLTestRunner extends ParentRunner<TestCase> {
 
     private static final String SOURCE_SUFFIX = ".sl";
     private static final String INPUT_SUFFIX = ".input";
@@ -96,17 +142,25 @@ public final class SLTestRunner extends ParentRunner<TestCase> {
             throw new InitializationError(String.format("@%s annotation required on class '%s' to run with '%s'.", SLTestSuite.class.getSimpleName(), c.getName(), SLTestRunner.class.getSimpleName()));
         }
 
-        String[] pathes = suite.value();
+        String[] paths = suite.value();
 
-        Path root = null;
-        for (String path : pathes) {
-            root = FileSystems.getDefault().getPath(path);
-            if (Files.exists(root)) {
-                break;
+        Class<?> testCaseDirectory = c;
+        if (suite.testCaseDirectory() != SLTestSuite.class) {
+            testCaseDirectory = suite.testCaseDirectory();
+        }
+        Path root = getRootViaResourceURL(testCaseDirectory, paths);
+
+        if (root == null) {
+            for (String path : paths) {
+                Path candidate = FileSystems.getDefault().getPath(path);
+                if (Files.exists(candidate)) {
+                    root = candidate;
+                    break;
+                }
             }
         }
-        if (root == null && pathes.length > 0) {
-            throw new FileNotFoundException(pathes[0]);
+        if (root == null && paths.length > 0) {
+            throw new FileNotFoundException(paths[0]);
         }
 
         final Path rootPath = root;
@@ -139,6 +193,86 @@ public final class SLTestRunner extends ParentRunner<TestCase> {
         return foundCases;
     }
 
+    /**
+     * Recursively deletes a file that may represent a directory.
+     */
+    private static void delete(File f) {
+        if (f.isDirectory()) {
+            for (File c : f.listFiles()) {
+                delete(c);
+            }
+        }
+        if (!f.delete()) {
+            PrintStream err = System.err;
+            err.println("Failed to delete file: " + f);
+        }
+    }
+
+    /**
+     * Unpacks a jar file to a temporary directory that will be removed when the VM exits.
+     *
+     * @param jarfilePath the path of the jar to unpack
+     * @return the path of the temporary directory
+     */
+    private static String explodeJarToTempDir(File jarfilePath) {
+        try {
+            final Path jarfileDir = Files.createTempDirectory(jarfilePath.getName());
+            Runtime.getRuntime().addShutdownHook(new Thread() {
+                @Override
+                public void run() {
+                    delete(jarfileDir.toFile());
+                }
+            });
+            jarfileDir.toFile().deleteOnExit();
+            JarFile jarfile = new JarFile(jarfilePath);
+            Enumeration<JarEntry> entries = jarfile.entries();
+            while (entries.hasMoreElements()) {
+                JarEntry e = entries.nextElement();
+                if (!e.isDirectory()) {
+                    File path = new File(jarfileDir.toFile(), e.getName().replace('/', File.separatorChar));
+                    File dir = path.getParentFile();
+                    dir.mkdirs();
+                    assert dir.exists();
+                    Files.copy(jarfile.getInputStream(e), path.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+            return jarfileDir.toFile().getAbsolutePath();
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    public static Path getRootViaResourceURL(final Class<?> c, String[] paths) {
+        URL url = c.getResource(c.getSimpleName() + ".class");
+        if (url != null) {
+            char sep = File.separatorChar;
+            String externalForm = url.toExternalForm();
+            String classPart = sep + c.getName().replace('.', sep) + ".class";
+            String prefix = null;
+            String base;
+            if (externalForm.startsWith("jar:file:")) {
+                prefix = "jar:file:";
+                int bang = externalForm.indexOf('!', prefix.length());
+                Assume.assumeTrue(bang != -1);
+                File jarfilePath = new File(externalForm.substring(prefix.length(), bang));
+                Assume.assumeTrue(jarfilePath.exists());
+                base = explodeJarToTempDir(jarfilePath);
+            } else if (externalForm.startsWith("file:")) {
+                prefix = "file:";
+                base = externalForm.substring(prefix.length(), externalForm.length() - classPart.length());
+            } else {
+                return null;
+            }
+            for (String path : paths) {
+                String candidate = base + sep + path;
+                if (new File(candidate).exists()) {
+                    return FileSystems.getDefault().getPath(candidate);
+                }
+            }
+        }
+        return null;
+    }
+
     private static String readAllLines(Path file) throws IOException {
         // fix line feeds for non unix os
         StringBuilder outFile = new StringBuilder();
@@ -146,10 +280,6 @@ public final class SLTestRunner extends ParentRunner<TestCase> {
             outFile.append(line).append(LF);
         }
         return outFile.toString();
-    }
-
-    public static void setRepeats(int repeats) {
-        SLTestRunner.repeats = repeats;
     }
 
     private static final List<NodeFactory<? extends SLBuiltinNode>> builtins = new ArrayList<>();
@@ -162,30 +292,55 @@ public final class SLTestRunner extends ParentRunner<TestCase> {
     protected void runChild(TestCase testCase, RunNotifier notifier) {
         notifier.fireTestStarted(testCase.name);
 
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        PrintWriter printer = new PrintWriter(out);
+        PolyglotEngine engine = null;
         try {
-            TruffleVM vm = TruffleVM.newVM().stdIn(new BufferedReader(new StringReader(repeat(testCase.testInput, repeats)))).stdOut(printer).build();
-
-            String script = readAllLines(testCase.path);
-            SLLanguage.run(vm, testCase.path.toUri(), null, printer, repeats, builtins);
-
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            engine = PolyglotEngine.newBuilder().setIn(new ByteArrayInputStream(testCase.testInput.getBytes("UTF-8"))).setOut(out).build();
+            PrintWriter printer = new PrintWriter(out);
+            run(engine, testCase.path, printer);
             printer.flush();
+
             String actualOutput = new String(out.toByteArray());
-            Assert.assertEquals(script, repeat(testCase.expectedOutput, repeats), actualOutput);
+            Assert.assertEquals(testCase.name.toString(), testCase.expectedOutput, actualOutput);
         } catch (Throwable ex) {
-            notifier.fireTestFailure(new Failure(testCase.name, new IllegalStateException("Cannot run " + testCase.sourceName, ex)));
+            notifier.fireTestFailure(new Failure(testCase.name, ex));
         } finally {
+            if (engine != null) {
+                engine.dispose();
+            }
             notifier.fireTestFinished(testCase.name);
         }
     }
 
-    private static String repeat(String s, int count) {
-        StringBuilder result = new StringBuilder(s.length() * count);
-        for (int i = 0; i < count; i++) {
-            result.append(s);
+    private static void run(PolyglotEngine engine, Path path, PrintWriter out) throws IOException {
+        SLContext context = (SLContext) engine.getLanguages().get(SLLanguage.MIME_TYPE).getGlobalObject().get();
+
+        for (NodeFactory<? extends SLBuiltinNode> builtin : builtins) {
+            context.installBuiltin(builtin);
         }
-        return result.toString();
+
+        /* Parse the SL source file. */
+
+        Source source = Source.newBuilder(path.toFile()).build();
+        context.getFunctionRegistry().register(Parser.parseSL(source));
+
+        /* Lookup our main entry point, which is per definition always named "main". */
+        SLFunction mainFunction = context.getFunctionRegistry().lookup("main", false);
+        if (mainFunction == null) {
+            throw new SLException("No function main() defined in SL source file.");
+        }
+
+        /* Call the main entry point, without any arguments. */
+        try {
+            Object result = mainFunction.getCallTarget().call();
+            if (result != SLNull.SINGLETON) {
+                out.println(result);
+            }
+        } catch (UnsupportedSpecializationException ex) {
+            out.println(SLMain.formatTypeError(ex));
+        } catch (SLUndefinedNameException ex) {
+            out.println(ex.getMessage());
+        }
     }
 
     public static void runInMain(Class<?> testClass, String[] args) throws InitializationError, NoTestsRemainException {
