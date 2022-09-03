@@ -135,7 +135,8 @@ final class DIScopeBuilder {
 
         final String relativePath = name.substring(pathStartIndex);
         try {
-            return context.getEnv().getTruffleFile(pathPrefix).resolve(relativePath);
+            final Path path = Paths.get(pathPrefix, relativePath);
+            return context.getEnv().getTruffleFile(path.toUri());
         } catch (InvalidPathException ex) {
             throw new LLVMParserException(ex.getMessage());
         }
