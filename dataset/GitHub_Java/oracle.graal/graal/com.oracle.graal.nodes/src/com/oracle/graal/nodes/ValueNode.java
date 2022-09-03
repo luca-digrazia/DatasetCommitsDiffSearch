@@ -26,6 +26,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.util.*;
 
 /**
  * This class represents a value within the graph, including local variables, phis, and all other
@@ -110,7 +111,7 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
      * @return {@code true} if this value represents the null constant
      */
     public final boolean isNullConstant() {
-        return this instanceof ConstantNode && ((ConstantNode) this).getValue().isNull();
+        return this instanceof ConstantNode && ((ConstantNode) this).value.isNull();
     }
 
     /**
@@ -121,9 +122,31 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
      */
     public final Constant asConstant() {
         if (this instanceof ConstantNode) {
-            return ((ConstantNode) this).getValue();
+            return ((ConstantNode) this).value;
         }
         return null;
+    }
+
+    public <T extends Stamp> boolean verifyStamp(Class<T> stampClass) {
+        assert stamp() != null;
+        assert stampClass.isInstance(stamp()) : this + " (" + GraphUtil.approxSourceLocation(this) + ") has unexpected stamp type: expected " + stampClass.getName() + ", got " +
+                        stamp().getClass().getName() + ", usages=" + usages();
+        return true;
+    }
+
+    public final ObjectStamp objectStamp() {
+        assert verifyStamp(ObjectStamp.class);
+        return (ObjectStamp) stamp();
+    }
+
+    public final IntegerStamp integerStamp() {
+        assert verifyStamp(IntegerStamp.class);
+        return (IntegerStamp) stamp();
+    }
+
+    public final FloatStamp floatStamp() {
+        assert verifyStamp(FloatStamp.class);
+        return (FloatStamp) stamp();
     }
 
     @Override
@@ -131,9 +154,5 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
         assertTrue(kind() != null, "Should have a valid kind");
         assertTrue(kind() == kind().getStackKind(), "Should have a stack kind : %s", kind());
         return super.verify();
-    }
-
-    public ValueNode asNode() {
-        return this;
     }
 }
