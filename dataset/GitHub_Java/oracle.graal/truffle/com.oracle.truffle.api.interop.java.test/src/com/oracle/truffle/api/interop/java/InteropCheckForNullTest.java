@@ -34,19 +34,9 @@ import org.junit.runner.RunWith;
 public class InteropCheckForNullTest {
     @Test
     public void showHowToCheckForNull() {
-        TruffleObject nullValue = JavaObject.NULL;
-
-        IsNullChecker check = JavaInterop.asJavaFunction(IsNullChecker.class, nullValue);
-        assertTrue("Yes, it is null", check.isNull());
+        assertTrue("Yes, it is null", JavaInteropSnippets.isNullValue(JavaObject.NULL));
 
         TruffleObject nonNullValue = JavaInterop.asTruffleObject(this);
-
-        IsNullChecker check2 = JavaInterop.asJavaFunction(IsNullChecker.class, nonNullValue);
-        assertFalse("No, it is not null", check2.isNull());
-    }
-
-    public interface IsNullChecker {
-        @MethodMessage(message = "IS_NULL")
-        boolean isNull();
+        assertFalse("No, it is not null", JavaInteropSnippets.isNullValue(nonNullValue));
     }
 }
