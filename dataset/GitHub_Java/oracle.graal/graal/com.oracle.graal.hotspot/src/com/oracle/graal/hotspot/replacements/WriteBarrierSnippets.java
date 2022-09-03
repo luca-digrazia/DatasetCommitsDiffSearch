@@ -350,6 +350,10 @@ public class WriteBarrierSnippets implements Snippets {
         }
 
         public void lower(SerialWriteBarrier writeBarrier, LoweringTool tool) {
+            if (writeBarrier.alwaysNull()) {
+                writeBarrier.graph().removeFixed(writeBarrier);
+                return;
+            }
             Arguments args = new Arguments(serialWriteBarrier, writeBarrier.graph().getGuardsStage(), tool.getLoweringStage());
             args.add("object", writeBarrier.getObject());
             args.add("location", writeBarrier.getLocation());
