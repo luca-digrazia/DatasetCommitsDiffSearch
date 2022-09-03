@@ -22,21 +22,31 @@
  */
 package com.oracle.graal.lir.dfa;
 
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static jdk.vm.ci.code.ValueUtil.isIllegal;
 
-import java.util.*;
+import java.util.EnumSet;
+import java.util.List;
 
-import jdk.internal.jvmci.code.*;
-import com.oracle.graal.debug.*;
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.compiler.common.cfg.BlockMap;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Indent;
+import com.oracle.graal.lir.InstructionStateProcedure;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.ValueConsumer;
+import com.oracle.graal.lir.framemap.FrameMap;
+import com.oracle.graal.lir.util.ValueSet;
 
-public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends LiveValueSet<S>> {
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.Value;
+
+public abstract class LocationMarker<S extends ValueSet<S>> {
 
     private final LIR lir;
     private final BlockMap<S> liveInMap;
@@ -57,17 +67,17 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends L
 
     protected abstract void processState(LIRInstruction op, LIRFrameState info, S values);
 
-    @SuppressWarnings("unchecked")
     void build() {
-        UniqueWorkList<T> worklist = new UniqueWorkList<>(lir.getControlFlowGraph().getBlocks().size());
-        for (int i = lir.getControlFlowGraph().getBlocks().size() - 1; i >= 0; i--) {
-            worklist.add((T) lir.getControlFlowGraph().getBlocks().get(i));
+        AbstractBlockBase<?>[] blocks = lir.getControlFlowGraph().getBlocks();
+        UniqueWorkList worklist = new UniqueWorkList(blocks.length);
+        for (int i = blocks.length - 1; i >= 0; i--) {
+            worklist.add(blocks[i]);
         }
         for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
             liveInMap.put(block, newLiveValueSet());
         }
         while (!worklist.isEmpty()) {
-            AbstractBlockBase<T> block = worklist.poll();
+            AbstractBlockBase<?> block = worklist.poll();
             processBlock(block, worklist);
         }
     }
@@ -75,9 +85,9 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends L
     /**
      * Merge outSet with in-set of successors.
      */
-    private boolean updateOutBlock(AbstractBlockBase<T> block) {
+    private boolean updateOutBlock(AbstractBlockBase<?> block) {
         S union = newLiveValueSet();
-        for (T succ : block.getSuccessors()) {
+        for (AbstractBlockBase<?> succ : block.getSuccessors()) {
             union.putAll(liveInMap.get(succ));
         }
         S outSet = liveOutMap.get(block);
@@ -89,7 +99,8 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends L
         return false;
     }
 
-    private void processBlock(AbstractBlockBase<T> block, UniqueWorkList<T> worklist) {
+    @SuppressWarnings("try")
+    private void processBlock(AbstractBlockBase<?> block, UniqueWorkList worklist) {
         if (updateOutBlock(block)) {
             try (Indent indent = Debug.logAndIndent("handle block %s", block)) {
                 currentSet = liveOutMap.get(block).copy();
@@ -100,13 +111,14 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends L
                 }
                 liveInMap.put(block, currentSet);
                 currentSet = null;
-                worklist.addAll(block.getPredecessors());
+                for (AbstractBlockBase<?> b : block.getPredecessors()) {
+                    worklist.add(b);
+                }
             }
         }
     }
 
     private static final EnumSet<OperandFlag> REGISTER_FLAG_SET = EnumSet.of(OperandFlag.REG);
-    private static final LIRKind REFERENCE_KIND = LIRKind.reference(Kind.Object);
 
     private S currentSet;
 
@@ -114,6 +126,7 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends L
      * Process all values of an instruction bottom-up, i.e. definitions before usages. Values that
      * start or end at the current operation are not included.
      */
+    @SuppressWarnings("try")
     private void processInstructionBottomUp(LIRInstruction op) {
         try (Indent indent = Debug.logAndIndent("handle op %d, %s", op.id(), op)) {
             // kills
@@ -122,7 +135,8 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends L
             op.visitEachOutput(defConsumer);
             if (frameMap != null && op.destroysCallerSavedRegisters()) {
                 for (Register reg : frameMap.getRegisterConfig().getCallerSaveRegisters()) {
-                    defConsumer.visitValue(reg.asValue(REFERENCE_KIND), OperandMode.TEMP, REGISTER_FLAG_SET);
+                    PlatformKind kind = frameMap.getTarget().arch.getLargestStorableKind(reg.getRegisterCategory());
+                    defConsumer.visitValue(reg.asValue(LIRKind.value(kind)), OperandMode.TEMP, REGISTER_FLAG_SET);
                 }
             }
 
@@ -137,12 +151,14 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends L
     }
 
     InstructionStateProcedure stateConsumer = new InstructionStateProcedure() {
+        @Override
         public void doState(LIRInstruction inst, LIRFrameState info) {
             processState(inst, info, currentSet);
         }
     };
 
     ValueConsumer useConsumer = new ValueConsumer() {
+        @Override
         public void visitValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
             if (shouldProcessValue(operand)) {
                 // no need to insert values and derived reference
@@ -155,6 +171,7 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends L
     };
 
     ValueConsumer defConsumer = new ValueConsumer() {
+        @Override
         public void visitValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
             if (shouldProcessValue(operand)) {
                 if (Debug.isLogEnabled()) {
@@ -162,7 +179,7 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends L
                 }
                 currentSet.remove(operand);
             } else {
-                assert isIllegal(operand) || operand.getPlatformKind() != Kind.Illegal || mode == OperandMode.TEMP : String.format("Illegal PlatformKind is only allowed for TEMP mode: %s, %s",
+                assert isIllegal(operand) || !operand.getValueKind().equals(LIRKind.Illegal) || mode == OperandMode.TEMP : String.format("Illegal PlatformKind is only allowed for TEMP mode: %s, %s",
                                 operand, mode);
             }
         }
