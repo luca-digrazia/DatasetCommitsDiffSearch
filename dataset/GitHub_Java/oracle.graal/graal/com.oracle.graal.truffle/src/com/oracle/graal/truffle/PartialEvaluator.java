@@ -407,7 +407,7 @@ public class PartialEvaluator {
     @SuppressWarnings({"try", "unused"})
     private void fastPartialEvaluation(OptimizedCallTarget callTarget, TruffleInlining inliningDecision, StructuredGraph graph, PhaseContext baseContext, HighTierContext tierContext) {
         doGraphPE(callTarget, graph, tierContext, inliningDecision);
-        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "After Partial Evaluation");
+        Debug.dump(Debug.INFO_LOG_LEVEL, graph, "After FastPE");
 
         graph.maybeCompress();
 
