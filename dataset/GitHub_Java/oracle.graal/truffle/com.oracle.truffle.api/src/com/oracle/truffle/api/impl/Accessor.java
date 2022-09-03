@@ -39,6 +39,7 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.SuspendedEvent;
+import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrument.ASTProber;
 import com.oracle.truffle.api.instrument.Instrumenter;
@@ -48,7 +49,6 @@ import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import java.util.Map;
 
 /**
  * Communication between PolyglotEngine, TruffleLanguage API/SPI, and other services.
@@ -149,16 +149,16 @@ public abstract class Accessor {
         }
     }
 
-    protected Env attachEnv(Object vm, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Instrumenter instrumenter, String[] arguments) {
-        return API.attachEnv(vm, language, stdOut, stdErr, stdIn, instrumenter, arguments);
+    protected Env attachEnv(Object vm, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Instrumenter instrumenter) {
+        return API.attachEnv(vm, language, stdOut, stdErr, stdIn, instrumenter);
     }
 
-    protected Object eval(TruffleLanguage<?> l, Source s, Map<Source, CallTarget> cache) throws IOException {
-        return API.eval(l, s, cache);
+    protected Object eval(TruffleLanguage<?> l, Source s) throws IOException {
+        return API.eval(l, s);
     }
 
-    protected Object evalInContext(Object vm, SuspendedEvent ev, String code, Node node, MaterializedFrame frame) throws IOException {
-        return API.evalInContext(vm, ev, code, node, frame);
+    protected Object evalInContext(Object vm, SuspendedEvent ev, String code, FrameInstance frame) throws IOException {
+        return API.evalInContext(vm, ev, code, frame);
     }
 
     protected Object importSymbol(Object vm, TruffleLanguage<?> queryingLang, String globalName) {
@@ -319,6 +319,10 @@ public abstract class Accessor {
         return API.findContext(env);
     }
 
+    protected TruffleLanguage<?> findLanguage(Env env) {
+        return API.findLanguage(env);
+    }
+
     /** Applies all registered {@linkplain ASTProber probers} to the AST. */
     protected void probeAST(RootNode rootNode) {
         INSTRUMENT.probeAST(rootNode);
@@ -334,21 +338,11 @@ public abstract class Accessor {
         return parse(truffleLanguage, code, context, argumentNames);
     }
 
-    protected TruffleLanguage<?> findLanguage(Env env) {
-        return API.findLanguage(env);
-    }
-
     protected CallTarget parse(TruffleLanguage<?> truffleLanguage, Source code, Node context, String... argumentNames) throws IOException {
         return API.parse(truffleLanguage, code, context, argumentNames);
     }
 
     protected String toString(TruffleLanguage<?> language, Env env, Object obj) {
         return API.toString(language, env, obj);
-    }
-
-    static <T extends TruffleLanguage<?>> T findLanguageByClass(Object vm, Class<T> languageClass) {
-        Env env = API.findLanguage(vm, languageClass);
-        TruffleLanguage<?> language = API.findLanguage(env);
-        return languageClass.cast(language);
     }
 }
