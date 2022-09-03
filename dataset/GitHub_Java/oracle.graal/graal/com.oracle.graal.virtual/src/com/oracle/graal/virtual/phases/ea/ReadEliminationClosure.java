@@ -55,37 +55,29 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
         boolean deleted = false;
         if (node instanceof LoadFieldNode) {
             LoadFieldNode load = (LoadFieldNode) node;
-            if (!load.isVolatile()) {
-                ValueNode object = GraphUtil.unproxify(load.object());
-                LoadCacheEntry identifier = new LoadCacheEntry(object, load.field());
-                ValueNode cachedValue = state.getCacheEntry(identifier);
-                if (cachedValue != null) {
-                    effects.replaceAtUsages(load, cachedValue);
-                    state.addScalarAlias(load, cachedValue);
-                    deleted = true;
-                } else {
-                    state.addCacheEntry(identifier, load);
-                }
+            ValueNode object = GraphUtil.unproxify(load.object());
+            LoadCacheEntry identifier = new LoadCacheEntry(object, load.field());
+            ValueNode cachedValue = state.getCacheEntry(identifier);
+            if (cachedValue != null) {
+                effects.replaceAtUsages(load, cachedValue);
+                state.addScalarAlias(load, cachedValue);
+                deleted = true;
             } else {
-                processIdentity(state, ANY_LOCATION);
+                state.addCacheEntry(identifier, load);
             }
         } else if (node instanceof StoreFieldNode) {
             StoreFieldNode store = (StoreFieldNode) node;
-            if (!store.isVolatile()) {
-                ValueNode object = GraphUtil.unproxify(store.object());
-                LoadCacheEntry identifier = new LoadCacheEntry(object, store.field());
-                ValueNode cachedValue = state.getCacheEntry(identifier);
+            ValueNode object = GraphUtil.unproxify(store.object());
+            LoadCacheEntry identifier = new LoadCacheEntry(object, store.field());
+            ValueNode cachedValue = state.getCacheEntry(identifier);
 
-                ValueNode value = state.getScalarAlias(store.value());
-                if (GraphUtil.unproxify(value) == GraphUtil.unproxify(cachedValue)) {
-                    effects.deleteFixedNode(store);
-                    deleted = true;
-                }
-                state.killReadCache((LocationIdentity) store.field());
-                state.addCacheEntry(identifier, value);
-            } else {
-                processIdentity(state, ANY_LOCATION);
+            ValueNode value = state.getScalarAlias(store.value());
+            if (GraphUtil.unproxify(value) == GraphUtil.unproxify(cachedValue)) {
+                effects.deleteFixedNode(store);
+                deleted = true;
             }
+            state.killReadCache((LocationIdentity) store.field());
+            state.addCacheEntry(identifier, value);
         } else if (node instanceof ReadNode) {
             ReadNode read = (ReadNode) node;
             if (read.location() instanceof ConstantLocationNode) {
@@ -112,14 +104,13 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                     effects.deleteFixedNode(write);
                     deleted = true;
                 }
-                processIdentity(state, write.location().getLocationIdentity());
+                state.killReadCache(write.location().getLocationIdentity());
                 state.addCacheEntry(identifier, value);
             } else {
-                processIdentity(state, write.location().getLocationIdentity());
+                state.killReadCache(write.location().getLocationIdentity());
             }
         } else if (node instanceof MemoryCheckpoint.Single) {
-            LocationIdentity identity = ((MemoryCheckpoint.Single) node).getLocationIdentity();
-            processIdentity(state, identity);
+            processIdentity(state, ((MemoryCheckpoint.Single) node).getLocationIdentity());
         } else if (node instanceof MemoryCheckpoint.Multi) {
             for (LocationIdentity identity : ((MemoryCheckpoint.Multi) node).getLocationIdentities()) {
                 processIdentity(state, identity);
