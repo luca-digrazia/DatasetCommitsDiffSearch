@@ -24,7 +24,6 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -84,12 +83,12 @@ public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDur
 
     @Override
     default void computeStateDuring(FrameState stateAfter) {
-        FrameState newStateDuring = stateAfter.duplicateModifiedDuringCall(bci(), asNode().getKind());
+        FrameState newStateDuring = stateAfter.duplicateModified(bci(), stateAfter.rethrowException(), asNode().getKind());
+        newStateDuring.setDuringCall(true);
         setStateDuring(newStateDuring);
     }
 
     default ValueNode getReceiver() {
-        assert getInvokeKind().hasReceiver();
         return callTarget().arguments().get(0);
     }
 
@@ -99,9 +98,5 @@ public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDur
             receiverType = ((MethodCallTargetNode) callTarget()).targetMethod().getDeclaringClass();
         }
         return receiverType;
-    }
-
-    default InvokeKind getInvokeKind() {
-        return callTarget().invokeKind();
     }
 }

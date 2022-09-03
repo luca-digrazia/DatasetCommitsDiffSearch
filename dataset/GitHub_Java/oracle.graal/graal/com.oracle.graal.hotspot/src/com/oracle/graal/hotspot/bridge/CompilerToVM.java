@@ -35,12 +35,13 @@ import com.oracle.graal.hotspot.meta.*;
 public interface CompilerToVM {
 
     /**
-     * Copies the original bytecode of a given method into a new byte array and returns it.
+     * Copies the original bytecode of a given method into a given byte array.
      *
      * @param metaspaceMethod the metaspace Method object
-     * @return a new byte array containing the original bytecode
+     * @param code the array into which to copy the original bytecode
+     * @return the value of {@code code}
      */
-    byte[] initializeBytecode(long metaspaceMethod);
+    byte[] initializeBytecode(long metaspaceMethod, byte[] code);
 
     int exceptionTableLength(long metaspaceMethod);
 

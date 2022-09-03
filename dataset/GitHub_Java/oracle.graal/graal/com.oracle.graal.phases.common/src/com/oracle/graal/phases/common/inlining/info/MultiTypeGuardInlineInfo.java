@@ -41,7 +41,7 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
-import com.oracle.graal.phases.common.inlining.info.elem.Inlineable;
+import com.oracle.graal.phases.common.inlining.InliningUtil.Inlineable;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
 
@@ -332,13 +332,13 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
             assert concretes.size() > 0;
             Debug.log("Method check cascade with %d methods", concretes.size());
 
-            ConstantNode[] constantMethods = new ConstantNode[concretes.size()];
+            ValueNode[] constantMethods = new ValueNode[concretes.size()];
             double[] probability = new double[concretes.size()];
             for (int i = 0; i < concretes.size(); ++i) {
                 ResolvedJavaMethod firstMethod = concretes.get(i);
                 Constant firstMethodConstant = firstMethod.getEncoding();
 
-                ConstantNode firstMethodConstantNode = ConstantNode.forConstant(firstMethodConstant, metaAccess, graph);
+                ValueNode firstMethodConstantNode = ConstantNode.forConstant(firstMethodConstant, metaAccess, graph);
                 constantMethods[i] = firstMethodConstantNode;
                 double concretesProbability = concretesProbabilities.get(i);
                 assert concretesProbability >= 0.0;

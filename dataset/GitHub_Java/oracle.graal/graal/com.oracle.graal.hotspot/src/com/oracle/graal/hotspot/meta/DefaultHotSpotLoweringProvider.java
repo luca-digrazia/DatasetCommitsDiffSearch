@@ -277,7 +277,7 @@ public class DefaultHotSpotLoweringProvider implements HotSpotLoweringProvider {
 
             case Object:
                 if (compressible && runtime.getConfig().useCompressedOops) {
-                    return NarrowOopStamp.compressed((ObjectStamp) stamp, runtime.getConfig().getOopEncoding());
+                    return new NarrowOopStamp((ObjectStamp) stamp, runtime.getConfig().getOopEncoding());
                 }
         }
         return stamp;
