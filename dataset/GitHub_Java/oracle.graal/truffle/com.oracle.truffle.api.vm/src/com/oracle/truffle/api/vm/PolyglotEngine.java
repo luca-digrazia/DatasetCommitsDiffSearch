@@ -49,6 +49,7 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
+import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.Accessor;
@@ -113,6 +114,7 @@ import java.util.Collection;
  */
 @SuppressWarnings({"rawtypes", "deprecation"})
 public class PolyglotEngine {
+    static final boolean JAVA_INTEROP_ENABLED = !TruffleOptions.AOT;
     static final Logger LOG = Logger.getLogger(PolyglotEngine.class.getName());
     private static final SPIAccessor SPI = new SPIAccessor();
     private final Thread initThread;
@@ -374,7 +376,16 @@ public class PolyglotEngine {
          * @since 0.9
          */
         public Builder globalSymbol(String name, Object obj) {
-            final Object truffleReady = JavaInterop.asTruffleValue(obj);
+            final Object truffleReady;
+            if (obj instanceof TruffleObject || obj instanceof Number || obj instanceof String || obj instanceof Character || obj instanceof Boolean) {
+                truffleReady = obj;
+            } else {
+                if (JAVA_INTEROP_ENABLED) {
+                    truffleReady = JavaInterop.asTruffleObject(obj);
+                } else {
+                    throw new IllegalArgumentException();
+                }
+            }
             globals.put(name, truffleReady);
             return this;
         }
@@ -812,17 +823,17 @@ public class PolyglotEngine {
          * @since 0.9
          */
         public Object get() {
-            return get(true, true);
+            return get(true);
         }
 
-        private Object get(boolean unwrapJava, boolean wrapEngine) {
+        private Object get(boolean unwrapJava) {
             assertNoTruffle();
             Object result = waitForSymbol();
             if (result instanceof TruffleObject) {
                 if (unwrapJava) {
                     result = JavaInterop.asJavaObject(Object.class, (TruffleObject) result);
                 }
-                if (wrapEngine && executor != null && result instanceof TruffleObject) {
+                if (executor != null && result instanceof TruffleObject) {
                     return new EngineTruffleObject(PolyglotEngine.this, (TruffleObject) result);
                 }
             }
@@ -847,7 +858,7 @@ public class PolyglotEngine {
          */
         public <T> T as(final Class<T> representation) {
             assertNoTruffle();
-            final Object obj = get(true, false);
+            final Object obj = get();
             if (obj instanceof EngineTruffleObject) {
                 EngineTruffleObject eto = (EngineTruffleObject) obj;
                 if (representation.isInstance(eto.getDelegate())) {
@@ -865,7 +876,10 @@ public class PolyglotEngine {
             if (representation.isInstance(obj)) {
                 return representation.cast(obj);
             }
-            return JavaInterop.asJavaObject(representation, (TruffleObject) get(false, true));
+            if (JAVA_INTEROP_ENABLED) {
+                return JavaInterop.asJavaObject(representation, (TruffleObject) get(false));
+            }
+            throw new ClassCastException("Value cannot be represented as " + representation.getName());
         }
 
         /**

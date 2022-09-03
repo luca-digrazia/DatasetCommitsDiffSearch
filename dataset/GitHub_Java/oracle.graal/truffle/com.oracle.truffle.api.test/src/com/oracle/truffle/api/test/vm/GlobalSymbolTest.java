@@ -22,31 +22,67 @@
  */
 package com.oracle.truffle.api.test.vm;
 
-import com.oracle.truffle.api.source.Source;
 import static com.oracle.truffle.api.test.vm.ImplicitExplicitExportTest.L3;
-import com.oracle.truffle.api.vm.*;
-import java.io.*;
-import java.util.concurrent.Executors;
-import org.junit.*;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
+import java.util.List;
+
+import org.junit.After;
+import org.junit.Test;
+
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
 
 public class GlobalSymbolTest {
+
+    private PolyglotEngine vm;
+
+    @After
+    public void after() {
+        if (vm != null) {
+            vm.dispose();
+        }
+    }
+
     @Test
-    public void globalSymbolFoundByLanguage() throws IOException {
-        TruffleVM vm = TruffleVM.newVM().globalSymbol("ahoj", "42").executor(Executors.newSingleThreadExecutor()).build();
+    public void globalSymbolFoundByLanguage() {
+        vm = createEngineBuilder().globalSymbol("ahoj", "42").build();
         // @formatter:off
-        Object ret = vm.eval(
-            Source.fromText("return=ahoj", "Return").withMimeType(L3)
+        Object ret = vm.eval(Source.newBuilder("return=ahoj").name("Return").mimeType(L3).build()
         ).get();
         // @formatter:on
         assertEquals("42", ret);
     }
 
     @Test
-    public void globalSymbolFoundByVMUser() throws IOException {
-        TruffleVM vm = TruffleVM.newVM().globalSymbol("ahoj", "42").build();
-        TruffleVM.Symbol ret = vm.findGlobalSymbol("ahoj");
+    public void globalSymbolFoundByVMUser() {
+        vm = createEngineBuilder().globalSymbol("ahoj", "42").build();
+        PolyglotEngine.Value ret = vm.findGlobalSymbol("ahoj");
         assertNotNull("Symbol found", ret);
         assertEquals("42", ret.get());
+    }
+
+    protected PolyglotEngine.Builder createEngineBuilder() {
+        return PolyglotEngine.newBuilder();
+    }
+
+    @Test
+    public void passingArray() {
+        vm = createEngineBuilder().globalSymbol("arguments", new Object[]{"one", "two", "three"}).build();
+        PolyglotEngine.Value value = vm.findGlobalSymbol("arguments");
+        assertTrue("Get unwraps to original instance of array", value.get() instanceof Object[]);
+        List<?> args = value.as(List.class);
+        assertNotNull("Can be converted to List", args);
+        assertEquals("Three items", 3, args.size());
+        assertEquals("one", args.get(0));
+        assertEquals("two", args.get(1));
+        assertEquals("three", args.get(2));
+        String[] arr = args.toArray(new String[0]);
+        assertEquals("Three items in array", 3, arr.length);
+        assertEquals("one", arr[0]);
+        assertEquals("two", arr[1]);
+        assertEquals("three", arr[2]);
     }
 }
