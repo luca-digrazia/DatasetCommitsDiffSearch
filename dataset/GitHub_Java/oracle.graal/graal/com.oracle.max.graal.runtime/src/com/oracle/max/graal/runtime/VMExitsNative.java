@@ -85,6 +85,7 @@ public class VMExitsNative implements VMExits, Remote {
             @Override
             public void run() {
                 if (GraalOptions.Meter) {
+
                     GraalMetrics.print();
                 }
                 if (GraalOptions.Time) {

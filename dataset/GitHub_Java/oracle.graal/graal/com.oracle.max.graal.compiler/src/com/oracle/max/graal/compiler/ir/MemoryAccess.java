@@ -27,7 +27,7 @@ import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 
-public abstract class MemoryAccess extends Instruction {
+public abstract class MemoryAccess extends StateSplit {
     private static final int INPUT_COUNT = 2;
     private static final int INPUT_NODE = 0;
     private static final int INPUT_GUARD = 1;
@@ -36,6 +36,11 @@ public abstract class MemoryAccess extends Instruction {
 
     private int displacement;
     private CiKind valueKind;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
+    }
 
     /**
      * The instruction that produces the object tested against null.
@@ -67,10 +72,11 @@ public abstract class MemoryAccess extends Instruction {
         return valueKind;
     }
 
-    public MemoryAccess(CiKind kind, int displacement, int inputCount, int successorCount, Graph graph) {
+    public MemoryAccess(CiKind kind, Value location, int displacement, int inputCount, int successorCount, Graph graph) {
         super(kind.stackKind(), INPUT_COUNT + inputCount, SUCCESSOR_COUNT + successorCount, graph);
         this.displacement = displacement;
         this.valueKind = kind;
+        setLocation(location);
     }
 
     @Override

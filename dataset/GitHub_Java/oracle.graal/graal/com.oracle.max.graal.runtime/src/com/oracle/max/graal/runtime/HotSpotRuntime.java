@@ -26,6 +26,7 @@ import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 
+import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.runtime.nodes.*;
@@ -82,8 +83,8 @@ public class HotSpotRuntime implements RiRuntime {
                     return "{" + call.runtimeCall.name() + "}";
                 } else if (call.symbol != null) {
                     return "{" + call.symbol + "}";
-                } else if (call.stubID != null) {
-                    return "{" + call.stubID + "}";
+                } else if (call.globalStubID != null) {
+                    return "{" + call.globalStubID + "}";
                 } else {
                     return "{" + call.method + "}";
                 }
@@ -178,7 +179,7 @@ public class HotSpotRuntime implements RiRuntime {
     }
 
     @Override
-    public Object registerCompilerStub(CiTargetMethod targetMethod, String name) {
+    public Object registerGlobalStub(CiTargetMethod targetMethod, String name) {
         return HotSpotTargetMethod.installStub(compiler, targetMethod, name);
     }
 
@@ -242,30 +243,29 @@ public class HotSpotRuntime implements RiRuntime {
     }
 
     @Override
-    public void lower(Node n, CiLoweringTool tool) {
+    public Node lower(Node n, CiLoweringTool tool) {
         if (n instanceof LoadField) {
             LoadField field = (LoadField) n;
             if (field.isVolatile()) {
-                return;
+                return null;
             }
             Graph graph = field.graph();
             int displacement = ((HotSpotField) field.field()).offset();
             assert field.kind != CiKind.Illegal;
-            ReadNode memoryRead = new ReadNode(field.field().kind().stackKind(), field.object(), new LocationNode(field.field(), field.field().kind(), displacement, graph), graph);
+            MemoryRead memoryRead = new MemoryRead(field.field().kind(), field.object(), displacement, graph);
             memoryRead.setGuard((GuardNode) tool.createGuard(new IsNonNull(field.object(), graph)));
             memoryRead.setNext(field.next());
-            field.replaceAndDelete(memoryRead);
+            return memoryRead;
         } else if (n instanceof StoreField) {
             StoreField field = (StoreField) n;
             if (field.isVolatile()) {
-                return;
+                return null;
             }
             Graph graph = field.graph();
             int displacement = ((HotSpotField) field.field()).offset();
-            WriteNode memoryWrite = new WriteNode(CiKind.Illegal, field.object(), field.value(), new LocationNode(field.field(), field.field().kind(), displacement, graph), graph);
-            memoryWrite.setGuard((GuardNode) tool.createGuard(new IsNonNull(field.object(), graph)));
+            MemoryWrite memoryWrite = new MemoryWrite(field.field().kind(), field.object(), field.value(), displacement, graph);
             memoryWrite.setStateAfter(field.stateAfter());
-            memoryWrite.setNext(field.next());
+            memoryWrite.setGuard((GuardNode) tool.createGuard(new IsNonNull(field.object(), graph)));
             if (field.field().kind() == CiKind.Object && !field.value().isNullConstant()) {
                 FieldWriteBarrier writeBarrier = new FieldWriteBarrier(field.object(), graph);
                 memoryWrite.setNext(writeBarrier);
@@ -273,7 +273,8 @@ public class HotSpotRuntime implements RiRuntime {
             } else {
                 memoryWrite.setNext(field.next());
             }
-            field.replaceAndDelete(memoryWrite);
+            return memoryWrite;
         }
+        return null;
     }
 }
