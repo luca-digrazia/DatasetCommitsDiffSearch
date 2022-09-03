@@ -63,7 +63,8 @@ import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNodeGen;
 import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.LLVMProfiledMemMove;
+import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
+import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions.MemCopyNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.Type;
@@ -647,7 +648,7 @@ public abstract class LLVMStoreNode extends LLVMExpressionNode {
 
         @Specialization
         public Object execute(LLVMAddress address, LLVMFunction function) {
-            LLVMHeap.putFunctionPointer(address, function.getFunctionPointer());
+            LLVMHeap.putFunctionIndex(address, function.getFunctionIndex());
             return null;
         }
 
@@ -663,36 +664,36 @@ public abstract class LLVMStoreNode extends LLVMExpressionNode {
     @NodeField(type = int.class, name = "structSize")
     public abstract static class LLVMStructStoreNode extends LLVMStoreNode {
 
-        private final LLVMProfiledMemMove profiledMemMove;
+        @Child private MemCopyNode memCopy;
 
         public abstract int getStructSize();
 
-        protected LLVMStructStoreNode(Type type, SourceSection source) {
+        protected LLVMStructStoreNode(LLVMNativeFunctions heapFunctions, Type type, SourceSection source) {
             super(type, source);
-            profiledMemMove = new LLVMProfiledMemMove();
+            memCopy = heapFunctions.createMemCopyNode();
         }
 
         @Specialization
         public Object execute(LLVMGlobalVariable address, LLVMGlobalVariable value) {
-            profiledMemMove.memmove(address.getNativeLocation(), value.getNativeLocation(), getStructSize());
+            memCopy.execute(address.getNativeLocation(), value.getNativeLocation(), getStructSize());
             return null;
         }
 
         @Specialization
         public Object execute(LLVMAddress address, LLVMGlobalVariable value) {
-            profiledMemMove.memmove(address, value.getNativeLocation(), getStructSize());
+            memCopy.execute(address, value.getNativeLocation(), getStructSize());
             return null;
         }
 
         @Specialization
         public Object execute(LLVMGlobalVariable address, LLVMAddress value) {
-            profiledMemMove.memmove(address.getNativeLocation(), value, getStructSize());
+            memCopy.execute(address.getNativeLocation(), value, getStructSize());
             return null;
         }
 
         @Specialization
         public Object execute(LLVMAddress address, LLVMAddress value) {
-            profiledMemMove.memmove(address, value, getStructSize());
+            memCopy.execute(address, value, getStructSize());
             return null;
         }
 
@@ -1002,7 +1003,7 @@ public abstract class LLVMStoreNode extends LLVMExpressionNode {
             for (int i = 0; i < values.length; i++) {
                 try {
                     LLVMFunctionDescriptor currentValue = (LLVMFunctionDescriptor) values[i].executeTruffleObject(frame);
-                    LLVMHeap.putFunctionPointer(currentPtr, currentValue.getFunctionPointer());
+                    LLVMHeap.putFunctionIndex(currentPtr, currentValue.getFunctionIndex());
                     currentPtr += stride;
                 } catch (UnexpectedResultException e) {
                     CompilerDirectives.transferToInterpreter();
@@ -1019,12 +1020,13 @@ public abstract class LLVMStoreNode extends LLVMExpressionNode {
 
         @Children private final LLVMExpressionNode[] values;
         private final int stride;
-        private final LLVMProfiledMemMove profiledMemMove;
 
-        public LLVMAddressArrayCopyNode(LLVMExpressionNode[] values, int stride) {
+        @Child private MemCopyNode memCopy;
+
+        public LLVMAddressArrayCopyNode(LLVMNativeFunctions heapFunctions, LLVMExpressionNode[] values, int stride) {
             this.values = values;
             this.stride = stride;
-            this.profiledMemMove = new LLVMProfiledMemMove();
+            this.memCopy = heapFunctions.createMemCopyNode();
         }
 
         @Specialization
@@ -1039,7 +1041,7 @@ public abstract class LLVMStoreNode extends LLVMExpressionNode {
             for (int i = 0; i < values.length; i++) {
                 try {
                     LLVMAddress currentValue = values[i].executeLLVMAddress(frame);
-                    profiledMemMove.memmove(LLVMAddress.fromLong(currentPtr), currentValue, stride);
+                    memCopy.execute(LLVMAddress.fromLong(currentPtr), currentValue, stride);
                     currentPtr += stride;
                 } catch (UnexpectedResultException e) {
                     CompilerDirectives.transferToInterpreter();

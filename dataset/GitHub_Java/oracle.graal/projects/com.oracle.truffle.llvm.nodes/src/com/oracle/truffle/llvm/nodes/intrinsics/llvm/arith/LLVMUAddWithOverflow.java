@@ -32,15 +32,16 @@ package com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMMemory;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMBuiltin;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public class LLVMUAddWithOverflow {
 
-    @NodeChildren({@NodeChild(value = "left", type = LLVMI32Node.class), @NodeChild(value = "right", type = LLVMI32Node.class), @NodeChild(value = "target", type = LLVMAddressNode.class)})
-    public abstract static class LLVMUAddWithOverflowI32 extends LLVMAddressNode {
+    @NodeChildren({@NodeChild(value = "left", type = LLVMExpressionNode.class), @NodeChild(value = "right", type = LLVMExpressionNode.class),
+                    @NodeChild(value = "target", type = LLVMExpressionNode.class)})
+    public abstract static class LLVMUAddWithOverflowI32 extends LLVMBuiltin {
 
         private static final int OVERFLOW_FIELD_OFFSET = 4;
 
@@ -49,7 +50,7 @@ public class LLVMUAddWithOverflow {
             int result = left + right;
             boolean overflow = (((left ^ result) & (right ^ result)) < 0);
             LLVMMemory.putI32(addr, result);
-            LLVMMemory.putI32(addr.increment(OVERFLOW_FIELD_OFFSET), overflow ? 1 : 0);
+            LLVMMemory.putI32(addr.getVal() + OVERFLOW_FIELD_OFFSET, overflow ? 1 : 0);
             return addr;
         }
     }

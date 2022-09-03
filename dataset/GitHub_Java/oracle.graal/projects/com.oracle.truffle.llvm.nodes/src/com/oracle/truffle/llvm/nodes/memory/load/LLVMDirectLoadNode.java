@@ -49,7 +49,6 @@ import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
@@ -69,8 +68,8 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        public LLVMIVarBit executeI64(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            return LLVMMemory.getIVarBit(globalAccess.getNativeLocation(addr), getBitWidth());
+        public LLVMIVarBit executeI64(LLVMGlobalVariable addr) {
+            return LLVMMemory.getIVarBit(addr.getNativeLocation(), getBitWidth());
         }
     }
 
@@ -83,8 +82,8 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        public LLVM80BitFloat executeDouble(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            return LLVMMemory.get80BitFloat(globalAccess.getNativeLocation(addr));
+        public LLVM80BitFloat executeDouble(LLVMGlobalVariable addr) {
+            return LLVMMemory.get80BitFloat(addr.getNativeLocation());
         }
     }
 
@@ -93,12 +92,12 @@ public abstract class LLVMDirectLoadNode {
 
         @Specialization
         public LLVMFunctionHandle executeAddress(LLVMAddress addr) {
-            return LLVMFunctionHandle.createHandle(LLVMHeap.getFunctionPointer(addr));
+            return new LLVMFunctionHandle(LLVMHeap.getFunctionIndex(addr));
         }
 
         @Specialization
-        public LLVMFunctionHandle executeAddress(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            return LLVMFunctionHandle.createHandle(LLVMHeap.getFunctionPointer(globalAccess.getNativeLocation(addr)));
+        public LLVMFunctionHandle executeAddress(LLVMGlobalVariable addr) {
+            return new LLVMFunctionHandle(LLVMHeap.getFunctionIndex(addr.getNativeLocation()));
         }
     }
 
@@ -113,8 +112,8 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        public Object executeAddress(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            return globalAccess.get(addr);
+        public Object executeAddress(LLVMGlobalVariable addr) {
+            return addr.get();
         }
 
         @Specialization
@@ -171,7 +170,6 @@ public abstract class LLVMDirectLoadNode {
     public static final class LLVMGlobalVariableDirectLoadNode extends LLVMExpressionNode {
 
         protected final LLVMGlobalVariable descriptor;
-        @Child private LLVMGlobalVariableAccess access = createGlobalAccess();
 
         public LLVMGlobalVariableDirectLoadNode(LLVMGlobalVariable descriptor) {
             this.descriptor = descriptor;
@@ -179,7 +177,7 @@ public abstract class LLVMDirectLoadNode {
 
         @Override
         public Object executeGeneric(VirtualFrame frame) {
-            return access.get(descriptor);
+            return descriptor.get();
         }
 
     }

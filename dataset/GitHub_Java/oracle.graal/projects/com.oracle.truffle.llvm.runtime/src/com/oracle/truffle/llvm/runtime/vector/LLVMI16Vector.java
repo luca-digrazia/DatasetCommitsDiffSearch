@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,9 +30,17 @@
 package com.oracle.truffle.llvm.runtime.vector;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+
+import java.util.Arrays;
 
 @ValueType
-public final class LLVMI16Vector extends LLVMVector {
+public final class LLVMI16Vector {
+
+    private static final int MASK = 0xffff;
+    private static final int I16_SIZE = 2;
+
     private final short[] vector;
 
     public static LLVMI16Vector create(short[] vector) {
@@ -43,6 +51,162 @@ public final class LLVMI16Vector extends LLVMVector {
         this.vector = vector;
     }
 
+    public static LLVMI16Vector readVectorFromMemory(LLVMAddress address, int size) {
+        short[] vector = new short[size];
+        long currentPtr = address.getVal();
+        for (int i = 0; i < size; i++) {
+            vector[i] = LLVMMemory.getI16(currentPtr);
+            currentPtr += I16_SIZE;
+        }
+        return create(vector);
+    }
+
+    public static void writeVectorToMemory(LLVMAddress address, LLVMI16Vector vector) {
+        long currentPtr = address.getVal();
+        for (int i = 0; i < vector.getLength(); i++) {
+            LLVMMemory.putI16(currentPtr, vector.getValue(i));
+            currentPtr += I16_SIZE;
+        }
+    }
+
+    // We do not want to use lambdas because of bad startup
+    private interface Operation {
+        short eval(short a, short b);
+    }
+
+    private static LLVMI16Vector doOperation(LLVMI16Vector lhs, LLVMI16Vector rhs, Operation op) {
+        short[] left = lhs.vector;
+        short[] right = rhs.vector;
+
+        // not sure if this assert is true for llvm ir in general
+        // this implementation however assumes it
+        assert left.length == right.length;
+
+        short[] result = new short[left.length];
+
+        for (int i = 0; i < left.length; i++) {
+            result[i] = op.eval(left[i], right[i]);
+        }
+        return create(result);
+    }
+
+    public LLVMI16Vector add(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) (a + b);
+            }
+        });
+    }
+
+    public LLVMI16Vector mul(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) (a * b);
+            }
+        });
+    }
+
+    public LLVMI16Vector sub(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) (a - b);
+            }
+        });
+    }
+
+    public LLVMI16Vector div(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) (a / b);
+            }
+        });
+    }
+
+    public LLVMI16Vector divUnsigned(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) ((a & MASK) / (b & MASK));
+            }
+        });
+    }
+
+    public LLVMI16Vector rem(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) (a % b);
+            }
+        });
+    }
+
+    public LLVMI16Vector remUnsigned(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) ((a & MASK) % (b & MASK));
+            }
+        });
+    }
+
+    public LLVMI16Vector and(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) (a & b);
+            }
+        });
+    }
+
+    public LLVMI16Vector or(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) (a | b);
+            }
+        });
+    }
+
+    public LLVMI16Vector leftShift(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) (a << b);
+            }
+        });
+    }
+
+    public LLVMI16Vector logicalRightShift(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) (a >>> b);
+            }
+        });
+    }
+
+    public LLVMI16Vector arithmeticRightShift(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) (a >> b);
+            }
+        });
+    }
+
+    public LLVMI16Vector xor(LLVMI16Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public short eval(short a, short b) {
+                return (short) (a ^ b);
+            }
+        });
+    }
+
     public short[] getValues() {
         return vector;
     }
@@ -51,8 +215,14 @@ public final class LLVMI16Vector extends LLVMVector {
         return vector[index];
     }
 
-    @Override
+    public LLVMI16Vector insert(short element, int index) {
+        short[] copyOf = Arrays.copyOf(vector, vector.length);
+        copyOf[index] = element;
+        return create(copyOf);
+    }
+
     public int getLength() {
         return vector.length;
     }
+
 }

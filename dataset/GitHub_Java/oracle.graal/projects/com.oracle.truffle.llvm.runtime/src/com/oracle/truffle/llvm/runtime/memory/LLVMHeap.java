@@ -48,16 +48,18 @@ public final class LLVMHeap extends LLVMMemory {
     // current hack: we cannot directly store the LLVMFunction in the native memory due to GC
     public static final int FUNCTION_PTR_SIZE_BYTE = 8;
 
-    public static void putFunctionPointer(LLVMAddress address, long functionIndex) {
-        LLVMMemory.putI64(address, functionIndex);
+    public static void putFunctionIndex(LLVMAddress address, int functionIndex) {
+        UNSAFE.putInt(LLVMMemory.extractAddr(address), functionIndex);
     }
 
-    public static void putFunctionPointer(long ptr, long functionIndex) {
-        LLVMMemory.putI64(ptr, functionIndex);
+    public static void putFunctionIndex(long ptr, int functionIndex) {
+        assert ptr != 0;
+        UNSAFE.putInt(ptr, functionIndex);
     }
 
-    public static long getFunctionPointer(LLVMAddress addr) {
-        return LLVMMemory.getI64(addr);
+    public static int getFunctionIndex(LLVMAddress addr) {
+        int functionIndex = UNSAFE.getInt(LLVMMemory.extractAddr(addr));
+        return functionIndex;
     }
 
 }

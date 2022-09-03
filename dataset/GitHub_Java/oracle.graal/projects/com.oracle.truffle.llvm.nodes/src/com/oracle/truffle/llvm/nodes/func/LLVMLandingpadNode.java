@@ -34,14 +34,11 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.llvm.nodes.memory.LLVMForceLLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.memory.LLVMForceLLVMAddressNodeGen;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMException;
-import com.oracle.truffle.llvm.runtime.LLVMNativeFunctions;
-import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public final class LLVMLandingpadNode extends LLVMExpressionNode {
@@ -64,9 +61,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
     public LLVMNativeFunctions.SulongGetUnwindHeaderNode getGetUnwindHeader() {
         if (getUnwindHeader == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMContext context = getContext();
-            NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
-            this.getUnwindHeader = insert(nfiContextExtension.getNativeSulongFunctions().createGetUnwindHeader(context));
+            this.getUnwindHeader = insert(getContext().getNativeFunctions().createGetUnwindHeader());
         }
         return getUnwindHeader;
     }
@@ -74,14 +69,10 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
     public LLVMNativeFunctions.SulongGetExceptionTypeNode getGetExceptionType() {
         if (getExceptionType == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMContext context = getContext();
-            NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
-            this.getExceptionType = insert(nfiContextExtension.getNativeSulongFunctions().createGetExceptionType(context));
+            this.getExceptionType = insert(getContext().getNativeFunctions().createGetExceptionType());
         }
         return getExceptionType;
     }
-
-    @Child private LLVMForceLLVMAddressNode toNative = LLVMForceLLVMAddressNodeGen.create();
 
     @Override
     public Object executeGeneric(VirtualFrame frame) {
@@ -95,13 +86,13 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
             if (clauseId == 0 && !cleanup) {
                 throw exception;
             } else {
-                LLVMAddress executeLLVMAddress = toNative.executeWithTarget(frame, allocateLandingPadValue.executeGeneric(frame));
+                LLVMAddress executeLLVMAddress = allocateLandingPadValue.executeLLVMAddress(frame);
                 LLVMAddress pair0 = executeLLVMAddress;
                 LLVMMemory.putAddress(pair0, unwindHeader);
                 LLVMMemory.putI32(executeLLVMAddress.getVal() + LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES, clauseId);
                 return executeLLVMAddress;
             }
-        } catch (FrameSlotTypeException e) {
+        } catch (FrameSlotTypeException | UnexpectedResultException e) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);
         }
@@ -144,16 +135,14 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
         public LLVMNativeFunctions.SulongCanCatchNode getCanCatch() {
             if (canCatch == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                LLVMContext context = getContext();
-                NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
-                this.canCatch = insert(nfiContextExtension.getNativeSulongFunctions().createSulongCanCatch(context));
+                this.canCatch = insert(getContext().getNativeFunctions().createSulongCanCatch());
             }
             return canCatch;
         }
 
         @Override
         public int getIdentifier(VirtualFrame frame, LLVMAddress exceptionInfo, LLVMAddress thrownTypeID) {
-            LLVMAddress catchAddress = forceToLLVMcatchType.executeWithTarget(frame, catchType.executeGeneric(frame));
+            LLVMAddress catchAddress = forceToLLVMcatchType.executeWithTarget(catchType.executeGeneric(frame));
             if (catchAddress.getVal() == 0) {
                 /*
                  * If ExcType is null, any exception matches, so the landing pad should always be
@@ -182,9 +171,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
         public LLVMNativeFunctions.SulongCanCatchNode getCanCatch() {
             if (canCatch == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                LLVMContext context = getContext();
-                NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
-                this.canCatch = insert(nfiContextExtension.getNativeSulongFunctions().createSulongCanCatch(context));
+                this.canCatch = insert(getContext().getNativeFunctions().createSulongCanCatch());
             }
             return canCatch;
         }
@@ -205,7 +192,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
              * types in the list
              */
             for (int i = 0; i < filterTypes.length; i++) {
-                LLVMAddress filterAddress = forceToLLVMfilterTypes[i].executeWithTarget(frame, filterTypes[i].executeGeneric(frame));
+                LLVMAddress filterAddress = forceToLLVMfilterTypes[i].executeWithTarget(filterTypes[i].executeGeneric(frame));
                 if (filterAddress.getVal() == 0) {
                     /*
                      * If ExcType is null, any exception matches, so the landing pad should always
@@ -220,17 +207,5 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
             return false;
         }
 
-    }
-
-    private static LLVMForceLLVMAddressNode getForceLLVMAddressNode() {
-        return LLVMForceLLVMAddressNodeGen.create();
-    }
-
-    private static LLVMForceLLVMAddressNode[] getForceLLVMAddressNodes(int size) {
-        LLVMForceLLVMAddressNode[] forceToLLVM = new LLVMForceLLVMAddressNode[size];
-        for (int i = 0; i < size; i++) {
-            forceToLLVM[i] = getForceLLVMAddressNode();
-        }
-        return forceToLLVM;
     }
 }

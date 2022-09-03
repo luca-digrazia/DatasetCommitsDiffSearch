@@ -62,14 +62,8 @@ public abstract class LLVMMemory {
         }
     }
 
-    /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMProfiledMemSet} instead. */
-    @Deprecated
     public static void memset(LLVMAddress address, long size, byte value) {
         UNSAFE.setMemory(address.getVal(), size, value);
-    }
-
-    public static void memset(long address, long size, byte value) {
-        UNSAFE.setMemory(address, size, value);
     }
 
     public static void free(LLVMAddress address) {

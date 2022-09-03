@@ -30,14 +30,16 @@
 package com.oracle.truffle.llvm.runtime.vector;
 
 import java.util.Arrays;
-import java.util.function.Function;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 
 @ValueType
 public final class LLVMDoubleVector {
 
     private final double[] vector;
+    private static final int DOUBLE_SIZE = 8;
 
     public static LLVMDoubleVector create(double[] vector) {
         return new LLVMDoubleVector(vector);
@@ -45,6 +47,24 @@ public final class LLVMDoubleVector {
 
     private LLVMDoubleVector(double[] vector) {
         this.vector = vector;
+    }
+
+    public static LLVMDoubleVector readVectorFromMemory(LLVMAddress address, int size) {
+        double[] vector = new double[size];
+        long currentPtr = address.getVal();
+        for (int i = 0; i < size; i++) {
+            vector[i] = LLVMMemory.getDouble(currentPtr);
+            currentPtr += DOUBLE_SIZE;
+        }
+        return create(vector);
+    }
+
+    public static void writeVectorToMemory(LLVMAddress address, LLVMDoubleVector vector) {
+        long currentPtr = address.getVal();
+        for (int i = 0; i < vector.getLength(); i++) {
+            LLVMMemory.putDouble(currentPtr, vector.getValue(i));
+            currentPtr += DOUBLE_SIZE;
+        }
     }
 
     // We do not want to use lambdas because of bad startup
@@ -64,15 +84,6 @@ public final class LLVMDoubleVector {
 
         for (int i = 0; i < left.length; i++) {
             result[i] = op.eval(left[i], right[i]);
-        }
-        return create(result);
-    }
-
-    public LLVMDoubleVector apply(Function<Double, Double> function) {
-        double[] result = new double[vector.length];
-
-        for (int i = 0; i < vector.length; i++) {
-            result[i] = function.apply(vector[i]);
         }
         return create(result);
     }
@@ -139,4 +150,5 @@ public final class LLVMDoubleVector {
     public int getLength() {
         return vector.length;
     }
+
 }

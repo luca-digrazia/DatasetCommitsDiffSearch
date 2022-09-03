@@ -46,7 +46,6 @@ import com.oracle.truffle.llvm.nodes.func.LLVMNativeCallUtils;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -111,8 +110,8 @@ public final class LLVMTruffleOnlyIntrinsics {
         }
 
         @Specialization
-        public long executeIntrinsic(LLVMGlobalVariable string, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            return strlen(globalAccess.getNativeLocation(string).getVal());
+        public long executeIntrinsic(LLVMGlobalVariable string) {
+            return strlen(string.getNativeLocation().getVal());
         }
 
         @CompilationFinal private boolean inJava = true;
@@ -171,19 +170,18 @@ public final class LLVMTruffleOnlyIntrinsics {
         }
 
         @Specialization
-        public int executeIntrinsic(LLVMGlobalVariable str1, LLVMAddress str2, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            return callNative(globalAccess.getNativeLocation(str1).getVal(), str2.getVal());
+        public int executeIntrinsic(LLVMGlobalVariable str1, LLVMAddress str2) {
+            return callNative(str1.getNativeLocation().getVal(), str2.getVal());
         }
 
         @Specialization
-        public int executeIntrinsic(LLVMAddress str1, LLVMGlobalVariable str2, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            return callNative(str1.getVal(), globalAccess.getNativeLocation(str2).getVal());
+        public int executeIntrinsic(LLVMAddress str1, LLVMGlobalVariable str2) {
+            return callNative(str1.getVal(), str2.getNativeLocation().getVal());
         }
 
         @Specialization
-        public int executeIntrinsic(LLVMGlobalVariable str1, LLVMGlobalVariable str2, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess1,
-                        @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess2) {
-            return callNative(globalAccess1.getNativeLocation(str1).getVal(), globalAccess2.getNativeLocation(str2).getVal());
+        public int executeIntrinsic(LLVMGlobalVariable str1, LLVMGlobalVariable str2) {
+            return callNative(str1.getNativeLocation().getVal(), str2.getNativeLocation().getVal());
         }
 
         @Child private Node readStr1 = Message.READ.createNode();
