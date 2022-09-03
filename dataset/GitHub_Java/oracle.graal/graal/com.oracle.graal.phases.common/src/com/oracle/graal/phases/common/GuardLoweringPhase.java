@@ -203,11 +203,15 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
             graph.setGuardsStage(GuardsStage.FIXED_DEOPTS);
         }
 
-        assert assertNoGuardsLeft(graph);
+        assert checkNoGuardsLeft(graph);
     }
 
-    private static boolean assertNoGuardsLeft(StructuredGraph graph) {
-        assert graph.getNodes().filter(GuardNode.class).isEmpty();
+    private static boolean checkNoGuardsLeft(StructuredGraph graph) {
+        for (Node n : graph.getNodes()) {
+            if (n instanceof GuardNode) {
+                assert false : n;
+            }
+        }
         return true;
     }
 

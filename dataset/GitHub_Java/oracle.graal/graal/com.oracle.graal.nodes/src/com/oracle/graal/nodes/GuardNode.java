@@ -50,7 +50,11 @@ public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, 
     protected DeoptimizationAction action;
     protected boolean negated;
 
-    public GuardNode(LogicNode condition, AnchoringNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, JavaConstant speculation) {
+    public static GuardNode create(LogicNode condition, AnchoringNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, JavaConstant speculation) {
+        return new GuardNode(condition, anchor, reason, action, negated, speculation);
+    }
+
+    protected GuardNode(LogicNode condition, AnchoringNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, JavaConstant speculation) {
         super(StampFactory.forVoid(), anchor);
         this.condition = condition;
         this.reason = reason;
@@ -99,7 +103,7 @@ public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, 
     public Node canonical(CanonicalizerTool tool) {
         if (condition() instanceof LogicNegationNode) {
             LogicNegationNode negation = (LogicNegationNode) condition();
-            return new GuardNode(negation.getValue(), getAnchor(), reason, action, !negated, speculation);
+            return GuardNode.create(negation.getValue(), getAnchor(), reason, action, !negated, speculation);
         }
         if (condition() instanceof LogicConstantNode) {
             LogicConstantNode c = (LogicConstantNode) condition();
