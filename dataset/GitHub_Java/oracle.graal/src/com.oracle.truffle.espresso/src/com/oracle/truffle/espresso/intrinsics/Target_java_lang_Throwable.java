@@ -32,9 +32,4 @@ public class Target_java_lang_Throwable {
         /* nop */
         return self;
     }
-
-    @Intrinsic(hasReceiver = true)
-    public static int getStackTraceDepth(Object self) {
-        return 0;
-    }
 }

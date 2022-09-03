@@ -270,7 +270,8 @@ public class EspressoRootNode extends RootNode {
     private final MethodInfo method;
     private final InterpreterToVM vm;
 
-    @CompilerDirectives.CompilationFinal(dimensions = 1) private final FrameSlot[] locals;
+    @CompilerDirectives.CompilationFinal(dimensions = 1)
+    private final FrameSlot[] locals;
 
     private final FrameSlot stackSlot;
 
@@ -735,19 +736,19 @@ public class EspressoRootNode extends RootNode {
                         stack.pushLong(stack.popInt());
                         break;
                     case I2F:
-                        stack.pushFloat((float) stack.popInt());
+                        stack.pushFloat(stack.popInt());
                         break;
                     case I2D:
-                        stack.pushDouble((double) stack.popInt());
+                        stack.pushDouble(stack.popInt());
                         break;
                     case L2I:
                         stack.pushInt((int) stack.popLong());
                         break;
                     case L2F:
-                        stack.pushFloat((float) stack.popLong());
+                        stack.pushFloat(stack.popLong());
                         break;
                     case L2D:
-                        stack.pushDouble((double) stack.popLong());
+                        stack.pushDouble(stack.popLong());
                         break;
                     case F2I:
                         stack.pushInt((int) stack.popFloat());
@@ -756,7 +757,7 @@ public class EspressoRootNode extends RootNode {
                         stack.pushLong((long) stack.popFloat());
                         break;
                     case F2D:
-                        stack.pushDouble((double) stack.popFloat());
+                        stack.pushDouble(stack.popFloat());
                         break;
                     case D2I:
                         stack.pushInt((int) stack.popDouble());
@@ -1236,36 +1237,36 @@ public class EspressoRootNode extends RootNode {
         return exitMethodAndReturn(StaticObject.VOID);
     }
 
-    private static int divInt(int divisor, int dividend) {
-        return dividend / divisor;
+    private static int divInt(int dividend, int divisor) {
+        return divisor / dividend;
     }
 
-    private static long divLong(long divisor, long dividend) {
-        return dividend / divisor;
+    private static long divLong(long dividend, long divisor) {
+        return divisor / dividend;
     }
 
-    private static float divFloat(float divisor, float dividend) {
-        return dividend / divisor;
+    private static float divFloat(float dividend, float divisor) {
+        return divisor / dividend;
     }
 
-    private static double divDouble(double divisor, double dividend) {
-        return dividend / divisor;
+    private static double divDouble(double dividend, double divisor) {
+        return divisor / dividend;
     }
 
-    private static int remInt(int divisor, int dividend) {
-        return dividend % divisor;
+    private static int remInt(int dividend, int divisor) {
+        return divisor % dividend;
     }
 
-    private static long remLong(long divisor, long dividend) {
-        return dividend % divisor;
+    private static long remLong(long dividend, long divisor) {
+        return divisor % dividend;
     }
 
     private static float remFloat(float dividend, float divisor) {
-        return dividend % divisor;
+        return divisor % dividend;
     }
 
-    private static double remDouble(double divisor, double dividend) {
-        return dividend % divisor;
+    private static double remDouble(double dividend, double divisor) {
+        return divisor % dividend;
     }
 
     private static int shiftLeftInt(int bits, int value) {
@@ -1366,7 +1367,9 @@ public class EspressoRootNode extends RootNode {
             CompilerDirectives.transferToInterpreter();
             // TODO(peterssen): Profile whether null was hit or not.
             Meta meta = method.getDeclaringClass().getContext().getMeta();
-            throw meta.throwEx(NullPointerException.class);
+            StaticObject nullPointerEx = meta.exceptionKlass(NullPointerException.class).allocateInstance();
+            Meta.meta(nullPointerEx).method("<init>", void.class).invokeDirect();
+            throw new EspressoException(nullPointerEx);
         }
         return value;
     }

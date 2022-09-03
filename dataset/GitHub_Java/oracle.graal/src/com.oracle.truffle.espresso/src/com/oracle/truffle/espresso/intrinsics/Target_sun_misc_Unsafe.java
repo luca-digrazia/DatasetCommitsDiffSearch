@@ -23,13 +23,10 @@
 
 package com.oracle.truffle.espresso.intrinsics;
 
-import static com.oracle.truffle.espresso.meta.Meta.meta;
-
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 
 import com.oracle.truffle.espresso.impl.FieldInfo;
-import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectClass;
@@ -37,6 +34,8 @@ import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.runtime.Utils;
 
 import sun.misc.Unsafe;
+
+import static com.oracle.truffle.espresso.meta.Meta.meta;
 
 @EspressoIntrinsics
 public class Target_sun_misc_Unsafe {
@@ -203,7 +202,7 @@ public class Target_sun_misc_Unsafe {
     public static void putObjectVolatile(Object self, Object holder, long offset, Object value) {
         if (holder instanceof StaticObjectArray) {
             hostUnsafe.putObjectVolatile(((StaticObjectArray) holder).getWrapped(), offset, value);
-            return;
+            return ;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
         // field index.
@@ -216,23 +215,5 @@ public class Target_sun_misc_Unsafe {
     @Intrinsic(hasReceiver = true)
     public static void ensureClassInitialized(Object self, @Type(Class.class) StaticObjectClass clazz) {
         clazz.getMirror().initialize();
-    }
-
-    @Intrinsic(hasReceiver = true)
-    public static void copyMemory(Object self, Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes) {
-        if (bytes == 0) {
-            return;
-        }
-        hostUnsafe.copyMemory(MetaUtil.unwrap(srcBase), srcOffset, MetaUtil.unwrap(destBase), destOffset, bytes);
-    }
-
-    @Intrinsic(hasReceiver = true)
-    public static void putByte(Object self, long offset, byte value) {
-        hostUnsafe.putByte(offset, value);
-    }
-
-    @Intrinsic(hasReceiver = true)
-    public static void putByte(Object self, Object object, long offset, byte value) {
-        hostUnsafe.putByte(MetaUtil.unwrap(object), offset, value);
     }
 }

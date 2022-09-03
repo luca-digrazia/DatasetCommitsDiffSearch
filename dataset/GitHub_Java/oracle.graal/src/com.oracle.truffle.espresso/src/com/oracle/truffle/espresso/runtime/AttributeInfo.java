@@ -22,34 +22,21 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
-import com.oracle.truffle.espresso.impl.Klass;
+public class AttributeInfo {
 
-import static com.oracle.truffle.espresso.meta.Meta.meta;
+    private final String name;
+    private final byte[] info;
 
-public class StaticObject {
-    private final Klass klass;
-
-    // Context-less objects.
-    public static final StaticObject NULL = new StaticObject(null);
-    public static final StaticObject VOID = new StaticObject(null);
-
-    public Klass getKlass() {
-        return klass;
+    public String getName() {
+        return name;
     }
 
-    protected StaticObject(Klass klass) {
-        this.klass = klass;
+    public byte[] getRawInfo() {
+        return info;
     }
 
-    @Override
-    public String toString() {
-        if (this == NULL) {
-            return "null";
-        }
-        if (this == VOID) {
-            return "void";
-        }
-        return meta(this).guestToString();
-        // return klass.getTypeDescriptor().toJavaName();
+    public AttributeInfo(String name, byte[] info) {
+        this.name = name;
+        this.info = info;
     }
 }

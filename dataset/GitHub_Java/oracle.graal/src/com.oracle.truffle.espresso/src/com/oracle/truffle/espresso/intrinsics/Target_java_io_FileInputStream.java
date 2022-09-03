@@ -58,11 +58,15 @@ public class Target_java_io_FileInputStream {
             meta((StaticObject) meta(self).field("fd").get()).field("fd").set(fakeFd);
 
         } catch (FileNotFoundException e) {
-            Meta meta = meta(self).getMeta();
-            throw meta.throwEx(FileNotFoundException.class);
+            Meta meta = self.getKlass().getContext().getMeta();
+            StaticObject ex = meta.exceptionKlass(FileNotFoundException.class).allocateInstance();
+            meta(ex).method("<init>", void.class).invokeDirect();
+            throw new EspressoException(ex);
         } catch (IOException e) {
-            Meta meta = meta(self).getMeta();
-            throw meta.throwEx(IOException.class);
+            Meta meta = self.getKlass().getContext().getMeta();
+            StaticObject ex = meta.exceptionKlass(IOException.class).allocateInstance();
+            meta(ex).method("<init>", void.class).invokeDirect();
+            throw new EspressoException(ex);
         }
     }
 
@@ -79,9 +83,12 @@ public class Target_java_io_FileInputStream {
             try (FileInputStream fis = new FileInputStream(fd)) {
                 return fis.read(b, off, len);
             }
-        } catch (IOException e) {
-            Meta meta = meta(self).getMeta();
-            throw meta.throwEx(IOException.class);
+        }
+        catch (IOException e) {
+            Meta meta = self.getKlass().getContext().getMeta();
+            StaticObject ex = meta.exceptionKlass(IOException.class).allocateInstance();
+            meta(ex).method("<init>", void.class).invokeDirect();
+            throw new EspressoException(ex);
         }
     }
 
@@ -98,9 +105,12 @@ public class Target_java_io_FileInputStream {
             try (FileInputStream fis = new FileInputStream(fd)) {
                 return fis.available();
             }
-        } catch (IOException e) {
-            Meta meta = meta(self).getMeta();
-            throw meta.throwEx(IOException.class);
+        }
+        catch (IOException e) {
+            Meta meta = self.getKlass().getContext().getMeta();
+            StaticObject ex = meta.exceptionKlass(IOException.class).allocateInstance();
+            meta(ex).method("<init>", void.class).invokeDirect();
+            throw new EspressoException(ex);
         }
     }
 
@@ -113,13 +123,16 @@ public class Target_java_io_FileInputStream {
             if (fakeFd == 0) {
                 Utils.getContext().in().close();
             }
-            // FileDescriptor fd = fdMap.get(fakeFd);
-            // try (FileInputStream fis = new FileInputStream(fd)) {
-            // fis.close();
-            // }
-        } catch (IOException e) {
-            Meta meta = meta(self).getMeta();
-            throw meta.throwEx(IOException.class);
+//            FileDescriptor fd = fdMap.get(fakeFd);
+//            try (FileInputStream fis = new FileInputStream(fd)) {
+//                fis.close();
+//            }
+        }
+        catch (IOException e) {
+            Meta meta = self.getKlass().getContext().getMeta();
+            StaticObject ex = meta.exceptionKlass(IOException.class).allocateInstance();
+            meta(ex).method("<init>", void.class).invokeDirect();
+            throw new EspressoException(ex);
         }
     }
 }

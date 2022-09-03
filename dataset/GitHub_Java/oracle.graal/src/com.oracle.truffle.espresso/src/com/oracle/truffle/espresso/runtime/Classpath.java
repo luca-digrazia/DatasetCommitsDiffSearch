@@ -34,9 +34,6 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-
 public class Classpath {
 
     private static final List<Entry> EMPTY_LIST = Collections.emptyList();
@@ -400,22 +397,6 @@ public class Classpath {
      */
     public ClasspathFile readClassFile(String className) {
         return readFile(className, ".class");
-    }
-
-    /**
-     * Searches for a class file denoted by a given class name on this classpath and returns its
-     * contents in a byte array if found. Any IO exception that occurs when reading is silently
-     * ignored.
-     *
-     * @param type an internal class name (e.g. "Ljava/lang/Class;")
-     * @return the contents of the file available on the classpath whose name is computed as
-     *         {@code className.replace('.', '/')}. If no such file is available on this class path
-     *         or if reading the file produces an IO exception, then null is returned.
-     */
-    public ClasspathFile readClassFile(Symbol<Type> type) {
-        String rawType = type.toString();
-        rawType = rawType.substring(1, rawType.length() - 1);
-        return readFile(rawType, ".class");
     }
 
     /**

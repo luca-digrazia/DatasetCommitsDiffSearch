@@ -54,14 +54,4 @@ public class Target_java_lang_Runtime {
         }
         return StaticObject.NULL;
     }
-
-    @Intrinsic(hasReceiver = true)
-    public static long totalMemory(Object self) {
-        return Runtime.getRuntime().totalMemory();
-    }
-
-    @Intrinsic(hasReceiver = true)
-    public static void gc(Object self) {
-        Runtime.getRuntime().gc();
-    }
 }

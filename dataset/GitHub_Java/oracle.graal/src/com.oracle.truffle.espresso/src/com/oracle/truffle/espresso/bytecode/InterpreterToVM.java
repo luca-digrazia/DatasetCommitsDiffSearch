@@ -28,7 +28,6 @@ import static com.oracle.truffle.espresso.meta.Meta.meta;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Array;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Arrays;
@@ -70,7 +69,6 @@ import com.oracle.truffle.espresso.intrinsics.Target_java_lang_reflect_Array;
 import com.oracle.truffle.espresso.intrinsics.Target_java_security_AccessController;
 import com.oracle.truffle.espresso.intrinsics.Target_java_util_concurrent_atomic_AtomicLong;
 import com.oracle.truffle.espresso.intrinsics.Target_java_util_jar_JarFile;
-import com.oracle.truffle.espresso.intrinsics.Target_java_util_zip_Inflater;
 import com.oracle.truffle.espresso.intrinsics.Target_java_util_zip_ZipFile;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_launcher_LauncherHelper;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_misc_Perf;
@@ -92,22 +90,8 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.runtime.Utils;
-import sun.misc.Unsafe;
 
 public class InterpreterToVM {
-
-
-    private static Unsafe hostUnsafe;
-
-    static {
-        try {
-            Field f = Unsafe.class.getDeclaredField("theUnsafe");
-            f.setAccessible(true);
-            hostUnsafe = (Unsafe) f.get(null);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
-    }
 
     private final Map<MethodKey, CallTarget> intrinsics = new HashMap<>();
 
@@ -133,7 +117,6 @@ public class InterpreterToVM {
                     Target_java_security_AccessController.class,
                     Target_java_util_concurrent_atomic_AtomicLong.class,
                     Target_java_util_jar_JarFile.class,
-                    Target_java_util_zip_Inflater.class,
                     Target_java_util_zip_ZipFile.class,
                     Target_sun_launcher_LauncherHelper.class,
                     Target_sun_misc_Perf.class,
@@ -408,12 +391,12 @@ public class InterpreterToVM {
     // region Monitor enter/exit
     public void monitorEnter(Object obj) {
         // TODO(peterssen): Nop for single-threaded language.
-        hostUnsafe.monitorEnter(obj);
+        // UNSAFE.monitorEnter(obj);
     }
 
     public void monitorExit(Object obj) {
         // TODO(peterssen): Nop for single-threaded language.
-        hostUnsafe.monitorExit(obj);
+        // UNSAFE.monitorExit(obj);
     }
     // endregion
 

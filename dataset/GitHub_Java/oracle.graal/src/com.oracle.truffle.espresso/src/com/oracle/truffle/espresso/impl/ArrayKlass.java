@@ -28,6 +28,7 @@ import java.lang.reflect.Modifier;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 
 public final class ArrayKlass extends Klass {
@@ -100,14 +101,16 @@ public final class ArrayKlass extends Klass {
 
     @Override
     public Klass getSuperclass() {
-        return getContext().getMeta().OBJECT.rawKlass();
+        Object classLoader = null; // BCL
+        if (getConstantPool() != null) {
+            classLoader = getConstantPool().getClassLoader();
+        }
+        return getContext().getRegistries().resolve(getContext().getTypeDescriptors().OBJECT, classLoader);
     }
 
     @Override
     public Klass[] getInterfaces() {
-        Klass cloneable = getContext().getMeta().CLONEABLE.rawKlass();
-        Klass serializable = getContext().getMeta().SERIALIZABLE.rawKlass();
-        return new Klass[]{cloneable, serializable};
+        return Klass.EMPTY_ARRAY;
     }
 
     @Override

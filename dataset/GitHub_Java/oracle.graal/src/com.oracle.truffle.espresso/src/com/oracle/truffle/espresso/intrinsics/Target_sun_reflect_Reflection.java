@@ -28,7 +28,7 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.nodes.LinkedNode;
+import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 
@@ -36,25 +36,15 @@ import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 public class Target_sun_reflect_Reflection {
     @Intrinsic
     public static @Type(Class.class) StaticObject getCallerClass() {
+        // TODO(peterssen):
         final int[] depth = new int[]{0};
         CallTarget caller = Truffle.getRuntime().iterateFrames(
-                        frameInstance -> {
-                            if (frameInstance.getCallTarget() instanceof RootCallTarget) {
-                                RootCallTarget callTarget = (RootCallTarget) frameInstance.getCallTarget();
-                                RootNode rootNode = callTarget.getRootNode();
-                                if (rootNode instanceof LinkedNode) {
-                                    if (depth[0]++ > 1) {
-                                        return frameInstance.getCallTarget();
-                                    }
-                                }
-                            }
-                            return null;
-                        });
+                        frameInstance -> (depth[0]++ <= 1) ? null : frameInstance.getCallTarget());
 
         RootCallTarget callTarget = (RootCallTarget) caller;
         RootNode rootNode = callTarget.getRootNode();
-        if (rootNode instanceof LinkedNode) {
-            return ((LinkedNode) rootNode).getOriginalMethod().getDeclaringClass().rawKlass().mirror();
+        if (rootNode instanceof EspressoRootNode) {
+            return ((EspressoRootNode) rootNode).getMethod().getDeclaringClass().mirror();
         }
 
         throw EspressoError.shouldNotReachHere();

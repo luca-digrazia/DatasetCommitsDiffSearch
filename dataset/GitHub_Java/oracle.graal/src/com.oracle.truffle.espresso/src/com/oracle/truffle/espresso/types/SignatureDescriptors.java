@@ -20,36 +20,34 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.espresso.runtime;
+package com.oracle.truffle.espresso.types;
 
-import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.meta.MetaUtil;
 
-import static com.oracle.truffle.espresso.meta.Meta.meta;
+public final class SignatureDescriptors extends DescriptorCache<SignatureDescriptor> {
 
-public class StaticObject {
-    private final Klass klass;
+    private final TypeDescriptors typeDescriptors;
 
-    // Context-less objects.
-    public static final StaticObject NULL = new StaticObject(null);
-    public static final StaticObject VOID = new StaticObject(null);
-
-    public Klass getKlass() {
-        return klass;
+    public SignatureDescriptors(TypeDescriptors typeDescriptors) {
+        this.typeDescriptors = typeDescriptors;
     }
 
-    protected StaticObject(Klass klass) {
-        this.klass = klass;
+    public TypeDescriptors getTypeDescriptors() {
+        return typeDescriptors;
     }
 
     @Override
-    public String toString() {
-        if (this == NULL) {
-            return "null";
+    protected SignatureDescriptor create(String key) {
+        return new SignatureDescriptor(typeDescriptors, key);
+    }
+
+    public SignatureDescriptor create(Class<?> returnType, Class<?>... parameterTypes) {
+        StringBuilder sb = new StringBuilder("(");
+        for (Class<?> param : parameterTypes) {
+            sb.append(MetaUtil.toInternalName(param.getName()));
         }
-        if (this == VOID) {
-            return "void";
-        }
-        return meta(this).guestToString();
-        // return klass.getTypeDescriptor().toJavaName();
+        sb.append(")");
+        sb.append(MetaUtil.toInternalName(returnType.getName()));
+        return new SignatureDescriptor(typeDescriptors, sb.toString());
     }
 }

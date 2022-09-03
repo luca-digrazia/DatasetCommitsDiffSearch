@@ -23,16 +23,16 @@
 
 package com.oracle.truffle.espresso.intrinsics;
 
-import static com.oracle.truffle.espresso.runtime.Utils.maybeNull;
-
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.zip.ZipFile;
 
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.runtime.Utils;
+
+import static com.oracle.truffle.espresso.runtime.Utils.maybeNull;
 
 @EspressoIntrinsics
 public class Target_java_util_zip_ZipFile {
@@ -95,6 +95,7 @@ public class Target_java_util_zip_ZipFile {
     @Intrinsic
     public static long getNextEntry(long jzfile, int i) {
         return (long) ZipFileFunctions.GET_NEXT_ENTRY.invokeStatic(jzfile, i);
+
     }
 
     @Intrinsic
@@ -174,6 +175,6 @@ public class Target_java_util_zip_ZipFile {
     @Intrinsic
     public static @Type(String.class) Object getZipMessage(long jzfile) {
         String result = (String) ZipFileFunctions.GET_ZIP_MESSAGE.invokeStatic(jzfile);
-        return EspressoLanguage.getCurrentContext().getMeta().toGuest(result);
+        return Utils.getContext().getMeta().toGuest(result);
     }
 }
