@@ -58,7 +58,7 @@ public class SystemSubstitutions {
     @MethodSubstitution
     public static int identityHashCode(Object x) {
         if (x == null) {
-            probability(NOT_FREQUENT_PROBABILITY);
+            probability(0.01);
             return 0;
         }
 
