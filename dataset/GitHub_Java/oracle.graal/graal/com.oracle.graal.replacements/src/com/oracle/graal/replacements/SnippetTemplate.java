@@ -97,8 +97,8 @@ public class SnippetTemplate {
 
         protected SnippetInfo(ResolvedJavaMethod method) {
             this.method = method;
-            instantiationCounter = Debug.metric(new MethodDebugValueName("SnippetInstantiationCount", method));
-            instantiationTimer = Debug.timer(new MethodDebugValueName("SnippetInstantiationTime", method));
+            instantiationCounter = Debug.metric("SnippetInstantiationCount[" + method.getName() + "]");
+            instantiationTimer = Debug.timer("SnippetInstantiationTime[" + method.getName() + "]");
             assert Modifier.isStatic(method.getModifiers()) : "snippet method must be static: " + MetaUtil.format("%H.%n", method);
             int count = method.getSignature().getParameterCount(false);
             constantParameters = new boolean[count];
@@ -1012,6 +1012,12 @@ public class SnippetTemplate {
             // Re-wire the control flow graph around the replacee
             FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
             replacee.replaceAtPredecessor(firstCFGNodeDuplicate);
+            FixedNode next = null;
+            if (replacee instanceof FixedWithNextNode) {
+                FixedWithNextNode fwn = (FixedWithNextNode) replacee;
+                next = fwn.next();
+                fwn.setNext(null);
+            }
 
             if (replacee instanceof StateSplit) {
                 for (StateSplit sideEffectNode : sideEffectNodes) {
@@ -1046,12 +1052,6 @@ public class SnippetTemplate {
                     replacer.replace(replacee, returnValue, mmap);
                 }
                 if (returnDuplicate.isAlive()) {
-                    FixedNode next = null;
-                    if (replacee instanceof FixedWithNextNode) {
-                        FixedWithNextNode fwn = (FixedWithNextNode) replacee;
-                        next = fwn.next();
-                        fwn.setNext(null);
-                    }
                     returnDuplicate.clearInputs();
                     returnDuplicate.replaceAndDelete(next);
                 }
