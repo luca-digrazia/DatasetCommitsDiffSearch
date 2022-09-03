@@ -120,11 +120,10 @@ import com.oracle.truffle.api.source.SourceSection;
  * {@link ContextPolicy#REUSE reuse}, language instances will be reused after a language context was
  * {@link TruffleLanguage#disposeContext(Object) disposed}. With policy {@link ContextPolicy#SHARED
  * shared}, a language will also be reused if active contexts are not yet disposed. Language
- * instances will only be shared or reused if they are
- * {@link TruffleLanguage#areOptionsCompatible(OptionValues, OptionValues) compatible}. Language
- * implementations are encouraged to support the most permissive context policy possible. Please see
- * the individual {@link ContextPolicy policies} for details on the implications on the language
- * implementation.
+ * instances will only be shared or reused if they are {@link TruffleLanguage#isCompatible(Env)
+ * compatible}. Language implementations are encouraged to support the most permissive context
+ * policy possible. Please see the individual {@link ContextPolicy policies} for details on the
+ * implications on the language implementation.
  * <p>
  * The following illustration shows the cardinalities of the individual components:
  *
@@ -352,34 +351,32 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
-     * Returns <code>true</code> if the combination of two sets of options allow to
-     * {@link ContextPolicy#SHARED share} or {@link ContextPolicy#REUSE reuse} the same language
-     * instance, else <code>false</code>. If options are incompatible then a new language instance
-     * will be created for a new context. The first language context {@link #createContext(Env)
-     * created} for a {@link TruffleLanguage} instance always has compatible options, therefore
-     * {@link #areOptionsCompatible(OptionValues, OptionValues)} will not be invoked for it. The
-     * default implementation returns <code>true</code>.
+     * Returns <code>true</code> if a existing language instance is compatible with a new
+     * environment, else <code>false</code>. Invoked prior to the creation of a new context. The
+     * first language context {@link #createContext(Env) created} with a {@link TruffleLanguage}
+     * instance is always compatible, therefore {@link #isCompatible(Env)} will not be invoked for
+     * it. The default implementation returns <code>true</code>. The passed environment must not be
+     * escape the scope of this method.
      * <p>
      * If the context policy of a language is set to {@link ContextPolicy#EXCLUSIVE exclusive}
-     * (default behavior) then {@link #areOptionsCompatible(OptionValues, OptionValues)} will never
-     * be invoked as {@link TruffleLanguage} instances will not be shared for multiple contexts. For
-     * the other context policies {@link ContextPolicy#REUSE reuse} and {@link ContextPolicy#SHARED
-     * shared} this method can be used to further restrict the reuse of language instances.
-     * Compatibility influences {@link #parse(ParsingRequest) parse caching} because it uses the
-     * {@link TruffleLanguage language} instance as a key.
+     * (default behavior) then {@link #isCompatible(Env)} will never be invoked as
+     * {@link TruffleLanguage} instances will not be shared for multiple contexts. For the other
+     * context policies {@link ContextPolicy#REUSE reuse} and {@link ContextPolicy#SHARED shared}
+     * this method can be used to further restrict compatibility. Compatibility influences
+     * {@link #parse(ParsingRequest) parse caching} because it uses the {@link TruffleLanguage
+     * language} instance as a key.
      * <p>
-     * Example usage of areOptionsCompatible if sharing of the language instances and parse caching
-     * should be restricted by the script version option:
+     * Example usage of isCompatible if sharing of the language instances and parse caching should
+     * be restricted by an environment option:
      *
-     * {@link TruffleLanguageSnippets.CompatibleLanguage#areOptionsCompatible}
+     * {@link TruffleLanguageSnippets.CompatibleLanguage#isCompatible}
      *
-     * @param firstOptions the options used to create the first context, never <code>null</code>
-     * @param newOptions the options that will be used for the new context, never <code>null</code>
      * @see ContextPolicy
      * @see #parse(ParsingRequest)
+     * @param env the new environment to check compatibility with
      * @since 1.0
      */
-    protected boolean areOptionsCompatible(OptionValues firstOptions, OptionValues newOptions) {
+    protected boolean isCompatible(Env env) {
         return true;
     }
 
@@ -481,7 +478,7 @@ public abstract class TruffleLanguage<C> {
      * For example, assumptions that are dependent on the language context data. It is required to
      * invalidate any such assumptions that are used in the AST when this method is invoked.
      *
-     * @see #areOptionsCompatible(OptionValues, OptionValues)
+     * @see #isCompatible(Env)
      * @see ContextPolicy
      * @since 1.0
      */
@@ -529,10 +526,9 @@ public abstract class TruffleLanguage<C> {
      * argument names}. It is safe to assume that current {@link TruffleLanguage language} instance
      * and {@link ParsingRequest#getArgumentNames() argument names} will remain unchanged for a
      * parsed {@link CallTarget}. The scope of the caching is influenced by the
-     * {@link Registration#contextPolicy() context policy} and option
-     * {@link TruffleLanguage#areOptionsCompatible(OptionValues, OptionValues) compatibility}.
-     * Caching may be {@link Source#isCached() disabled} for sources. It is enabled for new sources
-     * by default.
+     * {@link Registration#contextPolicy() context policy} and
+     * {@link TruffleLanguage#isCompatible(Env) compatibility}. Caching may be
+     * {@link Source#isCached() disabled} for sources. It is enabled for new sources by default.
      * <p>
      * The {@code argumentNames} may contain symbolic names for actual parameters of the call to the
      * returned value. The result should be a call target with method
@@ -1248,7 +1244,6 @@ public abstract class TruffleLanguage<C> {
 
         private static final Object UNSET_CONTEXT = new Object();
         private final Object vmObject; // PolylgotLanguageContext
-        private final TruffleLanguage<Object> spi;
         private final InputStream in;
         private final OutputStream err;
         private final OutputStream out;
@@ -1257,6 +1252,7 @@ public abstract class TruffleLanguage<C> {
         private final String[] applicationArguments;
         private final FileSystem fileSystem;
 
+        @CompilationFinal private volatile TruffleLanguage<Object> spi;
         @CompilationFinal private volatile List<Object> services;
 
         @CompilationFinal private volatile Object context = UNSET_CONTEXT;
@@ -1265,11 +1261,9 @@ public abstract class TruffleLanguage<C> {
         @CompilationFinal private volatile Assumption initializedUnchangedAssumption = Truffle.getRuntime().createAssumption("Language context initialized unchanged");
         @CompilationFinal private volatile boolean valid;
 
-        @SuppressWarnings("unchecked")
-        private Env(Object vmObject, TruffleLanguage<?> language, OutputStream out, OutputStream err, InputStream in, Map<String, Object> config, OptionValues options, String[] applicationArguments,
+        private Env(Object vmObject, OutputStream out, OutputStream err, InputStream in, Map<String, Object> config, OptionValues options, String[] applicationArguments,
                         FileSystem fileSystem) {
             this.vmObject = vmObject;
-            this.spi = (TruffleLanguage<Object>) language;
             this.in = in;
             this.err = err;
             this.out = out;
@@ -1278,6 +1272,11 @@ public abstract class TruffleLanguage<C> {
             this.applicationArguments = applicationArguments == null ? new String[0] : applicationArguments;
             this.valid = true;
             this.fileSystem = fileSystem;
+        }
+
+        @SuppressWarnings("unchecked")
+        void setSpi(TruffleLanguage<?> spi) {
+            this.spi = (TruffleLanguage<Object>) spi;
         }
 
         Object getVMObject() {
@@ -2237,14 +2236,18 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public Env createEnv(Object vmObject, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options,
-                        String[] applicationArguments, FileSystem fileSystem) {
-            Env env = new Env(vmObject, language, stdOut, stdErr, stdIn, config, options, applicationArguments, fileSystem);
+        public Env createEnv(Object vmObject, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options, String[] applicationArguments,
+                        FileSystem fileSystem) {
+            return new Env(vmObject, stdOut, stdErr, stdIn, config, options, applicationArguments, fileSystem);
+        }
+
+        @Override
+        public void persistEnvSPI(Env env, TruffleLanguage<?> language) {
+            env.setSpi(language);
             LinkedHashSet<Object> collectedServices = new LinkedHashSet<>();
             LanguageInfo info = language.languageInfo;
             AccessAPI.instrumentAccess().collectEnvServices(collectedServices, API.nodes().getEngineObject(info), language);
             env.services = new ArrayList<>(collectedServices);
-            return env;
         }
 
         @Override
@@ -2432,13 +2435,14 @@ public abstract class TruffleLanguage<C> {
             assert env.spi != null;
             final Env newEnv = createEnv(
                             env.vmObject,
-                            env.spi,
                             stdOut,
                             stdErr,
                             stdIn,
                             config,
                             options,
-                            applicationArguments, fileSystem);
+                            applicationArguments,
+                            fileSystem);
+            persistEnvSPI(newEnv, env.spi);
 
             newEnv.initialized = env.initialized;
             newEnv.context = env.context;
@@ -2468,8 +2472,14 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public boolean areOptionsCompatible(TruffleLanguage<?> language, OptionValues firstContextOptions, OptionValues newContextOptions) {
-            return language.areOptionsCompatible(firstContextOptions, newContextOptions);
+        public boolean isCompatible(Env env, TruffleLanguage<?> language) {
+            assert env.getSpi() == null; // not yet persisted environment
+            env.setSpi(language);
+            try {
+                return language.isCompatible(env);
+            } finally {
+                env.setSpi(null);
+            }
         }
 
         @Override
@@ -2549,18 +2559,26 @@ class TruffleLanguageSnippets {
     // END: TruffleLanguageSnippets.PostInitLanguage#createContext
 
     abstract static
-    // BEGIN: TruffleLanguageSnippets.CompatibleLanguage#areOptionsCompatible
+    // BEGIN: TruffleLanguageSnippets.CompatibleLanguage#isCompatible
     class CompatibleLanguage extends TruffleLanguage<Env> {
 
         @Option(help = "", category = OptionCategory.USER)
         static final OptionKey<String> ScriptVersion
                     = new OptionKey<>("ECMA2017");
 
+        private volatile String version;
+
         @Override
-        protected boolean areOptionsCompatible(OptionValues firstOptions,
-                        OptionValues newOptions) {
-            return firstOptions.get(ScriptVersion).
-                            equals(newOptions.get(ScriptVersion));
+        protected boolean isCompatible(Env env) {
+            assert version != null;
+            return env.getOptions().get(ScriptVersion).
+                            equals(version);
+        }
+
+        @Override
+        protected Env createContext(Env env) {
+            version = env.getOptions().get(ScriptVersion);
+            return env;
         }
 
         @Override
@@ -2568,7 +2586,7 @@ class TruffleLanguageSnippets {
             return new CompatibleLanguageOptionDescriptors();
         }
     }
-    // END: TruffleLanguageSnippets.CompatibleLanguage#areOptionsCompatible
+    // END: TruffleLanguageSnippets.CompatibleLanguage#isCompatible
 
     static class CompatibleLanguageOptionDescriptors implements OptionDescriptors{
 
