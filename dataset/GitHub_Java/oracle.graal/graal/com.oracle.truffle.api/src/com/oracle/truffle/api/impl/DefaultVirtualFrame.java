@@ -29,12 +29,7 @@ import java.util.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 
-/**
- * This is an implementation-specific class. Do not use or instantiate it. Instead, use
- * {@link TruffleRuntime#createVirtualFrame(PackedFrame, Arguments, FrameDescriptor)} to create a
- * {@link VirtualFrame}.
- */
-final class DefaultVirtualFrame implements VirtualFrame {
+public final class DefaultVirtualFrame implements VirtualFrame {
 
     private final FrameDescriptor descriptor;
     private final PackedFrame caller;
@@ -42,7 +37,7 @@ final class DefaultVirtualFrame implements VirtualFrame {
     private Object[] locals;
     private byte[] tags;
 
-    DefaultVirtualFrame(FrameDescriptor descriptor, PackedFrame caller, Arguments arguments) {
+    public DefaultVirtualFrame(FrameDescriptor descriptor, PackedFrame caller, Arguments arguments) {
         this.descriptor = descriptor;
         this.caller = caller;
         this.arguments = arguments;
