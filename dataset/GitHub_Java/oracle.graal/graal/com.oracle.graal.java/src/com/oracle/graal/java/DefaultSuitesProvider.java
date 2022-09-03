@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,56 @@
  */
 package com.oracle.graal.java;
 
-import com.oracle.graal.lir.phases.LIRSuites;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.tiers.CompilerConfiguration;
-import com.oracle.graal.phases.tiers.HighTierContext;
-import com.oracle.graal.phases.tiers.Suites;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.jvmci.options.*;
+import com.oracle.jvmci.options.DerivedOptionValue.OptionSupplier;
 
-public class DefaultSuitesProvider extends SuitesProviderBase {
+public class DefaultSuitesProvider implements SuitesProvider {
 
-    private final CompilerConfiguration compilerConfiguration;
+    private final DerivedOptionValue<Suites> defaultSuites;
+    private final PhaseSuite<HighTierContext> defaultGraphBuilderSuite;
+    private final DerivedOptionValue<LIRSuites> defaultLIRSuites;
 
-    public DefaultSuitesProvider(CompilerConfiguration compilerConfiguration, Plugins plugins) {
-        super();
-        this.defaultGraphBuilderSuite = createGraphBuilderSuite(plugins);
-        this.compilerConfiguration = compilerConfiguration;
+    private class SuitesSupplier implements OptionSupplier<Suites> {
+
+        private static final long serialVersionUID = 2677805381215454728L;
+
+        public Suites get() {
+            return createSuites();
+        }
+
     }
 
-    @Override
+    private class LIRSuitesSupplier implements OptionSupplier<LIRSuites> {
+
+        private static final long serialVersionUID = 312070237227476252L;
+
+        public LIRSuites get() {
+            return createLIRSuites();
+        }
+
+    }
+
+    public DefaultSuitesProvider(Plugins plugins) {
+        this.defaultGraphBuilderSuite = createGraphBuilderSuite(plugins);
+        this.defaultSuites = new DerivedOptionValue<>(new SuitesSupplier());
+        this.defaultLIRSuites = new DerivedOptionValue<>(new LIRSuitesSupplier());
+    }
+
+    public Suites getDefaultSuites() {
+        return defaultSuites.getValue();
+    }
+
     public Suites createSuites() {
-        return Suites.createSuites(compilerConfiguration);
+        return Suites.createDefaultSuites();
+    }
+
+    public PhaseSuite<HighTierContext> getDefaultGraphBuilderSuite() {
+        return defaultGraphBuilderSuite;
     }
 
     protected PhaseSuite<HighTierContext> createGraphBuilderSuite(Plugins plugins) {
@@ -51,8 +80,12 @@ public class DefaultSuitesProvider extends SuitesProviderBase {
         return suite;
     }
 
-    @Override
-    public LIRSuites createLIRSuites() {
-        return Suites.createLIRSuites(compilerConfiguration);
+    public LIRSuites getDefaultLIRSuites() {
+        return defaultLIRSuites.getValue();
     }
+
+    public LIRSuites createLIRSuites() {
+        return Suites.createDefaultLIRSuites();
+    }
+
 }

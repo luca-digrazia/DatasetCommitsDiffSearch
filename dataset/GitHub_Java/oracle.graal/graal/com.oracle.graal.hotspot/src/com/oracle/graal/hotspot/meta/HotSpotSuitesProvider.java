@@ -22,38 +22,23 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
-import static com.oracle.graal.compiler.common.GraalOptions.VerifyPhases;
-import static jdk.internal.jvmci.hotspot.CompilerToVM.compilerToVM;
-import jdk.internal.jvmci.hotspot.CompilerToVM;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
-import jdk.internal.jvmci.options.DerivedOptionValue;
-import jdk.internal.jvmci.options.DerivedOptionValue.OptionSupplier;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.DebugInfoMode;
-import com.oracle.graal.hotspot.HotSpotBackend;
-import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
-import com.oracle.graal.hotspot.HotSpotInstructionProfiling;
-import com.oracle.graal.hotspot.phases.AheadOfTimeVerificationPhase;
-import com.oracle.graal.hotspot.phases.LoadJavaMirrorWithKlassPhase;
-import com.oracle.graal.hotspot.phases.WriteBarrierAdditionPhase;
-import com.oracle.graal.hotspot.phases.WriteBarrierVerificationPhase;
-import com.oracle.graal.java.GraphBuilderPhase;
-import com.oracle.graal.lir.phases.LIRSuites;
-import com.oracle.graal.nodes.EncodedGraph;
-import com.oracle.graal.nodes.GraphEncoder;
-import com.oracle.graal.nodes.SimplifyingGraphDecoder;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.phases.*;
+import com.oracle.graal.java.*;
+import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.common.AddressLoweringPhase;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.AddressLoweringPhase.AddressLowering;
-import com.oracle.graal.phases.common.ExpandLogicPhase;
-import com.oracle.graal.phases.tiers.HighTierContext;
-import com.oracle.graal.phases.tiers.Suites;
-import com.oracle.graal.phases.tiers.SuitesProvider;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.options.*;
+import com.oracle.jvmci.options.DerivedOptionValue.OptionSupplier;
 
 /**
  * HotSpot implementation of {@link SuitesProvider}.
@@ -63,7 +48,6 @@ public class HotSpotSuitesProvider implements SuitesProvider {
     protected final DerivedOptionValue<Suites> defaultSuites;
     protected final PhaseSuite<HighTierContext> defaultGraphBuilderSuite;
     private final DerivedOptionValue<LIRSuites> defaultLIRSuites;
-    protected final HotSpotVMConfig config;
     protected final HotSpotGraalRuntimeProvider runtime;
 
     private final AddressLowering addressLowering;
@@ -89,8 +73,7 @@ public class HotSpotSuitesProvider implements SuitesProvider {
 
     }
 
-    public HotSpotSuitesProvider(SuitesProvider defaultSuitesProvider, HotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, AddressLowering addressLowering) {
-        this.config = config;
+    public HotSpotSuitesProvider(SuitesProvider defaultSuitesProvider, HotSpotGraalRuntimeProvider runtime, AddressLowering addressLowering) {
         this.runtime = runtime;
         this.addressLowering = addressLowering;
         this.defaultSuitesProvider = defaultSuitesProvider;
@@ -112,15 +95,15 @@ public class HotSpotSuitesProvider implements SuitesProvider {
 
         if (ImmutableCode.getValue()) {
             // lowering introduces class constants, therefore it must be after lowering
-            ret.getHighTier().appendPhase(new LoadJavaMirrorWithKlassPhase(config.classMirrorOffset, config.useCompressedOops ? config.getOopEncoding() : null));
+            ret.getHighTier().appendPhase(new LoadJavaMirrorWithKlassPhase(runtime.getConfig().classMirrorOffset, runtime.getConfig().useCompressedOops ? runtime.getConfig().getOopEncoding() : null));
             if (VerifyPhases.getValue()) {
                 ret.getHighTier().appendPhase(new AheadOfTimeVerificationPhase());
             }
         }
 
-        ret.getMidTier().appendPhase(new WriteBarrierAdditionPhase(config));
+        ret.getMidTier().appendPhase(new WriteBarrierAdditionPhase(runtime.getConfig()));
         if (VerifyPhases.getValue()) {
-            ret.getMidTier().appendPhase(new WriteBarrierVerificationPhase(config));
+            ret.getMidTier().appendPhase(new WriteBarrierVerificationPhase());
         }
 
         ret.getLowTier().findPhase(ExpandLogicPhase.class).add(new AddressLoweringPhase(addressLowering));
@@ -166,7 +149,7 @@ public class HotSpotSuitesProvider implements SuitesProvider {
      * @return a possibly modified graph builder suite
      */
     public static PhaseSuite<HighTierContext> withSimpleDebugInfoIfRequested(PhaseSuite<HighTierContext> gbs) {
-        if (compilerToVM().shouldDebugNonSafepoints()) {
+        if (HotSpotGraalRuntime.runtime().getCompilerToVM().shouldDebugNonSafepoints()) {
             PhaseSuite<HighTierContext> newGbs = gbs.copy();
             GraphBuilderPhase graphBuilderPhase = (GraphBuilderPhase) newGbs.findPhase(GraphBuilderPhase.class).previous();
             GraphBuilderConfiguration graphBuilderConfig = graphBuilderPhase.getGraphBuilderConfig();
