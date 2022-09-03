@@ -130,6 +130,11 @@ public class ForeignCallNode extends AbstractStateSplit implements LIRLowerable,
     }
 
     @Override
+    public DeoptimizationReason getDeoptimizationReason() {
+        return null;
+    }
+
+    @Override
     public FrameState getState() {
         if (deoptState != null) {
             assert stateAfter() == null;

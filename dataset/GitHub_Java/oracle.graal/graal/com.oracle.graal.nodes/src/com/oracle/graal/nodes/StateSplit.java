@@ -30,21 +30,19 @@ import com.oracle.graal.nodes.spi.*;
 public interface StateSplit extends NodeWithState {
 
     /**
-     * Gets the {@link FrameState} corresponding to the state of the JVM after execution of this
-     * node.
+     * Gets the state of the JVM frame after execution of this node.
      */
     FrameState stateAfter();
 
     /**
-     * Sets the {@link FrameState} corresponding to the state of the JVM after execution of this
-     * node.
+     * Sets the state of the JVM frame after execution of this node.
      */
     void setStateAfter(FrameState x);
 
     /**
-     * Determines if this node has a side-effect. Such nodes can not be safely re-executed because
-     * they modified state which is visible to other thread or modified state beyond what is
-     * captured in {@link FrameState} nodes.
+     * Determines if this node has a side-effect. Execution of such a node changes state visible to
+     * other threads. These nodes denote boundaries across which deoptimization points cannot be
+     * moved.
      */
     boolean hasSideEffect();
 }

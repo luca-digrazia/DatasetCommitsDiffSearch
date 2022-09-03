@@ -219,6 +219,11 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Iterabl
     }
 
     @Override
+    public DeoptimizationReason getDeoptimizationReason() {
+        return null;
+    }
+
+    @Override
     public FrameState getDeoptimizationState() {
         if (deoptState == null) {
             FrameState stateDuring = stateDuring();

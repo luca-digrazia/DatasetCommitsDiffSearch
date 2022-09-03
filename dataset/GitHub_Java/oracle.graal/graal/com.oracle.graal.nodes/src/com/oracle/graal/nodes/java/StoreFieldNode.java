@@ -23,10 +23,10 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
@@ -36,7 +36,7 @@ import com.oracle.graal.nodes.virtual.*;
 public final class StoreFieldNode extends AccessFieldNode implements StateSplit, VirtualizableRoot {
 
     @Input private ValueNode value;
-    @OptionalInput(InputType.State) private FrameState stateAfter;
+    @Input(notDataflow = true) private FrameState stateAfter;
 
     public FrameState stateAfter() {
         return stateAfter;
@@ -58,7 +58,7 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
 
     /**
      * Creates a new StoreFieldNode.
-     *
+     * 
      * @param object the receiver object
      * @param field the compiler interface field
      * @param value the node representing the value to store to the field
@@ -68,19 +68,13 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
         this.value = value;
     }
 
-    public StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value, FrameState stateAfter) {
-        super(StampFactory.forVoid(), object, field);
-        this.value = value;
-        this.stateAfter = stateAfter;
-    }
-
     @Override
     public void virtualize(VirtualizerTool tool) {
         State state = tool.getObjectState(object());
         if (state != null && state.getState() == EscapeState.Virtual) {
             int fieldIndex = ((VirtualInstanceNode) state.getVirtualObject()).fieldIndex(field());
             if (fieldIndex != -1) {
-                tool.setVirtualEntry(state, fieldIndex, value(), false);
+                tool.setVirtualEntry(state, fieldIndex, value());
                 tool.delete();
             }
         }
