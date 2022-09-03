@@ -24,12 +24,12 @@
  */
 package org.graalvm.compiler.replacements.test;
 
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.junit.Test;
 
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.code.InvalidInstalledCodeException;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class IntegerExactExceptionTest extends GraalCompilerTest {
 
@@ -73,6 +73,7 @@ public class IntegerExactExceptionTest extends GraalCompilerTest {
             code.executeVarargs(this, Integer.MAX_VALUE);
         } catch (ArithmeticException e) {
             // An ArithmeticException is expected to be thrown.
+            e.printStackTrace(System.out);
         }
 
         if (!code.isValid()) {
@@ -81,6 +82,7 @@ public class IntegerExactExceptionTest extends GraalCompilerTest {
                 code.executeVarargs(this, Integer.MAX_VALUE);
             } catch (ArithmeticException e) {
                 // An ArithmeticException is expected to be thrown.
+                e.printStackTrace(System.out);
             }
             assertTrue(code.isValid());
         }
@@ -127,6 +129,7 @@ public class IntegerExactExceptionTest extends GraalCompilerTest {
             code.executeVarargs(this, Long.MAX_VALUE);
         } catch (ArithmeticException e) {
             // An ArithmeticException is expected to be thrown.
+            e.printStackTrace(System.out);
         }
 
         if (!code.isValid()) {
@@ -135,6 +138,7 @@ public class IntegerExactExceptionTest extends GraalCompilerTest {
                 code.executeVarargs(this, Long.MAX_VALUE);
             } catch (ArithmeticException e) {
                 // An ArithmeticException is expected to be thrown.
+                e.printStackTrace(System.out);
             }
             assertTrue(code.isValid());
         }

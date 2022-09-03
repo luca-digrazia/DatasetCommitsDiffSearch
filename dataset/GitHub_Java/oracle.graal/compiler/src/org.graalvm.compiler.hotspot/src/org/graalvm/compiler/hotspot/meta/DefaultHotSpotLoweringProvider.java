@@ -59,14 +59,13 @@ import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import org.graalvm.compiler.hotspot.nodes.BeginLockScopeNode;
-import org.graalvm.compiler.hotspot.replacements.arraycopy.HotSpotArraycopySnippets;
-import org.graalvm.compiler.nodes.ComputeObjectAddressNode;
+import org.graalvm.compiler.hotspot.nodes.ComputeObjectAddressNode;
 import org.graalvm.compiler.hotspot.nodes.G1ArrayRangePostWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.G1ArrayRangePreWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.G1PostWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.G1PreWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.G1ReferentFieldReadBarrier;
-import org.graalvm.compiler.nodes.GetObjectAddressNode;
+import org.graalvm.compiler.hotspot.nodes.GetObjectAddressNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotCompressionNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotDirectCallTargetNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotIndirectCallTargetNode;
@@ -94,9 +93,9 @@ import org.graalvm.compiler.hotspot.replacements.StringToBytesSnippets;
 import org.graalvm.compiler.hotspot.replacements.UnsafeLoadSnippets;
 import org.graalvm.compiler.hotspot.replacements.WriteBarrierSnippets;
 import org.graalvm.compiler.hotspot.replacements.aot.ResolveConstantSnippets;
-import org.graalvm.compiler.replacements.arraycopy.ArrayCopyNode;
-import org.graalvm.compiler.replacements.arraycopy.ArrayCopySnippets;
-import org.graalvm.compiler.replacements.arraycopy.ArrayCopyWithSlowPathNode;
+import org.graalvm.compiler.hotspot.replacements.arraycopy.ArrayCopyNode;
+import org.graalvm.compiler.hotspot.replacements.arraycopy.ArrayCopySnippets;
+import org.graalvm.compiler.hotspot.replacements.arraycopy.ArrayCopyWithSlowPathNode;
 import org.graalvm.compiler.hotspot.replacements.profiling.ProfileSnippets;
 import org.graalvm.compiler.hotspot.word.KlassPointer;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
@@ -216,7 +215,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(options, factories, providers, target);
         unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(options, factories, providers, target);
         assertionSnippets = new AssertionSnippets.Templates(options, factories, providers, target);
-        arraycopySnippets = new ArrayCopySnippets.Templates(new HotSpotArraycopySnippets(), options, factories, runtime, providers, providers.getSnippetReflection(), target);
+        arraycopySnippets = new ArrayCopySnippets.Templates(options, factories, runtime, providers, target);
         stringToBytesSnippets = new StringToBytesSnippets.Templates(options, factories, providers, target);
         hashCodeSnippets = new HashCodeSnippets.Templates(options, factories, providers, target);
         resolveConstantSnippets = new ResolveConstantSnippets.Templates(options, factories, providers, target);
@@ -772,6 +771,20 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     public int fieldOffset(ResolvedJavaField f) {
         HotSpotResolvedJavaField field = (HotSpotResolvedJavaField) f;
         return field.getOffset();
+    }
+
+    @Override
+    public int arrayScalingFactor(JavaKind kind) {
+        if (runtime.getVMConfig().useCompressedOops && kind == JavaKind.Object) {
+            return super.arrayScalingFactor(JavaKind.Int);
+        } else {
+            return super.arrayScalingFactor(kind);
+        }
+    }
+
+    @Override
+    public int arrayBaseOffset(JavaKind kind) {
+        return metaAccess.getArrayBaseOffset(kind);
     }
 
     @Override
