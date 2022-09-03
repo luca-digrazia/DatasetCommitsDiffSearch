@@ -116,6 +116,10 @@ final class DITypeExtractor implements MetadataVisitor {
 
     @Override
     public void visit(MDBasicType mdType) {
+        if (parsedTypes.containsKey(mdType)) {
+            return;
+        }
+
         final String name = MDNameExtractor.getName(mdType.getName());
         final long size = mdType.getSize();
         final long align = mdType.getAlign();
@@ -156,6 +160,10 @@ final class DITypeExtractor implements MetadataVisitor {
 
     @Override
     public void visit(MDCompositeType mdType) {
+        if (parsedTypes.containsKey(mdType)) {
+            return;
+        }
+
         final long size = mdType.getSize();
         final long align = mdType.getAlign();
         final long offset = mdType.getOffset();
@@ -262,6 +270,10 @@ final class DITypeExtractor implements MetadataVisitor {
 
     @Override
     public void visit(MDSubroutine mdSubroutine) {
+        if (parsedTypes.containsKey(mdSubroutine)) {
+            return;
+        }
+
         final List<LLVMSourceType> members = new ArrayList<>();
         final LLVMSourceFunctionType type = new LLVMSourceFunctionType(members);
         parsedTypes.put(mdSubroutine, type);
@@ -270,6 +282,10 @@ final class DITypeExtractor implements MetadataVisitor {
 
     @Override
     public void visit(MDDerivedType mdType) {
+        if (parsedTypes.containsKey(mdType)) {
+            return;
+        }
+
         final long size = mdType.getSize();
         final long align = mdType.getAlign();
         final long offset = mdType.getOffset();
@@ -394,12 +410,16 @@ final class DITypeExtractor implements MetadataVisitor {
     @Override
     public void visit(MDNode mdTypeList) {
         for (MDBaseNode member : mdTypeList) {
-            resolve(member);
+            member.accept(this);
         }
     }
 
     @Override
     public void visit(MDString mdString) {
+        if (parsedTypes.containsKey(mdString)) {
+            return;
+        }
+
         final MDCompositeType referencedType = metadata.identifyType(mdString.getString());
         if (referencedType != null) {
             final LLVMSourceType type = resolve(referencedType);
@@ -409,48 +429,63 @@ final class DITypeExtractor implements MetadataVisitor {
 
     @Override
     public void visit(MDGlobalVariable mdGlobal) {
-        final LLVMSourceType type = resolve(mdGlobal.getType());
-        parsedTypes.put(mdGlobal, type);
+        if (!parsedTypes.containsKey(mdGlobal)) {
+            final LLVMSourceType type = resolve(mdGlobal.getType());
+            parsedTypes.put(mdGlobal, type);
 
-        if (mdGlobal.getStaticMemberDeclaration() != MDVoidNode.INSTANCE && mdGlobal.getVariable() instanceof MDValue) {
-            final LLVMSourceType declType = resolve(mdGlobal.getStaticMemberDeclaration());
-            final SymbolImpl symbol = ((MDValue) mdGlobal.getVariable()).getValue();
-            if (declType instanceof LLVMSourceStaticMemberType) {
-                staticMembers.put((LLVMSourceStaticMemberType) declType, symbol);
+            if (mdGlobal.getStaticMemberDeclaration() != MDVoidNode.INSTANCE && mdGlobal.getVariable() instanceof MDValue) {
+                final LLVMSourceType declType = resolve(mdGlobal.getStaticMemberDeclaration());
+                final SymbolImpl symbol = ((MDValue) mdGlobal.getVariable()).getValue();
+                if (declType instanceof LLVMSourceStaticMemberType) {
+                    staticMembers.put((LLVMSourceStaticMemberType) declType, symbol);
+                }
             }
         }
     }
 
     @Override
     public void visit(MDGlobalVariableExpression mdGlobalExpression) {
-        final LLVMSourceType type = resolve(mdGlobalExpression.getGlobalVariable());
-        parsedTypes.put(mdGlobalExpression, type);
+        if (!parsedTypes.containsKey(mdGlobalExpression)) {
+            final LLVMSourceType type = resolve(mdGlobalExpression.getGlobalVariable());
+            parsedTypes.put(mdGlobalExpression, type);
+        }
     }
 
     @Override
     public void visit(MDLocalVariable mdLocal) {
-        LLVMSourceType type = resolve(mdLocal.getType());
-        if (Flags.OBJECT_POINTER.isSetIn(mdLocal.getFlags()) && type instanceof LLVMSourcePointerType) {
-            // llvm does not set the objectpointer flag on this pointer type even though it sets
-            // it on the pointer type that is used in the function type descriptor
-            final LLVMSourcePointerType oldPointer = (LLVMSourcePointerType) type;
-            final LLVMSourcePointerType newPointer = new LLVMSourcePointerType(oldPointer.getSize(), oldPointer.getAlign(), oldPointer.getOffset(), true, oldPointer.isReference(),
-                            type.getLocation());
-            newPointer.setBaseType(oldPointer.getBaseType());
-            newPointer.setName(oldPointer::getName);
-            type = newPointer;
+        if (!parsedTypes.containsKey(mdLocal)) {
+            LLVMSourceType type = resolve(mdLocal.getType());
+            if (Flags.OBJECT_POINTER.isSetIn(mdLocal.getFlags()) && type instanceof LLVMSourcePointerType) {
+                // llvm does not set the objectpointer flag on this pointer type even though it sets
+                // it on the pointer type that is used in the function type descriptor
+                final LLVMSourcePointerType oldPointer = (LLVMSourcePointerType) type;
+                final LLVMSourcePointerType newPointer = new LLVMSourcePointerType(oldPointer.getSize(), oldPointer.getAlign(), oldPointer.getOffset(), true, oldPointer.isReference(),
+                                type.getLocation());
+                newPointer.setBaseType(oldPointer.getBaseType());
+                newPointer.setName(oldPointer::getName);
+                type = newPointer;
+            }
+            parsedTypes.put(mdLocal, type);
         }
-        parsedTypes.put(mdLocal, type);
     }
 
     @Override
     public void visit(MDSubprogram mdSubprogram) {
-        parsedTypes.put(mdSubprogram, resolve(mdSubprogram.getType()));
+        if (!parsedTypes.containsKey(mdSubprogram)) {
+            parsedTypes.put(mdSubprogram, resolve(mdSubprogram.getType()));
+        }
     }
 
     @Override
     public void visit(MDVoidNode md) {
-        parsedTypes.put(md, LLVMSourceType.VOID);
+        if (!parsedTypes.containsKey(md)) {
+            parsedTypes.put(md, new LLVMSourceType(() -> "void", 0, 0, 0, null) {
+                @Override
+                public LLVMSourceType getOffset(long newOffset) {
+                    return this;
+                }
+            });
+        }
     }
 
     private void getElements(MDBaseNode elemList, List<LLVMSourceType> elemTypes, boolean includeUnknowns) {

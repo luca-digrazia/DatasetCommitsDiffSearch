@@ -39,6 +39,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
@@ -440,19 +441,19 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         }
 
         @Override
-        public boolean isPointer(Object obj) {
+        public boolean isPointer(VirtualFrame frame, Object obj) {
             LLVMFunctionDescriptor fd = (LLVMFunctionDescriptor) obj;
             return fd.isPointer();
         }
 
         @Override
-        public long asPointer(Object obj) throws InteropException {
+        public long asPointer(VirtualFrame frame, Object obj) throws InteropException {
             LLVMFunctionDescriptor fd = (LLVMFunctionDescriptor) obj;
             return fd.asPointer();
         }
 
         @Override
-        public LLVMFunctionDescriptor toNative(Object obj) throws InteropException {
+        public LLVMFunctionDescriptor toNative(VirtualFrame frame, Object obj) throws InteropException {
             LLVMFunctionDescriptor fd = (LLVMFunctionDescriptor) obj;
             return fd.toNative();
         }

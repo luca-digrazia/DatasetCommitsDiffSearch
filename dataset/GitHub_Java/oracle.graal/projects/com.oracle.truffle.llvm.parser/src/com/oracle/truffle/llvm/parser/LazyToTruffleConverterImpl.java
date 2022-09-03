@@ -125,26 +125,22 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
         return method.getSourceFunction().getSourceType();
     }
 
-    private static FrameSlot[][] getNullableFrameSlots(FrameDescriptor frame, BitSet[] nullablePerBlock, List<FrameSlot> notNullable) {
+    private static FrameSlot[][] getNullableFrameSlots(FrameDescriptor frame, BitSet[] nullableBeforeBlock, List<FrameSlot> notNullable) {
         List<? extends FrameSlot> frameSlots = frame.getSlots();
-        FrameSlot[][] result = new FrameSlot[nullablePerBlock.length][];
+        FrameSlot[][] result = new FrameSlot[nullableBeforeBlock.length][];
 
-        for (int i = 0; i < nullablePerBlock.length; i++) {
-            BitSet nullable = nullablePerBlock[i];
+        for (int i = 0; i < nullableBeforeBlock.length; i++) {
+            BitSet nullable = nullableBeforeBlock[i];
             int bitIndex = -1;
 
-            ArrayList<FrameSlot> nullableSlots = new ArrayList<>();
+            ArrayList<FrameSlot> nullableBefore = new ArrayList<>();
             while ((bitIndex = nullable.nextSetBit(bitIndex + 1)) >= 0) {
                 FrameSlot frameSlot = frameSlots.get(bitIndex);
                 if (!notNullable.contains(frameSlot)) {
-                    nullableSlots.add(frameSlot);
+                    nullableBefore.add(frameSlot);
                 }
             }
-            if (nullableSlots.size() > 0) {
-                result[i] = nullableSlots.toArray(new FrameSlot[nullableSlots.size()]);
-            } else {
-                assert result[i] == null;
-            }
+            result[i] = nullableBefore.toArray(new FrameSlot[nullableBefore.size()]);
         }
         return result;
     }
