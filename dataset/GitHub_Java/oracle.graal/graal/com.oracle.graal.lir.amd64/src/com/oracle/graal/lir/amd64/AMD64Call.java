@@ -26,46 +26,36 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.Opcode;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.asm.TargetMethodAssembler.CallPositionListener;
+import com.oracle.max.asm.target.amd64.*;
 
 public class AMD64Call {
-
-    public static final Descriptor DEBUG = new Descriptor("debug", false, void.class);
 
     @Opcode("CALL_DIRECT")
     public static class DirectCallOp extends AMD64LIRInstruction implements StandardOp.CallOp {
         @Def({REG, ILLEGAL}) protected Value result;
         @Use({REG, STACK}) protected Value[] parameters;
-        @Temp protected Value[] temps;
         @State protected LIRFrameState state;
 
-        protected final Object callTarget;
+        protected final Object targetMethod;
+        protected final CallPositionListener callPositionListener;
 
-        public DirectCallOp(Object callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
-            this.callTarget = callTarget;
+        public DirectCallOp(Object targetMethod, Value result, Value[] parameters, LIRFrameState state, CallPositionListener callPositionListener) {
+            this.targetMethod = targetMethod;
             this.result = result;
             this.parameters = parameters;
             this.state = state;
-            this.temps = temps;
-            assert temps != null;
+            this.callPositionListener = callPositionListener;
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            emitAlignmentForDirectCall(tasm, masm);
-            directCall(tasm, masm, callTarget, state);
-        }
-
-        protected void emitAlignmentForDirectCall(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            // make sure that the displacement word of the call ends up word aligned
-            int offset = masm.codeBuffer.position();
-            offset += tasm.target.arch.getMachineCodeCallDisplacementOffset();
-            masm.nop(tasm.target.wordSize - offset % tasm.target.wordSize);
+            callAlignment(tasm, masm, callPositionListener);
+            directCall(tasm, masm, targetMethod, state);
         }
     }
 
@@ -74,37 +64,53 @@ public class AMD64Call {
         @Def({REG, ILLEGAL}) protected Value result;
         @Use({REG, STACK}) protected Value[] parameters;
         @Use({REG}) protected Value targetAddress;
-        @Temp protected Value[] temps;
         @State protected LIRFrameState state;
 
-        protected final Object callTarget;
+        private final Object targetMethod;
+        protected final CallPositionListener callPositionListener;
 
-        public IndirectCallOp(Object callTarget, Value result, Value[] parameters, Value[] temps, Value targetAddress, LIRFrameState state) {
-            this.callTarget = callTarget;
+        public IndirectCallOp(Object targetMethod, Value result, Value[] parameters, Value targetAddress, LIRFrameState state, CallPositionListener callPositionListener) {
+            this.targetMethod = targetMethod;
             this.result = result;
             this.parameters = parameters;
             this.targetAddress = targetAddress;
             this.state = state;
-            this.temps = temps;
-            assert temps != null;
+            this.callPositionListener = callPositionListener;
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            indirectCall(tasm, masm, asRegister(targetAddress), callTarget, state);
-        }
-
-        @Override
-        protected void verify() {
-            super.verify();
-            assert isRegister(targetAddress) : "The current register allocator cannot handle variables to be used at call sites, it must be in a fixed register for now";
+            if (callPositionListener != null) {
+                callPositionListener.beforeCall(tasm);
+                callPositionListener.atCall(tasm);
+            }
+            indirectCall(tasm, masm, asRegister(targetAddress), targetMethod, state);
         }
     }
 
-    public static void directCall(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Object callTarget, LIRFrameState info) {
+    public static void callAlignment(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CallPositionListener callPositionListener) {
+        if (callPositionListener != null) {
+            callPositionListener.beforeCall(tasm);
+        }
+
+        // make sure that the displacement word of the call ends up word aligned
+        int offset = masm.codeBuffer.position();
+        offset += tasm.target.arch.machineCodeCallDisplacementOffset;
+        while (offset++ % tasm.target.wordSize != 0) {
+            masm.nop();
+        }
+
+        if (callPositionListener != null) {
+            int pos = masm.codeBuffer.position();
+            callPositionListener.atCall(tasm);
+            assert pos == masm.codeBuffer.position() : "call position listener inserted code before an aligned call";
+        }
+    }
+
+    public static void directCall(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Object target, LIRFrameState info) {
         int before = masm.codeBuffer.position();
-        if (callTarget instanceof RuntimeCallTarget) {
-            long maxOffset = ((RuntimeCallTarget) callTarget).getMaxCallTargetOffset();
+        if (target instanceof RuntimeCall) {
+            long maxOffset = tasm.runtime.getMaxCallTargetOffset((RuntimeCall) target);
             if (maxOffset != (int) maxOffset) {
                 // offset might not fit a 32-bit immediate, generate an
                 // indirect call with a 64-bit immediate
@@ -115,12 +121,11 @@ public class AMD64Call {
             } else {
                 masm.call();
             }
-
         } else {
             masm.call();
         }
         int after = masm.codeBuffer.position();
-        tasm.recordDirectCall(before, after, tasm.runtime.lookupCallTarget(callTarget), info);
+        tasm.recordDirectCall(before, after, tasm.runtime.asCallTarget(target), info);
         tasm.recordExceptionHandlers(after, info);
         masm.ensureUniquePC();
     }
@@ -129,15 +134,15 @@ public class AMD64Call {
         int before = masm.codeBuffer.position();
         masm.jmp(0, true);
         int after = masm.codeBuffer.position();
-        tasm.recordDirectCall(before, after, tasm.runtime.lookupCallTarget(target), null);
+        tasm.recordDirectCall(before, after, tasm.runtime.asCallTarget(target), null);
         masm.ensureUniquePC();
     }
 
-    public static void indirectCall(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Register dst, Object callTarget, LIRFrameState info) {
+    public static void indirectCall(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Register dst, Object target, LIRFrameState info) {
         int before = masm.codeBuffer.position();
         masm.call(dst);
         int after = masm.codeBuffer.position();
-        tasm.recordIndirectCall(before, after, tasm.runtime.lookupCallTarget(callTarget), info);
+        tasm.recordIndirectCall(before, after, tasm.runtime.asCallTarget(target), info);
         tasm.recordExceptionHandlers(after, info);
         masm.ensureUniquePC();
     }
@@ -147,7 +152,7 @@ public class AMD64Call {
         assert (assertions = true) == true;
 
         if (assertions) {
-            directCall(tasm, masm, tasm.runtime.lookupRuntimeCall(DEBUG), null);
+            directCall(tasm, masm, RuntimeCall.Debug, null);
             masm.hlt();
         }
     }
