@@ -22,40 +22,16 @@
  */
 package com.oracle.graal.truffle.test;
 
-import java.util.Random;
+import java.util.*;
 
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.api.frame.FrameSlotTypeException;
-import com.oracle.truffle.api.frame.FrameUtil;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.nodes.*;
 
 public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationTest {
-
-    @Before
-    public void before() {
-        InstrumentationTestMode.set(true);
-    }
-
-    @Override
-    @After
-    public void after() {
-        super.after();
-        InstrumentationTestMode.set(false);
-    }
 
     public static class Bytecode {
         public static final byte CONST = 0;
@@ -65,7 +41,6 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         public static final byte POP = 4;
         public static final byte JMP = 5;
         public static final byte DUP = 6;
-        public static final byte SWITCH = 7;
     }
 
     public static boolean TRACE = false;
@@ -121,7 +96,7 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
             trace("Start program");
             int topOfStack = -1;
             int bci = 0;
-            outer: while (true) {
+            while (true) {
                 CompilerAsserts.partialEvaluationConstant(bci);
                 byte bc = bytecodes[bci];
                 byte value = 0;
@@ -157,40 +132,6 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
                             continue;
                         }
 
-                    case Bytecode.SWITCH:
-                        trace("%d (%d): SWITCH", bci, topOfStack);
-                        {
-                            int switchValue = getInt(frame, topOfStack--);
-                            byte switchTargetCount = bytecodes[bci + 1];
-                            int i = 0;
-                            while (true) {
-                                CompilerAsserts.partialEvaluationConstant(i);
-                                if (switchValue == i) {
-                                    CompilerAsserts.partialEvaluationConstant(i);
-                                    CompilerAsserts.partialEvaluationConstant(bci);
-                                    bci = bytecodes[bci + i + 2];
-                                    // Need this seemingly useless condition here for two reasons:
-                                    // 1. Bytecode analysis will consider the current block as
-                                    // being within the inner loop.
-                                    // 2. The if body will be an empty block that directly
-                                    // jumps to the begin of the outer loop.
-                                    if (i != -1) {
-                                        continue outer;
-                                    }
-                                }
-
-                                CompilerAsserts.partialEvaluationConstant(switchTargetCount);
-                                CompilerAsserts.partialEvaluationConstant(i);
-                                i = i + 1;
-                                if (i == switchTargetCount) {
-                                    break;
-                                }
-                            }
-                            // Continue with the code after the switch.
-                            bci += switchTargetCount + 1;
-                            continue;
-                        }
-
                     case Bytecode.POP:
                         trace("%d (%d): POP", bci, topOfStack);
                         topOfStack--;
@@ -218,8 +159,7 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
     }
 
     private static void assertReturns42(RootNode program) {
-        Object result = Truffle.getRuntime().createCallTarget(program).call();
-        Assert.assertEquals(Integer.valueOf(42), result);
+        Assert.assertEquals(Integer.valueOf(42), Truffle.getRuntime().createCallTarget(program).call());
     }
 
     private void assertPartialEvalEqualsAndRunsCorrect(RootNode program) {
@@ -587,28 +527,6 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         InstArrayProgram program = new InstArrayProgram2("instArraySimpleIfProgram2", inst, returnSlot, fd);
         program.execute(Truffle.getRuntime().createVirtualFrame(new Object[0], fd));
         program.execute(Truffle.getRuntime().createVirtualFrame(new Object[1], fd));
-        assertPartialEvalEqualsAndRunsCorrect(program);
-    }
-
-    @Test
-    public void simpleSwitchProgram() {
-        byte[] bytecodes = new byte[]{
-        /* 0: */Bytecode.CONST,
-        /* 1: */1,
-        /* 2: */Bytecode.SWITCH,
-        /* 3: */2,
-        /* 4: */9,
-        /* 5: */12,
-        /* 6: */Bytecode.CONST,
-        /* 7: */40,
-        /* 8: */Bytecode.RETURN,
-        /* 9: */Bytecode.CONST,
-        /* 10: */41,
-        /* 11: */Bytecode.RETURN,
-        /* 12: */Bytecode.CONST,
-        /* 13: */42,
-        /* 14: */Bytecode.RETURN};
-        Program program = new Program("simpleSwitchProgram", bytecodes, 0, 3);
         assertPartialEvalEqualsAndRunsCorrect(program);
     }
 }
