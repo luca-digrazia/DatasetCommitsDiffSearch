@@ -38,7 +38,7 @@ public final class GlobalAlias extends GlobalValueSymbol {
 
     private static final int ALIGN = 0;
 
-    private GlobalAlias(Type type, int aliasedValue, Linkage linkage, Visibility visibility) {
+    public GlobalAlias(Type type, int aliasedValue, Linkage linkage, Visibility visibility) {
         super(type, aliasedValue, ALIGN, linkage, visibility);
     }
 
