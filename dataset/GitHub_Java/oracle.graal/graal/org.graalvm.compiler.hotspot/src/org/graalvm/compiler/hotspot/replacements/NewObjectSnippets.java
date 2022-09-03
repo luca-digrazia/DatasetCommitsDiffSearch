@@ -537,7 +537,7 @@ public class NewObjectSnippets implements Snippets {
             fillWithGarbage(allocationSize, memory, false, headerSize, maybeUnroll, useSnippetCounters);
         }
         MembarNode.memoryBarrier(MemoryBarriers.STORE_STORE, INIT_LOCATION);
-        return memory.toObjectNonNull();
+        return memory.toObject();
     }
 
     public static class Templates extends AbstractTemplates {

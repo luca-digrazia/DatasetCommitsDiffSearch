@@ -75,7 +75,6 @@ public class SPARCIndexedAddressNode extends AddressNode implements LIRLowerable
         this.base = base;
     }
 
-    @Override
     public ValueNode getIndex() {
         return index;
     }
@@ -83,10 +82,5 @@ public class SPARCIndexedAddressNode extends AddressNode implements LIRLowerable
     public void setIndex(ValueNode index) {
         updateUsages(this.index, index);
         this.index = index;
-    }
-
-    @Override
-    public long getMaxConstantDisplacement() {
-        return Long.MAX_VALUE;
     }
 }

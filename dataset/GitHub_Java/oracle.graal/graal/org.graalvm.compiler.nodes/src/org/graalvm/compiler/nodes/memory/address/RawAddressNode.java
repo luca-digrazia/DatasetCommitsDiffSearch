@@ -54,14 +54,4 @@ public class RawAddressNode extends AddressNode {
     public ValueNode getBase() {
         return address;
     }
-
-    @Override
-    public long getMaxConstantDisplacement() {
-        return 0;
-    }
-
-    @Override
-    public ValueNode getIndex() {
-        return null;
-    }
 }

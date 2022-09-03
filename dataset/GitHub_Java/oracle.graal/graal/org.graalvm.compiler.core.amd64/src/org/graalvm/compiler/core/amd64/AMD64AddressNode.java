@@ -100,7 +100,6 @@ public class AMD64AddressNode extends AddressNode implements LIRLowerable {
         this.base = base;
     }
 
-    @Override
     public ValueNode getIndex() {
         return index;
     }
@@ -127,10 +126,5 @@ public class AMD64AddressNode extends AddressNode implements LIRLowerable {
 
     public void setDisplacement(int displacement) {
         this.displacement = displacement;
-    }
-
-    @Override
-    public long getMaxConstantDisplacement() {
-        return displacement;
     }
 }

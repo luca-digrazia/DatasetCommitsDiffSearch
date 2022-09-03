@@ -72,14 +72,4 @@ public class SPARCImmediateAddressNode extends AddressNode implements LIRLowerab
     public ValueNode getBase() {
         return base;
     }
-
-    @Override
-    public long getMaxConstantDisplacement() {
-        return displacement;
-    }
-
-    @Override
-    public ValueNode getIndex() {
-        return null;
-    }
 }
