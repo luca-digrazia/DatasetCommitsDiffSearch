@@ -30,10 +30,7 @@ import static java.lang.Float.*;
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MIOp;
-import com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.MoveOp;
@@ -566,51 +563,28 @@ public class AMD64Move {
     private static void const2stack(CompilationResultBuilder crb, AMD64MacroAssembler masm, Value result, JavaConstant input) {
         assert !crb.codeCache.needsDataPatch(input);
         AMD64Address dest = (AMD64Address) crb.asAddress(result);
-        final long imm;
         switch (input.getKind().getStackKind()) {
             case Int:
-                imm = input.asInt();
+                masm.movl(dest, input.asInt());
                 break;
             case Long:
-                imm = input.asLong();
+                masm.movlong(dest, input.asLong());
                 break;
             case Float:
-                imm = floatToRawIntBits(input.asFloat());
+                masm.movl(dest, floatToRawIntBits(input.asFloat()));
                 break;
             case Double:
-                imm = doubleToRawLongBits(input.asDouble());
+                masm.movlong(dest, doubleToRawLongBits(input.asDouble()));
                 break;
             case Object:
                 if (input.isNull()) {
-                    imm = 0;
+                    masm.movlong(dest, 0L);
                 } else {
                     throw GraalInternalError.shouldNotReachHere("Non-null object constants must be in register");
                 }
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
-        }
-        switch (result.getKind()) {
-            case Byte:
-                assert NumUtil.isByte(imm) : "Is not in byte range: " + imm;
-                AMD64MIOp.MOVB.emit(masm, OperandSize.BYTE, dest, (int) imm);
-                break;
-            case Short:
-                assert NumUtil.isShort(imm) : "Is not in short range: " + imm;
-                AMD64MIOp.MOV.emit(masm, OperandSize.WORD, dest, (int) imm);
-                break;
-            case Int:
-            case Float:
-                assert NumUtil.isInt(imm) : "Is not in int range: " + imm;
-                masm.movl(dest, (int) imm);
-                break;
-            case Long:
-            case Double:
-            case Object:
-                masm.movlong(dest, imm);
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere("Unknown result Kind: " + result.getKind());
         }
     }
 }
