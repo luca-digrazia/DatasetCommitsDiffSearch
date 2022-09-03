@@ -95,12 +95,18 @@ public final class ModelModule implements ModuleGenerator {
     }
 
     public void accept(ModelVisitor visitor) {
-        types.forEach(visitor::visit);
+        for (Type type : types) {
+            visitor.visit(type);
+        }
         for (GlobalValueSymbol variable : globals) {
             variable.accept(visitor);
         }
-        defines.forEach(visitor::visit);
-        declares.forEach(visitor::visit);
+        for (FunctionDefinition define : defines) {
+            visitor.visit(define);
+        }
+        for (FunctionDeclaration declare : declares) {
+            visitor.visit(declare);
+        }
     }
 
     @Override
