@@ -273,22 +273,23 @@ public abstract class LIRGenerator extends ValueVisitor {
         return x.operand();
     }
 
-    private void setOperandsForLocals() {
+    private void setOperandsForLocals(FrameState state) {
         CiCallingConvention args = compilation.frameMap().incomingArguments();
-        for (Node node : compilation.graph.start().usages()) {
-            if (node instanceof Local) {
-                Local local = (Local) node;
-                int i = local.index();
+        int javaIndex = 0;
+        for (int i = 0; i < args.locations.length; i++) {
+            CiValue src = args.locations[i];
+            assert src.isLegal() : "check";
 
-                CiValue src = args.locations[i];
-                assert src.isLegal() : "check";
+            CiVariable dest = newVariable(src.kind.stackKind());
+            lir.move(src, dest, src.kind);
 
-                CiVariable dest = newVariable(src.kind.stackKind());
-                lir.move(src, dest, src.kind);
-
-                assert src.kind.stackKind() == local.kind.stackKind() : "local type check failed";
-                setResult(local, dest);
-            }
+            // Assign new location to Local instruction for this local
+            Value instr = state.localAt(javaIndex);
+            Local local = ((Local) instr);
+            CiKind kind = src.kind.stackKind();
+            assert kind == local.kind.stackKind() : "local type check failed";
+            setResult(local, dest);
+            javaIndex += kind.jvmSlots;
         }
     }
 
@@ -893,7 +894,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             if (prologue != null) {
                 emitXir(prologue, null, null, null, false);
             }
-            setOperandsForLocals();
+            setOperandsForLocals(ir.getHIRStartBlock().end().stateAfter());
         }
     }
 
