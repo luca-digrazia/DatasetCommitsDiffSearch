@@ -642,7 +642,7 @@ public final class ProbeNode extends Node {
     }
 
     private static boolean checkInteropType(Object value, EventBinding.Source<?> binding) {
-        if (value != null && value != UNWIND_ACTION_REENTER && value != UNWIND_ACTION_IGNORED && !InstrumentationHandler.ACCESSOR.isTruffleObject(value)) {
+        if (value != null && value != UNWIND_ACTION_REENTER && !InstrumentationHandler.ACCESSOR.isTruffleObject(value)) {
             Class<?> clazz = value.getClass();
             if (!(clazz == Byte.class ||
                             clazz == Short.class ||
@@ -786,6 +786,7 @@ public final class ProbeNode extends Node {
 
         @Child private ProbeNode.EventChainNode next;
         private final EventBinding.Source<?> binding;
+        private final BranchProfile unwindHasNext = BranchProfile.create();
         @CompilationFinal private byte seen = 0;
 
         EventChainNode(EventBinding.Source<?> binding) {
@@ -833,24 +834,6 @@ public final class ProbeNode extends Node {
         private void setSeenUnwind() {
             CompilerAsserts.neverPartOfCompilation();
             seen = (byte) (seen | 0b10);
-        }
-
-        private boolean isSeenUnwindOnInputValue() {
-            return (seen & 0b100) != 0;
-        }
-
-        private void setSeenUnwindOnInputValue() {
-            CompilerAsserts.neverPartOfCompilation();
-            seen = (byte) (seen | 0b100);
-        }
-
-        private boolean isSeenHasNext() {
-            return (seen & 0b1000) != 0;
-        }
-
-        private void setSeenHasNext() {
-            CompilerAsserts.neverPartOfCompilation();
-            seen = (byte) (seen | 0b1000);
         }
 
         final void onDispose(EventContext context, VirtualFrame frame) {
@@ -906,10 +889,7 @@ public final class ProbeNode extends Node {
                         setSeenUnwind();
                     }
                     if (unwind != null && unwind != ex) {
-                        if (!isSeenHasNext()) {
-                            CompilerDirectives.transferToInterpreterAndInvalidate();
-                            setSeenHasNext();
-                        }
+                        unwindHasNext.enter();
                         unwind.addNext(ex);
                     } else {
                         unwind = ex;
@@ -924,29 +904,14 @@ public final class ProbeNode extends Node {
         protected abstract void innerOnEnter(EventContext context, VirtualFrame frame);
 
         final void onInputValue(EventContext context, VirtualFrame frame, EventBinding<?> inputBinding, EventContext inputContext, int inputIndex, Object inputValue) {
-            UnwindException unwind = null;
             if (next != null) {
-                try {
-                    next.onInputValue(context, frame, inputBinding, inputContext, inputIndex, inputValue);
-                } catch (UnwindException ex) {
-                    if (!isSeenUnwindOnInputValue()) {
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
-                        setSeenUnwindOnInputValue();
-                    }
-                    unwind = ex;
-                }
+                next.onInputValue(context, frame, inputBinding, inputContext, inputIndex, inputValue);
             }
+
             try {
                 if (binding == inputBinding) {
                     innerOnInputValue(context, frame, binding, inputContext, inputIndex, inputValue);
                 }
-            } catch (UnwindException ex) {
-                if (!isSeenUnwindOnInputValue()) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    setSeenUnwindOnInputValue();
-                }
-                ex.thrownFromBinding(binding);
-                unwind = mergeUnwind(unwind, ex);
             } catch (Throwable t) {
                 if (!isSeenException()) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -958,22 +923,6 @@ public final class ProbeNode extends Node {
                     CompilerDirectives.transferToInterpreter();
                     exceptionEventForClientInstrument(binding, "onInputValue", t);
                 }
-            }
-            if (unwind != null) {
-                throw unwind;
-            }
-        }
-
-        private UnwindException mergeUnwind(UnwindException unwind, UnwindException other) {
-            if (unwind != null && unwind != other) {
-                if (!isSeenHasNext()) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    setSeenHasNext();
-                }
-                unwind.addNext(other);
-                return unwind;
-            } else {
-                return other;
             }
         }
 
@@ -1000,7 +949,12 @@ public final class ProbeNode extends Node {
                     setSeenUnwind();
                 }
                 ex.thrownFromBinding(binding);
-                unwind = mergeUnwind(unwind, ex);
+                if (unwind != null && unwind != ex) {
+                    unwindHasNext.enter();
+                    unwind.addNext(ex);
+                } else {
+                    unwind = ex;
+                }
             } catch (Throwable t) {
                 if (!isSeenException()) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -1038,7 +992,12 @@ public final class ProbeNode extends Node {
                         CompilerDirectives.transferToInterpreterAndInvalidate();
                         setSeenUnwind();
                     }
-                    unwind = mergeUnwind(unwind, ex);
+                    if (unwind != null && unwind != ex) {
+                        unwindHasNext.enter();
+                        unwind.addNext(ex);
+                    } else {
+                        unwind = ex;
+                    }
                 }
             }
             try {
@@ -1049,7 +1008,12 @@ public final class ProbeNode extends Node {
                     setSeenUnwind();
                 }
                 ex.thrownFromBinding(binding);
-                unwind = mergeUnwind(unwind, ex);
+                if (unwind != null && unwind != ex) {
+                    unwindHasNext.enter();
+                    unwind.addNext(ex);
+                } else {
+                    unwind = ex;
+                }
             } catch (Throwable t) {
                 if (!isSeenException()) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -1075,10 +1039,7 @@ public final class ProbeNode extends Node {
             } else {
                 UnwindException nextUnwind = unwind.getNext();
                 if (nextUnwind != null) {
-                    if (!isSeenHasNext()) {
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
-                        setSeenHasNext();
-                    }
+                    unwindHasNext.enter();
                     return containsBindingBoundary(nextUnwind);
                 } else {
                     return false;
@@ -1097,10 +1058,7 @@ public final class ProbeNode extends Node {
             } else {
                 UnwindException nextUnwind = unwind.getNext();
                 if (nextUnwind != null) {
-                    if (!isSeenHasNext()) {
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
-                        setSeenHasNext();
-                    }
+                    unwindHasNext.enter();
                     return getInfoBoundary(nextUnwind);
                 } else {
                     return false;
@@ -1119,10 +1077,7 @@ public final class ProbeNode extends Node {
             } else {
                 UnwindException nextUnwind = unwind.getNext();
                 if (nextUnwind != null) {
-                    if (!isSeenHasNext()) {
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
-                        setSeenHasNext();
-                    }
+                    unwindHasNext.enter();
                     unwind.resetBoundary(binding);
                 }
             }
@@ -1480,7 +1435,7 @@ public final class ProbeNode extends Node {
 
         @Override
         protected Object innerOnUnwind(EventContext context, VirtualFrame frame, Object info) {
-            return UNWIND_ACTION_IGNORED;
+            return null;
         }
 
         @Override
