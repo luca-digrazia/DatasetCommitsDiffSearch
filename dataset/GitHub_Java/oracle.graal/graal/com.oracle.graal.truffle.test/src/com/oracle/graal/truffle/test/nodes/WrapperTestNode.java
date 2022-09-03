@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.truffle.test.nodes;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrument.EventHandlerNode;
-import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.WrapperNode;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
+import com.oracle.truffle.api.nodes.*;
 
 /**
  * Support for PE testing instrumentation.
@@ -34,7 +33,7 @@ import com.oracle.truffle.api.nodes.Node;
 public final class WrapperTestNode extends AbstractTestNode implements WrapperNode {
 
     @Child private AbstractTestNode child;
-    @Child private EventHandlerNode eventHandlerNode;
+    @Child private ProbeNode probeNode;
 
     public WrapperTestNode(AbstractTestNode child) {
         this.child = child;
@@ -45,12 +44,16 @@ public final class WrapperTestNode extends AbstractTestNode implements WrapperNo
     }
 
     @Override
-    public void insertEventHandlerNode(EventHandlerNode eventHandler) {
-        this.eventHandlerNode = eventHandler;
+    public boolean isInstrumentable() {
+        return false;
+    }
+
+    public void insertProbe(ProbeNode newProbeNode) {
+        this.probeNode = newProbeNode;
     }
 
     public Probe getProbe() {
-        return eventHandlerNode.getProbe();
+        return probeNode.getProbe();
     }
 
     @Override
@@ -60,13 +63,15 @@ public final class WrapperTestNode extends AbstractTestNode implements WrapperNo
 
     @Override
     public int execute(VirtualFrame frame) {
-        eventHandlerNode.enter(child, frame);
+        probeNode.enter(child, frame);
         try {
             final int result = child.execute(frame);
-            eventHandlerNode.returnValue(child, frame, result);
+            probeNode.returnValue(child, frame, result);
             return result;
+        } catch (KillException e) {
+            throw (e);
         } catch (Exception e) {
-            eventHandlerNode.returnExceptional(child, frame, e);
+            probeNode.returnExceptional(child, frame, e);
             throw (e);
         }
 
