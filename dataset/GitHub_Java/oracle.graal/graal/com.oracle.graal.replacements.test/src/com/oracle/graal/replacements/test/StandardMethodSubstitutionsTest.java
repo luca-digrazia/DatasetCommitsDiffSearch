@@ -131,7 +131,7 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
         StructuredGraph graph = testGraph(testMethodName);
 
         // Check to see if the resulting graph contains the expected node
-        StructuredGraph replacement = getReplacements().getSubstitution(realJavaMethod, -1);
+        StructuredGraph replacement = getReplacements().getMethodSubstitution(realJavaMethod);
         if (replacement == null && !optional) {
             assertInGraph(graph, intrinsicClass);
         }
