@@ -20,31 +20,21 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.truffle.phases;
+package com.oracle.graal.truffle.nodes;
 
-import com.oracle.graal.graph.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.truffle.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-/**
- * Compiler phase for verifying that the Truffle virtual frame does not escape and can therefore be
- * escape analyzed.
- */
-public class VerifyFrameDoesNotEscapePhase extends Phase {
+public class IntegerMulExactSplitNode extends IntegerExactArithmeticSplitNode {
+
+    public IntegerMulExactSplitNode(Stamp stamp, ValueNode x, ValueNode y, AbstractBeginNode next, AbstractBeginNode overflowSuccessor) {
+        super(stamp, x, y, next, overflowSuccessor);
+    }
 
     @Override
-    protected void run(StructuredGraph graph) {
-        NewFrameNode frame = graph.getNodes(NewFrameNode.class).first();
-        if (frame != null) {
-            for (MethodCallTargetNode callTarget : frame.usages().filter(MethodCallTargetNode.class)) {
-                if (callTarget.invoke() != null) {
-                    Throwable exception = new VerificationError("Frame escapes at: %s#%s", callTarget, callTarget.targetMethod());
-                    throw GraphUtil.approxSourceException(callTarget, exception);
-                }
-            }
-        }
+    protected Value generateArithmetic(LIRGeneratorTool gen) {
+        return gen.emitMul(gen.operand(getX()), gen.operand(getY()));
     }
 }

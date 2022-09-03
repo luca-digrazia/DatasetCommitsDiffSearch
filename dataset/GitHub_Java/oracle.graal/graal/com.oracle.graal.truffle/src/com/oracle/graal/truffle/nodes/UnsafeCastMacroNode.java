@@ -41,10 +41,7 @@ public class UnsafeCastMacroNode extends NeverPartOfCompilationNode implements C
             Class c = (Class) arguments.get(1).asConstant().asObject();
             ResolvedJavaType lookupJavaType = tool.runtime().lookupJavaType(c);
             Stamp s = StampFactory.declaredNonNull(lookupJavaType);
-            ValueAnchorNode valueAnchorNode = graph().add(new ValueAnchorNode());
-            UnsafeCastNode unsafeCast = graph().unique(new UnsafeCastNode(arguments.get(0), s, (GuardingNode) valueAnchorNode));
-            this.replaceAtUsages(unsafeCast);
-            return valueAnchorNode;
+            return graph().unique(new UnsafeCastNode(arguments.get(0), s));
         }
         return this;
     }

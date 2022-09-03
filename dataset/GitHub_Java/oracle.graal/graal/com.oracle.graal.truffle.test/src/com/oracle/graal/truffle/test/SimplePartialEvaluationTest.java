@@ -27,7 +27,6 @@ import org.junit.*;
 import com.oracle.graal.truffle.test.nodes.*;
 import com.oracle.truffle.api.frame.*;
 
-@Ignore("Currently ignored due to problems with code coverage tools.")
 public class SimplePartialEvaluationTest extends PartialEvaluationTest {
 
     public static Object constant42() {

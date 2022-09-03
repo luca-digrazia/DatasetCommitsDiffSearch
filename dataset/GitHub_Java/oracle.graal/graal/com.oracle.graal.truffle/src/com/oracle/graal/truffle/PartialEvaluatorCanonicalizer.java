@@ -35,11 +35,11 @@ import com.oracle.truffle.api.nodes.Node.Child;
 
 final class PartialEvaluatorCanonicalizer implements CanonicalizerPhase.CustomCanonicalizer {
 
-    private final MetaAccessProvider metaAccessProvider;
+    private final MetaAccessProvider runtime;
     private final ResolvedJavaType nodeClass;
 
-    PartialEvaluatorCanonicalizer(MetaAccessProvider metaAccessProvider, ResolvedJavaType nodeClass) {
-        this.metaAccessProvider = metaAccessProvider;
+    PartialEvaluatorCanonicalizer(MetaAccessProvider runtime, ResolvedJavaType nodeClass) {
+        this.runtime = runtime;
         this.nodeClass = nodeClass;
     }
 
@@ -53,7 +53,7 @@ final class PartialEvaluatorCanonicalizer implements CanonicalizerPhase.CustomCa
                             ((loadFieldNode.kind() == Kind.Object && loadFieldNode.field().getAnnotation(Child.class) != null) || Modifier.isFinal(loadFieldNode.field().getModifiers()) || loadFieldNode.field().getAnnotation(
                                             CompilerDirectives.CompilationFinal.class) != null)) {
                 Constant constant = loadFieldNode.field().readValue(loadFieldNode.object().asConstant());
-                return ConstantNode.forConstant(constant, metaAccessProvider, node.graph());
+                return ConstantNode.forConstant(constant, this.runtime, node.graph());
             }
         } else if (node instanceof LoadIndexedNode) {
             LoadIndexedNode loadIndexedNode = (LoadIndexedNode) node;
@@ -65,7 +65,7 @@ final class PartialEvaluatorCanonicalizer implements CanonicalizerPhase.CustomCa
                     Object array = loadIndexedNode.array().asConstant().asObject();
                     int index = loadIndexedNode.index().asConstant().asInt();
                     Object value = Array.get(array, index);
-                    return ConstantNode.forObject(value, metaAccessProvider, node.graph());
+                    return ConstantNode.forObject(value, this.runtime, node.graph());
                 }
             }
         } else if (node instanceof UnsafeLoadNode) {

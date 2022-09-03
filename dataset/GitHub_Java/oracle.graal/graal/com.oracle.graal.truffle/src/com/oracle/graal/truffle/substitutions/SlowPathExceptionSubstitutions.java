@@ -22,27 +22,38 @@
  */
 package com.oracle.graal.truffle.substitutions;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.truffle.*;
-import com.oracle.graal.truffle.nodes.*;
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.frame.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.truffle.api.nodes.*;
 
-@ClassSubstitution(OptimizedCallTarget.class)
-public class OptimizedCallTargetSubstitutions {
+/**
+ * Deoptimize on creation of a new SlowPathException instance.
+ */
+@ClassSubstitution(SlowPathException.class)
+public class SlowPathExceptionSubstitutions {
 
-    @MacroSubstitution(macro = NeverInlineMacroNode.class, isStatic = false)
-    public static native Object call(OptimizedCallTarget target, PackedFrame caller, Arguments args);
-
-    @MethodSubstitution
-    private static FrameWithoutBoxing createFrame(FrameDescriptor descriptor, PackedFrame caller, Arguments args) {
-        return NewFrameNode.allocate(descriptor, caller, args);
+    @MethodSubstitution(value = "<init>")
+    public static void init() {
+        DeoptimizeNode.deopt(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.UnreachedCode);
     }
 
     @SuppressWarnings("unused")
-    @MethodSubstitution(isStatic = false)
-    private static VirtualFrame create(OptimizedCallTarget target, FrameDescriptor descriptor, PackedFrame caller, Arguments args) {
-        return createFrame(descriptor, caller, args);
+    @MethodSubstitution(value = "<init>")
+    public static void init(String result, Throwable cause) {
+        DeoptimizeNode.deopt(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.UnreachedCode);
+    }
+
+    @SuppressWarnings("unused")
+    @MethodSubstitution(value = "<init>")
+    public static void init(String result) {
+        DeoptimizeNode.deopt(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.UnreachedCode);
+    }
+
+    @SuppressWarnings("unused")
+    @MethodSubstitution(value = "<init>")
+    public static void init(Throwable cause) {
+        DeoptimizeNode.deopt(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.UnreachedCode);
     }
 }

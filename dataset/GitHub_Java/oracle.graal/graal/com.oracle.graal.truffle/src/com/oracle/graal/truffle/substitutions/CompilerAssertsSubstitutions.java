@@ -24,7 +24,7 @@ package com.oracle.graal.truffle.substitutions;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.truffle.nodes.asserts.*;
+import com.oracle.graal.truffle.nodes.*;
 import com.oracle.truffle.api.*;
 
 @ClassSubstitution(CompilerAsserts.class)
@@ -32,9 +32,6 @@ public class CompilerAssertsSubstitutions {
 
     @MacroSubstitution(macro = NeverPartOfCompilationNode.class, isStatic = true)
     public static native void neverPartOfCompilation();
-
-    @MacroSubstitution(macro = NeverPartOfCompilationNode.class, isStatic = true)
-    public static native void neverPartOfCompilation(String message);
 
     @MacroSubstitution(macro = CompilationConstantNode.class, isStatic = true)
     public static native boolean compilationConstant(boolean value);

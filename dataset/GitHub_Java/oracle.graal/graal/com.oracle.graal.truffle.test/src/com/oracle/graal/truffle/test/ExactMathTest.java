@@ -27,7 +27,6 @@ import org.junit.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.runtime.*;
 import com.oracle.graal.truffle.substitutions.*;
 import com.oracle.truffle.api.*;
 
@@ -37,8 +36,7 @@ public class ExactMathTest extends GraalCompilerTest {
 
     public ExactMathTest() {
         if (!substitutionsInstalled) {
-            Replacements replacements = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders().getReplacements();
-            replacements.registerSubstitutions(ExactMathSubstitutions.class);
+            Graal.getRequiredCapability(Replacements.class).registerSubstitutions(ExactMathSubstitutions.class);
             substitutionsInstalled = true;
         }
     }

@@ -220,7 +220,6 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         }
         int slotIndex = slot.getIndex();
         if (slotIndex >= tags.length) {
-            CompilerDirectives.transferToInterpreter();
             resize();
         }
         tags[slotIndex] = (byte) accessKind.ordinal();
@@ -238,11 +237,9 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         }
         int slotIndex = slot.getIndex();
         if (slotIndex >= tags.length) {
-            CompilerDirectives.transferToInterpreter();
             resize();
         }
         if (tags[slotIndex] != accessKind.ordinal()) {
-            CompilerDirectives.transferToInterpreter();
             descriptor.getTypeConversion().updateFrameSlot(this, slot, getValue(slot));
             if (tags[slotIndex] != accessKind.ordinal()) {
                 throw new FrameSlotTypeException();

@@ -26,7 +26,6 @@ import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
-@NodeInfo
 public class ConstantWithAssumptionTestNode extends AbstractTestNode {
 
     private final int value;

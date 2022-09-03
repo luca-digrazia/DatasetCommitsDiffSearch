@@ -23,6 +23,7 @@
 package com.oracle.graal.truffle;
 
 import java.lang.ref.*;
+import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.truffle.api.impl.*;
@@ -30,13 +31,7 @@ import com.oracle.truffle.api.nodes.*;
 
 public final class OptimizedAssumption extends AbstractAssumption {
 
-    private static class Entry {
-        WeakReference<InstalledCode> installedCode;
-        long version;
-        Entry next;
-    }
-
-    private Entry first;
+    List<WeakReference<InstalledCode>> dependentInstalledCode;
 
     public OptimizedAssumption(String name) {
         super(name);
@@ -52,26 +47,25 @@ public final class OptimizedAssumption extends AbstractAssumption {
     @Override
     public synchronized void invalidate() {
         if (isValid) {
-            Entry e = first;
-            while (e != null) {
-                InstalledCode installedCode = e.installedCode.get();
-                if (installedCode != null && installedCode.getVersion() == e.version) {
-                    installedCode.invalidate();
+            if (dependentInstalledCode != null) {
+                for (WeakReference<InstalledCode> installedCodeReference : dependentInstalledCode) {
+                    InstalledCode installedCode = installedCodeReference.get();
+                    if (installedCode != null) {
+                        installedCode.invalidate();
+                    }
                 }
-                e = e.next;
+                dependentInstalledCode = null;
             }
-            first = null;
             isValid = false;
         }
     }
 
     public synchronized void registerInstalledCode(InstalledCode installedCode) {
         if (isValid) {
-            Entry e = new Entry();
-            e.installedCode = new WeakReference<>(installedCode);
-            e.version = installedCode.getVersion();
-            e.next = first;
-            first = e;
+            if (dependentInstalledCode == null) {
+                dependentInstalledCode = new ArrayList<>();
+            }
+            dependentInstalledCode.add(new WeakReference<>(installedCode));
         } else {
             installedCode.invalidate();
         }

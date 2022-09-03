@@ -31,7 +31,6 @@ public class RootTestNode extends RootNode {
     @Child AbstractTestNode node;
 
     public RootTestNode(String name, AbstractTestNode node) {
-        super(null);
         this.name = name;
         this.node = node;
     }

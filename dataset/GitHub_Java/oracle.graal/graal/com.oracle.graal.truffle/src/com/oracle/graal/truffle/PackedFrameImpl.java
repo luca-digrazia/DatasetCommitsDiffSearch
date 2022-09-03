@@ -20,31 +20,23 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.truffle.phases;
+package com.oracle.graal.truffle;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.truffle.nodes.*;
+import com.oracle.truffle.api.frame.*;
 
 /**
- * Compiler phase for verifying that the Truffle virtual frame does not escape and can therefore be
- * escape analyzed.
+ * Implementation of a packed frame that contains only a raw pointer to the native stack. This
+ * packed frame is only handed out by Truffle compiled methods.
+ * 
  */
-public class VerifyFrameDoesNotEscapePhase extends Phase {
+public class PackedFrameImpl implements PackedFrame {
+
+    private long stackPointer;
 
     @Override
-    protected void run(StructuredGraph graph) {
-        NewFrameNode frame = graph.getNodes(NewFrameNode.class).first();
-        if (frame != null) {
-            for (MethodCallTargetNode callTarget : frame.usages().filter(MethodCallTargetNode.class)) {
-                if (callTarget.invoke() != null) {
-                    Throwable exception = new VerificationError("Frame escapes at: %s#%s", callTarget, callTarget.targetMethod());
-                    throw GraphUtil.approxSourceException(callTarget, exception);
-                }
-            }
-        }
+    public VirtualFrame unpack() {
+        return unpackNative();
     }
+
+    private native VirtualFrame unpackNative();
 }

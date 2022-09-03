@@ -66,8 +66,6 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
     long timePartialEvaluationFinished;
     long timeCompilationFinished;
     int codeSize;
-    int nodeCountPartialEval;
-    int nodeCountLowered;
 
     @Override
     public Object call(PackedFrame caller, Arguments args) {
@@ -82,7 +80,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
                         originalInvokeCounter += invalidationReprofileCount;
                     }
                     if (TraceTruffleCompilation.getValue()) {
-                        OUT.printf("[truffle] invalidated %-48s |Alive %5.0fms\n", rootNode, (System.nanoTime() - timeCompilationFinished) / 1e6);
+                        OUT.printf("[truffle] invalidated %-48s |Alive %4.0fms\n", rootNode, (System.nanoTime() - timeCompilationFinished) / 1e6);
                     }
                 }
             } else {
@@ -118,10 +116,8 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
                 throw new BailoutException(String.format("code installation failed (codeSize=%s)", codeSize));
             } else {
                 if (TraceTruffleCompilation.getValue()) {
-                    int nodeCountTruffle = new InliningHelper.CallTargetProfile(rootNode).nodeCount;
-                    OUT.printf("[truffle] optimized %-50s |Nodes %7d |Time %5.0f(%4.0f+%-4.0f)ms |Nodes %5d/%5d |CodeSize %d\n", rootNode, nodeCountTruffle,
-                                    (timeCompilationFinished - timeCompilationStarted) / 1e6, (timePartialEvaluationFinished - timeCompilationStarted) / 1e6,
-                                    (timeCompilationFinished - timePartialEvaluationFinished) / 1e6, nodeCountPartialEval, nodeCountLowered, codeSize);
+                    OUT.printf("[truffle] optimized %-50s |Total %5.0fms |PE %4.0fms |Graal %4.0fms |CodeSize %d\n", rootNode, (timeCompilationFinished - timeCompilationStarted) / 1e6,
+                                    (timePartialEvaluationFinished - timeCompilationStarted) / 1e6, (timeCompilationFinished - timePartialEvaluationFinished) / 1e6, codeSize);
                 }
             }
         } catch (Throwable e) {
@@ -169,7 +165,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
         loopAndInvokeCounter -= count;
     }
 
-    private static class InliningHelper {
+    private class InliningHelper {
 
         private static final int MAX_SIZE = 300;
         private static final int MAX_INLINE_SIZE = 62;
@@ -205,7 +201,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
                 }
 
                 ProfiledInlinableCallSite inlinable = new ProfiledInlinableCallSite(inlineProfile, callSite);
-                double metric = (inlinable.callCount / inlineProfile.nodeCount) + ((double) inlinable.callCount / (double) target.originalInvokeCounter);
+                double metric = (inlinable.callCount / inlineProfile.nodeCount) + ((double) inlinable.callCount / (double) originalInvokeCounter);
                 if (metric >= max) {
                     inliningDecision = inlinable;
                     max = metric;
@@ -220,7 +216,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
                 if (inliningDecision.callSite.inline(target)) {
                     if (TraceTruffleCompilation.getValue()) {
 
-                        String calls = String.format("%4s/%4s", inliningDecision.callCount, target.originalInvokeCounter);
+                        String calls = String.format("%4s/%4s", inliningDecision.callCount, originalInvokeCounter);
                         String nodes = String.format("%3s/%3s", inliningDecision.profile.nodeCount, profile.nodeCount);
 
                         OUT.printf("[truffle] inlined   %-50s |Nodes %6s |Calls %6s         |into %s\n", inliningDecision.callSite, nodes, calls, target.getRootNode());
@@ -231,7 +227,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
             return false;
         }
 
-        private static class ProfiledInlinableCallSite {
+        private class ProfiledInlinableCallSite {
 
             final CallTargetProfile profile;
             final InlinableCallSite callSite;
@@ -242,9 +238,10 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
                 this.callSite = callSite;
                 this.callCount = callSite.getCallCount();
             }
+
         }
 
-        private static class CallTargetProfile {
+        private class CallTargetProfile {
 
             final Node root;
             final int nodeCount;

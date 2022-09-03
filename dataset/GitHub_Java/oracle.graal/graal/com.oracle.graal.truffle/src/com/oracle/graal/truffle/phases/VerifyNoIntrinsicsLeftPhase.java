@@ -23,10 +23,11 @@
 package com.oracle.graal.truffle.phases;
 
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Node.IterableNodeType;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.truffle.*;
-import com.oracle.graal.truffle.nodes.frame.*;
+import com.oracle.graal.truffle.nodes.*;
 
 /**
  * Verification phase for checking that no frame intrinsic nodes introduced by the
@@ -39,7 +40,7 @@ public class VerifyNoIntrinsicsLeftPhase extends Phase {
         verifyNoInstanceLeft(graph, NewFrameNode.class);
     }
 
-    public static <T extends Node & Node.IterableNodeType> void verifyNoInstanceLeft(StructuredGraph graph, Class<T> clazz) {
+    public static <T extends Node & IterableNodeType> void verifyNoInstanceLeft(StructuredGraph graph, Class<T> clazz) {
         if (graph.getNodes(clazz).count() != 0) {
             throw new VerificationError("Found unexpected node(s): %s", graph.getNodes(clazz));
         }

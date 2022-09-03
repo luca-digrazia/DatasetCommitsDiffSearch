@@ -23,7 +23,7 @@
 package com.oracle.graal.truffle.substitutions;
 
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.truffle.nodes.arithmetic.*;
+import com.oracle.graal.truffle.nodes.*;
 import com.oracle.truffle.api.*;
 
 /**
@@ -61,25 +61,5 @@ public class ExactMathSubstitutions {
     @MethodSubstitution
     public static long multiplyExact(long x, long y) {
         return IntegerMulExactNode.multiplyExact(x, y);
-    }
-
-    @MethodSubstitution
-    public static int multiplyHigh(int x, int y) {
-        return IntegerMulHighNode.multiplyHigh(x, y);
-    }
-
-    @MethodSubstitution
-    public static int multiplyHighUnsigned(int x, int y) {
-        return UnsignedMulHighNode.multiplyHighUnsigned(x, y);
-    }
-
-    @MethodSubstitution
-    public static long multiplyHigh(long x, long y) {
-        return IntegerMulHighNode.multiplyHigh(x, y);
-    }
-
-    @MethodSubstitution
-    public static long multiplyHighUnsigned(long x, long y) {
-        return UnsignedMulHighNode.multiplyHighUnsigned(x, y);
     }
 }

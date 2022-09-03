@@ -52,12 +52,12 @@ import com.oracle.truffle.api.nodes.*;
 public class PartialEvaluationTest extends GraalCompilerTest {
 
     private static final long UNROLL_LIMIT = 100;
-    private final PartialEvaluator partialEvaluator;
+    private final PartialEvaluator nodeCompiler;
 
     public PartialEvaluationTest() {
         // Make sure Truffle runtime is initialized.
         Assert.assertTrue(Truffle.getRuntime() instanceof GraalTruffleRuntime);
-        this.partialEvaluator = new PartialEvaluator(runtime, ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements());
+        this.nodeCompiler = new PartialEvaluator(runtime, runtime);
 
         DebugEnvironment.initialize(System.out);
     }
@@ -103,7 +103,7 @@ public class PartialEvaluationTest extends GraalCompilerTest {
 
             @Override
             public StructuredGraph call() {
-                StructuredGraph resultGraph = partialEvaluator.createGraph(compilable, assumptions);
+                StructuredGraph resultGraph = nodeCompiler.createGraph(compilable, assumptions);
                 CanonicalizerPhase canonicalizer = new CanonicalizerPhase(canonicalizeReads);
                 HighTierContext context = new HighTierContext(runtime, assumptions, replacements);
 
