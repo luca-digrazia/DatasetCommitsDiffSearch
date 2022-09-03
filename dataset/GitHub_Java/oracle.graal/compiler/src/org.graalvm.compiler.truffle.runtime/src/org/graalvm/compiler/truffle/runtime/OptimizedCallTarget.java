@@ -234,7 +234,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             if (isValid()) {
                 // Stubs were deoptimized => reinstall.
                 runtime().bypassedInstalledCode();
-                return callBoundary(args);
             }
         } else {
             // We come here from compiled code
@@ -318,7 +317,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             // Do not try to compile this target concurrently,
             // but do not block other threads if compilation is not asynchronous.
             synchronized (this) {
-                if (!isCompiling() && !isValid()) {
+                if (!isCompiling()) {
                     compilationTask = task = runtime().submitForCompilation(this);
                 }
             }
@@ -695,6 +694,19 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         final int numberOfKnownCallNodes;
         final OptimizedDirectCallNode onlyCaller;
         synchronized (this) {
+            knownCallNodes.removeIf(new Predicate<WeakReference<OptimizedDirectCallNode>>() {
+                @Override
+                public boolean test(WeakReference<OptimizedDirectCallNode> nodeWeakReference) {
+                    OptimizedDirectCallNode callNode = nodeWeakReference.get();
+                    if (callNode == null) {
+                        return true;
+                    }
+                    if (callNode.getRootNode().getCallTarget() == OptimizedCallTarget.this) {
+                        return true;
+                    }
+                    return false;
+                }
+            });
             numberOfKnownCallNodes = knownCallNodes.size();
             onlyCaller = numberOfKnownCallNodes == 1 ? knownCallNodes.get(0).get() : null;
         }
