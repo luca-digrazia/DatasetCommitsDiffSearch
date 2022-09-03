@@ -45,11 +45,8 @@ import com.oracle.truffle.llvm.nodes.func.LLVMNativeConvertNodeFactory.NativeToA
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
-import com.oracle.truffle.llvm.runtime.LLVMGlobalVariableDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleNull;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 abstract class LLVMNativeConvertNode extends Node {
@@ -57,19 +54,23 @@ abstract class LLVMNativeConvertNode extends Node {
     public abstract Object executeConvert(VirtualFrame frame, Object arg);
 
     static LLVMNativeConvertNode createToNative(LLVMContext context, Type argType) {
-        if (Type.isFunctionOrFunctionPointer(argType)) {
-            return FunctionToNativeNodeGen.create(context);
-        } else if (argType instanceof PointerType) {
-            return AddressToNativeNodeGen.create();
+        switch (argType.getLLVMType().getType()) {
+            case ADDRESS:
+                return AddressToNativeNodeGen.create();
+            case FUNCTION_ADDRESS:
+                return FunctionToNativeNodeGen.create(context);
+            default:
+                return new Id();
         }
-        return new Id();
     }
 
-    static LLVMNativeConvertNode createFromNative(Type retType) {
-        if (retType instanceof PointerType) {
-            return NativeToAddressNodeGen.create();
+    static LLVMNativeConvertNode createFromNative(LLVMRuntimeType retType) {
+        switch (retType) {
+            case ADDRESS:
+                return NativeToAddressNodeGen.create();
+            default:
+                return new Id();
         }
-        return new Id();
     }
 
     protected abstract static class AddressToNative extends LLVMNativeConvertNode {
@@ -77,21 +78,6 @@ abstract class LLVMNativeConvertNode extends Node {
         @Specialization
         long addressToNative(LLVMAddress address) {
             return address.getVal();
-        }
-
-        @Specialization
-        long addressToNative(@SuppressWarnings("unused") LLVMTruffleNull address) {
-            return 0;
-        }
-
-        @Specialization
-        long addressToNative(LLVMGlobalVariableDescriptor address) {
-            return address.getNativeAddress().getVal();
-        }
-
-        @Specialization
-        long llvmTruffleObjectToNative(LLVMTruffleObject truffleObject) {
-            return truffleObject.getOffset() + addressToNative(truffleObject.getObject());
         }
 
         @Child private Node unbox = Message.UNBOX.createNode();

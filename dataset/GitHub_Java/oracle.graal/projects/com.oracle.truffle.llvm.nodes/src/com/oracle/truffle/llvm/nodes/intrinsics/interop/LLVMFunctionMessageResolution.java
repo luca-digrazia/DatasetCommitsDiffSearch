@@ -34,15 +34,19 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 
-@MessageResolution(receiverType = LLVMFunctionDescriptor.class)
+@MessageResolution(receiverType = LLVMFunction.class, language = LLVMLanguage.class)
 public class LLVMFunctionMessageResolution {
 
     @Resolve(message = "IS_NULL")
     public abstract static class ForeignIsNullNode extends Node {
 
-        protected Object access(@SuppressWarnings("unused") VirtualFrame frame, LLVMFunctionDescriptor object) {
+        protected Object access(@SuppressWarnings("unused") VirtualFrame frame, LLVMFunction object) {
             return object.getFunctionIndex() == 0;
         }
 
@@ -52,7 +56,7 @@ public class LLVMFunctionMessageResolution {
     public abstract static class ForeignIsExecutableNode extends Node {
 
         @SuppressWarnings("unused")
-        protected Object access(VirtualFrame frame, LLVMFunctionDescriptor object) {
+        protected Object access(VirtualFrame frame, LLVMFunction object) {
             return true;
         }
 
@@ -61,16 +65,23 @@ public class LLVMFunctionMessageResolution {
     @Resolve(message = "EXECUTE")
     public abstract static class ForeignExecuteNode extends Node {
 
+        @Child private Node findContextNode;
         @Child private LLVMForeignCallNode executeNode;
 
         protected Object access(VirtualFrame frame, LLVMFunctionDescriptor object, Object[] arguments) {
-            return getHelperNode(object).executeCall(frame, object, arguments);
+            return getHelperNode().executeCall(frame, object, arguments);
         }
 
-        private LLVMForeignCallNode getHelperNode(LLVMFunctionDescriptor function) {
+        protected Object access(VirtualFrame frame, LLVMFunctionHandle object, Object[] arguments) {
+            return getHelperNode().executeCall(frame, object, arguments);
+        }
+
+        private LLVMForeignCallNode getHelperNode() {
             if (executeNode == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                executeNode = insert(LLVMForeignCallNodeGen.create(function.getContext().getStack(), function.getType().getReturnType()));
+                CompilerDirectives.transferToInterpreter();
+                findContextNode = insert(LLVMLanguage.INSTANCE.createFindContextNode0());
+                LLVMContext context = LLVMLanguage.INSTANCE.findContext0(findContextNode);
+                executeNode = insert(LLVMForeignCallNodeGen.create(context, null, null));
             }
 
             return executeNode;
