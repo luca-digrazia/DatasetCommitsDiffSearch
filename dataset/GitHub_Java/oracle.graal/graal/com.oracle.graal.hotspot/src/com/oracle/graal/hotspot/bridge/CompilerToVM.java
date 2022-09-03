@@ -176,7 +176,6 @@ public interface CompilerToVM {
     public enum CodeInstallResult {
         OK("ok"),
         DEPENDENCIES_FAILED("dependencies failed"),
-        DEPENDENCIES_INVALID("dependencies invalid"),
         CACHE_FULL("code cache is full"),
         CODE_TOO_LARGE("code is too large");
 
@@ -191,9 +190,6 @@ public interface CompilerToVM {
                     break;
                 case "dependencies failed":
                     this.value = config.codeInstallResultDependenciesFailed;
-                    break;
-                case "dependencies invalid":
-                    this.value = config.codeInstallResultDependenciesInvalid;
                     break;
                 case "code cache is full":
                     this.value = config.codeInstallResultCacheFull;
