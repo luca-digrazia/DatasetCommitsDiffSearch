@@ -32,7 +32,6 @@ import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.test.*;
 
 /**
@@ -56,19 +55,19 @@ public class CompiledMethodTest extends GraalCompilerTest {
     public void test1() {
         Method method = getMethod("testMethod");
         final StructuredGraph graph = parse(method);
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getMetaAccess(), getCodeCache(), getConstantReflection(), getLowerer(), new Assumptions(false), replacements));
+        new CanonicalizerPhase(runtime(), new Assumptions(false)).apply(graph);
         new DeadCodeEliminationPhase().apply(graph);
 
         for (Node node : graph.getNodes()) {
             if (node instanceof ConstantNode) {
                 ConstantNode constant = (ConstantNode) node;
                 if (constant.kind() == Kind.Object && " ".equals(constant.value.asObject())) {
-                    graph.replaceFloating(constant, ConstantNode.forObject("-", getMetaAccess(), graph));
+                    graph.replaceFloating(constant, ConstantNode.forObject("-", runtime, graph));
                 }
             }
         }
 
-        final ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
+        final ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
         InstalledCode compiledMethod = getCode(javaMethod, graph);
         try {
             Object result = compiledMethod.execute("1", "2", "3");
@@ -82,7 +81,7 @@ public class CompiledMethodTest extends GraalCompilerTest {
     public void test3() {
         Method method = getMethod("testMethod");
         final StructuredGraph graph = parse(method);
-        final ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
+        final ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
         InstalledCode compiledMethod = getCode(javaMethod, graph);
         try {
             Object result = compiledMethod.executeVarargs("1", "2", "3");
@@ -96,7 +95,7 @@ public class CompiledMethodTest extends GraalCompilerTest {
     public void test4() {
         Method method = getMethod("testMethodVirtual");
         final StructuredGraph graph = parse(method);
-        final ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
+        final ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
         InstalledCode compiledMethod = getCode(javaMethod, graph);
         try {
             f1 = "0";
