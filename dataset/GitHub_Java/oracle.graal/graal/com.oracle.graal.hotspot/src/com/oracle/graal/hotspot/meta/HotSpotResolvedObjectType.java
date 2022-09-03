@@ -125,7 +125,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
      * 
      * @param javaClass the Class to create the mirror for
      */
-    private HotSpotResolvedObjectType(Class<?> javaClass) {
+    public HotSpotResolvedObjectType(Class<?> javaClass) {
         super(getSignatureName(javaClass));
         this.javaClass = javaClass;
         assert getName().charAt(0) != '[' || isArray() : getName();
@@ -356,15 +356,22 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     @Override
     public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method) {
         assert method instanceof HotSpotMethod;
-        final long resolvedMetaspaceMethod = runtime().getCompilerToVM().resolveMethod(this, method.getName(), ((HotSpotSignature) method.getSignature()).getMethodDescriptor());
-        if (resolvedMetaspaceMethod == 0) {
+        ResolvedJavaMethod res = (ResolvedJavaMethod) runtime().getCompilerToVM().resolveMethod(this, method.getName(), ((HotSpotSignature) method.getSignature()).getMethodDescriptor());
+        if (res == null || isAbstract(res.getModifiers())) {
             return null;
         }
-        HotSpotResolvedJavaMethod resolvedMethod = HotSpotResolvedJavaMethod.fromMetaspace(resolvedMetaspaceMethod);
-        if (isAbstract(resolvedMethod.getModifiers())) {
-            return null;
+        return res;
+    }
+
+    @Override
+    public String toString() {
+        String simpleName;
+        if (isArray() || isInterface()) {
+            simpleName = getName();
+        } else {
+            simpleName = getName().substring(1, getName().length() - 1);
         }
-        return resolvedMethod;
+        return "HotSpotType<" + simpleName + ", resolved>";
     }
 
     public ConstantPool constantPool() {
@@ -613,30 +620,5 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
      */
     public void setNodeClass(NodeClass nodeClass) {
         this.nodeClass = nodeClass;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (!(obj instanceof HotSpotResolvedObjectType)) {
-            return false;
-        }
-        HotSpotResolvedObjectType that = (HotSpotResolvedObjectType) obj;
-        return this.mirror() == that.mirror();
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
-
-    @Override
-    public String toString() {
-        String simpleName;
-        if (isArray() || isInterface()) {
-            simpleName = getName();
-        } else {
-            simpleName = getName().substring(1, getName().length() - 1);
-        }
-        return "HotSpotType<" + simpleName + ", resolved>";
     }
 }

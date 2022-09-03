@@ -47,7 +47,7 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native byte[] initializeBytecode(long metaspaceMethod, byte[] code);
 
     @Override
-    public native long exceptionTableStart(long metaspaceMethod);
+    public native ExceptionHandler[] initializeExceptionHandlers(long metaspaceMethod, ExceptionHandler[] handlers);
 
     @Override
     public native boolean hasBalancedMonitors(long metaspaceMethod);
@@ -123,10 +123,7 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native long[] getLineNumberTable(HotSpotResolvedJavaMethod method);
 
     @Override
-    public native long getLocalVariableTableStart(HotSpotResolvedJavaMethod method);
-
-    @Override
-    public native int getLocalVariableTableLength(HotSpotResolvedJavaMethod method);
+    public native Local[] getLocalVariableTable(HotSpotResolvedJavaMethod method);
 
     @Override
     public native String getFileName(HotSpotResolvedJavaType method);
@@ -153,8 +150,6 @@ public class CompilerToVMImpl implements CompilerToVM {
 
     public synchronized native void notifyCompilationStatistics(int id, HotSpotResolvedJavaMethod method, boolean osr, int processedBytecodes, long time, long timeUnitsPerSecond,
                     HotSpotInstalledCode installedCode);
-
-    public synchronized native void printCompilationStatistics(boolean perCompiler, boolean aggregate);
 
     public native void resetCompilationStatistics();
 

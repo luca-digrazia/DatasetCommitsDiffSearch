@@ -43,7 +43,7 @@ public interface CompilerToVM {
      */
     byte[] initializeBytecode(long metaspaceMethod, byte[] code);
 
-    long exceptionTableStart(long metaspaceMethod);
+    ExceptionHandler[] initializeExceptionHandlers(long metaspaceMethod, ExceptionHandler[] handlers);
 
     /**
      * Determines if a given metaspace Method object has balanced monitors.
@@ -189,8 +189,6 @@ public interface CompilerToVM {
      */
     void notifyCompilationStatistics(int id, HotSpotResolvedJavaMethod method, boolean osr, int processedBytecodes, long time, long timeUnitsPerSecond, HotSpotInstalledCode installedCode);
 
-    void printCompilationStatistics(boolean perCompiler, boolean aggregate);
-
     void resetCompilationStatistics();
 
     void initializeConfiguration(HotSpotVMConfig config);
@@ -235,9 +233,7 @@ public interface CompilerToVM {
 
     long[] getLineNumberTable(HotSpotResolvedJavaMethod method);
 
-    long getLocalVariableTableStart(HotSpotResolvedJavaMethod method);
-
-    int getLocalVariableTableLength(HotSpotResolvedJavaMethod method);
+    Local[] getLocalVariableTable(HotSpotResolvedJavaMethod method);
 
     String getFileName(HotSpotResolvedJavaType method);
 
