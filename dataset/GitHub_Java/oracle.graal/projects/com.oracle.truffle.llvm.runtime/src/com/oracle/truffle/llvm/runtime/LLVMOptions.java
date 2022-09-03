@@ -29,47 +29,144 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
 public class LLVMOptions {
 
     public static void main(String[] args) {
-        Property[] properties = Property.values();
-        for (Property prop : properties) {
-            // Checkstyle: stop
-            System.out.println(prop);
-            // Checkstyle: resume
+        for (PropertyCategory category : PropertyCategory.values()) {
+            List<Property> properties = category.getProperties();
+            if (!properties.isEmpty()) {
+                LLVMLogger.unconditionalInfo(category + ":");
+                for (Property prop : properties) {
+                    LLVMLogger.unconditionalInfo(prop.toString());
+                }
+                LLVMLogger.unconditionalInfo("");
+            }
+
         }
     }
 
     private static final String PATH_DELIMITER = ":";
+    private static final String OPTION_PREFIX = "sulong.";
+    private static final String OBSOLETE_OPTION_PREFIX = "llvm.";
+
+    @FunctionalInterface
+    interface OptionParser {
+        Object parse(Property property);
+    }
+
+    static boolean parseBoolean(Property prop) {
+        return Boolean.parseBoolean(System.getProperty(prop.getKey(), prop.getDefaultValue()));
+    }
+
+    static String parseString(Property prop) {
+        return System.getProperty(prop.getKey(), prop.getDefaultValue());
+    }
+
+    static int parseInteger(Property prop) {
+        return Integer.parseInt(System.getProperty(prop.getKey(), prop.getDefaultValue()));
+    }
+
+    static String[] parseDynamicLibraryPath(Property prop) {
+        String property = System.getProperty(prop.getKey(), prop.getDefaultValue());
+        if (property == null) {
+            return new String[0];
+        } else {
+            return property.split(PATH_DELIMITER);
+        }
+    }
+
+    public enum PropertyCategory {
+        GENERAL,
+        DEBUG,
+        PERFORMANCE,
+        TESTS,
+        MX;
+
+        public List<Property> getProperties() {
+            List<Property> properties = new ArrayList<>();
+            for (Property p : Property.values()) {
+                if (this == p.getCategory()) {
+                    properties.add(p);
+                }
+            }
+            return properties;
+        }
+    }
 
     public enum Property {
 
-        DEBUG("llvm-debug", "Turns debugging on/off", "false"),
-        PRINT_FUNCTION_ASTS("llvm-print-asts", "Prints the Truffle ASTs for the parsed functions", "false"),
+        DEBUG("Debug", "Turns debugging on/off", "false", LLVMOptions::parseBoolean, PropertyCategory.DEBUG),
+        PRINT_PERFORMANCE_WARNINGS("PrintPerformanceWarnings", "Prints performance warnings", "false", LLVMOptions::parseBoolean, PropertyCategory.DEBUG),
+        PERFORMANCE_WARNING_ARE_FATAL("PerformanceWarningsAreFatal", "Terminates the program after a performance issue is encountered", "false", LLVMOptions::parseBoolean, PropertyCategory.DEBUG),
+        PRINT_FUNCTION_ASTS("PrintASTs", "Prints the Truffle ASTs for the parsed functions", "false", LLVMOptions::parseBoolean, PropertyCategory.DEBUG),
+        EXECUTION_COUNT("ExecutionCount", "Execute each program for as many times as specified by this option", "1", LLVMOptions::parseInteger, PropertyCategory.DEBUG),
         /*
          * The boot classpath that should be used to execute the remote JVM when executing the LLVM
          * test suite (and other tests). These rely on comparing output sent to stdout that cannot
          * becaptured inside Java, since, e.g., a printf is executed by native code. To determine
          * the right value just copy the boot class path that you use to launch the main LLVM class"
          */
-        REMOTE_TEST_BOOT_CLASSPATH_KEY("llvm-test-boot", "The boot classpath for the remote JVM used to capture native printf and other output ", null),
-        GCC_TEST_DISCOVERY_PATH_KEY("llvm-test-gcc-discovery", "Looks for newly supported GCC test cases in the specified path.", null),
-        LLVM_TEST_DISCOVER_PATH("llvm-test-llvm-discovery", "Looks for newly supported LLVM test cases in the specified path.", null),
-        NWCC_TEST_DISCOVER_PATH("llvm-test-nwcc-discovery", "Looks for newly supported NWCC test cases in the specified path.", null),
-        DYN_LIBRARY_PATHS("llvm-dyn-libs", "The native library search paths delimited by " + PATH_DELIMITER, null),
-        PROJECT_ROOT_KEY("llvm-root", "Overrides the root of the LLVM project. This option exists to set the project root from mx", "."),
-        IS_GATE("llvm-gate", "Tell Sulong that the gate is executing", "false"),
-        PRINT_RET_VAL("llvm-print-retval", "Prints the return value of an execution", "true");
+        REMOTE_TEST_BOOT_CLASSPATH(
+                        "TestRemoteBootPath",
+                        "The boot classpath for the remote JVM used to capture native printf and other output.",
+                        null,
+                        LLVMOptions::parseString,
+                        PropertyCategory.TESTS),
+        REMOTE_TEST_CASES_AS_LOCAL(
+                        "LaunchRemoteTestCasesLocally",
+                        "Launches the test cases which are usually launched in a separate JVM in the currently running one.",
+                        "false",
+                        LLVMOptions::parseBoolean,
+                        PropertyCategory.TESTS),
+        TEST_DISCOVERY_PATH(
+                        "TestDiscoveryPath",
+                        "Looks for newly supported test cases in the specified path. E.g., when executing the GCC test cases you can use /gcc.c-torture/execute to discover newly working torture test cases.",
+                        null,
+                        LLVMOptions::parseString,
+                        PropertyCategory.TESTS),
+        DYN_LIBRARY_PATHS("DynamicNativeLibraryPath", "The native library search paths delimited by " + PATH_DELIMITER, null, LLVMOptions::parseDynamicLibraryPath, PropertyCategory.GENERAL),
+        DYN_BITCODE_LIBRARIES("DynamicBitcodeLibraries", "The paths to shared bitcode libraries delimited by " + PATH_DELIMITER, null, LLVMOptions::parseDynamicLibraryPath, PropertyCategory.GENERAL),
+        PROJECT_ROOT("ProjectRoot", "Overrides the root of the project. This option exists to set the project root from mx", ".", LLVMOptions::parseString, PropertyCategory.MX),
+        OPTIMIZATIONS_DISABLE_SPECULATIVE(
+                        "DisableSpeculativeOptimizations",
+                        "Disables all speculative optimizations regardless if they would be enabled otherwise",
+                        "false",
+                        LLVMOptions::parseBoolean,
+                        PropertyCategory.PERFORMANCE),
+        OPTIMIZATION_SPECIALIZE_EXPECT_INTRINSIC("SpecializeExpectIntrinsic", "Specialize the llvm.expect intrinsic", "true", LLVMOptions::parseBoolean, PropertyCategory.PERFORMANCE),
+        OPTIMIZATION_VALUE_PROFILE_MEMORY_READS("ValueProfileMemoryReads", "Enable value profiling for memory reads", "true", LLVMOptions::parseBoolean, PropertyCategory.PERFORMANCE),
+        OPTIMIZATION_VALUE_PROFILE_FUNCTION_ARGS("ValueProfileFunctionArgs", "Enable value profiling for function arguments", "true", LLVMOptions::parseBoolean, PropertyCategory.PERFORMANCE),
+        OPTIMIZATION_BRANCH_PROBABILITIES("InjectBranchProbabilities", "Injects branch probabilities for the basic block successors", "true", LLVMOptions::parseBoolean, PropertyCategory.PERFORMANCE),
+        OPTIMIZATION_INTRINSIFY_C_FUNCTIONS("IntrinsifyCFunctions", "Substitute C functions by Java equivalents where possible", "true", LLVMOptions::parseBoolean, PropertyCategory.PERFORMANCE),
+        OPTIMIZATION_INLINE_CACHE_SIZE("InlineCacheSize", "Specifies the size of the polymorphic inline cache", "5", LLVMOptions::parseInteger, PropertyCategory.PERFORMANCE),
+        OPTIMIZATION_LIFE_TIME_ANALYSIS(
+                        "EnableLifetimeAnalysis",
+                        "Performs a lifetime analysis to set dead frame slots to null to assist the PE",
+                        "true",
+                        LLVMOptions::parseBoolean,
+                        PropertyCategory.PERFORMANCE),
+        NATIVE_CALL_STATS("PrintNativeCallStats", "Outputs stats about native call site frequencies", "false", LLVMOptions::parseBoolean, PropertyCategory.DEBUG),
+        LIFE_TIME_ANALYSIS_STATS("PrintNativeAnalysisStats", "Outputs the results of the lifetime analysis (if enabled)", "false", LLVMOptions::parseBoolean, PropertyCategory.DEBUG);
 
-        Property(String key, String description, String defaultValue) {
-            this.key = key;
+        Property(String key, String description, String defaultValue, OptionParser parser, PropertyCategory category) {
+            this.key = OPTION_PREFIX + key;
             this.description = description;
             this.defaultValue = defaultValue;
+            this.parser = parser;
+            this.category = category;
         }
 
         private final String key;
         private final String description;
         private final String defaultValue;
+        private final OptionParser parser;
+        private final PropertyCategory category;
 
         public String getKey() {
             return key;
@@ -83,93 +180,175 @@ public class LLVMOptions {
             return defaultValue;
         }
 
-        private static final String FORMAT_STRING = "%25s (default = %5s) %s";
+        public PropertyCategory getCategory() {
+            return category;
+        }
+
+        public Object parse() {
+            return parser.parse(this);
+        }
+
+        private static final String FORMAT_STRING = "%40s (default = %5s) %s";
 
         @Override
         public String toString() {
             return String.format(FORMAT_STRING, getKey(), getDefaultValue(), getDescription());
         }
 
+        public static Property fromKey(String key) {
+            for (Property p : values()) {
+                if (p.getKey().equals(key)) {
+                    return p;
+                }
+            }
+            return null;
+        }
+
     }
 
-    private static final boolean LLVM_DEBUG;
-    private static final boolean LLVM_PRINT_FUNCTION_ASTS;
-    private static final String LLVM_REMOTE_TEST_BOOT_CLASSPATH;
-    private static final String LLVM_GCC_TEST_DISCOVERY_PATH;
-    private static final String NWCC_TEST_DISCOVER_PATH;
-    private static final String LLVM_TEST_DISCOVERY_PATH;
-    private static final String[] DYN_LIBRARY_PATHS;
-    private static final String LLVM_PROJECT_ROOT;
-    private static final boolean LLVM_IS_GATE;
-    private static final boolean IS_PRINT_RET_VAL;
-
-    static boolean parseBoolean(Property prop) {
-        return Boolean.parseBoolean(System.getProperty(prop.getKey(), prop.getDefaultValue()));
-    }
-
-    static String parseString(Property prop) {
-        return System.getProperty(prop.getKey(), prop.getDefaultValue());
-    }
+    private static Map<Property, Object> parsedProperties = new HashMap<>();
 
     static {
-        LLVM_DEBUG = parseBoolean(Property.DEBUG);
-        LLVM_PRINT_FUNCTION_ASTS = parseBoolean(Property.PRINT_FUNCTION_ASTS);
-        LLVM_REMOTE_TEST_BOOT_CLASSPATH = parseString(Property.REMOTE_TEST_BOOT_CLASSPATH_KEY);
-        LLVM_GCC_TEST_DISCOVERY_PATH = parseString(Property.GCC_TEST_DISCOVERY_PATH_KEY);
-        NWCC_TEST_DISCOVER_PATH = parseString(Property.NWCC_TEST_DISCOVER_PATH);
-        LLVM_TEST_DISCOVERY_PATH = parseString(Property.LLVM_TEST_DISCOVER_PATH);
-        String dynamicLibraries = parseString(Property.DYN_LIBRARY_PATHS);
-        DYN_LIBRARY_PATHS = dynamicLibraries == null ? null : dynamicLibraries.split(PATH_DELIMITER);
-        LLVM_PROJECT_ROOT = parseString(Property.PROJECT_ROOT_KEY);
-        LLVM_IS_GATE = parseBoolean(Property.IS_GATE);
-        IS_PRINT_RET_VAL = parseBoolean(Property.PRINT_RET_VAL);
+        parseOptions();
+        checkForInvalidOptionNames();
+        checkForObsoleteOptionPrefix();
     }
 
-    public static boolean isDebug() {
-        return LLVM_DEBUG;
+    private static void checkForInvalidOptionNames() {
+        boolean wrongOptionName = false;
+        Properties allProperties = System.getProperties();
+        for (String key : allProperties.stringPropertyNames()) {
+            if (key.startsWith(OPTION_PREFIX)) {
+                if (Property.fromKey(key) == null) {
+                    wrongOptionName = true;
+                    LLVMLogger.error(key + " is an invalid option!");
+                }
+            }
+        }
+        if (wrongOptionName) {
+            LLVMLogger.error("\nvalid options:");
+            printOptions();
+            System.exit(-1);
+        }
     }
 
-    public static boolean isPrintFunctionAsts() {
-        return LLVM_PRINT_FUNCTION_ASTS;
+    private static void printOptions() {
+        LLVMOptions.main(new String[0]);
+    }
+
+    private static void checkForObsoleteOptionPrefix() {
+        Properties allProperties = System.getProperties();
+        for (String key : allProperties.stringPropertyNames()) {
+            if (key.startsWith(OBSOLETE_OPTION_PREFIX)) {
+                LLVMLogger.error(
+                                "The prefix '" + OBSOLETE_OPTION_PREFIX + "' in option '" + key + "' is an obsolete option prefix and has been replaced by the prefix '" + OPTION_PREFIX + "':");
+                printOptions();
+                System.exit(-1);
+            }
+        }
+    }
+
+    private static void parseOptions() {
+        Property[] properties = Property.values();
+        for (Property prop : properties) {
+            parsedProperties.put(prop, prop.parse());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T getParsedProperty(Property property) {
+        return (T) parsedProperties.get(property);
+    }
+
+    public static boolean debugEnabled() {
+        return getParsedProperty(Property.DEBUG);
+    }
+
+    public static boolean printFunctionASTs() {
+        return getParsedProperty(Property.PRINT_FUNCTION_ASTS);
     }
 
     public static String getRemoteTestBootClassPath() {
-        if (LLVM_REMOTE_TEST_BOOT_CLASSPATH == null) {
+        if (getParsedProperty(Property.REMOTE_TEST_BOOT_CLASSPATH) == null) {
             throw new AssertionError();
         }
-        return LLVM_REMOTE_TEST_BOOT_CLASSPATH;
+        return getParsedProperty(Property.REMOTE_TEST_BOOT_CLASSPATH);
     }
 
-    public static String getGCCTestDiscoveryPath() {
-        return LLVM_GCC_TEST_DISCOVERY_PATH;
+    public static String getTestDiscoveryPath() {
+        return getParsedProperty(Property.TEST_DISCOVERY_PATH);
     }
 
-    public static boolean isDiscoveryTestMode() {
-        return getGCCTestDiscoveryPath() != null || getLLVMTestDiscoveryPath() != null || getNWCCDiscoveryPath() != null;
-    }
-
-    public static String getLLVMTestDiscoveryPath() {
-        return LLVM_TEST_DISCOVERY_PATH;
-    }
-
-    public static String getNWCCDiscoveryPath() {
-        return NWCC_TEST_DISCOVER_PATH;
+    public static boolean discoveryTestModeEnabled() {
+        return getTestDiscoveryPath() != null;
     }
 
     public static String[] getDynamicLibraryPaths() {
-        return DYN_LIBRARY_PATHS;
+        return getParsedProperty(Property.DYN_LIBRARY_PATHS);
     }
 
     public static String getProjectRoot() {
-        return LLVM_PROJECT_ROOT;
+        return getParsedProperty(Property.PROJECT_ROOT);
     }
 
-    public static boolean isGate() {
-        return LLVM_IS_GATE;
+    public static boolean specializeForExpectIntrinsic() {
+        return !disableSpeculativeOptimizations() && (boolean) getParsedProperty(Property.OPTIMIZATION_SPECIALIZE_EXPECT_INTRINSIC);
     }
 
-    public static boolean isPrintRetVal() {
-        return IS_PRINT_RET_VAL;
+    public static boolean valueProfileMemoryReads() {
+        return !disableSpeculativeOptimizations() && (boolean) getParsedProperty(Property.OPTIMIZATION_VALUE_PROFILE_MEMORY_READS);
+    }
+
+    public static boolean intrinsifyCLibraryFunctions() {
+        return getParsedProperty(Property.OPTIMIZATION_INTRINSIFY_C_FUNCTIONS);
+    }
+
+    public static boolean injectBranchProbabilities() {
+        return !disableSpeculativeOptimizations() && (boolean) getParsedProperty(Property.OPTIMIZATION_BRANCH_PROBABILITIES);
+    }
+
+    public static boolean printNativeCallStats() {
+        return getParsedProperty(Property.NATIVE_CALL_STATS);
+    }
+
+    public static boolean disableSpeculativeOptimizations() {
+        return getParsedProperty(Property.OPTIMIZATIONS_DISABLE_SPECULATIVE);
+    }
+
+    public static boolean lifeTimeAnalysisEnabled() {
+        return getParsedProperty(Property.OPTIMIZATION_LIFE_TIME_ANALYSIS);
+    }
+
+    public static boolean printLifeTimeAnalysis() {
+        return lifeTimeAnalysisEnabled() && (boolean) getParsedProperty(Property.LIFE_TIME_ANALYSIS_STATS);
+    }
+
+    public static boolean launchRemoteTestCasesAsLocal() {
+        return getParsedProperty(Property.REMOTE_TEST_CASES_AS_LOCAL);
+    }
+
+    public static boolean printPerformanceWarnings() {
+        return getParsedProperty(Property.PRINT_PERFORMANCE_WARNINGS);
+    }
+
+    public static int getInlineCacheSize() {
+        return getParsedProperty(Property.OPTIMIZATION_INLINE_CACHE_SIZE);
+    }
+
+    public static int getExecutionCount() {
+        return getParsedProperty(Property.EXECUTION_COUNT);
+    }
+
+    public static boolean valueProfileFunctionArgs() {
+        return getParsedProperty(Property.OPTIMIZATION_VALUE_PROFILE_FUNCTION_ARGS);
+    }
+
+    public static boolean performanceWarningsAreFatal() {
+        return getParsedProperty(Property.PERFORMANCE_WARNING_ARE_FATAL);
+    }
+
+    public static String[] getDynamicBitcodeLibraries() {
+        return getParsedProperty(Property.DYN_BITCODE_LIBRARIES);
     }
 
 }
