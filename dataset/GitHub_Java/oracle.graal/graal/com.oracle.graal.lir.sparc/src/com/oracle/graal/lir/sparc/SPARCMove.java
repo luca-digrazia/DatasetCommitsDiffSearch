@@ -25,18 +25,16 @@ package com.oracle.graal.lir.sparc;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static com.oracle.graal.sparc.SPARC.*;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 
 import com.oracle.graal.api.code.CompilationResult.RawData;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.ImplicitNullCheck;
-import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.StandardOp.NullCheck;
+import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.lir.asm.*;
 
 public class SPARCMove {
@@ -137,7 +135,7 @@ public class SPARCMove {
 
         @Override
         public void emitMemAccess(SPARCMacroAssembler masm) {
-            final SPARCAddress addr = guaranueeLoadable(address.toAddress(), masm);
+            final SPARCAddress addr = address.toAddress();
             final Register dst = asRegister(result);
             switch (kind) {
                 case Boolean:
@@ -174,17 +172,21 @@ public class SPARCMove {
     public static class LoadAddressOp extends SPARCLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
-        @Use({COMPOSITE, UNINITIALIZED}) protected SPARCAddressValue addressValue;
+        @Use({COMPOSITE, UNINITIALIZED}) protected SPARCAddressValue address;
 
         public LoadAddressOp(AllocatableValue result, SPARCAddressValue address) {
             this.result = result;
-            this.addressValue = address;
+            this.address = address;
         }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            SPARCAddress address = addressValue.toAddress();
-            loadEffectiveAddress(address, asLongReg(result), masm);
+            SPARCAddress addr = address.toAddress();
+            if (addr.hasIndex()) {
+                new Add(addr.getBase(), addr.getIndex(), asLongReg(result)).emit(masm);
+            } else {
+                new Add(addr.getBase(), addr.getDisplacement(), asLongReg(result)).emit(masm);
+            }
         }
     }
 
@@ -281,20 +283,7 @@ public class SPARCMove {
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             SPARCAddress address = (SPARCAddress) crb.asAddress(slot);
-            loadEffectiveAddress(address, asLongReg(result), masm);
-        }
-    }
-
-    private static void loadEffectiveAddress(SPARCAddress address, Register result, SPARCMacroAssembler masm) {
-        if (address.getIndex() == Register.None) {
-            if (isSimm13(address.getDisplacement())) {
-                new Add(address.getBase(), address.getDisplacement(), result).emit(masm);
-            } else {
-                new Setx(address.getDisplacement(), result).emit(masm);
-                new Add(address.getBase(), result, result).emit(masm);
-            }
-        } else {
-            new Add(address.getBase(), address.getIndex(), result).emit(masm);
+            new Add(address.getBase(), address.getDisplacement(), asLongReg(result)).emit(masm);
         }
     }
 
@@ -310,7 +299,7 @@ public class SPARCMove {
         @Override
         public void emitMemAccess(SPARCMacroAssembler masm) {
             assert isRegister(input);
-            SPARCAddress addr = guaranueeLoadable(address.toAddress(), masm);
+            SPARCAddress addr = address.toAddress();
             switch (kind) {
                 case Boolean:
                 case Byte:
@@ -355,22 +344,21 @@ public class SPARCMove {
 
         @Override
         public void emitMemAccess(SPARCMacroAssembler masm) {
-            SPARCAddress addr = guaranueeLoadable(address.toAddress(), masm);
             switch (kind) {
                 case Boolean:
                 case Byte:
-                    new Stb(g0, addr).emit(masm);
+                    new Stb(g0, address.toAddress()).emit(masm);
                     break;
                 case Short:
                 case Char:
-                    new Sth(g0, addr).emit(masm);
+                    new Sth(g0, address.toAddress()).emit(masm);
                     break;
                 case Int:
-                    new Stw(g0, addr).emit(masm);
+                    new Stw(g0, address.toAddress()).emit(masm);
                     break;
                 case Long:
                 case Object:
-                    new Stx(g0, addr).emit(masm);
+                    new Stx(g0, address.toAddress()).emit(masm);
                     break;
                 case Float:
                 case Double:
@@ -463,29 +451,8 @@ public class SPARCMove {
         }
     }
 
-    /**
-     * Guarantees that the given SPARCAddress given before is loadable by subsequent call. If the
-     * displacement exceeds the imm13 value, the value is put into a scratch register o7, which must
-     * be used as soon as possible.
-     *
-     * @param addr Address to modify
-     * @param masm assembler to output the prior stx command
-     * @return a loadable SPARCAddress
-     */
-    public static SPARCAddress guaranueeLoadable(SPARCAddress addr, SPARCMacroAssembler masm) {
-        boolean displacementOutOfBound = addr.getIndex() == Register.None && !SPARCAssembler.isSimm13(addr.getDisplacement());
-        if (displacementOutOfBound) {
-            Register scratch = g3;
-            new Setx(addr.getDisplacement(), scratch, false).emit(masm);
-            return new SPARCAddress(addr.getBase(), scratch);
-        } else {
-            return addr;
-        }
-    }
-
     private static void reg2stack(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input) {
         SPARCAddress dst = (SPARCAddress) crb.asAddress(result);
-        dst = guaranueeLoadable(dst, masm);
         Register src = asRegister(input);
         switch (input.getKind()) {
             case Byte:
@@ -516,7 +483,6 @@ public class SPARCMove {
 
     private static void stack2reg(CompilationResultBuilder crb, SPARCMacroAssembler masm, Value result, Value input) {
         SPARCAddress src = (SPARCAddress) crb.asAddress(input);
-        src = guaranueeLoadable(src, masm);
         Register dst = asRegister(result);
         switch (input.getKind()) {
             case Boolean:
