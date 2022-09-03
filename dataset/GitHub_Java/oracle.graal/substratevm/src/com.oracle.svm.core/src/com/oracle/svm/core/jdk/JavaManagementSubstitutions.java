@@ -112,6 +112,8 @@ final class SubstrateRuntimeMXBean implements RuntimeMXBean {
         return Collections.emptyList();
     }
 
+    /* All remaining methods are unsupported on Substrate VM. */
+
     @Override
     public ObjectName getObjectName() {
         throw VMError.unsupportedFeature(MSG);
@@ -133,8 +135,6 @@ final class SubstrateRuntimeMXBean implements RuntimeMXBean {
         }
         return id + "@" + hostName;
     }
-
-    /* All remaining methods are unsupported on Substrate VM. */
 
     @Override
     public String getVmName() {
