@@ -66,7 +66,7 @@ public class LowTier extends PhaseSuite<LowTierContext> {
 
         appendPhase(new ExpandLogicPhase());
 
-        appendPhase(new FixReadsPhase(true));
+        appendPhase(new FixReadsPhase());
 
         appendPhase(new UseTrappingNullChecksPhase());
 
