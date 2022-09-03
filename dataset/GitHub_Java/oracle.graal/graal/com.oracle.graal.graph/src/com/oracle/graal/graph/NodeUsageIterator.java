@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.graph;
 
-import java.util.Iterator;
-import java.util.NoSuchElementException;
+import java.util.*;
 
 class NodeUsageIterator implements Iterator<Node> {
 
@@ -39,14 +38,13 @@ class NodeUsageIterator implements Iterator<Node> {
         } else if (index == 1) {
             current = node.usage1;
         } else {
-            int relativeIndex = index - Node.INLINE_USAGE_COUNT;
-            if (relativeIndex < node.extraUsagesCount) {
-                current = node.extraUsages[relativeIndex];
+            if (index - Node.INLINE_USAGE_COUNT < node.extraUsages.length) {
+                current = node.extraUsages[index - Node.INLINE_USAGE_COUNT];
             }
         }
     }
 
-    NodeUsageIterator(Node node) {
+    public NodeUsageIterator(Node node) {
         this.node = node;
         advance();
     }

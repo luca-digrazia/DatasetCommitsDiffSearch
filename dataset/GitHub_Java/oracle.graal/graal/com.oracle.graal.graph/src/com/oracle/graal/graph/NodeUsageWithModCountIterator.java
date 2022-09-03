@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.graph;
 
-import java.util.ConcurrentModificationException;
+import java.util.*;
 
 class NodeUsageWithModCountIterator extends NodeUsageIterator {
 
-    NodeUsageWithModCountIterator(Node n) {
+    public NodeUsageWithModCountIterator(Node n) {
         super(n);
     }
 
