@@ -218,10 +218,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public int getMaxLocals() {
-        int modifiers = getModifiers();
-        if (Modifier.isAbstract(modifiers) || Modifier.isNative(modifiers)) {
-            return 0;
-        }
         HotSpotVMConfig config = graalRuntime().getConfig();
         long metaspaceConstMethod = unsafe.getLong(metaspaceMethod + config.methodConstMethodOffset);
         return unsafe.getShort(metaspaceConstMethod + config.methodMaxLocalsOffset) & 0xFFFF;
@@ -229,10 +225,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public int getMaxStackSize() {
-        int modifiers = getModifiers();
-        if (Modifier.isAbstract(modifiers) || Modifier.isNative(modifiers)) {
-            return 0;
-        }
         HotSpotVMConfig config = graalRuntime().getConfig();
         long metaspaceConstMethod = unsafe.getLong(metaspaceMethod + config.methodConstMethodOffset);
         return config.extraStackEntries + (unsafe.getShort(metaspaceConstMethod + config.constMethodMaxStackOffset) & 0xFFFF);
@@ -415,9 +407,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     @Override
     public LineNumberTable getLineNumberTable() {
         long[] values = graalRuntime().getCompilerToVM().getLineNumberTable(this);
-        if (values == null) {
-            return null;
-        }
         assert values.length % 2 == 0;
         int[] bci = new int[values.length / 2];
         int[] line = new int[values.length / 2];
@@ -433,9 +422,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     @Override
     public LocalVariableTable getLocalVariableTable() {
         Local[] locals = graalRuntime().getCompilerToVM().getLocalVariableTable(this);
-        if (locals == null) {
-            return null;
-        }
         return new LocalVariableTableImpl(locals);
     }
 

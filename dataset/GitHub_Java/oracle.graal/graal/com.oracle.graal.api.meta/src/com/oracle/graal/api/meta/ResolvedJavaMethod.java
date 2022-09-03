@@ -175,14 +175,12 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget {
     boolean canBeInlined();
 
     /**
-     * Returns the LineNumberTable of this method or null if this method does not have a line
-     * numbers table.
+     * Returns the LineNumberTable of this method.
      */
     LineNumberTable getLineNumberTable();
 
     /**
-     * Returns the local variable table of this method or null if this method does not have a local
-     * variable table.
+     * Returns the localvariable table of this method.
      */
     LocalVariableTable getLocalVariableTable();
 
