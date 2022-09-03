@@ -142,7 +142,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
 
         private boolean isImplicitNullCheck(LocationNode location) {
             if (location instanceof ConstantLocationNode) {
-                return ((ConstantLocationNode) location).getDisplacement() < implicitNullCheckLimit;
+                return ((ConstantLocationNode) location).displacement() < implicitNullCheckLimit;
             } else {
                 return false;
             }
