@@ -23,16 +23,13 @@
 
 package org.graalvm.compiler.core.amd64;
 
-import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isAllocatableValue;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.CMP;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.OperandSize.DWORD;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.OperandSize.PD;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.OperandSize.PS;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.OperandSize.QWORD;
 import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
-import static org.graalvm.compiler.lir.LIRValueUtil.asConstant;
 import static org.graalvm.compiler.lir.LIRValueUtil.asConstantValue;
 import static org.graalvm.compiler.lir.LIRValueUtil.asJavaConstant;
 import static org.graalvm.compiler.lir.LIRValueUtil.isConstantValue;
@@ -78,7 +75,6 @@ import org.graalvm.compiler.lir.amd64.AMD64ControlFlow.FloatCondSetOp;
 import org.graalvm.compiler.lir.amd64.AMD64ControlFlow.ReturnOp;
 import org.graalvm.compiler.lir.amd64.AMD64ControlFlow.StrategySwitchOp;
 import org.graalvm.compiler.lir.amd64.AMD64ControlFlow.TableSwitchOp;
-import org.graalvm.compiler.lir.amd64.AMD64LFenceOp;
 import org.graalvm.compiler.lir.amd64.AMD64Move;
 import org.graalvm.compiler.lir.amd64.AMD64Move.CompareAndSwapOp;
 import org.graalvm.compiler.lir.amd64.AMD64Move.MembarOp;
@@ -193,31 +189,16 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
-    private AllocatableValue asAllocatable(Value value, ValueKind<?> kind) {
-        if (value.getValueKind().equals(kind)) {
-            return asAllocatable(value);
-        } else if (isRegister(value)) {
-            return asRegister(value).asValue(kind);
-        } else if (isConstantValue(value)) {
-            return emitLoadConstant(kind, asConstant(value));
-        } else {
-            Variable variable = newVariable(kind);
-            emitMove(variable, value);
-            return variable;
-        }
-    }
-
     @Override
-    public Variable emitLogicCompareAndSwap(ValueKind<?> accessKind, Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
+    public Variable emitLogicCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
         ValueKind<?> kind = newValue.getValueKind();
         assert kind.equals(expectedValue.getValueKind());
-        AMD64Kind memKind = (AMD64Kind) accessKind.getPlatformKind();
+        AMD64Kind memKind = (AMD64Kind) kind.getPlatformKind();
 
         AMD64AddressValue addressValue = asAddressValue(address);
-        RegisterValue aRes = AMD64.rax.asValue(accessKind);
-        AllocatableValue allocatableNewValue = asAllocatable(newValue, accessKind);
-        emitMove(aRes, expectedValue);
-        append(new CompareAndSwapOp(memKind, aRes, addressValue, aRes, allocatableNewValue));
+        RegisterValue raxRes = AMD64.rax.asValue(kind);
+        emitMove(raxRes, expectedValue);
+        append(new CompareAndSwapOp(memKind, raxRes, addressValue, raxRes, asAllocatable(newValue)));
 
         assert trueValue.getValueKind().equals(falseValue.getValueKind());
         Variable result = newVariable(trueValue.getValueKind());
@@ -226,7 +207,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Value emitValueCompareAndSwap(ValueKind<?> accessKind, Value address, Value expectedValue, Value newValue) {
+    public Value emitValueCompareAndSwap(Value address, Value expectedValue, Value newValue) {
         ValueKind<?> kind = newValue.getValueKind();
         assert kind.equals(expectedValue.getValueKind());
         AMD64Kind memKind = (AMD64Kind) kind.getPlatformKind();
@@ -587,9 +568,5 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public LIRInstruction createZapArgumentSpace(StackSlot[] zappedStack, JavaConstant[] zapValues) {
         return new AMD64ZapStackOp(zappedStack, zapValues);
-    }
-
-    public void emitLFence() {
-        append(new AMD64LFenceOp());
     }
 }

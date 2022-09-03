@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,13 +23,8 @@
 package org.graalvm.compiler.replacements.amd64;
 
 import org.graalvm.compiler.api.replacements.ClassSubstitution;
-import org.graalvm.compiler.api.replacements.Fold;
-import org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
-import org.graalvm.compiler.core.common.spi.ArrayOffsetProvider;
 import org.graalvm.compiler.replacements.nodes.ArrayCompareToNode;
-import org.graalvm.compiler.word.Word;
-import org.graalvm.word.Pointer;
 
 import jdk.vm.ci.meta.JavaKind;
 
@@ -66,59 +59,5 @@ public class AMD64StringUTF16Substitutions {
          */
         return ArrayCompareToNode.compareTo(other, value, other.length, value.length, JavaKind.Char, JavaKind.Byte);
     }
-
-    @MethodSubstitution(optional = true)
-    public static int indexOfCharUnsafe(byte[] value, int ch, int fromIndex, int max) {
-        Pointer sourcePointer = Word.objectToTrackedPointer(value).add(byteArrayBaseOffset(INJECTED)).add(fromIndex * charArrayIndexScale(INJECTED));
-        int result = AMD64ArrayIndexOfNode.optimizedArrayIndexOf(sourcePointer, max - fromIndex, (char) ch, JavaKind.Char);
-        if (result != -1) {
-            return result + fromIndex;
-        }
-        return result;
-    }
-
-    /*-
-     * java.lang.StringUTF16.compress([CI[BII)I
-     *
-     * @HotSpotIntrinsicCandidate
-     * public static int compress(char[] src, int src_indx, byte[] dst, int dst_indx, int len)
-     */
-    @MethodSubstitution
-    public static int compress(char[] src, int sndx, byte[] dst, int dndx, int len) {
-        int ndx1 = Math.max(0, sndx);
-        int ndx2 = Math.max(0, dndx);
-
-        assert ndx1 + len < src.length;
-        assert ndx2 + len < dst.length;
-
-        Pointer srcptr = Word.objectToTrackedPointer(src).add(charArrayBaseOffset(INJECTED)).add(ndx1 * charArrayIndexScale(INJECTED));
-        Pointer dstptr = Word.objectToTrackedPointer(dst).add(byteArrayBaseOffset(INJECTED)).add(ndx2 * byteArrayIndexScale(INJECTED));
-        return AMD64StringUTF16CompressNode.compress(srcptr, dstptr, len);
-    }
-
-    @Fold
-    protected static int charArrayBaseOffset(@InjectedParameter ArrayOffsetProvider aop) {
-        return aop.arrayBaseOffset(JavaKind.Char);
-    }
-
-    @Fold
-    protected static int charArrayIndexScale(@InjectedParameter ArrayOffsetProvider aop) {
-        return aop.arrayScalingFactor(JavaKind.Char);
-    }
-
-    @Fold
-    protected static int byteArrayBaseOffset(@InjectedParameter ArrayOffsetProvider aop) {
-        return aop.arrayBaseOffset(JavaKind.Byte);
-    }
-
-    @Fold
-    protected static int byteArrayIndexScale(@InjectedParameter ArrayOffsetProvider aop) {
-        return aop.arrayScalingFactor(JavaKind.Byte);
-    }
-
-    /**
-     * Marker value for the {@link InjectedParameter} injected parameter.
-     */
-    private static final ArrayOffsetProvider INJECTED = null;
 
 }
