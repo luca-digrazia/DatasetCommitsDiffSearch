@@ -47,8 +47,6 @@ public interface HotSpotLIRGenerator {
 
     void emitPatchReturnAddress(ValueNode address);
 
-    void emitJumpToExceptionHandlerInCaller(ValueNode handlerInCallerPc, ValueNode exception, ValueNode exceptionPc);
-
     void visitDirectCompareAndSwap(DirectCompareAndSwapNode x);
 
     /**

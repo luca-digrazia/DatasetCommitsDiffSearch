@@ -35,10 +35,6 @@ import com.oracle.graal.phases.common.*;
  */
 public class DeoptimizeOnExceptionTest extends GraalCompilerTest {
 
-    public DeoptimizeOnExceptionTest() {
-        suites.getHighTier().findPhase(AbstractInliningPhase.class).remove();
-    }
-
     @Override
     protected void editPhasePlan(ResolvedJavaMethod method, StructuredGraph graph, PhasePlan phasePlan) {
         phasePlan.disablePhase(InliningPhase.class);

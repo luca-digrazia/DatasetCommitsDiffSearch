@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.nodes.PatchReturnAddressNode.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
 
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.code.*;
@@ -53,19 +52,9 @@ public class ExceptionHandlerStub extends CRuntimeStub {
         super(runtime, replacements, target, linkage);
     }
 
-    /**
-     * This stub is called when returning to a method to handle an exception thrown by a callee. It
-     * is not used for routing implicit exceptions. Therefore, it does not need to save any
-     * registers as HotSpot uses a caller save convention.
-     */
-    @Override
-    public boolean preservesRegisters() {
-        return false;
-    }
-
     @Snippet
     private static void exceptionHandler(Object exception, Word exceptionPc) {
-        checkNoExceptionInThread(exception, exceptionPc);
+        checkNoExceptionInThread();
         writeExceptionOop(thread(), exception);
         writeExceptionPc(thread(), exceptionPc);
         if (logging()) {
@@ -75,6 +64,8 @@ public class ExceptionHandlerStub extends CRuntimeStub {
         // patch throwing pc into return address so that deoptimization finds the right debug info
         patchReturnAddress(exceptionPc);
 
+        // TODO (ds) add support for non-register-preserving C runtime calls and
+        // use it for this call as no registers need saving by this stub
         Word handlerPc = exceptionHandlerForPc(EXCEPTION_HANDLER_FOR_PC, thread());
 
         if (logging()) {
@@ -85,15 +76,13 @@ public class ExceptionHandlerStub extends CRuntimeStub {
         patchReturnAddress(handlerPc);
     }
 
-    private static void checkNoExceptionInThread(Object exception, Word exceptionPc) {
+    private static void checkNoExceptionInThread() {
         if (assertionsEnabled()) {
-            Object currentException = readExceptionOop(thread());
-            if (currentException != null && currentException != exception) {
-                fatal("exception oop must be null or %p, not %p", Word.fromObject(exception).rawValue(), Word.fromObject(currentException).rawValue());
+            if (readExceptionOop(thread()) != null) {
+                fatal("exception oop must be null, not %p", Word.fromObject(readExceptionOop(thread())).rawValue());
             }
-            Word currentExceptionPc = readExceptionPc(thread());
-            if (currentExceptionPc.notEqual(Word.zero()) && currentExceptionPc.notEqual(exceptionPc)) {
-                fatal("exception pc must be zero or %p, not %p", exceptionPc.rawValue(), currentExceptionPc.rawValue());
+            if (readExceptionPc(thread()).notEqual(Word.zero())) {
+                fatal("exception pc must be zero, not %p", readExceptionPc(thread()).rawValue());
             }
         }
     }
@@ -108,7 +97,7 @@ public class ExceptionHandlerStub extends CRuntimeStub {
     private static boolean assertionsEnabled() {
         boolean enabled = false;
         assert enabled = true;
-        return enabled || graalRuntime().getConfig().cAssertions;
+        return enabled;
     }
 
     public static final Descriptor EXCEPTION_HANDLER_FOR_PC = descriptorFor(ExceptionHandlerStub.class, "exceptionHandlerForPc", false);
