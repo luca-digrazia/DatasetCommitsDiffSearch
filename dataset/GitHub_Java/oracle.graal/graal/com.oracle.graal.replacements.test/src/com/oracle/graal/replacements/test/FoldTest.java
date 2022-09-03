@@ -32,10 +32,7 @@ import com.oracle.graal.compiler.test.GraalCompilerTest;
 import com.oracle.graal.nodes.ReturnNode;
 import com.oracle.graal.nodes.StartNode;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import com.oracle.graal.nodes.graphbuilderconf.NodeIntrinsicPluginFactory.InjectionProvider;
 import com.oracle.graal.replacements.NodeIntrinsificationProvider;
 
@@ -80,12 +77,13 @@ public class FoldTest extends GraalCompilerTest {
         }
     }
 
-    @Override
-    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
-        InvocationPlugins invocationPlugins = conf.getPlugins().getInvocationPlugins();
-        Registration r = new Registration(invocationPlugins, TestMethod.class);
-        r.registerMethodSubstitution(TestMethodSubstitution.class, "test");
-        return super.editGraphBuilderConfiguration(conf);
+    private static boolean substitutionsInstalled;
+
+    public FoldTest() {
+        if (!substitutionsInstalled) {
+            getProviders().getReplacements().registerSubstitutions(TestMethod.class, TestMethodSubstitution.class);
+            substitutionsInstalled = true;
+        }
     }
 
     public static int callTest() {
@@ -97,7 +95,8 @@ public class FoldTest extends GraalCompilerTest {
         Plugins ret = super.getDefaultGraphBuilderPlugins();
         // manually register generated factories, jvmci service providers don't work from unit tests
         InjectionProvider injection = new NodeIntrinsificationProvider(getMetaAccess(), getSnippetReflection(), getProviders().getForeignCalls(), null);
-        new PluginFactory_FoldTest().registerPlugins(ret.getInvocationPlugins(), injection);
+        new FoldFactory_FoldTest_FoldUtils_getNumber().registerPlugin(ret.getInvocationPlugins(), injection);
+        new FoldFactory_FoldTest_FoldUtils_multiply_255f288().registerPlugin(ret.getInvocationPlugins(), injection);
         return ret;
     }
 
