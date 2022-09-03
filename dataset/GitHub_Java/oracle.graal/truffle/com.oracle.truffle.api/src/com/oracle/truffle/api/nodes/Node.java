@@ -45,6 +45,7 @@ import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.api.utilities.JSONHelper;
 
 /**
  * Abstract base class for all Truffle nodes.
@@ -84,8 +85,8 @@ public abstract class Node implements NodeInterface, Cloneable {
     protected Node() {
         CompilerAsserts.neverPartOfCompilation("do not create a Node from compiled code");
         this.nodeClass = NodeClass.get(getClass());
-        if (TruffleOptions.TraceASTJSON && ACCESSOR != null) {
-            ACCESSOR.dumpSupport().dump(this, null, null);
+        if (TruffleOptions.TraceASTJSON) {
+            JSONHelper.dumpNewNode(this);
         }
     }
 
@@ -203,7 +204,7 @@ public abstract class Node implements NodeInterface, Cloneable {
         }
         newChild.parent = this;
         if (TruffleOptions.TraceASTJSON) {
-            ACCESSOR.dumpSupport().dump(this, newChild, null);
+            JSONHelper.dumpNewChild(this, newChild);
         }
         NodeUtil.adoptChildrenHelper(newChild);
     }
@@ -323,7 +324,7 @@ public abstract class Node implements NodeInterface, Cloneable {
             NodeUtil.traceRewrite(this, newNode, reason);
         }
         if (TruffleOptions.TraceASTJSON) {
-            ACCESSOR.dumpSupport().dump(this, newNode, reason);
+            JSONHelper.dumpReplaceChild(this, newNode, reason);
         }
     }
 
@@ -580,11 +581,6 @@ public abstract class Node implements NodeInterface, Cloneable {
             return new AccessNodes();
         }
 
-        @Override
-        protected DumpSupport dumpSupport() {
-            return super.dumpSupport();
-        }
-
         static final class AccessNodes extends Accessor.Nodes {
             @SuppressWarnings("rawtypes")
             @Override
@@ -600,16 +596,6 @@ public abstract class Node implements NodeInterface, Cloneable {
             @Override
             public boolean isTaggedWith(Node node, Class<?> tag) {
                 return node.isTaggedWith(tag);
-            }
-
-            @Override
-            public boolean isCopyUninitializedSupported(RootNode rootNode) {
-                return rootNode.isCloneUninitializedSupported();
-            }
-
-            @Override
-            public RootNode copyUninitialized(RootNode rootNode) {
-                return rootNode.cloneUninitialized();
             }
         }
     }
