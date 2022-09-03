@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.graph.UnsafeAccess.*;
 
 import com.oracle.graal.api.meta.*;
@@ -34,7 +35,7 @@ import com.oracle.graal.nodes.type.*;
  * Store of a value at a location specified as an offset relative to an object. No null check is
  * performed before the store.
  */
-public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, Canonicalizable, MemoryCheckpoint.Single {
+public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, Canonicalizable, MemoryCheckpoint {
 
     @Input private ValueNode value;
     @Input(notDataflow = true) private FrameState stateAfter;
@@ -73,8 +74,8 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
     }
 
     @Override
-    public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.ANY_LOCATION;
+    public LocationIdentity[] getLocationIdentities() {
+        return new LocationIdentity[]{ANY_LOCATION};
     }
 
     @Override
