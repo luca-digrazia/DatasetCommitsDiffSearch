@@ -105,6 +105,7 @@ public final class GraalOptions {
     public static int     LoopUnswitchUncertaintyBoost       = 5;
 
     // debugging settings
+    public static int     MethodEndBreakpointGuards          = 2;
     public static boolean ZapStackOnMethodEntry              = ____;
     public static boolean DeoptALot                          = ____;
     public static boolean VerifyPhases                       = true;
@@ -113,7 +114,7 @@ public final class GraalOptions {
 
     // Debug settings:
     public static boolean Debug                              = true;
-    public static boolean DebugReplacements                      = false;
+    public static boolean DebugSnippets                      = false;
     public static boolean PerThreadDebugValues               = ____;
     public static boolean SummarizeDebugValues               = ____;
     public static boolean SummarizePerPhase                  = ____;
@@ -124,8 +125,6 @@ public final class GraalOptions {
     public static String  LogFile                            = null;
     public static String  MethodFilter                       = null;
     public static boolean DumpOnError                        = ____;
-    public static boolean GenericDynamicCounters             = ____;
-    public static boolean BenchmarkDynamicCounters           = ____;
 
     // Ideal graph visualizer output settings
     public static boolean PrintBinaryGraphs                  = true;
@@ -149,16 +148,13 @@ public final class GraalOptions {
     public static boolean ExitVMOnBailout                    = ____;
     public static boolean ExitVMOnException                  = true;
 
-    // Register allocator debugging
-    public static String  RegisterPressure                   = null;
-
     // Code generator settings
     public static boolean ConditionalElimination             = true;
     public static boolean CullFrameStates                    = ____;
     public static boolean UseProfilingInformation            = true;
            static boolean RemoveNeverExecutedCode            = true;
            static boolean UseExceptionProbability            = true;
-           static boolean UseExceptionProbabilityForOperations = true;
+    public static boolean AllowExplicitExceptionChecks       = true;
     public static boolean OmitHotExceptionStacktrace         = ____;
     public static boolean GenSafepoints                      = true;
     public static boolean GenLoopSafepoints                  = true;
@@ -168,7 +164,7 @@ public final class GraalOptions {
     public static boolean GenAssertionCode                   = ____;
     public static boolean AlignCallsForPatching              = true;
     public static boolean ResolveClassBeforeStaticInvoke     = ____;
-    public static boolean CanOmitFrame                       = true;
+    public static boolean CanOmitFrame                       = false;
     public static int     SafepointPollOffset                = 256;
 
     public static boolean MemoryAwareScheduling              = true;
@@ -186,7 +182,6 @@ public final class GraalOptions {
     public static boolean SupportJsrBytecodes                = true;
 
     public static boolean OptAssumptions                     = true;
-    public static boolean OptConvertDeoptsToGuards           = true;
     public static boolean OptReadElimination                 = true;
     public static boolean OptCanonicalizer                   = true;
     public static boolean OptScheduleOutOfLoops              = true;

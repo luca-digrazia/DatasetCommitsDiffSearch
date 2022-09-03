@@ -27,6 +27,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.Opcode;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.amd64.AMD64Call.DirectCallOp;
 import com.oracle.graal.lir.asm.*;
@@ -45,7 +46,7 @@ final class AMD64HotspotDirectStaticCallOp extends DirectCallOp {
     private final Constant metaspaceMethod;
     private final InvokeKind invokeKind;
 
-    AMD64HotspotDirectStaticCallOp(ResolvedJavaMethod target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind, Constant metaspaceMethod) {
+    AMD64HotspotDirectStaticCallOp(InvokeTarget target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind, Constant metaspaceMethod) {
         super(target, result, parameters, temps, state);
         assert invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special;
         this.metaspaceMethod = metaspaceMethod;
