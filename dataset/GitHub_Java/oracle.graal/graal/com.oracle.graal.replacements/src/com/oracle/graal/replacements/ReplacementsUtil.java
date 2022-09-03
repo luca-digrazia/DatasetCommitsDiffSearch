@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,21 @@
  */
 package com.oracle.graal.replacements;
 
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.replacements.nodes.*;
 
-public class ReplacementsUtil {
+// JaCoCo Exclude
+public final class ReplacementsUtil {
     private ReplacementsUtil() {
         // empty
     }
 
-    private static final boolean REPLACEMENTS_ASSERTIONS_ENABLED;
+    public static final boolean REPLACEMENTS_ASSERTIONS_ENABLED;
 
     static {
         boolean assertionsEnabled = false;
         assert (assertionsEnabled = true) != false;
-        REPLACEMENTS_ASSERTIONS_ENABLED = assertionsEnabled;
+        REPLACEMENTS_ASSERTIONS_ENABLED = assertionsEnabled && GraalOptions.ImmutableCode.getValue() == false;
     }
 
     /**
