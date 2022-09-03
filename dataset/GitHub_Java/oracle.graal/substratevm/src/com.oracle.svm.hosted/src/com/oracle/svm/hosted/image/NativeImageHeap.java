@@ -53,9 +53,10 @@ import org.graalvm.nativeimage.c.function.RelocatedPointer;
 import org.graalvm.word.WordBase;
 
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
-import com.oracle.svm.core.FrameAccess;
+import com.oracle.svm.core.HostedIdentityHashCodeProvider;
 import com.oracle.svm.core.StaticFieldsSupport;
 import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.amd64.FrameAccess;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.heap.Heap;
@@ -77,7 +78,6 @@ import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedType;
 import com.oracle.svm.hosted.meta.HostedUniverse;
-import com.oracle.svm.hosted.meta.MaterializedConstantFields;
 import com.oracle.svm.hosted.meta.MethodPointer;
 
 import jdk.vm.ci.meta.JavaConstant;
@@ -142,20 +142,12 @@ public final class NativeImageHeap {
         assert addObjectWorklist.isEmpty();
     }
 
-    /**
-     * This code assumes that the read-only primitive partition is the first thing in the read-only
-     * section of the image heap, and that the read-only relocatable partition is the last thing in
-     * the read-only section.
-     *
-     * Compare to {@link NativeImageHeap#setReadOnlySection(String, long)} that sets the ordering or
-     * partitions within the read-only section.
-     */
     void alignRelocatablePartition(long alignment) {
         long relocatablePartitionOffset = readOnlyPrimitive.getSize() + readOnlyReference.getSize();
         long beforeRelocPadding = NumUtil.roundUp(relocatablePartitionOffset, alignment) - relocatablePartitionOffset;
-        readOnlyPrimitive.addPrePad(beforeRelocPadding);
+        readOnlyPrimitive.incrementSize(beforeRelocPadding);
         long afterRelocPadding = NumUtil.roundUp(readOnlyRelocatable.getSize(), alignment) - readOnlyRelocatable.getSize();
-        readOnlyRelocatable.addPostPad(afterRelocPadding);
+        readOnlyRelocatable.incrementSize(afterRelocPadding);
     }
 
     private static Object readObjectField(HostedField field, JavaConstant receiver) {
@@ -171,8 +163,7 @@ public final class NativeImageHeap {
          * fields manually.
          */
         for (HostedField field : getUniverse().getFields()) {
-            if (Modifier.isStatic(field.getModifiers()) && field.hasLocation() && field.getType().getStorageKind() == JavaKind.Object) {
-                assert field.isWritten() || MaterializedConstantFields.singleton().contains(field.wrapped);
+            if (Modifier.isStatic(field.getModifiers()) && field.isWritten() && field.isAccessed() && field.getType().getStorageKind() == JavaKind.Object) {
                 addObject(readObjectField(field, null), false, field);
             }
         }
@@ -249,18 +240,13 @@ public final class NativeImageHeap {
             throw VMError.shouldNotReachHere("DynamicHub written to the image that has not been seen as reachable during static analysis: " + original);
         }
 
-        int identityHashCode;
-        if (original instanceof DynamicHub) {
-            /*
-             * We need to use the identity hash code of the original java.lang.Class object and not
-             * of the DynamicHub, so that hash maps that are filled during image generation and use
-             * Class keys still work at run time.
-             */
-            identityHashCode = System.identityHashCode(universe.hostVM().lookupType((DynamicHub) original).getJavaClass());
-        } else {
+        int identityHashCode = 0;
+        if (original instanceof HostedIdentityHashCodeProvider) {
+            identityHashCode = ((HostedIdentityHashCodeProvider) original).hostedIdentityHashCode();
+        }
+        if (identityHashCode == 0) {
             identityHashCode = System.identityHashCode(original);
         }
-        VMError.guarantee(identityHashCode != 0, "0 is used as a marker value for 'hash code not yet computed'");
 
         if (original instanceof String) {
             handleImageString((String) original);
@@ -534,8 +520,7 @@ public final class NativeImageHeap {
         ObjectInfo primitiveFields = objects.get(StaticFieldsSupport.getStaticPrimitiveFields());
         ObjectInfo objectFields = objects.get(StaticFieldsSupport.getStaticObjectFields());
         for (HostedField field : getUniverse().getFields()) {
-            if (Modifier.isStatic(field.getModifiers()) && field.hasLocation()) {
-                assert field.isWritten() || MaterializedConstantFields.singleton().contains(field.wrapped);
+            if (Modifier.isStatic(field.getModifiers()) && field.isWritten() && field.isAccessed()) {
                 ObjectInfo fields = (field.getStorageKind() == JavaKind.Object) ? objectFields : primitiveFields;
                 writeField(buffer, fields, field, null, null);
             }
@@ -903,12 +888,9 @@ public final class NativeImageHeap {
         if (useHeapBase()) {
             /*
              * Zero designates null, so add some padding at the heap base to make object offsets
-             * strictly positive.
-             *
-             * This code assumes that the read-only primitive partition is the first partition in
-             * the image heap.
+             * strictly positive
              */
-            readOnlyPrimitive.addPrePad(layout.getAlignment());
+            readOnlyPrimitive.incrementSize(layout.getAlignment());
         }
     }
 
@@ -1085,33 +1067,12 @@ public final class NativeImageHeap {
             return size;
         }
 
-        long getPrePad() {
-            return prePadding;
-        }
-
-        long getPostPad() {
-            return postPadding;
-        }
-
         long getCount() {
             return count;
         }
 
         void incrementSize(final long increment) {
             size += increment;
-        }
-
-        void addPrePad(long padSize) {
-            prePadding += padSize;
-            incrementSize(padSize);
-        }
-
-        void addPostPad(long padSize) {
-            postPadding += padSize;
-            incrementSize(padSize);
-        }
-
-        void incrementCount() {
             count += 1L;
         }
 
@@ -1124,7 +1085,6 @@ public final class NativeImageHeap {
 
             long position = size;
             incrementSize(info.getSize());
-            incrementCount();
             return position;
         }
 
@@ -1176,10 +1136,8 @@ public final class NativeImageHeap {
                     }
                 }
             }
-            assert (getCount() == uniqueCount) : String.format("Incorrect counting:  partition: %s  getCount(): %d  uniqueCount: %d", name, getCount(), uniqueCount);
-            final long paddedSize = uniqueSize + getPrePad() + getPostPad();
-            assert (getSize() == paddedSize) : String.format("Incorrect sizing: partition: %s getSize(): %d uniqueSize: %d prePad: %d postPad: %d",
-                            name, getSize(), uniqueSize, getPrePad(), getPostPad());
+            assert (getCount() == uniqueCount) : String.format("Incorrect counting: getCount(): %d  uniqueCount: %d", getCount(), uniqueCount);
+            assert (getSize() == uniqueSize) : String.format("Incorrect sizing: getSize(): %d  uniqueSize: %d", getCount(), uniqueCount);
             final long nonuniqueCount = uniqueCount + canonicalizedCount;
             final long nonuniqueSize = uniqueSize + canonicalizedSize;
             final double countPercent = 100.0D * ((double) uniqueCount / (double) nonuniqueCount);
@@ -1200,8 +1158,6 @@ public final class NativeImageHeap {
             this.heap = heap;
             this.writable = writable;
             this.size = 0L;
-            this.prePadding = 0L;
-            this.postPadding = 0L;
             this.count = 0L;
             this.firstAllocatedObject = null;
             this.lastAllocatedObject = null;
@@ -1217,10 +1173,6 @@ public final class NativeImageHeap {
         private final boolean writable;
         /** The total size of the objects in this partition. */
         private long size;
-        /** The size of any padding at the beginning of the partition. */
-        private long prePadding;
-        /** The size of any padding at the end of the partition. */
-        private long postPadding;
         /** The number of objects in this partition. */
         private long count;
 

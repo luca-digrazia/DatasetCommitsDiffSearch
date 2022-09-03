@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.core.heap;
 
+import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.word.BarrieredAccess;
 import org.graalvm.compiler.word.ObjectAccess;
 import org.graalvm.compiler.word.Word;
@@ -97,7 +98,14 @@ public final class ReferenceAccessImpl implements ReferenceAccess {
     @AlwaysInline("Performance")
     @Uninterruptible(reason = "for uninterruptible callers", mayBeInlined = true)
     public boolean haveCompressedReferences() {
-        return SubstrateOptions.UseHeapBaseRegister.getValue();
+        return SubstrateOptions.SpawnIsolates.getValue();
+    }
+
+    @Override
+    @AlwaysInline("Performance")
+    @Uninterruptible(reason = "for uninterruptible callers", mayBeInlined = true)
+    public CompressEncoding getCompressEncoding() {
+        return ImageSingletons.lookup(CompressEncoding.class);
     }
 }
 

@@ -250,7 +250,7 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
 
             VMThreads.detachThread(thread);
         } catch (Throwable t) {
-            result = CEntryPointErrors.UNCAUGHT_EXCEPTION;
+            result = CEntryPointErrors.UNSPECIFIED;
         } finally {
             VMThreads.THREAD_MUTEX.unlock();
             VMThreads.singleton().freeIsolateThread(thread);
@@ -270,16 +270,12 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
 
     @SubstrateForeignCallTarget
     private static int tearDownIsolate() {
-        try {
-            RuntimeSupport.executeTearDownHooks();
-            if (!JavaThreads.singleton().tearDownVM()) {
-                return CEntryPointErrors.UNSPECIFIED;
-            }
-            return Isolates.tearDownCurrent();
-        } catch (Throwable t) {
-            logException(t);
-            return CEntryPointErrors.UNCAUGHT_EXCEPTION;
+        RuntimeSupport.executeTearDownHooks();
+        boolean success = JavaThreads.singleton().tearDownVM();
+        if (!success) {
+            return CEntryPointErrors.UNSPECIFIED;
         }
+        return Isolates.tearDownCurrent();
     }
 
     @Snippet
@@ -356,12 +352,6 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
 
     @SubstrateForeignCallTarget
     private static int reportException(Throwable exception) {
-        logException(exception);
-        ImageSingletons.lookup(LogHandler.class).fatalError();
-        return CEntryPointErrors.UNSPECIFIED; // unreachable
-    }
-
-    private static void logException(Throwable exception) {
         Log.log().string(exception.getClass().getName());
         if (!NoAllocationVerifier.isActive()) {
             String detail = exception.getMessage();
@@ -370,6 +360,8 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
             }
         }
         Log.log().newline();
+        ImageSingletons.lookup(LogHandler.class).fatalError();
+        return CEntryPointErrors.UNSPECIFIED; // unreachable
     }
 
     @Snippet

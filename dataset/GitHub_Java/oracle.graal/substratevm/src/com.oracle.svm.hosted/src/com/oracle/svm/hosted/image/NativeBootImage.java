@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.hosted.image;
 
-import static com.oracle.svm.core.SubstrateUtil.mangleName;
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
 import java.io.ByteArrayOutputStream;
@@ -68,10 +67,9 @@ import com.oracle.objectfile.ObjectFile.RelocationKind;
 import com.oracle.objectfile.ObjectFile.Section;
 import com.oracle.objectfile.SectionName;
 import com.oracle.objectfile.macho.MachOObjectFile;
-import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.Isolates;
 import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.SubstrateUtil;
+import com.oracle.svm.core.amd64.FrameAccess;
 import com.oracle.svm.core.c.CConst;
 import com.oracle.svm.core.c.CGlobalDataImpl;
 import com.oracle.svm.core.c.CHeader;
@@ -348,7 +346,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
 
             // Text section (code)
             final RelocatableBuffer textBuffer = RelocatableBuffer.factory("text", textSectionSize, objectFile.getByteOrder());
-            final NativeTextSectionImpl textImpl = NativeTextSectionImpl.factory(textBuffer, objectFile, codeCache);
+            final TextImpl textImpl = TextImpl.factory(textBuffer, objectFile, codeCache);
             final String textSectionName = SectionName.TEXT.getFormatDependentName(objectFile.getFormat());
             textSection = objectFile.newProgbitsSection(textSectionName, objectFile.getPageSize(), false, true, textImpl);
 
@@ -366,7 +364,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
 
             // Define symbols for the sections.
             objectFile.createDefinedSymbol(textSection.getName(), textSection, 0, 0, false, false);
-            objectFile.createDefinedSymbol("__svm_text_end", textSection, textSectionSize, 0, false, true);
+            objectFile.createDefinedSymbol("__svm_text_end", textSection, codeCache.getCodeCacheSize(), 0, false, true);
             objectFile.createDefinedSymbol(roDataSection.getName(), roDataSection, 0, 0, false, false);
             objectFile.createDefinedSymbol(rwDataSection.getName(), rwDataSection, 0, 0, false, false);
 
@@ -590,6 +588,30 @@ public abstract class NativeBootImage extends AbstractBootImage {
     }
 
     /**
+     * Given a {@link ResolvedJavaMethod}, compute a "full name" including its classname and method
+     * descriptor.
+     *
+     * @param sm a substrate method
+     * @param includeReturnType TODO
+     * @return the full name (including classname and descriptor) of sm
+     */
+    private static String methodFullNameAndDescriptor(ResolvedJavaMethod sm, boolean includeReturnType) {
+        return sm.format("%H.%n(%P)" + (includeReturnType ? "%R" : "")).replace(" ", "");
+    }
+
+    /**
+     * Given a java.lang.reflect.Method, compute a "full name" including its classname and method
+     * descriptor.
+     *
+     * @param m a method
+     * @param includeReturnType TODO
+     * @return the full name (including classname and descriptor) of m
+     */
+    public static String methodFullNameAndDescriptor(java.lang.reflect.Method m, boolean includeReturnType) {
+        return m.getDeclaringClass().getCanonicalName() + "." + m.getName() + getMethodDescriptor(m, includeReturnType);
+    }
+
+    /**
      * Given a java.lang.reflect.Method, compute the symbol name of its start address (if any) in
      * the image. The symbol name returned is the one that would be used for local references (e.g.
      * for relocation), so is guaranteed to exist if the method is in the image. However, it is not
@@ -601,7 +623,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
      */
     public static String localSymbolNameForMethod(java.lang.reflect.Method m) {
         /* We don't mangle local symbols, because they never need be referenced by an assembler. */
-        return SubstrateUtil.uniqueShortName(m);
+        return methodFullNameAndDescriptor(m, true);
     }
 
     /**
@@ -616,7 +638,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
      */
     public static String localSymbolNameForMethod(ResolvedJavaMethod sm) {
         /* We don't mangle local symbols, because they never need be referenced by an assembler. */
-        return SubstrateUtil.uniqueShortName(sm);
+        return methodFullNameAndDescriptor(sm, true);
     }
 
     /**
@@ -631,7 +653,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
      *         does)
      */
     public static String globalSymbolNameForMethod(java.lang.reflect.Method m) {
-        return mangleName(SubstrateUtil.uniqueShortName(m));
+        return mangleName(methodFullNameAndDescriptor(m, false));
     }
 
     /**
@@ -646,7 +668,90 @@ public abstract class NativeBootImage extends AbstractBootImage {
      *         does)
      */
     public static String globalSymbolNameForMethod(ResolvedJavaMethod sm) {
-        return mangleName(SubstrateUtil.uniqueShortName(sm));
+        return mangleName(methodFullNameAndDescriptor(sm, false));
+    }
+
+    /**
+     * Return the Java bytecode method descriptor for a java.lang.reflect.Method. (Perhaps
+     * surprisingly, this seems not to be exposed by java.lang.reflect, so we implement it here.)
+     *
+     * @param m a method
+     * @param includeReturnType whether the descriptor string should include the return type
+     * @return its descriptor (as defined by the Java class file format), describing its argument
+     *         and, if includeReturnType is true, its return type. Does not include the name of the
+     *         method, class or package.
+     */
+    public static String getMethodDescriptor(java.lang.reflect.Method m, boolean includeReturnType) {
+        // this is based on com.oracle.graal.api.meta.MetaUtil.signatureToMethodDescriptor
+        StringBuilder sb = new StringBuilder("(");
+        for (Class<?> c : m.getParameterTypes()) {
+            sb.append(getTypeFragment(c));
+        }
+        sb.append(')');
+        if (includeReturnType) {
+            sb.append(getTypeFragment(m.getReturnType()));
+        }
+        return sb.toString();
+
+    }
+
+    private static String getTypeFragment(Class<?> c) {
+        /*
+         * HACK: java.lang.reflect does not expose method descriptors directly, *BUT* the
+         * specification of getName() for array types indirectly does so. So we use this to our
+         * advantage in the following monster.
+         */
+        if (c.isArray()) {
+            return c.getName();
+        } else if (c == void.class) {
+            return "V";
+        } else {
+            Class<?> arrayOfC = java.lang.reflect.Array.newInstance(c, new int[]{0}).getClass();
+            String nameOfArrayType = arrayOfC.getName();
+            String nameOfC = nameOfArrayType.substring(1); // trim the leading '['
+            // the multidimensional case doesn't reach here
+            assert nameOfC.charAt(0) != '[';
+            return nameOfC;
+        }
+    }
+
+    /**
+     * Mangle the given method name according to our image's (default) mangling convention. A rough
+     * requirement is that symbol names are valid symbol name tokens for the assembler. (This is
+     * necessary to use them in linker command lines, which we currently do in
+     * NativeImageGenerator.) These are of the form '[a-zA-Z\._\$][a-zA-Z0-9\$_]*'. We use the
+     * underscore sign as an escape character. It is always followed by four hex digits representing
+     * the escaped character in natural (big-endian) order. We do not allow the dollar sign, even
+     * though it is legal, because it has special meaning in some shells and disturbs command lines.
+     *
+     * @param methodName a string to mangle
+     * @return a mangled version of methodName
+     */
+    public static String mangleName(String methodName) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < methodName.length(); ++i) {
+            char c = methodName.charAt(i);
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (i == 0 && c == '.') || (i > 0 && c >= '0' && c <= '9')) {
+                // it's legal in this position
+                out.append(c);
+            } else {
+                out.append('_');
+                out.append(String.format("%04x", (int) c));
+            }
+        }
+        String mangled = out.toString();
+        assert mangled.matches("[a-zA-Z\\._][a-zA-Z0-9_]*");
+        //@formatter:off
+        /*
+         * To demangle, the following pipeline works for me (assuming no multi-byte characters):
+         *
+         * sed -r 's/\_([0-9a-f]{4})/\n\1\n/g' | sed -r 's#^[0-9a-f]{2}([0-9a-f]{2})#/usr/bin/printf "\\x\1"#e' | tr -d '\n'
+         *
+         * It's not strictly correct if the first characters after an escape sequence
+         * happen to match ^[0-9a-f]{2}, but hey....
+         */
+         //@formatter:on
+        return mangled;
     }
 
     @Override
@@ -698,10 +803,10 @@ public abstract class NativeBootImage extends AbstractBootImage {
     private Section rwDataSection;
     private Section heapSection;
 
-    public abstract static class NativeTextSectionImpl extends BasicProgbitsSectionImpl {
+    protected static final class TextImpl extends BasicProgbitsSectionImpl {
 
-        public static NativeTextSectionImpl factory(RelocatableBuffer relocatableBuffer, ObjectFile objectFile, NativeImageCodeCache codeCache) {
-            return codeCache.getTextSectionImpl(relocatableBuffer, objectFile, codeCache);
+        public static TextImpl factory(RelocatableBuffer relocatableBuffer, ObjectFile objectFile, NativeImageCodeCache codeCache) {
+            return new TextImpl(relocatableBuffer, objectFile, codeCache);
         }
 
         private Element getRodataSection() {
@@ -725,10 +830,13 @@ public abstract class NativeBootImage extends AbstractBootImage {
             return getContent();
         }
 
-        protected abstract void defineMethodSymbol(String name, Element section, HostedMethod method, CompilationResult result);
+        private void defineMethodSymbol(String name, Element section, HostedMethod method, CompilationResult result) {
+            final int size = result == null ? 0 : result.getTargetCodeSize();
+            objectFile.createDefinedSymbol(name, section, method.getCodeAddressOffset(), size, true, true);
+        }
 
         @SuppressWarnings("try")
-        protected void writeTextSection(DebugContext debug, final Section textSection, final List<HostedMethod> entryPoints) {
+        private void writeTextSection(DebugContext debug, final Section textSection, final List<HostedMethod> entryPoints) {
             try (Indent indent = debug.logAndIndent("TextImpl.writeTextSection")) {
                 /*
                  * Write the text content. For slightly complicated reasons, we now call
@@ -767,7 +875,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
                 // 1. fq with return type
                 for (Map.Entry<HostedMethod, CompilationResult> ent : codeCache.getCompilations().entrySet()) {
                     final String symName = localSymbolNameForMethod(ent.getKey());
-                    final String signatureString = SubstrateUtil.uniqueShortName(ent.getKey());
+                    final String signatureString = methodFullNameAndDescriptor(ent.getKey(), false);
                     final HostedMethod existing = methodsBySignature.get(signatureString);
                     HostedMethod current = ent.getKey();
                     if (existing != null) {
@@ -817,7 +925,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
 
                 // the map starts out empty...
                 assert textBuffer.mapSize() == 0;
-                codeCache.patchMethods(textBuffer, objectFile);
+                codeCache.patchMethods(textBuffer);
                 // but now may be populated
 
                 /*
@@ -828,7 +936,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
             }
         }
 
-        protected NativeTextSectionImpl(RelocatableBuffer relocatableBuffer, ObjectFile objectFile, NativeImageCodeCache codeCache) {
+        protected TextImpl(RelocatableBuffer relocatableBuffer, ObjectFile objectFile, NativeImageCodeCache codeCache) {
             // TODO: Do not separate the byte[] from the RelocatableBuffer.
             super(relocatableBuffer.getBytes());
             this.textBuffer = relocatableBuffer;
@@ -836,8 +944,8 @@ public abstract class NativeBootImage extends AbstractBootImage {
             this.codeCache = codeCache;
         }
 
-        protected final RelocatableBuffer textBuffer;
-        protected final ObjectFile objectFile;
-        protected final NativeImageCodeCache codeCache;
+        private final RelocatableBuffer textBuffer;
+        private final ObjectFile objectFile;
+        private final NativeImageCodeCache codeCache;
     }
 }
