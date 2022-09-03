@@ -42,10 +42,10 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.Intrinsic;
-import com.oracle.truffle.llvm.runtime.NativeLookup.UnsupportedNativeTypeException;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -65,11 +65,7 @@ public abstract class LLVMDispatchNode extends LLVMNode {
     private String getSignature() {
         if (signature == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            try {
-                this.signature = LLVMContext.getNativeSignature(type, LLVMCallNode.USER_ARGUMENT_OFFSET);
-            } catch (UnsupportedNativeTypeException ex) {
-                throw new AssertionError(ex);
-            }
+            this.signature = LLVMContext.getNativeSignature(type, LLVMCallNode.USER_ARGUMENT_OFFSET);
         }
         return signature;
     }
@@ -80,14 +76,7 @@ public abstract class LLVMDispatchNode extends LLVMNode {
      * Function is defined in the user program (available as LLVM IR)
      */
 
-    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"function == cachedFunction", "cachedFunction.isLLVMIRFunction()"})
-    protected static Object doDirectReferenceCache(LLVMFunctionDescriptor function, Object[] arguments,
-                    @Cached("function") LLVMFunctionDescriptor cachedFunction,
-                    @Cached("create(cachedFunction.getLLVMIRFunction())") DirectCallNode callNode) {
-        return callNode.call(arguments);
-    }
-
-    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"function.getFunctionId() == cachedFunction.getFunctionId()", "cachedFunction.isLLVMIRFunction()"}, replaces = "doDirectReferenceCache")
+    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"function.getFunctionPointer() == cachedFunction.getFunctionPointer()", "cachedFunction.isLLVMIRFunction()"})
     protected static Object doDirect(LLVMFunctionDescriptor function, Object[] arguments,
                     @Cached("function") LLVMFunctionDescriptor cachedFunction,
                     @Cached("create(cachedFunction.getLLVMIRFunction())") DirectCallNode callNode) {
@@ -149,12 +138,11 @@ public abstract class LLVMDispatchNode extends LLVMNode {
                     @Cached("createFromNativeNode()") LLVMNativeConvertNode fromNative,
                     @Cached("createNativeCallNode()") Node nativeCall,
                     @Cached("bindSymbol(frame, cachedDescriptor)") TruffleObject cachedBoundFunction,
-                    @Cached("getContext()") LLVMContext context,
-                    @Cached("nativeCallStatisticsEnabled(context)") boolean statistics) {
+                    @Cached("getContext()") LLVMContext context) {
 
         Object[] nativeArgs = prepareNativeArguments(frame, arguments, toNative);
         getThreadingStack(context).getStack().setStackPointer((long) arguments[0]);
-        Object returnValue = LLVMNativeCallUtils.callNativeFunction(statistics, context, nativeCall, cachedBoundFunction, nativeArgs, cachedDescriptor);
+        Object returnValue = LLVMNativeCallUtils.callNativeFunction(context, nativeCall, cachedBoundFunction, nativeArgs, cachedDescriptor);
         getThreadingStack(context).getStack().setStackPointer((long) arguments[0]);
         return fromNative.executeConvert(frame, returnValue);
     }
@@ -171,13 +159,12 @@ public abstract class LLVMDispatchNode extends LLVMNode {
                     @Cached("createFromNativeNode()") LLVMNativeConvertNode fromNative,
                     @Cached("createNativeCallNode()") Node nativeCall,
                     @Cached("getBindNode()") Node bindNode,
-                    @Cached("getContext()") LLVMContext context,
-                    @Cached("nativeCallStatisticsEnabled(context)") boolean statistics) {
+                    @Cached("getContext()") LLVMContext context) {
 
         Object[] nativeArgs = prepareNativeArguments(frame, arguments, toNative);
         TruffleObject boundSymbol = LLVMNativeCallUtils.bindNativeSymbol(bindNode, descriptor.getNativeFunction(), getSignature());
         getThreadingStack(context).getStack().setStackPointer((long) arguments[0]);
-        Object returnValue = LLVMNativeCallUtils.callNativeFunction(statistics, getContext(), nativeCall, boundSymbol, nativeArgs, descriptor);
+        Object returnValue = LLVMNativeCallUtils.callNativeFunction(getContext(), nativeCall, boundSymbol, nativeArgs, descriptor);
         getThreadingStack(context).getStack().setStackPointer((long) arguments[0]);
         return fromNative.executeConvert(frame, returnValue);
     }
