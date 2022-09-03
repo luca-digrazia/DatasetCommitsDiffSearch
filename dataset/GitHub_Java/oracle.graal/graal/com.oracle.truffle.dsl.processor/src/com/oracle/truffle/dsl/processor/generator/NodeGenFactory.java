@@ -32,6 +32,7 @@ import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 import javax.lang.model.util.*;
 
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.*;
@@ -41,22 +42,18 @@ import com.oracle.truffle.api.dsl.internal.DSLOptions.TypeBoxingOptimization;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.Node.Child;
-import com.oracle.truffle.api.nodes.Node.Children;
 import com.oracle.truffle.dsl.processor.*;
-import com.oracle.truffle.dsl.processor.expression.*;
-import com.oracle.truffle.dsl.processor.expression.DSLExpression.Variable;
 import com.oracle.truffle.dsl.processor.java.*;
 import com.oracle.truffle.dsl.processor.java.model.*;
-import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.ArrayCodeTypeMirror;
 import com.oracle.truffle.dsl.processor.model.*;
 import com.oracle.truffle.dsl.processor.parser.*;
 import com.oracle.truffle.dsl.processor.parser.SpecializationGroup.TypeGuard;
 
 public class NodeGenFactory {
 
-    private static final String FRAME_VALUE = TemplateMethod.FRAME_NAME;
+    private static final String FRAME_VALUE = "frameValue";
+
     private static final String NAME_SUFFIX = "_";
-    private static final String NODE_SUFFIX = "NodeGen";
 
     private final ProcessorContext context;
     private final NodeData node;
@@ -73,10 +70,11 @@ public class NodeGenFactory {
         this.genericType = typeSystem.getGenericTypeData();
         this.options = typeSystem.getOptions();
         this.singleSpecializable = isSingleSpecializableImpl();
-        this.varArgsThreshold = calculateVarArgsThreshold();
+        this.varArgsThreshold = calculateVarArgsThresHold();
+
     }
 
-    private int calculateVarArgsThreshold() {
+    private int calculateVarArgsThresHold() {
         TypeMirror specialization = context.getType(SpecializationNode.class);
         TypeElement specializationType = fromTypeMirror(specialization);
 
@@ -90,11 +88,7 @@ public class NodeGenFactory {
     }
 
     public static String nodeTypeName(NodeData node) {
-        return resolveNodeId(node) + NODE_SUFFIX;
-    }
-
-    private static String assumptionName(AssumptionExpression assumption) {
-        return assumption.getId() + NAME_SUFFIX;
+        return resolveNodeId(node) + "NodeGen";
     }
 
     private static String resolveNodeId(NodeData node) {
@@ -159,9 +153,17 @@ public class NodeGenFactory {
         }
     }
 
+    private static String assumptionName(String assumption) {
+        return assumption + "_";
+    }
+
     public CodeTypeElement create() {
         CodeTypeElement clazz = GeneratorUtils.createClass(node, null, modifiers(FINAL), nodeTypeName(node), node.getTemplateType().asType());
         ElementUtils.setVisibility(clazz.getModifiers(), ElementUtils.getVisibility(node.getTemplateType().getModifiers()));
+
+        for (String assumption : node.getAssumptions()) {
+            clazz.add(new CodeVariableElement(modifiers(PRIVATE, FINAL), getType(Assumption.class), assumptionName(assumption)));
+        }
 
         for (NodeChildData child : node.getChildren()) {
             clazz.addOptional(createAccessChildMethod(child));
@@ -181,7 +183,7 @@ public class NodeGenFactory {
             }
         }
 
-        for (ExecutableElement superConstructor : GeneratorUtils.findUserConstructors(node.getTemplateType().asType())) {
+        for (ExecutableElement superConstructor : NodeBaseFactory.findUserConstructors(node.getTemplateType().asType())) {
             clazz.add(createNodeConstructor(clazz, superConstructor));
         }
 
@@ -238,7 +240,7 @@ public class NodeGenFactory {
 
     private Element createUnsupportedMethod() {
         LocalContext locals = LocalContext.load(this);
-        CodeExecutableElement method = locals.createMethod(modifiers(PROTECTED), getType(UnsupportedSpecializationException.class), "unsupported");
+        CodeExecutableElement method = locals.createMethod(modifiers(PRIVATE), getType(UnsupportedSpecializationException.class), "unsupported");
 
         CodeTreeBuilder builder = method.createBuilder();
         builder.startReturn();
@@ -330,7 +332,7 @@ public class NodeGenFactory {
 
         List<SpecializationData> generateSpecializations = new ArrayList<>();
         generateSpecializations.add(node.getUninitializedSpecialization());
-        if (needsPolymorphic()) {
+        if (needsPolymorphic(reachableSpecializations)) {
             generateSpecializations.add(node.getPolymorphicSpecialization());
         }
         generateSpecializations.addAll(reachableSpecializations);
@@ -344,26 +346,6 @@ public class NodeGenFactory {
         baseSpecialization.addOptional(createCreatePolymorphic(generated));
 
         return node.getUninitializedSpecialization();
-    }
-
-    private boolean needsPolymorphic() {
-        List<SpecializationData> reachableSpecializations = getReachableSpecializations();
-        if (reachableSpecializations.size() != 1) {
-            return true;
-        }
-
-        SpecializationData specialization = reachableSpecializations.get(0);
-        for (Parameter parameter : specialization.getSignatureParameters()) {
-            TypeData type = parameter.getTypeSystemType();
-            if (type != null && type.hasImplicitSourceTypes()) {
-                return true;
-            }
-        }
-        if (specialization.hasMultipleInstances()) {
-            return true;
-        }
-        return false;
-
     }
 
     // create specialization
@@ -508,8 +490,7 @@ public class NodeGenFactory {
     }
 
     private Element createMergeMethod(SpecializationData specialization) {
-        boolean cacheBoundGuard = specialization.hasMultipleInstances();
-        if (specialization.getExcludedBy().isEmpty() && !specialization.isPolymorphic() && !cacheBoundGuard) {
+        if (specialization.getExcludedBy().isEmpty() && !specialization.isPolymorphic()) {
             return null;
         }
         TypeMirror specializationNodeType = getType(SpecializationNode.class);
@@ -530,11 +511,7 @@ public class NodeGenFactory {
                 builder.statement("removeSame(\"Contained by " + containedSpecialization.createReferenceName() + "\")");
                 builder.end();
             }
-            if (cacheBoundGuard) {
-                builder.statement("return super.mergeNoSame(newNode)");
-            } else {
-                builder.statement("return super.merge(newNode)");
-            }
+            builder.statement("return super.merge(newNode)");
         }
 
         return executable;
@@ -574,6 +551,21 @@ public class NodeGenFactory {
         }
 
         return executable;
+    }
+
+    private boolean needsPolymorphic(List<SpecializationData> reachableSpecializations) {
+        if (reachableSpecializations.size() > 1) {
+            return true;
+        }
+        if (options.implicitCastOptimization().isDuplicateTail()) {
+            SpecializationData specialization = reachableSpecializations.get(0);
+            for (Parameter parameter : specialization.getSignatureParameters()) {
+                if (parameter.getTypeSystemType().hasImplicitSourceTypes()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private Element createCreateFallback(Map<SpecializationData, CodeTypeElement> generatedSpecializationClasses) {
@@ -620,7 +612,7 @@ public class NodeGenFactory {
                 if (generatedType == null) {
                     throw new AssertionError("No generated type for " + specialization);
                 }
-                return createSlowPathExecute(specialization, values);
+                return createSlowPathExecute(specialization, locals);
             }
 
             public boolean isFastPath() {
@@ -630,7 +622,7 @@ public class NodeGenFactory {
 
         builder.tree(execution);
 
-        if (hasFallthrough(group, genericType, locals, false, null)) {
+        if (hasFallthrough(group, genericType, locals, false)) {
             builder.returnNull();
         }
         return method;
@@ -719,6 +711,8 @@ public class NodeGenFactory {
         return evaluatedCount;
     }
 
+    // create specialization
+
     private Element createUnsupported() {
         SpecializationData fallback = node.getGenericSpecialization();
         if (fallback == null || optimizeFallback(fallback) || fallback.getMethod() == null) {
@@ -742,24 +736,11 @@ public class NodeGenFactory {
         if (reachableSpecializations.size() != 1) {
             return false;
         }
-
-        SpecializationData specialization = reachableSpecializations.get(0);
-
-        for (Parameter parameter : specialization.getSignatureParameters()) {
+        for (Parameter parameter : reachableSpecializations.get(0).getSignatureParameters()) {
             TypeData type = parameter.getTypeSystemType();
             if (type != null && type.hasImplicitSourceTypes()) {
                 return false;
             }
-        }
-
-        if (!specialization.getAssumptionExpressions().isEmpty()) {
-            return false;
-        }
-
-        if (specialization.getCaches().size() > 0) {
-            // TODO chumer: caches do not yet support single specialization.
-            // it could be worthwhile to explore if this is possible
-            return false;
         }
         return true;
     }
@@ -829,7 +810,7 @@ public class NodeGenFactory {
             if (wrappedExecutableType != null) {
                 builder.startReturn().tree(callTemplateMethod(null, wrappedExecutableType, locals)).end();
             } else {
-                builder.tree(createFastPath(builder, specialization, execType.getType(), locals));
+                builder.tree(createFastPathExecute(builder, specialization, execType.getType(), locals));
             }
         } else {
             // create acceptAndExecute
@@ -987,8 +968,7 @@ public class NodeGenFactory {
                     continue;
                 }
             }
-
-            builder.defaultValue(parameter.getType());
+            builder.string(parameter.getLocalName());
         }
         builder.end();
         return builder.build();
@@ -1032,39 +1012,9 @@ public class NodeGenFactory {
         if (specialization.isFallback()) {
             return builder.returnNull().build();
         }
-
         if (node.isFrameUsedByAnyGuard()) {
             builder.tree(createTransferToInterpreterAndInvalidate());
         }
-
-        boolean hasAssumptions = !specialization.getAssumptionExpressions().isEmpty();
-        if (hasAssumptions) {
-            for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
-                CodeTree assumptions = DSLExpressionGenerator.write(assumption.getExpression(), accessParent(null),
-                                castBoundTypes(bindExpressionValues(assumption.getExpression(), specialization, currentValues)));
-                String name = assumptionName(assumption);
-                // needs specialization index for assumption to make unique
-                String varName = name + specialization.getIndex();
-                TypeMirror type = assumption.getExpression().getResolvedType();
-                builder.declaration(type, varName, assumptions);
-                currentValues.set(name, new LocalVariable(null, type, varName, null));
-            }
-
-            builder.startIf();
-            String sep = "";
-            for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
-                LocalVariable assumptionVar = currentValues.get(assumptionName(assumption));
-                if (assumptionVar == null) {
-                    throw new AssertionError("assumption var not resolved");
-                }
-                builder.string(sep);
-                builder.startCall("isValid").tree(assumptionVar.createReference()).end();
-                sep = " && ";
-            }
-            builder.end();
-            builder.startBlock();
-        }
-
         for (SpecializationData otherSpeciailzation : node.getSpecializations()) {
             if (otherSpeciailzation == specialization) {
                 continue;
@@ -1077,29 +1027,7 @@ public class NodeGenFactory {
             }
         }
 
-        CodeTree create = createCallCreateMethod(specialization, null, currentValues);
-
-        if (specialization.hasMultipleInstances()) {
-            builder.declaration(getType(SpecializationNode.class), "s", create);
-            DSLExpression limitExpression = specialization.getLimitExpression();
-            CodeTree limitExpressionTree;
-            if (limitExpression == null) {
-                limitExpressionTree = CodeTreeBuilder.singleString("3");
-            } else {
-                limitExpressionTree = DSLExpressionGenerator.write(limitExpression, accessParent(null), //
-                                castBoundTypes(bindExpressionValues(limitExpression, specialization, currentValues)));
-            }
-
-            builder.startIf().string("countSame(s) < ").tree(limitExpressionTree).end().startBlock();
-            builder.statement("return s");
-            builder.end();
-        } else {
-            builder.startReturn().tree(create).end();
-        }
-
-        if (hasAssumptions) {
-            builder.end();
-        }
+        builder.startReturn().tree(createCallCreateMethod(specialization, null, currentValues)).end();
 
         if (mayBeExcluded(specialization)) {
             CodeTreeBuilder checkHasSeenBuilder = builder.create();
@@ -1111,7 +1039,7 @@ public class NodeGenFactory {
         return builder.build();
     }
 
-    private boolean hasFallthrough(SpecializationGroup group, TypeData forType, LocalContext currentValues, boolean fastPath, List<GuardExpression> ignoreGuards) {
+    private static boolean hasFallthrough(SpecializationGroup group, TypeData forType, LocalContext currentValues, boolean fastPath) {
         for (TypeGuard guard : group.getTypeGuards()) {
             if (currentValues.getValue(guard.getSignatureIndex()) == null) {
                 // not evaluated
@@ -1123,44 +1051,22 @@ public class NodeGenFactory {
             }
         }
 
-        List<GuardExpression> guards = new ArrayList<>(group.getGuards());
-        List<GuardExpression> elseConnectable = group.findElseConnectableGuards();
-        guards.removeAll(elseConnectable);
-        if (ignoreGuards != null) {
-            guards.removeAll(ignoreGuards);
-        }
-        SpecializationData specialization = group.getSpecialization();
-        if (specialization != null && fastPath) {
-            for (ListIterator<GuardExpression> iterator = guards.listIterator(); iterator.hasNext();) {
-                GuardExpression guard = iterator.next();
-                if (!specialization.isDynamicParameterBound(guard.getExpression())) {
-                    iterator.remove();
-                }
-            }
-        }
-
-        if (!guards.isEmpty()) {
+        List<GuardExpression> expressions = new ArrayList<>(group.getGuards());
+        expressions.removeAll(group.findElseConnectableGuards());
+        if (!expressions.isEmpty()) {
             return true;
         }
 
-        if (!fastPath && specialization != null && !specialization.getAssumptionExpressions().isEmpty()) {
+        if ((!fastPath || forType.isGeneric()) && !group.getAssumptions().isEmpty()) {
             return true;
         }
 
-        if (!fastPath && specialization != null && mayBeExcluded(specialization)) {
+        if (!fastPath && group.getSpecialization() != null && !group.getSpecialization().getExceptions().isEmpty()) {
             return true;
         }
 
-        if (!elseConnectable.isEmpty()) {
-            SpecializationGroup previous = group.getPrevious();
-            if (previous != null && hasFallthrough(previous, forType, currentValues, fastPath, previous.getGuards())) {
-                return true;
-            }
-        }
-
-        List<SpecializationGroup> groupChildren = group.getChildren();
-        if (!groupChildren.isEmpty()) {
-            return hasFallthrough(groupChildren.get(groupChildren.size() - 1), forType, currentValues, fastPath, ignoreGuards);
+        if (!group.getChildren().isEmpty()) {
+            return hasFallthrough(group.getChildren().get(group.getChildren().size() - 1), forType, currentValues, fastPath);
         }
 
         return false;
@@ -1211,25 +1117,11 @@ public class NodeGenFactory {
         }
         if (currentValues != null) {
             for (Parameter p : specialization.getSignatureParameters()) {
+                LocalVariable local = currentValues.get(p.getLocalName());
                 CodeVariableElement var = createImplicitProfileParameter(p.getSpecification().getExecution(), p.getTypeSystemType());
                 if (var != null) {
-                    // we need the original name here
-                    builder.tree(LocalVariable.fromParameter(p).createReference());
+                    builder.tree(local.createReference());
                 }
-            }
-            for (CacheExpression cache : specialization.getCaches()) {
-                LocalVariable variable = currentValues.get(cache.getParameter().getLocalName());
-                if (variable == null) {
-                    throw new AssertionError("Could not bind cached value " + cache.getParameter().getLocalName() + ": " + currentValues);
-                }
-                builder.tree(variable.createReference());
-            }
-            for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
-                LocalVariable variable = currentValues.get(assumptionName(assumption));
-                if (variable == null) {
-                    throw new AssertionError("Could not bind assumption value " + assumption.getId() + ": " + currentValues);
-                }
-                builder.tree(variable.createReference());
             }
         }
         builder.end();
@@ -1307,30 +1199,6 @@ public class NodeGenFactory {
                     }
                 }
             }
-            for (CacheExpression cache : specialization.getCaches()) {
-                String name = cache.getParameter().getLocalName();
-                TypeMirror type = cache.getParameter().getType();
-
-                if (ElementUtils.isAssignable(type, new ArrayCodeTypeMirror(getType(Node.class)))) {
-                    CodeVariableElement var = clazz.add(new CodeVariableElement(modifiers(PRIVATE, FINAL), type, name));
-                    var.addAnnotationMirror(new CodeAnnotationMirror(context.getDeclaredType(Children.class)));
-                } else if (ElementUtils.isAssignable(type, getType(Node.class))) {
-                    CodeVariableElement var = clazz.add(new CodeVariableElement(modifiers(PRIVATE), type, name));
-                    var.addAnnotationMirror(new CodeAnnotationMirror(context.getDeclaredType(Child.class)));
-                } else {
-                    clazz.add(new CodeVariableElement(modifiers(PRIVATE, FINAL), type, name));
-                }
-                constructor.addParameter(new CodeVariableElement(type, name));
-                builder.startStatement().string("this.").string(name).string(" = ").string(name).end();
-            }
-
-            for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
-                String name = assumptionName(assumption);
-                TypeMirror type = assumption.getExpression().getResolvedType();
-                clazz.add(new CodeVariableElement(modifiers(PRIVATE, FINAL), type, name));
-                constructor.addParameter(new CodeVariableElement(type, name));
-                builder.startStatement().string("this.").string(name).string(" = ").string(name).end();
-            }
         }
 
         if (constructor.getParameters().isEmpty()) {
@@ -1390,12 +1258,9 @@ public class NodeGenFactory {
         return builder.build();
     }
 
-    private static CodeTree createCallDelegate(String methodName, String reason, TypeData forType, LocalContext currentValues) {
+    private static CodeTree createCallDelegate(String methodName, TypeData forType, LocalContext currentValues) {
         CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
         builder.startCall(methodName);
-        if (reason != null) {
-            builder.doubleQuote(reason);
-        }
         currentValues.addReferencesTo(builder, FRAME_VALUE);
         builder.end();
 
@@ -1435,10 +1300,6 @@ public class NodeGenFactory {
         TypeData type = forType == null ? genericType : forType;
         LocalContext currentLocals = LocalContext.load(this, evaluatedArguments, varArgsThreshold);
 
-        if (specialization != null) {
-            currentLocals.loadFastPathState(specialization);
-        }
-
         CodeExecutableElement executable = currentLocals.createMethod(modifiers(PUBLIC), type.getPrimitiveType(), TypeSystemNodeFactory.executeName(forType), FRAME_VALUE);
         executable.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(Override.class)));
 
@@ -1447,12 +1308,12 @@ public class NodeGenFactory {
         }
 
         CodeTreeBuilder builder = executable.createBuilder();
-        builder.tree(createFastPath(builder, specialization, type, currentLocals));
+        builder.tree(createFastPathExecute(builder, specialization, type, currentLocals));
 
         return executable;
     }
 
-    private CodeTree createFastPath(CodeTreeBuilder parent, SpecializationData specialization, TypeData type, LocalContext currentLocals) {
+    private CodeTree createFastPathExecute(CodeTreeBuilder parent, SpecializationData specialization, TypeData type, LocalContext currentLocals) {
         final CodeTreeBuilder builder = parent.create();
 
         for (NodeExecutionData execution : node.getChildExecutions()) {
@@ -1473,11 +1334,11 @@ public class NodeGenFactory {
 
         LocalContext originalValues = currentLocals.copy();
         if (specialization == null) {
-            builder.startReturn().tree(createCallDelegate("acceptAndExecute", null, type, currentLocals)).end();
+            builder.startReturn().tree(createCallDelegate("acceptAndExecute", type, currentLocals)).end();
         } else if (specialization.isPolymorphic()) {
             builder.tree(createCallNext(type, currentLocals));
         } else if (specialization.isUninitialized()) {
-            builder.startReturn().tree(createCallDelegate("uninitialized", null, type, currentLocals)).end();
+            builder.startReturn().tree(createCallDelegate("uninitialized", type, currentLocals)).end();
         } else {
             final TypeData finalType = type;
             SpecializationGroup group = SpecializationGroup.create(specialization);
@@ -1491,7 +1352,7 @@ public class NodeGenFactory {
                 }
             };
             builder.tree(createGuardAndCast(group, type, currentLocals, executionFactory));
-            if (hasFallthrough(group, type, originalValues, true, null) || group.getSpecialization().isFallback()) {
+            if (hasFallthrough(group, type, originalValues, true) || group.getSpecialization().isFallback()) {
                 builder.tree(createCallNext(type, originalValues));
             }
         }
@@ -1542,27 +1403,6 @@ public class NodeGenFactory {
             ifCount++;
         }
         CodeTreeBuilder execute = builder.create();
-
-        if (!specialization.getAssumptionExpressions().isEmpty()) {
-            builder.startTryBlock();
-            for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
-                LocalVariable assumptionVar = currentValues.get(assumptionName(assumption));
-                if (assumptionVar == null) {
-                    throw new AssertionError("Could not resolve assumption var " + currentValues);
-                }
-                builder.startStatement().startCall("check").tree(assumptionVar.createReference()).end().end();
-            }
-            builder.end().startCatchBlock(getType(InvalidAssumptionException.class), "ae");
-            builder.startReturn();
-            List<String> assumptionIds = new ArrayList<>();
-            for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
-                assumptionIds.add(assumption.getId());
-            }
-            builder.tree(createCallDelegate("removeThis", String.format("Assumption %s invalidated", assumptionIds), forType, currentValues));
-            builder.end();
-            builder.end();
-        }
-
         execute.startReturn();
         if (specialization.getMethod() == null) {
             execute.startCall("unsupported");
@@ -1586,24 +1426,27 @@ public class NodeGenFactory {
         } else {
             castGuards = new HashSet<>();
             for (TypeGuard castGuard : group.getTypeGuards()) {
-                if (isTypeGuardUsedInAnyGuardOrCacheBelow(group, currentValues, castGuard)) {
+                if (isTypeGuardUsedInAnyGuardBelow(group, currentValues, castGuard)) {
                     castGuards.add(castGuard);
                 }
             }
         }
-
-        SpecializationData specialization = group.getSpecialization();
-        CodeTree[] checkAndCast = createTypeCheckAndLocals(specialization, group.getTypeGuards(), castGuards, currentValues, execution);
-
+        CodeTree[] checkAndCast = createTypeCheckAndCast(group.getTypeGuards(), castGuards, currentValues, execution);
         CodeTree check = checkAndCast[0];
         CodeTree cast = checkAndCast[1];
 
         List<GuardExpression> elseGuardExpressions = group.findElseConnectableGuards();
         List<GuardExpression> guardExpressions = new ArrayList<>(group.getGuards());
         guardExpressions.removeAll(elseGuardExpressions);
-        CodeTree[] methodGuardAndAssertions = createMethodGuardCheck(guardExpressions, specialization, currentValues, execution.isFastPath());
-        CodeTree methodGuards = methodGuardAndAssertions[0];
-        CodeTree guardAssertions = methodGuardAndAssertions[1];
+        CodeTree methodGuards = createMethodGuardCheck(guardExpressions, currentValues);
+
+        if (!group.getAssumptions().isEmpty()) {
+            if (execution.isFastPath() && !forType.isGeneric()) {
+                cast = appendAssumptionFastPath(cast, group.getAssumptions(), forType, currentValues);
+            } else {
+                methodGuards = appendAssumptionSlowPath(methodGuards, group.getAssumptions());
+            }
+        }
 
         int ifCount = 0;
         if (!check.isEmpty()) {
@@ -1614,9 +1457,6 @@ public class NodeGenFactory {
         }
         if (!cast.isEmpty()) {
             builder.tree(cast);
-        }
-        if (!guardAssertions.isEmpty()) {
-            builder.tree(guardAssertions);
         }
         boolean elseIf = !elseGuardExpressions.isEmpty();
         if (!methodGuards.isEmpty()) {
@@ -1634,12 +1474,40 @@ public class NodeGenFactory {
             for (SpecializationGroup child : group.getChildren()) {
                 builder.tree(createGuardAndCast(child, forType, currentValues.copy(), execution));
             }
+            SpecializationData specialization = group.getSpecialization();
             if (specialization != null) {
                 builder.tree(execution.createExecute(specialization, currentValues));
             }
         }
         builder.end(ifCount);
 
+        return builder.build();
+    }
+
+    private CodeTree appendAssumptionSlowPath(CodeTree methodGuards, List<String> assumptions) {
+        CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
+
+        builder.tree(methodGuards);
+        String connect = methodGuards.isEmpty() ? "" : " && ";
+        for (String assumption : assumptions) {
+            builder.string(connect);
+            builder.startCall(accessParent(assumptionName(assumption)), "isValid").end();
+            connect = " && ";
+        }
+
+        return builder.build();
+    }
+
+    private CodeTree appendAssumptionFastPath(CodeTree casts, List<String> assumptions, TypeData forType, LocalContext currentValues) {
+        CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
+        builder.tree(casts);
+        builder.startTryBlock();
+        for (String assumption : assumptions) {
+            builder.startStatement().startCall(accessParent(assumptionName(assumption)), "check").end().end();
+        }
+        builder.end().startCatchBlock(getType(InvalidAssumptionException.class), "ae");
+        builder.tree(createCallNext(forType, currentValues));
+        builder.end();
         return builder.build();
     }
 
@@ -1656,7 +1524,7 @@ public class NodeGenFactory {
          * Hacky else case. In this case the specialization is not reachable due to previous else
          * branch. This is only true if the minimum state is not checked.
          */
-        if (previous.getGuards().size() == 1 && previous.getTypeGuards().isEmpty() &&
+        if (previous.getGuards().size() == 1 && previous.getTypeGuards().isEmpty() && previous.getAssumptions().isEmpty() &&
                         (previous.getParent() == null || previous.getMaxSpecializationIndex() != previous.getParent().getMaxSpecializationIndex())) {
             return false;
         }
@@ -1664,40 +1532,26 @@ public class NodeGenFactory {
         return true;
     }
 
-    private boolean isTypeGuardUsedInAnyGuardOrCacheBelow(SpecializationGroup group, LocalContext currentValues, TypeGuard typeGuard) {
-        String localName = currentValues.getValue(typeGuard.getSignatureIndex()).getName();
+    private boolean isTypeGuardUsedInAnyGuardBelow(SpecializationGroup group, LocalContext currentValues, TypeGuard typeGuard) {
+        NodeExecutionData execution = node.getChildExecutions().get(typeGuard.getSignatureIndex());
 
-        SpecializationData specialization = group.getSpecialization();
         for (GuardExpression guard : group.getGuards()) {
-            if (isVariableBoundIn(specialization, guard.getExpression(), localName, currentValues)) {
-                return true;
-            }
-        }
-        if (specialization != null) {
-            for (CacheExpression cache : specialization.getCaches()) {
-                if (isVariableBoundIn(specialization, cache.getExpression(), localName, currentValues)) {
+            List<Parameter> guardParameters = guard.getResolvedGuard().findByExecutionData(execution);
+            TypeData sourceType = currentValues.getValue(typeGuard.getSignatureIndex()).getType();
+
+            for (Parameter guardParameter : guardParameters) {
+                if (sourceType.needsCastTo(guardParameter.getType())) {
                     return true;
                 }
             }
         }
 
         for (SpecializationGroup child : group.getChildren()) {
-            if (isTypeGuardUsedInAnyGuardOrCacheBelow(child, currentValues, typeGuard)) {
+            if (isTypeGuardUsedInAnyGuardBelow(child, currentValues, typeGuard)) {
                 return true;
             }
         }
 
-        return false;
-    }
-
-    private static boolean isVariableBoundIn(SpecializationData specialization, DSLExpression expression, String localName, LocalContext currentValues) throws AssertionError {
-        Map<Variable, LocalVariable> boundValues = bindExpressionValues(expression, specialization, currentValues);
-        for (Variable var : expression.findBoundVariables()) {
-            LocalVariable target = boundValues.get(var);
-            if (target != null && localName.equals(target.getName())) {
-                return true;
-            }
-        }
         return false;
     }
 
@@ -2092,75 +1946,23 @@ public class NodeGenFactory {
         return builder.build();
     }
 
-    private CodeTree[] createMethodGuardCheck(List<GuardExpression> guardExpressions, SpecializationData specialization, LocalContext currentValues, boolean fastPath) {
-        CodeTreeBuilder expressionBuilder = CodeTreeBuilder.createBuilder();
-        CodeTreeBuilder assertionBuilder = CodeTreeBuilder.createBuilder();
+    private CodeTree createMethodGuardCheck(List<GuardExpression> guardExpressions, LocalContext currentValues) {
+        CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
         String and = "";
         for (GuardExpression guard : guardExpressions) {
-            DSLExpression expression = guard.getExpression();
-
-            Map<Variable, CodeTree> resolvedBindings = castBoundTypes(bindExpressionValues(expression, specialization, currentValues));
-            CodeTree expressionCode = DSLExpressionGenerator.write(expression, accessParent(null), resolvedBindings);
-
-            if (!specialization.isDynamicParameterBound(expression) && fastPath) {
-                /*
-                 * Guards where no dynamic parameters are bound can just be executed on the fast
-                 * path.
-                 */
-                assertionBuilder.startAssert().tree(expressionCode).end();
-            } else {
-                expressionBuilder.string(and);
-                expressionBuilder.tree(expressionCode);
-                and = " && ";
+            builder.string(and);
+            if (guard.isNegated()) {
+                builder.string("!");
             }
+            builder.tree(callTemplateMethod(accessParent(null), guard.getResolvedGuard(), currentValues));
+            and = " && ";
         }
-        return new CodeTree[]{expressionBuilder.build(), assertionBuilder.build()};
+        return builder.build();
     }
 
-    private static Map<Variable, CodeTree> castBoundTypes(Map<Variable, LocalVariable> bindings) {
-        Map<Variable, CodeTree> resolvedBindings = new HashMap<>();
-        for (Variable variable : bindings.keySet()) {
-            LocalVariable localVariable = bindings.get(variable);
-            CodeTree resolved = localVariable.createReference();
-            if (!ElementUtils.typeEquals(variable.getResolvedType(), localVariable.getTypeMirror())) {
-                resolved = CodeTreeBuilder.createBuilder().cast(variable.getResolvedType(), resolved).build();
-            }
-            resolvedBindings.put(variable, resolved);
-        }
-        return resolvedBindings;
-    }
-
-    private static Map<Variable, LocalVariable> bindExpressionValues(DSLExpression expression, SpecializationData specialization, LocalContext currentValues) throws AssertionError {
-        Map<Variable, LocalVariable> bindings = new HashMap<>();
-
-        Set<Variable> boundVariables = expression.findBoundVariables();
-        if (specialization == null && !boundVariables.isEmpty()) {
-            throw new AssertionError("Cannot bind guard variable in non-specialization group. yet.");
-        }
-
-        // resolve bindings for local context
-        for (Variable variable : boundVariables) {
-            Parameter resolvedParameter = specialization.findByVariable(variable.getResolvedVariable());
-            if (resolvedParameter != null) {
-                LocalVariable localVariable;
-                if (resolvedParameter.getSpecification().isSignature()) {
-                    NodeExecutionData execution = resolvedParameter.getSpecification().getExecution();
-                    localVariable = currentValues.getValue(execution);
-                } else {
-                    localVariable = currentValues.get(resolvedParameter.getLocalName());
-                }
-                if (localVariable != null) {
-                    bindings.put(variable, localVariable);
-                }
-            }
-        }
-        return bindings;
-    }
-
-    private CodeTree[] createTypeCheckAndLocals(SpecializationData specialization, List<TypeGuard> typeGuards, Set<TypeGuard> castGuards, LocalContext currentValues,
-                    SpecializationExecution specializationExecution) {
+    private CodeTree[] createTypeCheckAndCast(List<TypeGuard> typeGuards, Set<TypeGuard> castGuards, LocalContext currentValues, SpecializationExecution specializationExecution) {
         CodeTreeBuilder checksBuilder = CodeTreeBuilder.createBuilder();
-        CodeTreeBuilder localsBuilder = CodeTreeBuilder.createBuilder();
+        CodeTreeBuilder castsBuilder = CodeTreeBuilder.createBuilder();
         for (TypeGuard typeGuard : typeGuards) {
             int signatureIndex = typeGuard.getSignatureIndex();
             LocalVariable value = currentValues.getValue(signatureIndex);
@@ -2221,26 +2023,12 @@ public class NodeGenFactory {
             if (castGuards == null || castGuards.contains(typeGuard)) {
                 LocalVariable castVariable = currentValues.getValue(execution).nextName().newType(typeGuard.getType()).accessWith(null);
                 currentValues.setValue(execution, castVariable);
-                localsBuilder.tree(castVariable.createDeclaration(castBuilder.build()));
+                castsBuilder.tree(castVariable.createDeclaration(castBuilder.build()));
             }
 
             checksBuilder.tree(checkBuilder.build());
         }
-
-        if (specialization != null && !specializationExecution.isFastPath()) {
-            for (CacheExpression cache : specialization.getCaches()) {
-                CodeTree initializer = DSLExpressionGenerator.write(cache.getExpression(), accessParent(null),
-                                castBoundTypes(bindExpressionValues(cache.getExpression(), specialization, currentValues)));
-                String name = cache.getParameter().getLocalName();
-                // multiple specializations might use the same name
-                String varName = name + specialization.getIndex();
-                TypeMirror type = cache.getParameter().getType();
-                localsBuilder.declaration(type, varName, initializer);
-                currentValues.set(name, new LocalVariable(null, type, varName, null));
-            }
-        }
-
-        return new CodeTree[]{checksBuilder.build(), localsBuilder.build()};
+        return new CodeTree[]{checksBuilder.build(), castsBuilder.build()};
     }
 
     public static final class LocalContext {
@@ -2250,20 +2038,6 @@ public class NodeGenFactory {
 
         private LocalContext(NodeGenFactory factory) {
             this.factory = factory;
-        }
-
-        public void loadFastPathState(SpecializationData specialization) {
-            for (CacheExpression cache : specialization.getCaches()) {
-                Parameter cacheParameter = cache.getParameter();
-                String name = cacheParameter.getVariableElement().getSimpleName().toString();
-                set(cacheParameter.getLocalName(), new LocalVariable(cacheParameter.getTypeSystemType(), cacheParameter.getType(), name, CodeTreeBuilder.singleString("this." + name)));
-            }
-
-            for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
-                String name = assumptionName(assumption);
-                TypeMirror type = assumption.getExpression().getResolvedType();
-                set(name, new LocalVariable(null, type, name, CodeTreeBuilder.singleString("this." + name)));
-            }
         }
 
         public CodeExecutableElement createMethod(Set<Modifier> modifiers, TypeMirror returnType, String name, String... optionalArguments) {
@@ -2462,11 +2236,6 @@ public class NodeGenFactory {
 
         private LocalVariable getShortCircuit(NodeExecutionData execution) {
             return values.get(shortCircuitName(execution));
-        }
-
-        @Override
-        public String toString() {
-            return "LocalContext [values=" + values + "]";
         }
 
     }
