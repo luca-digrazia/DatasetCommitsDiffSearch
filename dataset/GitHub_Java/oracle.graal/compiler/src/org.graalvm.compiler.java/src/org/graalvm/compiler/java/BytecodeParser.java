@@ -2268,10 +2268,8 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected void parseAndInlineCallee(ResolvedJavaMethod targetMethod, ValueNode[] args, IntrinsicContext calleeIntrinsicContext) {
-        FixedWithNextNode calleeBeforeUnwindNode = null;
-        ValueNode calleeUnwindValue = null;
-
         try (IntrinsicScope s = calleeIntrinsicContext != null && !parsingIntrinsic() ? new IntrinsicScope(this, targetMethod.getSignature().toParameterKinds(!targetMethod.isStatic()), args) : null) {
+
             BytecodeParser parser = graphBuilderInstance.createBytecodeParser(graph, this, targetMethod, INVOCATION_ENTRY_BCI, calleeIntrinsicContext);
             FrameStateBuilder startFrameState = new FrameStateBuilder(parser, parser.code, graph);
             if (!targetMethod.isStatic()) {
@@ -2318,15 +2316,12 @@ public class BytecodeParser implements GraphBuilderContext {
                 }
             }
 
-            calleeBeforeUnwindNode = parser.getBeforeUnwindNode();
+            FixedWithNextNode calleeBeforeUnwindNode = parser.getBeforeUnwindNode();
             if (calleeBeforeUnwindNode != null) {
-                calleeUnwindValue = parser.getUnwindValue();
+                ValueNode calleeUnwindValue = parser.getUnwindValue();
                 assert calleeUnwindValue != null;
+                calleeBeforeUnwindNode.setNext(handleException(calleeUnwindValue, bci(), false));
             }
-        }
-
-        if (calleeBeforeUnwindNode != null) {
-            calleeBeforeUnwindNode.setNext(handleException(calleeUnwindValue, bci(), false));
         }
     }
 
