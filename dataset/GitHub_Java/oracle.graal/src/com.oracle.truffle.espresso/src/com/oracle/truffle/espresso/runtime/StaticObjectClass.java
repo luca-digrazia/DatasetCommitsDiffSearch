@@ -22,12 +22,16 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.impl.ObjectKlass;
 
 public final class StaticObjectClass extends StaticObjectImpl {
+    @CompilerDirectives.CompilationFinal //
     private Klass mirror;
 
     public void setMirror(Klass mirror) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         assert this.mirror == null;
         this.mirror = mirror;
     }
@@ -37,11 +41,11 @@ public final class StaticObjectClass extends StaticObjectImpl {
         return this.mirror;
     }
 
-    public StaticObjectClass(Klass klass) {
+    public StaticObjectClass(ObjectKlass klass) {
         super(klass);
     }
 
-    public StaticObjectClass(Klass klass, boolean isStatic) {
+    public StaticObjectClass(ObjectKlass klass, boolean isStatic) {
         super(klass, isStatic);
     }
 

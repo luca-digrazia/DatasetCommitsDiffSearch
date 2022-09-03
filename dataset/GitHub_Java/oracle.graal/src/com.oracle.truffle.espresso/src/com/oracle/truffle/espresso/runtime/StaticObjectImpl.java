@@ -38,24 +38,26 @@ import com.oracle.truffle.espresso.meta.MetaUtil;
 
 public class StaticObjectImpl implements StaticObject {
     private Map<String, Object> hiddenFields;
+    private final boolean isStatic;
     private final Klass klass;
 
     private final Object[] fields;
 
-    public StaticObjectImpl(Klass klass, Map<String, Object> hiddenFields, Object[] fields) {
-        this.klass = klass;
-        this.hiddenFields = hiddenFields;
-        this.fields = fields;
+    public boolean isStatic() {
+        return isStatic;
     }
 
-    public boolean isStatic() {
-        return this == klass.getStatics();
+    public StaticObjectImpl(Klass klass, Map<String, Object> hiddenFields, Object[] fields, boolean isStatic) {
+        this.klass = klass;
+        this.hiddenFields = hiddenFields;
+        this.isStatic = isStatic;
+        this.fields = fields;
     }
 
     // Shallow copy.
     public StaticObject copy() {
         HashMap<String, Object> hiddenFieldsCopy = hiddenFields != null ? new HashMap<>(hiddenFields) : null;
-        return new StaticObjectImpl(getKlass(), hiddenFieldsCopy, fields.clone());
+        return new StaticObjectImpl(getKlass(), hiddenFieldsCopy, fields.clone(), isStatic);
     }
 
     public StaticObjectImpl(ObjectKlass klass) {
@@ -66,6 +68,7 @@ public class StaticObjectImpl implements StaticObject {
         assert !isStatic || klass.isInitialized();
         this.klass = klass;
         this.hiddenFields = null;
+        this.isStatic = isStatic;
         this.fields = isStatic ? new Object[klass.getStaticFieldSlots()] : new Object[klass.getInstanceFieldSlots()];
         FieldInfo[] allFields = isStatic ? klass.getStaticFields() : klass.getInstanceFields(true);
         for (FieldInfo fi : allFields) {
