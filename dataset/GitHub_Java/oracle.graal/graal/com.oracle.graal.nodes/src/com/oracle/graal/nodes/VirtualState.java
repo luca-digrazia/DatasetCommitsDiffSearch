@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 
 /**
  * Base class for nodes that contain "virtual" state, like FrameState and VirtualObjectState.
@@ -53,10 +52,5 @@ public abstract class VirtualState extends Node {
     public abstract void applyToVirtual(VirtualClosure closure);
 
     public abstract boolean isPartOfThisState(VirtualState state);
-
-    @Override
-    public final StructuredGraph graph() {
-        return (StructuredGraph) super.graph();
-    }
 
 }

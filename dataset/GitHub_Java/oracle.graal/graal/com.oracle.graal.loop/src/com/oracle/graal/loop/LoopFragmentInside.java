@@ -22,13 +22,11 @@
  */
 package com.oracle.graal.loop;
 
-import static com.oracle.graal.graph.util.CollectionsAccess.*;
-
 import java.util.*;
 
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
@@ -63,7 +61,7 @@ public class LoopFragmentInside extends LoopFragment {
     }
 
     @Override
-    public LoopFragmentInside duplicate(boolean createExitFrameStates) {
+    public LoopFragmentInside duplicate() {
         assert !isDuplicate();
         return new LoopFragmentInside(this);
     }
@@ -85,14 +83,14 @@ public class LoopFragmentInside extends LoopFragment {
     }
 
     @Override
-    public void insertBefore(LoopEx loop, boolean createExitFrameStates) {
+    public void insertBefore(LoopEx loop) {
         assert this.isDuplicate() && this.original().loop() == loop;
 
         patchNodes(dataFixBefore);
 
         BeginNode end = mergeEnds();
 
-        mergeEarlyExits(createExitFrameStates);
+        mergeEarlyExits();
 
         original().patchPeeling(this);
 
@@ -102,7 +100,7 @@ public class LoopFragmentInside extends LoopFragment {
     }
 
     @Override
-    public NodeBitMap nodes() {
+    public NodeIterable<Node> nodes() {
         if (nodes == null) {
             LoopFragmentWhole whole = loop().whole();
             whole.nodes(); // init nodes bitmap in whole
@@ -203,10 +201,10 @@ public class LoopFragmentInside extends LoopFragment {
         for (LoopExitNode exit : exits()) {
             FrameState exitState = exit.stateAfter();
             if (exitState != null) {
-                exitState.applyToVirtual(v -> usagesToPatch.markAndGrow(v));
+                exitState.applyToVirtual(v -> usagesToPatch.mark(v));
             }
             for (ProxyNode proxy : exit.proxies()) {
-                usagesToPatch.markAndGrow(proxy);
+                usagesToPatch.mark(proxy);
             }
         }
 
@@ -232,7 +230,7 @@ public class LoopFragmentInside extends LoopFragment {
             newPhis.add(newPhi);
             for (Node usage : phi.usages().snapshot()) {
                 // patch only usages that should use the new phi ie usages that were peeled
-                if (usagesToPatch.isMarkedAndGrow(usage)) {
+                if (usagesToPatch.isMarked(usage)) {
                     usage.replaceFirstInput(phi, newPhi);
                 }
             }
@@ -289,7 +287,7 @@ public class LoopFragmentInside extends LoopFragment {
                 reverseEnds.put(duplicate, le);
             }
         }
-        mergedInitializers = newNodeIdentityMap();
+        mergedInitializers = new IdentityHashMap<>();
         BeginNode newExit;
         StructuredGraph graph = graph();
         if (endsToMerge.size() == 1) {
