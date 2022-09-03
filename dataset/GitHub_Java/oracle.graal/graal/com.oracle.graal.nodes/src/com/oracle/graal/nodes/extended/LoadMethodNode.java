@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,8 +33,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * Loads a method from the virtual method table of a given hub.
  */
-@NodeInfo
-public class LoadMethodNode extends FixedWithNextNode implements Lowerable, Canonicalizable {
+public final class LoadMethodNode extends FixedWithNextNode implements Lowerable, Canonicalizable {
 
     @Input private ValueNode hub;
     private final ResolvedJavaMethod method;
@@ -71,7 +70,7 @@ public class LoadMethodNode extends FixedWithNextNode implements Lowerable, Cano
                 ResolvedJavaMethod resolvedMethod = type.findUniqueConcreteMethod(method);
                 if (resolvedMethod != null && !type.isInterface() && method.getDeclaringClass().isAssignableFrom(type)) {
                     tool.assumptions().recordConcreteMethod(method, type, resolvedMethod);
-                    return ConstantNode.forConstant(resolvedMethod.getEncoding(), tool.getMetaAccess());
+                    return ConstantNode.forConstant(resolvedMethod.getEncoding(), tool.getMetaAccess(), graph());
                 }
             }
         }
@@ -97,9 +96,9 @@ public class LoadMethodNode extends FixedWithNextNode implements Lowerable, Cano
              * This really represent a misuse of LoadMethod since we're loading from a class which
              * isn't known to implement the original method but for now at least fold it away.
              */
-            return ConstantNode.forConstant(Constant.NULL_OBJECT, null);
+            return ConstantNode.forConstant(Constant.NULL_OBJECT, null, graph());
         } else {
-            return ConstantNode.forConstant(newMethod.getEncoding(), tool.getMetaAccess());
+            return ConstantNode.forConstant(newMethod.getEncoding(), tool.getMetaAccess(), graph());
         }
     }
 

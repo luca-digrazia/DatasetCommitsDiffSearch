@@ -183,7 +183,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             ResolvedJavaType arrayType = StampTool.typeOrNull(array);
             if (arrayType != null && StampTool.isExactType(array)) {
                 ResolvedJavaType elementType = arrayType.getComponentType();
-                if (!elementType.isJavaLangObject()) {
+                if (!MetaUtil.isJavaLangObject(elementType)) {
                     checkCastNode = graph.add(new CheckCastNode(elementType, value, null, true));
                     graph.addBeforeFixed(storeIndexed, checkCastNode);
                     value = checkCastNode;
@@ -626,15 +626,13 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     protected GuardingNode createBoundsCheck(AccessIndexedNode n, LoweringTool tool) {
         StructuredGraph graph = n.graph();
         ValueNode array = n.array();
-        ValueNode arrayLength = readArrayLength(array, tool.getConstantReflection());
+        ValueNode arrayLength = readArrayLength(n.graph(), array, tool.getConstantReflection());
         if (arrayLength == null) {
             Stamp stamp = StampFactory.positiveInt();
             ReadNode readArrayLength = graph.add(new ReadNode(array, ConstantLocationNode.create(ARRAY_LENGTH_LOCATION, Kind.Int, arrayLengthOffset(), graph), stamp, BarrierType.NONE));
             graph.addBeforeFixed(n, readArrayLength);
             readArrayLength.setGuard(createNullCheck(array, readArrayLength, tool));
             arrayLength = readArrayLength;
-        } else {
-            arrayLength = arrayLength.isAlive() ? arrayLength : graph.addOrUniqueWithInputs(arrayLength);
         }
 
         if (arrayLength.isConstant() && n.index().isConstant()) {

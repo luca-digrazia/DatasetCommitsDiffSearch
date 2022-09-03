@@ -306,8 +306,8 @@ public class FlowSensitiveReduction extends FixedGuardReduction {
      *
      */
     private MethodCallTargetNode deverbosifyInputsCopyOnWrite(MethodCallTargetNode parent) {
-        final CallTargetNode.InvokeKind ik = parent.invokeKind();
-        final boolean shouldTryDevirt = (ik == CallTargetNode.InvokeKind.Interface || ik == CallTargetNode.InvokeKind.Virtual);
+        final MethodCallTargetNode.InvokeKind ik = parent.invokeKind();
+        final boolean shouldTryDevirt = (ik == MethodCallTargetNode.InvokeKind.Interface || ik == MethodCallTargetNode.InvokeKind.Virtual);
         boolean shouldDowncastReceiver = shouldTryDevirt;
         MethodCallTargetNode changed = null;
         for (ValueNode i : FlowUtil.distinctValueAndConditionInputs(parent)) {
@@ -499,9 +499,9 @@ public class FlowSensitiveReduction extends FixedGuardReduction {
          * state-tracking. TODO the assumption here is that the code emitted for the resulting
          * FixedGuardNode is as efficient as for NullCheckNode.
          */
-        IsNullNode isNN = graph.unique(IsNullNode.create(object));
+        IsNullNode isNN = graph.unique(new IsNullNode(object));
         reasoner.added.add(isNN);
-        FixedGuardNode nullCheck = graph.add(FixedGuardNode.create(isNN, UnreachedCode, InvalidateReprofile, true));
+        FixedGuardNode nullCheck = graph.add(new FixedGuardNode(isNN, UnreachedCode, InvalidateReprofile, true));
         graph.replaceFixedWithFixed(ncn, nullCheck);
 
         state.trackNN(object, nullCheck);
@@ -546,9 +546,10 @@ public class FlowSensitiveReduction extends FixedGuardReduction {
      * MethodCallTargetNode} as described above may enable two optimizations:
      * <ul>
      * <li>
-     * devirtualization of an {@link com.oracle.graal.nodes.CallTargetNode.InvokeKind#Interface} or
-     * {@link com.oracle.graal.nodes.CallTargetNode.InvokeKind#Virtual} callsite (devirtualization
-     * made possible after narrowing the type of the receiver)</li>
+     * devirtualization of an
+     * {@link com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind#Interface} or
+     * {@link com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind#Virtual} callsite
+     * (devirtualization made possible after narrowing the type of the receiver)</li>
      * <li>
      * (future work) actual-argument-aware inlining, ie, to specialize callees on the types of
      * arguments other than the receiver (examples: multi-methods, the inlining problem, lambdas as
@@ -571,7 +572,7 @@ public class FlowSensitiveReduction extends FixedGuardReduction {
         }
         FlowUtil.replaceInPlace(invoke.asNode(), invoke.callTarget(), deverbosifyInputsCopyOnWrite((MethodCallTargetNode) invoke.callTarget()));
         MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
-        if (callTarget.invokeKind() != CallTargetNode.InvokeKind.Interface && callTarget.invokeKind() != CallTargetNode.InvokeKind.Virtual) {
+        if (callTarget.invokeKind() != MethodCallTargetNode.InvokeKind.Interface && callTarget.invokeKind() != MethodCallTargetNode.InvokeKind.Virtual) {
             return;
         }
         ValueNode receiver = callTarget.receiver();
@@ -599,7 +600,7 @@ public class FlowSensitiveReduction extends FixedGuardReduction {
         }
         if (method.canBeStaticallyBound() || Modifier.isFinal(type.getModifiers())) {
             metricMethodResolved.increment();
-            callTarget.setInvokeKind(CallTargetNode.InvokeKind.Special);
+            callTarget.setInvokeKind(MethodCallTargetNode.InvokeKind.Special);
             callTarget.setTargetMethod(method);
         }
     }
