@@ -205,9 +205,8 @@ public abstract class HotSpotForeignCallsProviderImpl implements HotSpotForeignC
     public List<Stub> getStubs() {
         List<Stub> stubs = new ArrayList<>();
         for (HotSpotForeignCallLinkage linkage : foreignCalls.getValues()) {
-            if (linkage.isCompiledStub()) {
-                Stub stub = linkage.getStub();
-                assert stub != null;
+            Stub stub = linkage.getStub();
+            if (stub != null) {
                 stubs.add(stub);
             }
         }
