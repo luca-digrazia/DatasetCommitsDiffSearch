@@ -27,22 +27,18 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
 
 public interface LoweringTool {
 
     GraalCodeCacheProvider getRuntime();
 
-    LoweringType getLoweringType();
-
     Replacements getReplacements();
 
-    GuardingNode createNullCheckGuard(GuardedNode guardedNode, ValueNode object);
+    ValueNode createNullCheckGuard(NodeInputList<ValueNode> dependencies, ValueNode object);
 
-    GuardingNode createGuard(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action);
+    ValueNode createGuard(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action);
 
-    GuardingNode createGuard(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated);
+    ValueNode createGuard(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated);
 
     Assumptions assumptions();
 
