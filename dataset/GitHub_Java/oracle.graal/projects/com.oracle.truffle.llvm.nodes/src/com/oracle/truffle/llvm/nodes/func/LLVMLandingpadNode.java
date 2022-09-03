@@ -35,15 +35,15 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBitcodeLibraryFunctions;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.except.LLVMUserException;
+import com.oracle.truffle.llvm.runtime.LLVMException;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNodeGen;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public final class LLVMLandingpadNode extends LLVMExpressionNode {
 
@@ -78,7 +78,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
     @Override
     public Object executeGeneric(VirtualFrame frame) {
         try {
-            LLVMUserException exception = (LLVMUserException) frame.getObject(exceptionSlot);
+            LLVMException exception = (LLVMException) frame.getObject(exceptionSlot);
             Object unwindHeader = exception.getUnwindHeader();
             LLVMStack.StackPointer stack = (LLVMStack.StackPointer) getStack.executeGeneric(frame);
 
@@ -86,10 +86,11 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
             if (clauseId == 0 && !cleanup) {
                 throw exception;
             } else {
-                LLVMNativePointer landingPadValue = allocateLandingPadValue.execute(frame);
-                getMemory().putPointer(landingPadValue, unwindHeaderToNative.executeWithTarget(unwindHeader));
-                getMemory().putI32(landingPadValue.increment(LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES), clauseId);
-                return landingPadValue;
+                LLVMAddress executeLLVMAddress = allocateLandingPadValue.execute(frame);
+                LLVMAddress pair0 = executeLLVMAddress;
+                getMemory().putAddress(pair0, unwindHeaderToNative.executeWithTarget(unwindHeader));
+                getMemory().putI32(executeLLVMAddress.getVal() + LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES, clauseId);
+                return executeLLVMAddress;
             }
         } catch (FrameSlotTypeException e) {
             CompilerDirectives.transferToInterpreter();
@@ -139,8 +140,8 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
 
         @Override
         public int getIdentifier(VirtualFrame frame, LLVMStack.StackPointer stack, Object unwindHeader) {
-            LLVMNativePointer catchAddress = catchType.execute(frame);
-            if (catchAddress.asNative() == 0) {
+            LLVMAddress catchAddress = catchType.execute(frame);
+            if (catchAddress.getVal() == 0) {
                 /*
                  * If ExcType is null, any exception matches, so the landing pad should always be
                  * entered. catch (...)
@@ -148,7 +149,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
                 return 1;
             }
             if (getCanCatch().canCatch(stack, unwindHeader, catchAddress) != 0) {
-                return (int) catchAddress.asNative();
+                return (int) catchAddress.getVal();
             }
             return 0;
         }
@@ -188,8 +189,8 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
              * types in the list
              */
             for (int i = 0; i < filterTypes.length; i++) {
-                LLVMNativePointer filterAddress = filterTypes[i].execute(frame);
-                if (filterAddress.asNative() == 0) {
+                LLVMAddress filterAddress = filterTypes[i].execute(frame);
+                if (filterAddress.getVal() == 0) {
                     /*
                      * If ExcType is null, any exception matches, so the landing pad should always
                      * be entered. catch (...)

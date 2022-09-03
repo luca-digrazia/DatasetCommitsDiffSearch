@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -47,13 +47,9 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeFactoryFactory.
 
 abstract class LLVMObjectNativeFactory {
 
-    private static final LongLibrary LONG_LIBRARY = new LongLibrary();
-
     @TruffleBoundary
     public static LLVMObjectNativeLibrary createCached(Object obj) {
-        if (obj instanceof Long) {
-            return LONG_LIBRARY;
-        } else if (obj instanceof LLVMObjectNativeLibrary.Provider) {
+        if (obj instanceof LLVMObjectNativeLibrary.Provider) {
             return ((LLVMObjectNativeLibrary.Provider) obj).createLLVMObjectNativeLibrary();
         } else if (obj instanceof DynamicObject) {
             ObjectType objectType = ((DynamicObject) obj).getShape().getObjectType();
@@ -61,7 +57,6 @@ abstract class LLVMObjectNativeFactory {
                 return ((LLVMObjectNativeLibrary.Provider) objectType).createLLVMObjectNativeLibrary();
             }
         }
-
         if (obj instanceof TruffleObject) {
             return new FallbackLibrary();
         } else {
@@ -71,28 +66,6 @@ abstract class LLVMObjectNativeFactory {
 
     public static LLVMObjectNativeLibrary createGeneric() {
         return new CachingLibrary();
-    }
-
-    private static class LongLibrary extends LLVMObjectNativeLibrary {
-        @Override
-        public boolean guard(Object obj) {
-            return obj instanceof Long;
-        }
-
-        @Override
-        public boolean isPointer(Object obj) {
-            return true;
-        }
-
-        @Override
-        public long asPointer(Object obj) throws InteropException {
-            return (long) obj;
-        }
-
-        @Override
-        public Object toNative(Object obj) throws InteropException {
-            throw new IllegalStateException("Should never be invoked as isPointer is always true.");
-        }
     }
 
     private static class FallbackLibrary extends LLVMObjectNativeLibrary {
@@ -203,7 +176,7 @@ abstract class LLVMObjectNativeFactory {
         }
     }
 
-    abstract static class CachedIsPointerNode extends LLVMNode {
+    abstract static class CachedIsPointerNode extends Node {
 
         static final int TYPE_LIMIT = 8;
 
@@ -222,7 +195,7 @@ abstract class LLVMObjectNativeFactory {
         }
     }
 
-    abstract static class CachedAsPointerNode extends LLVMNode {
+    abstract static class CachedAsPointerNode extends Node {
 
         static final int TYPE_LIMIT = 8;
 
@@ -246,7 +219,7 @@ abstract class LLVMObjectNativeFactory {
         }
     }
 
-    abstract static class CachedToNativeNode extends LLVMNode {
+    abstract static class CachedToNativeNode extends Node {
 
         static final int TYPE_LIMIT = 8;
 

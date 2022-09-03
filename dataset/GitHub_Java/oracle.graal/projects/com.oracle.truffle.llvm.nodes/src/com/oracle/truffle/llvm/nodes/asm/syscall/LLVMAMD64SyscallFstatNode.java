@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public abstract class LLVMAMD64SyscallFstatNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallFstatNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode fstat;
 
     public LLVMAMD64SyscallFstatNode() {
-        super("fstat");
         fstat = LLVMAMD64PosixCallNodeGen.create("fstat", "(SINT32,POINTER):SINT32", 2);
     }
 
+    @Override
+    public final String getName() {
+        return "fstat";
+    }
+
     @Specialization
-    protected long doI64(@SuppressWarnings("unused") VirtualFrame frame, long fd, LLVMAddress buf) {
+    protected long doI64(long fd, LLVMAddress buf) {
         return (int) fstat.execute((int) fd, buf.getVal());
     }
 
     @Specialization
-    protected long doI64(@SuppressWarnings("unused") VirtualFrame frame, long fd, long buf) {
+    protected long doI64(long fd, long buf) {
         return (int) fstat.execute((int) fd, buf);
     }
 }

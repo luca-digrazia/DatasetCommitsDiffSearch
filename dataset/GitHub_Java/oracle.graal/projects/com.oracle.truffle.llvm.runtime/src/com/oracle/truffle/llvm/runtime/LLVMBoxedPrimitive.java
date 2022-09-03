@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -76,7 +76,7 @@ public final class LLVMBoxedPrimitive implements LLVMObjectNativeLibrary.Provide
         public long asPointer(Object obj) throws InteropException {
             if (toLLVM == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                toLLVM = insert(ForeignToLLVM.create(ForeignToLLVMType.I64));
+                toLLVM = ForeignToLLVM.create(ForeignToLLVMType.I64);
             }
             LLVMBoxedPrimitive boxed = (LLVMBoxedPrimitive) obj;
             return (long) toLLVM.executeWithTarget(boxed.getValue());

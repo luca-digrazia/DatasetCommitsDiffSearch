@@ -29,20 +29,24 @@
  */
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public class LLVMAMD64SyscallFtruncateNode extends LLVMAMD64SyscallOperationNode {
+public class LLVMAMD64SyscallFtruncateNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode ftruncate;
 
     public LLVMAMD64SyscallFtruncateNode() {
-        super("ftruncate");
         ftruncate = LLVMAMD64PosixCallNodeGen.create("ftruncate", "(SINT32,SINT64):SINT32", 2);
     }
 
     @Override
-    public long execute(VirtualFrame frame, Object rdi, Object rsi, Object rdx, Object r10, Object r8, Object r9) {
+    public final String getName() {
+        return "ftruncate";
+    }
+
+    @Override
+    public long execute(Object rdi, Object rsi, Object rdx, Object r10, Object r8, Object r9) {
         int fd = (int) ((long) rdi);
         long length = (long) rsi;
         return (int) ftruncate.execute(fd, length);

@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public abstract class LLVMAMD64SyscallReadvNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallReadvNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode readv;
 
     public LLVMAMD64SyscallReadvNode() {
-        super("readv");
         readv = LLVMAMD64PosixCallNodeGen.create("readv", "(SINT32,POINTER,SINT32):SINT64", 3);
     }
 
+    @Override
+    public final String getName() {
+        return "readv";
+    }
+
     @Specialization
-    protected long doOp(@SuppressWarnings("unused") VirtualFrame frame, long fd, LLVMAddress ptr, long size) {
+    protected long doOp(long fd, LLVMAddress ptr, long size) {
         return (long) readv.execute((int) fd, ptr.getVal(), size);
     }
 
     @Specialization
-    protected long doOp(VirtualFrame frame, long fd, long ptr, long size) {
-        return doOp(frame, fd, LLVMAddress.fromLong(ptr), size);
+    protected long doOp(long fd, long ptr, long size) {
+        return doOp(fd, LLVMAddress.fromLong(ptr), size);
     }
 }

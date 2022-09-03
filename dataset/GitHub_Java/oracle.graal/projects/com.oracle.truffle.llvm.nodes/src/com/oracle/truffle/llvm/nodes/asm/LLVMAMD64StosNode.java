@@ -38,7 +38,7 @@ import com.oracle.truffle.llvm.nodes.memory.store.LLVMI16StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI32StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI64StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI8StoreNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMStoreNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
@@ -54,7 +54,7 @@ public abstract class LLVMAMD64StosNode extends LLVMExpressionNode {
     public abstract static class LLVMAMD64StosbNode extends LLVMAMD64StosNode {
         public LLVMAMD64StosbNode(LLVMAMD64WriteValueNode writeRDI) {
             super(writeRDI);
-            store = LLVMI8StoreNodeGen.create(null, null);
+            store = LLVMI8StoreNodeGen.create();
         }
 
         @Specialization
@@ -75,7 +75,7 @@ public abstract class LLVMAMD64StosNode extends LLVMExpressionNode {
     public abstract static class LLVMAMD64StoswNode extends LLVMAMD64StosNode {
         public LLVMAMD64StoswNode(LLVMAMD64WriteValueNode writeRDI) {
             super(writeRDI);
-            store = LLVMI16StoreNodeGen.create(null, null);
+            store = LLVMI16StoreNodeGen.create();
         }
 
         @Specialization
@@ -96,7 +96,7 @@ public abstract class LLVMAMD64StosNode extends LLVMExpressionNode {
     public abstract static class LLVMAMD64StosdNode extends LLVMAMD64StosNode {
         public LLVMAMD64StosdNode(LLVMAMD64WriteValueNode writeRDI) {
             super(writeRDI);
-            store = LLVMI32StoreNodeGen.create(null, null);
+            store = LLVMI32StoreNodeGen.create();
         }
 
         @Specialization
@@ -117,7 +117,7 @@ public abstract class LLVMAMD64StosNode extends LLVMExpressionNode {
     public abstract static class LLVMAMD64StosqNode extends LLVMAMD64StosNode {
         public LLVMAMD64StosqNode(LLVMAMD64WriteValueNode writeRDI) {
             super(writeRDI);
-            store = LLVMI64StoreNodeGen.create(null, null);
+            store = LLVMI64StoreNodeGen.create();
         }
 
         @Specialization

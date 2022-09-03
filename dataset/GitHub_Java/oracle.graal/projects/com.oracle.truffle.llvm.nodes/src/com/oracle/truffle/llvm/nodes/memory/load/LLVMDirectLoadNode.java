@@ -82,7 +82,7 @@ public abstract class LLVMDirectLoadNode {
         }
 
         protected LLVMForeignReadNode createForeignRead() {
-            return new LLVMForeignReadNode(ForeignToLLVMType.I8);
+            return new LLVMForeignReadNode(ForeignToLLVMType.I8, I8_SIZE_IN_BYTES);
         }
 
         private int getByteSize() {
@@ -119,7 +119,7 @@ public abstract class LLVMDirectLoadNode {
         }
 
         protected LLVMForeignReadNode createForeignRead() {
-            return new LLVMForeignReadNode(ForeignToLLVMType.I8);
+            return new LLVMForeignReadNode(ForeignToLLVMType.I8, I8_SIZE_IN_BYTES);
         }
     }
 
@@ -139,7 +139,7 @@ public abstract class LLVMDirectLoadNode {
         }
 
         static LLVMForeignReadNode createForeignRead() {
-            return new LLVMForeignReadNode(ForeignToLLVMType.POINTER);
+            return new LLVMForeignReadNode(ForeignToLLVMType.POINTER, ADDRESS_SIZE_IN_BYTES);
         }
 
         @Specialization
@@ -189,7 +189,7 @@ public abstract class LLVMDirectLoadNode {
         }
 
         protected LLVMForeignReadNode createForeignReadNode() {
-            return new LLVMForeignReadNode(ForeignToLLVMType.POINTER);
+            return new LLVMForeignReadNode(ForeignToLLVMType.POINTER, ADDRESS_SIZE_IN_BYTES);
         }
     }
 

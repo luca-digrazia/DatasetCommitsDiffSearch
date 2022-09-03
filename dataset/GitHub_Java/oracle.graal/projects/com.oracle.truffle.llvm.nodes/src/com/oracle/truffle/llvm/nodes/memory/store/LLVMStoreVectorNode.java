@@ -52,8 +52,8 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
 
     private final int vectorLength;
 
-    public LLVMStoreVectorNode(VectorType type) {
-        super(type);
+    public LLVMStoreVectorNode(VectorType type, int elementAccessSize) {
+        super(type, elementAccessSize);
         this.vectorLength = type.getNumberOfElements();
     }
 

@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public abstract class LLVMAMD64SyscallSendfileNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallSendfileNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode sendfile;
 
     public LLVMAMD64SyscallSendfileNode() {
-        super("ioctl");
         sendfile = LLVMAMD64PosixCallNodeGen.create("sendfile", "(SINT32,SINT32,POINTER,UINT64):SINT64", 4);
     }
 
+    @Override
+    public final String getName() {
+        return "ioctl";
+    }
+
     @Specialization
-    protected long doI64(@SuppressWarnings("unused") VirtualFrame frame, long outFd, long inFd, LLVMAddress offset, long count) {
+    protected long doI64(long outFd, long inFd, LLVMAddress offset, long count) {
         return (long) sendfile.execute((int) outFd, (int) inFd, offset.getVal(), count);
     }
 
     @Specialization
-    protected long doI64(VirtualFrame frame, long outFd, long inFd, long offset, long count) {
-        return doI64(frame, outFd, inFd, LLVMAddress.fromLong(offset), count);
+    protected long doI64(long outFd, long inFd, long offset, long count) {
+        return doI64(outFd, inFd, LLVMAddress.fromLong(offset), count);
     }
 }

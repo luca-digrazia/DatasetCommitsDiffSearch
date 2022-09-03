@@ -29,28 +29,35 @@
  */
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMString;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public abstract class LLVMAMD64SyscallGetcwdNode extends LLVMAMD64SyscallOperationNode {
-    public LLVMAMD64SyscallGetcwdNode() {
-        super("getcwd");
+public abstract class LLVMAMD64SyscallGetcwdNode extends LLVMSyscallOperationNode {
+
+    @Override
+    public final String getName() {
+        return "getcwd";
     }
 
     @Specialization
-    protected long doOp(LLVMAddress buf, long size) {
+    protected long doOp(LLVMAddress buf, long size,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         String cwd = LLVMPath.getcwd();
         if (cwd.length() >= size) {
             return -LLVMAMD64Error.ERANGE;
         } else {
-            LLVMString.strcpy(buf, cwd);
+            LLVMString.strcpy(memory, buf, cwd);
             return cwd.length() + 1;
         }
     }
 
     @Specialization
-    protected long doOp(long buf, long size) {
-        return doOp(LLVMAddress.fromLong(buf), size);
+    protected long doOp(long buf, long size,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return doOp(LLVMAddress.fromLong(buf), size, memory);
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -37,29 +37,52 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
 @ValueType
 public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider {
-
     private final TruffleObject object;
     private final long offset;
+    private final LLVMSourceType baseType;
+
+    private static LLVMSourceType overrideBaseType(LLVMTruffleObject obj, LLVMSourceType newType) {
+        if (obj.getOffset() == 0) {
+            if (newType != null) {
+                return newType;
+            } else {
+                return obj.getBaseType();
+            }
+        } else {
+            return obj.getBaseType();
+        }
+    }
 
     public static LLVMTruffleObject createNullPointer() {
         return createPointer(0L);
     }
 
     public static LLVMTruffleObject createPointer(long ptr) {
-        return new LLVMTruffleObject(null, ptr);
+        return new LLVMTruffleObject(null, ptr, null);
     }
 
-    public LLVMTruffleObject(TruffleObject object) {
-        this(object, 0);
+    public LLVMTruffleObject(LLVMTruffleObject orig, Type type) {
+        this(orig, type.getSourceType());
     }
 
-    private LLVMTruffleObject(TruffleObject object, long offset) {
+    public LLVMTruffleObject(LLVMTruffleObject orig, LLVMSourceType type) {
+        this(orig.getObject(), orig.getOffset(), overrideBaseType(orig, type));
+    }
+
+    public LLVMTruffleObject(TruffleObject object, Type type) {
+        this(object, 0, type.getSourceType());
+    }
+
+    private LLVMTruffleObject(TruffleObject object, long offset, LLVMSourceType baseType) {
         this.object = object;
         this.offset = offset;
+        this.baseType = baseType;
     }
 
     public long getOffset() {
@@ -71,7 +94,11 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
     }
 
     public LLVMTruffleObject increment(long incr) {
-        return new LLVMTruffleObject(object, offset + incr);
+        return new LLVMTruffleObject(object, offset + incr, baseType);
+    }
+
+    public LLVMSourceType getBaseType() {
+        return baseType;
     }
 
     @TruffleBoundary
@@ -140,7 +167,7 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
         public Object toNative(Object obj) throws InteropException {
             LLVMTruffleObject object = (LLVMTruffleObject) obj;
             Object nativeBase = lib.toNative(object.getObject());
-            return new LLVMTruffleObject((TruffleObject) nativeBase, object.offset);
+            return new LLVMTruffleObject((TruffleObject) nativeBase, object.offset, object.baseType);
         }
     }
 

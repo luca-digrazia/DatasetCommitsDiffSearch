@@ -48,11 +48,11 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 public abstract class LLVMI1RMWNode extends LLVMExpressionNode {
 
     protected static LLVMI1LoadNode createRead() {
-        return LLVMI1LoadNodeGen.create(null);
+        return LLVMI1LoadNodeGen.create();
     }
 
     protected static LLVMI1StoreNode createWrite() {
-        return LLVMI1StoreNodeGen.create(null, null);
+        return LLVMI1StoreNodeGen.create();
     }
 
     public abstract static class LLVMI1RMWXchgNode extends LLVMI1RMWNode {

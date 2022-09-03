@@ -207,14 +207,15 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
                         @Cached("handle") LLVMAddress cachedHandle,
                         @Cached("doLookup(cachedHandle)") LLVMFunctionDescriptor descriptor,
                         @Cached("getContextReference()") ContextReference<LLVMContext> c) {
-            return new LLVMTruffleAddress(handle, new PointerType(null));
+            return new LLVMTruffleAddress(handle, new PointerType(null), c.get());
         }
 
         @Specialization(replaces = {"doCachedHandle", "doCachedNative"}, guards = {"handle.getVal() != 0"})
-        protected TruffleObject doUncachedHandle(LLVMAddress handle) {
+        protected TruffleObject doUncachedHandle(LLVMAddress handle,
+                        @Cached("getContextReference()") ContextReference<LLVMContext> c) {
             LLVMFunctionDescriptor descriptor = doLookup(handle);
             if (descriptor == null) {
-                return new LLVMTruffleAddress(handle, new PointerType(null));
+                return new LLVMTruffleAddress(handle, new PointerType(null), c.get());
             } else if (descriptor.isNativeFunction()) {
                 return descriptor.getNativeFunction();
             } else {

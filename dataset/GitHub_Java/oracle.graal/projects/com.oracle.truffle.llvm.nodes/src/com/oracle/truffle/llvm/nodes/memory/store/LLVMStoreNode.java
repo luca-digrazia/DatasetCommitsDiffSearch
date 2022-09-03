@@ -35,13 +35,15 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 public abstract class LLVMStoreNode extends LLVMNode {
 
     protected final Type valueType;
+    private final int elementAccessSize;
 
-    public LLVMStoreNode(Type valueType) {
+    public LLVMStoreNode(Type valueType, int elementAccessSize) {
         this.valueType = valueType;
+        this.elementAccessSize = elementAccessSize;
     }
 
     protected LLVMForeignWriteNode createForeignWrite() {
-        return LLVMForeignWriteNodeGen.create(valueType);
+        return LLVMForeignWriteNodeGen.create(valueType, elementAccessSize);
     }
 
     public abstract Object executeWithTarget(Object address, Object value);

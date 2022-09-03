@@ -45,7 +45,7 @@ import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 public abstract class LLVMDoubleStoreNode extends LLVMStoreNode {
 
     public LLVMDoubleStoreNode() {
-        super(PrimitiveType.DOUBLE);
+        super(PrimitiveType.DOUBLE, DOUBLE_SIZE_IN_BYTES);
     }
 
     @Specialization

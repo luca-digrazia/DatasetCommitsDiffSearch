@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public abstract class LLVMAMD64SyscallRenameNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallRenameNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode rename;
 
     public LLVMAMD64SyscallRenameNode() {
-        super("rename");
         rename = LLVMAMD64PosixCallNodeGen.create("rename", "(UINT64,UINT64):SINT32", 2);
     }
 
+    @Override
+    public final String getName() {
+        return "rename";
+    }
+
     @Specialization
-    protected long doOp(@SuppressWarnings("unused") VirtualFrame frame, LLVMAddress oldpath, LLVMAddress newpath) {
+    protected long doOp(LLVMAddress oldpath, LLVMAddress newpath) {
         return (int) rename.execute(oldpath.getVal(), newpath.getVal());
     }
 
     @Specialization
-    protected long doOp(VirtualFrame frame, long oldpath, long newpath) {
-        return doOp(frame, LLVMAddress.fromLong(oldpath), LLVMAddress.fromLong(newpath));
+    protected long doOp(long oldpath, long newpath) {
+        return doOp(LLVMAddress.fromLong(oldpath), LLVMAddress.fromLong(newpath));
     }
 }

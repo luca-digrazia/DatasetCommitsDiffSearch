@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public abstract class LLVMAMD64SyscallGetsockoptNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallGetsockoptNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode getsockopt;
 
     public LLVMAMD64SyscallGetsockoptNode() {
-        super("getsockopt");
         getsockopt = LLVMAMD64PosixCallNodeGen.create("getsockopt", "(SINT32,SINT32,SINT32,UINT64,UINT64):SINT32", 5);
     }
 
+    @Override
+    public final String getName() {
+        return "getsockopt";
+    }
+
     @Specialization
-    protected long doOp(@SuppressWarnings("unused") VirtualFrame frame, long sockfd, long level, long optname, LLVMAddress addr, LLVMAddress addrlen) {
+    protected long doOp(long sockfd, long level, long optname, LLVMAddress addr, LLVMAddress addrlen) {
         return (int) getsockopt.execute((int) sockfd, (int) level, (int) optname, addr.getVal(), addrlen.getVal());
     }
 
     @Specialization
-    protected long doOp(VirtualFrame frame, long sockfd, long level, long optname, long addr, long addrlen) {
-        return doOp(frame, sockfd, level, optname, LLVMAddress.fromLong(addr), LLVMAddress.fromLong(addrlen));
+    protected long doOp(long sockfd, long level, long optname, long addr, long addrlen) {
+        return doOp(sockfd, level, optname, LLVMAddress.fromLong(addr), LLVMAddress.fromLong(addrlen));
     }
 }

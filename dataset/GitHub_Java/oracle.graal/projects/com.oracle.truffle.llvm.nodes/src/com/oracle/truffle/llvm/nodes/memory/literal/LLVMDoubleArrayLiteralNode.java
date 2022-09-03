@@ -77,7 +77,7 @@ public abstract class LLVMDoubleArrayLiteralNode extends LLVMExpressionNode {
     }
 
     protected LLVMForeignWriteNode createForeignWrite() {
-        return LLVMForeignWriteNodeGen.create(PrimitiveType.DOUBLE);
+        return LLVMForeignWriteNodeGen.create(PrimitiveType.DOUBLE, 8);
     }
 
     @Specialization

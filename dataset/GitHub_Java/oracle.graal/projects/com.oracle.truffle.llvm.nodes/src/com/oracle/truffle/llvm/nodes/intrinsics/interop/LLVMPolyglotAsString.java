@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
-import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
@@ -81,11 +80,10 @@ public abstract class LLVMPolyglotAsString extends LLVMIntrinsic {
             return charset.encode(str);
         }
 
-        @Specialization
+        @Specialization(guards = "obj.getOffset() == 0")
         ByteBuffer doForeign(LLVMTruffleObject obj, LLVMCharset charset,
-                        @Cached("create()") LLVMAsForeignNode asForeign,
                         @Cached("create()") BoxedEncodeStringNode encode) {
-            return encode.execute(asForeign.execute(obj), charset);
+            return encode.execute(obj.getObject(), charset);
         }
     }
 

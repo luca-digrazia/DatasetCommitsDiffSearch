@@ -29,20 +29,24 @@
  */
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public class LLVMAMD64SyscallSocketNode extends LLVMAMD64SyscallOperationNode {
+public class LLVMAMD64SyscallSocketNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode socket;
 
     public LLVMAMD64SyscallSocketNode() {
-        super("socket");
         socket = LLVMAMD64PosixCallNodeGen.create("socket", "(SINT32,SINT32,SINT32):SINT32", 3);
     }
 
     @Override
-    public long execute(VirtualFrame frame, Object rdi, Object rsi, Object rdx, Object r10, Object r8, Object r9) {
+    public final String getName() {
+        return "socket";
+    }
+
+    @Override
+    public long execute(Object rdi, Object rsi, Object rdx, Object r10, Object r8, Object r9) {
         int domain = (int) (long) rdi;
         int type = (int) (long) rsi;
         int protocol = (int) (long) rdx;

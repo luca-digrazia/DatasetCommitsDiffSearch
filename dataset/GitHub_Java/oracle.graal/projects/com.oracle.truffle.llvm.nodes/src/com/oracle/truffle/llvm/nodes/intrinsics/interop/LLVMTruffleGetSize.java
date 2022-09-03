@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
-import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Fallback;
@@ -52,10 +51,16 @@ public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
 
     @Child private Node foreignGetSize = Message.GET_SIZE.createNode();
     @Child private ForeignToLLVM toLLVM;
-    @Child private LLVMAsForeignNode asForeign = LLVMAsForeignNode.create();
 
     protected LLVMTruffleGetSize(ForeignToLLVMType type) {
         this.toLLVM = ForeignToLLVM.create(type);
+    }
+
+    private static void checkLLVMTruffleObject(LLVMTruffleObject value) {
+        if (value.getOffset() != 0) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            throw new IllegalAccessError("Pointee must be unmodified");
+        }
     }
 
     private Object getSize(TruffleObject value) {
@@ -70,8 +75,8 @@ public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
 
     @Specialization
     protected Object doIntrinsic(LLVMTruffleObject value) {
-        TruffleObject foreign = asForeign.execute(value);
-        return getSize(foreign);
+        checkLLVMTruffleObject(value);
+        return getSize(value.getObject());
     }
 
     @Fallback

@@ -53,10 +53,10 @@ public abstract class LLVMLoadVectorNode extends LLVMLoadNode {
 
     public abstract int getSize();
 
-    LLVMForeignReadNode[] createForeignReads(ForeignToLLVMType type) {
+    LLVMForeignReadNode[] createForeignReads(ForeignToLLVMType type, int readSize) {
         LLVMForeignReadNode[] result = new LLVMForeignReadNode[getSize()];
         for (int i = 0; i < result.length; i++) {
-            result[i] = new LLVMForeignReadNode(type);
+            result[i] = new LLVMForeignReadNode(type, readSize);
         }
         return result;
     }
@@ -89,7 +89,7 @@ public abstract class LLVMLoadVectorNode extends LLVMLoadNode {
         }
 
         protected LLVMForeignReadNode[] createForeignReads() {
-            return createForeignReads(ForeignToLLVMType.I1);
+            return createForeignReads(ForeignToLLVMType.I1, I1_SIZE_IN_BYTES);
         }
     }
 
@@ -121,7 +121,7 @@ public abstract class LLVMLoadVectorNode extends LLVMLoadNode {
         }
 
         protected LLVMForeignReadNode[] createForeignReads() {
-            return createForeignReads(ForeignToLLVMType.I8);
+            return createForeignReads(ForeignToLLVMType.I8, I8_SIZE_IN_BYTES);
         }
     }
 
@@ -153,7 +153,7 @@ public abstract class LLVMLoadVectorNode extends LLVMLoadNode {
         }
 
         protected LLVMForeignReadNode[] createForeignReads() {
-            return createForeignReads(ForeignToLLVMType.I16);
+            return createForeignReads(ForeignToLLVMType.I16, I16_SIZE_IN_BYTES);
         }
     }
 
@@ -185,7 +185,7 @@ public abstract class LLVMLoadVectorNode extends LLVMLoadNode {
         }
 
         protected LLVMForeignReadNode[] createForeignReads() {
-            return createForeignReads(ForeignToLLVMType.I32);
+            return createForeignReads(ForeignToLLVMType.I32, I32_SIZE_IN_BYTES);
         }
     }
 
@@ -217,7 +217,7 @@ public abstract class LLVMLoadVectorNode extends LLVMLoadNode {
         }
 
         protected LLVMForeignReadNode[] createForeignReads() {
-            return createForeignReads(ForeignToLLVMType.I64);
+            return createForeignReads(ForeignToLLVMType.I64, I64_SIZE_IN_BYTES);
         }
     }
 
@@ -249,7 +249,7 @@ public abstract class LLVMLoadVectorNode extends LLVMLoadNode {
         }
 
         protected LLVMForeignReadNode[] createForeignReads() {
-            return createForeignReads(ForeignToLLVMType.FLOAT);
+            return createForeignReads(ForeignToLLVMType.FLOAT, FLOAT_SIZE_IN_BYTES);
         }
     }
 
@@ -281,7 +281,7 @@ public abstract class LLVMLoadVectorNode extends LLVMLoadNode {
         }
 
         protected LLVMForeignReadNode[] createForeignReads() {
-            return createForeignReads(ForeignToLLVMType.DOUBLE);
+            return createForeignReads(ForeignToLLVMType.DOUBLE, DOUBLE_SIZE_IN_BYTES);
         }
     }
 
@@ -309,7 +309,7 @@ public abstract class LLVMLoadVectorNode extends LLVMLoadNode {
         }
 
         protected LLVMForeignReadNode[] createForeignReads() {
-            return createForeignReads(ForeignToLLVMType.POINTER);
+            return createForeignReads(ForeignToLLVMType.POINTER, ADDRESS_SIZE_IN_BYTES);
         }
     }
 }

@@ -32,8 +32,8 @@ package com.oracle.truffle.llvm.nodes.asm.syscall;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public abstract class LLVMAMD64SyscallGetgroupsNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode getgroups;
@@ -48,12 +48,12 @@ public abstract class LLVMAMD64SyscallGetgroupsNode extends LLVMSyscallOperation
     }
 
     @Specialization
-    protected long op(long gidsetsize, LLVMNativePointer grouplist) {
-        return (int) getgroups.execute((int) gidsetsize, grouplist.asNative());
+    protected long execute(long gidsetsize, LLVMAddress grouplist) {
+        return (int) getgroups.execute((int) gidsetsize, grouplist.getVal());
     }
 
     @Specialization
     protected long execute(long gidsetsize, long grouplist) {
-        return op(gidsetsize, LLVMNativePointer.create(grouplist));
+        return execute(gidsetsize, LLVMAddress.fromLong(grouplist));
     }
 }

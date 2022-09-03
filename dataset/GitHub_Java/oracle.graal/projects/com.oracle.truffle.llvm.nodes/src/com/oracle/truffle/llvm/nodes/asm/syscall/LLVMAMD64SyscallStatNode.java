@@ -30,36 +30,40 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public abstract class LLVMAMD64SyscallStatNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallStatNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode stat;
 
     public LLVMAMD64SyscallStatNode() {
-        super("stat");
         stat = LLVMAMD64PosixCallNodeGen.create("stat", "(POINTER,POINTER):SINT32", 2);
     }
 
+    @Override
+    public final String getName() {
+        return "stat";
+    }
+
     @Specialization
-    protected long doI64(@SuppressWarnings("unused") VirtualFrame frame, LLVMAddress path, LLVMAddress buf) {
+    protected long doI64(LLVMAddress path, LLVMAddress buf) {
         return (int) stat.execute(path.getVal(), buf.getVal());
     }
 
     @Specialization
-    protected long doI64(VirtualFrame frame, long path, long buf) {
-        return doI64(frame, LLVMAddress.fromLong(path), LLVMAddress.fromLong(buf));
+    protected long doI64(long path, long buf) {
+        return doI64(LLVMAddress.fromLong(path), LLVMAddress.fromLong(buf));
     }
 
     @Specialization
-    protected long doI64(VirtualFrame frame, LLVMAddress path, long buf) {
-        return doI64(frame, path, LLVMAddress.fromLong(buf));
+    protected long doI64(LLVMAddress path, long buf) {
+        return doI64(path, LLVMAddress.fromLong(buf));
     }
 
     @Specialization
-    protected long doI64(VirtualFrame frame, long path, LLVMAddress buf) {
-        return doI64(frame, LLVMAddress.fromLong(path), buf);
+    protected long doI64(long path, LLVMAddress buf) {
+        return doI64(LLVMAddress.fromLong(path), buf);
     }
 }

@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public abstract class LLVMAMD64SyscallFaccessatNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallFaccessatNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode faccessat;
 
     public LLVMAMD64SyscallFaccessatNode() {
-        super("faccessat");
         faccessat = LLVMAMD64PosixCallNodeGen.create("faccessat", "(SINT32,UINT64,SINT32,SINT32):SINT32", 4);
     }
 
+    @Override
+    public final String getName() {
+        return "faccessat";
+    }
+
     @Specialization
-    protected long doOp(@SuppressWarnings("unused") VirtualFrame frame, long fd, LLVMAddress path, long amode, long flag) {
+    protected long doOp(long fd, LLVMAddress path, long amode, long flag) {
         return (int) faccessat.execute((int) fd, path.getVal(), (int) amode, (int) flag);
     }
 
     @Specialization
-    protected long doOp(VirtualFrame frame, long fd, long path, long amode, long flag) {
-        return doOp(frame, fd, LLVMAddress.fromLong(path), (int) amode, flag);
+    protected long doOp(long fd, long path, long amode, long flag) {
+        return doOp(fd, LLVMAddress.fromLong(path), (int) amode, flag);
     }
 }

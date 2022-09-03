@@ -62,6 +62,7 @@ import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
+@SuppressWarnings("unused")
 abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
     private static final int I1_SIZE = 1;
     private static final int I8_SIZE = 1;
@@ -120,29 +121,30 @@ abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
         public abstract Object executeWithTarget(Object receiver, int index);
 
         @Specialization(guards = {"index == cachedIndex", "typeGuard(receiver, cachedType)"})
-        protected Object doCachedTypeCachedOffset(LLVMTruffleAddress receiver, @SuppressWarnings("unused") int index,
-                        @Cached("getType(receiver)") @SuppressWarnings("unused") Type cachedType,
+        protected Object doCachedTypeCachedOffset(LLVMTruffleAddress receiver, int index,
+                        @Cached("getType(receiver)") Type cachedType,
                         @Cached("index") int cachedIndex,
                         @Cached("getPointeeType(receiver)") PrimitiveType elementType,
                         @Cached("getPrepareValueForEscapeNode(elementType)") LLVMDataEscapeNode prepareValueForEscape,
                         @Cached("getLLVMMemory()") LLVMMemory memory) {
-            return prepareValueForEscape.executeWithTarget(doRead(memory, receiver, elementType, cachedIndex));
+            return prepareValueForEscape.executeWithTarget(doRead(memory, receiver, elementType, cachedIndex), receiver.getContext());
         }
 
         @Specialization(guards = {"typeGuard(receiver, cachedType)"}, replaces = "doCachedTypeCachedOffset")
         protected Object doCachedType(LLVMTruffleAddress receiver, int index,
-                        @Cached("getType(receiver)") @SuppressWarnings("unused") Type cachedType,
+                        @Cached("getType(receiver)") Type cachedType,
                         @Cached("getPointeeType(receiver)") PrimitiveType elementType,
                         @Cached("getPrepareValueForEscapeNode(elementType)") LLVMDataEscapeNode prepareValueForEscape,
                         @Cached("getLLVMMemory()") LLVMMemory memory) {
-            return prepareValueForEscape.executeWithTarget(doRead(memory, receiver, elementType, index));
+            return prepareValueForEscape.executeWithTarget(doRead(memory, receiver, elementType, index), receiver.getContext());
         }
 
         @Specialization(replaces = {"doCachedTypeCachedOffset", "doCachedType"})
         protected Object doRegular(LLVMTruffleAddress receiver, int index,
                         @Cached("getLLVMMemory()") LLVMMemory memory) {
             if (receiver.getType() instanceof PointerType && ((PointerType) receiver.getType()).getPointeeType() instanceof PrimitiveType) {
-                return LLVMDataEscapeNode.slowConvert(doRead(memory, receiver, (PrimitiveType) ((PointerType) receiver.getType()).getPointeeType(), index), getPointeeType(receiver));
+                return LLVMDataEscapeNode.slowConvert(doRead(memory, receiver, (PrimitiveType) ((PointerType) receiver.getType()).getPointeeType(), index), getPointeeType(receiver),
+                                receiver.getContext());
             } else {
                 CompilerDirectives.transferToInterpreter();
                 throw UnknownIdentifierException.raise(
@@ -186,16 +188,16 @@ abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
         }
 
         @Specialization(guards = "receiver.getDescriptor() == cachedReceiver")
-        protected Object doGlobalCached(@SuppressWarnings("unused") LLVMSharedGlobalVariable receiver, int index,
+        protected Object doGlobalCached(LLVMSharedGlobalVariable receiver, int index,
                         @Cached("receiver.getDescriptor()") LLVMGlobal cachedReceiver,
                         @Cached("create()") ReadObjectNode globalAccess,
-                        @Cached("getElementType(cachedReceiver)") @SuppressWarnings("unused") Type elementType,
+                        @Cached("getElementType(cachedReceiver)") Type elementType,
                         @Cached("getPrepareValueForEscapeNode(elementType)") LLVMDataEscapeNode prepareValueForEscape) {
             if (index != 0) {
                 CompilerDirectives.transferToInterpreter();
                 throw UnknownIdentifierException.raise("Index must be 0 for globals - but was " + index);
             }
-            return prepareValueForEscape.executeWithTarget(globalAccess.execute(cachedReceiver));
+            return prepareValueForEscape.executeWithTarget(globalAccess.execute(cachedReceiver), receiver.getContext());
         }
 
         @Specialization(replaces = "doGlobalCached")
@@ -205,7 +207,7 @@ abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
                 CompilerDirectives.transferToInterpreter();
                 throw UnknownIdentifierException.raise("Index must be 0 for globals - but was " + index);
             }
-            return LLVMDataEscapeNode.slowConvert(globalAccess.execute(receiver.getDescriptor()), receiver.getDescriptor().getType());
+            return LLVMDataEscapeNode.slowConvert(globalAccess.execute(receiver.getDescriptor()), receiver.getDescriptor().getType(), receiver.getContext());
         }
     }
 
@@ -214,8 +216,8 @@ abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
         public abstract Object executeWithTarget(Object receiver, int index, Object value);
 
         @Specialization(guards = {"index == cachedIndex", "typeGuard(receiver, cachedType)"})
-        protected Object doCachedTypeCachedOffset(LLVMTruffleAddress receiver, @SuppressWarnings("unused") int index, Object value,
-                        @Cached("getType(receiver)") @SuppressWarnings("unused") Type cachedType,
+        protected Object doCachedTypeCachedOffset(LLVMTruffleAddress receiver, int index, Object value,
+                        @Cached("getType(receiver)") Type cachedType,
                         @Cached("index") int cachedIndex,
                         @Cached("getPointeeType(receiver)") PrimitiveType elementType,
                         @Cached("getToLLVMNode(elementType)") ForeignToLLVM toLLVM,
@@ -226,7 +228,7 @@ abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
 
         @Specialization(guards = {"typeGuard(receiver, cachedType)"}, replaces = "doCachedTypeCachedOffset")
         protected Object doCachedType(LLVMTruffleAddress receiver, int index, Object value,
-                        @Cached("getType(receiver)") @SuppressWarnings("unused") Type cachedType,
+                        @Cached("getType(receiver)") Type cachedType,
                         @Cached("getPointeeType(receiver)") PrimitiveType elementType,
                         @Cached("getToLLVMNode(elementType)") ForeignToLLVM toLLVM,
                         @Cached("getLLVMMemory()") LLVMMemory memory) {
@@ -260,7 +262,7 @@ abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
         }
 
         private static void doSlowWrite(LLVMMemory memory, LLVMTruffleAddress receiver, PrimitiveType cachedType, int index, Object value, SlowPathForeignToLLVM toLLVM) {
-            Object v = toLLVM.convert(cachedType, memory, value);
+            Object v = toLLVM.convert(cachedType, memory, receiver.getContext(), value);
             doWrite(memory, receiver, cachedType, index, v);
         }
 
@@ -326,7 +328,7 @@ abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
         }
 
         @Specialization(guards = {"receiver.getDescriptor() == cachedReceiver", "isPointerTypeGlobal(cachedReceiver)", "notTruffleObject(value)"})
-        protected Object doPrimitiveToPointerCached(@SuppressWarnings("unused") LLVMSharedGlobalVariable receiver, int index, Object value,
+        protected Object doPrimitiveToPointerCached(LLVMSharedGlobalVariable receiver, int index, Object value,
                         @Cached("receiver.getDescriptor()") LLVMGlobal cachedReceiver,
                         @Cached("getToTruffleObjectLLVMNode()") ForeignToLLVM toLLVM,
                         @Cached("create()") WriteObjectNode globalAccess) {
@@ -353,7 +355,7 @@ abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
         }
 
         @Specialization(guards = {"receiver.getDescriptor() == cachedReceiver", "isPointerTypeGlobal(cachedReceiver)", "notTruffleObject(value)"})
-        protected Object doGlobalTruffleObjectCached(@SuppressWarnings("unused") LLVMSharedGlobalVariable receiver, int index, TruffleObject value,
+        protected Object doGlobalTruffleObjectCached(LLVMSharedGlobalVariable receiver, int index, TruffleObject value,
                         @Cached("getToTruffleObjectLLVMNode()") ForeignToLLVM toLLVM,
                         @Cached("receiver.getDescriptor()") LLVMGlobal cachedReceiver,
                         @Cached("create()") WriteObjectNode globalAccess) {
@@ -380,7 +382,7 @@ abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
         }
 
         @Specialization(guards = {"receiver.getDescriptor() == cachedReceiver", "isPrimitiveTypeGlobal(cachedReceiver)"})
-        protected Object doGlobalCached(@SuppressWarnings("unused") LLVMSharedGlobalVariable receiver, int index, Object value,
+        protected Object doGlobalCached(LLVMSharedGlobalVariable receiver, int index, Object value,
                         @Cached("receiver.getDescriptor()") LLVMGlobal cachedReceiver,
                         @Cached("getPointeeType(cachedReceiver)") PrimitiveType cachedType,
                         @Cached("createPrimitiveGlobalWrite(cachedType)") LLVMGlobalWriteNode globalAccess,
@@ -395,6 +397,7 @@ abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
 
         @Specialization(guards = "isPrimitiveTypeGlobal(receiver)", replaces = "doGlobalCached")
         protected Object doGlobal(LLVMSharedGlobalVariable receiver, int index, Object value,
+                        @Cached("create()") WriteObjectNode globalAccess,
                         @Cached("getContextReference()") ContextReference<LLVMContext> context,
                         @Cached("getLLVMMemory()") LLVMMemory memory) {
             if (index != 0) {
@@ -422,8 +425,8 @@ abstract class LLVMAddressMessageResolutionNode extends LLVMNode {
         }
 
         private static void doSlowWrite(LLVMMemory memory, LLVMContext context, LLVMGlobal receiver, PrimitiveType type, Object value, SlowPathForeignToLLVM toLLVM) {
-            Object v = toLLVM.convert(type, memory, value);
-            LLVMGlobalWriteNode.slowPrimitiveWrite(context, memory, type, receiver, v);
+            Object v = toLLVM.convert(type, memory, context, value);
+            LLVMGlobalWriteNode.slowPrimitiveWrite(context, memory, type, receiver, value);
         }
 
         private static void doWrite(LLVMGlobalWriteNode access, LLVMGlobal receiver, PrimitiveType cachedType, Object v) {

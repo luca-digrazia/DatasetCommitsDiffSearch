@@ -30,26 +30,30 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNode;
 import com.oracle.truffle.llvm.nodes.asm.syscall.posix.LLVMAMD64PosixCallNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public abstract class LLVMAMD64SyscallRecvfromNode extends LLVMAMD64SyscallOperationNode {
+public abstract class LLVMAMD64SyscallRecvfromNode extends LLVMSyscallOperationNode {
     @Child private LLVMAMD64PosixCallNode recvfrom;
 
     public LLVMAMD64SyscallRecvfromNode() {
-        super("recvfrom");
         recvfrom = LLVMAMD64PosixCallNodeGen.create("recvfrom", "(SINT32,UINT64,UINT64,SINT32,UINT64,UINT64):SINT64", 6);
     }
 
+    @Override
+    public final String getName() {
+        return "recvfrom";
+    }
+
     @Specialization
-    protected long doOp(@SuppressWarnings("unused") VirtualFrame frame, long socket, LLVMAddress buffer, long length, long flags, LLVMAddress address, LLVMAddress addressLen) {
+    protected long doOp(long socket, LLVMAddress buffer, long length, long flags, LLVMAddress address, LLVMAddress addressLen) {
         return (long) recvfrom.execute((int) socket, buffer.getVal(), length, (int) flags, address.getVal(), addressLen.getVal());
     }
 
     @Specialization
-    protected long doOp(VirtualFrame frame, long socket, long buffer, long length, long flags, long address, long addressLen) {
-        return execute(frame, socket, LLVMAddress.fromLong(buffer), length, flags, LLVMAddress.fromLong(address), LLVMAddress.fromLong(addressLen));
+    protected long doOp(long socket, long buffer, long length, long flags, long address, long addressLen) {
+        return execute(socket, LLVMAddress.fromLong(buffer), length, flags, LLVMAddress.fromLong(address), LLVMAddress.fromLong(addressLen));
     }
 }

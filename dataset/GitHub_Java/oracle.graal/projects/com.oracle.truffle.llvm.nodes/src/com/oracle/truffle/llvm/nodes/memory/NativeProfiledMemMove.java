@@ -32,11 +32,11 @@ package com.oracle.truffle.llvm.nodes.memory;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public abstract class NativeProfiledMemMove extends LLVMNode implements LLVMMemMoveNode {
     protected static final long MAX_JAVA_LEN = 256;
@@ -48,15 +48,20 @@ public abstract class NativeProfiledMemMove extends LLVMNode implements LLVMMemM
     private final LLVMMemory memory = getLLVMMemory();
 
     @Specialization
+    protected Object doInt(Object target, Object source, int length) {
+        return memmove(convertTarget.executeWithTarget(target), convertSource.executeWithTarget(source), length);
+    }
+
+    @Specialization
     protected Object doLong(Object target, Object source, long length) {
         return memmove(convertTarget.executeWithTarget(target), convertSource.executeWithTarget(source), length);
     }
 
-    private Object memmove(LLVMNativePointer target, LLVMNativePointer source, long length) {
+    private Object memmove(LLVMAddress target, LLVMAddress source, long length) {
         if (inJava) {
             if (length <= MAX_JAVA_LEN) {
-                long targetPointer = target.asNative();
-                long sourcePointer = source.asNative();
+                long targetPointer = target.getVal();
+                long sourcePointer = source.getVal();
 
                 if (CompilerDirectives.injectBranchProbability(CompilerDirectives.UNLIKELY_PROBABILITY, targetPointer == sourcePointer)) {
                     // nothing todo
@@ -117,7 +122,7 @@ public abstract class NativeProfiledMemMove extends LLVMNode implements LLVMMemM
     }
 
     @SuppressWarnings("deprecation")
-    private static void nativeMemCopy(LLVMMemory memory, LLVMNativePointer target, LLVMNativePointer source, long length) {
-        memory.copyMemory(source.asNative(), target.asNative(), length);
+    private static void nativeMemCopy(LLVMMemory memory, LLVMAddress target, LLVMAddress source, long length) {
+        memory.copyMemory(source.getVal(), target.getVal(), length);
     }
 }
