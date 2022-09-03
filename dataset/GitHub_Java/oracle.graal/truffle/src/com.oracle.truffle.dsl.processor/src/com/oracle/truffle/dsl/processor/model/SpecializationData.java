@@ -384,11 +384,7 @@ public final class SpecializationData extends TemplateMethod {
     }
 
     public boolean hasMultipleInstances() {
-        return getMaximumNumberOfInstances() > 1;
-    }
-
-    public boolean isGuardBindsCache() {
-        if (!getCaches().isEmpty() && !getGuards().isEmpty()) {
+        if (!getCaches().isEmpty()) {
             for (GuardExpression guard : getGuards()) {
                 DSLExpression guardExpression = guard.getExpression();
                 Set<VariableElement> boundVariables = guardExpression.findBoundVariableElements();
@@ -405,7 +401,7 @@ public final class SpecializationData extends TemplateMethod {
     }
 
     public boolean isConstantLimit() {
-        if (isGuardBindsCache()) {
+        if (hasMultipleInstances()) {
             DSLExpression expression = getLimitExpression();
             if (expression == null) {
                 return true;
@@ -422,7 +418,7 @@ public final class SpecializationData extends TemplateMethod {
     }
 
     public int getMaximumNumberOfInstances() {
-        if (isGuardBindsCache()) {
+        if (hasMultipleInstances()) {
             DSLExpression expression = getLimitExpression();
             if (expression == null) {
                 return 3; // default limit
