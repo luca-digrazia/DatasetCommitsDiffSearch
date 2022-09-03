@@ -35,13 +35,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugDumpHandler;
 import com.oracle.graal.debug.DebugDumpScope;
-import com.oracle.graal.debug.GraalDebugConfig.Options;
 import com.oracle.graal.debug.TTY;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.GraalDebugConfig.Options;
 import com.oracle.graal.graph.Graph;
 
 import jdk.vm.ci.meta.JavaMethod;
@@ -116,8 +115,6 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 return;
             }
             final Graph graph = (Graph) object;
-            final SnippetReflectionProvider snippetReflection = Debug.contextLookup(SnippetReflectionProvider.class);
-
             // Get all current JavaMethod instances in the context.
             List<String> inlineContext = getInlineContext(graph);
 
@@ -131,7 +128,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                      */
                     int inlineDepth = previousInlineContext.size() - 1;
                     closeScope(inlineDepth);
-                    openScope(inlineContext.get(inlineDepth), inlineDepth, properties, snippetReflection);
+                    openScope(inlineContext.get(inlineDepth), inlineDepth, properties);
                 } else {
                     // Check for method scopes that must be closed since the previous dump.
                     for (int i = 0; i < previousInlineContext.size(); ++i) {
@@ -146,7 +143,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                     for (int i = 0; i < inlineContext.size(); ++i) {
                         if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
                             for (int inlineDepth = i; inlineDepth < inlineContext.size(); ++inlineDepth) {
-                                openScope(inlineContext.get(inlineDepth), inlineDepth, inlineDepth == inlineContext.size() - 1 ? properties : null, snippetReflection);
+                                openScope(inlineContext.get(inlineDepth), inlineDepth, inlineDepth == inlineContext.size() - 1 ? properties : null);
                             }
                             break;
                         }
@@ -163,7 +160,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 properties.put("graph", graph.toString());
                 properties.put("date", new Date().toString());
                 properties.put("scope", Debug.currentScope());
-                printer.print(graph, nextDumpId() + ":" + message, properties, snippetReflection);
+                printer.print(graph, nextDumpId() + ":" + message, properties);
             } catch (IOException e) {
                 failuresCount++;
                 printer = null;
@@ -244,7 +241,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
         }
     }
 
-    private void openScope(String name, int inlineDepth, Map<Object, Object> properties, SnippetReflectionProvider snippetReflection) {
+    private void openScope(String name, int inlineDepth, Map<Object, Object> properties) {
         String prefix = inlineDepth == 0 ? Thread.currentThread().getName() + ":" : "";
         try {
             Map<Object, Object> props = properties;
@@ -259,7 +256,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 }
                 props.put("date", new Date().toString());
             }
-            printer.beginGroup(prefix + name, name, Debug.contextLookup(ResolvedJavaMethod.class), -1, props, snippetReflection);
+            printer.beginGroup(prefix + name, name, Debug.contextLookup(ResolvedJavaMethod.class), -1, props);
         } catch (IOException e) {
             failuresCount++;
             printer = null;
