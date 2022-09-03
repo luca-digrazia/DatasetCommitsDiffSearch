@@ -32,6 +32,8 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Add;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fmovd;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Fmovs;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Lddf;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Ldf;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsb;
@@ -40,6 +42,11 @@ import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsw;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Lduh;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Membar;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Movdtox;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Movstosw;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Movstouw;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Movwtos;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Movxtod;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Or;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Stb;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Stdf;
@@ -241,25 +248,25 @@ public class SPARCMove {
             delayedControlTransfer.emitControlTransfer(crb, masm);
             if (resultKind == Float) {
                 if (inputKind == Int || inputKind == Short || inputKind == Char || inputKind == Byte) {
-                    masm.movwtos(asIntReg(input), asFloatReg(result));
+                    new Movwtos(asIntReg(input), asFloatReg(result)).emit(masm);
                 } else {
                     throw GraalInternalError.shouldNotReachHere();
                 }
             } else if (resultKind == Double) {
                 if (inputKind == Int || inputKind == Short || inputKind == Char || inputKind == Byte) {
-                    masm.movxtod(asIntReg(input), asDoubleReg(result));
+                    new Movxtod(asIntReg(input), asDoubleReg(result)).emit(masm);
                 } else {
-                    masm.movxtod(asLongReg(input), asDoubleReg(result));
+                    new Movxtod(asLongReg(input), asDoubleReg(result)).emit(masm);
                 }
             } else if (inputKind == Float) {
                 if (resultKind == Int || resultKind == Short || resultKind == Byte) {
-                    masm.movstosw(asFloatReg(input), asIntReg(result));
+                    new Movstosw(asFloatReg(input), asIntReg(result)).emit(masm);
                 } else {
-                    masm.movstouw(asFloatReg(input), asIntReg(result));
+                    new Movstouw(asFloatReg(input), asIntReg(result)).emit(masm);
                 }
             } else if (inputKind == Double) {
                 if (resultKind == Long) {
-                    masm.movdtox(asDoubleReg(input), asLongReg(result));
+                    new Movdtox(asDoubleReg(input), asLongReg(result)).emit(masm);
                 } else {
                     throw GraalInternalError.shouldNotReachHere();
                 }
@@ -639,14 +646,14 @@ public class SPARCMove {
                 break;
             case Float:
                 if (result.getPlatformKind() == Kind.Float) {
-                    masm.fmovs(src, dst);
+                    new Fmovs(src, dst).emit(masm);
                 } else {
                     throw GraalInternalError.shouldNotReachHere();
                 }
                 break;
             case Double:
                 if (result.getPlatformKind() == Kind.Double) {
-                    masm.fmovd(src, dst);
+                    new Fmovd(src, dst).emit(masm);
                 } else {
                     throw GraalInternalError.shouldNotReachHere();
                 }
@@ -796,7 +803,7 @@ public class SPARCMove {
                             }
                             delaySlotLir.emitControlTransfer(crb, masm);
                             // Now load the float value
-                            masm.movwtos(scratch, asFloatReg(result));
+                            new Movwtos(scratch, asFloatReg(result)).emit(masm);
                         } else {
                             crb.asFloatConstRef(input);
                             // First load the address into the scratch register
@@ -823,7 +830,7 @@ public class SPARCMove {
                             }
                             delaySlotLir.emitControlTransfer(crb, masm);
                             // Now load the float value
-                            masm.movxtod(scratch, asDoubleReg(result));
+                            new Movxtod(scratch, asDoubleReg(result)).emit(masm);
                         } else {
                             crb.asDoubleConstRef(input);
                             // First load the address into the scratch register
