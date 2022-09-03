@@ -29,6 +29,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.type.StampFactory;
@@ -287,11 +288,7 @@ public abstract class InstrumentPhase extends BasePhase<PhaseContext> {
             }
 
             List<Point> sortedPoints = new ArrayList<>();
-            for (Point p : pointMap.values()) {
-                if (p.shouldInclude()) {
-                    sortedPoints.add(p);
-                }
-            }
+            sortedPoints.addAll(pointMap.values().stream().filter(p -> p.shouldInclude()).collect(Collectors.toList()));
             Collections.sort(sortedPoints, pointsComparator);
 
             ArrayList<String> histogram = new ArrayList<>();
