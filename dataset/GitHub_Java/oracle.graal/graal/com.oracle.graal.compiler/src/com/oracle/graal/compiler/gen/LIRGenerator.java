@@ -61,6 +61,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     protected final StructuredGraph graph;
     protected final CodeCacheProvider runtime;
     protected final TargetDescription target;
+    protected final ResolvedJavaMethod method;
     protected final CallingConvention cc;
 
     protected final DebugInfoBuilder debugInfoBuilder;
@@ -85,17 +86,16 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
      */
     public abstract boolean canStoreConstant(Constant c);
 
-    public LIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, CallingConvention cc, LIR lir) {
+    public LIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, CallingConvention cc, LIR lir) {
         this.graph = graph;
         this.runtime = runtime;
         this.target = target;
         this.frameMap = frameMap;
+        this.method = method;
         if (graph.getEntryBCI() == StructuredGraph.INVOCATION_ENTRY_BCI) {
             this.cc = cc;
         } else {
-            JavaType[] parameterTypes = new JavaType[]{runtime.lookupJavaType(long.class)};
-            CallingConvention tmp = frameMap.registerConfig.getCallingConvention(JavaCallee, runtime.lookupJavaType(void.class), parameterTypes, target, false);
-            this.cc = new CallingConvention(cc.getStackSize(), cc.getReturn(), tmp.getArgument(0));
+            this.cc = frameMap.registerConfig.getCallingConvention(JavaCallee, method.getSignature().getReturnType(null), new JavaType[]{runtime.lookupJavaType(long.class)}, target, false);
         }
         this.nodeOperands = graph.createNodeMap();
         this.lir = lir;
@@ -116,6 +116,10 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     @Override
     public CodeCacheProvider getRuntime() {
         return runtime;
+    }
+
+    public ResolvedJavaMethod method() {
+        return method;
     }
 
     /**

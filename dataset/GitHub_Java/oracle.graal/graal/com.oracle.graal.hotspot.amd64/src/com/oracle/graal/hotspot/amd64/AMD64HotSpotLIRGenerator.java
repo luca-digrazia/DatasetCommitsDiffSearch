@@ -59,8 +59,8 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         return (HotSpotRuntime) runtime;
     }
 
-    protected AMD64HotSpotLIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, CallingConvention cc, LIR lir) {
-        super(graph, runtime, target, frameMap, cc, lir);
+    protected AMD64HotSpotLIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, CallingConvention cc, LIR lir) {
+        super(graph, runtime, target, frameMap, method, cc, lir);
     }
 
     /**
@@ -174,7 +174,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     @Override
     protected boolean needOnlyOopMaps() {
         // Stubs only need oop maps
-        return graph.start() instanceof StubStartNode;
+        return runtime().asStub(method) != null;
     }
 
     /**
@@ -201,18 +201,11 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         append(new AMD64RestoreRegistersOp(save.getSlots().clone(), save));
     }
 
-    Stub getStub() {
-        if (graph.start() instanceof StubStartNode) {
-            return ((StubStartNode) graph.start()).getStub();
-        }
-        return null;
-    }
-
     @Override
     public Variable emitCall(RuntimeCallTarget callTarget, CallingConvention callCc, DeoptimizingNode info, Value... args) {
-        Stub stub = getStub();
+        Stub stub = runtime().asStub(method);
         boolean isCRuntimeCall = ((HotSpotRuntimeCallTarget) callTarget).isCRuntimeCall();
-        assert !isCRuntimeCall || stub != null : "direct call to C runtime can only be made from compiled stubs, not from " + graph;
+        assert !isCRuntimeCall || stub != null : "direct call to C runtime can only be made from compiled stubs, not from " + method;
 
         AMD64SaveRegistersOp save = null;
         StackSlot[] savedRegisterLocations = null;

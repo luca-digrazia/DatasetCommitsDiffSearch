@@ -127,7 +127,7 @@ public class AllocatorTest extends GraalCompilerTest {
             @Override
             public RegisterStats call() {
                 CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
-                GraalCompiler.emitLIR(backend, backend.target, lir, graph, cc);
+                GraalCompiler.emitLIR(backend, backend.target, lir, graph, graph.method(), cc);
                 return new RegisterStats(lir);
             }
         });
