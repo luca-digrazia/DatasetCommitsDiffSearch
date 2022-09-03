@@ -25,7 +25,6 @@
 package com.oracle.truffle.nfi;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.Cached;
@@ -43,59 +42,37 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.nfi.LibFFIClosureFactory.UnboxStringNodeGen;
 import java.nio.ByteBuffer;
 
-final class LibFFIClosure implements TruffleObject {
+final class LibFFIClosure {
 
     final ClosureNativePointer nativePointer;
 
-    static LibFFIClosure createSlowPath(LibFFISignature signature, TruffleObject executable) {
-        CompilerAsserts.neverPartOfCompilation();
-        NFIContext ctx = NFILanguage.getCurrentContextReference().get();
-        return create(ctx, signature, executable);
-    }
-
-    static LibFFIClosure create(NFIContext context, LibFFISignature signature, TruffleObject executable) {
-        CompilerAsserts.neverPartOfCompilation();
-        LibFFIClosure ret = new LibFFIClosure(context, signature, executable);
-        ret.nativePointer.registerManagedRef(ret);
+    static LibFFIClosure create(LibFFISignature signature, TruffleObject executable) {
+        LibFFIClosure ret = new LibFFIClosure(signature, executable);
+        NativeAllocation.registerNativeAllocation(ret, ret.nativePointer);
         return ret;
     }
 
-    static LibFFIClosure newClosureWrapper(ClosureNativePointer nativePointer) {
-        LibFFIClosure ret = new LibFFIClosure(nativePointer);
-        ret.nativePointer.registerManagedRef(ret);
-        return ret;
-    }
-
-    private LibFFIClosure(NFIContext context, LibFFISignature signature, TruffleObject executable) {
+    private LibFFIClosure(LibFFISignature signature, TruffleObject executable) {
         Message message = Message.createExecute(signature.getArgTypes().length);
 
         LibFFIType retType = signature.getRetType();
         if (retType instanceof LibFFIType.ObjectType) {
             // shortcut for simple object return values
             CallTarget executeCallTarget = Truffle.getRuntime().createCallTarget(new ObjectRetClosureRootNode(signature, executable, message));
-            this.nativePointer = context.allocateClosureObjectRet(signature, executeCallTarget);
+            this.nativePointer = allocateClosureObjectRet(signature, executeCallTarget);
         } else if (retType instanceof LibFFIType.StringType) {
             // shortcut for simple string return values
             CallTarget executeCallTarget = Truffle.getRuntime().createCallTarget(new StringRetClosureRootNode(signature, executable, message));
-            this.nativePointer = context.allocateClosureStringRet(signature, executeCallTarget);
+            this.nativePointer = allocateClosureStringRet(signature, executeCallTarget);
         } else if (retType instanceof LibFFIType.VoidType) {
             // special handling for no return value
             CallTarget executeCallTarget = Truffle.getRuntime().createCallTarget(new ObjectRetClosureRootNode(signature, executable, message));
-            this.nativePointer = context.allocateClosureVoidRet(signature, executeCallTarget);
+            this.nativePointer = allocateClosureVoidRet(signature, executeCallTarget);
         } else {
             // generic case: last argument is the return buffer
             CallTarget executeCallTarget = Truffle.getRuntime().createCallTarget(new BufferRetClosureRootNode(signature, executable, message));
-            this.nativePointer = context.allocateClosureBufferRet(signature, executeCallTarget);
+            this.nativePointer = allocateClosureBufferRet(signature, executeCallTarget);
         }
-    }
-
-    private LibFFIClosure(ClosureNativePointer nativePointer) {
-        this.nativePointer = nativePointer;
-    }
-
-    @Override
-    public ForeignAccess getForeignAccess() {
-        return LibFFIClosureMessageResolutionForeign.ACCESS;
     }
 
     static final class RetPatches {
@@ -123,12 +100,9 @@ final class LibFFIClosure implements TruffleObject {
             this.messageNode = message.createNode();
 
             LibFFIType[] args = signature.getArgTypes();
-            argNodes = new ClosureArgumentNode[signature.getRealArgCount()];
-            int nodeIdx = 0;
-            for (LibFFIType arg : args) {
-                if (!arg.injectedArgument) {
-                    argNodes[nodeIdx++] = arg.createClosureArgumentNode();
-                }
+            argNodes = new ClosureArgumentNode[args.length];
+            for (int i = 0; i < args.length; i++) {
+                argNodes[i] = args[i].createClosureArgumentNode();
             }
         }
 
@@ -272,4 +246,12 @@ final class LibFFIClosure implements TruffleObject {
             return unboxString.execute(ret);
         }
     }
+
+    private static native ClosureNativePointer allocateClosureObjectRet(LibFFISignature signature, CallTarget callTarget);
+
+    private static native ClosureNativePointer allocateClosureStringRet(LibFFISignature signature, CallTarget callTarget);
+
+    private static native ClosureNativePointer allocateClosureBufferRet(LibFFISignature signature, CallTarget callTarget);
+
+    private static native ClosureNativePointer allocateClosureVoidRet(LibFFISignature signature, CallTarget callTarget);
 }
