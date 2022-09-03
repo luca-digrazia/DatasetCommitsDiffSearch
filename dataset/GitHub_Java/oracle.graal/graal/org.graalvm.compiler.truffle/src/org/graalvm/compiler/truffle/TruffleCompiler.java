@@ -220,7 +220,7 @@ public abstract class TruffleCompiler {
                 speculationLog.collectFailedSpeculations();
             }
 
-            CompilationResult compilationResult = createCompilationResult(name, graph.compilationId());
+            CompilationResult compilationResult = new CompilationResult(name);
             result = compileGraph(graph, graph.method(), providers, backend, graphBuilderSuite, Optimizations, graph.getProfilingInfo(), suites, lirSuites, compilationResult, factory);
         } catch (Throwable e) {
             throw Debug.handle(e);
@@ -240,13 +240,6 @@ public abstract class TruffleCompiler {
         }
 
         return result;
-    }
-
-    /**
-     * @param compilationIdentifier
-     */
-    protected CompilationResult createCompilationResult(String name, CompilationIdentifier compilationIdentifier) {
-        return new CompilationResult(name);
     }
 
     protected abstract PhaseSuite<HighTierContext> createGraphBuilderSuite();

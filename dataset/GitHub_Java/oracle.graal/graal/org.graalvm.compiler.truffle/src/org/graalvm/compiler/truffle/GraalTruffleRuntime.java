@@ -77,6 +77,7 @@ import org.graalvm.compiler.truffle.debug.TraceCompilationPolymorphismListener;
 import org.graalvm.compiler.truffle.debug.TraceInliningListener;
 import org.graalvm.compiler.truffle.debug.TraceSplittingListener;
 import org.graalvm.compiler.truffle.phases.InstrumentPhase;
+import org.graalvm.util.EconomicMap;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
@@ -164,7 +165,9 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     /**
      * Gets the initial values for this Graal-based Truffle runtime.
      */
-    public abstract OptionValues getInitialOptions();
+    public OptionValues getInitialOptions() {
+        return new OptionValues(EconomicMap.create());
+    }
 
     public GraalTruffleRuntime(Supplier<GraalRuntime> graalRuntime) {
         this.graalRuntime = graalRuntime;

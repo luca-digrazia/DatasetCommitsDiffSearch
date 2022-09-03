@@ -27,6 +27,7 @@ import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TraceTruffleCo
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -41,6 +42,8 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.SourceSection;
 
 public final class TraceCompilationListener extends AbstractDebugCompilationListener {
+
+    private final Map<OptimizedCallTarget, LocalCompilation> compilationMap = new ConcurrentHashMap<>();
 
     private TraceCompilationListener() {
     }
