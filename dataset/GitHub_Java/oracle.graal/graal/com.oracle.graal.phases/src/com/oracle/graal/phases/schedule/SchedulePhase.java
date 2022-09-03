@@ -704,19 +704,14 @@ public final class SchedulePhase extends Phase {
         }
         Block cur = latestBlock;
         Block result = latestBlock;
-        Loop<?> earliestLoop = earliest.getLoop();
-        while (true) {
-            Loop<?> curLoop = cur.getLoop();
-            if (curLoop == earliestLoop) {
-                return result;
-            } else {
-                Block dom = cur.getDominator();
-                if (dom.getLoopDepth() < result.getLoopDepth()) {
-                    result = dom;
-                }
-                cur = dom;
+        while (cur.getLoop() != null && cur != earliest && cur.getDominator() != null) {
+            Block dom = cur.getDominator();
+            if (dom.getLoopDepth() < result.getLoopDepth()) {
+                result = dom;
             }
+            cur = dom;
         }
+        return result;
     }
 
     /**
