@@ -45,7 +45,6 @@ public final class CompilerThread extends Thread {
     private CompilerThread(Runnable r) {
         super(r);
         this.setName("GraalCompilerThread-" + this.getId());
-        this.setPriority(MAX_PRIORITY);
         this.setDaemon(true);
     }
 

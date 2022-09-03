@@ -25,14 +25,16 @@ package com.oracle.graal.hotspot;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 
-import java.io.*;
-import java.lang.reflect.*;
+import java.io.File;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.net.*;
-import java.util.*;
+import java.util.Enumeration;
 import java.util.jar.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.bytecode.*;
+import com.oracle.graal.bytecode.Bytecodes;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -51,8 +53,8 @@ public final class CompileTheWorld {
     public static final String SUN_BOOT_CLASS_PATH = "sun.boot.class.path";
 
     // Some runtime instances we need.
-    private final HotSpotGraalRuntime runtime = runtime();
-    private final VMToCompilerImpl vmToCompiler = (VMToCompilerImpl) runtime.getVMToCompiler();
+    private final HotSpotGraalRuntime graalRuntime = graalRuntime();
+    private final VMToCompilerImpl vmToCompiler = (VMToCompilerImpl) graalRuntime.getVMToCompiler();
 
     /** List of Zip/Jar files to compile (see {@link GraalOptions#CompileTheWorld}. */
     private final String files;
@@ -182,19 +184,18 @@ public final class CompileTheWorld {
                     }
 
                     // Are we compiling this class?
-                    HotSpotMetaAccessProvider metaAccess = runtime.getProviders().getMetaAccess();
                     if (classFileCounter >= startAt) {
                         TTY.println("CompileTheWorld (%d) : %s", classFileCounter, className);
 
                         // Enqueue each constructor/method in the class for compilation.
                         for (Constructor<?> constructor : javaClass.getDeclaredConstructors()) {
-                            HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaConstructor(constructor);
+                            HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) graalRuntime.getRuntime().lookupJavaConstructor(constructor);
                             if (canBeCompiled(javaMethod, constructor.getModifiers())) {
                                 compileMethod(javaMethod);
                             }
                         }
                         for (Method method : javaClass.getDeclaredMethods()) {
-                            HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaMethod(method);
+                            HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) graalRuntime.getRuntime().lookupJavaMethod(method);
                             if (canBeCompiled(javaMethod, method.getModifiers())) {
                                 compileMethod(javaMethod);
                             }

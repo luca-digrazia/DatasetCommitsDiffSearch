@@ -446,42 +446,29 @@ public class VMToCompilerImpl implements VMToCompiler {
                 ArrayList<DebugValue> sortedValues = new ArrayList<>(debugValues);
                 Collections.sort(sortedValues);
 
-                String summary = DebugValueSummary.getValue();
-                if (summary == null) {
-                    summary = "Scope";
-                }
-                switch (summary) {
-                    case "PartialScope": {
-                        DebugValueMap globalMap = new DebugValueMap("Global");
-                        for (DebugValueMap map : topLevelMaps) {
-                            flattenChildren(map, globalMap);
-                        }
-                        globalMap.normalize();
-                        printMap(new DebugValueScope(null, globalMap), sortedValues);
-                        break;
+                if (SummarizeDebugValues.getValue()) {
+                    printSummary(topLevelMaps, sortedValues);
+                } else if (PerThreadDebugValues.getValue()) {
+                    for (DebugValueMap map : topLevelMaps) {
+                        TTY.println("Showing the results for thread: " + map.getName());
+                        map.group();
+                        map.normalize();
+                        printMap(map, sortedValues, 0);
                     }
-                    case "Thread":
-                        for (DebugValueMap map : topLevelMaps) {
-                            TTY.println("Showing the results for thread: " + map.getName());
-                            map.group();
-                            map.normalize();
-                            printMap(new DebugValueScope(null, map), sortedValues);
-                        }
-                        break;
-                    case "Name":
-                        printSummary(topLevelMaps, sortedValues);
-                        break;
-                    case "Scope": // fall through
-                    default: {
-                        DebugValueMap globalMap = new DebugValueMap("Global");
-                        for (DebugValueMap map : topLevelMaps) {
+                } else {
+                    DebugValueMap globalMap = new DebugValueMap("Global");
+                    for (DebugValueMap map : topLevelMaps) {
+                        if (SummarizePerPhase.getValue()) {
+                            flattenChildren(map, globalMap);
+                        } else {
                             globalMap.addChild(map);
                         }
-                        globalMap.group();
-                        globalMap.normalize();
-                        printMap(new DebugValueScope(null, globalMap), sortedValues);
-                        break;
                     }
+                    if (!SummarizePerPhase.getValue()) {
+                        globalMap.group();
+                    }
+                    globalMap.normalize();
+                    printMap(globalMap, sortedValues, 0);
                 }
             }
         }
@@ -514,7 +501,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             long total = collectTotal(topLevelMaps, index);
             result.setCurrentValue(index, total);
         }
-        printMap(new DebugValueScope(null, result), debugValues);
+        printMap(result, debugValues, 0);
     }
 
     static long collectTotal(DebugValue value) {
@@ -539,48 +526,21 @@ public class VMToCompilerImpl implements VMToCompiler {
         return total;
     }
 
-    /**
-     * Tracks the scope when printing a {@link DebugValueMap}, allowing "empty" scopes to be
-     * omitted. An empty scope is one in which there are no (nested) non-zero debug values.
-     */
-    static class DebugValueScope {
+    private static void printMap(DebugValueMap map, List<DebugValue> debugValues, int level) {
 
-        final DebugValueScope parent;
-        final int level;
-        final DebugValueMap map;
-        private boolean printed;
-
-        public DebugValueScope(DebugValueScope parent, DebugValueMap map) {
-            this.parent = parent;
-            this.map = map;
-            this.level = parent == null ? 0 : parent.level + 1;
-        }
-
-        public void print() {
-            if (!printed) {
-                printed = true;
-                if (parent != null) {
-                    parent.print();
-                }
-                printIndent(level);
-                TTY.println("%s", map.getName());
-            }
-        }
-    }
-
-    private static void printMap(DebugValueScope scope, List<DebugValue> debugValues) {
+        printIndent(level);
+        TTY.println("%s", map.getName());
 
         for (DebugValue value : debugValues) {
-            long l = scope.map.getCurrentValue(value.getIndex());
+            long l = map.getCurrentValue(value.getIndex());
             if (l != 0) {
-                scope.print();
-                printIndent(scope.level + 1);
+                printIndent(level + 1);
                 TTY.println(value.getName() + "=" + value.toString(l));
             }
         }
 
-        for (DebugValueMap child : scope.map.getChildren()) {
-            printMap(new DebugValueScope(scope, child), debugValues);
+        for (DebugValueMap child : map.getChildren()) {
+            printMap(child, debugValues, level + 1);
         }
     }
 
