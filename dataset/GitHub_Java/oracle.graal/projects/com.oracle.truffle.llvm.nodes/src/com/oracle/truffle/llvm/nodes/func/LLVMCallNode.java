@@ -33,7 +33,6 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.func.LLVMCallNodeFactory.ArgumentNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -48,9 +47,7 @@ public final class LLVMCallNode extends LLVMExpressionNode {
     @Children private final ArgumentNode[] prepareArgumentNodes;
     @Child private LLVMLookupDispatchNode dispatchNode;
 
-    private final SourceSection sourceSection;
-
-    public LLVMCallNode(FunctionType functionType, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes, SourceSection sourceSection) {
+    public LLVMCallNode(FunctionType functionType, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes) {
         this.functionNode = functionNode;
         this.argumentNodes = argumentNodes;
         this.dispatchNode = LLVMLookupDispatchNodeGen.create(functionType);
@@ -58,7 +55,6 @@ public final class LLVMCallNode extends LLVMExpressionNode {
         for (int i = 0; i < argumentNodes.length; i++) {
             this.prepareArgumentNodes[i] = ArgumentNodeGen.create(null);
         }
-        this.sourceSection = sourceSection;
     }
 
     @ExplodeLoop
@@ -92,8 +88,4 @@ public final class LLVMCallNode extends LLVMExpressionNode {
         }
     }
 
-    @Override
-    public SourceSection getSourceSection() {
-        return sourceSection;
-    }
 }
