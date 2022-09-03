@@ -43,6 +43,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import java.util.Collections;
 
 /**
  * <p>
@@ -229,17 +230,16 @@ public abstract class TruffleInstrument {
         /**
          * Searches for services of the requested type allong the associated
          * {@link com.oracle.truffle.api.vm.PolyglotRuntime runtime}. The services may be registered
-         * by {@link TruffleLanguage#TruffleLanguage(java.lang.Object...) language implementations}
-         * when constructing a language.
+         * by the {@link #registerService(java.lang.Object) instruments} or by
+         * {@link TruffleLanguage#TruffleLanguage(java.lang.Object...) language implementations}.
          *
          * @param <S> the requested type
-         * @param language the language to query for the service
          * @param type the class of the requested type
-         * @return the registered service or <code>null</code> if none found
+         * @return iterable to go through all requested services
          * @since 0.26
          */
-        public <S> S lookup(LanguageInfo language, Class<S> type) {
-            return null;
+        public <S> Iterable<S> lookup(Class<S> type) {
+            return Collections.emptyList();
         }
 
         Object[] onCreate(TruffleInstrument instrument) {
