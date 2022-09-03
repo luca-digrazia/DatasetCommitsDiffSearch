@@ -144,8 +144,7 @@ public class BasicArrayCopyNode extends AbstractMemoryCheckpoint implements Virt
     }
 
     private static boolean checkBounds(int position, int length, VirtualObjectNode virtualObject) {
-        assert length >= 0;
-        return position >= 0 && position <= virtualObject.entryCount() - length;
+        return position >= 0 && position + length <= virtualObject.entryCount();
     }
 
     private static boolean checkEntryTypes(int srcPos, int length, VirtualObjectNode src, ResolvedJavaType destComponentType, VirtualizerTool tool) {
