@@ -115,21 +115,21 @@ public class ReplacementsParseTest extends ReplacementsTest {
         final Object id;
 
         String stringizeId() {
-            Object res = id;
-            if (res == THROW_EXCEPTION_MARKER) {
+            String res = String.valueOf(id);
+            if (res.equals(THROW_EXCEPTION_MARKER.toString())) {
                 // Tests exception throwing from partial intrinsification
-                throw new CustomError("ex");
+                throw new CustomError("ex: " + id);
             }
-            return String.valueOf(res);
+            return res;
         }
 
         static String stringize(Object obj) {
-            Object res = obj;
-            if (res == THROW_EXCEPTION_MARKER) {
+            String res = String.valueOf(obj);
+            if (res.equals(THROW_EXCEPTION_MARKER.toString())) {
                 // Tests exception throwing from partial intrinsification
-                throw new CustomError("ex");
+                throw new CustomError("ex: " + obj);
             }
-            return String.valueOf(res);
+            return res;
         }
 
         static String identity(String s) {
@@ -252,7 +252,14 @@ public class ReplacementsParseTest extends ReplacementsTest {
 
     @BeforeClass
     public static void warmupProfiles() {
+        ReplacementsParseTest test = new ReplacementsParseTest();
         for (int i = 0; i < 40000; i++) {
+            test.test1Snippet(i);
+            test.test2Snippet(i);
+            test.doNextAfter(new double[16], new double[16]);
+            callStringize("normal");
+            callStringizeId(new TestObject());
+            callLambda("some string");
             callCopyFirst(new byte[16], new byte[16], true);
             callCopyFirstL2R(new byte[16], new byte[16]);
         }
@@ -329,8 +336,8 @@ public class ReplacementsParseTest extends ReplacementsTest {
         // is executed before this test
         getResolvedJavaMethod("callStringize").reprofile();
         forceCompileOverride = true;
-        String standardReturnValue = new CustomError("ex").toString();
-        String compiledReturnValue = IN_COMPILED_HANDLER_MARKER;
+        String standardReturnValue = new CustomError("ex: " + THROW_EXCEPTION_MARKER).toString();
+        String compiledReturnValue = new CustomError("ex: " + THROW_EXCEPTION_MARKER) + IN_COMPILED_HANDLER_MARKER;
         testWithDifferentReturnValues(getInitialOptions(), standardReturnValue, compiledReturnValue, "callStringize", THROW_EXCEPTION_MARKER);
     }
 
@@ -339,8 +346,8 @@ public class ReplacementsParseTest extends ReplacementsTest {
         OptionValues options = new OptionValues(getInitialOptions(), InlinePartialIntrinsicExitDuringParsing, false);
         test(options, "callStringize", "a string");
         test(options, "callStringize", Boolean.TRUE);
-        String standardReturnValue = new CustomError("ex").toString();
-        String compiledReturnValue = IN_COMPILED_HANDLER_MARKER;
+        String standardReturnValue = new CustomError("ex: " + THROW_EXCEPTION_MARKER).toString();
+        String compiledReturnValue = new CustomError("ex: " + THROW_EXCEPTION_MARKER) + IN_COMPILED_HANDLER_MARKER;
         for (int i = 0; i < 1000; i++) {
             // Ensures 'exception seen' bit is set for call to stringize
             callStringize(THROW_EXCEPTION_MARKER);
@@ -357,8 +364,8 @@ public class ReplacementsParseTest extends ReplacementsTest {
         // is executed before this test
         getResolvedJavaMethod("callStringize").reprofile();
         forceCompileOverride = true;
-        String standardReturnValue = new CustomError("ex").toString();
-        String compiledReturnValue = IN_COMPILED_HANDLER_MARKER;
+        String standardReturnValue = new CustomError("ex: " + THROW_EXCEPTION_MARKER).toString();
+        String compiledReturnValue = new CustomError("ex: " + THROW_EXCEPTION_MARKER) + IN_COMPILED_HANDLER_MARKER;
         testWithDifferentReturnValues(getInitialOptions(), standardReturnValue, compiledReturnValue, "callStringizeId", new TestObject(THROW_EXCEPTION_MARKER));
     }
 
@@ -372,8 +379,8 @@ public class ReplacementsParseTest extends ReplacementsTest {
             // Ensures 'exception seen' bit is set for call to stringizeId
             callStringizeId(exceptionTestObject);
         }
-        String standardReturnValue = new CustomError("ex").toString();
-        String compiledReturnValue = IN_COMPILED_HANDLER_MARKER;
+        String standardReturnValue = new CustomError("ex: " + THROW_EXCEPTION_MARKER).toString();
+        String compiledReturnValue = new CustomError("ex: " + THROW_EXCEPTION_MARKER) + IN_COMPILED_HANDLER_MARKER;
         forceCompileOverride = true;
         testWithDifferentReturnValues(options, standardReturnValue, compiledReturnValue, "callStringizeId", exceptionTestObject);
     }
@@ -383,7 +390,7 @@ public class ReplacementsParseTest extends ReplacementsTest {
             return TestObject.stringize(obj);
         } catch (CustomError e) {
             if (GraalDirectives.inCompiledCode()) {
-                return IN_COMPILED_HANDLER_MARKER;
+                return e + IN_COMPILED_HANDLER_MARKER;
             }
             return e.toString();
         }
@@ -394,7 +401,7 @@ public class ReplacementsParseTest extends ReplacementsTest {
             return testObj.stringizeId();
         } catch (CustomError e) {
             if (GraalDirectives.inCompiledCode()) {
-                return IN_COMPILED_HANDLER_MARKER;
+                return e + IN_COMPILED_HANDLER_MARKER;
             }
             return e.toString();
         }

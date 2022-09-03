@@ -98,7 +98,6 @@ import org.graalvm.util.UnmodifiableEconomicMap;
 import org.graalvm.util.UnmodifiableMapCursor;
 
 import java.lang.reflect.Constructor;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -395,7 +394,7 @@ public class InliningUtil extends ValueMergeUtil {
     }
 
     /**
-     * Inline {@code inlineGraph} into the current replacing the node {@code Invoke} and return the
+     * Inline {@code inlineGraph} into the current replacoing the node {@code Invoke} and return the
      * set of nodes which should be canonicalized. The set should only contain nodes which modified
      * by the inlining since the current graph and {@code inlineGraph} are expected to already be
      * canonical.
@@ -475,7 +474,8 @@ public class InliningUtil extends ValueMergeUtil {
                 returnValue = mergeReturns(merge, returnNodes);
                 invokeNode.replaceAtUsages(returnValue);
                 if (merge.isPhiAtMerge(returnValue)) {
-                    fixFrameStates(graph, merge, (PhiNode) returnValue);
+                    NodeMap<Node> seen = new NodeMap<>(graph);
+                    fixFrameStates(merge, merge, seen, returnValue, (PhiNode) returnValue);
                 }
                 merge.setNext(n);
             }
@@ -511,55 +511,45 @@ public class InliningUtil extends ValueMergeUtil {
         return returnValue;
     }
 
-    private static void fixFrameStates(StructuredGraph graph, MergeNode originalMerge, PhiNode returnPhi) {
+    private static void fixFrameStates(MergeNode originalMerge, Node current, NodeMap<Node> seen, ValueNode currentValue, PhiNode returnPhi) {
         // It is possible that some of the frame states that came from AFTER_BCI reference a Phi
         // node that was created to merge multiple returns. This can create cycles
         // (see GR-3949 and GR-3957).
         // To detect this, we follow the control paths starting from the merge node,
         // split the Phi node inputs at merges and assign the proper input to each frame state.
-        NodeMap<Node> seen = new NodeMap<>(graph);
-        ArrayDeque<Node> workList = new ArrayDeque<>();
-        ArrayDeque<ValueNode> valueList = new ArrayDeque<>();
-        workList.push(originalMerge);
-        valueList.push(returnPhi);
-        while (!workList.isEmpty()) {
-            Node current = workList.pop();
-            ValueNode currentValue = valueList.pop();
-            if (seen.containsKey(current)) {
-                continue;
-            }
-            seen.put(current, current);
-            if (current instanceof StateSplit && current != originalMerge) {
-                StateSplit stateSplit = (StateSplit) current;
-                FrameState state = stateSplit.stateAfter();
-                if (state != null && state.values().contains(returnPhi)) {
-                    int index = 0;
-                    FrameState duplicate = state.duplicate();
-                    for (ValueNode value : state.values()) {
-                        if (value == returnPhi) {
-                            duplicate.values().set(index, currentValue);
-                        }
-                        index++;
+        if (seen.containsKey(current)) {
+            return;
+        }
+        seen.put(current, current);
+        if (current instanceof StateSplit && current != originalMerge) {
+            StateSplit stateSplit = (StateSplit) current;
+            FrameState state = stateSplit.stateAfter();
+            if (state != null && state.values().contains(returnPhi)) {
+                int index = 0;
+                FrameState duplicate = state.duplicate();
+                for (ValueNode value : state.values()) {
+                    if (value == returnPhi) {
+                        duplicate.values().set(index, currentValue);
                     }
-                    stateSplit.setStateAfter(duplicate);
-                    GraphUtil.tryKillUnused(state);
+                    index++;
                 }
+                stateSplit.setStateAfter(duplicate);
+                GraphUtil.tryKillUnused(state);
             }
-            if (current instanceof AbstractMergeNode) {
-                AbstractMergeNode currentMerge = (AbstractMergeNode) current;
-                for (EndNode pred : currentMerge.cfgPredecessors()) {
-                    ValueNode newValue = currentValue;
-                    if (currentMerge.isPhiAtMerge(currentValue)) {
-                        PhiNode currentPhi = (PhiNode) currentValue;
-                        newValue = currentPhi.valueAt(pred);
-                    }
-                    workList.push(pred);
-                    valueList.push(newValue);
+        }
+        if (current instanceof AbstractMergeNode) {
+            AbstractMergeNode currentMerge = (AbstractMergeNode) current;
+            for (EndNode pred : currentMerge.cfgPredecessors()) {
+                ValueNode newValue = currentValue;
+                if (currentMerge.isPhiAtMerge(currentValue)) {
+                    PhiNode currentPhi = (PhiNode) currentValue;
+                    newValue = currentPhi.valueAt(pred);
                 }
-            } else if (current.predecessor() != null) {
-                workList.push(current.predecessor());
-                valueList.push(currentValue);
+                fixFrameStates(originalMerge, pred, seen, newValue, returnPhi);
             }
+        }
+        if (current.predecessor() != null) {
+            fixFrameStates(originalMerge, current.predecessor(), seen, currentValue, returnPhi);
         }
     }
 
