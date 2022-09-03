@@ -23,14 +23,10 @@
 package com.oracle.graal.lir.alloc.lsra;
 
 import static com.oracle.graal.lir.LIRValueUtil.*;
-import static jdk.internal.jvmci.code.CodeUtil.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.jvmci.code.CodeUtil.*;
+import static com.oracle.jvmci.code.ValueUtil.*;
 
 import java.util.*;
-
-import jdk.internal.jvmci.code.*;
-import com.oracle.graal.debug.*;
-import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.AllocatableRegisters;
 import com.oracle.graal.compiler.common.cfg.*;
@@ -41,6 +37,9 @@ import com.oracle.graal.lir.alloc.lsra.Interval.RegisterBinding;
 import com.oracle.graal.lir.alloc.lsra.Interval.RegisterPriority;
 import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
 import com.oracle.graal.lir.alloc.lsra.Interval.State;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  */
@@ -237,10 +236,10 @@ class LinearScanWalker extends IntervalWalker {
         }
     }
 
-    void spillCollectActiveAny(RegisterPriority registerPriority) {
+    void spillCollectActiveAny() {
         Interval interval = activeLists.get(RegisterBinding.Any);
         while (interval != Interval.EndMarker) {
-            setUsePos(interval, Math.min(interval.nextUsage(registerPriority, currentPosition), interval.to()), false);
+            setUsePos(interval, Math.min(interval.nextUsage(RegisterPriority.LiveAtLoopEnd, currentPosition), interval.to()), false);
             interval = interval.next;
         }
     }
@@ -777,11 +776,20 @@ class LinearScanWalker extends IntervalWalker {
             // spillBlockUnhandledFixed(cur);
             assert unhandledLists.get(RegisterBinding.Fixed) == Interval.EndMarker : "must not have unhandled fixed intervals because all fixed intervals have a use at position 0";
             spillBlockInactiveFixed(interval);
-            spillCollectActiveAny(RegisterPriority.LiveAtLoopEnd);
+            spillCollectActiveAny();
             spillCollectInactiveAny(interval);
 
             if (Debug.isLogEnabled()) {
-                printRegisterState();
+                try (Indent indent2 = Debug.logAndIndent("state of registers:")) {
+                    for (Register reg : availableRegs) {
+                        int i = reg.number;
+                        try (Indent indent3 = Debug.logAndIndent("reg %d: usePos: %d, blockPos: %d, intervals: ", i, usePos[i], blockPos[i])) {
+                            for (int j = 0; j < spillIntervals[i].size(); j++) {
+                                Debug.log("%d ", spillIntervals[i].get(j).operandNumber);
+                            }
+                        }
+                    }
+                }
             }
 
             // the register must be free at least until this position
@@ -811,11 +819,10 @@ class LinearScanWalker extends IntervalWalker {
                 }
 
                 if (firstUsage <= interval.from() + 1) {
-                    String description = "cannot spill interval (" + interval + ") that is used in first instruction (possible reason: no register found) firstUsage=" + firstUsage +
-                                    ", interval.from()=" + interval.from() + "; already used candidates: " + Arrays.toString(availableRegs);
+                    String description = "cannot spill interval that is used in first instruction (possible reason: no register found) firstUsage=" + firstUsage + ", interval.from()=" +
+                                    interval.from() + "; already used candidates: " + Arrays.toString(availableRegs);
                     // assign a reasonable register and do a bailout in product mode to avoid errors
                     allocator.assignSpillSlot(interval);
-                    Debug.dump(allocator.ir, description);
                     allocator.printIntervals(description);
                     throw new OutOfRegistersException("LinearScan: no register found", description);
                 }
@@ -842,19 +849,6 @@ class LinearScanWalker extends IntervalWalker {
 
             // perform splitting and spilling for all affected intervals
             splitAndSpillIntersectingIntervals(reg);
-        }
-    }
-
-    void printRegisterState() {
-        try (Indent indent2 = Debug.logAndIndent("state of registers:")) {
-            for (Register reg : availableRegs) {
-                int i = reg.number;
-                try (Indent indent3 = Debug.logAndIndent("reg %d: usePos: %d, blockPos: %d, intervals: ", i, usePos[i], blockPos[i])) {
-                    for (int j = 0; j < spillIntervals[i].size(); j++) {
-                        Debug.log("%s ", spillIntervals[i].get(j));
-                    }
-                }
-            }
         }
     }
 
