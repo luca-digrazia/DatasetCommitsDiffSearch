@@ -432,10 +432,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                 if (inlineInfo.getMethodToInline() == null) {
                     return false;
                 } else {
-                    if (inlineInfo.isIntrinsic()) {
-                        // TODO(da): add support for inlining intrinsics
-                        return false;
-                    }
+                    assert !inlineInfo.isIntrinsic() : "not supported";
                     return doInline(methodScope, loopScope, invokeData, inlineInfo.getMethodToInline(), arguments);
                 }
             }

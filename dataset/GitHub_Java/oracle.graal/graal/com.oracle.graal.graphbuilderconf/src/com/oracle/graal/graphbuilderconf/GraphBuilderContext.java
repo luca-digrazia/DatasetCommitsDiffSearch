@@ -22,69 +22,142 @@
  */
 package com.oracle.graal.graphbuilderconf;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.compiler.common.type.StampFactory.*;
+import static jdk.internal.jvmci.meta.DeoptimizationAction.*;
+import static jdk.internal.jvmci.meta.DeoptimizationReason.*;
+
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
- * Used by a {@link GraphBuilderPlugin} to interface with a graph builder object.
+ * Used by a {@link GraphBuilderPlugin} to interface with an object that parses the bytecode of a
+ * single {@linkplain #getMethod() method} as part of building a {@linkplain #getGraph() graph} .
  */
 public interface GraphBuilderContext {
 
     /**
-     * Information about a snippet or method substitution currently being processed by the graph
-     * builder. When in the scope of a replacement, the graph builder does not check the value kinds
-     * flowing through the JVM state since replacements can employ non-Java kinds to represent
-     * values such as raw machine words and pointers.
+     * Raw operation for adding a node to the graph when neither {@link #add} nor
+     * {@link #addPush(Kind, ValueNode)} can be used.
+     *
+     * @return either the node added or an equivalent node
      */
-    public interface Replacement {
+    <T extends ValueNode> T append(T value);
 
-        /**
-         * Gets the method being replaced.
-         */
-        ResolvedJavaMethod getOriginalMethod();
+    /**
+     * Adds the given node to the graph and also adds recursively all referenced inputs.
+     *
+     * @param value the node to be added to the graph
+     * @return either the node added or an equivalent node
+     */
+    <T extends ValueNode> T recursiveAppend(T value);
 
-        /**
-         * Gets the replacement method.
-         */
-        ResolvedJavaMethod getReplacementMethod();
+    /**
+     * Pushes a given value to the frame state stack using an explicit kind. This should be used
+     * when {@code value.getKind()} is different from the kind that the bytecode instruction
+     * currently being parsed pushes to the stack.
+     *
+     * @param kind the kind to use when type checking this operation
+     * @param value the value to push to the stack. The value must already have been
+     *            {@linkplain #append(ValueNode) appended}.
+     */
+    void push(Kind kind, ValueNode value);
 
-        /**
-         * Determines if this replacement is being inlined as a compiler intrinsic. A compiler
-         * intrinsic is atomic with respect to deoptimization. Deoptimization within a compiler
-         * intrinsic will restart the interpreter at the intrinsified call.
-         */
-        boolean isIntrinsic();
+    /**
+     * Adds a node to the graph. If the returned node is a {@link StateSplit} with a null
+     * {@linkplain StateSplit#stateAfter() frame state}, the frame state is initialized.
+     *
+     * @param value the value to add to the graph and push to the stack. The {@code value.getKind()}
+     *            kind is used when type checking this operation.
+     * @return a node equivalent to {@code value} in the graph
+     */
+    default <T extends ValueNode> T add(T value) {
+        if (value.graph() != null) {
+            assert !(value instanceof StateSplit) || ((StateSplit) value).stateAfter() != null;
+            return value;
+        }
+        T equivalentValue = append(value);
+        if (equivalentValue instanceof StateSplit) {
+            StateSplit stateSplit = (StateSplit) equivalentValue;
+            if (stateSplit.stateAfter() == null && stateSplit.hasSideEffect()) {
+                setStateAfter(stateSplit);
+            }
+        }
+        return equivalentValue;
     }
 
-    <T extends ControlSinkNode> T append(T fixed);
+    /**
+     * Adds a node with a non-void kind to the graph, pushes it to the stack. If the returned node
+     * is a {@link StateSplit} with a null {@linkplain StateSplit#stateAfter() frame state}, the
+     * frame state is initialized.
+     *
+     * @param kind the kind to use when type checking this operation
+     * @param value the value to add to the graph and push to the stack
+     * @return a node equivalent to {@code value} in the graph
+     */
+    default <T extends ValueNode> T addPush(Kind kind, T value) {
+        T equivalentValue = value.graph() != null ? value : append(value);
+        push(kind, equivalentValue);
+        if (equivalentValue instanceof StateSplit) {
+            StateSplit stateSplit = (StateSplit) equivalentValue;
+            if (stateSplit.stateAfter() == null && stateSplit.hasSideEffect()) {
+                setStateAfter(stateSplit);
+            }
+        }
+        return equivalentValue;
+    }
 
-    <T extends ControlSplitNode> T append(T fixed);
+    /**
+     * Handles an invocation that a plugin determines can replace the original invocation (i.e., the
+     * one for which the plugin was applied). This applies all standard graph builder processing to
+     * the replaced invocation including applying any relevant plugins.
+     *
+     * @param invokeKind the kind of the replacement invocation
+     * @param targetMethod the target of the replacement invocation
+     * @param args the arguments to the replacement invocation
+     * @param forceInlineEverything specifies if all invocations encountered in the scope of
+     *            handling the replaced invoke are to be force inlined
+     */
+    void handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean forceInlineEverything);
 
-    <T extends FixedWithNextNode> T append(T fixed);
-
-    <T extends FloatingNode> T append(T value);
-
-    <T extends ValueNode> T append(T value);
+    /**
+     * Intrinsifies an invocation of a given method by inlining the bytecodes of a given
+     * substitution method.
+     *
+     * @param targetMethod the method being intrinsified
+     * @param substitute the intrinsic implementation
+     * @param args the arguments with which to inline the invocation
+     */
+    void intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, ValueNode[] args);
 
     StampProvider getStampProvider();
 
     MetaAccessProvider getMetaAccess();
 
-    Assumptions getAssumptions();
+    default Assumptions getAssumptions() {
+        return getGraph().getAssumptions();
+    }
 
     ConstantReflectionProvider getConstantReflection();
 
-    SnippetReflectionProvider getSnippetReflection();
-
-    void push(Kind kind, ValueNode value);
-
+    /**
+     * Gets the graph being constructed.
+     */
     StructuredGraph getGraph();
 
-    FrameState createStateAfter();
+    /**
+     * Creates a snap shot of the current frame state with the BCI of the instruction after the one
+     * currently being parsed and assigns it to a given {@linkplain StateSplit#hasSideEffect() side
+     * effect} node.
+     *
+     * @param sideEffect a side effect node just appended to the graph
+     */
+    void setStateAfter(StateSplit sideEffect);
 
     /**
      * Gets the parsing context for the method that inlines the method being parsed by this context.
@@ -92,12 +165,19 @@ public interface GraphBuilderContext {
     GraphBuilderContext getParent();
 
     /**
-     * Gets the root method for the graph building process.
+     * Gets the first ancestor parsing context that is not parsing a
+     * {@linkplain #parsingIntrinsic() intrinsic}.
      */
-    ResolvedJavaMethod getRootMethod();
+    default GraphBuilderContext getNonIntrinsicAncestor() {
+        GraphBuilderContext ancestor = getParent();
+        while (ancestor != null && ancestor.parsingIntrinsic()) {
+            ancestor = ancestor.getParent();
+        }
+        return ancestor;
+    }
 
     /**
-     * Gets the method currently being parsed.
+     * Gets the method being parsed by this context.
      */
     ResolvedJavaMethod getMethod();
 
@@ -107,36 +187,68 @@ public interface GraphBuilderContext {
     int bci();
 
     /**
-     * Gets the inline depth of this context. 0 implies this is the context for the
-     * {@linkplain #getRootMethod() root method}.
+     * Gets the kind of invocation currently being parsed.
      */
-    int getDepth();
+    InvokeKind getInvokeKind();
 
     /**
-     * Determines if the current parsing context is a snippet or method substitution.
+     * Gets the return type of the invocation currently being parsed.
      */
-    default boolean parsingReplacement() {
-        return getReplacement() == null;
-    }
+    JavaType getInvokeReturnType();
 
-    /**
-     * Gets the replacement of the current parsing context or {@code null} if not
-     * {@link #parsingReplacement() parsing a replacement}.
-     */
-    Replacement getReplacement();
-
-    /**
-     * @see GuardingPiNode#nullCheckedValue(ValueNode)
-     */
-    static ValueNode nullCheckedValue(GraphBuilderContext builder, ValueNode value) {
-        ValueNode nonNullValue = GuardingPiNode.nullCheckedValue(value);
-        if (nonNullValue != value) {
-            builder.append((FixedWithNextNode) nonNullValue);
+    default Stamp getInvokeReturnStamp() {
+        JavaType returnType = getInvokeReturnType();
+        if (returnType.getKind() == Kind.Object && returnType instanceof ResolvedJavaType) {
+            return StampFactory.declared((ResolvedJavaType) returnType);
+        } else {
+            return StampFactory.forKind(returnType.getKind());
         }
-        return nonNullValue;
     }
 
-    boolean eagerResolving();
+    /**
+     * Gets the inline depth of this context. A return value of 0 implies that this is the context
+     * for the parse root.
+     */
+    default int getDepth() {
+        GraphBuilderContext parent = getParent();
+        return parent == null ? 0 : 1 + parent.getDepth();
+    }
+
+    /**
+     * Determines if this parsing context is within the bytecode of an intrinsic or a method inlined
+     * by an intrinsic.
+     */
+    default boolean parsingIntrinsic() {
+        return getIntrinsic() != null;
+    }
+
+    /**
+     * Gets the intrinsic of the current parsing context or {@code null} if not
+     * {@link #parsingIntrinsic() parsing an intrinsic}.
+     */
+    IntrinsicContext getIntrinsic();
 
     BailoutException bailout(String string);
+
+    /**
+     * Gets a version of a given value that has a {@linkplain StampTool#isPointerNonNull(ValueNode)
+     * non-null} stamp.
+     */
+    default ValueNode nullCheckedValue(ValueNode value) {
+        if (!StampTool.isPointerNonNull(value.stamp())) {
+            IsNullNode condition = getGraph().unique(new IsNullNode(value));
+            ObjectStamp receiverStamp = (ObjectStamp) value.stamp();
+            Stamp stamp = receiverStamp.join(objectNonNull());
+            FixedGuardNode fixedGuard = append(new FixedGuardNode(condition, NullCheckException, InvalidateReprofile, true));
+            PiNode nonNullReceiver = getGraph().unique(new PiNode(value, stamp));
+            nonNullReceiver.setGuard(fixedGuard);
+            // TODO: Propogating the non-null into the frame state would
+            // remove subsequent null-checks on the same value. However,
+            // it currently causes an assertion failure when merging states.
+            //
+            // frameState.replace(value, nonNullReceiver);
+            return nonNullReceiver;
+        }
+        return value;
+    }
 }
