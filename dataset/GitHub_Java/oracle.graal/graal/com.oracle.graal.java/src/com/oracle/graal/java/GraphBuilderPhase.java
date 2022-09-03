@@ -34,6 +34,7 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
 import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.bytecode.*;
@@ -284,7 +285,7 @@ public class GraphBuilderPhase extends Phase {
         ValueNode value;
         if (kind == Kind.Object) {
             value = frameState.xpop();
-            // astore and astore_<n> may be used to store a returnAddress (jsr)
+            // astore and astore_<n> may be used to store a returnAddress (jsr) see JVMS par. 6.5.astore
             assert value.kind() == Kind.Object || value.kind() == Kind.Int;
         } else {
             value = frameState.pop(kind);
@@ -797,7 +798,12 @@ public class GraphBuilderPhase extends Phase {
         if (!optimisticOpts.useTypeCheckHints() || !canHaveSubtype(type)) {
             return null;
         } else {
-            return profilingInfo.getTypeProfile(bci());
+            ResolvedJavaType uniqueSubtype = type.findUniqueConcreteSubtype();
+            if (uniqueSubtype != null) {
+                return new JavaTypeProfile(profilingInfo.getNullSeen(bci()), 0.0D, new ProfiledType(uniqueSubtype, 1.0D));
+            } else {
+                return profilingInfo.getTypeProfile(bci());
+            }
         }
     }
 
@@ -1163,7 +1169,7 @@ public class GraphBuilderPhase extends Phase {
         createInvokeNode(callTarget, resultType);
     }
 
-    protected Invoke createInvokeNode(CallTargetNode callTarget, Kind resultType) {
+    protected Invoke createInvokeNode(MethodCallTargetNode callTarget, Kind resultType) {
         // be conservative if information was not recorded (could result in endless recompiles
         // otherwise)
         if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
