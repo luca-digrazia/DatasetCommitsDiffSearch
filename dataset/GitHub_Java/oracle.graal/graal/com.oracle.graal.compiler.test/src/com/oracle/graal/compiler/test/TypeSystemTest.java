@@ -28,7 +28,6 @@ import junit.framework.Assert;
 
 import org.junit.Test;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.*;
@@ -190,13 +189,12 @@ public class TypeSystemTest extends GraalCompilerTest {
         if (false) {
             StructuredGraph graph = parse(snippet);
             Debug.dump(graph, "Graph");
-            Assumptions assumptions = new Assumptions(false);
-            new CanonicalizerPhase(null, runtime(), assumptions).apply(graph);
+            new CanonicalizerPhase(null, runtime(), null).apply(graph);
             new ConditionalEliminationPhase().apply(graph);
-            new CanonicalizerPhase(null, runtime(), assumptions).apply(graph);
+            new CanonicalizerPhase(null, runtime(), null).apply(graph);
             new GlobalValueNumberingPhase().apply(graph);
             StructuredGraph referenceGraph = parse(referenceSnippet);
-            new CanonicalizerPhase(null, runtime(), assumptions).apply(referenceGraph);
+            new CanonicalizerPhase(null, runtime(), null).apply(referenceGraph);
             new GlobalValueNumberingPhase().apply(referenceGraph);
             assertEquals(referenceGraph, graph);
         }
@@ -237,7 +235,7 @@ public class TypeSystemTest extends GraalCompilerTest {
     }
 
     private static void outputNode(Node node) {
-        System.out.print("  " + node + "    (usage count: " + node.usages().count() + ") (inputs:");
+        System.out.print("  " + node + "    (usage count: " + node.usages().size() + ") (inputs:");
         for (Node input : node.inputs()) {
             System.out.print(" " + input.toString(Verbosity.Id));
         }
@@ -255,10 +253,9 @@ public class TypeSystemTest extends GraalCompilerTest {
         if (false) {
             StructuredGraph graph = parse(snippet);
             Debug.dump(graph, "Graph");
-            Assumptions assumptions = new Assumptions(false);
-            new CanonicalizerPhase(null, runtime(), assumptions).apply(graph);
+            new CanonicalizerPhase(null, runtime(), null).apply(graph);
             new ConditionalEliminationPhase().apply(graph);
-            new CanonicalizerPhase(null, runtime(), assumptions).apply(graph);
+            new CanonicalizerPhase(null, runtime(), null).apply(graph);
             Debug.dump(graph, "Graph");
             Assert.assertFalse("shouldn't have nodes of type " + clazz, graph.getNodes(clazz).iterator().hasNext());
         }
