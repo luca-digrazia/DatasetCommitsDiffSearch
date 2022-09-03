@@ -341,7 +341,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
         Variable result;
         LIRFrameState debugInfo = null;
-        if (hotspotLinkage.needsDebugInfo()) {
+        if (hotspotLinkage.canDeoptimize()) {
             debugInfo = state;
             assert debugInfo != null || stub != null;
         }
