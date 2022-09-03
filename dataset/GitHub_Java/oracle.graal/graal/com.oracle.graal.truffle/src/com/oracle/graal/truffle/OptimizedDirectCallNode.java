@@ -157,10 +157,8 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
         }
         newTarget.incrementKnownCallSites();
 
-        if (getParent() != null) {
-            // dummy replace to report the split, irrelevant if this node is not adopted
-            replace(this, "Split call " + newTarget.toString());
-        }
+        // dummy replace to report the split
+        replace(this, "Split call " + newTarget.toString());
         if (newTarget.getSourceCallTarget() == null) {
             splitCallTarget = null;
         } else {
