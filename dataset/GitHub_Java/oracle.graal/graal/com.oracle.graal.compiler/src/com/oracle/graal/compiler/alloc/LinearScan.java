@@ -614,22 +614,7 @@ public final class LinearScan {
                                 assert isRegister(fromLocation) : "from operand must be a register but is: " + fromLocation + " toLocation=" + toLocation + " spillState=" + interval.spillState();
                                 assert isStackSlot(toLocation) : "to operand must be a stack slot";
 
-                                if (interval.spillState() == SpillState.SpillInDominator) {
-                                    /*
-                                     * SpillInDominator spill positions are always at the beginning
-                                     * of a basic block. We need to skip the moves inserted by data
-                                     * flow resolution to ensure data integrity.
-                                     */
-                                    assert isBlockBegin(opId) && j == 0 : "SpillInDominator spill position must be at the beginning of a block!";
-                                    int pos = 1;
-                                    while (instructions.get(pos).id() == -1) {
-                                        pos++;
-                                    }
-                                    assert pos < instructions.size() : String.format("Cannot move spill move out of the current block! (pos: %d, #inst: %d, block: %s", pos, instructions.size(), block);
-                                    insertionBuffer.append(pos, ir.getSpillMoveFactory().createMove(toLocation, fromLocation));
-                                } else {
-                                    insertionBuffer.append(j + 1, ir.getSpillMoveFactory().createMove(toLocation, fromLocation));
-                                }
+                                insertionBuffer.append(j + 1, ir.getSpillMoveFactory().createMove(toLocation, fromLocation));
 
                                 Debug.log("inserting move after definition of interval %d to stack slot %s at opId %d", interval.operandNumber, interval.spillSlot(), opId);
                             }
@@ -1968,17 +1953,8 @@ public final class LinearScan {
                     verify();
                 }
 
-                try (Scope s1 = Debug.scope("EliminateSpillMove")) {
-                    eliminateSpillMoves();
-                } catch (Throwable e) {
-                    throw Debug.handle(e);
-                }
-
-                try (Scope s1 = Debug.scope("AssignLocations")) {
-                    assignLocations();
-                } catch (Throwable e) {
-                    throw Debug.handle(e);
-                }
+                eliminateSpillMoves();
+                assignLocations();
 
                 if (DetailedAsserts.getValue()) {
                     verifyIntervals();
@@ -2010,14 +1986,13 @@ public final class LinearScan {
                             }
                             // iterate all blocks where the interval has use positions
                             for (AbstractBlock<?> splitBlock : blocksForSplitChild(splitChild)) {
-                                if (dominates(defBlock, splitBlock)) {
-                                    Debug.log("Split interval %s, block %s", splitChild, splitBlock);
-                                    if (spillBlock == null) {
-                                        spillBlock = splitBlock;
-                                    } else {
-                                        spillBlock = nearestCommonDominator(spillBlock, splitBlock);
-                                        assert spillBlock != null;
-                                    }
+                                assert dominates(defBlock, splitBlock) : String.format("Definition does not dominate the spill block %s !dom %s (interval %s)", defBlock, splitBlock, interval);
+                                Debug.log("Split interval %s, block %s", splitChild, splitBlock);
+                                if (spillBlock == null) {
+                                    spillBlock = splitBlock;
+                                } else {
+                                    spillBlock = nearestCommonDominator(spillBlock, splitBlock);
+                                    assert spillBlock != null;
                                 }
                             }
                         }
@@ -2049,6 +2024,7 @@ public final class LinearScan {
 
                             if (defBlock.probability() <= spillBlock.probability()) {
                                 // better spill block has the same probability -> do nothing
+                                assert spillBlock.probability() - defBlock.probability() < 0.00000001 : "Check whether the probability difference is within epsilon";
                                 interval.setSpillState(SpillState.StoreAtDefinition);
                             } else {
                                 betterSpillPosWithLowerProbability.increment();
@@ -2069,35 +2045,41 @@ public final class LinearScan {
      */
     private class UseBlockIterator implements Iterator<AbstractBlock<?>> {
 
-        Range range;
-        AbstractBlock<?> block;
+        int nextOpId;
+        Interval interval;
+        Range currentRange;
 
         public UseBlockIterator(Interval interval) {
-            range = interval.first();
-            block = blockForId(range.from);
+            // the first use position is the begin of the interval
+            nextOpId = interval.from();
+            this.interval = interval;
+            this.currentRange = interval.first();
         }
 
         public AbstractBlock<?> next() {
-            AbstractBlock<?> currentBlock = block;
+            AbstractBlock<?> block = blockForId(nextOpId);
+
             int nextBlockIndex = block.getLinearScanNumber() + 1;
             if (nextBlockIndex < sortedBlocks.size()) {
-                block = sortedBlocks.get(nextBlockIndex);
-                if (range.to <= getFirstLirInstructionId(block)) {
-                    range = range.next;
-                    if (range == Range.EndMarker) {
-                        block = null;
-                    } else {
-                        block = blockForId(range.from);
-                    }
+                int from = getFirstLirInstructionId(sortedBlocks.get(nextBlockIndex));
+                assert from > nextOpId : "cannot go backwards";
+                assert from > maxOpId() || isBlockBegin(from) : "nextOpId is not a block begin";
+                assert from > maxOpId() || blockForId(from).getLinearScanNumber() == block.getLinearScanNumber() + 1 : "nextOpId is not the beginning of the next block";
+                nextOpId = interval.nextUsage(RegisterPriority.None, from);
+                if (nextOpId > currentRange.from) {
+                    // jump to next range
+                    nextOpId = currentRange.from;
+                    currentRange = currentRange.next;
                 }
             } else {
-                block = null;
+                // already at last the last block
+                nextOpId = Integer.MAX_VALUE;
             }
-            return currentBlock;
+            return block;
         }
 
         public boolean hasNext() {
-            return block != null;
+            return nextOpId < interval.to();
         }
     }
 
