@@ -22,9 +22,10 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import jdk.vm.ci.common.JVMCIError;
+
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.iterators.NodePredicates;
 import com.oracle.graal.graph.spi.Simplifiable;
 import com.oracle.graal.graph.spi.SimplifierTool;
 import com.oracle.graal.nodeinfo.NodeInfo;
@@ -37,8 +38,6 @@ import com.oracle.graal.nodes.calc.FloatingNode;
 import com.oracle.graal.nodes.calc.IntegerEqualsNode;
 import com.oracle.graal.nodes.spi.Lowerable;
 import com.oracle.graal.nodes.spi.LoweringTool;
-
-import jdk.vm.ci.common.JVMCIError;
 
 /**
  * Instances of this node class will look for a preceding if node and put the given probability into
@@ -93,7 +92,8 @@ public final class BranchProbabilityNode extends FloatingNode implements Simplif
                  */
                 return;
             }
-            boolean usageFound = false;
+            boolean couldSet = false;
+            boolean isExcused = false;
             for (IntegerEqualsNode node : this.usages().filter(IntegerEqualsNode.class)) {
                 if (node.condition() == Condition.EQ) {
                     ValueNode other = node.getX();
@@ -106,16 +106,16 @@ public final class BranchProbabilityNode extends FloatingNode implements Simplif
                             probabilityToSet = 1.0 - probabilityToSet;
                         }
                         for (IfNode ifNodeUsages : node.usages().filter(IfNode.class)) {
-                            usageFound = true;
+                            couldSet = true;
                             ifNodeUsages.setTrueSuccessorProbability(probabilityToSet);
                         }
-                        if (!usageFound) {
-                            usageFound = node.usages().filter(NodePredicates.isA(FixedGuardNode.class).or(ConditionalNode.class)).isNotEmpty();
+                        if (!couldSet) {
+                            isExcused = node.usages().filter(ConditionalNode.class).isNotEmpty() || node.usages().filter(FixedGuardNode.class).isNotEmpty();
                         }
                     }
                 }
             }
-            if (usageFound) {
+            if (couldSet || isExcused) {
                 ValueNode currentCondition = condition;
                 replaceAndDelete(currentCondition);
                 if (tool != null) {
