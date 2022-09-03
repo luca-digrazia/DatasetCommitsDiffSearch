@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,20 +24,33 @@
  */
 package com.oracle.graal.compiler.test.deopt;
 
-import java.lang.reflect.*;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.nodes.AbstractEndNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.LoopBeginNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 
 public final class MonitorDeoptTest extends GraalCompilerTest {
 
     private enum State {
-        INITIAL, RUNNING_GRAAL, INVALIDATED, RUNNING_INTERPRETER, TERMINATED
+        INITIAL,
+        ALLOWING_SAFEPOINT,
+        RUNNING_GRAAL,
+        INVALIDATED,
+        RUNNING_INTERPRETER,
+        TERMINATED
     }
+
+    static final long TIMEOUT = 5000;
 
     private static class Monitor {
         private volatile State state = State.INITIAL;
@@ -58,8 +71,31 @@ public final class MonitorDeoptTest extends GraalCompilerTest {
         }
 
         public synchronized void waitState(State targetState) throws InterruptedException {
-            while (state != targetState) {
-                wait();
+            long startTime = System.currentTimeMillis();
+            while (state != targetState && System.currentTimeMillis() - startTime < TIMEOUT) {
+                wait(100);
+            }
+            if (state != targetState) {
+                throw new IllegalStateException("Timed out waiting for " + targetState);
+            }
+        }
+
+        /**
+         * Change the current state to {@link State#ALLOWING_SAFEPOINT} and do a short wait to allow
+         * a safepoint to happen. Then restore the state to the original value.
+         *
+         * @param expectedState
+         * @throws InterruptedException
+         */
+        public synchronized void safepoint(State expectedState) throws InterruptedException {
+            if (state == expectedState) {
+                state = State.ALLOWING_SAFEPOINT;
+                wait(1);
+                if (state != State.ALLOWING_SAFEPOINT) {
+                    throw new InternalError("Other threads can not update the state from ALLOWING_SAFEPOINT: " + state);
+                }
+                state = expectedState;
+                notifyAll();
             }
         }
 
@@ -67,21 +103,40 @@ public final class MonitorDeoptTest extends GraalCompilerTest {
             return state;
         }
 
-        public synchronized void invalidate(InstalledCode code) {
+        public synchronized void invalidate(InstalledCode code) throws InterruptedException {
+            // wait for the main thread to start
+            waitState(State.RUNNING_GRAAL);
+
             state = State.INVALIDATED;
             code.invalidate();
         }
     }
 
-    public static boolean test(Monitor monitor) {
+    public static boolean test(Monitor monitor) throws InterruptedException {
         // initially, we're running as Graal compiled code
         monitor.setState(State.RUNNING_GRAAL);
 
-        for (;;) {
+        boolean timedOut = true;
+        long startTime = System.currentTimeMillis();
+        long safepointCheckTime = startTime;
+        while (System.currentTimeMillis() - startTime < TIMEOUT) {
             // wait for the compiled code to be invalidated
             if (monitor.tryUpdateState(State.INVALIDATED, State.RUNNING_INTERPRETER)) {
+                timedOut = false;
                 break;
             }
+            if (System.currentTimeMillis() - safepointCheckTime > 200) {
+                /*
+                 * It's possible for a safepoint to be triggered by external code before
+                 * invalidation is ready. Allow a safepoint to occur if required but don't allow
+                 * invalidation to proceed.
+                 */
+                monitor.safepoint(State.RUNNING_GRAAL);
+                safepointCheckTime = System.currentTimeMillis();
+            }
+        }
+        if (timedOut) {
+            throw new InternalError("Timed out while waiting for code to be invalidated: " + monitor.getState());
         }
 
         for (int i = 0; i < 500; i++) {
@@ -123,33 +178,27 @@ public final class MonitorDeoptTest extends GraalCompilerTest {
      */
     private static void removeLoopSafepoint(StructuredGraph graph) {
         LoopBeginNode loopBegin = findFirstLoop(graph);
-        for (LoopEndNode end : loopBegin.loopEnds()) {
-            end.disableSafepoint();
-        }
+        loopBegin.disableSafepoint();
     }
 
     @Test
     public void run0() throws Throwable {
-        Method method = getMethod("test");
+        ResolvedJavaMethod javaMethod = getResolvedJavaMethod("test");
 
-        StructuredGraph graph = parse(method);
+        StructuredGraph graph = parseEager(javaMethod, AllowAssumptions.YES);
         removeLoopSafepoint(graph);
 
-        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
         CompilationResult compilationResult = compile(javaMethod, graph);
-        final InstalledCode installedCode = getProviders().getCodeCache().setDefaultMethod(javaMethod, compilationResult);
+        final InstalledCode installedCode = getBackend().createDefaultInstalledCode(javaMethod, compilationResult);
 
         final Monitor monitor = new Monitor();
 
         Thread controlThread = new Thread(new Runnable() {
 
+            @Override
             public void run() {
                 try {
-                    // wait for the main thread to start
-                    monitor.waitState(State.RUNNING_GRAAL);
-
-                    // invalidate the compiled code while holding the lock
-                    // at this point, the compiled method hangs in a MonitorEnter
+                    // Wait for thread to reach RUNNING_GRAAL and then invalidate the code
                     monitor.invalidate(installedCode);
 
                     // wait for the main thread to continue running in the interpreter
