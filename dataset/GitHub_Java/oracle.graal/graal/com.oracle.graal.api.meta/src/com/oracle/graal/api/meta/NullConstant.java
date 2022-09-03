@@ -23,7 +23,7 @@
 package com.oracle.graal.api.meta;
 
 /**
- * The implementation type of the {@link JavaConstant#NULL_POINTER null constant}.
+ * The implementation type of the {@link JavaConstant#NULL_OBJECT null constant}.
  */
 final class NullConstant extends AbstractValue implements JavaConstant {
 
@@ -74,18 +74,13 @@ final class NullConstant extends AbstractValue implements JavaConstant {
     }
 
     @Override
-    public String toString() {
-        return JavaConstant.toString(this);
-    }
-
-    @Override
     public String toValueString() {
         return "null";
     }
 
     @Override
     public int hashCode() {
-        return 13;
+        return System.identityHashCode(this);
     }
 
     @Override
