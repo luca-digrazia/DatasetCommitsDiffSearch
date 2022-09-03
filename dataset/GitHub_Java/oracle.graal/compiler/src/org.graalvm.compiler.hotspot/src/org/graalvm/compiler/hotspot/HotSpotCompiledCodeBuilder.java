@@ -221,10 +221,6 @@ public class HotSpotCompiledCodeBuilder {
             List<Site> sourcePositionSites = new ArrayList<>();
             for (SourceMapping source : target.getSourceMappings()) {
                 NodeSourcePosition sourcePosition = source.getSourcePosition();
-                if (sourcePosition.isPlaceholder() || sourcePosition.isSubstitution()) {
-                    // HotSpot doesn't understand any of the special positions so just drop them.
-                    continue;
-                }
                 assert sourcePosition.verify();
                 sourcePosition = sourcePosition.trim();
                 /*
