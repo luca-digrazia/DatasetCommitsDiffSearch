@@ -22,8 +22,9 @@
  */
 package com.oracle.svm.core.graal.posix;
 
-import static com.oracle.svm.core.graal.nodes.WriteCurrentVMThreadNode.writeCurrentVMThread;
+import static com.oracle.svm.core.LibCHelper.heapBase;
 import static com.oracle.svm.core.graal.nodes.WriteHeapBaseNode.writeCurrentVMHeapBase;
+import static com.oracle.svm.core.graal.nodes.WriteCurrentVMThreadNode.writeCurrentVMThread;
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
 import java.util.Map;
@@ -38,6 +39,9 @@ import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.Node.ConstantNodeParameter;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
+import org.graalvm.compiler.nodes.FixedNode;
+import org.graalvm.compiler.nodes.FullInfopointNode;
+import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.options.OptionValues;
@@ -51,19 +55,19 @@ import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.word.LocationIdentity;
-import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.MustNotAllocate;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.c.CGlobalData;
-import com.oracle.svm.core.c.CGlobalDataFactory;
+import com.oracle.svm.core.c.function.CEntryPointActions;
 import com.oracle.svm.core.c.function.CEntryPointCreateIsolateParameters;
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
 import com.oracle.svm.core.graal.nodes.CEntryPointEnterNode;
 import com.oracle.svm.core.graal.nodes.CEntryPointLeaveNode;
+import com.oracle.svm.core.graal.nodes.CInterfaceReadNode;
+import com.oracle.svm.core.graal.nodes.DeadEndNode;
 import com.oracle.svm.core.graal.snippets.CFunctionSnippets;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.graal.snippets.SubstrateTemplates;
@@ -78,6 +82,7 @@ import com.oracle.svm.core.snippets.SubstrateForeignCallTarget;
 import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.thread.Safepoint;
 import com.oracle.svm.core.thread.VMThreads;
+import com.oracle.svm.core.util.UserError;
 
 /**
  * Snippets for calling from C to Java. This is the inverse of {@link CFunctionSnippets}.
@@ -139,24 +144,17 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
     @NodeIntrinsic(value = ForeignCallNode.class)
     public static native int tearDownIsolateForeignCall(@ConstantNodeParameter ForeignCallDescriptor descriptor);
 
-    public static final String HEAP_BASE = "__svm_heap_base";
-    private static final CGlobalData<PointerBase> heapBaseAccess = CGlobalDataFactory.forSymbol(HEAP_BASE);
-
-    @Uninterruptible(reason = "Called by an uninterruptible method.")
-    static PointerBase heapBase() {
-        return heapBaseAccess.get();
-    }
-
-    @Fold
-    static boolean hasHeapBase() {
-        return ImageSingletons.lookup(CompressEncoding.class).hasBase();
-    }
-
     @Uninterruptible(reason = "Called by an uninterruptible method.")
     private static void clearHeapBase() {
         if (SubstrateOptions.UseHeapBaseRegister.getValue()) {
             writeCurrentVMHeapBase(WordFactory.nullPointer());
         }
+    }
+
+    @Fold
+    static boolean hasHeapBase() {
+        CompressEncoding compressEncoding = ImageSingletons.lookup(CompressEncoding.class);
+        return compressEncoding.hasBase();
     }
 
     @Uninterruptible(reason = "Called by an uninterruptible method.")
@@ -464,6 +462,31 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
         }
     }
 
+    private static void checkEntryBeforeLowering(CEntryPointEnterNode node) {
+        if (node.graph().method().getAnnotation(Uninterruptible.class) != null) {
+            return;
+        }
+        /* only struct accesses may come before an CEntryPointActions entry call. */
+        Node predecessor = node.predecessor();
+        while (predecessor.getClass() == CInterfaceReadNode.class || predecessor.getClass() == FullInfopointNode.class) {
+            predecessor = predecessor.predecessor();
+        }
+        UserError.guarantee(predecessor == node.graph().start(), CEntryPointActions.class.getSimpleName() +
+                        " entry method call must be the first statement in the method: " + node.graph().method().format("%H.%n(%p)"));
+    }
+
+    private static void checkExitBeforeLowering(CEntryPointLeaveNode node) {
+        if (node.graph().method().getAnnotation(Uninterruptible.class) != null) {
+            return;
+        }
+        FixedNode successor = node.next();
+        while (successor instanceof FullInfopointNode) {
+            successor = ((FullInfopointNode) successor).next();
+        }
+        UserError.guarantee(successor.getClass() == ReturnNode.class || successor.getClass() == DeadEndNode.class,
+                        "Calls to " + CEntryPointActions.class.getSimpleName() + " exit methods must immediately precede a return: " + node.graph().method().format("%H.%n(%p)"));
+    }
+
     protected class EnterMTLowering implements NodeLoweringProvider<CEntryPointEnterNode> {
 
         private final SnippetInfo createIsolate = snippet(PosixCEntryPointSnippets.class, "createIsolateSnippet");
@@ -473,6 +496,8 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
 
         @Override
         public void lower(CEntryPointEnterNode node, LoweringTool tool) {
+            checkEntryBeforeLowering(node);
+
             Arguments args;
             switch (node.getEnterAction()) {
                 case CreateIsolate:
@@ -497,7 +522,7 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
                 default:
                     throw shouldNotReachHere();
             }
-            template(node, args).instantiate(providers.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
+            template(node.getDebug(), args).instantiate(providers.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
         }
     }
 
@@ -506,6 +531,8 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
 
         @Override
         public void lower(CEntryPointEnterNode node, LoweringTool tool) {
+            checkEntryBeforeLowering(node);
+
             Arguments args;
             switch (node.getEnterAction()) {
                 case CreateIsolate:
@@ -517,7 +544,7 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
                 default:
                     throw shouldNotReachHere();
             }
-            template(node, args).instantiate(providers.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
+            template(node.getDebug(), args).instantiate(providers.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
         }
     }
 
@@ -529,6 +556,8 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
 
         @Override
         public void lower(CEntryPointLeaveNode node, LoweringTool tool) {
+            checkExitBeforeLowering(node);
+
             Arguments args;
             switch (node.getLeaveAction()) {
                 case Leave:
@@ -551,7 +580,7 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
                 default:
                     throw shouldNotReachHere();
             }
-            template(node, args).instantiate(providers.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
+            template(node.getDebug(), args).instantiate(providers.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
         }
 
     }
@@ -563,6 +592,8 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
 
         @Override
         public void lower(CEntryPointLeaveNode node, LoweringTool tool) {
+            checkExitBeforeLowering(node);
+
             Arguments args;
             switch (node.getLeaveAction()) {
                 case ExceptionAbort:
@@ -577,7 +608,7 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
                 default:
                     throw shouldNotReachHere();
             }
-            template(node, args).instantiate(providers.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
+            template(node.getDebug(), args).instantiate(providers.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
         }
     }
 }
