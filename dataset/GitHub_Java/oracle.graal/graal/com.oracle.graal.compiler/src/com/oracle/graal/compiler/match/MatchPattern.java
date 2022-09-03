@@ -50,11 +50,11 @@ public class MatchPattern {
     static class Result {
         final MatchResultCode code;
 
-        final ValueNode node;
+        final ScheduledNode node;
 
         final MatchPattern matcher;
 
-        Result(MatchResultCode result, ValueNode node, MatchPattern matcher) {
+        Result(MatchResultCode result, ScheduledNode node, MatchPattern matcher) {
             this.code = result;
             this.node = node;
             this.matcher = matcher;
@@ -75,32 +75,32 @@ public class MatchPattern {
         private static final Result CACHED_NOT_SAFE = new Result(MatchResultCode.NOT_SAFE, null, null);
         private static final Result CACHED_ALREADY_USED = new Result(MatchResultCode.ALREADY_USED, null, null);
 
-        static Result wrongClass(ValueNode node, MatchPattern matcher) {
+        static Result WRONG_CLASS(ValueNode node, MatchPattern matcher) {
             MatchResult_WRONG_CLASS.increment();
             return Debug.isEnabled() ? new Result(MatchResultCode.WRONG_CLASS, node, matcher) : CACHED_WRONG_CLASS;
         }
 
-        static Result namedValueMismatch(ValueNode node, MatchPattern matcher) {
+        static Result NAMED_VALUE_MISMATCH(ValueNode node, MatchPattern matcher) {
             MatchResult_NAMED_VALUE_MISMATCH.increment();
             return Debug.isEnabled() ? new Result(MatchResultCode.NAMED_VALUE_MISMATCH, node, matcher) : CACHED_NAMED_VALUE_MISMATCH;
         }
 
-        static Result tooManyUsers(ValueNode node, MatchPattern matcher) {
+        static Result TOO_MANY_USERS(ValueNode node, MatchPattern matcher) {
             MatchResult_TOO_MANY_USERS.increment();
             return Debug.isEnabled() ? new Result(MatchResultCode.TOO_MANY_USERS, node, matcher) : CACHED_TOO_MANY_USERS;
         }
 
-        static Result notInBlock(ValueNode node, MatchPattern matcher) {
+        static Result NOT_IN_BLOCK(ScheduledNode node, MatchPattern matcher) {
             MatchResult_NOT_IN_BLOCK.increment();
             return Debug.isEnabled() ? new Result(MatchResultCode.NOT_IN_BLOCK, node, matcher) : CACHED_NOT_IN_BLOCK;
         }
 
-        static Result notSafe(ValueNode node, MatchPattern matcher) {
+        static Result NOT_SAFE(ScheduledNode node, MatchPattern matcher) {
             MatchResult_NOT_SAFE.increment();
             return Debug.isEnabled() ? new Result(MatchResultCode.NOT_SAFE, node, matcher) : CACHED_NOT_SAFE;
         }
 
-        static Result alreadyUsed(ValueNode node, MatchPattern matcher) {
+        static Result ALREADY_USED(ValueNode node, MatchPattern matcher) {
             MatchResult_ALREADY_USED.increment();
             return Debug.isEnabled() ? new Result(MatchResultCode.ALREADY_USED, node, matcher) : CACHED_ALREADY_USED;
         }
@@ -151,8 +151,22 @@ public class MatchPattern {
         this(null, name, singleUser);
     }
 
+    /**
+     * Gets the {@link Node} class instantiated for a given canonical {@link Node} class depending
+     * on whether or not generated node classes are enabled.
+     */
+    @SuppressWarnings("unchecked")
+    private static Class<? extends ValueNode> asInstantiatedClass(Class<? extends ValueNode> nodeClass) {
+        if (nodeClass != null && Node.USE_GENERATED_NODES) {
+            Class<? extends ValueNode> res = (Class<? extends ValueNode>) NodeClass.get(nodeClass).getGenClass();
+            assert res != null : nodeClass;
+            return res;
+        }
+        return nodeClass;
+    }
+
     public MatchPattern(Class<? extends ValueNode> nodeClass, String name, boolean singleUser) {
-        this.nodeClass = nodeClass;
+        this.nodeClass = asInstantiatedClass(nodeClass);
         this.name = name;
         this.singleUser = singleUser;
         this.patterns = EMPTY_PATTERNS;
@@ -161,7 +175,7 @@ public class MatchPattern {
 
     private MatchPattern(Class<? extends ValueNode> nodeClass, String name, boolean singleUser, MatchPattern[] patterns, Position[] inputs) {
         assert inputs == null || inputs.length == patterns.length;
-        this.nodeClass = nodeClass;
+        this.nodeClass = asInstantiatedClass(nodeClass);
         this.name = name;
         this.singleUser = singleUser;
         this.patterns = patterns;
@@ -186,7 +200,7 @@ public class MatchPattern {
 
     private Result matchType(ValueNode node) {
         if (nodeClass != null && node.getClass() != nodeClass) {
-            return Result.wrongClass(node, this);
+            return Result.WRONG_CLASS(node, this);
         }
         return Result.OK;
     }
@@ -252,7 +266,7 @@ public class MatchPattern {
 
         if (singleUser && !atRoot) {
             if (node.usages().count() > 1) {
-                return Result.tooManyUsers(node, statement.getPattern());
+                return Result.TOO_MANY_USERS(node, statement.getPattern());
             }
         }
 
@@ -298,9 +312,7 @@ public class MatchPattern {
             return name;
         } else {
             String nodeName = nodeClass.getSimpleName();
-            if (nodeName.endsWith("Node")) {
-                nodeName = nodeName.substring(0, nodeName.length() - 4);
-            }
+            nodeName = nodeName.substring(0, nodeName.length() - (Node.USE_GENERATED_NODES ? 7 : 4));
             if (patterns.length == 0) {
                 return nodeName + (name != null ? "=" + name : "");
             } else {
