@@ -162,6 +162,10 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             if (removeOrMaterializeIf(tool)) {
                 return;
             }
+
+            if (removeIntermediateMaterialization(tool)) {
+                return;
+            }
         }
 
         if (falseSuccessor().usages().isEmpty() && (!(falseSuccessor() instanceof LoopExitNode)) && falseSuccessor().next() instanceof IfNode) {
@@ -397,7 +401,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
      * 
      * @return true if a transformation was made, false otherwise
      */
-    public boolean removeIntermediateMaterialization(SimplifierTool tool) {
+    private boolean removeIntermediateMaterialization(SimplifierTool tool) {
         if (!(condition() instanceof CompareNode)) {
             return false;
         }
