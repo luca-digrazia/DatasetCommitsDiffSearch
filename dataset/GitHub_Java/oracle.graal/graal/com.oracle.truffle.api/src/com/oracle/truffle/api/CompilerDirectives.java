@@ -139,12 +139,4 @@ public class CompilerDirectives {
     public static <T> T unsafeCast(Object value, Class<T> clazz) {
         return (T) value;
     }
-
-    /**
-     * Marks methods that are considered slowpath and should therefore not be inlined by default.
-     */
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target({ElementType.METHOD})
-    public @interface SlowPath {
-    }
 }
