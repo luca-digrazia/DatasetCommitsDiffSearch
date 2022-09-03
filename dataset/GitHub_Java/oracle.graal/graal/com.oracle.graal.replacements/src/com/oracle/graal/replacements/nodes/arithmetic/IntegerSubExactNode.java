@@ -22,33 +22,46 @@
  */
 package com.oracle.graal.replacements.nodes.arithmetic;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
+
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.SubNode;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.util.GraphUtil;
+
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * Node representing an exact integer substraction that will throw an {@link ArithmeticException} in
  * case the addition would overflow the 32 bit range.
  */
-@NodeInfo
+@NodeInfo(cycles = CYCLES_2, size = SIZE_2)
 public final class IntegerSubExactNode extends SubNode implements IntegerExactArithmeticNode {
     public static final NodeClass<IntegerSubExactNode> TYPE = NodeClass.create(IntegerSubExactNode.class);
 
     public IntegerSubExactNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y);
+        setStamp(x.stamp().unrestricted());
         assert x.stamp().isCompatible(y.stamp()) && x.stamp() instanceof IntegerStamp;
     }
 
     @Override
     public boolean inferStamp() {
-        // TODO Should probably use a specialized version which understands that it can't overflow
-        return super.inferStamp();
+        /*
+         * Note: it is not allowed to use the foldStamp method of the regular sub node as we do not
+         * know the result stamp of this node if we do not know whether we may deopt. If we know we
+         * can never overflow we will replace this node with its non overflow checking counterpart
+         * anyway.
+         */
+        return false;
     }
 
     @Override
@@ -64,18 +77,21 @@ public final class IntegerSubExactNode extends SubNode implements IntegerExactAr
                 return forX;
             }
         }
+        if (!IntegerStamp.subtractionCanOverflow((IntegerStamp) x.stamp(), (IntegerStamp) y.stamp())) {
+            return new SubNode(x, y).canonical(tool);
+        }
         return this;
     }
 
     private ValueNode canonicalXYconstant(ValueNode forX, ValueNode forY) {
         JavaConstant xConst = forX.asJavaConstant();
         JavaConstant yConst = forY.asJavaConstant();
-        assert xConst.getKind() == yConst.getKind();
+        assert xConst.getJavaKind() == yConst.getJavaKind();
         try {
-            if (xConst.getKind() == Kind.Int) {
+            if (xConst.getJavaKind() == JavaKind.Int) {
                 return ConstantNode.forInt(Math.subtractExact(xConst.asInt(), yConst.asInt()));
             } else {
-                assert xConst.getKind() == Kind.Long;
+                assert xConst.getJavaKind() == JavaKind.Long;
                 return ConstantNode.forLong(Math.subtractExact(xConst.asLong(), yConst.asLong()));
             }
         } catch (ArithmeticException ex) {

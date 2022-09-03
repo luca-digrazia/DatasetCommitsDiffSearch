@@ -22,32 +22,98 @@
  */
 package com.oracle.graal.replacements.nodes.arithmetic;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.compiler.common.type.IntegerStamp.addOverflowsNegatively;
+import static com.oracle.graal.compiler.common.type.IntegerStamp.addOverflowsPositively;
+import static com.oracle.graal.compiler.common.type.IntegerStamp.carryBits;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
+
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.AddNode;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * Node representing an exact integer addition that will throw an {@link ArithmeticException} in
  * case the addition would overflow the 32 bit range.
  */
-@NodeInfo
+@NodeInfo(cycles = CYCLES_2, size = SIZE_2)
 public final class IntegerAddExactNode extends AddNode implements IntegerExactArithmeticNode {
     public static final NodeClass<IntegerAddExactNode> TYPE = NodeClass.create(IntegerAddExactNode.class);
 
     public IntegerAddExactNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y);
+        setStamp(x.stamp().unrestricted());
         assert x.stamp().isCompatible(y.stamp()) && x.stamp() instanceof IntegerStamp;
     }
 
     @Override
     public boolean inferStamp() {
-        // TODO Should probably use a specialized version which understands that it can't overflow
-        return super.inferStamp();
+        /*
+         * Note: it is not allowed to use the foldStamp method of the regular add node as we do not
+         * know the result stamp of this node if we do not know whether we may deopt. If we know we
+         * can never overflow we will replace this node with its non overflow checking counterpart
+         * anyway.
+         */
+        return false;
+    }
+
+    @Override
+    public Stamp foldStamp(Stamp stampX, Stamp stampY) {
+        IntegerStamp a = (IntegerStamp) stampX;
+        IntegerStamp b = (IntegerStamp) stampY;
+
+        int bits = a.getBits();
+        assert bits == b.getBits();
+
+        long defaultMask = CodeUtil.mask(bits);
+        long variableBits = (a.downMask() ^ a.upMask()) | (b.downMask() ^ b.upMask());
+        long variableBitsWithCarry = variableBits | (carryBits(a.downMask(), b.downMask()) ^ carryBits(a.upMask(), b.upMask()));
+        long newDownMask = (a.downMask() + b.downMask()) & ~variableBitsWithCarry;
+        long newUpMask = (a.downMask() + b.downMask()) | variableBitsWithCarry;
+
+        newDownMask &= defaultMask;
+        newUpMask &= defaultMask;
+
+        long newLowerBound;
+        long newUpperBound;
+        boolean lowerOverflowsPositively = addOverflowsPositively(a.lowerBound(), b.lowerBound(), bits);
+        boolean upperOverflowsPositively = addOverflowsPositively(a.upperBound(), b.upperBound(), bits);
+        boolean lowerOverflowsNegatively = addOverflowsNegatively(a.lowerBound(), b.lowerBound(), bits);
+        boolean upperOverflowsNegatively = addOverflowsNegatively(a.upperBound(), b.upperBound(), bits);
+        if (lowerOverflowsPositively) {
+            newLowerBound = CodeUtil.maxValue(bits);
+        } else if (lowerOverflowsNegatively) {
+            newLowerBound = CodeUtil.minValue(bits);
+        } else {
+            newLowerBound = CodeUtil.signExtend((a.lowerBound() + b.lowerBound()) & defaultMask, bits);
+        }
+
+        if (upperOverflowsPositively) {
+            newUpperBound = CodeUtil.maxValue(bits);
+        } else if (upperOverflowsNegatively) {
+            newUpperBound = CodeUtil.minValue(bits);
+        } else {
+            newUpperBound = CodeUtil.signExtend((a.upperBound() + b.upperBound()) & defaultMask, bits);
+        }
+
+        IntegerStamp limit = StampFactory.forInteger(bits, newLowerBound, newUpperBound);
+        newUpMask &= limit.upMask();
+        newUpperBound = CodeUtil.signExtend(newUpperBound & newUpMask, bits);
+        newDownMask |= limit.downMask();
+        newLowerBound |= newDownMask;
+        return new IntegerStamp(bits, newLowerBound, newUpperBound, newDownMask, newUpMask);
     }
 
     @Override
@@ -82,12 +148,12 @@ public final class IntegerAddExactNode extends AddNode implements IntegerExactAr
         JavaConstant xConst = forX.asJavaConstant();
         JavaConstant yConst = forY.asJavaConstant();
         if (xConst != null && yConst != null) {
-            assert xConst.getKind() == yConst.getKind();
+            assert xConst.getJavaKind() == yConst.getJavaKind();
             try {
-                if (xConst.getKind() == Kind.Int) {
+                if (xConst.getJavaKind() == JavaKind.Int) {
                     return ConstantNode.forInt(Math.addExact(xConst.asInt(), yConst.asInt()));
                 } else {
-                    assert xConst.getKind() == Kind.Long;
+                    assert xConst.getJavaKind() == JavaKind.Long;
                     return ConstantNode.forLong(Math.addExact(xConst.asLong(), yConst.asLong()));
                 }
             } catch (ArithmeticException ex) {

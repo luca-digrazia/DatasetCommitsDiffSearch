@@ -22,26 +22,45 @@
  */
 package com.oracle.graal.replacements.nodes.arithmetic;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_4;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
+
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.MulNode;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * Node representing an exact integer multiplication that will throw an {@link ArithmeticException}
  * in case the addition would overflow the 32 bit range.
  */
-@NodeInfo
+@NodeInfo(cycles = CYCLES_4, cyclesRationale = "mul+cmp", size = SIZE_2)
 public final class IntegerMulExactNode extends MulNode implements IntegerExactArithmeticNode {
     public static final NodeClass<IntegerMulExactNode> TYPE = NodeClass.create(IntegerMulExactNode.class);
 
     public IntegerMulExactNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y);
+        setStamp(x.stamp().unrestricted());
         assert x.stamp().isCompatible(y.stamp()) && x.stamp() instanceof IntegerStamp;
+    }
+
+    @Override
+    public boolean inferStamp() {
+        /*
+         * Note: it is not allowed to use the foldStamp method of the regular mul node as we do not
+         * know the result stamp of this node if we do not know whether we may deopt. If we know we
+         * can never overflow we will replace this node with its non overflow checking counterpart
+         * anyway.
+         */
+        return false;
     }
 
     @Override
@@ -60,18 +79,73 @@ public final class IntegerMulExactNode extends MulNode implements IntegerExactAr
                 return ConstantNode.forIntegerStamp(stamp(), 0);
             }
         }
+        if (!mayOverFlow((IntegerStamp) x.stamp(), (IntegerStamp) y.stamp())) {
+            return new MulNode(x, y).canonical(tool);
+        }
         return this;
+    }
+
+    private static boolean mayOverFlow(IntegerStamp a, IntegerStamp b) {
+        // see IntegerStamp#foldStamp for details
+        assert a.getBits() == b.getBits();
+        if (a.upMask() == 0) {
+            return false;
+        } else if (b.upMask() == 0) {
+            return false;
+        }
+        if (a.isUnrestricted()) {
+            return true;
+        }
+        if (b.isUnrestricted()) {
+            return true;
+        }
+        int bits = a.getBits();
+        // Checkstyle: stop
+        long minN_a = a.lowerBound();
+        long maxN_a = Math.min(0, a.upperBound());
+        long minP_a = Math.max(0, a.lowerBound());
+        long maxP_a = a.upperBound();
+
+        long minN_b = b.lowerBound();
+        long maxN_b = Math.min(0, b.upperBound());
+        long minP_b = Math.max(0, b.lowerBound());
+        long maxP_b = b.upperBound();
+        // Checkstyle: resume
+
+        boolean mayOverflow = false;
+        if (a.canBePositive()) {
+            if (b.canBePositive()) {
+                mayOverflow |= IntegerStamp.multiplicationOverflows(maxP_a, maxP_b, bits);
+                mayOverflow |= IntegerStamp.multiplicationOverflows(minP_a, minP_b, bits);
+            }
+            if (b.canBeNegative()) {
+                mayOverflow |= IntegerStamp.multiplicationOverflows(minP_a, maxN_b, bits);
+                mayOverflow |= IntegerStamp.multiplicationOverflows(maxP_a, minN_b, bits);
+
+            }
+        }
+        if (a.canBeNegative()) {
+            if (b.canBePositive()) {
+                mayOverflow |= IntegerStamp.multiplicationOverflows(maxN_a, minP_b, bits);
+                mayOverflow |= IntegerStamp.multiplicationOverflows(minN_a, maxP_b, bits);
+            }
+            if (b.canBeNegative()) {
+                mayOverflow |= IntegerStamp.multiplicationOverflows(minN_a, minN_b, bits);
+                mayOverflow |= IntegerStamp.multiplicationOverflows(maxN_a, maxN_b, bits);
+            }
+        }
+        return mayOverflow;
     }
 
     private ValueNode canonicalXconstant(ValueNode forX, ValueNode forY) {
         JavaConstant xConst = forX.asJavaConstant();
         JavaConstant yConst = forY.asJavaConstant();
-        assert xConst.getKind() == yConst.getKind();
+        assert xConst.getJavaKind() == yConst.getJavaKind();
         try {
-            if (xConst.getKind() == Kind.Int) {
+            if (xConst.getJavaKind() == JavaKind.Int) {
                 return ConstantNode.forInt(Math.multiplyExact(xConst.asInt(), yConst.asInt()));
             } else {
-                assert xConst.getKind() == Kind.Long;
+                assert xConst.getJavaKind() == JavaKind.Long;
                 return ConstantNode.forLong(Math.multiplyExact(xConst.asLong(), yConst.asLong()));
             }
         } catch (ArithmeticException ex) {

@@ -38,19 +38,20 @@ import com.intel.llvm.ireditor.lLVM_IR.SimpleConstant;
 import com.intel.llvm.ireditor.lLVM_IR.ValueRef;
 import com.intel.llvm.ireditor.types.ResolvedAnyIntegerType;
 import com.intel.llvm.ireditor.types.ResolvedType;
-import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
+import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
 
 /*
  * http://llvm.org/docs/LangRef.html#constant-expressions
  */
-public class LLVMConstantEvaluator {
+public final class LLVMConstantEvaluator {
 
     private static LLVMParserRuntime runtime;
 
-    public static Object evaluateConstant(LLVMParserRuntime curRuntime, Constant index) {
+    public static Object evaluateConstant(LLVMParserRuntimeTextual curRuntime, Constant index) {
         LLVMConstantEvaluator.runtime = curRuntime;
         ResolvedType type = curRuntime.resolve(index);
         if (!(type instanceof ResolvedAnyIntegerType)) {
@@ -77,7 +78,8 @@ public class LLVMConstantEvaluator {
     }
 
     private static Object evaluateGlobalVariable(GlobalVariable ref) {
-        LLVMAddress addr = runtime.getGlobalAddress(ref);
+        com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable globalVariable = LLVMToBitcodeAdapter.resolveGlobalVariable((LLVMParserRuntimeTextual) runtime, ref);
+        Object addr = runtime.getGlobalAddress(globalVariable);
         assert addr != null;
         return addr;
     }
@@ -119,11 +121,17 @@ public class LLVMConstantEvaluator {
     }
 
     private static boolean isAddress(Object obj) {
-        return obj instanceof LLVMAddress;
+        return obj instanceof LLVMAddress || obj instanceof LLVMGlobalVariableDescriptor;
     }
 
     private static long asLongAddress(Object obj) {
-        return ((LLVMAddress) obj).getVal();
+        if (obj instanceof LLVMAddress) {
+            return ((LLVMAddress) obj).getVal();
+        } else if (obj instanceof LLVMGlobalVariableDescriptor) {
+            return ((LLVMGlobalVariableDescriptor) obj).getNativeStorage().getVal();
+        } else {
+            throw new AssertionError(obj);
+        }
     }
 
     private static boolean isNumber(Object obj) {
