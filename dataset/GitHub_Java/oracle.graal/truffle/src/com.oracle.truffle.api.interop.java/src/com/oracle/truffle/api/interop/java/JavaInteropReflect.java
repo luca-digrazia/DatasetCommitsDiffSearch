@@ -94,18 +94,6 @@ final class JavaInteropReflect {
                     }
                 }
             }
-            if (onlyStatic) {
-                // no support for nonstatic type members now
-                for (Class<?> t : object.clazz.getClasses()) {
-                    final boolean isStatic = isStaticTypeOrInterface(t);
-                    if (!isStatic) {
-                        continue;
-                    }
-                    if (t.getSimpleName().equals(name)) {
-                        return new JavaObject(null, t);
-                    }
-                }
-            }
             throw UnknownIdentifierException.raise(name);
         }
         return JavaInterop.toGuestValue(val, object.languageContext);
@@ -135,21 +123,6 @@ final class JavaInteropReflect {
                 continue;
             }
             if (m.getName().equals(name)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    static boolean isMemberType(JavaObject object, String name) {
-        Object obj = object.obj;
-        final boolean onlyStatic = obj == null;
-        if (!onlyStatic) {
-            // no support for nonstatic members now
-            return false;
-        }
-        for (Class<?> c : object.clazz.getClasses()) {
-            if (isStaticTypeOrInterface(c) && name.equals(c.getSimpleName())) {
                 return true;
             }
         }
@@ -269,11 +242,6 @@ final class JavaInteropReflect {
         return Proxy.newProxyInstance(clazz.getClassLoader(), new Class<?>[]{clazz}, new TruffleHandler(obj));
     }
 
-    static boolean isStaticTypeOrInterface(Class<?> t) {
-        // anonymous classes are private, they should be eliminated elsewhere
-        return t.isInterface() || t.isEnum() || ((t.getModifiers() & Modifier.STATIC) > 0);
-    }
-
     @CompilerDirectives.TruffleBoundary
     static String[] findUniquePublicMemberNames(Class<?> c, boolean onlyInstance, boolean includeInternal) throws SecurityException {
         Class<?> clazz = c;
@@ -299,15 +267,6 @@ final class JavaInteropReflect {
             names.add(method.getName());
             if (includeInternal) {
                 names.add(jniName(method));
-            }
-        }
-        if (!onlyInstance) {
-            // no support for nonstatic member types now
-            for (Class<?> t : clazz.getClasses()) {
-                if (!isStaticTypeOrInterface(t)) {
-                    continue;
-                }
-                names.add(t.getSimpleName());
             }
         }
         return names.toArray(new String[0]);
