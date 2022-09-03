@@ -239,9 +239,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         int slotIndex = slot.getIndex();
         if (slotIndex >= getTags().length) {
             CompilerDirectives.transferToInterpreter();
-            if (!resize()) {
-                throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
-            }
+            resize();
         }
         getTags()[slotIndex] = (byte) accessKind.ordinal();
     }
@@ -250,9 +248,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         int slotIndex = slot.getIndex();
         if (slotIndex >= getTags().length) {
             CompilerDirectives.transferToInterpreter();
-            if (!resize()) {
-                throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
-            }
+            resize();
         }
         byte tag = this.getTags()[slotIndex];
         if (tag != accessKind.ordinal()) {
@@ -293,7 +289,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         }
     }
 
-    private boolean resize() {
+    private void resize() {
         int oldSize = tags.length;
         int newSize = descriptor.getSize();
         if (newSize > oldSize) {
@@ -301,9 +297,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
             Arrays.fill(locals, oldSize, newSize, descriptor.getTypeConversion().getDefaultValue());
             primitiveLocals = Arrays.copyOf(primitiveLocals, newSize);
             tags = Arrays.copyOf(tags, newSize);
-            return true;
         }
-        return false;
     }
 
     private byte getTag(FrameSlot slot) {
