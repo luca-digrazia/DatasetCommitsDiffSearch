@@ -95,15 +95,6 @@ public final class Compare extends BooleanNode {
         setY(y);
     }
 
-    @Override
-    public boolean valueEqual(Node i) {
-        if (i instanceof Compare) {
-            Compare compare = (Compare) i;
-            return compare.condition == condition && compare.unorderedIsTrue == unorderedIsTrue;
-        }
-        return super.valueEqual(i);
-    }
-
     /**
      * Gets the condition (comparison operation) for this instruction.
      * @return the condition
@@ -166,6 +157,11 @@ public final class Compare extends BooleanNode {
         return x;
     }
 
+    @Override
+    public BooleanNode negate() {
+        return new Compare(x(), condition.negate(), y(), graph());
+    }
+
     private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
         public Node canonical(Node node) {
@@ -201,7 +197,7 @@ public final class Compare extends BooleanNode {
                     }
                     BooleanNode result = materializeNode.value();
                     if (isFalseCheck) {
-                        result = new NegateBooleanNode(result, compare.graph());
+                        result = result.negate();
                     }
                     if (GraalOptions.TraceCanonicalizer) {
                         TTY.println("Removed materialize replacing with " + result);

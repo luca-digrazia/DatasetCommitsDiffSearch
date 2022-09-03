@@ -720,7 +720,8 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genThrow(int bci) {
         Value exception = frameState.apop();
-        FixedGuard node = new FixedGuard(new IsNonNull(exception, graph), graph);
+        FixedGuard node = new FixedGuard(graph);
+        node.setNode(new IsNonNull(exception, graph));
         append(node);
 
         FixedNode entry = handleException(exception, bci);
@@ -740,9 +741,7 @@ public final class GraphBuilderPhase extends Phase {
         Constant typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, isInitialized, cpi);
         Value object = frameState.apop();
         if (typeInstruction != null) {
-//            append(new FixedGuard(new InstanceOf(typeInstruction, object, graph), graph));
-//            frameState.apush(object);
-            frameState.apush(new CheckCast(typeInstruction, object, graph));
+            frameState.apush(append(new CheckCast(typeInstruction, object, graph)));
         } else {
             frameState.apush(appendConstant(CiConstant.NULL_OBJECT));
         }
@@ -1142,8 +1141,9 @@ public final class GraphBuilderPhase extends Phase {
                 if (ifNode.falseSuccessor() == prev) {
                     FixedNode successor = ifNode.trueSuccessor();
                     BooleanNode condition = ifNode.compare();
-                    FixedGuard fixedGuard = new FixedGuard(condition, graph);
+                    FixedGuard fixedGuard = new FixedGuard(graph);
                     fixedGuard.setNext(successor);
+                    fixedGuard.setNode(condition);
                     ifNode.replaceAndDelete(fixedGuard);
                     lastInstr = null;
                     return fixed;

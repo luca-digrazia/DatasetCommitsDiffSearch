@@ -61,11 +61,11 @@ public abstract class TypeCheck extends BooleanNode {
     /**
      * The instruction that loads the target class object that is used by this checkcast.
      */
-     public Value targetClassInstruction() {
-        return (Value) inputs().get(super.inputCount() + INPUT_TARGET_CLASS_INSTRUCTION);
+     public Constant targetClassInstruction() {
+        return (Constant) inputs().get(super.inputCount() + INPUT_TARGET_CLASS_INSTRUCTION);
     }
 
-    private void setTargetClassInstruction(Value n) {
+    private void setTargetClassInstruction(Constant n) {
         inputs().set(super.inputCount() + INPUT_TARGET_CLASS_INSTRUCTION, n);
     }
 
@@ -75,7 +75,7 @@ public abstract class TypeCheck extends BooleanNode {
      * @return the target class
      */
     public RiType targetClass() {
-        return targetClassInstruction() instanceof Constant ? (RiType) targetClassInstruction().asConstant().asObject() : null;
+        return (RiType) targetClassInstruction().asConstant().asObject();
     }
 
     /**
@@ -87,7 +87,7 @@ public abstract class TypeCheck extends BooleanNode {
      * @param successorCount
      * @param graph
      */
-    public TypeCheck(Value targetClassInstruction, Value object, CiKind kind, int inputCount, int successorCount, Graph graph) {
+    public TypeCheck(Constant targetClassInstruction, Value object, CiKind kind, int inputCount, int successorCount, Graph graph) {
         super(kind, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
         setObject(object);
         setTargetClassInstruction(targetClassInstruction);
