@@ -284,15 +284,10 @@ public abstract class TruffleCompiler {
 
         @Override
         public void postProcess(InstalledCode installedCode) {
-            for (Consumer<InstalledCode> entry : installedCodeEntries) {
-                entry.accept(installedCode);
-            }
-        }
-
-        @Override
-        public void installFailed(Throwable t) {
-            for (Consumer<InstalledCode> entry : installedCodeEntries) {
-                entry.accept(null);
+            if (installedCode instanceof OptimizedCallTarget) {
+                for (Consumer<InstalledCode> entry : installedCodeEntries) {
+                    entry.accept(installedCode);
+                }
             }
         }
 
