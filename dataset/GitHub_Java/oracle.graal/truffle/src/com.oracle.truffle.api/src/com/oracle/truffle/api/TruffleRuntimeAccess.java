@@ -43,7 +43,5 @@ public interface TruffleRuntimeAccess {
      *
      * @since 0.28
      */
-    default int getPriority() {
-        return 0;
-    }
+    int getPriority();
 }
