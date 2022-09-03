@@ -35,25 +35,20 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
- * An {@linkplain Instrumenter instrumentation} handle for a subscription to a
- * {@linkplain SourceSectionFilter filtered} stream of execution event notifications.
- * <p>
- * The subscription remains active until:
+ * Represents a binding from a {@link SourceSectionFilter} instance for a particular
+ * {@link ExecutionEventListener} or {@link ExecutionEventNodeFactory}.
+ *
+ * A binding is active until disposed, either:
  * <ul>
- * <li>explicit {@linkplain #dispose() disposal} of the subscription; or</li>
- *
- * <li>the instrument that created the subscription is
- * {@linkplain com.oracle.truffle.api.vm.PolyglotEngine.Instrument#setEnabled(boolean) disabled}; or
- *
- * <li>the instrumented engine is {@linkplain com.oracle.truffle.api.vm.PolyglotEngine#dispose()
- * disposed}.</li>
+ * <li>by a call to dispose();</li>
+ * <li>the instrumenter that created the binding is {@link EventBinding#dispose() disposed}; or</li>
+ * <li>the engine running the language is disposed.</li>
  * </ul>
- * </p>
+ * If all bindings of a listener or factory are disposed then their methods are not invoked again by
+ * the instrumentation framework.
  *
- * @param <T> subscriber type: {@link ExecutionEventListener} or {@link ExecutionEventNodeFactory}.
- * @see Instrumenter#attachListener(SourceSectionFilter, ExecutionEventListener)
- * @see Instrumenter#attachFactory(SourceSectionFilter, ExecutionEventNodeFactory)
- *
+ * @param <T> represents the concrete type of the element bound. Either an implementation of
+ *            {@link ExecutionEventListener} or {@link ExecutionEventNodeFactory}.
  * @since 0.12
  */
 public final class EventBinding<T> {
@@ -74,8 +69,8 @@ public final class EventBinding<T> {
     }
 
     /**
-     * @return the subscriber: an {@link ExecutionEventNodeFactory} or
-     *         {@link ExecutionEventListener}.
+     * Returns the bound element, either a {@link ExecutionEventNodeFactory factory} or a
+     * {@link ExecutionEventListener listener} implementation.
      *
      * @since 0.12
      */
@@ -84,8 +79,9 @@ public final class EventBinding<T> {
     }
 
     /**
-     * @return the filter being applied to the subscription's stream of notifications
+     * Returns the bound filter for this binding.
      *
+     * @return the filter never null
      * @since 0.12
      */
     public SourceSectionFilter getFilter() {
@@ -93,7 +89,7 @@ public final class EventBinding<T> {
     }
 
     /**
-     * @return whether the subscription has been permanently cancelled.
+     * Returns <code>true</code> if the binding was already disposed, otherwise <code>false</code>.
      *
      * @since 0.12
      */
@@ -102,7 +98,8 @@ public final class EventBinding<T> {
     }
 
     /**
-     * Cancels the subscription permanently.
+     * Disposes this binding. If a binding of a listener or factory is disposed then their methods
+     * are not invoked again by the instrumentation framework.
      *
      * @since 0.12
      */
@@ -133,7 +130,7 @@ public final class EventBinding<T> {
     }
 
     boolean isInstrumentedSource(Source source) {
-        return getInstrumenter().isInstrumentableSource(source) && getFilter().isInstrumentedSource(source);
+        return getFilter().isInstrumentedSource(source);
     }
 
     boolean isExecutionEvent() {
