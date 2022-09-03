@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,45 +22,52 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.nodes.NodeUtil.NodeCountFilter;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.NodeInfo;
 
 /**
  * A call node with a constant {@link CallTarget} that can be optimized by Graal.
  */
+@NodeInfo
 public final class OptimizedDirectCallNode extends DirectCallNode implements MaterializedFrameNotify {
 
     private int callCount;
-    private boolean trySplit = true;
     private boolean inliningForced;
 
-    @CompilationFinal private boolean inlined;
     @CompilationFinal private OptimizedCallTarget splitCallTarget;
     @CompilationFinal private FrameAccess outsideFrameAccess = FrameAccess.NONE;
 
-    private OptimizedDirectCallNode(OptimizedCallTarget target) {
+    private final TruffleSplittingStrategy splittingStrategy;
+    private final GraalTruffleRuntime runtime;
+
+    public OptimizedDirectCallNode(GraalTruffleRuntime runtime, OptimizedCallTarget target) {
         super(target);
+        assert target.getSourceCallTarget() == null;
+        this.runtime = runtime;
+        this.splittingStrategy = new DefaultTruffleSplittingStrategy(this);
     }
 
     @Override
     public Object call(VirtualFrame frame, Object[] arguments) {
         if (CompilerDirectives.inInterpreter()) {
-            onInterpreterCall();
+            onInterpreterCall(arguments);
         }
-        return callProxy(this, getCurrentCallTarget(), frame, arguments, inlined);
+        return callProxy(this, getCurrentCallTarget(), frame, arguments, true);
     }
 
-    public static Object callProxy(MaterializedFrameNotify notify, CallTarget callTarget, VirtualFrame frame, Object[] arguments, boolean inlined) {
+    public static Object callProxy(MaterializedFrameNotify notify, CallTarget callTarget, VirtualFrame frame, Object[] arguments, boolean direct) {
         try {
             if (notify.getOutsideFrameAccess() != FrameAccess.NONE) {
                 CompilerDirectives.materialize(frame);
             }
-            if (inlined) {
-                return ((OptimizedCallTarget) callTarget).callInlined(arguments);
+            if (direct) {
+                return ((OptimizedCallTarget) callTarget).callDirect(arguments);
             } else {
                 return callTarget.call(arguments);
             }
@@ -96,8 +103,8 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
     }
 
     @Override
-    public boolean isSplittable() {
-        return getCallTarget().getRootNode().isSplittable();
+    public boolean isCallTargetCloningAllowed() {
+        return getCallTarget().getRootNode().isCloningAllowed();
     }
 
     @Override
@@ -115,106 +122,47 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
     }
 
     @Override
-    public OptimizedCallTarget getSplitCallTarget() {
+    public OptimizedCallTarget getClonedCallTarget() {
         return splitCallTarget;
     }
 
-    private void onInterpreterCall() {
-        callCount++;
-        if (trySplit) {
-            if (callCount == 1) {
-                // on first call
-                getCurrentCallTarget().incrementKnownCallSites();
-            }
-            if (callCount > 1 && !inlined) {
-                trySplit = false;
-                if (shouldSplit()) {
-                    splitImpl(true);
-                }
-            }
+    private void onInterpreterCall(Object[] arguments) {
+        int calls = ++callCount;
+        if (calls == 1) {
+            getCurrentCallTarget().incrementKnownCallSites();
         }
+        splittingStrategy.beforeCall(arguments);
     }
 
-    /* Called by the runtime system if this CallNode is really going to be inlined. */
-    void inline() {
-        inlined = true;
+    /** Used by the splitting strategy to install new targets. */
+    synchronized void split() {
+        CompilerAsserts.neverPartOfCompilation();
+
+        if (splitCallTarget != null) {
+            return;
+        }
+
+        assert isCallTargetCloningAllowed();
+        OptimizedCallTarget currentTarget = getCallTarget();
+        OptimizedCallTarget splitTarget = getCallTarget().cloneUninitialized();
+
+        if (callCount >= 1) {
+            currentTarget.decrementKnownCallSites();
+        }
+        splitTarget.incrementKnownCallSites();
+
+        if (getParent() != null) {
+            // dummy replace to report the split, irrelevant if this node is not adopted
+            replace(this, "Split call node");
+        }
+        splitCallTarget = splitTarget;
+        runtime.getCompilationNotify().notifyCompilationSplit(this);
     }
 
     @Override
-    public boolean isInlined() {
-        return inlined;
-    }
-
-    @Override
-    public boolean split() {
-        splitImpl(false);
+    public boolean cloneCallTarget() {
+        splittingStrategy.forceSplitting();
         return true;
     }
 
-    private void splitImpl(boolean heuristic) {
-        CompilerAsserts.neverPartOfCompilation();
-
-        OptimizedCallTarget splitTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(getCallTarget().getRootNode().split());
-        splitTarget.setSplitSource(getCallTarget());
-        if (heuristic) {
-            OptimizedCallTargetLog.logSplit(this, getCallTarget(), splitTarget);
-        }
-        if (callCount >= 1) {
-            getCallTarget().decrementKnownCallSites();
-            splitTarget.incrementKnownCallSites();
-        }
-        this.splitCallTarget = splitTarget;
-    }
-
-    private boolean shouldSplit() {
-        if (splitCallTarget != null) {
-            return false;
-        }
-        if (!TruffleCompilerOptions.TruffleSplittingEnabled.getValue()) {
-            return false;
-        }
-        if (!isSplittable()) {
-            return false;
-        }
-        OptimizedCallTarget splitTarget = getCallTarget();
-        int nodeCount = OptimizedCallUtils.countNonTrivialNodes(splitTarget, false);
-        if (nodeCount > TruffleCompilerOptions.TruffleSplittingMaxCalleeSize.getValue()) {
-            return false;
-        }
-
-        // disable recursive splitting for now
-        OptimizedCallTarget root = (OptimizedCallTarget) getRootNode().getCallTarget();
-        if (root == splitTarget || root.getSplitSource() == splitTarget) {
-            // recursive call found
-            return false;
-        }
-
-        // max one child call and callCount > 2 and kind of small number of nodes
-        if (isMaxSingleCall()) {
-            return true;
-        }
-        return countPolymorphic() >= 1;
-    }
-
-    private boolean isMaxSingleCall() {
-        return NodeUtil.countNodes(getCurrentCallTarget().getRootNode(), new NodeCountFilter() {
-            public boolean isCounted(Node node) {
-                return node instanceof DirectCallNode;
-            }
-        }) <= 1;
-    }
-
-    private int countPolymorphic() {
-        return NodeUtil.countNodes(getCurrentCallTarget().getRootNode(), new NodeCountFilter() {
-            public boolean isCounted(Node node) {
-                NodeCost cost = node.getCost();
-                boolean polymorphic = cost == NodeCost.POLYMORPHIC || cost == NodeCost.MEGAMORPHIC;
-                return polymorphic;
-            }
-        });
-    }
-
-    public static OptimizedDirectCallNode create(OptimizedCallTarget target) {
-        return new OptimizedDirectCallNode(target);
-    }
 }
