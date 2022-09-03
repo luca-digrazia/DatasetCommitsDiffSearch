@@ -108,7 +108,6 @@ public final class NodeClass extends FieldIntrospection {
      * Determines if this node type implements {@link Simplifiable}.
      */
     private final boolean isSimplifiable;
-    private final boolean isLeafNode;
 
     public NodeClass(Class<?> clazz) {
         this(clazz, new DefaultCalcOffset(), null, 0);
@@ -210,7 +209,7 @@ public final class NodeClass extends FieldIntrospection {
             this.iterableId = Node.NOT_ITERABLE;
             this.iterableIds = null;
         }
-        isLeafNode = (this.inputOffsets.length == 0 && this.successorOffsets.length == 0);
+
         nodeIterableCount = Debug.metric("NodeIterable_%s", shortName);
     }
 
@@ -235,13 +234,9 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     private boolean isNodeClassFor(Node n) {
-        if (Node.USE_GENERATED_NODES) {
-            GeneratedNode gen = n.getClass().getAnnotation(GeneratedNode.class);
-            assert gen != null;
-            return gen.value() == getClazz();
-        } else {
-            return n.getNodeClass().getClazz() == n.getClass();
-        }
+        GeneratedNode gen = n.getClass().getAnnotation(GeneratedNode.class);
+        assert gen != null;
+        return gen.value() == getClazz();
     }
 
     public String shortName() {
@@ -1573,9 +1568,5 @@ public final class NodeClass extends FieldIntrospection {
 
     private static boolean isAssignable(Class<?> fieldType, Node replacement) {
         return replacement == null || !NODE_CLASS.isAssignableFrom(fieldType) || fieldType.isAssignableFrom(replacement.getClass());
-    }
-
-    public boolean isLeafNode() {
-        return isLeafNode;
     }
 }
