@@ -34,7 +34,7 @@ import com.oracle.truffle.dsl.processor.typesystem.*;
 public final class SpecializationGroup {
 
     private final List<String> assumptions;
-    private final List<TypeGuard> typeGuards;
+    private final List<TypeData> typeGuards;
     private final List<GuardData> guards;
 
     private final SpecializationData specialization;
@@ -51,43 +51,17 @@ public final class SpecializationGroup {
         this.assumptions.addAll(data.getAssumptions());
         Signature sig = data.getSignature();
         for (int i = 1; i < sig.size(); i++) {
-            typeGuards.add(new TypeGuard(sig.get(i), i - 1));
+            typeGuards.add(sig.get(i));
         }
         this.guards.addAll(data.getGuards());
     }
 
-    public SpecializationGroup(List<SpecializationGroup> children, List<String> assumptionMatches, List<TypeGuard> typeGuardsMatches, List<GuardData> guardMatches) {
+    public SpecializationGroup(List<SpecializationGroup> children, List<String> assumptionMatches, List<TypeData> typeGuardsMatches, List<GuardData> guardMatches) {
         this.assumptions = assumptionMatches;
         this.typeGuards = typeGuardsMatches;
         this.guards = guardMatches;
         this.specialization = null;
         updateChildren(children);
-    }
-
-    public TypeGuard findTypeGuard(int signatureIndex) {
-        for (TypeGuard guard : typeGuards) {
-            if (guard.getSignatureIndex() == signatureIndex) {
-                return guard;
-            }
-        }
-        return null;
-    }
-
-    public GuardData getElseConnectableGuard() {
-        if (!getTypeGuards().isEmpty() || !getAssumptions().isEmpty()) {
-            return null;
-        }
-        SpecializationGroup previousGroup = getPreviousGroup();
-        if (previousGroup != null && getGuards().size() >= 1 && previousGroup.getGuards().size() == 1) {
-            GuardData guard = getGuards().get(0);
-            GuardData previousGuard = previousGroup.getGuards().get(0);
-
-            if (guard.getMethod().equals(previousGuard.getMethod())) {
-                assert guard.isNegated() != previousGuard.isNegated();
-                return guard;
-            }
-        }
-        return null;
     }
 
     private void updateChildren(List<SpecializationGroup> childs) {
@@ -100,6 +74,14 @@ public final class SpecializationGroup {
         }
     }
 
+    public int getTypeGuardOffset() {
+        return (parent != null ? parent.getTypeGuardOffsetRec() : 0);
+    }
+
+    private int getTypeGuardOffsetRec() {
+        return typeGuards.size() + (parent != null ? parent.getTypeGuardOffsetRec() : 0);
+    }
+
     public SpecializationGroup getParent() {
         return parent;
     }
@@ -108,7 +90,7 @@ public final class SpecializationGroup {
         return assumptions;
     }
 
-    public List<TypeGuard> getTypeGuards() {
+    public List<TypeData> getTypeGuards() {
         return typeGuards;
     }
 
@@ -133,7 +115,7 @@ public final class SpecializationGroup {
         }
 
         List<String> assumptionMatches = new ArrayList<>();
-        List<TypeGuard> typeGuardsMatches = new ArrayList<>();
+        List<TypeData> typeGuardsMatches = new ArrayList<>();
         List<GuardData> guardMatches = new ArrayList<>();
 
         SpecializationGroup first = groups.get(0);
@@ -149,14 +131,19 @@ public final class SpecializationGroup {
             assumptionMatches.add(assumption);
         }
 
-        outer: for (TypeGuard typeGuard : first.typeGuards) {
+        int typeGuardIndex = 0;
+        outer: for (TypeData typeGuard : first.typeGuards) {
             for (SpecializationGroup other : others) {
-                if (!other.typeGuards.contains(typeGuard)) {
-                    // type guards can be combined unordered
-                    continue outer;
+                if (typeGuardIndex >= other.typeGuards.size()) {
+                    break outer;
+                }
+
+                if (!other.typeGuards.get(typeGuardIndex).equals(typeGuard)) {
+                    break outer;
                 }
             }
             typeGuardsMatches.add(typeGuard);
+            typeGuardIndex++;
         }
 
         outer: for (GuardData guard : first.guards) {
@@ -175,7 +162,7 @@ public final class SpecializationGroup {
 
         for (SpecializationGroup group : groups) {
             group.assumptions.removeAll(assumptionMatches);
-            group.typeGuards.removeAll(typeGuardsMatches);
+            group.typeGuards.subList(0, typeGuardIndex).clear();
             group.guards.removeAll(guardMatches);
         }
 
@@ -183,12 +170,12 @@ public final class SpecializationGroup {
         return new SpecializationGroup(newChildren, assumptionMatches, typeGuardsMatches, guardMatches);
     }
 
-    public static SpecializationGroup create(List<SpecializationData> specializations) {
+    public static List<SpecializationGroup> create(List<SpecializationData> specializations) {
         List<SpecializationGroup> groups = new ArrayList<>();
         for (SpecializationData specialization : specializations) {
             groups.add(new SpecializationGroup(specialization));
         }
-        return new SpecializationGroup(createCombinationalGroups(groups), Collections.<String> emptyList(), Collections.<TypeGuard> emptyList(), Collections.<GuardData> emptyList());
+        return createCombinationalGroups(groups);
     }
 
     @Override
@@ -249,53 +236,6 @@ public final class SpecializationGroup {
                 max = Math.max(max, childGroup.getMaxSpecializationIndex());
             }
             return max;
-        }
-    }
-
-    public static final class TypeGuard {
-
-        private final int signatureIndex;
-        private final TypeData type;
-
-        public TypeGuard(TypeData type, int signatureIndex) {
-            this.type = type;
-            this.signatureIndex = signatureIndex;
-        }
-
-        @Override
-        public int hashCode() {
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + signatureIndex;
-            result = prime * result + type.hashCode();
-            return result;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            } else if (obj == null) {
-                return false;
-            } else if (getClass() != obj.getClass()) {
-                return false;
-            }
-
-            TypeGuard other = (TypeGuard) obj;
-            if (signatureIndex != other.signatureIndex) {
-                return false;
-            } else if (!type.equals(other.type)) {
-                return false;
-            }
-            return true;
-        }
-
-        public int getSignatureIndex() {
-            return signatureIndex;
-        }
-
-        public TypeData getType() {
-            return type;
         }
     }
 }

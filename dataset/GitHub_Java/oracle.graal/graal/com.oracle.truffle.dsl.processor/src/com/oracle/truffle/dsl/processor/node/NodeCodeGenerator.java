@@ -1429,15 +1429,6 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             emitSpecializationListeners(builder, node);
 
-            String currentNode = "this";
-            for (SpecializationData specialization : node.getSpecializations()) {
-                if (!specialization.getExceptions().isEmpty()) {
-                    currentNode = "current";
-                    builder.declaration(baseClassName(node), currentNode, "this");
-                    break;
-                }
-            }
-
             builder.startStatement().string("String message = ").startCall("createInfo0").string("reason");
             addInternalValueParameterNames(builder, node.getGenericSpecialization(), node.getGenericSpecialization(), null, false, true);
             builder.end().end();
@@ -1453,12 +1444,11 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             List<SpecializationGroup> groups = SpecializationGroup.create(filteredSpecializations);
 
-            final String currentNodeVar = currentNode;
             for (SpecializationGroup group : groups) {
                 builder.tree(createExecuteTree(builder, node.getGenericSpecialization(), group, true, new CodeBlock<SpecializationData>() {
 
                     public CodeTree create(CodeTreeBuilder b, SpecializationData current) {
-                        return createGenericInvokeAndSpecialize(b, node.getGenericSpecialization(), current, currentNodeVar);
+                        return createGenericInvokeAndSpecialize(b, node.getGenericSpecialization(), current);
                     }
                 }));
             }
@@ -1730,47 +1720,49 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 builder.startReturn().tree(createTemplateMethodCall(builder, null, source, current, null)).end();
             }
 
-            return encloseThrowsWithFallThrough(current, builder.getRoot());
+            return encloseThrowsWithFallThrough(current, builder.getRoot(), null);
         }
 
-        protected CodeTree createGenericInvokeAndSpecialize(CodeTreeBuilder parent, SpecializationData source, SpecializationData current, String currentNodeVar) {
+        protected CodeTree createGenericInvokeAndSpecialize(CodeTreeBuilder parent, SpecializationData source, SpecializationData current) {
             CodeTreeBuilder builder = parent.create();
             CodeTreeBuilder prefix = parent.create();
 
             NodeData node = current.getNode();
 
+            String restoreNode = null;
             if (current.isGeneric() && node.isPolymorphic()) {
-                builder.startIf().string(currentNodeVar).string(".next0 == null && minimumState > 0").end().startBlock();
-                builder.tree(createRewritePolymorphic(builder, node, currentNodeVar));
+                builder.startIf().string("next0 == null && minimumState > 0").end().startBlock();
+                builder.tree(createRewritePolymorphic(builder, node));
                 builder.end();
                 builder.startElseBlock();
-                builder.tree(createRewriteGeneric(builder, source, current, currentNodeVar));
+                builder.tree(createRewriteGeneric(builder, source, current));
                 builder.end();
             } else {
                 // simple rewrite
                 if (current.getExceptions().isEmpty()) {
-                    builder.tree(createGenericInvoke(builder, source, current, createReplaceCall(builder, current, currentNodeVar, currentNodeVar, null)));
+                    builder.tree(createGenericInvoke(builder, source, current, createReplaceCall(builder, current, null, null)));
                 } else {
-                    builder.startStatement().string(currentNodeVar).string(" = ").tree(createReplaceCall(builder, current, currentNodeVar, currentNodeVar, null)).end();
-                    builder.tree(createGenericInvoke(builder, source, current, CodeTreeBuilder.singleString(currentNodeVar)));
+                    prefix.declaration(baseClassName(node), "restoreNode", createReplaceCall(builder, current, null, null));
+                    builder.tree(createGenericInvoke(builder, source, current, CodeTreeBuilder.singleString("restoreNode")));
+                    restoreNode = "restoreNode";
                 }
             }
             CodeTreeBuilder root = parent.create();
             root.tree(prefix.getRoot());
-            root.tree(encloseThrowsWithFallThrough(current, builder.getRoot()));
+            root.tree(encloseThrowsWithFallThrough(current, builder.getRoot(), restoreNode));
             return root.getRoot();
         }
 
-        private CodeTree createRewriteGeneric(CodeTreeBuilder parent, SpecializationData source, SpecializationData current, String currentNode) {
+        private CodeTree createRewriteGeneric(CodeTreeBuilder parent, SpecializationData source, SpecializationData current) {
             NodeData node = current.getNode();
 
             CodeTreeBuilder builder = parent.create();
-            builder.declaration(getContext().getTruffleTypes().getNode(), "root", currentNode);
-            builder.startIf().string(currentNode).string(".next0 != null").end().startBlock();
+            builder.declaration(getContext().getTruffleTypes().getNode(), "root", "this");
+            builder.startIf().string("next0 != null").end().startBlock();
             builder.tree(createFindRoot(builder, node, false));
             builder.end();
             builder.end();
-            builder.tree(createGenericInvoke(builder, source, current, createReplaceCall(builder, current, "root", currentNode, null)));
+            builder.tree(createGenericInvoke(builder, source, current, createReplaceCall(builder, current, "root", null)));
             return builder.getRoot();
         }
 
@@ -1789,7 +1781,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             return builder.getRoot();
         }
 
-        private CodeTree encloseThrowsWithFallThrough(SpecializationData current, CodeTree tree) {
+        private CodeTree encloseThrowsWithFallThrough(SpecializationData current, CodeTree tree, String restoreNodeVarName) {
             if (current.getExceptions().isEmpty()) {
                 return tree;
             }
@@ -1799,6 +1791,16 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             builder.tree(tree);
             for (SpecializationThrowsData exception : current.getExceptions()) {
                 builder.end().startCatchBlock(exception.getJavaClass(), "rewriteEx");
+                if (restoreNodeVarName != null) {
+                    builder.startStatement().startCall(restoreNodeVarName, "replace").string("this");
+                    builder.startGroup();
+                    builder.startCall("createInfo0").doubleQuote("Rewrite exception thrown " + Utils.getSimpleName(exception.getJavaClass()) + ".");
+                    addInternalValueParameterNames(builder, current, current, null, false, true);
+                    builder.end();
+                    builder.end();
+                    builder.end().end();
+                }
+
                 builder.string("// fall through").newLine();
             }
             builder.end();
@@ -1826,7 +1828,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             return builder.getRoot();
         }
 
-        protected CodeTree createReplaceCall(CodeTreeBuilder builder, SpecializationData current, String target, String source, String message) {
+        protected CodeTree createReplaceCall(CodeTreeBuilder builder, SpecializationData current, String target, String message) {
             String className = nodeSpecializationClassName(current);
             CodeTreeBuilder replaceCall = builder.create();
             if (target != null) {
@@ -1834,7 +1836,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             } else {
                 replaceCall.startCall("replace");
             }
-            replaceCall.startGroup().startNew(className).string(source).end().end();
+            replaceCall.startGroup().startNew(className).string("this").end().end();
             if (message == null) {
                 replaceCall.string("message");
             } else {
@@ -1844,12 +1846,12 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             return replaceCall.getRoot();
         }
 
-        private CodeTree createRewritePolymorphic(CodeTreeBuilder parent, NodeData node, String currentNode) {
+        private CodeTree createRewritePolymorphic(CodeTreeBuilder parent, NodeData node) {
             String polyClassName = nodePolymorphicClassName(node, node.getGenericPolymorphicSpecialization());
             String uninitializedName = nodeSpecializationClassName(node.getUninitializedSpecialization());
             CodeTreeBuilder builder = parent.create();
 
-            builder.declaration(polyClassName, "polymorphic", builder.create().startNew(polyClassName).string(currentNode).end());
+            builder.declaration(polyClassName, "polymorphic", builder.create().startNew(polyClassName).string("this").end());
 
             for (ActualParameter param : node.getGenericSpecialization().getParameters()) {
                 if (!param.getSpecification().isSignature()) {
@@ -1857,19 +1859,19 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 }
                 NodeChildData child = node.findChild(param.getSpecification().getName());
                 if (child != null) {
-                    builder.startStatement().string(currentNode).string(".").string(child.getName());
+                    builder.startStatement().string("this.").string(child.getName());
                     if (child.getCardinality().isMany()) {
                         builder.string("[").string(String.valueOf(param.getIndex())).string("]");
                     }
                     builder.string(" = null").end();
                 }
             }
-            builder.startStatement().startCall(currentNode, "replace").string("polymorphic").string("message").end().end();
-            builder.startStatement().startCall("polymorphic", "setNext0").string(currentNode).end().end();
-            builder.startStatement().startCall(currentNode, "setNext0").startNew(uninitializedName).string(currentNode).end().end().end();
+            builder.startStatement().startCall("super", "replace").string("polymorphic").string("message").end().end();
+            builder.startStatement().startCall("polymorphic", "setNext0").string("this").end().end();
+            builder.startStatement().startCall("setNext0").startNew(uninitializedName).string("this").end().end().end();
 
             builder.startReturn();
-            builder.startCall(currentNode + ".next0", executeCachedName(node.getGenericPolymorphicSpecialization()));
+            builder.startCall("next0", executeCachedName(node.getGenericPolymorphicSpecialization()));
             addInternalValueParameterNames(builder, node.getGenericSpecialization(), node.getGenericSpecialization(), null, true, true);
             builder.end();
             builder.end();
@@ -2494,7 +2496,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             builder.startBlock();
             String message = ("Polymorphic limit reached (" + node.getPolymorphicDepth() + ")");
             builder.tree(createGenericInvoke(builder, node.getGenericPolymorphicSpecialization(), node.getGenericSpecialization(),
-                            createReplaceCall(builder, node.getGenericSpecialization(), "root", "this", message)));
+                            createReplaceCall(builder, node.getGenericSpecialization(), "root", message)));
             builder.end();
 
             builder.startElseBlock();
