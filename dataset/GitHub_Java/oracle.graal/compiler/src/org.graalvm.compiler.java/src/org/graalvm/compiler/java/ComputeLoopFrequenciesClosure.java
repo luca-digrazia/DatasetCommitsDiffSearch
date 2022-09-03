@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,17 +32,15 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.ControlSplitNode;
-import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
-import org.graalvm.compiler.java.ComputeLoopFrequenciesClosure.State;
 import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.graph.ReentrantNodeIterator;
 
-public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.NodeIteratorClosure<State> {
+public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.NodeIteratorClosure<Double> {
 
     private static final ComputeLoopFrequenciesClosure INSTANCE = new ComputeLoopFrequenciesClosure();
 
@@ -50,71 +48,44 @@ public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.N
         // nothing to do
     }
 
-    protected static class State {
-        protected final double probability;
-        protected final ProfileSource profileSource;
-
-        static State ZERO = new State(0.0, ProfileSource.UNKNOWN);
-        static State ONE = new State(1.0, ProfileSource.UNKNOWN);
-
-        State(double probability, ProfileSource profileSource) {
-            this.probability = probability;
-            this.profileSource = profileSource;
-        }
-
-        State add(State other) {
-            return new State(this.probability + other.probability, this.profileSource.combine(other.profileSource));
-        }
-
-        State scale(double otherProbability, ProfileSource otherprofileSource) {
-            return new State(this.probability * otherProbability, this.profileSource.combine(otherprofileSource));
-        }
-
-        @Override
-        public String toString() {
-            return "[" + probability + ", " + profileSource + "]";
-        }
-    }
-
     @Override
-    protected State processNode(FixedNode node, State currentState) {
+    protected Double processNode(FixedNode node, Double currentState) {
         // normal nodes never change the probability of a path
         return currentState;
     }
 
     @Override
-    protected State merge(AbstractMergeNode merge, List<State> states) {
+    protected Double merge(AbstractMergeNode merge, List<Double> states) {
         // a merge has the sum of all predecessor probabilities
-        State result = State.ZERO;
-        for (State s : states) {
-            result = result.add(s);
+        double result = 0.0;
+        for (double d : states) {
+            result += d;
         }
         return result;
     }
 
     @Override
-    protected State afterSplit(AbstractBeginNode node, State oldState) {
+    protected Double afterSplit(AbstractBeginNode node, Double oldState) {
         // a control split splits up the probability
         ControlSplitNode split = (ControlSplitNode) node.predecessor();
-        return oldState.scale(split.probability(node), split.getProfileSource());
+        return oldState * split.probability(node);
     }
 
     @Override
-    protected EconomicMap<LoopExitNode, State> processLoop(LoopBeginNode loop, State initialState) {
-        EconomicMap<LoopExitNode, State> exitStates = ReentrantNodeIterator.processLoop(this, loop, State.ONE).exitStates;
+    protected EconomicMap<LoopExitNode, Double> processLoop(LoopBeginNode loop, Double initialState) {
+        EconomicMap<LoopExitNode, Double> exitStates = ReentrantNodeIterator.processLoop(this, loop, 1D).exitStates;
 
-        State exitState = State.ZERO;
-        for (State e : exitStates.getValues()) {
-            exitState = exitState.add(e);
+        double exitRelativeFrequency = 0.0;
+        for (double d : exitStates.getValues()) {
+            exitRelativeFrequency += d;
         }
-        double exitRelativeFrequency = exitState.probability;
         exitRelativeFrequency = Math.min(1.0, exitRelativeFrequency);
         exitRelativeFrequency = Math.max(ControlFlowGraph.MIN_RELATIVE_FREQUENCY, exitRelativeFrequency);
         double loopFrequency = 1.0 / exitRelativeFrequency;
-        loop.setLoopFrequency(loopFrequency, exitState.profileSource);
+        loop.setLoopFrequency(loopFrequency);
 
-        double adjustmentFactor = initialState.probability * loopFrequency;
-        exitStates.replaceAll((exitNode, state) -> new State(multiplyRelativeFrequencies(state.probability, adjustmentFactor), state.profileSource));
+        double adjustmentFactor = initialState * loopFrequency;
+        exitStates.replaceAll((exitNode, frequency) -> multiplyRelativeFrequencies(frequency, adjustmentFactor));
 
         return exitStates;
     }
@@ -126,7 +97,7 @@ public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.N
      */
     public static void compute(StructuredGraph graph) {
         if (graph.hasLoops()) {
-            ReentrantNodeIterator.apply(INSTANCE, graph.start(), State.ONE);
+            ReentrantNodeIterator.apply(INSTANCE, graph.start(), 1D);
         }
     }
 

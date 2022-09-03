@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,7 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import org.graalvm.compiler.options.EnumOptionKey;
+import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
@@ -40,26 +40,20 @@ import org.graalvm.compiler.serviceprovider.GraalServices;
  * Options that configure a {@link DebugContext} and related functionality.
  */
 public class DebugOptions {
-    /**
-     * Values for the {@link DebugOptions#PrintGraph} option denoting where graphs dumped as a
-     * result of the {@link DebugOptions#Dump} option are sent.
-     */
-    public enum PrintGraphTarget {
-        /**
-         * Dump graphs to files.
-         */
-        file,
+    static class DeprecatedOptionKey<T> extends OptionKey<T> {
+        private final OptionKey<T> replacement;
 
-        /**
-         * Dump graphs to the network. The network destination is specified by the
-         * {@link DebugOptions#PrintGraphHost} and {@link DebugOptions#PrintGraphPort} options.
-         */
-        network,
+        DeprecatedOptionKey(OptionKey<T> replacement) {
+            super(replacement.getDefaultValue());
+            this.replacement = replacement;
+        }
 
-        /**
-         * Do not dump graphs.
-         */
-        none;
+        @Override
+        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, T oldValue, T newValue) {
+            // Ideally we'd use TTY here but it may not yet be initialized.
+            System.err.printf("Warning: the %s option is deprecated - use %s instead%n", getName(), replacement.getName());
+            replacement.update(values, newValue);
+        }
     }
 
     // @formatter:off
@@ -133,12 +127,15 @@ public class DebugOptions {
     @Option(help = "Enable dumping LIR, register allocation and code generation info to the C1Visualizer.", type = OptionType.Debug)
     public static final OptionKey<Boolean> PrintBackendCFG = new OptionKey<>(true);
 
-    @Option(help = "Where to dump graphs for the IdealGraphVisualizer.", type = OptionType.Debug)
-    public static final EnumOptionKey<PrintGraphTarget> PrintGraph = new EnumOptionKey<>(PrintGraphTarget.file);
+    @Option(help = "Enable dumping to the IdealGraphVisualizer.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> PrintGraph = new OptionKey<>(true);
+    @Option(help = "Print graphs to files instead of sending them over the network.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> PrintGraphFile = new OptionKey<>(false);
+
     @Option(help = "Host part of the address to which graphs are dumped.", type = OptionType.Debug)
     public static final OptionKey<String> PrintGraphHost = new OptionKey<>("127.0.0.1");
     @Option(help = "Port part of the address to which graphs are dumped in binary format.", type = OptionType.Debug)
-    public static final OptionKey<Integer> PrintGraphPort = new OptionKey<>(4445);
+    public static final OptionKey<Integer> PrintBinaryGraphPort = new OptionKey<>(4445);
     @Option(help = "Schedule graphs as they are dumped.", type = OptionType.Debug)
     public static final OptionKey<Boolean> PrintGraphWithSchedule = new OptionKey<>(false);
 
