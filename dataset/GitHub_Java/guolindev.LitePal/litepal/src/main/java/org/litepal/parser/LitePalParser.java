@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,6 +70,11 @@ public class LitePalParser {
 	 */
 	static final String NODE_CASES = "cases";
 
+    /**
+     * Node name column storage.
+     */
+    static final String NODE_STORAGE = "storage";
+
 	/**
 	 * Attribute name value, for dbname and version node.
 	 */
@@ -90,11 +95,11 @@ public class LitePalParser {
 	 * DomParse to parse the configuration file as default. SAXParser and
 	 * XmlPullParser is also optional, but not visible to developers.
 	 */
-	public static void parseLitePalConfiguration() {
+	public static LitePalConfig parseLitePalConfiguration() {
 		if (parser == null) {
 			parser = new LitePalParser();
 		}
-		parser.useSAXParser();
+		return parser.usePullParse();
 	}
 
 	/**
@@ -106,15 +111,14 @@ public class LitePalParser {
 	 * could be thrown. Be careful of writing litepal.xml file, or developer's
 	 * application may be crash.
 	 */
-	void useSAXParser() {
-		LitePalContentHandler handler = null;
+    private void useSAXParser() {
+		LitePalContentHandler handler;
 		try {
 			SAXParserFactory factory = SAXParserFactory.newInstance();
 			XMLReader xmlReader = factory.newSAXParser().getXMLReader();
 			handler = new LitePalContentHandler();
 			xmlReader.setContentHandler(handler);
 			xmlReader.parse(new InputSource(getConfigInputStream()));
-			return;
 		} catch (NotFoundException e) {
 			throw new ParseConfigurationFileException(
 					ParseConfigurationFileException.CAN_NOT_FIND_LITEPAL_FILE);
@@ -137,9 +141,9 @@ public class LitePalParser {
 	 * could be thrown. Be careful of writing litepal.xml file, or developer's
 	 * application may be crash.
 	 */
-	void usePullParse() {
+    private LitePalConfig usePullParse() {
 		try {
-			LitePalAttr litePalAttr = LitePalAttr.getInstance();
+			LitePalConfig litePalConfig = new LitePalConfig();
 			XmlPullParserFactory factory = XmlPullParserFactory.newInstance();
 			XmlPullParser xmlPullParser = factory.newPullParser();
 			xmlPullParser.setInput(getConfigInputStream(), "UTF-8");
@@ -150,24 +154,28 @@ public class LitePalParser {
 				case XmlPullParser.START_TAG: {
 					if (NODE_DB_NAME.equals(nodeName)) {
 						String dbName = xmlPullParser.getAttributeValue("", ATTR_VALUE);
-						litePalAttr.setDbName(dbName);
+                        litePalConfig.setDbName(dbName);
 					} else if (NODE_VERSION.equals(nodeName)) {
 						String version = xmlPullParser.getAttributeValue("", ATTR_VALUE);
-						litePalAttr.setVersion(Integer.parseInt(version));
+                        litePalConfig.setVersion(Integer.parseInt(version));
 					} else if (NODE_MAPPING.equals(nodeName)) {
 						String className = xmlPullParser.getAttributeValue("", ATTR_CLASS);
-						litePalAttr.addClassName(className);
+                        litePalConfig.addClassName(className);
 					} else if (NODE_CASES.equals(nodeName)) {
 						String cases = xmlPullParser.getAttributeValue("", ATTR_VALUE);
-						litePalAttr.setCases(cases);
-					}
-					break;
+                        litePalConfig.setCases(cases);
+					} else if (NODE_STORAGE.equals(nodeName)) {
+                        String storage = xmlPullParser.getAttributeValue("", ATTR_VALUE);
+                        litePalConfig.setStorage(storage);
+                    }
+                    break;
 				}
 				default:
 					break;
 				}
 				eventType = xmlPullParser.next();
 			}
+            return litePalConfig;
 		} catch (XmlPullParserException e) {
 			throw new ParseConfigurationFileException(
 					ParseConfigurationFileException.FILE_FORMAT_IS_NOT_CORRECT);
@@ -189,7 +197,7 @@ public class LitePalParser {
 		String[] fileNames = assetManager.list("");
 		if (fileNames != null && fileNames.length > 0) {
 			for (String fileName : fileNames) {
-				if (Const.LitePal.CONFIGURATION_FILE_NAME.equalsIgnoreCase(fileName)) {
+				if (Const.Config.CONFIGURATION_FILE_NAME.equalsIgnoreCase(fileName)) {
 					return assetManager.open(fileName, AssetManager.ACCESS_BUFFER);
 				}
 			}
