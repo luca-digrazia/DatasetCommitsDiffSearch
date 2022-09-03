@@ -22,29 +22,17 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import java.lang.invoke.MethodHandle;
+import java.lang.invoke.*;
 
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.CanonicalizerTool;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.replacements.nodes.*;
 
 /**
  * Macro node for {@link MethodHandle}{@code .invokeBasic(Object...)}.
  */
-public class MethodHandleInvokeBasicNode extends AbstractMethodHandleNode {
+public class MethodHandleInvokeBasicNode extends MacroNode {
 
     public MethodHandleInvokeBasicNode(Invoke invoke) {
         super(invoke);
     }
-
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        InvokeNode invoke = getInvokeBasicTarget();
-        if (invoke != null) {
-            return invoke;
-        }
-        return this;
-    }
-
 }
