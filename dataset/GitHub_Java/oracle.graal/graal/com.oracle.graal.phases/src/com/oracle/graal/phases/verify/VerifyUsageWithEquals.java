@@ -45,7 +45,7 @@ public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
     private boolean isAssignableType(ValueNode node, MetaAccessProvider runtime) {
         if (node.stamp() instanceof ObjectStamp) {
             ResolvedJavaType valueType = runtime.lookupJavaType(klass);
-            ResolvedJavaType nodeType = ObjectStamp.typeOrNull(node);
+            ResolvedJavaType nodeType = node.objectStamp().type();
 
             if (nodeType != null && valueType.isAssignableFrom(nodeType)) {
                 return true;
@@ -73,7 +73,7 @@ public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
             if (!isEqualsMethod(graph)) {
                 // bail out if we compare an object of type klass with == or != (except null checks)
                 assert !(checkUsage(cn.x(), cn.y(), context.getRuntime()) && checkUsage(cn.y(), cn.x(), context.getRuntime())) : "Verifcation of " + klass.getName() + " usage failed: Comparing " +
-                                cn.x() + " and " + cn.y() + " in " + graph.method() + " must use .equals() for object equality, not '==' or '!='";
+                                cn.x() + " and" + cn.y() + " in " + graph.method() + " must use .equals() for object equality, not '==' or '!='";
             }
         }
         return true;
