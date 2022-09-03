@@ -69,7 +69,6 @@ public class RegexObject implements RegexLanguageObject {
     private final RegexSource source;
     private final TruffleObject namedCaptureGroups;
     private @CompilationFinal TruffleObject compiledRegexObject;
-    private TruffleObject volatileCompiledRegexObject;
 
     public RegexObject(RegexCompiler compiler, RegexSource source, Map<String, Integer> namedCaptureGroups) {
         this.compiler = compiler;
@@ -88,20 +87,13 @@ public class RegexObject implements RegexLanguageObject {
     public TruffleObject getCompiledRegexObject() {
         if (compiledRegexObject == null) {
             transferToInterpreterAndInvalidate();
-            compiledRegexObject = volatileCompiledRegexObject != null ? volatileCompiledRegexObject : compileRegex();
+            compiledRegexObject = compileRegex();
         }
         return compiledRegexObject;
     }
 
-    public TruffleObject getVolatileCompiledRegexObject() {
-        if (volatileCompiledRegexObject == null) {
-            volatileCompiledRegexObject = compileRegex();
-        }
-        return  volatileCompiledRegexObject;
-    }
-
     @TruffleBoundary
-    private TruffleObject compileRegex() {
+    public TruffleObject compileRegex() {
         return compiler.compile(source);
     }
 
