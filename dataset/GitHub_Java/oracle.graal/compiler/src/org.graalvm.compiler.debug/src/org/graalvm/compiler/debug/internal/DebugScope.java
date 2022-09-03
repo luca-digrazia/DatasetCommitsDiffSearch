@@ -333,8 +333,9 @@ public final class DebugScope implements Debug.Scope {
         if (isDumpEnabled(dumpLevel)) {
             DebugConfig config = getConfig();
             if (config != null) {
+                String message = String.format(formatString, args);
                 for (DebugDumpHandler dumpHandler : config.dumpHandlers()) {
-                    dumpHandler.dump(object, formatString, args);
+                    dumpHandler.dump(object, message);
                 }
             }
         }
@@ -346,8 +347,9 @@ public final class DebugScope implements Debug.Scope {
     public static void forceDump(Object object, String format, Object... args) {
         DebugConfig config = getConfig();
         if (config != null) {
+            String message = String.format(format, args);
             for (DebugDumpHandler dumpHandler : config.dumpHandlers()) {
-                dumpHandler.dump(object, format, args);
+                dumpHandler.dump(object, message);
             }
         } else {
             TTY.println("Forced dump ignored because debugging is disabled - use -Dgraal.ForceDebugEnable=true");
@@ -361,8 +363,9 @@ public final class DebugScope implements Debug.Scope {
         if (isVerifyEnabled()) {
             DebugConfig config = getConfig();
             if (config != null) {
+                String message = String.format(formatString, args);
                 for (DebugVerifyHandler handler : config.verifyHandlers()) {
-                    handler.verify(object, formatString, args);
+                    handler.verify(object, message);
                 }
             }
         }
