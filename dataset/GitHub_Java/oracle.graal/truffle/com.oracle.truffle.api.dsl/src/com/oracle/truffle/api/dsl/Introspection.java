@@ -29,23 +29,20 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import com.oracle.truffle.api.dsl.internal.IntrospectionAccessor;
 import com.oracle.truffle.api.nodes.Node;
 
 /**
  * Contains introspection utilities for Truffle DSL. The contained utilities are only usable if the
  * operation node is annotated with {@link Introspectable}.
- * <p>
- * Introspection is useful for using testing the node declaration and verifying that particular
- * specializations become active.
- * <p>
- * Example for using introspection in unit testing:
- *
- * {@codesnippet com.oracle.truffle.api.dsl.test.IntrospectionTest}
  *
  * @since 0.22
  * @see Introspectable
  */
 public final class Introspection {
+
+    private static final List<List<Object>> EMPTY_CACHED = Collections.unmodifiableList(Arrays.asList(Collections.emptyList()));
+    private static final List<List<Object>> NO_CACHED = Collections.emptyList();
 
     private Introspection() {
         /* No instances */
@@ -61,7 +58,7 @@ public final class Introspection {
      * @since 0.22
      */
     public static boolean isIntrospectable(Node node) {
-        return node instanceof Provider;
+        return node instanceof IntrospectionAccessor;
     }
 
     /**
@@ -77,11 +74,16 @@ public final class Introspection {
      * @param node a introspectable DSL operation with at least one specialization
      * @param methodName the Java method name of the specialization to introspect
      * @return introspection info for the method
-     * @see Introspection example usage
      * @since 0.22
      */
     public static SpecializationInfo getSpecialization(Node node, String methodName) {
-        return getIntrospectionData(node).getSpecialization(methodName);
+        for (Object object : getIntrospectionData(node)) {
+            Object[] fieldData = getIntrospectionData(object);
+            if (methodName.equals(fieldData[0])) {
+                return createSpecialization(getIntrospectionData(object));
+            }
+        }
+        return null;
     }
 
     /**
@@ -93,18 +95,59 @@ public final class Introspection {
      * critical code.
      *
      * @param node a introspectable DSL operation with at least one specialization
-     * @see Introspection example usage
      * @since 0.22
      */
     public static List<SpecializationInfo> getSpecializations(Node node) {
-        return getIntrospectionData(node).getSpecializations();
+        List<SpecializationInfo> specializations = new ArrayList<>();
+        for (Object object : getIntrospectionData(node)) {
+            specializations.add(createSpecialization(getIntrospectionData(object)));
+        }
+        return Collections.unmodifiableList(specializations);
     }
 
-    private static Data getIntrospectionData(Node node) {
-        if (!(node instanceof Provider)) {
+    @SuppressWarnings("unchecked")
+    private static SpecializationInfo createSpecialization(Object[] fieldData) {
+        String id = (String) fieldData[0];
+        byte state = (byte) fieldData[1];
+        List<List<Object>> cachedData = (List<List<Object>>) fieldData[2];
+        if (cachedData == null || cachedData.isEmpty()) {
+            if ((state & 0b01) != 0) {
+                cachedData = EMPTY_CACHED;
+            } else {
+                cachedData = NO_CACHED;
+            }
+        } else {
+            for (int i = 0; i < cachedData.size(); i++) {
+                cachedData.set(i, Collections.unmodifiableList(cachedData.get(i)));
+            }
+        }
+        SpecializationInfo s = new SpecializationInfo(id, state, cachedData);
+        return s;
+    }
+
+    private static Object[] getIntrospectionData(Object specializationData) {
+        if (!(specializationData instanceof Object[])) {
+            throw new IllegalStateException("Invalid introspection data.");
+        }
+        Object[] fieldData = (Object[]) specializationData;
+        if (fieldData.length < 3 || !(fieldData[0] instanceof String) //
+                        || !(fieldData[1] instanceof Byte) //
+                        || (fieldData[2] != null && !(fieldData[2] instanceof List))) {
+            throw new IllegalStateException("Invalid introspection data.");
+        }
+        return fieldData;
+    }
+
+    private static Object[] getIntrospectionData(Node node) {
+        if (!(node instanceof IntrospectionAccessor)) {
             throw new IllegalArgumentException(String.format("Provided node is not introspectable. Annotate with @%s to make a node introspectable.", Introspectable.class.getSimpleName()));
         }
-        return ((Provider) node).getIntrospectionData();
+        Object data = ((IntrospectionAccessor) node).getIntrospectionData();
+        if (!(data instanceof Object[])) {
+            throw new IllegalStateException("Invalid introspection data.");
+        }
+        Object[] arrayData = (Object[]) data;
+        return arrayData;
     }
 
     /**
@@ -118,7 +161,7 @@ public final class Introspection {
         private final byte state; /* 0b000000<excluded><active> */
         private final List<List<Object>> cachedData;
 
-        SpecializationInfo(String methodName, byte state, List<List<Object>> cachedData) {
+        private SpecializationInfo(String methodName, byte state, List<List<Object>> cachedData) {
             this.methodName = methodName;
             this.state = state;
             this.cachedData = cachedData;
@@ -176,99 +219,6 @@ public final class Introspection {
                 throw new IllegalArgumentException("Invalid specialization index");
             }
             return cachedData.get(instanceIndex);
-        }
-
-    }
-
-    /**
-     * Internal marker interface for DSL generated code to access reflection information. A DSL user
-     * must not refer to this type manually.
-     *
-     * @since 0.22
-     */
-    public interface Provider {
-
-        /**
-         * Returns internal reflection data in undefined format. A DSL user must not call this
-         * method method.
-         *
-         * @since 0.22
-         */
-        Data getIntrospectionData();
-
-    }
-
-    /**
-     * Internal container class for introspection data. This class is only intended to be used from
-     * generate code.
-     *
-     * @since 0.22
-     */
-    public static final class Data {
-
-        private static final List<List<Object>> EMPTY_CACHED = Collections.unmodifiableList(Arrays.asList(Collections.emptyList()));
-        private static final List<List<Object>> NO_CACHED = Collections.emptyList();
-
-        private final Object[] data;
-
-        /**
-         * Default constructor for introspection data. Not intended to be used by manually written
-         * code. The format of the data array is unspecified and therefore implementation specific.
-         *
-         * @since 0.22
-         */
-        public Data(Object[] data) {
-            this.data = data;
-        }
-
-        SpecializationInfo getSpecialization(String methodName) {
-            for (Object object : data) {
-                Object[] fieldData = getIntrospectionData(object);
-                if (methodName.equals(fieldData[0])) {
-                    return createSpecialization(fieldData);
-                }
-            }
-            return null;
-        }
-
-        List<SpecializationInfo> getSpecializations() {
-            List<SpecializationInfo> specializations = new ArrayList<>();
-            for (Object object : data) {
-                specializations.add(createSpecialization(getIntrospectionData(object)));
-            }
-            return Collections.unmodifiableList(specializations);
-        }
-
-        private static Object[] getIntrospectionData(Object specializationData) {
-            if (!(specializationData instanceof Object[])) {
-                throw new IllegalStateException("Invalid introspection data.");
-            }
-            Object[] fieldData = (Object[]) specializationData;
-            if (fieldData.length < 3 || !(fieldData[0] instanceof String) //
-                            || !(fieldData[1] instanceof Byte) //
-                            || (fieldData[2] != null && !(fieldData[2] instanceof List))) {
-                throw new IllegalStateException("Invalid introspection data.");
-            }
-            return fieldData;
-        }
-
-        @SuppressWarnings("unchecked")
-        private static SpecializationInfo createSpecialization(Object[] fieldData) {
-            String id = (String) fieldData[0];
-            byte state = (byte) fieldData[1];
-            List<List<Object>> cachedData = (List<List<Object>>) fieldData[2];
-            if (cachedData == null || cachedData.isEmpty()) {
-                if ((state & 0b01) != 0) {
-                    cachedData = EMPTY_CACHED;
-                } else {
-                    cachedData = NO_CACHED;
-                }
-            } else {
-                for (int i = 0; i < cachedData.size(); i++) {
-                    cachedData.set(i, Collections.unmodifiableList(cachedData.get(i)));
-                }
-            }
-            return new SpecializationInfo(id, state, cachedData);
         }
 
     }
