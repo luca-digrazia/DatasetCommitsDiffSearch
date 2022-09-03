@@ -57,7 +57,6 @@ public class ConstantPhiTest extends JTTTest {
     }
 
     @Test
-    @SuppressWarnings("try")
     public void run0() {
         try (OverrideScope os = OptionValue.override(GraalOptions.MaximumInliningSize, -1)) {
             runTest("test", 0, 0xDEADDEAD);
@@ -65,7 +64,6 @@ public class ConstantPhiTest extends JTTTest {
     }
 
     @Test
-    @SuppressWarnings("try")
     public void run1() {
         try (OverrideScope os = OptionValue.override(GraalOptions.MaximumInliningSize, -1)) {
             runTest("test", -1, 0xDEADDEAD);
@@ -73,7 +71,6 @@ public class ConstantPhiTest extends JTTTest {
     }
 
     @Test
-    @SuppressWarnings("try")
     public void run2() {
         try (OverrideScope os = OptionValue.override(GraalOptions.MaximumInliningSize, -1)) {
             runTest("test", 1, 0xDEADDEAD);
