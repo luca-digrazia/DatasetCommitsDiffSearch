@@ -66,13 +66,6 @@ public class VirtualObjectFieldNode extends ValueNode implements LIRLowerable {
     }
 
     @Override
-    public boolean verify() {
-        assertTrue(object != null, "No object");
-        assertTrue(input != null, "No input");
-        return super.verify();
-    }
-
-    @Override
     public Map<Object, Object> getDebugProperties() {
         Map<Object, Object> properties = super.getDebugProperties();
         properties.put("index", index);
@@ -81,7 +74,7 @@ public class VirtualObjectFieldNode extends ValueNode implements LIRLowerable {
 
     @Override
     public String toString(Verbosity verbosity) {
-        if (verbosity == Verbosity.Name && object() != null && object().fields() != null) {
+        if (verbosity == Verbosity.Name && object().fields() != null) {
             return super.toString(Verbosity.Name) + " " + object().fields()[index].name();
         } else {
             return super.toString(verbosity);

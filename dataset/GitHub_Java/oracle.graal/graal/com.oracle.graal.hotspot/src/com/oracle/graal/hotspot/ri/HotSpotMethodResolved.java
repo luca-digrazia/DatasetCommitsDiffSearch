@@ -29,6 +29,7 @@ import com.oracle.graal.hotspot.server.*;
 public interface HotSpotMethodResolved extends RiResolvedMethod, Remote {
 
     RiResolvedMethod uniqueConcreteMethod();
+    void dumpProfile();
     int vtableEntryOffset();
 
     void setCurrentTask(CompilationTask task);

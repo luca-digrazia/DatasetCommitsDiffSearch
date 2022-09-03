@@ -23,17 +23,16 @@
 
 package com.oracle.graal.hotspot.bridge;
 
-import java.io.*;
-
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
+import com.oracle.graal.hotspot.ri.*;
 
 /**
  * Calls from HotSpot into Java.
  */
 public interface VMToCompiler {
 
-    boolean compileMethod(HotSpotResolvedJavaMethod method, int entryBCI, boolean blocking, int priority) throws Throwable;
+    boolean compileMethod(HotSpotMethodResolved method, int entryBCI, boolean blocking, int priority) throws Throwable;
 
     void shutdownCompiler() throws Throwable;
 
@@ -41,23 +40,23 @@ public interface VMToCompiler {
 
     void bootstrap() throws Throwable;
 
-    PrintStream log();
+    RiMethod createRiMethodUnresolved(String name, String signature, RiType holder);
 
-    JavaMethod createJavaMethod(String name, String signature, JavaType holder);
+    RiSignature createRiSignature(String signature);
 
-    Signature createSignature(String signature);
+    RiField createRiField(RiType holder, String name, RiType type, int offset, int flags);
 
-    JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags);
+    RiType createRiType(HotSpotConstantPool pool, String name);
 
-    JavaType createPrimitiveJavaType(int basicType);
+    RiType createRiTypePrimitive(int basicType);
 
-    JavaType createJavaType(String name);
+    RiType createRiTypeUnresolved(String name);
 
-    Constant createConstant(Kind kind, long value);
+    CiConstant createCiConstant(CiKind kind, long value);
 
-    Constant createConstantFloat(float value);
+    CiConstant createCiConstantFloat(float value);
 
-    Constant createConstantDouble(double value);
+    CiConstant createCiConstantDouble(double value);
 
-    Constant createConstantObject(Object object);
+    CiConstant createCiConstantObject(Object object);
 }
