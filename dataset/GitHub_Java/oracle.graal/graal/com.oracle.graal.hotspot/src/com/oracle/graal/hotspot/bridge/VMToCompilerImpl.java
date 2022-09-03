@@ -142,11 +142,9 @@ public class VMToCompilerImpl implements VMToCompiler {
         this.runtime = runtime;
     }
 
-    public void startCompiler(boolean bootstrapEnabled, boolean hostedOnly) throws Throwable {
+    public void startCompiler(boolean bootstrapEnabled) throws Throwable {
 
-        if (!hostedOnly) {
-            FastNodeClassRegistry.initialize(runtime.getCompilerToVM());
-        }
+        FastNodeClassRegistry.initialize(runtime.getCompilerToVM());
 
         bootstrapRunning = bootstrapEnabled;
 

@@ -36,7 +36,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
 
     private static final double EXCEPTION_PROBA = 1e-5;
 
-    @Successor private BeginNode next;
+    @Successor private AbstractBeginNode next;
     @Successor private DispatchBeginNode exceptionEdge;
     @Input(InputType.Extension) private CallTargetNode callTarget;
     @Input(InputType.State) private FrameState stateDuring;
@@ -66,11 +66,11 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
         exceptionEdge = x;
     }
 
-    public BeginNode next() {
+    public AbstractBeginNode next() {
         return next;
     }
 
-    public void setNext(BeginNode x) {
+    public void setNext(AbstractBeginNode x) {
         updatePredecessor(next, x);
         next = x;
     }
@@ -163,7 +163,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
     }
 
     public void killExceptionEdge() {
-        BeginNode edge = exceptionEdge();
+        AbstractBeginNode edge = exceptionEdge();
         setExceptionEdge(null);
         GraphUtil.killCFG(edge);
     }
@@ -196,12 +196,12 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
     }
 
     @Override
-    public double probability(BeginNode successor) {
+    public double probability(AbstractBeginNode successor) {
         return successor == next ? 1 - exceptionProbability : exceptionProbability;
     }
 
     @Override
-    public void setProbability(BeginNode successor, double value) {
+    public void setProbability(AbstractBeginNode successor, double value) {
         assert successor == next || successor == exceptionEdge;
         this.exceptionProbability = successor == next ? 1 - value : value;
     }
@@ -220,6 +220,13 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
     public void setStateDuring(FrameState stateDuring) {
         updateUsages(this.stateDuring, stateDuring);
         this.stateDuring = stateDuring;
+    }
+
+    @Override
+    public void computeStateDuring(FrameState tempStateAfter) {
+        FrameState newStateDuring = tempStateAfter.duplicateModified(bci(), tempStateAfter.rethrowException(), getKind());
+        newStateDuring.setDuringCall(true);
+        setStateDuring(newStateDuring);
     }
 
     @Override

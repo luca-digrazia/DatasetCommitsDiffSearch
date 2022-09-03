@@ -23,8 +23,9 @@
 package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.api.meta.MetaUtil.*;
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static java.lang.reflect.Modifier.*;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
@@ -32,7 +33,7 @@ import java.net.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 
 /**
@@ -73,7 +74,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
      */
     public static ResolvedJavaType fromMetaspaceKlass(long metaspaceKlass) {
         assert metaspaceKlass != 0;
-        Class<?> javaClass = runtime().getCompilerToVM().getJavaMirror(metaspaceKlass);
+        Class javaClass = runtime().getCompilerToVM().getJavaMirror(metaspaceKlass);
         assert javaClass != null;
         return fromClass(javaClass);
     }
@@ -132,7 +133,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     @Override
     public ResolvedJavaType getComponentType() {
-        Class<?> javaComponentType = mirror().getComponentType();
+        Class javaComponentType = mirror().getComponentType();
         return javaComponentType == null ? null : fromClass(javaComponentType);
     }
 
@@ -140,7 +141,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     public ResolvedJavaType findUniqueConcreteSubtype() {
         HotSpotVMConfig config = runtime().getConfig();
         if (isArray()) {
-            return getElementalType(this).isFinal() ? this : null;
+            return isFinal(getElementalType(this).getModifiers()) ? this : null;
         } else if (isInterface()) {
             final long implementorMetaspaceKlass = runtime().getCompilerToVM().getKlassImplementor(metaspaceKlass());
 
@@ -156,20 +157,20 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
              * than one implementors (see: InstanceKlass::add_implementor). The isInterface check
              * takes care of this fact since this class is an interface.
              */
-            if (type.isAbstract() || type.isInterface() || !type.isLeafClass()) {
+            if (isAbstract(type.getModifiers()) || type.isInterface() || !type.isLeafClass()) {
                 return null;
             }
             return type;
         } else {
             HotSpotResolvedObjectType type = this;
-            while (type.isAbstract()) {
+            while (isAbstract(type.getModifiers())) {
                 long subklass = type.getSubklass();
                 if (subklass == 0 || unsafeReadWord(subklass + config.nextSiblingOffset) != 0) {
                     return null;
                 }
                 type = (HotSpotResolvedObjectType) fromMetaspaceKlass(subklass);
             }
-            if (type.isAbstract() || type.isInterface() || !type.isLeafClass()) {
+            if (isAbstract(type.getModifiers()) || type.isInterface() || !type.isLeafClass()) {
                 return null;
             }
             return type;
@@ -198,14 +199,14 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     @Override
     public HotSpotResolvedObjectType getSuperclass() {
-        Class<?> javaSuperclass = mirror().getSuperclass();
+        Class javaSuperclass = mirror().getSuperclass();
         return javaSuperclass == null ? null : (HotSpotResolvedObjectType) fromClass(javaSuperclass);
     }
 
     @Override
     public ResolvedJavaType[] getInterfaces() {
         if (interfaces == null) {
-            Class<?>[] javaInterfaces = mirror().getInterfaces();
+            Class[] javaInterfaces = mirror().getInterfaces();
             ResolvedJavaType[] result = new ResolvedJavaType[javaInterfaces.length];
             for (int i = 0; i < javaInterfaces.length; i++) {
                 result[i] = fromClass(javaInterfaces[i]);
@@ -254,7 +255,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
         if (isArray()) {
             return getComponentType().asExactType() != null ? this : null;
         }
-        return isFinal() ? this : null;
+        return isFinal(getModifiers()) ? this : null;
     }
 
     @Override
@@ -355,22 +356,18 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     }
 
     @Override
-    public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
-        assert !callerType.isArray();
-        if (!method.isAbstract() && method.getDeclaringClass().equals(this) && method.isPublic()) {
+    public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method) {
+        assert method instanceof HotSpotMethod;
+        if (!isAbstract(method.getModifiers()) && method.getDeclaringClass().equals(this)) {
             return method;
         }
-        if (!method.getDeclaringClass().isAssignableFrom(this)) {
-            return null;
-        }
-        HotSpotResolvedJavaMethod hotSpotMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotResolvedObjectType hotSpotCallerType = (HotSpotResolvedObjectType) callerType;
-        final long resolvedMetaspaceMethod = runtime().getCompilerToVM().resolveMethod(metaspaceKlass(), hotSpotMethod.getMetaspaceMethod(), hotSpotCallerType.metaspaceKlass());
+
+        final long resolvedMetaspaceMethod = runtime().getCompilerToVM().resolveMethod(metaspaceKlass(), method.getName(), ((HotSpotSignature) method.getSignature()).getMethodDescriptor());
         if (resolvedMetaspaceMethod == 0) {
             return null;
         }
         HotSpotResolvedJavaMethod resolvedMethod = HotSpotResolvedJavaMethod.fromMetaspace(resolvedMetaspaceMethod);
-        if (resolvedMethod.isAbstract()) {
+        if (isAbstract(resolvedMethod.getModifiers())) {
             return null;
         }
         return resolvedMethod;
@@ -715,7 +712,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     @Override
     public ResolvedJavaMethod[] getDeclaredConstructors() {
-        Constructor<?>[] constructors = mirror().getDeclaredConstructors();
+        Constructor[] constructors = mirror().getDeclaredConstructors();
         ResolvedJavaMethod[] result = new ResolvedJavaMethod[constructors.length];
         for (int i = 0; i < constructors.length; i++) {
             result[i] = runtime().getHostProviders().getMetaAccess().lookupJavaConstructor(constructors[i]);
