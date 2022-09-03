@@ -48,7 +48,7 @@ public class ArrayGetInstanceTest extends GraalCompilerTest {
     }
 
     public static boolean newArrayInLoop(Class<?> klass, int length) {
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 10; i++) {
             Array.newInstance(klass, length);
         }
         return GraalDirectives.inCompiledCode();
@@ -60,9 +60,9 @@ public class ArrayGetInstanceTest extends GraalCompilerTest {
         InstalledCode code = getCode(method, new OptionValues(getInitialOptions(), HighTier.Options.Inline, false));
         try {
             code.executeVarargs(ArrayGetInstanceTest.class, -1);
-        } catch (NegativeArraySizeException e) {
+        } catch (Throwable e) {
         }
-        code = getCode(method, null, true, false, new OptionValues(getInitialOptions(), HighTier.Options.Inline, false));
+        code = getCode(method, new OptionValues(getInitialOptions(), HighTier.Options.Inline, false));
         assertTrue((Boolean) code.executeVarargs(ArrayGetInstanceTest.class, 0));
     }
 
