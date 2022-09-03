@@ -67,6 +67,7 @@ import com.oracle.graal.lir.amd64.AMD64Move.MembarOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveToRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.NullCheckOp;
+import com.oracle.graal.lir.amd64.AMD64Move.SpillMoveOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StackLeaOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreConstantOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreOp;
@@ -93,7 +94,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
         @Override
         public LIRInstruction createMove(Value result, Value input) {
-            return AMD64LIRGenerator.createMove(result, input);
+            return new SpillMoveOp(result, input);
         }
     }
 
@@ -145,17 +146,13 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         return result;
     }
 
-    private static AMD64LIRInstruction createMove(Value dst, Value src) {
-        if (isRegister(src) || isStackSlot(dst)) {
-            return new MoveFromRegOp(dst, src);
-        } else {
-            return new MoveToRegOp(dst, src);
-        }
-    }
-
     @Override
     public void emitMove(Value dst, Value src) {
-        append(createMove(dst, src));
+        if (isRegister(src) || isStackSlot(dst)) {
+            append(new MoveFromRegOp(dst, src));
+        } else {
+            append(new MoveToRegOp(dst, src));
+        }
     }
 
     private AMD64Address prepareAddress(Kind kind, Value base, int displacement, Value index, int scale) {
@@ -759,16 +756,16 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason) {
+    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
         LIRFrameState info = state();
-        LabelRef stubEntry = createDeoptStub(action, reason, info);
+        LabelRef stubEntry = createDeoptStub(action, reason, info, deoptInfo);
         append(new BranchOp(ConditionFlag.Overflow, stubEntry, info));
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason) {
+    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
         LIRFrameState info = state();
-        LabelRef stubEntry = createDeoptStub(action, reason, info);
+        LabelRef stubEntry = createDeoptStub(action, reason, info, deoptInfo);
         append(new JumpOp(stubEntry, info));
     }
 
@@ -892,9 +889,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info) {
+    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info, Object deoptInfo) {
         assert info.topFrame.getBCI() >= 0 : "invalid bci for deopt framestate";
-        AMD64DeoptimizationStub stub = new AMD64DeoptimizationStub(action, reason, info);
+        AMD64DeoptimizationStub stub = new AMD64DeoptimizationStub(action, reason, info, deoptInfo);
         lir.stubs.add(stub);
         return LabelRef.forLabel(stub.label);
     }

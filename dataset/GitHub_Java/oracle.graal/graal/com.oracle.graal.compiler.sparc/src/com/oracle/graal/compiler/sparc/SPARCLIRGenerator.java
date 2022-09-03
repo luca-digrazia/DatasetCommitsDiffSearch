@@ -112,7 +112,7 @@ public class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info) {
+    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info, Object deoptInfo) {
         // SPARC: Auto-generated method stub
         return null;
     }
@@ -334,13 +334,13 @@ public class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason) {
+    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
         // SPARC: Auto-generated method stub
 
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason) {
+    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
         // SPARC: Auto-generated method stub
 
     }
@@ -366,12 +366,6 @@ public class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public void visitBreakpointNode(BreakpointNode i) {
         // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void emitUnwind(Value operand) {
-        // TODO Auto-generated method stub
 
     }
 }

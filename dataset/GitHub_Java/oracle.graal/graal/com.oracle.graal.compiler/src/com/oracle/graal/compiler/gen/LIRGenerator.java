@@ -562,7 +562,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         for (PhiNode phi : merge.phis()) {
             if (phi.type() == PhiType.Value) {
                 ValueNode curVal = phi.valueAt(pred);
-                resolver.move(operandForPhi(phi), operand(curVal));
+                resolver.move(operand(curVal), operandForPhi(phi));
             }
         }
         resolver.dispose();
@@ -596,7 +596,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         } else {
             // Fall back to a normal branch.
             LIRFrameState info = state();
-            LabelRef stubEntry = createDeoptStub(action, deoptReason, info);
+            LabelRef stubEntry = createDeoptStub(action, deoptReason, info, comp);
             if (negated) {
                 emitBranch(comp, stubEntry, null, info);
             } else {
@@ -759,7 +759,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         return result;
     }
 
-    protected abstract LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info);
+    protected abstract LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info, Object deoptInfo);
 
     @Override
     public Variable emitCall(RuntimeCallTarget callTarget, CallingConvention cc, boolean canTrap, Value... args) {
