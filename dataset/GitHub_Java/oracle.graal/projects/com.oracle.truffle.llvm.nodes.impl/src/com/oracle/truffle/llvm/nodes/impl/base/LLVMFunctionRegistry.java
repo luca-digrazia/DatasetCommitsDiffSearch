@@ -32,8 +32,8 @@ package com.oracle.truffle.llvm.nodes.impl.base;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.NodeFactory;
@@ -41,6 +41,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
+import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 
@@ -75,9 +76,9 @@ public class LLVMFunctionRegistry {
      */
     @CompilationFinal private LLVMFunctionDescriptor[] functionDescriptors = new LLVMFunctionDescriptor[REAL_FUNCTION_START_INDEX];
 
-    public LLVMFunctionRegistry(NodeFactoryFacade facade) {
+    public LLVMFunctionRegistry(LLVMOptimizationConfiguration optimizationConfig, NodeFactoryFacade facade) {
         this.facade = facade;
-        this.intrinsics = facade.getFunctionSubstitutionFactories();
+        this.intrinsics = facade.getFunctionSubstitutionFactories(optimizationConfig);
         functionPtrCallTargetMap = new RootCallTarget[REAL_FUNCTION_START_INDEX + intrinsics.size() + 1];
         functionDescriptors[0] = LLVMFunctionDescriptor.create(ZERO_FUNCTION, LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false, 0);
         registerIntrinsics();
@@ -123,27 +124,14 @@ public class LLVMFunctionRegistry {
         for (String intrinsicFunction : intrinsics.keySet()) {
             LLVMFunctionDescriptor function = createFunctionDescriptor(intrinsicFunction, LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
             NodeFactory<? extends LLVMNode> nodeFactory = intrinsics.get(intrinsicFunction);
-            RootNode functionRoot;
             List<Class<? extends Node>> executionSignature = nodeFactory.getExecutionSignature();
-
             int nrArguments = executionSignature.size();
-            Object[] args = new Object[nrArguments];
-            int functionDescriptor = 0;
+            LLVMNode[] args = new LLVMNode[nrArguments];
             for (int i = 0; i < nrArguments; i++) {
-                args[i] = facade.createFunctionArgNode(i - functionDescriptor, executionSignature.get(i));
+                args[i] = facade.createFunctionArgNode(i, executionSignature.get(i));
             }
-            LLVMNode intrinsicNode;
-            List<Class<?>> firstNodeFactory = nodeFactory.getNodeSignatures().get(0);
-            if (firstNodeFactory.contains(LLVMFunctionDescriptor.class)) {
-                // node constructor expects a LLVMFunctionDescriptor
-                Object[] newArgs = new Object[args.length + 1];
-                newArgs[0] = function;
-                System.arraycopy(args, 0, newArgs, 1, args.length);
-                intrinsicNode = nodeFactory.createNode(newArgs);
-            } else {
-                intrinsicNode = nodeFactory.createNode(args);
-            }
-            functionRoot = facade.createFunctionSubstitutionRootNode(intrinsicNode);
+            LLVMNode intrinsicNode = nodeFactory.createNode((Object[]) args);
+            RootNode functionRoot = facade.createFunctionSubstitutionRootNode(intrinsicNode);
             RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(functionRoot);
             assert functionPtrCallTargetMap[function.getFunctionIndex()] == null;
             functionPtrCallTargetMap[function.getFunctionIndex()] = callTarget;
