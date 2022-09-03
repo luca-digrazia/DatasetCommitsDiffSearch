@@ -213,17 +213,23 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
             save = new AMD64SaveRegistersOp(savingMoves, restoringMoves, savedRegisterLocations);
             append(save);
 
-            append(new AMD64HotSpotCRuntimeCallPrologueOp());
+            Value thread = args[0];
+            AMD64HotSpotCRuntimeCallPrologueOp op = new AMD64HotSpotCRuntimeCallPrologueOp(thread);
+            append(op);
         }
 
         Variable result = super.emitCall(callTarget, cc, info, args);
 
         if (needsCalleeSave) {
-            assert !calleeSaveInfo.containsKey(currentRuntimeCallInfo);
-            calleeSaveInfo.put(currentRuntimeCallInfo, save);
 
-            append(new AMD64HotSpotCRuntimeCallEpilogueOp());
-            append(new AMD64RestoreRegistersOp(savedRegisterLocations.clone(), save));
+            Value thread = args[0];
+            AMD64HotSpotCRuntimeCallEpilogueOp op = new AMD64HotSpotCRuntimeCallEpilogueOp(thread);
+            append(op);
+
+            AMD64RestoreRegistersOp restore = new AMD64RestoreRegistersOp(savedRegisterLocations.clone(), save);
+            AMD64SaveRegistersOp oldValue = calleeSaveInfo.put(currentRuntimeCallInfo, save);
+            assert oldValue == null;
+            append(restore);
         }
 
         return result;
@@ -324,13 +330,6 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     public void emitDeoptimizeCaller(DeoptimizationAction action, DeoptimizationReason reason) {
         AMD64HotSpotDeoptimizeCallerOp op = new AMD64HotSpotDeoptimizeCallerOp(action, reason);
         epilogueOps.add(op);
-        append(op);
-    }
-
-    @Override
-    public void emitPatchReturnAddress(ValueNode address) {
-        load(operand(address));
-        AMD64HotSpotPatchReturnAddressOp op = new AMD64HotSpotPatchReturnAddressOp(load(operand(address)));
         append(op);
     }
 
