@@ -464,8 +464,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                     newArgs[i] = newArg;
                 } else if (arg != newArg) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    newArgs = new Object[nodes.length];
-                    System.arraycopy(args, 0, newArgs, 0, args.length);
+                    newArgs = Arrays.copyOf(args, args.length);
                     newArgs[i] = newArg;
                     needsCopy = true;
                 }
@@ -487,8 +486,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                     newArgs[i] = newArg;
                 } else if (arg != newArg) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    newArgs = new Object[args.length];
-                    System.arraycopy(args, 0, newArgs, 0, args.length);
+                    newArgs = Arrays.copyOf(args, args.length);
                     newArgs[i] = newArg;
                     needsCopy = true;
                 }
