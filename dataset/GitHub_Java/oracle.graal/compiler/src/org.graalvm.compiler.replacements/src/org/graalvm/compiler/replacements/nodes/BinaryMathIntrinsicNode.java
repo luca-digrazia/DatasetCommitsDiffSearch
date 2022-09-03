@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,8 +24,7 @@ package org.graalvm.compiler.replacements.nodes;
 
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
-
-import org.graalvm.compiler.core.common.spi.ForeignCallSignature;
+import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.type.FloatStamp;
 import org.graalvm.compiler.core.common.type.PrimitiveStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -59,12 +56,12 @@ public final class BinaryMathIntrinsicNode extends BinaryNode implements Arithme
     protected final BinaryOperation operation;
 
     public enum BinaryOperation {
-        POW(new ForeignCallSignature("arithmeticPow", double.class, double.class, double.class));
+        POW(new ForeignCallDescriptor("arithmeticPow", double.class, double.class, double.class));
 
-        public final ForeignCallSignature foreignCallSignature;
+        public final ForeignCallDescriptor foreignCallDescriptor;
 
-        BinaryOperation(ForeignCallSignature foreignCallSignature) {
-            this.foreignCallSignature = foreignCallSignature;
+        BinaryOperation(ForeignCallDescriptor foreignCallDescriptor) {
+            this.foreignCallDescriptor = foreignCallDescriptor;
         }
     }
 
@@ -107,7 +104,6 @@ public final class BinaryMathIntrinsicNode extends BinaryNode implements Arithme
 
     @Override
     public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
-        // We can only reach here in the math stubs
         Value xValue = nodeValueMap.operand(getX());
         Value yValue = nodeValueMap.operand(getY());
         Value result;
