@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.parser;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -144,10 +145,10 @@ public interface SulongNodeFactory {
      */
     LLVMControlFlowNode createUnreachableNode(LLVMParserRuntime runtime);
 
-    LLVMControlFlowNode createIndirectBranch(LLVMParserRuntime runtime, LLVMExpressionNode value, int[] labelTargets, LLVMExpressionNode[] phiWrites);
+    LLVMControlFlowNode createIndirectBranch(LLVMParserRuntime runtime, LLVMExpressionNode value, int[] labelTargets, LLVMExpressionNode[][] phiWrites);
 
-    LLVMControlFlowNode createSwitch(LLVMParserRuntime runtime, LLVMExpressionNode cond, int defaultLabel, int[] otherLabels, LLVMExpressionNode[] cases,
-                    PrimitiveType llvmType, LLVMExpressionNode[] phiWriteNodes);
+    LLVMControlFlowNode createSwitch(LLVMParserRuntime runtime, LLVMExpressionNode cond, int[] labels, LLVMExpressionNode[] cases,
+                    PrimitiveType llvmType, LLVMExpressionNode[][] phiWriteNodes);
 
     LLVMControlFlowNode createConditionalBranch(LLVMParserRuntime runtime, int trueIndex, int falseIndex, LLVMExpressionNode conditionNode, LLVMExpressionNode[] truePhiWriteNodes,
                     LLVMExpressionNode[] falsePhiWriteNodes);
@@ -245,6 +246,13 @@ public interface SulongNodeFactory {
                     FunctionDefinition functionHeader);
 
     /**
+     * Returns the index of the first argument of the formal parameter list.
+     *
+     * @return the index
+     */
+    Optional<Integer> getArgStartIndex();
+
+    /**
      * Creates an inline assembler instruction.
      *
      * @param asmExpression
@@ -260,6 +268,13 @@ public interface SulongNodeFactory {
     Object allocateGlobalConstant(LLVMParserRuntime runtime, GlobalConstant globalConstant);
 
     RootNode createStaticInitsRootNode(LLVMParserRuntime runtime, LLVMExpressionNode[] staticInits);
+
+    /**
+     * Returns whether function calls expect an implicit stack pointer argument.
+     *
+     * @return true if the parser should pass an implicit stack pointer argument for function calls
+     */
+    Optional<Boolean> hasStackPointerArgument(LLVMParserRuntime runtime);
 
     LLVMStackFrameNuller createFrameNuller(LLVMParserRuntime runtime, String identifier, Type type, FrameSlot slot);
 

@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.parser.factories;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -275,14 +276,14 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     }
 
     @Override
-    public LLVMControlFlowNode createIndirectBranch(LLVMParserRuntime runtime, LLVMExpressionNode value, int[] labelTargets, LLVMExpressionNode[] phiWrites) {
+    public LLVMControlFlowNode createIndirectBranch(LLVMParserRuntime runtime, LLVMExpressionNode value, int[] labelTargets, LLVMExpressionNode[][] phiWrites) {
         return LLVMBranchFactory.createIndirectBranch(value, labelTargets, phiWrites);
     }
 
     @Override
-    public LLVMControlFlowNode createSwitch(LLVMParserRuntime runtime, LLVMExpressionNode cond, int defaultLabel, int[] otherLabels, LLVMExpressionNode[] cases,
-                    PrimitiveType llvmType, LLVMExpressionNode[] phiWriteNodes) {
-        return LLVMSwitchFactory.createSwitch(cond, defaultLabel, otherLabels, cases, llvmType, phiWriteNodes);
+    public LLVMControlFlowNode createSwitch(LLVMParserRuntime runtime, LLVMExpressionNode cond, int[] successors, LLVMExpressionNode[] cases,
+                    PrimitiveType llvmType, LLVMExpressionNode[][] phiWriteNodes) {
+        return LLVMSwitchFactory.createSwitch(cond, successors, cases, llvmType, phiWriteNodes);
     }
 
     @Override
@@ -395,6 +396,11 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     }
 
     @Override
+    public Optional<Integer> getArgStartIndex() {
+        return Optional.of(LLVMCallNode.ARG_START_INDEX);
+    }
+
+    @Override
     public LLVMExpressionNode createInlineAssemblerExpression(LLVMParserRuntime runtime, String asmExpression, String asmFlags, LLVMExpressionNode[] args, Type[] argTypes, Type retType) {
         Parser asmParser = new Parser(asmExpression, asmFlags, args, argTypes, retType);
         LLVMInlineAssemblyRootNode assemblyRoot = asmParser.Parse();
@@ -440,7 +446,7 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
 
     @Override
     public LLVMExpressionNode createFunctionArgNode(int i, Class<? extends Node> clazz) {
-        return LLVMFunctionFactory.createFunctionArgNode(i);
+        return LLVMFunctionFactory.createFunctionArgNode(this, i);
     }
 
     @Override
@@ -496,6 +502,11 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     public RootNode createStaticInitsRootNode(LLVMParserRuntime runtime, LLVMExpressionNode[] staticInits) {
         return new LLVMStaticInitsBlockNode(runtime.getLanguage(), staticInits, runtime.getGlobalFrameDescriptor(), runtime.getContext(),
                         runtime.getStackPointerSlot());
+    }
+
+    @Override
+    public Optional<Boolean> hasStackPointerArgument(LLVMParserRuntime runtime) {
+        return Optional.of(true);
     }
 
     @Override
