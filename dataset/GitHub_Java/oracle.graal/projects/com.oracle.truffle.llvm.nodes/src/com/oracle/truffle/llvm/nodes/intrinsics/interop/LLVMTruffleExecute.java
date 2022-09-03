@@ -88,7 +88,7 @@ public abstract class LLVMTruffleExecute extends LLVMIntrinsic {
         return doExecute(frame, cachedValue);
     }
 
-    @Specialization(replaces = "doIntrinsicCachedTruffleObject")
+    @Specialization(contains = "doIntrinsicCachedTruffleObject")
     public Object doIntrinsicTruffleObject(VirtualFrame frame, TruffleObject value) {
         return doExecute(frame, value);
     }
@@ -100,7 +100,7 @@ public abstract class LLVMTruffleExecute extends LLVMIntrinsic {
         return doExecute(frame, cachedValue.getObject());
     }
 
-    @Specialization(replaces = "doIntrinsicCachedLLVMTruffleObject")
+    @Specialization(contains = "doIntrinsicCachedLLVMTruffleObject")
     public Object doIntrinsicLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject value) {
         checkLLVMTruffleObject(value);
         return doExecute(frame, value.getObject());
