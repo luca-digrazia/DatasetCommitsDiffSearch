@@ -39,37 +39,29 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.llvm.runtime.interop.LLVMFunctionMessageResolutionForeign;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack.NeedsStack;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 
-public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<LLVMFunctionDescriptor>, LLVMObjectNativeLibrary.Provider {
+public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject, Comparable<LLVMFunctionDescriptor> {
 
     private final String functionName;
-    private final String libraryName;
     private final FunctionType type;
-    private final LLVMContext context;
-
     private final int functionId;
+    private final LLVMContext context;
 
     @CompilationFinal private Function function;
     @CompilationFinal private Assumption functionAssumption;
 
     @CompilationFinal private TruffleObject nativeWrapper;
     @CompilationFinal private long nativePointer;
-
-    private static final long SULONG_FUNCTION_POINTER_TAG = 0xDEAD_FACE_0000_0000L;
-
-    private static long tagSulongFunctionPointer(int id) {
-        return id | SULONG_FUNCTION_POINTER_TAG;
-    }
 
     public static final class Intrinsic {
         private final String name;
@@ -123,6 +115,7 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
             overloadingMap.put(type, newTarget);
             return newTarget;
         }
+
     }
 
     abstract static class Function {
@@ -165,7 +158,7 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
             }
 
             if (wrapper == null) {
-                pointer = LLVMAddress.fromLong(tagSulongFunctionPointer(descriptor.functionId));
+                pointer = LLVMAddress.fromLong(LLVMFunction.tagSulongFunctionPointer(descriptor.getFunctionId()));
                 wrapper = new LLVMTruffleAddress(pointer, descriptor.getType(), descriptor.context);
             }
 
@@ -285,10 +278,9 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         return function;
     }
 
-    private LLVMFunctionDescriptor(LLVMContext context, String libraryName, String name, FunctionType type, int functionId, Function function) {
+    private LLVMFunctionDescriptor(LLVMContext context, String name, FunctionType type, int functionId, Function function) {
         CompilerAsserts.neverPartOfCompilation();
         this.context = context;
-        this.libraryName = libraryName;
         this.functionName = name;
         this.type = type;
         this.functionId = functionId;
@@ -296,8 +288,12 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         this.function = function;
     }
 
-    public static LLVMFunctionDescriptor createDescriptor(LLVMContext context, String libraryName, String name, FunctionType type, int functionId) {
-        return new LLVMFunctionDescriptor(context, libraryName, name, type, functionId, new UnresolvedFunction());
+    public int getFunctionId() {
+        return functionId;
+    }
+
+    public static LLVMFunctionDescriptor createDescriptor(LLVMContext context, String name, FunctionType type, int functionId) {
+        return new LLVMFunctionDescriptor(context, name, type, functionId, new UnresolvedFunction());
     }
 
     public interface LazyToTruffleConverter {
@@ -306,6 +302,35 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
 
     public boolean isLLVMIRFunction() {
         return getFunction() instanceof LLVMIRFunction || getFunction() instanceof LazyLLVMIRFunction;
+    }
+
+    private static class NeedsStackPointer {
+        boolean condition = false;
+    }
+
+    public boolean needsStackPointer() {
+        if (isLLVMIRFunction()) {
+            final NeedsStackPointer needsStackPointer = new NeedsStackPointer();
+
+            getLLVMIRFunction().getRootNode().accept(new NodeVisitor() {
+
+                @Override
+                public boolean visit(Node node) {
+                    Class<?> nodeClass = node.getClass();
+                    while (nodeClass != null) {
+                        if (nodeClass.isAnnotationPresent(NeedsStack.class)) {
+                            needsStackPointer.condition = true;
+                            break;
+                        }
+                        nodeClass = nodeClass.getSuperclass();
+                    }
+                    return true;
+                }
+            });
+            return needsStackPointer.condition;
+        } else {
+            return false;
+        }
     }
 
     public boolean isNativeIntrinsicFunction() {
@@ -365,14 +390,31 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         return functionName;
     }
 
-    public String getLibraryName() {
-        return libraryName;
-    }
-
     public FunctionType getType() {
         return type;
     }
 
+    /**
+     * Gets a pointer to this function that can be stored in native memory.
+     */
+    @Override
+    public long getFunctionPointer() {
+        if (nativeWrapper == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            nativeWrapper = getFunction().createNativeWrapper(this);
+            if (nativeWrapper == null) {
+                return 0;
+            }
+            try {
+                nativePointer = ForeignAccess.sendAsPointer(Message.AS_POINTER.createNode(), nativeWrapper);
+            } catch (UnsupportedMessageException ex) {
+                nativePointer = LLVMFunction.tagSulongFunctionPointer(functionId);
+            }
+        }
+        return nativePointer;
+    }
+
+    @Override
     public boolean isNullFunction() {
         return functionId == 0;
     }
@@ -419,77 +461,4 @@ public final class LLVMFunctionDescriptor implements TruffleObject, Comparable<L
         return LLVMFunctionMessageResolutionForeign.ACCESS;
     }
 
-    @Override
-    public LLVMObjectNativeLibrary createLLVMObjectNativeLibrary() {
-        return new LLVMFunctionDescriptorNativeLibrary();
-    }
-
-    private static final class LLVMFunctionDescriptorNativeLibrary extends LLVMObjectNativeLibrary {
-
-        @Override
-        public boolean guard(Object obj) {
-            return obj instanceof LLVMFunctionDescriptor;
-        }
-
-        @Override
-        public boolean isPointer(VirtualFrame frame, Object obj) {
-            LLVMFunctionDescriptor fd = (LLVMFunctionDescriptor) obj;
-            return fd.isPointer();
-        }
-
-        @Override
-        public long asPointer(VirtualFrame frame, Object obj) throws InteropException {
-            LLVMFunctionDescriptor fd = (LLVMFunctionDescriptor) obj;
-            return fd.asPointer();
-        }
-
-        @Override
-        public LLVMFunctionDescriptor toNative(VirtualFrame frame, Object obj) throws InteropException {
-            LLVMFunctionDescriptor fd = (LLVMFunctionDescriptor) obj;
-            return fd.toNative();
-        }
-    }
-
-    /*
-     * TODO: make this function private
-     */
-    public long asPointer() {
-        if (isNullFunction()) {
-            return 0;
-        }
-        if (isPointer()) {
-            return nativePointer;
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw UnsupportedMessageException.raise(Message.AS_POINTER);
-    }
-
-    /*
-     * TODO: make this function private
-     */
-    public boolean isPointer() {
-        if (isNullFunction()) {
-            return true;
-        }
-        return nativeWrapper != null;
-    }
-
-    /*
-     * TODO: make this function private
-     */
-    /**
-     * Gets a pointer to this function that can be stored in native memory.
-     */
-    public LLVMFunctionDescriptor toNative() {
-        if (nativeWrapper == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            nativeWrapper = getFunction().createNativeWrapper(this);
-            try {
-                nativePointer = ForeignAccess.sendAsPointer(Message.AS_POINTER.createNode(), nativeWrapper);
-            } catch (UnsupportedMessageException ex) {
-                nativePointer = tagSulongFunctionPointer(functionId);
-            }
-        }
-        return this;
-    }
 }
