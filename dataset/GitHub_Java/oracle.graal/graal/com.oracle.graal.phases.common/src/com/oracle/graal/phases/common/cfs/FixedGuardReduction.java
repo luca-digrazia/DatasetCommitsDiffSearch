@@ -33,11 +33,6 @@ import com.oracle.graal.phases.tiers.PhaseContext;
  * This class implements control-flow sensitive reductions for
  * {@link com.oracle.graal.nodes.FixedGuardNode}.
  * </p>
- *
- * <p>
- * The laundry-list of all flow-sensitive reductions is summarized in
- * {@link com.oracle.graal.phases.common.cfs.FlowSensitiveReduction}
- * </p>
  * 
  * @see #visitFixedGuardNode(com.oracle.graal.nodes.FixedGuardNode)
  */
@@ -48,33 +43,15 @@ public abstract class FixedGuardReduction extends CheckCastReduction {
     }
 
     /**
-     * <p>
-     * Upon visiting a {@link com.oracle.graal.nodes.FixedGuardNode}, based on flow-sensitive
-     * conditions, we need to determine whether:
-     * <ul>
-     * <li>it is redundant (in which case it should be simplified), or</li>
-     * <li>flow-sensitive information can be gained from it.</li>
-     * </ul>
-     * </p>
+     * In case the condition is constant,
+     * {@link com.oracle.graal.nodes.FixedGuardNode#simplify(com.oracle.graal.graph.spi.SimplifierTool)
+     * FixedGuardNode#simplify(SimplifierTool)} will eventually remove the
+     * {@link com.oracle.graal.nodes.FixedGuardNode} ("always succeeds") or kill the code that
+     * should be killed ("always fails").
      * 
      * <p>
-     * This method realizes the above by inspecting the
-     * {@link com.oracle.graal.nodes.FixedGuardNode}'s condition:
-     * <ol>
-     * <li>a constant condition signals the node won't be reduced here</li>
-     * <li>the outcome of the condition can be predicted:</li>
-     * <ul>
-     * <li>
-     * "always succeeds", after finding an equivalent (or stronger)
-     * {@link com.oracle.graal.nodes.extended.GuardingNode} in scope. The
-     * {@link com.oracle.graal.nodes.FixedGuardNode} is removed after replacing its usages with the
-     * existing guarding node</li>
-     * <li>
-     * "always fails", which warrants making that explicit by making the condition constant, see
-     * {@link #markFixedGuardNodeAlwaysFails(com.oracle.graal.nodes.FixedGuardNode)}</li>
-     * </ul>
-     * <li>otherwise the condition is tracked flow-sensitively</li>
-     * </ol>
+     * The only thing we do here is tracking as true fact (from this program point onwards) the
+     * condition of the {@link com.oracle.graal.nodes.FixedGuardNode FixedGuardNode}.
      * </p>
      * 
      * <p>
@@ -85,8 +62,6 @@ public abstract class FixedGuardReduction extends CheckCastReduction {
 
         /*
          * A FixedGuardNode with LogicConstantNode condition is left untouched.
-         * `FixedGuardNode.simplify()` will eventually remove the FixedGuardNode (in case it
-         * "always succeeds") or kill code ("always fails").
          */
 
         if (f.condition() instanceof LogicConstantNode) {
@@ -117,10 +92,10 @@ public abstract class FixedGuardReduction extends CheckCastReduction {
         final boolean isTrue = !f.isNegated();
 
         /*
-         * A FixedGuardNode can only be removed provided a replacement anchor is found (so called
-         * "evidence"), ie an anchor that amounts to the same combination of (negated, condition) as
-         * for the FixedGuardNode at hand. Just deverbosifying the condition in place isn't
-         * semantics-preserving.
+         * FixedGuardNode requires handling similar to that of GuardingPiNode, (ie the condition
+         * can't simply be deverbosified in place). A replacement anchor is needed, ie an anchor
+         * that amounts to the same combination of (negated, condition) for the FixedGuardNode at
+         * hand.
          */
 
         // TODO what about isDependencyTainted
@@ -227,8 +202,7 @@ public abstract class FixedGuardReduction extends CheckCastReduction {
      * Porcelain method.
      * 
      * <p>
-     * The `replacement` guard must be such that it implies the `old` guard. Moreover, rhe
-     * `replacement` guard must be in scope.
+     * The `replacement` guard must be such that it implies the `old` guard.
      * </p>
      */
     private void removeFixedGuardNode(FixedGuardNode old, GuardingNode replacement) {
