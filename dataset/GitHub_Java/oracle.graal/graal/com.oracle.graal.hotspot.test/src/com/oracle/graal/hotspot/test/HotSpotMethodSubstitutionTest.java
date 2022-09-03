@@ -67,6 +67,7 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
     @Test
     public void testClassSubstitutions() {
         test("getModifiers");
+        test("isInstance");
         test("isInterface");
         test("isArray");
         test("isPrimitive");
@@ -74,18 +75,26 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
         test("getComponentType");
 
         for (Class<?> c : new Class[]{getClass(), Cloneable.class, int[].class, String[][].class}) {
-            assertDeepEquals(c.getModifiers(), HotSpotClassSubstitutions.getModifiers(c));
-            assertDeepEquals(c.isInterface(), HotSpotClassSubstitutions.isInterface(c));
-            assertDeepEquals(c.isArray(), HotSpotClassSubstitutions.isArray(c));
-            assertDeepEquals(c.isPrimitive(), HotSpotClassSubstitutions.isPrimitive(c));
-            assertDeepEquals(c.getSuperclass(), HotSpotClassSubstitutions.getSuperclass(c));
-            assertDeepEquals(c.getComponentType(), HotSpotClassSubstitutions.getComponentType(c));
+            assertDeepEquals(c.getModifiers(), ClassSubstitutions.getModifiers(c));
+            assertDeepEquals(c.isInterface(), ClassSubstitutions.isInterface(c));
+            assertDeepEquals(c.isArray(), ClassSubstitutions.isArray(c));
+            assertDeepEquals(c.isPrimitive(), ClassSubstitutions.isPrimitive(c));
+            assertDeepEquals(c.getSuperclass(), ClassSubstitutions.getSuperclass(c));
+            assertDeepEquals(c.getComponentType(), ClassSubstitutions.getComponentType(c));
+            for (Object o : new Object[]{this, new int[5], new String[2][], new Object()}) {
+                assertDeepEquals(c.isInstance(o), ClassSubstitutions.isInstance(c, o));
+            }
         }
     }
 
     @SuppressWarnings("all")
     public static int getModifiers(Class<?> clazz) {
         return clazz.getModifiers();
+    }
+
+    @SuppressWarnings("all")
+    public static boolean isInstance(Class<?> clazz) {
+        return clazz.isInstance(Number.class);
     }
 
     @SuppressWarnings("all")

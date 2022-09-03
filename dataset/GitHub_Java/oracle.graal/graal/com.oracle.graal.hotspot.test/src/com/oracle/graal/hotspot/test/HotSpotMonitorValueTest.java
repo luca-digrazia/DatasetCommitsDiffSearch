@@ -35,6 +35,7 @@ import com.oracle.graal.api.code.CompilationResult.Infopoint;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.hotspot.meta.*;
 
 public class HotSpotMonitorValueTest extends GraalCompilerTest {
 
@@ -52,14 +53,14 @@ public class HotSpotMonitorValueTest extends GraalCompilerTest {
                         assertNull(caller.caller());
                         assertDeepEquals(2, frame.numLocks);
                         assertDeepEquals(2, caller.numLocks);
-                        StackLockValue lock1 = (StackLockValue) frame.getLockValue(0);
-                        StackLockValue lock2 = (StackLockValue) frame.getLockValue(1);
-                        StackLockValue lock3 = (StackLockValue) caller.getLockValue(0);
-                        StackLockValue lock4 = (StackLockValue) caller.getLockValue(1);
+                        HotSpotMonitorValue lock1 = (HotSpotMonitorValue) frame.getLockValue(0);
+                        HotSpotMonitorValue lock2 = (HotSpotMonitorValue) frame.getLockValue(1);
+                        HotSpotMonitorValue lock3 = (HotSpotMonitorValue) caller.getLockValue(0);
+                        HotSpotMonitorValue lock4 = (HotSpotMonitorValue) caller.getLockValue(1);
 
-                        List<StackLockValue> locks = Arrays.asList(lock1, lock2, lock3, lock4);
-                        for (StackLockValue lock : locks) {
-                            for (StackLockValue other : locks) {
+                        List<HotSpotMonitorValue> locks = Arrays.asList(lock1, lock2, lock3, lock4);
+                        for (HotSpotMonitorValue lock : locks) {
+                            for (HotSpotMonitorValue other : locks) {
                                 if (other != lock) {
                                     // Every lock must have a different stack slot
                                     assertThat(lock.getSlot(), not(other.getSlot()));

@@ -44,9 +44,6 @@ import com.oracle.graal.nodes.*;
  */
 public class JTTTest extends GraalCompilerTest {
 
-    public static final class DummyTestClass {
-    }
-
     protected static final Set<DeoptimizationReason> EMPTY = Collections.<DeoptimizationReason> emptySet();
     /**
      * The arguments which, if non-null, will replace the Locals in the test method's graph.
@@ -67,13 +64,9 @@ public class JTTTest extends GraalCompilerTest {
             assert parameterTypes.length == args.length;
             for (int i = 0; i < args.length; i++) {
                 ParameterNode param = graph.getParameter(i);
-                if (param != null) {
-                    Constant c = getSnippetReflection().forBoxed(parameterTypes[i].getKind(), args[i]);
-                    ConstantNode replacement = ConstantNode.forConstant(c, getMetaAccess(), graph);
-                    param.replaceAtUsages(replacement);
-                } else {
-                    // Parameter is not used and has been dead-code eliminated
-                }
+                Constant c = getSnippetReflection().forBoxed(parameterTypes[i].getKind(), args[i]);
+                ConstantNode replacement = ConstantNode.forConstant(c, getMetaAccess(), graph);
+                param.replaceAtUsages(replacement);
             }
         }
         return graph;

@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.replacements.test;
 
-import java.util.HashMap;
+import java.util.*;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.compiler.test.*;
 
 /**
  * Tests the implementation of {@code NEW}.
@@ -144,7 +143,7 @@ public class NewInstanceTest extends GraalCompilerTest {
         String name = "o1";
         HashMap<String, Object> map = new HashMap<>();
 
-        SomeObject() {
+        public SomeObject() {
             map.put(name, this.getClass());
         }
 

@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
+import static org.junit.Assert.*;
+
 import org.junit.*;
 
 import com.oracle.graal.nodes.*;
