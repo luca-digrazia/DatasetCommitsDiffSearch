@@ -24,11 +24,9 @@ package com.oracle.graal.hotspot.replacements;
 
 import java.lang.reflect.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
@@ -49,7 +47,6 @@ public final class ObjectCloneNode extends BasicObjectCloneNode implements Virtu
     }
 
     @Override
-    @SuppressWarnings("try")
     protected StructuredGraph getLoweredSnippetGraph(LoweringTool tool) {
         ResolvedJavaType type = StampTool.typeOrNull(getObject());
         if (type != null) {
@@ -66,7 +63,7 @@ public final class ObjectCloneNode extends BasicObjectCloneNode implements Virtu
                     }
 
                     assert snippetGraph != null : "ObjectCloneSnippets should be installed";
-                    return lowerReplacement((StructuredGraph) snippetGraph.copy(), tool);
+                    return lowerReplacement(snippetGraph.copy(), tool);
                 }
                 assert false : "unhandled array type " + type.getComponentType().getKind();
             } else {
