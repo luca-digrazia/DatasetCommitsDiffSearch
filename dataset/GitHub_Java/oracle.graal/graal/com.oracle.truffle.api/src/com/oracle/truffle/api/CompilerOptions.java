@@ -22,20 +22,19 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.impl;
+package com.oracle.truffle.api;
 
-import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.nodes.*;
 
-public class DefaultCompilerOptions implements CompilerOptions {
+/**
+ * Allows options to be set to control the compilation of a specific {@link RootNode}, without
+ * creating a dependency on the specific compiler used. Options can be tested for support before
+ * setting.
+ */
+public interface CompilerOptions {
 
-    public static DefaultCompilerOptions INSTANCE = new DefaultCompilerOptions();
+    boolean supportsOption(String name);
 
-    public boolean supportsOption(String name) {
-        return false;
-    }
-
-    public void setOption(String name, Object value) {
-        throw new UnsupportedOperationException(String.format("Option %s is not supported by this runtime"));
-    }
+    void setOption(String name, Object value);
 
 }
