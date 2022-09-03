@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
@@ -80,7 +81,6 @@ import jdk.vm.ci.common.InitTimer;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotVMConfigStore;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.runtime.JVMCIBackend;
 
 //JaCoCo Exclude
@@ -111,7 +111,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     private final GraalHotSpotVMConfig config;
 
     private final OptionValues options;
-    private final HotSpotGraalMBean mBean;
 
     /**
      * @param compilerConfigurationFactory factory for the compiler configuration
@@ -128,8 +127,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         } else {
             options = initialOptions;
         }
-
-        this.mBean = HotSpotGraalMBean.create();
 
         snippetCounterGroups = GraalOptions.SnippetCounters.getValue(options) ? new ArrayList<>() : null;
         CompilerConfiguration compilerConfiguration = compilerConfigurationFactory.createCompilerConfiguration();
@@ -228,6 +225,17 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
         runtimeStartTime = System.nanoTime();
         bootstrapJVMCI = config.getFlag("BootstrapJVMCI", Boolean.class);
+
+        assert checkPathIsInvalid(DELETED_OUTPUT_DIRECTORY);
+    }
+
+    private static boolean checkPathIsInvalid(String path) {
+        try {
+            Paths.get(path);
+            return false;
+        } catch (InvalidPathException e) {
+            return true;
+        }
     }
 
     private HotSpotBackend registerBackend(HotSpotBackend backend) {
@@ -249,12 +257,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     @Override
     public OptionValues getOptions() {
-        return mBean == null ? options : mBean.optionsFor(options, null);
-    }
-
-    @Override
-    public OptionValues getOptions(ResolvedJavaMethod forMethod) {
-        return mBean == null ? options : mBean.optionsFor(options, forMethod);
+        return options;
     }
 
     @Override
@@ -372,9 +375,18 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     private String outputDirectory;
 
+    /**
+     * Use an illegal file name to denote that the output directory has been deleted.
+     */
+    private static final String DELETED_OUTPUT_DIRECTORY = "\u0000";
+
     @Override
     public String getOutputDirectory() {
-        if (outputDirectory == null) {
+        return getOutputDirectory(true);
+    }
+
+    private synchronized String getOutputDirectory(boolean createIfNull) {
+        if (outputDirectory == null && createIfNull) {
             outputDirectory = "graal_output_" + getExecutionID();
             File dir = new File(outputDirectory).getAbsoluteFile();
             if (!dir.exists()) {
@@ -385,22 +397,23 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
                 }
             }
         }
-        return outputDirectory;
+        return DELETED_OUTPUT_DIRECTORY.equals(outputDirectory) ? null : outputDirectory;
     }
 
     /**
      * Archives and deletes the {@linkplain #getOutputDirectory() output directory} if it exists.
      */
     private void archiveAndDeleteOutputDirectory() {
-        if (outputDirectory != null) {
-            Path dir = Paths.get(outputDirectory);
+        String outDir = getOutputDirectory(false);
+        if (outDir != null) {
+            Path dir = Paths.get(outDir);
             if (dir.toFile().exists()) {
                 try {
                     // Give compiler threads a chance to finishing dumping
                     Thread.sleep(1000);
                 } catch (InterruptedException e1) {
                 }
-                File zip = new File(outputDirectory + ".zip").getAbsoluteFile();
+                File zip = new File(outDir + ".zip").getAbsoluteFile();
                 List<Path> toDelete = new ArrayList<>();
                 try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zip))) {
                     zos.setLevel(Deflater.BEST_COMPRESSION);
@@ -437,6 +450,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
                     }
                 }
             }
+            outputDirectory = DELETED_OUTPUT_DIRECTORY;
         }
     }
 }
