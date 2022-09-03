@@ -22,8 +22,10 @@
  */
 package org.graalvm.compiler.nodes.calc;
 
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import org.graalvm.compiler.core.common.NumUtil;
-import org.graalvm.compiler.core.common.calc.CanonicalCondition;
+import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.Node;
@@ -33,11 +35,9 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
+import org.graalvm.compiler.options.OptionValues;
 
 @NodeInfo(shortName = "|<|")
 public final class IntegerBelowNode extends IntegerLowerThanNode {
@@ -126,8 +126,8 @@ public final class IntegerBelowNode extends IntegerLowerThanNode {
         }
 
         @Override
-        protected CanonicalCondition getCondition() {
-            return CanonicalCondition.BT;
+        protected Condition getCondition() {
+            return Condition.BT;
         }
 
         @Override

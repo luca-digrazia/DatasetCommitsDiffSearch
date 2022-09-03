@@ -34,6 +34,7 @@ import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.PiNode;
+import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.debug.DynamicCounterNode;
@@ -115,7 +116,14 @@ public final class GraphEffectList extends EffectList {
      */
     public void addFloatingNode(ValueNode node, @SuppressWarnings("unused") String cause) {
         add("add floating node", graph -> {
-            graph.addWithoutUniqueWithInputs(node);
+            if (node instanceof ProxyNode) {
+                ProxyNode proxyNode = (ProxyNode) node;
+                ValueNode value = proxyNode.value();
+                if (!value.isAlive()) {
+                    graph.addWithoutUnique(value);
+                }
+            }
+            graph.addWithoutUnique(node);
         });
     }
 

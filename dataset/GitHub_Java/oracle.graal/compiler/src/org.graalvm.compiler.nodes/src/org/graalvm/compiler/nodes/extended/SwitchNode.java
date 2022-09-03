@@ -228,7 +228,7 @@ public abstract class SwitchNode extends ControlSplitNode {
 
     @Override
     public AbstractBeginNode getPrimarySuccessor() {
-        return null;
+        return this.defaultSuccessor();
     }
 
     /**
