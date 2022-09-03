@@ -434,9 +434,8 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             this.e = e;
         }
 
-        @SuppressWarnings("sync-override")
         @Override
-        public final Throwable fillInStackTrace() {
+        public synchronized Throwable fillInStackTrace() {
             return this;
         }
 
@@ -696,12 +695,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
-        public boolean inContextPreInitialization(Object vmObject) {
-            PolyglotLanguageContext context = (PolyglotLanguageContext) vmObject;
-            return context.context.inContextPreInitialization;
-        }
-
-        @Override
         @TruffleBoundary
         public void exportSymbol(Object vmObject, String symbolName, Object value) {
             PolyglotLanguageContext context = (PolyglotLanguageContext) vmObject;
@@ -849,10 +842,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
         @Override
         public Throwable asHostException(Throwable exception) {
-            if (!(exception instanceof HostException)) {
-                CompilerDirectives.transferToInterpreter();
-                throw new IllegalArgumentException("Provided value not a host exception.");
-            }
             return ((HostException) exception).getOriginal();
         }
 
@@ -1027,6 +1016,9 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
         @Override
         public boolean isHostFunction(Object obj) {
+            if (TruffleOptions.AOT) {
+                return false;
+            }
             return HostFunction.isInstance(obj);
         }
 

@@ -221,12 +221,12 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         this.engineOptionValues.putAll(originalEngineOptions);
         this.compilerOptionValues.putAll(originalCompilerOptions);
 
-        if (!boundEngine) {
-            initializeMultiContext(null);
-        }
-
         for (PolyglotLanguage language : languagesOptions.keySet()) {
             language.getOptionValues().putAll(languagesOptions.get(language));
+        }
+
+        if (!boundEngine) {
+            initializeMultiContext(null);
         }
 
         ENGINES.put(this, null);
@@ -309,7 +309,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     synchronized void initializeMultiContext(PolyglotContextImpl existingContext) {
         if (singleContext.isValid()) {
             singleContext.invalidate("More than one context introduced.");
-            PolyglotContextImpl.invalidateStaticContextAssumption();
             if (existingContext != null) {
                 for (PolyglotLanguageContext context : existingContext.contexts) {
                     if (context.isInitialized()) {
