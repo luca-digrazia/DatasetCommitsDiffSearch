@@ -80,20 +80,16 @@ public class SubstrateOptions {
     @Option(help = "Path passed to the linker as the -rpath (list of comma-separated directories)")//
     public static final HostedOptionKey<String[]> LinkerRPath = new HostedOptionKey<>(null);
 
-    @Option(help = "Directory of the image file to be generated", type = OptionType.User)//
-    public static final HostedOptionKey<String> Path = new HostedOptionKey<>(Paths.get(".").toAbsolutePath().normalize().resolve("svmbuild").toString());
-
     @APIOption(name = "-ea", customHelp = "enable assertions in the generated image")//
     @APIOption(name = "-da", kind = APIOption.APIOptionKind.Negated, customHelp = "disable assertions in the generated image")//
     @Option(help = "Enable or disable Java assert statements at run time", type = OptionType.User)//
     public static final HostedOptionKey<Boolean> RuntimeAssertions = new HostedOptionKey<>(false);
 
-    public static boolean getRuntimeAssertionsForClass(String name) {
-        return RuntimeAssertions.getValue() && getRuntimeAssertionsFilter().test(name);
-    }
+    @Option(help = "Directory of the image file to be generated", type = OptionType.User)//
+    public static final HostedOptionKey<String> Path = new HostedOptionKey<>(Paths.get(".").toAbsolutePath().normalize().resolve("svmbuild").toString());
 
     @Fold
-    static Predicate<String> getRuntimeAssertionsFilter() {
+    public static FoldedPredicate getRuntimeAssertionsFilter() {
         return makeFilter(RuntimeAssertionsFilter.getValue());
     }
 
@@ -252,20 +248,19 @@ public class SubstrateOptions {
     @Option(help = "Backend used by the compiler", type = OptionType.User)//
     public static final HostedOptionKey<String> CompilerBackend = new HostedOptionKey<>("lir");
 
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public static Predicate<String> makeFilter(String[] definedFilters) {
+    public static FoldedPredicate makeFilter(String[] definedFilters) {
         if (definedFilters != null) {
             List<String> wildCardList = OptionUtils.flatten(",", definedFilters);
-            return javaName -> {
+            return new FoldedPredicate((String javaName) -> {
                 for (String wildCard : wildCardList) {
                     if (javaName.startsWith(wildCard)) {
                         return true;
                     }
                 }
                 return false;
-            };
+            });
         }
-        return javaName -> true;
+        return new FoldedPredicate((String javaName) -> true);
     }
 
     public static class FoldedPredicate implements Predicate<String> {
