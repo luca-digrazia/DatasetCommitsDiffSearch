@@ -429,6 +429,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                 singleThreadedConstant.invalidate();
             }
         }
+        constantCurrentThreadInfo = info;
         currentThreadInfo = info;
     }
 
@@ -801,7 +802,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     PolyglotThreadInfo getFirstActiveOtherThread(boolean includePolyglotThread) {
         assert Thread.holdsLock(this);
         // send enters and leaves into a lock by setting the lastThread to null.
-        setCachedThreadInfo(getCurrentThreadInfo());
+        setCachedThreadInfo(PolyglotThreadInfo.NULL);
         for (PolyglotThreadInfo otherInfo : threads.values()) {
             if (!includePolyglotThread && otherInfo.isPolyglotThread(this)) {
                 continue;
@@ -837,7 +838,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                 if (!closed) {
                     // triggers a thread changed event which requires synchronization on the next
                     PolyglotThreadInfo threadInfo = getCurrentThreadInfo();
-                    setCachedThreadInfo(threadInfo);
+
+                    setCachedThreadInfo(PolyglotThreadInfo.NULL);
 
                     if (!threadInfo.explicitContextStack.isEmpty()) {
                         throw new IllegalStateException("The context is explicitely entered on the current thread. Call leave() before closing the context to resolve this.");
