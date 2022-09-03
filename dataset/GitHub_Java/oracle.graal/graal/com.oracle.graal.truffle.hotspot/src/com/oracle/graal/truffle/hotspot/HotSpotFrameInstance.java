@@ -30,6 +30,7 @@ import com.oracle.graal.truffle.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.SlowPath;
 import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.nodes.*;
 
 public abstract class HotSpotFrameInstance implements FrameInstance {
@@ -88,10 +89,10 @@ public abstract class HotSpotFrameInstance implements FrameInstance {
 
     public abstract CallTarget getTargetCallTarget();
 
-    public DirectCallNode getCallNode() {
+    public CallNode getCallNode() {
         Object receiver = stackFrame.getLocal(getNotifyIndex());
-        if (receiver instanceof DirectCallNode) {
-            return (DirectCallNode) receiver;
+        if (receiver instanceof CallNode) {
+            return (CallNode) receiver;
         } else {
             return null;
         }
@@ -99,14 +100,14 @@ public abstract class HotSpotFrameInstance implements FrameInstance {
 
     /**
      * This class represents a frame that is taken from the
-     * {@link OptimizedDirectCallNode#callProxy(MaterializedFrameNotify, CallTarget, VirtualFrame, Object[], boolean)}
+     * {@link OptimizedCallNode#callProxy(MaterializedFrameNotify, OptimizedCallTarget, VirtualFrame, Object[], boolean)}
      * method.
      */
     public static final class CallNodeFrame extends HotSpotFrameInstance {
         public static final Method METHOD;
         static {
             try {
-                METHOD = OptimizedDirectCallNode.class.getDeclaredMethod("callProxy", MaterializedFrameNotify.class, CallTarget.class, VirtualFrame.class, Object[].class, boolean.class);
+                METHOD = OptimizedCallNode.class.getDeclaredMethod("callProxy", MaterializedFrameNotify.class, OptimizedCallTarget.class, VirtualFrame.class, Object[].class, boolean.class);
             } catch (NoSuchMethodException | SecurityException e) {
                 throw new GraalInternalError(e);
             }
@@ -154,7 +155,7 @@ public abstract class HotSpotFrameInstance implements FrameInstance {
         public static final Method METHOD;
         static {
             try {
-                METHOD = OptimizedCallTarget.class.getDeclaredMethod("callProxy", VirtualFrame.class);
+                METHOD = RootCallTarget.class.getDeclaredMethod("callProxy", VirtualFrame.class);
             } catch (NoSuchMethodException | SecurityException e) {
                 throw new GraalInternalError(e);
             }

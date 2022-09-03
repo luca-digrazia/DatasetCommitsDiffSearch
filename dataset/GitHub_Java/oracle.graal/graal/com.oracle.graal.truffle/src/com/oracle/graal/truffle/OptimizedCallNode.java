@@ -23,269 +23,172 @@
 package com.oracle.graal.truffle;
 
 import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.frame.FrameInstance.*;
 import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.NodeUtil.NodeCountFilter;
 
 /**
- * Call target that is optimized by Graal upon surpassing a specific invocation threshold.
+ * A call node with a constant {@link CallTarget} that can be optimized by Graal.
  */
-abstract class OptimizedCallNode extends DefaultCallNode {
+public final class OptimizedCallNode extends DefaultCallNode {
 
-    protected int callCount;
+    private int callCount;
+    private boolean trySplit = true;
+
+    @CompilationFinal private boolean inlined;
+    @CompilationFinal private OptimizedCallTarget splitCallTarget;
 
     private OptimizedCallNode(OptimizedCallTarget target) {
         super(target);
     }
 
     @Override
-    public final boolean isInlinable() {
-        return true;
-    }
-
-    @Override
-    public final boolean isSplittable() {
+    public boolean isSplittable() {
         return getCallTarget().getRootNode().isSplittable();
     }
 
     @Override
-    public final OptimizedCallTarget getCallTarget() {
+    public OptimizedCallTarget getCallTarget() {
         return (OptimizedCallTarget) super.getCallTarget();
     }
 
-    public final int getCallCount() {
+    public int getCallCount() {
         return callCount;
     }
 
-    public TruffleInliningProfile createInliningProfile() {
-        return new OptimizedCallNodeProfile(this);
+    @Override
+    public OptimizedCallTarget getCurrentCallTarget() {
+        return (OptimizedCallTarget) super.getCurrentCallTarget();
     }
 
     @Override
     public OptimizedCallTarget getSplitCallTarget() {
-        return null;
+        return splitCallTarget;
     }
 
-    final OptimizedCallNode inlineImpl() {
-        if (getParent() == null) {
-            throw new IllegalStateException("CallNode must be adopted before it is split.");
+    @Override
+    public Object call(VirtualFrame frame, Object[] arguments) {
+        if (CompilerDirectives.inInterpreter()) {
+            onInterpreterCall();
         }
-        return replace(new InlinedOptimizedCallNode(getCallTarget(), getSplitCallTarget(), getExecutedCallTarget().getRootNode(), callCount));
+        return callProxy(this, getCurrentCallTarget(), frame, arguments, inlined);
     }
 
-    public final OptimizedCallTarget getExecutedCallTarget() {
-        return getSplitCallTarget() != null ? getSplitCallTarget() : getCallTarget();
+    public static Object callProxy(MaterializedFrameNotify notify, OptimizedCallTarget callTarget, VirtualFrame frame, Object[] arguments, boolean inlined) {
+        try {
+            if (notify.getOutsideFrameAccess() != FrameAccess.NONE) {
+                CompilerDirectives.materialize(frame);
+            }
+            if (inlined) {
+                return callTarget.callInlined(arguments);
+            } else {
+                return callTarget.call(arguments);
+            }
+        } finally {
+            // this assertion is needed to keep the values from being cleared as non-live locals
+            assert notify != null & callTarget != null & frame != null;
+        }
+    }
+
+    private void onInterpreterCall() {
+        callCount++;
+        if (trySplit) {
+            if (callCount == 1) {
+                // on first call
+                getCurrentCallTarget().incrementKnownCallSites();
+            }
+            if (callCount > 1 && !inlined) {
+                trySplit = false;
+                if (shouldSplit()) {
+                    splitImpl(true);
+                }
+            }
+        }
+    }
+
+    /* Called by the runtime system if this CallNode is really going to be inlined. */
+    void inline() {
+        inlined = true;
+    }
+
+    @Override
+    public boolean isInlined() {
+        return inlined;
+    }
+
+    @Override
+    public boolean split() {
+        splitImpl(false);
+        return true;
+    }
+
+    private void splitImpl(boolean heuristic) {
+        CompilerAsserts.neverPartOfCompilation();
+
+        OptimizedCallTarget splitTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(getCallTarget().getRootNode().split());
+        splitTarget.setSplitSource(getCallTarget());
+        if (heuristic) {
+            OptimizedCallTargetLog.logSplit(this, getCallTarget(), splitTarget);
+        }
+        if (callCount >= 1) {
+            getCallTarget().decrementKnownCallSites();
+            splitTarget.incrementKnownCallSites();
+        }
+        this.splitCallTarget = splitTarget;
+    }
+
+    private boolean shouldSplit() {
+        if (splitCallTarget != null) {
+            return false;
+        }
+        if (!TruffleCompilerOptions.TruffleSplittingEnabled.getValue()) {
+            return false;
+        }
+        if (!isSplittable()) {
+            return false;
+        }
+        OptimizedCallTarget splitTarget = getCallTarget();
+        int nodeCount = OptimizedCallUtils.countNonTrivialNodes(splitTarget, false);
+        if (nodeCount > TruffleCompilerOptions.TruffleSplittingMaxCalleeSize.getValue()) {
+            return false;
+        }
+
+        // disable recursive splitting for now
+        OptimizedCallTarget root = (OptimizedCallTarget) getRootNode().getCallTarget();
+        if (root == splitTarget || root.getSplitSource() == splitTarget) {
+            // recursive call found
+            return false;
+        }
+
+        // max one child call and callCount > 2 and kind of small number of nodes
+        if (isMaxSingleCall()) {
+            return true;
+        }
+        return countPolymorphic() >= 1;
+    }
+
+    private boolean isMaxSingleCall() {
+        return NodeUtil.countNodes(getCurrentCallTarget().getRootNode(), new NodeCountFilter() {
+            public boolean isCounted(Node node) {
+                return node instanceof CallNode;
+            }
+        }) <= 1;
+    }
+
+    private int countPolymorphic() {
+        return NodeUtil.countNodes(getCurrentCallTarget().getRootNode(), new NodeCountFilter() {
+            public boolean isCounted(Node node) {
+                NodeCost cost = node.getCost();
+                boolean polymorphic = cost == NodeCost.POLYMORPHIC || cost == NodeCost.MEGAMORPHIC;
+                return polymorphic;
+            }
+        });
     }
 
     public static OptimizedCallNode create(OptimizedCallTarget target) {
-        return new DefaultOptimizedCallNode(target);
+        return new OptimizedCallNode(target);
     }
-
-    private static final class DefaultOptimizedCallNode extends OptimizedCallNode {
-
-        private boolean splitTried;
-
-        DefaultOptimizedCallNode(OptimizedCallTarget target) {
-            super(target);
-        }
-
-        @Override
-        public Object call(PackedFrame caller, Arguments arguments) {
-            if (CompilerDirectives.inInterpreter()) {
-                callCount++;
-                if (!splitTried) {
-                    return trySplit(caller, arguments);
-                }
-            }
-            return callTarget.call(caller, arguments);
-        }
-
-        private Object trySplit(PackedFrame caller, Arguments arguments) {
-            int effectiveCallCount = callCount;
-            // we try splitting for the first two invocations
-            if (effectiveCallCount == 1 || effectiveCallCount == 2) {
-                if (isSplittable() && shouldSplit()) {
-                    return splitImpl().call(caller, arguments);
-                }
-            }
-            if (effectiveCallCount >= 2) {
-                splitTried = true;
-            }
-            return callTarget.call(caller, arguments);
-        }
-
-        @Override
-        public boolean isInlined() {
-            return false;
-        }
-
-        @Override
-        public boolean split() {
-            if (!isSplittable()) {
-                // split is only allowed once and if the root node supports it
-                return false;
-            }
-            if (getParent() == null) {
-                throw new IllegalStateException("CallNode must be adopted before it is split.");
-            }
-            splitImpl();
-            return true;
-        }
-
-        private OptimizedCallNode splitImpl() {
-            RootNode splittedRoot = getCallTarget().getRootNode().split();
-            OptimizedCallTarget splitCallTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(splittedRoot);
-            OptimizedCallTarget.logSplit(getCallTarget(), splitCallTarget);
-            return replace(new SplitOptimizedCallNode(getCallTarget(), splitCallTarget, callCount));
-        }
-
-        private boolean shouldSplit() {
-            if (!TruffleCompilerOptions.TruffleSplittingEnabled.getValue()) {
-                return false;
-            }
-            RootNode targetRoot = getCallTarget().getRootNode();
-            int nodeCount = NodeUtil.countNodes(targetRoot, null, true);
-            if (nodeCount >= TruffleCompilerOptions.TruffleSplittingMaxCalleeSize.getValue()) {
-                return false;
-            }
-            SplitScoreVisitor visitor = new SplitScoreVisitor();
-            targetRoot.accept(visitor);
-            int genericNess = visitor.getSplitScore();
-            return genericNess > 0;
-        }
-
-        @Override
-        public void inline() {
-            inlineImpl();
-        }
-
-        @Override
-        public OptimizedCallTarget getSplitCallTarget() {
-            return null;
-        }
-
-    }
-
-    private static final class InlinedOptimizedCallNode extends OptimizedCallNode {
-
-        private final RootNode inlinedRoot;
-        private final OptimizedCallTarget splittedTarget;
-
-        public InlinedOptimizedCallNode(OptimizedCallTarget target, OptimizedCallTarget splittedTarget, RootNode inlinedRoot, int callCount) {
-            super(target);
-            this.inlinedRoot = inlinedRoot;
-            this.splittedTarget = splittedTarget;
-            this.callCount = callCount;
-            installParentInlinedCall();
-        }
-
-        @Override
-        public Object call(PackedFrame caller, Arguments arguments) {
-            if (CompilerDirectives.inInterpreter()) {
-                callCount++;
-            }
-            return inlinedRoot.execute(Truffle.getRuntime().createVirtualFrame(caller, arguments, inlinedRoot.getFrameDescriptor()));
-        }
-
-        @Override
-        public void inline() {
-        }
-
-        @Override
-        public boolean split() {
-            return false;
-        }
-
-        @Override
-        public boolean isInlined() {
-            return true;
-        }
-
-        @Override
-        public RootNode getInlinedRoot() {
-            return inlinedRoot;
-        }
-
-        @Override
-        public OptimizedCallTarget getSplitCallTarget() {
-            return splittedTarget;
-        }
-    }
-
-    private static class SplitOptimizedCallNode extends OptimizedCallNode {
-
-        private final OptimizedCallTarget splittedTarget;
-
-        public SplitOptimizedCallNode(OptimizedCallTarget target, OptimizedCallTarget splittedTarget, int callCount) {
-            super(target);
-            this.callCount = callCount;
-            this.splittedTarget = splittedTarget;
-        }
-
-        @Override
-        public Object call(PackedFrame caller, Arguments arguments) {
-            if (CompilerDirectives.inInterpreter()) {
-                callCount++;
-            }
-            return splittedTarget.call(caller, arguments);
-        }
-
-        @Override
-        public boolean isInlined() {
-            return false;
-        }
-
-        @Override
-        public final boolean split() {
-            return false;
-        }
-
-        @Override
-        public void inline() {
-            inlineImpl();
-        }
-
-        @Override
-        public final OptimizedCallTarget getSplitCallTarget() {
-            return splittedTarget;
-        }
-
-    }
-
-    private static final class SplitScoreVisitor implements NodeVisitor {
-
-        private int splitScore = 0;
-
-        public boolean visit(Node node) {
-            if (node instanceof OptimizedCallNode) {
-                OptimizedCallNode call = (OptimizedCallNode) node;
-                if (call.getInlinedRoot() != null) {
-                    call.getInlinedRoot().accept(this);
-                }
-            }
-            splitScore += splitScore(node);
-            return true;
-        }
-
-        public int getSplitScore() {
-            return splitScore;
-        }
-
-        private static int splitScore(Node node) {
-            NodeInfo info = node.getClass().getAnnotation(NodeInfo.class);
-            if (info == null) {
-                return 0;
-            }
-            switch (info.kind()) {
-                case GENERIC:
-                    return 3;
-                case POLYMORPHIC:
-                    return 1;
-                default:
-                    return 0;
-            }
-        }
-
-    }
-
 }
