@@ -165,8 +165,7 @@ public class SimpleREPLClient implements REPLClient {
         addCommand(REPLRemoteCommand.DISABLE_CMD);
         addCommand(REPLRemoteCommand.DOWN_CMD);
         addCommand(REPLRemoteCommand.ENABLE_CMD);
-        addCommand(REPLRemoteCommand.EVAL_CMD);
-        addCommand(REPLRemoteCommand.EVAL_STEP_INTO_CMD);
+        addCommand(evalCommand);
         addCommand(fileCommand);
         addCommand(REPLRemoteCommand.FRAME_CMD);
         addCommand(helpCommand);
@@ -174,7 +173,6 @@ public class SimpleREPLClient implements REPLClient {
         addCommand(REPLRemoteCommand.KILL_CMD);
         addCommand(listCommand);
         addCommand(REPLRemoteCommand.LOAD_CMD);
-        addCommand(REPLRemoteCommand.LOAD_STEP_INTO_CMD);
         addCommand(quitCommand);
         addCommand(setCommand);
         addCommand(REPLRemoteCommand.SET_LANG_CMD);
@@ -722,6 +720,33 @@ public class SimpleREPLClient implements REPLClient {
             } else {
                 clientContext.displayStack();
             }
+        }
+    };
+
+    private final REPLCommand evalCommand = new REPLRemoteCommand("eval", null, "Evaluate a string, in context of the current frame if any") {
+
+        private int evalCounter = 0;
+
+        @Override
+        public REPLMessage createRequest(REPLClientContext context, String[] args) {
+            if (args.length > 1) {
+                final String code = args[1];
+                if (!code.isEmpty()) {
+                    // Create a fake entry in the file maps and cache, based on this unique name
+                    final String fakeFileName = "<eval" + ++evalCounter + ">";
+                    Source.fromNamedText(fakeFileName, code);
+                    final REPLMessage request = new REPLMessage();
+                    request.put(REPLMessage.OP, REPLMessage.EVAL);
+                    request.put(REPLMessage.CODE, code);
+                    request.put(REPLMessage.SOURCE_NAME, fakeFileName);
+                    if (clientContext.level > 0) {
+                        // Specify a requested execution context, if one exists; otherwise top level
+                        request.put(REPLMessage.FRAME_NUMBER, Integer.toString(context.getSelectedFrameNumber()));
+                    }
+                    return request;
+                }
+            }
+            return null;
         }
     };
 
