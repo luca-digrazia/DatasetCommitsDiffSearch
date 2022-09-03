@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.replacements.test;
 
-import java.util.*;
-
 import org.junit.*;
 
 import com.oracle.graal.api.code.*;
@@ -232,16 +230,6 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
         return clazz.isInstance(object);
     }
 
-    public static boolean isInstance2(boolean cond, Object object) {
-        Class<?> clazz;
-        if (cond) {
-            clazz = String.class;
-        } else {
-            clazz = java.util.HashMap.class;
-        }
-        return clazz.isInstance(object);
-    }
-
     public static boolean isAssignableFrom(Class<?> clazz, Class<?> other) {
         return clazz.isAssignableFrom(other);
     }
@@ -249,7 +237,6 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
     @Test
     public void testClassSubstitutions() {
         testGraph("isInstance");
-        testGraph("isInstance2");
         testGraph("isAssignableFrom");
         for (Class<?> c : new Class[]{getClass(), Cloneable.class, int[].class, String[][].class}) {
             for (Object o : new Object[]{this, new int[5], new String[2][], new Object()}) {
@@ -257,12 +244,5 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
                 test("isAssignableFrom", c, o.getClass());
             }
         }
-
-        test("isInstance2", true, null);
-        test("isInstance2", false, null);
-        test("isInstance2", true, "string");
-        test("isInstance2", false, "string");
-        test("isInstance2", true, new HashMap<>());
-        test("isInstance2", false, new HashMap<>());
     }
 }

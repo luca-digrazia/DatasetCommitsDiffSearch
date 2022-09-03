@@ -39,7 +39,9 @@ import com.oracle.graal.hotspotvmconfig.*;
  *
  * All non-static, public fields in this class are so that they can be compiled as constants.
  */
-public class HotSpotVMConfig {
+public class HotSpotVMConfig extends CompilerObject {
+
+    private static final long serialVersionUID = -4744897993263044184L;
 
     /**
      * Determines if the current architecture is included in a given architecture set specification.
@@ -1253,8 +1255,8 @@ public class HotSpotVMConfig {
     @HotSpotVMType(name = "BasicLock", get = HotSpotVMType.Type.SIZE) @Stable public int basicLockSize;
     @HotSpotVMField(name = "BasicLock::_displaced_header", type = "markOop", get = HotSpotVMField.Type.OFFSET) @Stable public int basicLockDisplacedHeaderOffset;
 
-    @HotSpotVMValue(expression = "Universe::heap()->supports_inline_contig_alloc() ? Universe::heap()->end_addr() : (HeapWord**)-1", get = HotSpotVMValue.Type.ADDRESS) @Stable public long heapEndAddress;
-    @HotSpotVMValue(expression = "Universe::heap()->supports_inline_contig_alloc() ? Universe::heap()->top_addr() : (HeapWord**)-1", get = HotSpotVMValue.Type.ADDRESS) @Stable public long heapTopAddress;
+    @HotSpotVMValue(expression = "Universe::heap()->end_addr()", get = HotSpotVMValue.Type.ADDRESS) @Stable public long heapEndAddress;
+    @HotSpotVMValue(expression = "Universe::heap()->top_addr()", get = HotSpotVMValue.Type.ADDRESS) @Stable public long heapTopAddress;
 
     @HotSpotVMField(name = "Thread::_allocated_bytes", type = "jlong", get = HotSpotVMField.Type.OFFSET) @Stable public int threadAllocatedBytesOffset;
 
@@ -1442,9 +1444,6 @@ public class HotSpotVMConfig {
     @HotSpotVMValue(expression = "SharedRuntime::dsin", get = HotSpotVMValue.Type.ADDRESS) @Stable public long arithmeticSinAddress;
     @HotSpotVMValue(expression = "SharedRuntime::dcos", get = HotSpotVMValue.Type.ADDRESS) @Stable public long arithmeticCosAddress;
     @HotSpotVMValue(expression = "SharedRuntime::dtan", get = HotSpotVMValue.Type.ADDRESS) @Stable public long arithmeticTanAddress;
-    @HotSpotVMValue(expression = "SharedRuntime::dexp", get = HotSpotVMValue.Type.ADDRESS) @Stable public long arithmeticExpAddress;
-    @HotSpotVMValue(expression = "SharedRuntime::dlog", get = HotSpotVMValue.Type.ADDRESS) @Stable public long arithmeticLogAddress;
-    @HotSpotVMValue(expression = "SharedRuntime::dlog10", get = HotSpotVMValue.Type.ADDRESS) @Stable public long arithmeticLog10Address;
     @HotSpotVMValue(expression = "SharedRuntime::dpow", get = HotSpotVMValue.Type.ADDRESS) @Stable public long arithmeticPowAddress;
 
     @HotSpotVMValue(expression = "(jint) GraalCounterSize") @Stable public int graalCountersSize;
@@ -1512,26 +1511,23 @@ public class HotSpotVMConfig {
     @HotSpotVMConstant(name = "CompilerToVM::KLASS_TAG") @Stable public int compilerToVMKlassTag;
     @HotSpotVMConstant(name = "CompilerToVM::SYMBOL_TAG") @Stable public int compilerToVMSymbolTag;
 
-    // Checkstyle: stop
-    @HotSpotVMConstant(name = "CodeInstaller::VERIFIED_ENTRY") @Stable public int MARKID_VERIFIED_ENTRY;
-    @HotSpotVMConstant(name = "CodeInstaller::UNVERIFIED_ENTRY") @Stable public int MARKID_UNVERIFIED_ENTRY;
-    @HotSpotVMConstant(name = "CodeInstaller::OSR_ENTRY") @Stable public int MARKID_OSR_ENTRY;
-    @HotSpotVMConstant(name = "CodeInstaller::EXCEPTION_HANDLER_ENTRY") @Stable public int MARKID_EXCEPTION_HANDLER_ENTRY;
-    @HotSpotVMConstant(name = "CodeInstaller::DEOPT_HANDLER_ENTRY") @Stable public int MARKID_DEOPT_HANDLER_ENTRY;
-    @HotSpotVMConstant(name = "CodeInstaller::INVOKEINTERFACE") @Stable public int MARKID_INVOKEINTERFACE;
-    @HotSpotVMConstant(name = "CodeInstaller::INVOKEVIRTUAL") @Stable public int MARKID_INVOKEVIRTUAL;
-    @HotSpotVMConstant(name = "CodeInstaller::INVOKESTATIC") @Stable public int MARKID_INVOKESTATIC;
-    @HotSpotVMConstant(name = "CodeInstaller::INVOKESPECIAL") @Stable public int MARKID_INVOKESPECIAL;
-    @HotSpotVMConstant(name = "CodeInstaller::INLINE_INVOKE") @Stable public int MARKID_INLINE_INVOKE;
-    @HotSpotVMConstant(name = "CodeInstaller::POLL_NEAR") @Stable public int MARKID_POLL_NEAR;
-    @HotSpotVMConstant(name = "CodeInstaller::POLL_RETURN_NEAR") @Stable public int MARKID_POLL_RETURN_NEAR;
-    @HotSpotVMConstant(name = "CodeInstaller::POLL_FAR") @Stable public int MARKID_POLL_FAR;
-    @HotSpotVMConstant(name = "CodeInstaller::POLL_RETURN_FAR") @Stable public int MARKID_POLL_RETURN_FAR;
-    @HotSpotVMConstant(name = "CodeInstaller::CARD_TABLE_SHIFT") @Stable public int MARKID_CARD_TABLE_SHIFT;
-    @HotSpotVMConstant(name = "CodeInstaller::CARD_TABLE_ADDRESS") @Stable public int MARKID_CARD_TABLE_ADDRESS;
-    @HotSpotVMConstant(name = "CodeInstaller::INVOKE_INVALID") @Stable public int MARKID_INVOKE_INVALID;
-
-    // Checkstyle: resume
+    @HotSpotVMConstant(name = "CodeInstaller::VERIFIED_ENTRY") @Stable public int codeInstallerMarkIdVerifiedEntry;
+    @HotSpotVMConstant(name = "CodeInstaller::UNVERIFIED_ENTRY") @Stable public int codeInstallerMarkIdUnverifiedEntry;
+    @HotSpotVMConstant(name = "CodeInstaller::OSR_ENTRY") @Stable public int codeInstallerMarkIdOsrEntry;
+    @HotSpotVMConstant(name = "CodeInstaller::EXCEPTION_HANDLER_ENTRY") @Stable public int codeInstallerMarkIdExceptionHandlerEntry;
+    @HotSpotVMConstant(name = "CodeInstaller::DEOPT_HANDLER_ENTRY") @Stable public int codeInstallerMarkIdDeoptHandlerEntry;
+    @HotSpotVMConstant(name = "CodeInstaller::INVOKEINTERFACE") @Stable public int codeInstallerMarkIdInvokeinterface;
+    @HotSpotVMConstant(name = "CodeInstaller::INVOKEVIRTUAL") @Stable public int codeInstallerMarkIdInvokevirtual;
+    @HotSpotVMConstant(name = "CodeInstaller::INVOKESTATIC") @Stable public int codeInstallerMarkIdInvokestatic;
+    @HotSpotVMConstant(name = "CodeInstaller::INVOKESPECIAL") @Stable public int codeInstallerMarkIdInvokespecial;
+    @HotSpotVMConstant(name = "CodeInstaller::INLINE_INVOKE") @Stable public int codeInstallerMarkIdInlineInvoke;
+    @HotSpotVMConstant(name = "CodeInstaller::POLL_NEAR") @Stable public int codeInstallerMarkIdPollNear;
+    @HotSpotVMConstant(name = "CodeInstaller::POLL_RETURN_NEAR") @Stable public int codeInstallerMarkIdPollReturnNear;
+    @HotSpotVMConstant(name = "CodeInstaller::POLL_FAR") @Stable public int codeInstallerMarkIdPollFar;
+    @HotSpotVMConstant(name = "CodeInstaller::POLL_RETURN_FAR") @Stable public int codeInstallerMarkIdPollReturnFar;
+    @HotSpotVMConstant(name = "CodeInstaller::CARD_TABLE_SHIFT") @Stable public int codeInstallerMarkIdCardTableShift;
+    @HotSpotVMConstant(name = "CodeInstaller::CARD_TABLE_ADDRESS") @Stable public int codeInstallerMarkIdCardTableAddress;
+    @HotSpotVMConstant(name = "CodeInstaller::INVOKE_INVALID") @Stable public int codeInstallerMarkIdInvokeInvalid;
 
     public boolean check() {
         for (Field f : getClass().getDeclaredFields()) {
