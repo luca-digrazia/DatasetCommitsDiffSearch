@@ -34,16 +34,16 @@ import com.oracle.graal.word.*;
 /**
  * Node that is used to maintain a stack based counter of how many locks are currently held.
  */
-public final class MonitorCounterNode extends FloatingNode implements LIRGenResLowerable {
+public final class MonitorCounterNode extends FloatingNode implements LIRGenLowerable {
 
     private MonitorCounterNode() {
         super(null);
     }
 
     @Override
-    public void generate(LIRGenerator gen, LIRGenerationResult res) {
+    public void generate(LIRGenerator gen) {
         assert graph().getNodes().filter(MonitorCounterNode.class).count() == 1 : "monitor counters not canonicalized to single instance";
-        StackSlot counter = res.getFrameMap().allocateStackSlots(1, new BitSet(0), null);
+        StackSlot counter = gen.getFrameMap().allocateStackSlots(1, new BitSet(0), null);
         Value result = gen.emitAddress(counter);
         gen.setResult(this, result);
     }

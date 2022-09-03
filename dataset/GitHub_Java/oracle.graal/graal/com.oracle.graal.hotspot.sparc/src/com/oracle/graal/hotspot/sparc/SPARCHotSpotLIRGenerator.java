@@ -48,7 +48,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 
-public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSpotLIRGenerator, SPARCHotSpotLIRGenerationResult {
+public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSpotLIRGenerator {
 
     private final HotSpotVMConfig config;
     private final Object stub;
@@ -69,7 +69,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
      * deoptimization. The return address slot in the callee is overwritten with the address of a
      * deoptimization stub.
      */
-    private StackSlot deoptimizationRescueSlot;
+    StackSlot deoptimizationRescueSlot;
 
     @Override
     protected DebugInfoBuilder createDebugInfoBuilder(NodeMap<Value> nodeOperands) {
@@ -88,7 +88,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         return stub != null;
     }
 
-    public Stub getStub() {
+    Stub getStub() {
         return (Stub) stub;
     }
 
@@ -323,9 +323,5 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     public void emitPrefetchAllocate(ValueNode address, ValueNode distance) {
         SPARCAddressValue addr = emitAddress(operand(address), 0, loadNonConst(operand(distance)), 1);
         append(new SPARCPrefetchOp(addr, config.allocatePrefetchInstr));
-    }
-
-    public StackSlot getDeoptimizationRescueSlot() {
-        return deoptimizationRescueSlot;
     }
 }

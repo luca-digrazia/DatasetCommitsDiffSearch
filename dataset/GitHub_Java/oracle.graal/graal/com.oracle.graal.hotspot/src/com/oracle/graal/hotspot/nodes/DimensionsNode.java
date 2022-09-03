@@ -37,7 +37,7 @@ import com.oracle.graal.word.*;
  * Intrinsic for allocating an on-stack array of integers to hold the dimensions of a multianewarray
  * instruction.
  */
-public final class DimensionsNode extends FixedWithNextNode implements LIRGenResLowerable {
+public final class DimensionsNode extends FixedWithNextNode implements LIRGenLowerable {
 
     private final int rank;
 
@@ -47,11 +47,11 @@ public final class DimensionsNode extends FixedWithNextNode implements LIRGenRes
     }
 
     @Override
-    public void generate(LIRGenerator gen, LIRGenerationResult res) {
+    public void generate(LIRGenerator gen) {
         int size = rank * 4;
         int wordSize = gen.target().wordSize;
         int slots = roundUp(size, wordSize) / wordSize;
-        StackSlot array = res.getFrameMap().allocateStackSlots(slots, new BitSet(0), null);
+        StackSlot array = gen.getFrameMap().allocateStackSlots(slots, new BitSet(0), null);
         Value result = gen.emitAddress(array);
         gen.setResult(this, result);
     }

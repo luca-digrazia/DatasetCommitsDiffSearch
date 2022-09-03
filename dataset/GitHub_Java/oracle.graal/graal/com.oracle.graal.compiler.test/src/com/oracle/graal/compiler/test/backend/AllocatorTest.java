@@ -74,7 +74,7 @@ public class AllocatorTest extends GraalCompilerTest {
             this.lir = lir;
 
             for (AbstractBlock<?> block : lir.codeEmittingOrder()) {
-                for (LIRInstruction instr : lir.getLIRforBlock(block)) {
+                for (LIRInstruction instr : lir.lir(block)) {
                     collectStats(instr);
                 }
             }
