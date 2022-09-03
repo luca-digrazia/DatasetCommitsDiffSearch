@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.compiler.test.inlining;
 
-import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 
 import java.lang.reflect.Field;
@@ -187,7 +186,7 @@ public class RecursiveInliningTest extends GraalCompilerTest {
 
     @SuppressWarnings("try")
     private static StructuredGraph parseBytecodes(ResolvedJavaMethod method, HighTierContext context, CanonicalizerPhase canonicalizer, StructuredGraph caller) {
-        StructuredGraph newGraph = new StructuredGraph(method, AllowAssumptions.from(caller.getAssumptions() != null), INVALID_COMPILATION_ID);
+        StructuredGraph newGraph = new StructuredGraph(method, AllowAssumptions.from(caller.getAssumptions() != null));
         if (!caller.isUnsafeAccessTrackingEnabled()) {
             newGraph.disableUnsafeAccessTracking();
         }
