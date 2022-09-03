@@ -29,13 +29,13 @@ import com.oracle.shadowed.com.google.gson.Gson;
 
 public class SubstrateServerMessage {
     ServerCommand command;
-    byte[] payload;
+    String payload;
 
     SubstrateServerMessage() {
         /* Needed for GSON use in native-image */
     }
 
-    SubstrateServerMessage(ServerCommand command, byte[] payload) {
+    SubstrateServerMessage(ServerCommand command, String payload) {
         this.command = command;
         this.payload = payload;
     }
@@ -44,10 +44,6 @@ public class SubstrateServerMessage {
         new Gson().toJson(message, os);
         os.write(System.lineSeparator());
         os.flush();
-    }
-
-    public String payloadString() {
-        return new String(payload);
     }
 
     public enum ServerCommand {

@@ -24,7 +24,6 @@ package com.oracle.svm.hosted.server;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.channels.ClosedByInterruptException;
 
 import com.oracle.shadowed.com.google.gson.Gson;
 import com.oracle.svm.hosted.server.SubstrateServerMessage.ServerCommand;
@@ -41,8 +40,6 @@ public class StreamingJSONOutputStream extends OutputStream {
     private final ServerCommand command;
     private OutputStream original;
     private final Gson gson = new Gson();
-    private volatile boolean interrupted;
-    private volatile boolean writing;
 
     public void setOriginal(OutputStream original) {
         this.original = original;
@@ -55,21 +52,13 @@ public class StreamingJSONOutputStream extends OutputStream {
 
     @Override
     public void write(int b) throws IOException {
-        if (interrupted) {
-            throw new ClosedByInterruptException();
+        String jsonString = gson.toJson(new SubstrateServerMessage(command, new String(new byte[]{(byte) b}, 0, 1)));
+        for (byte ch : jsonString.getBytes()) {
+            original.write(ch);
         }
-        writing = true;
-        try {
-            String jsonString = gson.toJson(new SubstrateServerMessage(command, new byte[]{(byte) b}));
-            for (byte ch : jsonString.getBytes()) {
-                original.write(ch);
-            }
 
-            for (byte ch : System.lineSeparator().getBytes()) {
-                original.write(ch);
-            }
-        } finally {
-            writing = false;
+        for (byte ch : System.lineSeparator().getBytes()) {
+            original.write(ch);
         }
     }
 
@@ -81,13 +70,5 @@ public class StreamingJSONOutputStream extends OutputStream {
     @Override
     public void close() throws IOException {
         original.close();
-    }
-
-    void writingInterrupted(boolean value) {
-        this.interrupted = value;
-    }
-
-    public boolean isWriting() {
-        return writing;
     }
 }

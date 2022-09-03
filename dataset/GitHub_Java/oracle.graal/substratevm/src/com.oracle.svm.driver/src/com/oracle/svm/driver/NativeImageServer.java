@@ -269,7 +269,7 @@ final class NativeImageServer extends NativeImage {
     }
 
     private Path getMachineDir() {
-        Path machineDir = getUserConfigDir().resolve(getMachineID());
+        Path machineDir = getHomeDir().resolve(".native-image").resolve(getMachineID());
         ensureDirectoryExists(machineDir);
         return machineDir;
     }
@@ -291,29 +291,16 @@ final class NativeImageServer extends NativeImage {
 
     @SuppressWarnings("try")
     private Server getServerInstance(LinkedHashSet<Path> classpath, LinkedHashSet<Path> bootClasspath, LinkedHashSet<String> javaArgs) {
+        /* Maximize reuse by using same VM memory arguments for all server-based image builds */
+        replaceArg(javaArgs, oXms, getXmsValue());
+        replaceArg(javaArgs, oXmx, getXmxValue());
+
         Server[] result = {null};
         /* Important - Creating new servers is a machine-exclusive operation */
         withFileChannel(getMachineDir().resolve("create-server.lock"), lockFileChannel -> {
             try (FileLock lock = lockFileChannel(lockFileChannel)) {
                 /* Ensure that all dead server entries are gone before we start */
                 cleanupServers(false, false, true);
-
-                /* Determine how many ports are allowed to get used for build-servers */
-                String maxPortsStr = loadProperties(getMachineDir().resolve(machineProperties)).get(pKeyMaxPorts);
-                if (maxPortsStr == null || maxPortsStr.isEmpty()) {
-                    maxPortsStr = getUserConfigProperties().get(pKeyMaxPorts);
-                }
-                int maxPorts;
-                if (maxPortsStr == null || maxPortsStr.isEmpty()) {
-                    maxPorts = 2;
-                } else {
-                    maxPorts = Math.max(1, Integer.parseInt(maxPortsStr));
-                }
-
-                /* Maximize reuse by using same VM mem-args for all server-based image builds */
-                replaceArg(javaArgs, oXms, getXmsValue());
-                replaceArg(javaArgs, oXmx, getXmxValue(maxPorts));
-
                 Path sessionDir = getSessionDir();
                 String serverUID = imageServerUID(classpath, bootClasspath, javaArgs);
                 Path serverDir = sessionDir.resolve(serverDirPrefix + serverUID);
@@ -329,7 +316,7 @@ final class NativeImageServer extends NativeImage {
                         showError("Found corrupt ServerDir: " + serverDir, e);
                     }
                 } else {
-                    int serverPort = acquirePortNumber(maxPorts);
+                    int serverPort = acquirePortNumber();
                     if (serverPort < 0) {
                         /* Server limit reached */
                         showVerboseMessage(verboseServer, "Server limit reached -> remove least recently used server");
@@ -342,7 +329,7 @@ final class NativeImageServer extends NativeImage {
                         if (victim != null) {
                             showVerboseMessage(verboseServer, "Selected server to remove " + victim);
                             victim.shutdown();
-                            serverPort = acquirePortNumber(maxPorts);
+                            serverPort = acquirePortNumber();
                             if (serverPort < 0) {
                                 showWarning("Cannot acquire new server port despite removing " + victim);
                             }
@@ -587,7 +574,7 @@ final class NativeImageServer extends NativeImage {
     }
 
     @SuppressWarnings("try")
-    private int acquirePortNumber(int maxPorts) {
+    private int acquirePortNumber() {
         int firstPortNumber = 26681;
         int[] selectedPort = {-1};
         Path machineDir = getMachineDir();
@@ -596,12 +583,17 @@ final class NativeImageServer extends NativeImage {
                 Path machinePropertiesPath = machineDir.resolve(machineProperties);
                 TreeSet<Integer> inUseSet = new TreeSet<>();
                 Properties mp = new Properties();
+                int maxPorts = 2;
                 if (Files.isReadable(machinePropertiesPath)) {
                     try (InputStream is = Files.newInputStream(machinePropertiesPath)) {
                         mp.load(is);
                         String portInUseValue = mp.getProperty(pKeyPortsInUse);
                         if (portInUseValue != null && !portInUseValue.isEmpty()) {
                             inUseSet.addAll(Arrays.stream(portInUseValue.split(" ")).map(Integer::parseInt).collect(Collectors.toList()));
+                        }
+                        String maxPortsStr = mp.getProperty(pKeyMaxPorts);
+                        if (maxPortsStr != null && !maxPortsStr.isEmpty()) {
+                            maxPorts = Math.max(1, Integer.parseInt(maxPortsStr));
                         }
                     }
                 }
@@ -752,12 +744,6 @@ final class NativeImageServer extends NativeImage {
 
     void setUseServer(boolean val) {
         useServer = val;
-    }
-
-    @Override
-    protected void setDryRun(boolean val) {
-        super.setDryRun(val);
-        useServer = !val;
     }
 
     void setVerboseServer(boolean val) {
