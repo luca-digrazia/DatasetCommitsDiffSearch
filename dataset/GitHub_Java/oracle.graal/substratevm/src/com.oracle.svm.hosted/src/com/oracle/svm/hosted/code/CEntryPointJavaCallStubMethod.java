@@ -25,18 +25,14 @@
 package com.oracle.svm.hosted.code;
 
 import java.lang.annotation.Annotation;
-import java.util.List;
 
-import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.function.CFunctionPointer;
+import org.graalvm.nativeimage.c.function.CodePointer;
 
 import com.oracle.graal.pointsto.meta.HostedProviders;
-import com.oracle.svm.core.c.BoxedRelocatedPointer;
-import com.oracle.svm.core.thread.VMThreads.StatusSupport;
+import com.oracle.svm.core.c.MutableBoxedPointer;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.phases.HostedGraphKit;
 
@@ -51,10 +47,10 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 public class CEntryPointJavaCallStubMethod extends CCallStubMethod {
     private final String name;
     private final ResolvedJavaType declaringClass;
-    private final CFunctionPointer target;
+    private final CodePointer target;
 
-    CEntryPointJavaCallStubMethod(ResolvedJavaMethod original, String name, ResolvedJavaType declaringClass, CFunctionPointer target) {
-        super(original, StatusSupport.STATUS_IN_NATIVE);
+    CEntryPointJavaCallStubMethod(ResolvedJavaMethod original, String name, ResolvedJavaType declaringClass, CodePointer target) {
+        super(original, true);
         this.name = name;
         this.declaringClass = declaringClass;
         this.target = target;
@@ -76,16 +72,17 @@ public class CEntryPointJavaCallStubMethod extends CCallStubMethod {
     }
 
     @Override
-    protected ValueNode createTargetAddressNode(HostedGraphKit kit, HostedProviders providers, List<ValueNode> arguments) {
+    protected ValueNode createTargetAddressNode(HostedGraphKit kit, HostedProviders providers) {
         try {
             /*
-             * We currently cannot handle {@link MethodPointer} as a constant in the code, so we use
-             * an indirection with a non-final field load from an object of BoxedRelocatedPointer.
+             * We currently cannot handle {@link MethodPointer} as a constant in the code, so we
+             * force an indirection with a field load from an object of MutableBoxedPointer. Due to
+             * the mutable nature of the class, the field load is not constant-folded.
              */
-            BoxedRelocatedPointer box = new BoxedRelocatedPointer(target);
+            MutableBoxedPointer box = new MutableBoxedPointer(target);
             ConstantNode boxNode = kit.createObject(box);
-            ResolvedJavaField field = providers.getMetaAccess().lookupJavaField(BoxedRelocatedPointer.class.getDeclaredField("pointer"));
-            return kit.append(LoadFieldNode.createOverrideStamp(StampPair.createSingle(kit.wordStamp((ResolvedJavaType) field.getType())), boxNode, field));
+            ResolvedJavaField field = providers.getMetaAccess().lookupJavaField(MutableBoxedPointer.class.getDeclaredField("pointer"));
+            return kit.createLoadField(boxNode, field);
         } catch (NoSuchFieldException e) {
             throw VMError.shouldNotReachHere(e);
         }
