@@ -29,7 +29,6 @@ import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil;
 import org.graalvm.compiler.hotspot.word.KlassPointer;
-import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.code.Register;
 
@@ -37,8 +36,8 @@ import jdk.vm.ci.code.Register;
  */
 public class ClassCastExceptionStub extends CreateExceptionStub {
 
-    public ClassCastExceptionStub(OptionValues options, HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
-        super("createClassCastException", options, providers, linkage);
+    public ClassCastExceptionStub(HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
+        super("createClassCastException", providers, linkage);
     }
 
     @Override
