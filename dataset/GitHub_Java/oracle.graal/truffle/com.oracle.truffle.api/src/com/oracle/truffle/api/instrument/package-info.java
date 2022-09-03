@@ -23,17 +23,11 @@
  * questions.
  */
 
-/*
- @ApiInfo(
- group="Obsolete soon"
- )
- */
-
 /**
- * <h4>Truffle {@linkplain com.oracle.truffle.api.instrument.Instrumenter Instrumentation}: access to execution events for Debuggers and other tools.</h4>
+ * <h4>The Truffle Instrumentation Framework</h4>
  * <p>
  * This framework permits client
- * {@linkplain com.oracle.truffle.api.instrument.Instrumenter.Tool tools},
+ * {@linkplain com.oracle.truffle.api.iknstrument.Instrumenter.Tool tools},
  * either builtin or third-party, to observe with <em>very low overhead</em> the execution of a
  * {@linkplain com.oracle.truffle.api.TruffleLanguage Truffle Language} program at the level of
  * <em>AST execution events</em>:
@@ -43,11 +37,11 @@
  * <li>a Truffle
  * {@linkplain com.oracle.truffle.api.nodes.Node Node} execution has just completed.</li>
  * </ul>
- * The framework supports many kinds of tools, for example simple collectors of data such as the
- * CoverageTracker.
+ * The framework supports many kinds of tools, for example simple collectors of data such as
+ * {@linkplain com.oracle.truffle.tools.CoverageTracker code coverage}.
  * It also supports Truffle's built-in
  * {@linkplain com.oracle.truffle.api.debug.Debugger debugging services}, as well as utilities
- * that maintain {@linkplain com.oracle.truffle.api.debug.LineToProbesMap maps of source code locations}
+ * that maintain {@linkplain com.oracle.truffle.tools.LineToProbesMap maps of source code locations}
  * for other tools such as {@linkplain com.oracle.truffle.api.debug.Debugger debugging}.
  *
  * <h4>Instrumentation Services</h4>
@@ -66,7 +60,9 @@
  * {@linkplain com.oracle.truffle.api.instrument.Probe Probe} that is permanently associated with a
  * particular segment of source code, e.g. a "statement", that corresponds to an AST location.</li>
  * <li>Probing is only supported at
- * {@linkplain com.oracle.truffle.api.nodes.Node Nodes} where supported by specific language implementations.</li>
+ * {@linkplain com.oracle.truffle.api.nodes.Node Nodes} that are implemented to be
+ * {@linkplain com.oracle.truffle.api.instrument.Instrumenter#isInstrumentable(com.oracle.truffle.api.nodes.Node)
+ * instrumentable}.</li>
  * <li>The relationship between a
  * {@linkplain com.oracle.truffle.api.instrument.Probe Probe} and
  * a source code location persists across Truffle <em>cloning</em> of ASTs, which is to say, a single
@@ -98,7 +94,8 @@
  * of clients during program execution.  For example, knowing which
  * {@linkplain com.oracle.truffle.api.instrument.Probe Probes} are on
  * {@linkplain com.oracle.truffle.api.instrument.StandardSyntaxTag#STATEMENT STATEMENT nodes}
- * informs both the CoverageTracker and the
+ * informs both the {@linkplain com.oracle.truffle.tools.CoverageTracker code coverage} counter
+ * and the
  * {@linkplain com.oracle.truffle.api.debug.Debugger debugger} while "stepping".</li>
  * <li>{@linkplain com.oracle.truffle.api.instrument.SyntaxTag tags} can also be added at any
  * time by any client for any purpose, including private
@@ -112,8 +109,8 @@
  * being {@linkplain com.oracle.truffle.api.instrument.Instrumenter#probe(com.oracle.truffle.api.nodes.Node) created} and
  * {@linkplain com.oracle.truffle.api.instrument.SyntaxTag Tags} being
  * {@linkplain com.oracle.truffle.api.instrument.Probe#tagAs(SyntaxTag, Object) added} by
- * {@linkplain com.oracle.truffle.api.instrument.Instrumenter#addProbeListener(ProbeListener) registering} a
- * {@linkplain com.oracle.truffle.api.instrument.ProbeListener ProbeListener}.</li>
+ * {@linkplain com.oracle.truffle.api.instrument.Instrumenter#addProbeListener(ProbeListener) registering a
+ * {@linkplain com.oracle.truffle.api.instrument.ProbeListener ProbeListner}.</li>
  * <li>Clients can also
  * {@linkplain com.oracle.truffle.api.instrument.Instrumenter#findProbesTaggedAs(SyntaxTag) find} all existing
  * {@linkplain com.oracle.truffle.api.instrument.Probe Probes}, possibly filtering the search by
@@ -125,12 +122,12 @@
  * <li>Clients can be notified of <em>AST execution events</em> by creating one of several kinds of
  * <em>event listener</em> and <em>attaching</em> it to a
  * {@linkplain com.oracle.truffle.api.instrument.Probe Probe}. This creates an
- * {@linkplain com.oracle.truffle.api.instrument.ProbeInstrument Instrument} that notifies the listener
+ * {@linkplain com.oracle.truffle.api.instrument.Instrument Instrument} that notifies the listener
  * of every subsequent execution event at the AST location corresponding to the
  * {@linkplain com.oracle.truffle.api.instrument.Probe Probe}.</li>
  * <li>An
- * {@linkplain com.oracle.truffle.api.instrument.ProbeInstrument Instrument} can be
- * {@linkplain com.oracle.truffle.api.instrument.ProbeInstrument#dispose() disposed}, at which time
+ * {@linkplain com.oracle.truffle.api.instrument.Instrument Instrument} can be
+ * {@linkplain com.oracle.truffle.api.instrument.Instrument#dispose() disposed}, at which time
  * it is removed from service at every clone of the AST, incurs no further overhead, and is
  * permanently unusable.</li>
  * <li>Many clients need only implement a
@@ -138,7 +135,7 @@
  * whose notification methods provide only the instance of the
  * {@linkplain com.oracle.truffle.api.instrument.Probe Probe} to which it was attached.  This
  * provides access to the corresponding
- * {@linkplain com.oracle.truffle.api.source.SourceSection source code location} and any
+ * {@linkplain com.oracle.truffle.api.SourceSection source code location} and any
  * {@linkplain com.oracle.truffle.api.instrument.SyntaxTag tags} that had been applied there.</li>
  * <li>Clients that require deeper access to execution state implement a
  * {@linkplain com.oracle.truffle.api.instrument.StandardInstrumentListener StandardInstrumentListener}
@@ -146,30 +143,30 @@
  * {@linkplain com.oracle.truffle.api.nodes.Node AST location} and current
  * {@linkplain com.oracle.truffle.api.frame.Frame stack frame}.</li>
  * <li>Clients can also create an
- * {@linkplain com.oracle.truffle.api.instrument.ProbeInstrument Instrument} (whose design is currently
+ * {@linkplain com.oracle.truffle.api.instrument.Instrument Instrument} (whose design is currently
  * under revision) that supports (effectively) inserting a Truffle AST fragment into the AST
  * location, where it will be executed subject to full Truffle optimization.</li>
  * </ul></li>
  *
- * <li><strong>Wide-area Instrumentation: TagInstruments</strong>
+ * <li><strong>Wide-area Instrumentation: traps</strong>
  * <ul>
  * <li>A specialized form of Instrumentation is provided that efficiently attaches a single
  * listener called a
- * {@linkplain com.oracle.truffle.api.instrument.StandardBeforeInstrumentListener StandardBeforeInstrumentListener} to every
+ * {@linkplain com.oracle.truffle.api.instrument.SyntaxTagTrap tag trap} to every
  * {@linkplain com.oracle.truffle.api.instrument.Probe Probe} containing a specified
  * {@linkplain com.oracle.truffle.api.instrument.SyntaxTag tag}.</li>
  * <li>One (but no more than one)
- * {@linkplain com.oracle.truffle.api.instrument.StandardBeforeInstrumentListener StandardBeforeInstrumentListener}
- * may optionally be attached for notification <em>before</em> every <em>AST execution event</em> where the specified
+ * {@linkplain com.oracle.truffle.api.instrument.SyntaxTagTrap tag trap} may optionally be set
+ * to be notified <em>before</em> every <em>AST execution event</em> where the specified
  * {@linkplain com.oracle.truffle.api.instrument.SyntaxTag tag} is present.</li>
  * <li>One (but no more than one)
- * {@linkplain com.oracle.truffle.api.instrument.StandardAfterInstrumentListener StandardAfterInstrumentListener}
- * may optionally be attached for notification <em>after</em> every <em>AST execution event</em> where the specified
+ * {@linkplain com.oracle.truffle.api.instrument.SyntaxTagTrap tag trap} may optionally be set
+ * to be notified <em>after</em> every <em>AST execution event</em> where the specified
  * {@linkplain com.oracle.truffle.api.instrument.SyntaxTag tag} is present.</li>
  * <li>The
- * {@linkplain com.oracle.truffle.api.instrument.TagInstrument TagInstrument} mechanism is independent
+ * {@linkplain com.oracle.truffle.api.instrument.SyntaxTagTrap tag trap} mechanism is independent
  * of listeners that may be attached to
- * {@linkplain com.oracle.truffle.api.instrument.Probe Probes}.  It is especially valuable for
+ * {@linkplain com.oracle.truffle.api.instrument.Probe Probe}.  It is especially valuable for
  * applications such as the debugger, where during "stepping" the program should be halted at
  * any node tagged with
  * {@linkplain com.oracle.truffle.api.instrument.StandardSyntaxTag#STATEMENT STATEMENT}.</li>
@@ -185,11 +182,12 @@
  * {@linkplain com.oracle.truffle.api.instrument.Instrumenter.Tool#setEnabled(boolean) disabled and re-enabled} and eventually
  * {@linkplain com.oracle.truffle.api.instrument.Instrumenter.Tool#dispose() disposed} when no longer needed.</li>
  * <li>A useful example is the
- * {@linkplain com.oracle.truffle.api.debug.LineToProbesMap LineToProbesMap}, which incrementally builds and maintains a map of
+ * {@linkplain com.oracle.truffle.tools.LineToProbesMap LineToProbesMap}, which incrementally builds and maintains a map of
  * {@linkplain com.oracle.truffle.api.instrument.Probe Probes} indexed by
  * {@linkplain com.oracle.truffle.api.source.LineLocation source code line}. Truffle
  * {@linkplain com.oracle.truffle.api.debug.Debugger debugging services} depend heavily on this utility.</li>
- * <li>The CoverageTracker maintains counts of execution events where a
+ * <li>The
+ * {@linkplain com.oracle.truffle.tools.CoverageTracker CoverageTracker} maintains counts of execution events where a
  * {@linkplain com.oracle.truffle.api.instrument.Probe Probe} has been tagged with
  * {@linkplain com.oracle.truffle.api.instrument.StandardSyntaxTag#STATEMENT STATEMENT}, indexed by source code line.</li>
  * </ul></li>
