@@ -226,14 +226,6 @@ public class Debug {
             public PrintStream output() {
                 return output;
             }
-
-            @Override
-            public void addToContext(Object o) {
-            }
-
-            @Override
-            public void removeFromContext(Object o) {
-            }
         };
     }
 

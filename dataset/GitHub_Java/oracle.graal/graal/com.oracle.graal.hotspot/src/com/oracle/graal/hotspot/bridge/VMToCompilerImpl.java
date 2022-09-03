@@ -23,7 +23,6 @@
 
 package com.oracle.graal.hotspot.bridge;
 
-import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -36,7 +35,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.Compiler;
-import com.oracle.graal.hotspot.counters.*;
 import com.oracle.graal.hotspot.ri.*;
 import com.oracle.graal.hotspot.server.*;
 import com.oracle.graal.hotspot.snippets.*;
@@ -68,8 +66,6 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     private ThreadPoolExecutor slowCompileQueue;
     private AtomicInteger compileTaskIds = new AtomicInteger();
 
-    private PrintStream log = System.out;
-
     public VMToCompilerImpl(Compiler compiler) {
         this.compiler = compiler;
 
@@ -85,16 +81,8 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     }
 
     public void startCompiler() throws Throwable {
-        if (GraalOptions.LogFile != null) {
-            try {
-                final boolean enableAutoflush = true;
-                log = new PrintStream(new FileOutputStream(GraalOptions.LogFile), enableAutoflush);
-            } catch (FileNotFoundException e) {
-                throw new RuntimeException("couldn't open log file: " + GraalOptions.LogFile, e);
-            }
-        }
-
-        TTY.initialize(log);
+        // Make sure TTY is initialized here such that the correct System.out is used for TTY.
+        TTY.initialize();
 
         if (GraalOptions.Log == null && GraalOptions.Meter == null && GraalOptions.Time == null && GraalOptions.Dump == null) {
             if (GraalOptions.MethodFilter != null) {
@@ -104,7 +92,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
         if (GraalOptions.Debug) {
             Debug.enable();
-            HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter, log);
+            HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter, GraalOptions.LogFile);
             Debug.setConfig(hotspotDebugConfig);
         }
         // Install intrinsics.
@@ -116,7 +104,9 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                 public void run() {
                     VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime);
                     GraalIntrinsics.installIntrinsics(runtime, runtime.getCompiler().getTarget());
-                    runtime.installSnippets();
+                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new SystemSnippets());
+                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new UnsafeSnippets());
+                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new ArrayCopySnippets());
                 }
             });
 
@@ -218,10 +208,10 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
         TTY.println(" in %d ms", System.currentTimeMillis() - startTime);
         if (compiler.getCache() != null) {
             compiler.getCache().clear();
+            compiler.getCache().enable();
         }
         System.gc();
         CiCompilationStatistics.clear("bootstrap2");
-        MethodEntryCounters.printCounters(compiler);
     }
 
     private void enqueue(Method m) throws Throwable {
@@ -230,26 +220,17 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
         compileMethod((HotSpotMethodResolved) riMethod, 0, false, 10);
     }
 
-    private static void shutdownCompileQueue(ThreadPoolExecutor queue) throws InterruptedException {
-        if (queue != null) {
-            queue.shutdown();
-            if (Debug.isEnabled() && GraalOptions.Dump != null) {
-                // Wait 5 seconds to try and flush out all graph dumps
-                queue.awaitTermination(5, TimeUnit.SECONDS);
-            }
-        }
-    }
-
     public void shutdownCompiler() throws Throwable {
         try {
             assert !CompilationTask.withinEnqueue.get();
             CompilationTask.withinEnqueue.set(Boolean.TRUE);
-            shutdownCompileQueue(compileQueue);
-            shutdownCompileQueue(slowCompileQueue);
+            compileQueue.shutdown();
+            if (slowCompileQueue != null) {
+                slowCompileQueue.shutdown();
+            }
         } finally {
             CompilationTask.withinEnqueue.set(Boolean.FALSE);
         }
-
 
         if (Debug.isEnabled()) {
             List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
@@ -284,8 +265,6 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
             }
         }
         CiCompilationStatistics.clear("final");
-        MethodEntryCounters.printCounters(compiler);
-        HotSpotXirGenerator.printCounters(TTY.out().out());
     }
 
     private void flattenChildren(DebugValueMap map, DebugValueMap globalMap) {
@@ -371,7 +350,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
             final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
             int id = compileTaskIds.incrementAndGet();
-            CompilationTask task = CompilationTask.create(compiler, createPhasePlan(optimisticOpts), optimisticOpts, method, id, priority);
+            CompilationTask task = CompilationTask.create(compiler, createHotSpotSpecificPhasePlan(optimisticOpts), optimisticOpts, method, id, priority);
             if (blocking) {
                 task.runCompilation();
             } else {
@@ -483,7 +462,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     }
 
 
-    public PhasePlan createPhasePlan(OptimisticOptimizations optimisticOpts) {
+    private PhasePlan createHotSpotSpecificPhasePlan(OptimisticOptimizations optimisticOpts) {
         PhasePlan phasePlan = new PhasePlan();
         GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(compiler.getRuntime(), GraphBuilderConfiguration.getDefault(), optimisticOpts);
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
@@ -491,10 +470,5 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
             phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
         }
         return phasePlan;
-    }
-
-    @Override
-    public PrintStream log() {
-        return log;
     }
 }

@@ -43,7 +43,10 @@ public class HotSpotDebugConfig implements DebugConfig {
     private final List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
     private final PrintStream output;
 
-    public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter, PrintStream output) {
+    private static final PrintStream cachedOut = System.out;
+
+
+    public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter, String logFile) {
         this.logFilter = DebugFilter.parse(logFilter);
         this.meterFilter = DebugFilter.parse(meterFilter);
         this.timerFilter = DebugFilter.parse(timerFilter);
@@ -60,7 +63,7 @@ public class HotSpotDebugConfig implements DebugConfig {
 
         // Report the filters that have been configured so the user can verify it's what they expect
         if (logFilter != null || meterFilter != null || timerFilter != null || dumpFilter != null || methodFilter != null) {
-            TTY.println(Thread.currentThread().getName() + ": " + toString());
+            TTY.println(this.toString());
         }
 
         if (GraalOptions.PrintIdealGraphFile) {
@@ -69,7 +72,15 @@ public class HotSpotDebugConfig implements DebugConfig {
             dumpHandlers.add(new IdealGraphPrinterDumpHandler(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintIdealGraphPort));
         }
         dumpHandlers.add(new CFGPrinterObserver());
-        this.output = output;
+        if (logFile == null || logFile.isEmpty()) {
+            output = cachedOut;
+        } else {
+            try {
+                output = new PrintStream(logFile);
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException("couldn't create log file: " + logFile, e);
+            }
+        }
     }
 
     public boolean isLogEnabled() {
@@ -148,15 +159,14 @@ public class HotSpotDebugConfig implements DebugConfig {
             return null;
         }
         Debug.setConfig(Debug.fixedConfig(true, true, false, false, dumpHandlers, output));
-        Debug.log(String.format("Exception occurred in scope: %s", Debug.currentScope()));
+        // sync "Exception occured in scope: " with mx/sanitycheck.py::Test.__init__
+        Debug.log(String.format("Exception occured in scope: %s", Debug.currentScope()));
         for (Object o : Debug.context()) {
             Debug.log("Context obj %s", o);
-            if (o instanceof Graph) {
-                if (GraalOptions.DumpOnError) {
-                    Debug.dump(o, "Exception graph");
-                } else {
-                    Debug.log("Use -G:+DumpOnError to enable dumping of graphs on this error");
-                }
+            if (o instanceof Graph && GraalOptions.DumpOnError) {
+                Graph graph = (Graph) o;
+                Debug.log("Found graph in context: ", graph);
+                Debug.dump(o, "Exception graph");
             }
         }
         return null;
