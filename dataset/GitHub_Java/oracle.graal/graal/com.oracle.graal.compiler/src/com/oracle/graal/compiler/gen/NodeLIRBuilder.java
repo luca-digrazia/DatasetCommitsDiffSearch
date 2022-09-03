@@ -26,6 +26,7 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.lir.LIR.*;
+import static com.oracle.graal.nodes.ConstantNode.*;
 
 import java.util.*;
 import java.util.Map.Entry;
@@ -43,6 +44,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.gen.LIRGenerator.LoadConstant;
 import com.oracle.graal.lir.gen.LIRGenerator.Options;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -133,7 +135,48 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
         if (nodeOperands == null) {
             return null;
         }
-        return nodeOperands.get(node);
+        Value operand = nodeOperands.get(node);
+        if (operand == null) {
+            operand = getConstantOperand(node);
+        }
+        return operand;
+    }
+
+    private Value getConstantOperand(ValueNode node) {
+        if (!ConstantNodeRecordsUsages) {
+            Constant value = node.asConstant();
+            if (value != null) {
+                if (gen.canInlineConstant(value)) {
+                    return setResult(node, value);
+                } else {
+                    Variable loadedValue;
+                    if (gen.getConstantLoads() == null) {
+                        gen.setConstantLoads(new HashMap<>());
+                    }
+                    LoadConstant load = gen.getConstantLoads().get(value);
+                    assert gen.getCurrentBlock() instanceof Block;
+                    if (load == null) {
+                        int index = gen.getResult().getLIR().getLIRforBlock(gen.getCurrentBlock()).size();
+                        loadedValue = gen.emitMove(value);
+                        LIRInstruction op = gen.getResult().getLIR().getLIRforBlock(gen.getCurrentBlock()).get(index);
+                        gen.getConstantLoads().put(value, new LoadConstant(loadedValue, gen.getCurrentBlock(), index, op));
+                    } else {
+                        AbstractBlock<?> dominator = ControlFlowGraph.commonDominator((Block) load.getBlock(), (Block) gen.getCurrentBlock());
+                        loadedValue = load.getVariable();
+                        if (dominator != load.getBlock()) {
+                            load.unpin(gen.getResult().getLIR());
+                        } else {
+                            assert load.getBlock() != gen.getCurrentBlock() || load.getIndex() < gen.getResult().getLIR().getLIRforBlock(gen.getCurrentBlock()).size();
+                        }
+                        load.setBlock(dominator);
+                    }
+                    return loadedValue;
+                }
+            }
+        } else {
+            // Constant is loaded by ConstantNode.generate()
+        }
+        return null;
     }
 
     public ValueNode valueForOperand(Value value) {
@@ -209,7 +252,10 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
             if (Options.TraceLIRGeneratorLevel.getValue() >= 3) {
                 TTY.println("LIRGen for " + instr);
             }
-            if (instr instanceof ValueNode) {
+            if (!ConstantNodeRecordsUsages && instr instanceof ConstantNode) {
+                // Loading of constants is done lazily by operand()
+
+            } else if (instr instanceof ValueNode) {
                 ValueNode valueNode = (ValueNode) instr;
                 Value operand = getOperand(valueNode);
                 if (operand == null) {
@@ -409,7 +455,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
 
     private void emitNullCheckBranch(IsNullNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, double trueSuccessorProbability) {
         PlatformKind kind = gen.getPlatformKind(node.object().stamp());
-        gen.emitCompareBranch(kind, operand(node.object()), kind.getDefaultValue(), Condition.EQ, false, trueSuccessor, falseSuccessor, trueSuccessorProbability);
+        gen.emitCompareBranch(kind, operand(node.object()), Constant.NULL_OBJECT, Condition.EQ, false, trueSuccessor, falseSuccessor, trueSuccessorProbability);
     }
 
     public void emitCompareBranch(CompareNode compare, LabelRef trueSuccessor, LabelRef falseSuccessor, double trueSuccessorProbability) {
@@ -437,7 +483,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
         if (node instanceof IsNullNode) {
             IsNullNode isNullNode = (IsNullNode) node;
             PlatformKind kind = gen.getPlatformKind(isNullNode.object().stamp());
-            return gen.emitConditionalMove(kind, operand(isNullNode.object()), kind.getDefaultValue(), Condition.EQ, false, trueValue, falseValue);
+            return gen.emitConditionalMove(kind, operand(isNullNode.object()), Constant.NULL_OBJECT, Condition.EQ, false, trueValue, falseValue);
         } else if (node instanceof CompareNode) {
             CompareNode compare = (CompareNode) node;
             PlatformKind kind = gen.getPlatformKind(compare.x().stamp());

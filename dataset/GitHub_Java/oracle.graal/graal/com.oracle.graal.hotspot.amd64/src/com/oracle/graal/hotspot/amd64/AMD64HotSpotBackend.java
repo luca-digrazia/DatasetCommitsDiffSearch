@@ -26,9 +26,10 @@ import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
 import java.util.*;
+
+import sun.misc.*;
 
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
@@ -54,6 +55,8 @@ import com.oracle.graal.nodes.spi.*;
  * HotSpot AMD64 specific backend.
  */
 public class AMD64HotSpotBackend extends HotSpotHostBackend {
+
+    private static final Unsafe unsafe = Unsafe.getUnsafe();
 
     public AMD64HotSpotBackend(HotSpotGraalRuntime runtime, HotSpotProviders providers) {
         super(runtime, providers);

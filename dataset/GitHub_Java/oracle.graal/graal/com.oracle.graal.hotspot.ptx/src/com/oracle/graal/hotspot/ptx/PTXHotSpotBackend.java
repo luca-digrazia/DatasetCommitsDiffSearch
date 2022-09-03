@@ -46,6 +46,7 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
@@ -224,7 +225,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
         return kernel;
     }
 
-    static final class RegisterAnalysis implements ValueConsumer {
+    static final class RegisterAnalysis extends ValueProcedure {
         private final SortedSet<Integer> signed32 = new TreeSet<>();
         private final SortedSet<Integer> signed64 = new TreeSet<>();
 
@@ -260,7 +261,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
         }
 
         @Override
-        public void visitValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+        public Value doValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
             if (isVariable(value)) {
                 Variable regVal = (Variable) value;
                 Kind regKind = regVal.getKind();
@@ -309,6 +310,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
                     }
                 }
             }
+            return value;
         }
     }
 
@@ -424,8 +426,8 @@ public class PTXHotSpotBackend extends HotSpotBackend {
                     }
                     // Record registers used in the kernel
                     registerAnalysis.op = op;
-                    op.visitEachTemp(registerAnalysis);
-                    op.visitEachOutput(registerAnalysis);
+                    op.forEachTemp(registerAnalysis);
+                    op.forEachOutput(registerAnalysis);
                 }
             }
         }

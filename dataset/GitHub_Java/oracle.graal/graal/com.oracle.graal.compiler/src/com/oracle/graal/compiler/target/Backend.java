@@ -71,13 +71,11 @@ public abstract class Backend {
      * The given registerConfig is optional, in case null is passed the default RegisterConfig from
      * the CodeCacheProvider will be used.
      */
-    public abstract FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig);
-
     public abstract FrameMap newFrameMap(RegisterConfig registerConfig);
 
     public abstract LIRGeneratorTool newLIRGenerator(CallingConvention cc, LIRGenerationResult lirGenRes);
 
-    public abstract LIRGenerationResult newLIRGenerationResult(LIR lir, FrameMapBuilder frameMapBuilder, ResolvedJavaMethod method, Object stub);
+    public abstract LIRGenerationResult newLIRGenerationResult(LIR lir, FrameMap frameMap, ResolvedJavaMethod method, Object stub);
 
     public abstract NodeLIRBuilderTool newNodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool lirGen);
 
@@ -97,8 +95,7 @@ public abstract class Backend {
     /**
      * Creates the object used to fill in the details of a given compilation result.
      */
-    public abstract CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGenResult, FrameMap frameMap, CompilationResult compilationResult,
-                    CompilationResultBuilderFactory factory);
+    public abstract CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGenResult, CompilationResult compilationResult, CompilationResultBuilderFactory factory);
 
     public abstract boolean shouldAllocateRegisters();
 

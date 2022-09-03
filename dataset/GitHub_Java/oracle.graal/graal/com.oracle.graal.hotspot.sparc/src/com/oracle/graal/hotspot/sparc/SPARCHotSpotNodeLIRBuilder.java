@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.sparc.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -40,7 +39,7 @@ import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.lir.sparc.SPARCMove.CompareAndSwapOp;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 
 public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements HotSpotNodeLIRBuilder {
 
@@ -53,7 +52,7 @@ public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements H
 
     @Override
     protected DebugInfoBuilder createDebugInfoBuilder(StructuredGraph graph, NodeMap<Value> nodeOperands) {
-        HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMap(), LIRKind.value(Kind.Long));
+        HotSpotLockStack lockStack = new HotSpotLockStack(gen.getResult().getFrameMap(), Kind.Long);
         return new HotSpotDebugInfoBuilder(nodeOperands, lockStack);
     }
 
@@ -69,17 +68,17 @@ public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements H
 
     @Override
     public void visitDirectCompareAndSwap(DirectCompareAndSwapNode x) {
+        Kind kind = x.newValue().getKind();
+        assert kind == x.expectedValue().getKind();
+
         Variable address = gen.load(operand(x.object()));
         Value offset = operand(x.offset());
         Variable cmpValue = (Variable) gen.loadNonConst(operand(x.expectedValue()));
         Variable newValue = gen.load(operand(x.newValue()));
 
-        LIRKind kind = cmpValue.getLIRKind();
-        assert kind.equals(newValue.getLIRKind());
-
         if (ValueUtil.isConstant(offset)) {
             assert !gen.getCodeCache().needsDataPatch(asConstant(offset));
-            Variable longAddress = gen.newVariable(LIRKind.value(Kind.Long));
+            Variable longAddress = newVariable(Kind.Long);
             gen.emitMove(longAddress, address);
             address = getGen().emitAdd(longAddress, asConstant(offset));
         } else {
@@ -89,19 +88,22 @@ public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements H
         }
 
         append(new CompareAndSwapOp(address, cmpValue, newValue));
-        setResult(x, gen.emitMove(newValue));
+
+        Variable result = newVariable(x.getKind());
+        gen.emitMove(result, newValue);
+        setResult(x, result);
     }
 
     @Override
     protected void emitDirectCall(DirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
         InvokeKind invokeKind = ((HotSpotDirectCallTargetNode) callTarget).invokeKind();
         if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual) {
-            append(new SPARCHotspotDirectVirtualCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind));
+            append(new SPARCHotspotDirectVirtualCallOp(callTarget.target(), result, parameters, temps, callState, invokeKind));
         } else {
             assert invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special;
-            HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
+            HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.target();
             assert !resolvedMethod.isAbstract() : "Cannot make direct call to abstract method.";
-            append(new SPARCHotspotDirectStaticCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind));
+            append(new SPARCHotspotDirectStaticCallOp(callTarget.target(), result, parameters, temps, callState, invokeKind));
         }
     }
 
@@ -111,7 +113,7 @@ public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements H
         gen.emitMove(metaspaceMethod, operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()));
         AllocatableValue targetAddress = g3.asValue();
         gen.emitMove(targetAddress, operand(callTarget.computedAddress()));
-        append(new SPARCIndirectCallOp(callTarget.targetMethod(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
+        append(new SPARCIndirectCallOp(callTarget.target(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
     }
 
     @Override
@@ -140,12 +142,4 @@ public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements H
         append(new SPARCPrefetchOp(addr, getGen().config.allocatePrefetchInstr));
     }
 
-    @Override
-    public void visitFullInfopointNode(FullInfopointNode i) {
-        if (i.getState() != null && i.getState().bci == BytecodeFrame.AFTER_BCI) {
-            Debug.log("Ignoring InfopointNode for AFTER_BCI");
-        } else {
-            super.visitFullInfopointNode(i);
-        }
-    }
 }

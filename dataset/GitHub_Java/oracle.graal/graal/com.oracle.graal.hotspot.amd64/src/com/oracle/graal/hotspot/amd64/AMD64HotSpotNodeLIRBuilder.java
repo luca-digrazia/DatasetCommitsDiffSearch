@@ -59,10 +59,7 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
 
     private static ValueNode filterCompression(ValueNode node) {
         ValueNode result = node;
-        if (result instanceof PiNode) {
-            result = ((PiNode) result).getOriginalNode();
-        }
-        if (result instanceof CompressionNode) {
+        while (result instanceof CompressionNode) {
             result = ((CompressionNode) result).getInput();
         }
         return result;
