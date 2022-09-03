@@ -27,8 +27,6 @@ import static java.lang.reflect.Modifier.STATIC;
 import static java.lang.reflect.Modifier.SYNCHRONIZED;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateRecompile;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.vm.ci.meta.DeoptimizationAction.None;
-import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
 import static jdk.vm.ci.meta.DeoptimizationReason.JavaSubroutineMismatch;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
 import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
@@ -249,6 +247,7 @@ import static org.graalvm.compiler.core.common.GraalOptions.StressInvokeWithExce
 import static org.graalvm.compiler.core.common.type.StampFactory.objectNonNull;
 import static org.graalvm.compiler.debug.GraalError.guarantee;
 import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
+import static org.graalvm.compiler.java.BytecodeParserOptions.DumpWithInfopoints;
 import static org.graalvm.compiler.java.BytecodeParserOptions.InlinePartialIntrinsicExitDuringParsing;
 import static org.graalvm.compiler.java.BytecodeParserOptions.TraceBytecodeParserLevel;
 import static org.graalvm.compiler.java.BytecodeParserOptions.TraceInlineDuringParsing;
@@ -288,9 +287,10 @@ import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.core.common.util.Util;
 import org.graalvm.compiler.debug.Assertions;
-import org.graalvm.compiler.debug.CounterKey;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.debug.DebugCloseable;
-import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugCounter;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.debug.TTY;
@@ -365,7 +365,6 @@ import org.graalvm.compiler.nodes.calc.UnsignedRightShiftNode;
 import org.graalvm.compiler.nodes.calc.XorNode;
 import org.graalvm.compiler.nodes.calc.ZeroExtendNode;
 import org.graalvm.compiler.nodes.extended.AnchoringNode;
-import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.BytecodeExceptionNode;
 import org.graalvm.compiler.nodes.extended.IntegerSwitchNode;
 import org.graalvm.compiler.nodes.extended.LoadHubNode;
@@ -454,9 +453,9 @@ public class BytecodeParser implements GraphBuilderContext {
     /**
      * Meters the number of actual bytecodes parsed.
      */
-    public static final CounterKey BytecodesParsed = DebugContext.counter("BytecodesParsed");
+    public static final DebugCounter BytecodesParsed = Debug.counter("BytecodesParsed");
 
-    protected static final CounterKey EXPLICIT_EXCEPTIONS = DebugContext.counter("ExplicitExceptions");
+    protected static final DebugCounter EXPLICIT_EXCEPTIONS = Debug.counter("ExplicitExceptions");
 
     /**
      * A scoped object for tasks to be performed after parsing an intrinsic such as processing
@@ -631,7 +630,6 @@ public class BytecodeParser implements GraphBuilderContext {
     private final GraphBuilderPhase.Instance graphBuilderInstance;
     protected final StructuredGraph graph;
     protected final OptionValues options;
-    protected final DebugContext debug;
 
     private BciBlockMapping blockMap;
     private LocalLiveness liveness;
@@ -666,7 +664,6 @@ public class BytecodeParser implements GraphBuilderContext {
         this.graphBuilderInstance = graphBuilderInstance;
         this.graph = graph;
         this.options = graph.getOptions();
-        this.debug = graph.getDebug();
         this.graphBuilderConfig = graphBuilderInstance.graphBuilderConfig;
         this.optimisticOpts = graphBuilderInstance.optimisticOpts;
         this.metaAccess = graphBuilderInstance.metaAccess;
@@ -720,7 +717,7 @@ public class BytecodeParser implements GraphBuilderContext {
             TTY.println(Util.indent(profilingInfo.toString(method, CodeUtil.NEW_LINE), "  "));
         }
 
-        try (Indent indent = debug.logAndIndent("build graph for %s", method)) {
+        try (Indent indent = Debug.logAndIndent("build graph for %s", method)) {
             if (bytecodeProvider.shouldRecordMethodDependencies()) {
                 assert getParent() != null || method.equals(graph.method());
                 // Record method dependency in the graph
@@ -728,7 +725,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
 
             // compute the block map, setup exception handlers and get the entrypoint(s)
-            BciBlockMapping newMapping = BciBlockMapping.create(stream, code, options, graph.getDebug());
+            BciBlockMapping newMapping = BciBlockMapping.create(stream, code, options);
             this.blockMap = newMapping;
             this.firstInstructionArray = new FixedWithNextNode[blockMap.getBlockCount()];
             this.entryStateArray = new FrameStateBuilder[blockMap.getBlockCount()];
@@ -742,11 +739,11 @@ public class BytecodeParser implements GraphBuilderContext {
              */
             assert computeKindVerification(startFrameState);
 
-            try (DebugContext.Scope s = debug.scope("LivenessAnalysis")) {
+            try (Scope s = Debug.scope("LivenessAnalysis")) {
                 int maxLocals = method.getMaxLocals();
-                liveness = LocalLiveness.compute(debug, stream, blockMap.getBlocks(), maxLocals, blockMap.getLoopCount());
+                liveness = LocalLiveness.compute(stream, blockMap.getBlocks(), maxLocals, blockMap.getLoopCount());
             } catch (Throwable e) {
-                throw debug.handle(e);
+                throw Debug.handle(e);
             }
 
             lastInstr = startInstruction;
@@ -1009,7 +1006,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
     private AbstractBeginNode handleException(ValueNode exceptionObject, int bci) {
         assert bci == BytecodeFrame.BEFORE_BCI || bci == bci() : "invalid bci";
-        debug.log("Creating exception dispatch edges at %d, exception object=%s, exception seen=%s", bci, exceptionObject, (profilingInfo == null ? "" : profilingInfo.getExceptionSeen(bci)));
+        Debug.log("Creating exception dispatch edges at %d, exception object=%s, exception seen=%s", bci, exceptionObject, (profilingInfo == null ? "" : profilingInfo.getExceptionSeen(bci)));
 
         FrameStateBuilder dispatchState = frameState.copy();
         dispatchState.clearStack();
@@ -1248,7 +1245,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
         exception.setStateAfter(createFrameState(bci(), exception));
         exception.setNext(handleException(exception, bci()));
-        EXPLICIT_EXCEPTIONS.increment(debug);
+        EXPLICIT_EXCEPTIONS.increment();
         return nonNullReceiver;
     }
 
@@ -1456,10 +1453,6 @@ public class BytecodeParser implements GraphBuilderContext {
             args[0] = emitExplicitExceptions(args[0]);
         }
 
-        if (initialInvokeKind == InvokeKind.Special && !targetMethod.isConstructor()) {
-            emitCheckForInvokeSuperSpecial(args);
-        }
-
         InlineInfo inlineInfo = null;
         try {
             currentInvoke = new CurrentInvoke(args, invokeKind, returnType);
@@ -1541,30 +1534,6 @@ public class BytecodeParser implements GraphBuilderContext {
             invoke.setUseForInlining(false);
         }
         return invoke;
-    }
-
-    /**
-     * Checks that the class of the receiver of an {@link Bytecodes#INVOKESPECIAL} in a method
-     * declared in an interface (i.e., a default method) is assignable to the interface. If not,
-     * then deoptimize so that the interpreter can throw an {@link IllegalAccessError}.
-     *
-     * This is a check not performed by the verifier and so must be performed at runtime.
-     *
-     * @param args arguments to an {@link Bytecodes#INVOKESPECIAL} implementing a direct call to a
-     *            method in a super class
-     */
-    protected void emitCheckForInvokeSuperSpecial(ValueNode[] args) {
-        ResolvedJavaType callingClass = method.getDeclaringClass();
-        if (callingClass.getHostClass() != null) {
-            callingClass = callingClass.getHostClass();
-        }
-        if (callingClass.isInterface()) {
-            ValueNode receiver = args[0];
-            TypeReference checkedType = TypeReference.createTrusted(graph.getAssumptions(), callingClass);
-            LogicNode condition = genUnique(createInstanceOf(checkedType, receiver, null));
-            FixedGuardNode fixedGuard = append(new FixedGuardNode(condition, ClassCastException, None, false));
-            args[0] = append(PiNode.create(receiver, StampFactory.object(checkedType, true), fixedGuard));
-        }
     }
 
     protected JavaTypeProfile getProfileForInvoke(InvokeKind invokeKind) {
@@ -2127,6 +2096,9 @@ public class BytecodeParser implements GraphBuilderContext {
         StackTraceElement where = code.asStackTraceElement(bci());
         String s = format("%s%s (%s:%d) %s", nSpaces(getDepth()), method.isConstructor() ? method.format("%h.%n") : method.getName(), where.getFileName(), where.getLineNumber(),
                         format(format, args));
+        if (s.equals("decrypt (CipherBlockChainingSubstitutions.java:117) inlining call to CipherBlockChainingSubstitutions.decrypt(Object, byte[], int, int, byte[], int)")) {
+            System.console();
+        }
         TTY.println(s);
     }
 
@@ -2450,7 +2422,7 @@ public class BytecodeParser implements GraphBuilderContext {
                         firstLoopExit = loopExit;
                     }
                     lastLoopExit = loopExit;
-                    debug.log("Target %s Exits %s, scanning framestates...", targetBlock, loop);
+                    Debug.log("Target %s Exits %s, scanning framestates...", targetBlock, loop);
                     newState.clearNonLiveLocals(targetBlock, liveness, true);
                     newState.insertLoopProxies(loopExit, getEntryState(loop));
                     loopExit.setStateAfter(newState.create(bci, loopExit));
@@ -2516,7 +2488,7 @@ public class BytecodeParser implements GraphBuilderContext {
             setEntryState(block, currentEntryState);
             currentEntryState.clearNonLiveLocals(block, liveness, true);
 
-            debug.log("createTarget %s: first visit, result: %s", block, targetNode);
+            Debug.log("createTarget %s: first visit, result: %s", block, targetNode);
             return result;
         }
 
@@ -2537,7 +2509,7 @@ public class BytecodeParser implements GraphBuilderContext {
             FixedNode result = target.fixed;
             getEntryState(block).merge(loopBegin, target.state);
 
-            debug.log("createTarget %s: merging backward branch to loop header %s, result: %s", block, loopBegin, result);
+            Debug.log("createTarget %s: merging backward branch to loop header %s, result: %s", block, loopBegin, result);
             return result;
         }
         assert currentBlock == null || currentBlock.getId() < block.getId() : "must not be backward branch";
@@ -2578,7 +2550,7 @@ public class BytecodeParser implements GraphBuilderContext {
         getEntryState(block).merge(mergeNode, target.state);
         mergeNode.addForwardEnd(newEnd);
 
-        debug.log("createTarget %s: merging state, result: %s", block, result);
+        Debug.log("createTarget %s: merging state, result: %s", block, result);
         return result;
     }
 
@@ -2609,10 +2581,10 @@ public class BytecodeParser implements GraphBuilderContext {
         // Ignore blocks that have no predecessors by the time their bytecodes are parsed
         FixedWithNextNode firstInstruction = getFirstInstruction(block);
         if (firstInstruction == null) {
-            debug.log("Ignoring block %s", block);
+            Debug.log("Ignoring block %s", block);
             return;
         }
-        try (Indent indent = debug.logAndIndent("Parsing block %s  firstInstruction: %s  loopHeader: %b", block, firstInstruction, block.isLoopHeader)) {
+        try (Indent indent = Debug.logAndIndent("Parsing block %s  firstInstruction: %s  loopHeader: %b", block, firstInstruction, block.isLoopHeader)) {
 
             lastInstr = firstInstruction;
             frameState = getEntryState(block);
@@ -2758,7 +2730,7 @@ public class BytecodeParser implements GraphBuilderContext {
              */
             setEntryState(block, frameState.copy());
 
-            debug.log("  created loop header %s", loopBegin);
+            Debug.log("  created loop header %s", loopBegin);
         } else if (lastInstr instanceof MergeNode) {
             /*
              * All inputs of non-loop phi nodes are known by now. We can infer the stamp for the
@@ -2767,7 +2739,7 @@ public class BytecodeParser implements GraphBuilderContext {
             frameState.inferPhiStamps((AbstractMergeNode) lastInstr);
         }
         assert lastInstr.next() == null : "instructions already appended at block " + block;
-        debug.log("  frameState: %s", frameState);
+        Debug.log("  frameState: %s", frameState);
 
         lastInstr = finishInstruction(lastInstr, frameState);
 
@@ -2775,7 +2747,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
         stream.setBCI(block.startBci);
         int bci = block.startBci;
-        BytecodesParsed.add(debug, block.endBci - bci);
+        BytecodesParsed.add(block.endBci - bci);
 
         /* Reset line number for new block */
         if (graphBuilderConfig.insertFullInfopoints()) {
@@ -2836,7 +2808,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private DebugCloseable openNodeContext() {
-        if ((graphBuilderConfig.trackNodeSourcePosition() || debug.isDumpEnabledForMethod()) && !parsingIntrinsic()) {
+        if ((graphBuilderConfig.trackNodeSourcePosition() || (Debug.isDumpEnabledForMethod() && DumpWithInfopoints.getValue(options))) && !parsingIntrinsic()) {
             return graph.withNodeSourcePosition(createBytecodePosition());
         }
         return null;
@@ -2899,7 +2871,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private boolean traceState() {
-        if (debug.isLogEnabled() && TraceBytecodeParserLevel.getValue(options) >= TRACELEVEL_STATE) {
+        if (Debug.isEnabled() && TraceBytecodeParserLevel.getValue(options) >= TRACELEVEL_STATE && Debug.isLogEnabled()) {
             frameState.traceState();
         }
         return true;
@@ -2960,7 +2932,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
 
             // Need to get probability based on current bci.
-            double probability = branchProbability(condition);
+            double probability = branchProbability();
 
             if (negate) {
                 BciBlock tmpBlock = trueBlock;
@@ -3949,7 +3921,7 @@ public class BytecodeParser implements GraphBuilderContext {
         if (prob != null) {
             assert prob.length == numberOfCases;
         } else {
-            debug.log("Missing probability (switch) in %s at bci %d", method, bci);
+            Debug.log("Missing probability (switch) in %s at bci %d", method, bci);
             prob = new double[numberOfCases];
             for (int i = 0; i < numberOfCases; i++) {
                 prob[i] = 1.0d / numberOfCases;
@@ -4027,39 +3999,15 @@ public class BytecodeParser implements GraphBuilderContext {
         return probability == 0 && optimisticOpts.removeNeverExecutedCode(getOptions());
     }
 
-    private double rawBranchProbability(LogicNode conditionInput) {
-        if (conditionInput instanceof IntegerEqualsNode) {
-            // Propagate injected branch probability if any.
-            IntegerEqualsNode condition = (IntegerEqualsNode) conditionInput;
-            BranchProbabilityNode injectedProbability = null;
-            ValueNode other = null;
-            if (condition.getX() instanceof BranchProbabilityNode) {
-                injectedProbability = (BranchProbabilityNode) condition.getX();
-                other = condition.getY();
-            } else if (condition.getY() instanceof BranchProbabilityNode) {
-                injectedProbability = (BranchProbabilityNode) condition.getY();
-                other = condition.getX();
-            }
-
-            if (injectedProbability != null && other != null && other.isConstant()) {
-                double probabilityValue = injectedProbability.getProbability().asJavaConstant().asDouble();
-                return other.asJavaConstant().asInt() == 0 ? 1.0 - probabilityValue : probabilityValue;
-            }
-        }
-
+    protected double branchProbability() {
         if (profilingInfo == null) {
             return 0.5;
         }
         assert assertAtIfBytecode();
-
-        return profilingInfo.getBranchTakenProbability(bci());
-    }
-
-    protected double branchProbability(LogicNode conditionInput) {
-        double probability = rawBranchProbability(conditionInput);
+        double probability = profilingInfo.getBranchTakenProbability(bci());
         if (probability < 0) {
             assert probability == -1 : "invalid probability";
-            debug.log("missing probability in %s at bci %d", code, bci());
+            Debug.log("missing probability in %s at bci %d", code, bci());
             probability = 0.5;
         }
 
@@ -4332,7 +4280,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected boolean traceInstruction(int bci, int opcode, boolean blockStart) {
-        if (debug.isLogEnabled() && TraceBytecodeParserLevel.getValue(options) >= TRACELEVEL_INSTRUCTIONS) {
+        if (Debug.isEnabled() && TraceBytecodeParserLevel.getValue(options) >= TRACELEVEL_INSTRUCTIONS && Debug.isLogEnabled()) {
             traceInstructionHelper(bci, opcode, blockStart);
         }
         return true;
@@ -4353,7 +4301,7 @@ public class BytecodeParser implements GraphBuilderContext {
         if (!currentBlock.getJsrScope().isEmpty()) {
             sb.append(' ').append(currentBlock.getJsrScope());
         }
-        debug.log("%s", sb);
+        Debug.log("%s", sb);
     }
 
     @Override
