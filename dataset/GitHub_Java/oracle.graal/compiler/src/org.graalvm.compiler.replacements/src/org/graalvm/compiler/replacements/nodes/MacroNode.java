@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -86,10 +84,10 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable, 
     public static final NodeClass<MacroNode> TYPE = NodeClass.create(MacroNode.class);
     @Input protected NodeInputList<ValueNode> arguments;
 
-    protected int bci;
-    protected ResolvedJavaMethod targetMethod;
-    protected InvokeKind invokeKind;
+    protected final int bci;
+    protected final ResolvedJavaMethod targetMethod;
     protected final StampPair returnStamp;
+    protected final InvokeKind invokeKind;
 
     protected MacroNode(NodeClass<? extends MacroNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode... arguments) {
         super(c, returnStamp.getTrustedStamp());
@@ -155,7 +153,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable, 
     @SuppressWarnings("try")
     protected StructuredGraph lowerReplacement(final StructuredGraph replacementGraph, LoweringTool tool) {
         final PhaseContext c = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getConstantFieldProvider(), tool.getLowerer(), tool.getReplacements(),
-                        tool.getStampProvider(), null);
+                        tool.getStampProvider());
         if (!graph().hasValueProxies()) {
             new RemoveValueProxyPhase().apply(replacementGraph);
         }
