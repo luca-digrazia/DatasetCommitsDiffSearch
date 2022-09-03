@@ -35,7 +35,6 @@ import org.graalvm.compiler.core.common.util.TypeConversion;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.word.BarrieredAccess;
 import org.graalvm.compiler.word.Word;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.Platform.AMD64;
 import org.graalvm.nativeimage.Platforms;
@@ -46,7 +45,7 @@ import org.graalvm.word.SignedWord;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.MonitorSupport;
+import com.oracle.svm.core.MonitorUtils;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.UnsafeAccess;
@@ -662,7 +661,7 @@ public final class Deoptimizer {
                      * the same object can be re-locked multiple times, we change the thread after
                      * all virtual frames have been reconstructed.
                      */
-                    ImageSingletons.lookup(MonitorSupport.class).setExclusiveOwnerThread(lockee, JavaThreads.singleton().createIfNotExisting(currentThread));
+                    MonitorUtils.setExclusiveOwnerThread(lockee, JavaThreads.singleton().createIfNotExisting(currentThread));
                 }
             }
         }
@@ -727,13 +726,17 @@ public final class Deoptimizer {
         assert sourceFrame.getValueInfos().length >= targetFrame.getValueInfos().length;
         int numValues = targetFrame.getValueInfos().length;
 
+        boolean useCompressedReferences = ReferenceAccess.singleton().haveCompressedReferences();
+
         /*
          * Create stack entries for all values of the source frame.
          */
         int newEndOfParams = endOfParams;
         for (int idx = 0; idx < numValues; idx++) {
             ValueInfo targetValue = targetFrame.getValueInfos()[idx];
-            if (targetValue.getKind() == JavaKind.Illegal) {
+            ValueType targetType = targetValue.getType();
+            JavaKind targetKind = targetValue.getKind();
+            if (targetKind == JavaKind.Illegal) {
                 /*
                  * The target value is optimized out, e.g. at a position after the lifetime of a
                  * local variable. Actually we don't care what's the source value in this case, but
@@ -743,15 +746,9 @@ public final class Deoptimizer {
                 JavaConstant con = readValue(sourceFrame.getValueInfos()[idx], sourceFrame);
                 assert con.getJavaKind() != JavaKind.Illegal;
 
-                if (con.getJavaKind().isObject() && SubstrateObjectConstant.isCompressed(con) != targetValue.isCompressedReference()) {
-                    // rewrap in constant with the appropriate compression for the target value
-                    Object obj = SubstrateObjectConstant.asObject(con);
-                    con = SubstrateObjectConstant.forObject(obj, targetValue.isCompressedReference());
-                }
-
                 relockVirtualObject(sourceFrame, idx, con);
 
-                switch (targetValue.getType()) {
+                switch (targetType) {
                     case StackSlot:
                         /*
                          * The target value is on the stack
@@ -777,7 +774,7 @@ public final class Deoptimizer {
                             assert totalOffset >= targetContentSize;
                             result.values[idx] = DeoptimizedFrame.ConstantEntry.factory(totalOffset, con);
 
-                            int endOffset = totalOffset + ConfigurationValues.getObjectLayout().sizeInBytes(con.getJavaKind(), targetValue.isCompressedReference());
+                            int endOffset = totalOffset + ConfigurationValues.getObjectLayout().sizeInBytes(con.getJavaKind(), useCompressedReferences);
                             if (endOffset > newEndOfParams) {
                                 newEndOfParams = endOffset;
                             }
@@ -820,7 +817,7 @@ public final class Deoptimizer {
             Object lockee = KnownIntrinsics.convertUnknownValue(SubstrateObjectConstant.asObject(valueConstant), Object.class);
             int lockeeIndex = TypeConversion.asS4(valueInfo.getData());
             assert lockee == materializedObjects[lockeeIndex];
-            MonitorSupport.monitorEnter(lockee);
+            MonitorUtils.monitorEnter(lockee);
 
             if (relockedObjects == null) {
                 relockedObjects = new Object[sourceFrame.getVirtualObjects().length];
@@ -831,18 +828,12 @@ public final class Deoptimizer {
     }
 
     private boolean verifyConstant(FrameInfoQueryResult targetFrame, ValueInfo targetValue, JavaConstant source) {
-        boolean equal;
         JavaConstant target = readValue(targetValue, targetFrame);
-        if (source.getJavaKind() == JavaKind.Object && target.getJavaKind() == JavaKind.Object) {
-            // Differences in compression are irrelevant, compare only object identities
-            equal = (SubstrateObjectConstant.asObject(target) == SubstrateObjectConstant.asObject(source));
-        } else {
-            equal = source.equals(target);
-        }
-        if (!equal) {
+        if (!source.equals(target)) {
             Log.log().string("source: ").string(source.toString()).string("  target: ").string(target.toString()).newline();
+            return false;
         }
-        return equal;
+        return true;
     }
 
     private JavaConstant readValue(ValueInfo valueInfo, FrameInfoQueryResult sourceFrame) {
@@ -1079,8 +1070,9 @@ public final class Deoptimizer {
         private static final int sizeofInt = JavaKind.Int.getByteCount();
         private static final int sizeofLong = JavaKind.Long.getByteCount();
         /** All references in deopt frames are compressed when compressed references are enabled. */
-        private final int sizeofCompressedReference = ConfigurationValues.getObjectLayout().getCompressedReferenceSize();
-        private final int sizeofUncompressedReference = ConfigurationValues.getObjectLayout().getReferenceSize();
+        private final boolean haveCompressedReferences = ReferenceAccess.singleton().haveCompressedReferences();
+        private final int sizeofReference = haveCompressedReferences ? ConfigurationValues.getObjectLayout().getCompressedReferenceSize()
+                        : ConfigurationValues.getObjectLayout().getReferenceSize();
         /**
          * The offset of the within the array object. I do not have to scale the offsets.
          */
@@ -1138,11 +1130,11 @@ public final class Deoptimizer {
 
         /** An Object can be written to the frame buffer. */
         @Uninterruptible(reason = "Called from uninterruptible code.")
-        protected void writeObject(int offset, Object value, boolean compressed) {
-            offsetCheck(offset, compressed ? sizeofCompressedReference : sizeofUncompressedReference);
+        protected void writeObject(int offset, Object value) {
+            offsetCheck(offset, sizeofReference);
             Word address = (Word) addressOfFrameArray0();
             address = address.add(offset);
-            ReferenceAccess.singleton().writeObjectAt(address, value, compressed);
+            ReferenceAccess.singleton().writeObjectAt(address, value, haveCompressedReferences);
         }
 
         /* Return &contentArray[0] as a Pointer. */
