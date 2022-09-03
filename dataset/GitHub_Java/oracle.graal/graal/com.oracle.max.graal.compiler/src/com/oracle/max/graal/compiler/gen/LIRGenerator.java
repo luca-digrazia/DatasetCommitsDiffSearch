@@ -50,7 +50,6 @@ import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.lir.StandardOp.ParametersOp;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
@@ -65,6 +64,8 @@ import com.oracle.max.graal.nodes.virtual.*;
  * This class traverses the HIR instructions and generates LIR instructions from them.
  */
 public abstract class LIRGenerator extends LIRGeneratorTool {
+    public final GraalContext context;
+
     protected final Graph graph;
     protected final RiRuntime runtime;
     protected final CiTarget target;
@@ -138,7 +139,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     private LockScope curLocks;
 
 
-    public LIRGenerator(Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
+    public LIRGenerator(GraalContext context, Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
+        this.context = context;
         this.graph = graph;
         this.runtime = runtime;
         this.target = target;
@@ -416,9 +418,15 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         }
         currentInstruction = instr;
 
-        Debug.log("Visiting %s", instr);
+        if (GraalOptions.TraceLIRVisit) {
+            TTY.println("Visiting    " + instr);
+        }
+
         emitNode(instr);
-        Debug.log("Operand for %s = %s", instr, operand(instr));
+
+        if (GraalOptions.TraceLIRVisit) {
+            TTY.println("Operand for " + instr + " = " + operand(instr));
+        }
     }
 
     protected void emitNode(ValueNode node) {
@@ -637,7 +645,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         if (writeBarrier != null) {
             emitXir(writeBarrier, null, null, false);
         }
-     }
+    }
 
     @SuppressWarnings("unused")
     protected void preGCWriteBarrier(CiValue addrOpr, boolean patch, LIRDebugInfo info) {
@@ -684,7 +692,9 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public void emitGuardCheck(BooleanNode comp) {
-        if (comp instanceof NullCheckNode && !((NullCheckNode) comp).expectedNull) {
+        if (comp instanceof IsTypeNode) {
+            emitTypeGuard((IsTypeNode) comp);
+        } else if (comp instanceof NullCheckNode && !((NullCheckNode) comp).expectedNull) {
             emitNullCheckGuard((NullCheckNode) comp);
         } else if (comp instanceof ConstantNode && comp.asConstant().asBoolean()) {
             // True constant, nothing to emit.
@@ -698,6 +708,15 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     protected abstract void emitNullCheckGuard(NullCheckNode node);
 
+    private void emitTypeGuard(IsTypeNode node) {
+        load(operand(node.object()));
+        LIRDebugInfo info = state();
+        XirArgument clazz = toXirArgument(node.type().getEncoding(Representation.ObjectHub));
+        XirSnippet typeCheck = xir.genTypeCheck(site(node), toXirArgument(node.object()), clazz, node.type());
+        emitXir(typeCheck, node, info, false);
+    }
+
+
     public void emitBranch(BooleanNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
         if (node instanceof NullCheckNode) {
             emitNullCheckBranch((NullCheckNode) node, trueSuccessor, falseSuccessor, info);
@@ -707,8 +726,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             emitInstanceOfBranch((InstanceOfNode) node, trueSuccessor, falseSuccessor, info);
         } else if (node instanceof ConstantNode) {
             emitConstantBranch(((ConstantNode) node).asConstant().asBoolean(), trueSuccessor, falseSuccessor, info);
-        } else if (node instanceof IsTypeNode) {
-            emitTypeBranch((IsTypeNode) node, trueSuccessor, falseSuccessor, info);
         } else {
             throw Util.unimplemented(node.toString());
         }
@@ -732,21 +749,15 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     private void emitInstanceOfBranch(InstanceOfNode x, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
         XirArgument obj = toXirArgument(x.object());
         XirSnippet snippet = xir.genInstanceOf(site(x), obj, toXirArgument(x.targetClassInstruction()), x.targetClass());
-        emitXir(snippet, x, info, null, false, x.negated() ? falseSuccessor : trueSuccessor, x.negated() ? trueSuccessor : falseSuccessor);
+        emitXir(snippet, x, info, null, false, x.negated ? falseSuccessor : trueSuccessor, x.negated ? trueSuccessor : falseSuccessor);
     }
+
 
     public void emitConstantBranch(boolean value, LabelRef trueSuccessorBlock, LabelRef falseSuccessorBlock, LIRDebugInfo info) {
         LabelRef block = value ? trueSuccessorBlock : falseSuccessorBlock;
         if (block != null) {
             emitJump(block, info);
         }
-    }
-
-    public void emitTypeBranch(IsTypeNode x, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
-        XirArgument thisClass = toXirArgument(x.objectClass());
-        XirArgument otherClass = toXirArgument(x.type().getEncoding(Representation.ObjectHub));
-        XirSnippet snippet = xir.genTypeBranch(site(x), thisClass, otherClass, x.type());
-        emitXir(snippet, x, info, null, false, trueSuccessor, falseSuccessor);
     }
 
     @Override
@@ -780,8 +791,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     private Variable emitInstanceOfConditional(InstanceOfNode x, CiValue trueValue, CiValue falseValue) {
         XirArgument obj = toXirArgument(x.object());
-        XirArgument trueArg = toXirArgument(x.negated() ? falseValue : trueValue);
-        XirArgument falseArg = toXirArgument(x.negated() ? trueValue : falseValue);
+        XirArgument trueArg = toXirArgument(x.negated ? falseValue : trueValue);
+        XirArgument falseArg = toXirArgument(x.negated ? trueValue : falseValue);
         XirSnippet snippet = xir.genMaterializeInstanceOf(site(x), obj, toXirArgument(x.targetClassInstruction()), trueArg, falseArg, x.targetClass());
         return (Variable) emitXir(snippet, null, null, false);
     }
@@ -1293,7 +1304,9 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                     inputOperandArray, tempOperandArray, inputOperandIndicesArray, tempOperandIndicesArray,
                     (allocatedResultOperand == IllegalValue) ? -1 : resultOperand.index,
                     info, infoAfter, trueSuccessor, falseSuccessor);
-            Debug.metric("LIRXIRInstructions").increment();
+            if (GraalOptions.Meter) {
+                context.metrics.LIRXIRInstructions++;
+            }
         }
 
         return operandsArray[resultOperand.index];

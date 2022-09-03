@@ -29,7 +29,6 @@ import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.graph.*;
 import com.oracle.max.graal.cri.*;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.PhiNode.PhiType;
@@ -189,15 +188,15 @@ public class EscapeAnalysisPhase extends Phase {
         }
 
         @Override
-        public void loopEnds(LoopBeginNode loopBegin, Collection<BlockExitState> loopEndStates) {
+        public void loopEnd(LoopEndNode x, BlockExitState loopEndState) {
             while (!(virtualObjectField instanceof PhiNode)) {
                 virtualObjectField = ((VirtualObjectFieldNode) virtualObjectField).lastState();
             }
-            for (BlockExitState loopEndState : loopEndStates) {
-                ((PhiNode) virtualObjectField).addInput(loopEndState.virtualObjectField);
-                for (int i2 = 0; i2 < fieldState.length; i2++) {
-                    ((PhiNode) fieldState[i2]).addInput(loopEndState.fieldState[i2]);
-                }
+            ((PhiNode) virtualObjectField).addInput(loopEndState.virtualObjectField);
+            assert ((PhiNode) virtualObjectField).valueCount() == 2;
+            for (int i2 = 0; i2 < fieldState.length; i2++) {
+                ((PhiNode) fieldState[i2]).addInput(loopEndState.fieldState[i2]);
+                assert ((PhiNode) fieldState[i2]).valueCount() == 2;
             }
         }
 
@@ -316,7 +315,7 @@ public class EscapeAnalysisPhase extends Phase {
                 assert ((NullCheckNode) usage).object() == node;
                 return null;
             } else if (usage instanceof IsTypeNode) {
-                assert ((IsTypeNode) usage).objectClass() == node;
+                assert ((IsTypeNode) usage).object() == node;
                 return null;
             } else if (usage instanceof AccessMonitorNode) {
                 assert ((AccessMonitorNode) usage).object() == node;
@@ -429,10 +428,21 @@ public class EscapeAnalysisPhase extends Phase {
             }
             if (invokes.size() == 0) {
 
-                Debug.dump(graph, "Before escape %s", node);
-                Debug.log("!!!!!!!! non-escaping object: %s (%s)", node, node.exactType());
-                removeAllocation(node, op);
-                Debug.dump(graph, "After escape", graph);
+                if (currentContext.isObserved()) {
+                    currentContext.observable.fireCompilationEvent("Before escape " + node, graph);
+                }
+                if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
+                    TTY.println("%n!!!!!!!! non-escaping object: %s (%s)", node, node.exactType());
+                }
+                try {
+                    currentContext.timers.startScope("Escape Analysis Fixup");
+                    removeAllocation(node, op);
+                } finally {
+                    currentContext.timers.endScope();
+                }
+                if (currentContext.isObserved()) {
+                    currentContext.observable.fireCompilationEvent("After escape", graph);
+                }
                 break;
             }
             if (weight < minimumWeight) {
@@ -447,8 +457,8 @@ public class EscapeAnalysisPhase extends Phase {
             if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
                 TTY.println("Trying inlining to get a non-escaping object for %s", node);
             }
-            new InliningPhase(target, runtime, invokes, assumptions, plan).apply(graph);
-            new DeadCodeEliminationPhase().apply(graph);
+            new InliningPhase(target, runtime, invokes, assumptions, plan).apply(graph, currentContext);
+            new DeadCodeEliminationPhase().apply(graph, currentContext);
             if (node.isDeleted()) {
                 if (GraalOptions.TraceEscapeAnalysis || GraalOptions.PrintEscapeAnalysis) {
                     TTY.println("%n!!!!!!!! object died while performing escape analysis: %s (%s)", node, node.exactType());
@@ -504,7 +514,9 @@ public class EscapeAnalysisPhase extends Phase {
                     }
                 } else {
                     exits.add(usage);
-                    break;
+                    if (!GraalOptions.TraceEscapeAnalysis) {
+                        break;
+                    }
                 }
             } else {
                 if (GraalOptions.ProbabilityAnalysis && usage instanceof FixedNode) {

@@ -26,7 +26,8 @@ import static com.oracle.max.graal.graph.iterators.NodePredicates.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
-import com.oracle.max.graal.debug.*;
+import com.oracle.max.criutils.*;
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.calc.*;
@@ -65,7 +66,9 @@ public class CanonicalizerPhase extends Phase {
         Tool tool = new Tool(nodeWorkList, runtime, target, assumptions);
         for (Node node : nodeWorkList) {
             if (node instanceof Canonicalizable) {
-                Debug.log("Canonicalizer: work on %s", node);
+                if (GraalOptions.TraceCanonicalizer) {
+                    TTY.println("Canonicalizer: work on " + node);
+                }
                 graph.mark();
                 ValueNode canonical = ((Canonicalizable) node).canonical(tool);
 //     cases:                                           original node:
@@ -219,7 +222,7 @@ public class CanonicalizerPhase extends Phase {
                         pred.replaceFirstSuccessor(replacedSux, next);
                         FrameState stateAfter = merge.stateAfter();
                         merge.setStateAfter(null);
-                        if (stateAfter != null && stateAfter.usages().isEmpty()) {
+                        if (stateAfter.usages().isEmpty()) {
                             stateAfter.safeDelete();
                         }
                         merge.safeDelete();

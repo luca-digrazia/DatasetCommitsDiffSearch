@@ -26,13 +26,13 @@ import java.util.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
+import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.phases.PhasePlan.PhasePosition;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.util.InliningUtil.InlineInfo;
 import com.oracle.max.graal.compiler.util.InliningUtil.InliningCallback;
 import com.oracle.max.graal.cri.*;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 
@@ -47,18 +47,14 @@ public class InliningPhase extends Phase implements InliningCallback {
     private final CiTarget target;
     private final GraalRuntime runtime;
 
-    private final Collection<? extends Invoke> hints;
+    private final Collection<Invoke> hints;
 
     private final PriorityQueue<InlineInfo> inlineCandidates = new PriorityQueue<>();
     private CiAssumptions assumptions;
 
     private final PhasePlan plan;
 
-    // Metrics
-    private static final DebugMetric metricInliningPerformed = Debug.metric("InliningPerformed");
-    private static final DebugMetric metricInliningConsidered = Debug.metric("InliningConsidered");
-
-    public InliningPhase(CiTarget target, GraalRuntime runtime, Collection<? extends Invoke> hints, CiAssumptions assumptions, PhasePlan plan) {
+    public InliningPhase(CiTarget target, GraalRuntime runtime, Collection<Invoke> hints, CiAssumptions assumptions, PhasePlan plan) {
         this.target = target;
         this.runtime = runtime;
         this.hints = hints;
@@ -82,24 +78,36 @@ public class InliningPhase extends Phase implements InliningCallback {
             InlineInfo info = inlineCandidates.remove();
             double penalty = Math.pow(GraalOptions.InliningSizePenaltyExp, graph.getNodeCount() / (double) GraalOptions.MaximumDesiredSize) / GraalOptions.InliningSizePenaltyExp;
             if (info.weight > GraalOptions.MaximumInlineWeight / (1 + penalty * GraalOptions.InliningSizePenalty)) {
-                Debug.log("not inlining (cut off by weight): %e", info.weight);
+                if (GraalOptions.TraceInlining) {
+                    TTY.println("not inlining (cut off by weight):");
+                    while (info != null) {
+                        TTY.println("    %f %s", info.weight, info);
+                        info = inlineCandidates.poll();
+                    }
+                }
                 return;
             }
             Iterable<Node> newNodes = null;
             if (info.invoke.node().isAlive()) {
                 try {
                     info.inline(graph, runtime, this);
-                    Debug.log("inlining %f: %s", info.weight, info);
-                    Debug.dump(graph, "after inlining %s", info);
+                    if (GraalOptions.TraceInlining) {
+                        TTY.println("inlining %f: %s", info.weight, info);
+                    }
+                    if (GraalOptions.TraceInlining) {
+                        currentContext.observable.fireCompilationEvent("after inlining " + info, graph);
+                    }
                     // get the new nodes here, the canonicalizer phase will reset the mark
                     newNodes = graph.getNewNodes();
                     if (GraalOptions.OptCanonicalizer) {
                         new CanonicalizerPhase(target, runtime, true, assumptions).apply(graph);
                     }
                     if (GraalOptions.Intrinsify) {
-                        new IntrinsificationPhase(runtime).apply(graph);
+                        new IntrinsificationPhase(runtime).apply(graph, currentContext);
                     }
-                    metricInliningPerformed.increment();
+                    if (GraalOptions.Meter) {
+                        currentContext.metrics.InlinePerformed++;
+                    }
                 } catch (CiBailout bailout) {
                     // TODO determine if we should really bail out of the whole compilation.
                     throw bailout;
@@ -135,7 +143,9 @@ public class InliningPhase extends Phase implements InliningCallback {
     private void scanInvoke(Invoke invoke, int level) {
         InlineInfo info = InliningUtil.getInlineInfo(invoke, level, runtime, assumptions, this);
         if (info != null) {
-            metricInliningConsidered.increment();
+            if (GraalOptions.Meter) {
+                currentContext.metrics.InlineConsidered++;
+            }
             inlineCandidates.add(info);
         }
     }
@@ -147,14 +157,14 @@ public class InliningPhase extends Phase implements InliningCallback {
         StructuredGraph newGraph = new StructuredGraph(method);
 
         if (plan != null) {
-            plan.runPhases(PhasePosition.AFTER_PARSING, newGraph);
+            plan.runPhases(PhasePosition.AFTER_PARSING, newGraph, currentContext);
         }
 
         if (GraalOptions.ProbabilityAnalysis) {
-            new DeadCodeEliminationPhase().apply(newGraph);
-            new ComputeProbabilityPhase().apply(newGraph);
+            new DeadCodeEliminationPhase().apply(newGraph, currentContext, false);
+            new ComputeProbabilityPhase().apply(newGraph, currentContext, false);
         }
-        new CanonicalizerPhase(target, runtime, assumptions).apply(newGraph);
+        new CanonicalizerPhase(target, runtime, assumptions).apply(newGraph, currentContext, false);
         return newGraph;
     }
 
@@ -199,9 +209,9 @@ public class InliningPhase extends Phase implements InliningCallback {
             if (!parsedMethods.containsKey(method)) {
                 StructuredGraph newGraph = new StructuredGraph(method);
                 if (plan != null) {
-                    plan.runPhases(PhasePosition.AFTER_PARSING, newGraph);
+                    plan.runPhases(PhasePosition.AFTER_PARSING, newGraph, currentContext);
                 }
-                new CanonicalizerPhase(target, runtime, assumptions).apply(newGraph);
+                new CanonicalizerPhase(target, runtime, assumptions).apply(newGraph, currentContext, false);
                 count = graphComplexity(newGraph);
                 parsedMethods.put(method, count);
             } else {

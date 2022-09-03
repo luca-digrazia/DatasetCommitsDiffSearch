@@ -156,7 +156,6 @@ public class SnippetIntrinsificationPhase extends Phase {
         Constructor< ? > constructor;
         try {
             constructor = nodeClass.getDeclaredConstructor(parameterTypes);
-            constructor.setAccessible(true);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

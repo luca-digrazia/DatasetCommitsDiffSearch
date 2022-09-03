@@ -24,31 +24,127 @@ package com.oracle.max.graal.compiler.schedule;
 
 import java.util.*;
 
-import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.criutils.*;
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.phases.*;
-import com.oracle.max.graal.compiler.value.*;
+import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.ci.*;
+import com.oracle.max.graal.graph.Node.Verbosity;
+import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.nodes.extended.*;
+import com.oracle.max.graal.nodes.virtual.*;
 
 
 public class IdentifyBlocksPhase extends Phase {
-    private final List<Block> blocks = new ArrayList<Block>();
+
+    public static class BlockFactory {
+        public Block createBlock(int blockID) {
+            return new Block(blockID);
+        }
+    }
+
+    private final BlockFactory blockFactory;
+    private final List<Block> blocks = new ArrayList<>();
     private NodeMap<Block> nodeToBlock;
-    private Graph graph;
+    private NodeMap<Block> earliestCache;
+    private Block startBlock;
     private boolean scheduleAllNodes;
+    private int loopCount;
 
     public IdentifyBlocksPhase(boolean scheduleAllNodes) {
-        super(scheduleAllNodes ? "FullSchedule" : "PartSchedule");
+        this(scheduleAllNodes, new BlockFactory());
+    }
+
+    public IdentifyBlocksPhase(boolean scheduleAllNodes, BlockFactory blockFactory) {
+        super(scheduleAllNodes ? "FullSchedule" : "PartSchedule", false);
+        this.blockFactory = blockFactory;
         this.scheduleAllNodes = scheduleAllNodes;
     }
 
+    public void calculateAlwaysReachedBlock() {
+        for (Block b : blocks) {
+            calculateAlwaysReachedBlock(b);
+        }
+    }
+
+
+    private void calculateAlwaysReachedBlock(Block b) {
+        if (b.getSuccessors().size() == 1) {
+            b.setAlwaysReachedBlock(b.getSuccessors().get(0));
+        } else if (b.getSuccessors().size() > 1) {
+            BitMap blockBitMap = new BitMap(blocks.size());
+            List<Block> visitedBlocks = new ArrayList<>();
+
+            // Do a fill starting at the dominated blocks and going upwards over predecessors.
+            for (Block dominated : b.getDominated()) {
+                for (Block pred : dominated.getPredecessors()) {
+                    blockFill(blockBitMap, pred, b, visitedBlocks);
+                }
+            }
+
+            boolean ok = true;
+
+            // Find out if there is exactly 1 dominated block that is left unmarked (this is the potential merge block that is always reached).
+            Block unmarkedDominated = null;
+            for (Block dominated : b.getDominated()) {
+                if (!blockBitMap.get(dominated.blockID())) {
+                    if (unmarkedDominated != null) {
+                        ok = false;
+                        break;
+                    }
+                    unmarkedDominated = dominated;
+                }
+            }
+
+            if (ok) {
+                // Check that there is no exit possible except for exception edges.
+                for (Block visitedBlock : visitedBlocks) {
+                    assert blockBitMap.get(visitedBlock.blockID());
+                    for (Block succ : visitedBlock.getSuccessors()) {
+                        if (succ != unmarkedDominated && !succ.isExceptionBlock() && !blockBitMap.get(succ.blockID())) {
+                            ok = false;
+                            break;
+                        }
+                    }
+
+                    if (!ok) {
+                        break;
+                    }
+                }
+            }
+
+            if (ok) {
+                assert unmarkedDominated != null;
+                b.setAlwaysReachedBlock(unmarkedDominated);
+            }
+        }
+    }
+
+    private void blockFill(BitMap blockBitMap, Block cur, Block stop, List<Block> visitedBlocks) {
+        if (blockBitMap.get(cur.blockID())) {
+            return;
+        }
+
+        blockBitMap.set(cur.blockID());
+        visitedBlocks.add(cur);
+
+        if (cur != stop) {
+            for (Block pred : cur.getPredecessors()) {
+                blockFill(blockBitMap, pred, stop, visitedBlocks);
+            }
+        }
+    }
 
     @Override
-    protected void run(Graph graph) {
-        this.graph = graph;
+    protected void run(StructuredGraph graph) {
         nodeToBlock = graph.createNodeMap();
-        identifyBlocks();
+        earliestCache = graph.createNodeMap();
+        identifyBlocks(graph);
+    }
+
+    public Block getStartBlock() {
+        return startBlock;
     }
 
     public List<Block> getBlocks() {
@@ -60,258 +156,307 @@ public class IdentifyBlocksPhase extends Phase {
     }
 
     private Block createBlock() {
-        Block b = new Block(blocks.size());
+        Block b = blockFactory.createBlock(blocks.size());
         blocks.add(b);
         return b;
     }
 
-    private Block assignBlock(Node n) {
-        Block curBlock = nodeToBlock.get(n);
-        if (curBlock == null) {
-            curBlock = createBlock();
-            return assignBlock(n, curBlock);
-        }
-        return curBlock;
+    public int loopCount() {
+        return loopCount;
     }
 
+    private Block assignBlockNew(Node n, Block block, StructuredGraph graph) {
+        Block b = block;
+        if (b == null) {
+            b = createBlock();
+        }
 
-    private Block assignBlock(Node n, Block b) {
         assert nodeToBlock.get(n) == null;
         nodeToBlock.set(n, b);
-        if (b.firstNode() == null) {
+
+        if (n == graph.start()) {
+            startBlock = b;
+        }
+
+        if (n instanceof MergeNode) {
+            for (PhiNode phi : ((MergeNode) n).phis()) {
+                nodeToBlock.set(phi, b);
+            }
+        }
+        if (n instanceof EndNode) {
+            assert b.end() == null || n == b.end();
+            b.setEnd((EndNode) n);
+        }
+        if (b.lastNode() == null) {
             b.setFirstNode(n);
             b.setLastNode(n);
+            b.getInstructions().add(n);
         } else {
-            if (b.lastNode() != null) {
-                b.getInstructions().add(b.lastNode());
-            }
-            b.setLastNode(n);
+            b.getInstructions().add(0, n);
+            b.setFirstNode(n);
         }
-        b.setLastNode(n);
+
         return b;
     }
 
-    public static boolean isFixed(Node n) {
-        return n != null && ((n instanceof FixedNode) || n == n.graph().start());
-    }
-
     public static boolean isBlockEnd(Node n) {
-        return trueSuccessorCount(n) > 1 || n instanceof Anchor || n instanceof Return || n instanceof Unwind;
+        return trueSuccessorCount(n) > 1 || n instanceof ReturnNode || n instanceof UnwindNode || n instanceof DeoptimizeNode;
     }
 
-    private void identifyBlocks() {
+    private void identifyBlocks(StructuredGraph graph) {
+
         // Identify blocks.
-        final ArrayList<Node> blockBeginNodes = new ArrayList<Node>();
-        NodeIterator.iterate(EdgeType.SUCCESSORS, graph.start(), null, new NodeVisitor() {
-            @Override
-            public boolean visit(Node n) {
-                if (!isFixed(n)) {
-                    return false;
-                }
-
-                if (n instanceof LoopBegin) {
-                    // a LoopBegin is always a merge
-                    assignBlock(n);
-                    blockBeginNodes.add(n);
-                    return true;
-                }
-
-                Node singlePred = null;
-                for (Node pred : n.predecessors()) {
-                    if (isFixed(pred)) {
-                        if (singlePred == null) {
-                            singlePred = pred;
-                        } else {
-                            // We have more than one predecessor => we are a merge block.
-                            assignBlock(n);
-                            blockBeginNodes.add(n);
-                            return true;
-                        }
+        for (Node n : graph.getNodes()) {
+            if (n instanceof EndNode || n instanceof ReturnNode || n instanceof UnwindNode || n instanceof LoopEndNode || n instanceof DeoptimizeNode) {
+                Block block = null;
+                Node currentNode = n;
+                Node prev = null;
+                while (nodeToBlock.get(currentNode) == null) {
+                    block = assignBlockNew(currentNode, block, graph);
+                    if (currentNode instanceof FixedNode) {
+                        block.setProbability(((FixedNode) currentNode).probability());
                     }
-                }
-
-                if (singlePred == null) {
-                    // We have no predecessor => we are the start block.
-                    assignBlock(n);
-                    blockBeginNodes.add(n);
-                } else {
-                    // We have a single predecessor => check its successor count.
-                    if (isBlockEnd(singlePred)) {
-                        assignBlock(n);
-                        blockBeginNodes.add(n);
-                    } else {
-                        assignBlock(n, nodeToBlock.get(singlePred));
+                    if (currentNode.predecessor() == null) {
+                        // At a merge node => stop iteration.
+                        assert currentNode instanceof MergeNode || currentNode == ((StructuredGraph) currentNode.graph()).start() : currentNode;
+                        break;
                     }
+                    if (block != null && currentNode instanceof BeginNode) {
+                        // We are at a split node => start a new block.
+                        block = null;
+                    }
+                    prev = currentNode;
+                    currentNode = currentNode.predecessor();
+                    // FIX(ls) what's the meaning of this assert?
+//                    assert !(currentNode instanceof AccessNode && ((AccessNode) currentNode).next() != prev) : currentNode;
+                    assert !currentNode.isDeleted() : prev + " " + currentNode;
                 }
-                return true;
-            }}
-        );
+            }
+        }
 
         // Connect blocks.
-        for (Node n : blockBeginNodes) {
-            Block block = nodeToBlock.get(n);
-            for (Node pred : n.predecessors()) {
-                if (isFixed(pred)) {
+        for (Block block : blocks) {
+            Node n = block.firstNode();
+            if (n instanceof MergeNode) {
+                MergeNode m = (MergeNode) n;
+                for (Node pred : m.cfgPredecessors()) {
                     Block predBlock = nodeToBlock.get(pred);
                     predBlock.addSuccessor(block);
                 }
-            }
-
-            if (n instanceof Merge) {
-                for (Node usage : n.usages()) {
-                    if (usage instanceof Phi) {
-                        nodeToBlock.set(usage, block);
+            } else {
+                if (n.predecessor() != null) {
+                    if (Util.isFixed(n.predecessor())) {
+                        Block predBlock = nodeToBlock.get(n.predecessor());
+                        predBlock.addSuccessor(block);
                     }
                 }
             }
         }
 
-        for (Node n : graph.getNodes()) {
-            if (n instanceof FrameState) {
-                FrameState f = (FrameState) n;
-                if (f.predecessors().size() == 1) {
-                    Block predBlock = nodeToBlock.get(f.predecessors().get(0));
-                    assert predBlock != null;
-                    nodeToBlock.set(f, predBlock);
-                    predBlock.getInstructions().add(f);
-                } else {
-                    assert f.predecessors().size() == 0;
-                }
-            }
-        }
-
-        computeDominators();
-
+        computeDominators(graph);
 
         if (scheduleAllNodes) {
-
-            // Add successors of loop end nodes. Makes the graph cyclic.
-            for (Node n : blockBeginNodes) {
-                Block block = nodeToBlock.get(n);
-                if (n instanceof LoopBegin) {
-                    LoopBegin loopBegin = (LoopBegin) n;
-                    nodeToBlock.get(loopBegin.loopEnd()).addSuccessor(block);
-                }
-            }
-
-            assignLatestPossibleBlockToNodes();
-            sortNodesWithinBlocks();
-        } else {
-            computeJavaBlocks();
-        }
-
-        //print();
-    }
-
-    private void computeJavaBlocks() {
-
-        for (Block b : blocks) {
-            computeJavaBlock(b);
+            computeLoopInformation(); // Will make the graph cyclic.
+            assignBlockToNodes(graph);
+            sortNodesWithinBlocks(graph);
         }
     }
 
-    private Block computeJavaBlock(Block b) {
-        if (b.javaBlock() == null) {
-            if (b.getPredecessors().size() == 0) {
-                b.setJavaBlock(b);
-            } else if (b.getPredecessors().size() == 1) {
-                Block pred = b.getPredecessors().get(0);
-                if (pred.getSuccessors().size() > 1) {
-                    b.setJavaBlock(b);
-                } else {
-                    b.setJavaBlock(computeJavaBlock(pred));
-                }
-            } else {
-                Block dominatorBlock = b.getPredecessors().get(0);
-                for (int i=1; i<b.getPredecessors().size(); ++i) {
-                    dominatorBlock = getCommonDominator(dominatorBlock, b.getPredecessors().get(i));
-                }
-                CiBitMap blockMap = new CiBitMap(blocks.size());
-                markPredecessors(b, dominatorBlock, blockMap);
-
-                Block result = dominatorBlock;
-                L1: for (Block curBlock : blocks) {
-                    if (curBlock != b && blockMap.get(curBlock.blockID())) {
-                        for (Block succ : curBlock.getSuccessors()) {
-                            if (!blockMap.get(succ.blockID())) {
-                                result = b;
-                                break L1;
-                            }
-                        }
-                    }
-                }
-                b.setJavaBlock(result);
+    private void computeLoopInformation() {
+        // Add successors of loop end nodes. Makes the graph cyclic.
+        for (Block block : blocks) {
+            Node n = block.lastNode();
+            if (n instanceof LoopEndNode) {
+                LoopEndNode loopEnd = (LoopEndNode) n;
+                assert loopEnd.loopBegin() != null;
+                Block loopBeginBlock = nodeToBlock.get(loopEnd.loopBegin());
+                block.addSuccessor(loopBeginBlock);
+                BitMap map = new BitMap(blocks.size());
+                loopBeginBlock.loopBlocks = new ArrayList<>();
+                markBlocks(block, loopBeginBlock, map, loopCount++, block.loopDepth());
+                assert loopBeginBlock.loopDepth() == block.loopDepth() && loopBeginBlock.loopIndex() == block.loopIndex();
             }
         }
-        return b.javaBlock();
     }
 
-    private void markPredecessors(Block b, Block stopBlock, CiBitMap blockMap) {
-        if (blockMap.get(b.blockID())) {
+    private void markBlocks(Block block, Block loopBeginBlock, BitMap map, int loopIndex, int initialDepth) {
+        if (map.get(block.blockID())) {
             return;
         }
-        blockMap.set(b.blockID());
-        if (b != stopBlock) {
-            for (Block pred : b.getPredecessors()) {
-                markPredecessors(pred, stopBlock, blockMap);
-            }
+
+        map.set(block.blockID());
+        loopBeginBlock.loopBlocks.add(block);
+        if (block.loopDepth() <= initialDepth) {
+            assert block.loopDepth() == initialDepth;
+            block.setLoopIndex(loopIndex);
+        }
+        block.setLoopDepth(block.loopDepth() + 1);
+
+        if (block == loopBeginBlock) {
+            return;
+        }
+
+        for (Block pred : block.getPredecessors()) {
+            markBlocks(pred, loopBeginBlock, map, loopIndex, initialDepth);
+        }
+
+        if (block.isLoopHeader()) {
+            markBlocks(nodeToBlock.get(((LoopBeginNode) block.firstNode()).loopEnd()), loopBeginBlock, map, loopIndex, initialDepth);
         }
     }
 
-    private void assignLatestPossibleBlockToNodes() {
+    private void assignBlockToNodes(StructuredGraph graph) {
         for (Node n : graph.getNodes()) {
-            assignLatestPossibleBlockToNode(n);
+            assignBlockToNode(n);
         }
     }
 
-    private Block assignLatestPossibleBlockToNode(Node n) {
+    public void assignBlockToNode(Node n) {
         if (n == null) {
-            return null;
+            return;
         }
+
+        assert !n.isDeleted();
 
         Block prevBlock = nodeToBlock.get(n);
         if (prevBlock != null) {
-            return prevBlock;
+            return;
         }
+        assert !(n instanceof PhiNode) : n;
+        // if in CFG, schedule at the latest position possible in the outermost loop possible
+        Block latestBlock = latestBlock(n);
+        Block block;
+        if (latestBlock == null) {
+            block = earliestBlock(n);
+        } else if (GraalOptions.ScheduleOutOfLoops && !(n instanceof VirtualObjectFieldNode) && !(n instanceof VirtualObjectNode)) {
+            Block earliestBlock = earliestBlock(n);
+            block = scheduleOutOfLoops(n, latestBlock, earliestBlock);
+        } else {
+            block = latestBlock;
+        }
+        assert !(n instanceof MergeNode);
+        nodeToBlock.set(n, block);
+        block.getInstructions().add(n);
+    }
 
+    private Block latestBlock(Node n) {
         Block block = null;
         for (Node succ : n.successors()) {
-            block = getCommonDominator(block, assignLatestPossibleBlockToNode(succ));
+            if (succ == null) {
+                continue;
+            }
+            assignBlockToNode(succ);
+            block = getCommonDominator(block, nodeToBlock.get(succ));
         }
+        ensureScheduledUsages(n);
+        CommonDominatorBlockClosure cdbc = new CommonDominatorBlockClosure(block);
         for (Node usage : n.usages()) {
-            if (usage instanceof Phi) {
-                Phi phi = (Phi) usage;
-                Merge merge = phi.merge();
-                Block mergeBlock = nodeToBlock.get(merge);
-                assert mergeBlock != null : "no block for merge " + merge.id();
-                for (int i = 0; i < phi.valueCount(); ++i) {
-                    if (phi.valueAt(i) == n) {
-                        if (mergeBlock.getPredecessors().size() == 0) {
-                            TTY.println(merge.toString());
-                            TTY.println(phi.toString());
-                            TTY.println(merge.predecessors().toString());
-                            TTY.println("value count: " + phi.valueCount());
-                        }
-                        block = getCommonDominator(block, mergeBlock.getPredecessors().get(i));
-                    }
-                }
-            } else if (usage instanceof FrameState && ((FrameState) usage).block() != null) {
-                Merge merge = ((FrameState) usage).block();
-                for (Node pred : merge.predecessors()) {
-                    if (isFixed(pred)) {
-                        block = getCommonDominator(block, nodeToBlock.get(pred));
-                    }
-                }
-            } else {
-                block = getCommonDominator(block, assignLatestPossibleBlockToNode(usage));
+            blocksForUsage(n, usage, cdbc);
+        }
+        return cdbc.block;
+    }
+
+    private class CommonDominatorBlockClosure implements BlockClosure {
+        public Block block;
+        public CommonDominatorBlockClosure(Block block) {
+            this.block = block;
+        }
+        @Override
+        public void apply(Block newBlock) {
+            this.block = getCommonDominator(this.block, newBlock);
+        }
+    }
+
+    private Block earliestBlock(Node n) {
+        Block earliest = nodeToBlock.get(n);
+        if (earliest != null) {
+            return earliest;
+        }
+        earliest = earliestCache.get(n);
+        if (earliest != null) {
+            return earliest;
+        }
+        BitMap bits = new BitMap(blocks.size());
+        ArrayList<Node> before = new ArrayList<>();
+        if (n.predecessor() != null) {
+            before.add(n.predecessor());
+        }
+        for (Node input : n.inputs()) {
+            before.add(input);
+        }
+        for (Node pred : before) {
+            if (pred == null) {
+                continue;
+            }
+            Block b = earliestBlock(pred);
+            if (!bits.get(b.blockID())) {
+                earliest = b;
+                do {
+                    bits.set(b.blockID());
+                    b = b.dominator();
+                } while(b != null && !bits.get(b.blockID()));
             }
         }
-
-        nodeToBlock.set(n, block);
-        if (block != null) {
-            block.getInstructions().add(n);
+        if (earliest == null) {
+            Block start = nodeToBlock.get(((StructuredGraph) n.graph()).start());
+            assert start != null;
+            return start;
         }
-        return block;
+        earliestCache.set(n, earliest);
+        return earliest;
+    }
+
+
+    private static Block scheduleOutOfLoops(Node n, Block latestBlock, Block earliest) {
+        assert latestBlock != null : "no latest : " + n;
+        Block cur = latestBlock;
+        Block result = latestBlock;
+        while (cur.loopDepth() != 0 && cur != earliest && cur.dominator() != null) {
+            Block dom = cur.dominator();
+            if (dom.loopDepth() < result.loopDepth()) {
+                result = dom;
+            }
+            cur = dom;
+        }
+        return result;
+    }
+
+    private void blocksForUsage(Node node, Node usage, BlockClosure closure) {
+        if (usage instanceof PhiNode) {
+            PhiNode phi = (PhiNode) usage;
+            MergeNode merge = phi.merge();
+            Block mergeBlock = nodeToBlock.get(merge);
+            assert mergeBlock != null : "no block for merge " + merge.toString(Verbosity.Id);
+            for (int i = 0; i < phi.valueCount(); ++i) {
+                if (phi.valueAt(i) == node) {
+                    if (mergeBlock.getPredecessors().size() <= i) {
+                        TTY.println(merge.toString());
+                        TTY.println(phi.toString());
+                        TTY.println(merge.cfgPredecessors().toString());
+                        TTY.println(phi.inputs().toString());
+                        TTY.println("value count: " + phi.valueCount());
+                    }
+                closure.apply(mergeBlock.getPredecessors().get(i));
+                }
+            }
+        } else if (usage instanceof FrameState && ((FrameState) usage).block() != null) {
+            MergeNode merge = ((FrameState) usage).block();
+            Block block = null;
+            for (Node pred : merge.cfgPredecessors()) {
+                block = getCommonDominator(block, nodeToBlock.get(pred));
+            }
+            closure.apply(block);
+        } else {
+            assignBlockToNode(usage);
+            closure.apply(nodeToBlock.get(usage));
+        }
+    }
+
+    private void ensureScheduledUsages(Node node) {
+        for (Node usage : node.usages().snapshot()) {
+            assignBlockToNode(usage);
+        }
+        // now true usages are ready
     }
 
     private Block getCommonDominator(Block a, Block b) {
@@ -324,7 +469,7 @@ public class IdentifyBlocksPhase extends Phase {
         return commonDominator(a, b);
     }
 
-    private void sortNodesWithinBlocks() {
+    private void sortNodesWithinBlocks(StructuredGraph graph) {
         NodeBitMap map = graph.createNodeBitMap();
         for (Block b : blocks) {
             sortNodesWithinBlocks(b, map);
@@ -333,75 +478,100 @@ public class IdentifyBlocksPhase extends Phase {
 
     private void sortNodesWithinBlocks(Block b, NodeBitMap map) {
         List<Node> instructions = b.getInstructions();
-        List<Node> sortedInstructions = new ArrayList<Node>();
+        List<Node> sortedInstructions = new ArrayList<>(instructions.size() + 2);
+
         assert !map.isMarked(b.firstNode()) && nodeToBlock.get(b.firstNode()) == b;
+        assert !map.isMarked(b.lastNode()) && nodeToBlock.get(b.lastNode()) == b;
 
-        boolean scheduleFirst = true;
-
-        if (b.firstNode() == b.lastNode()) {
-            Node node = b.firstNode();
-            if (!(node instanceof Merge)) {
-                scheduleFirst = false;
-            }
-        }
-        if (scheduleFirst) {
-            addToSorting(b, b.firstNode(), sortedInstructions, map);
-        }
         for (Node i : instructions) {
             addToSorting(b, i, sortedInstructions, map);
         }
-        addToSorting(b, b.lastNode(), sortedInstructions, map);
-        //assert b.firstNode() == sortedInstructions.get(0) : b.firstNode();
-    //    assert b.lastNode() == sortedInstructions.get(sortedInstructions.size() - 1);
+
+        // Make sure that last node gets really last (i.e. when a frame state successor hangs off it).
+        Node lastSorted = sortedInstructions.get(sortedInstructions.size() - 1);
+        if (lastSorted != b.lastNode()) {
+            int idx = sortedInstructions.indexOf(b.lastNode());
+            boolean canNotMove = false;
+            for (int i = idx + 1; i < sortedInstructions.size(); i++) {
+                if (sortedInstructions.get(i).inputs().contains(b.lastNode())) {
+                    canNotMove = true;
+                    break;
+                }
+            }
+            if (canNotMove) {
+                // (cwi) this was the assertion commented out below.  However, it is failing frequently when the
+                // scheduler is used for debug printing in early compiler phases. This was annoying during debugging
+                // when an excpetion breakpoint is set for assertion errors, so I changed it to a bailout.
+                if (b.lastNode() instanceof ControlSplitNode) {
+                    throw new CiBailout("");
+                }
+                //assert !(b.lastNode() instanceof ControlSplitNode);
+
+                //b.setLastNode(lastSorted);
+            } else {
+                sortedInstructions.remove(b.lastNode());
+                sortedInstructions.add(b.lastNode());
+            }
+        }
         b.setInstructions(sortedInstructions);
-//        TTY.println("Block " + b);
-//        for (Node n : sortedInstructions) {
-//            TTY.println("Node: " + n);
-//        }
     }
 
     private void addToSorting(Block b, Node i, List<Node> sortedInstructions, NodeBitMap map) {
-        if (i == null || map.isMarked(i) || nodeToBlock.get(i) != b || i instanceof Phi || i instanceof Local) {
+        if (i == null || map.isMarked(i) || nodeToBlock.get(i) != b || i instanceof PhiNode || i instanceof LocalNode) {
             return;
         }
 
-        for (Node input : i.inputs()) {
-            addToSorting(b, input, sortedInstructions, map);
+        if (i instanceof WriteNode) {
+            // TODO(tw): Make sure every ReadNode that is connected to the same memory state is executed before every write node.
+            // WriteNode wn = (WriteNode) i;
         }
 
-        for (Node pred : i.predecessors()) {
-            addToSorting(b, pred, sortedInstructions, map);
+        FrameState state = null;
+        WriteNode writeNode = null;
+        for (Node input : i.inputs()) {
+            if (input instanceof WriteNode && !map.isMarked(input) && nodeToBlock.get(input) == b) {
+                writeNode = (WriteNode) input;
+            } else if (input instanceof FrameState) {
+                state = (FrameState) input;
+            } else {
+                addToSorting(b, input, sortedInstructions, map);
+            }
+        }
+
+        if (i.predecessor() != null) {
+            addToSorting(b, i.predecessor(), sortedInstructions, map);
         }
 
         map.mark(i);
 
-        for (Node succ : i.successors()) {
-            if (succ instanceof FrameState) {
-                addToSorting(b, succ, sortedInstructions, map);
-            }
-        }
+        addToSorting(b, state, sortedInstructions, map);
+        assert writeNode == null || !map.isMarked(writeNode);
+        addToSorting(b, writeNode, sortedInstructions, map);
 
         // Now predecessors and inputs are scheduled => we can add this node.
-        if (!(i instanceof FrameState)) {
-            sortedInstructions.add(i);
-        }
+        sortedInstructions.add(i);
     }
 
-    private void computeDominators() {
+    private void computeDominators(StructuredGraph graph) {
         Block dominatorRoot = nodeToBlock.get(graph.start());
+        assert dominatorRoot != null;
         assert dominatorRoot.getPredecessors().size() == 0;
-        CiBitMap visited = new CiBitMap(blocks.size());
+        BitMap visited = new BitMap(blocks.size());
         visited.set(dominatorRoot.blockID());
-        LinkedList<Block> workList = new LinkedList<Block>();
+        LinkedList<Block> workList = new LinkedList<>();
         workList.add(dominatorRoot);
 
+        int cnt = 0;
         while (!workList.isEmpty()) {
+            if (cnt++ > blocks.size() * 20) {
+                throw new RuntimeException("(ls) endless loop in computeDominators?");
+            }
             Block b = workList.remove();
 
             List<Block> predecessors = b.getPredecessors();
             if (predecessors.size() == 1) {
                 b.setDominator(predecessors.get(0));
-            } else if (predecessors.size() > 0) {
+            } else if (predecessors.size() > 1) {
                 boolean delay = false;
                 for (Block pred : predecessors) {
                     if (pred != dominatorRoot && pred.dominator() == null) {
@@ -436,7 +606,7 @@ public class IdentifyBlocksPhase extends Phase {
     }
 
     public Block commonDominator(Block a, Block b) {
-        CiBitMap bitMap = new CiBitMap(blocks.size());
+        BitMap bitMap = new BitMap(blocks.size());
         Block cur = a;
         while (cur != null) {
             bitMap.set(cur.blockID());
@@ -454,76 +624,15 @@ public class IdentifyBlocksPhase extends Phase {
         throw new IllegalStateException("no common dominator between " + a + " and " + b);
     }
 
-    private void print() {
-        TTY.println("============================================");
-        TTY.println("%d blocks", blocks.size());
-
-        for (Block b : blocks) {
-           TTY.println();
-           TTY.print(b.toString());
-
-           TTY.print(" succs=");
-           for (Block succ : b.getSuccessors()) {
-               TTY.print(succ + ";");
-           }
-
-           TTY.print(" preds=");
-           for (Block pred : b.getPredecessors()) {
-               TTY.print(pred + ";");
-           }
-
-           if (b.dominator() != null) {
-               TTY.print(" dom=" + b.dominator());
-           }
-           TTY.println();
-
-           if (b.getInstructions().size() > 0) {
-               TTY.print("first instr: " + b.getInstructions().get(0));
-               TTY.print("last instr: " + b.getInstructions().get(b.getInstructions().size() - 1));
-           }
-        }
-
-/*
-        TTY.println("============================================");
-        TTY.println("%d nodes", nodeToBlock.size());
-        for (Node n : graph.getNodes()) {
-            if (n != null) {
-                TTY.print("Node %d: %s", n.id(), n.getClass().toString());
-                Block curBlock = nodeToBlock.get(n);
-                if (curBlock != null) {
-                    TTY.print(" %s", curBlock);
-                }
-                TTY.println();
-            }
-        }*/
-    }
-
     public static int trueSuccessorCount(Node n) {
         if (n == null) {
             return 0;
         }
         int i = 0;
         for (Node s : n.successors()) {
-            if (isFixed(s)) {
+            if (Util.isFixed(s)) {
                 i++;
             }
-        }
-        return i;
-    }
-
-    public static int truePredecessorCount(Node n) {
-        if (n == null) {
-            return 0;
-        }
-        int i = 0;
-        for (Node s : n.predecessors()) {
-            if (isFixed(s)) {
-                i++;
-            }
-        }
-
-        if (n instanceof LoopBegin) {
-            i++;
         }
         return i;
     }
