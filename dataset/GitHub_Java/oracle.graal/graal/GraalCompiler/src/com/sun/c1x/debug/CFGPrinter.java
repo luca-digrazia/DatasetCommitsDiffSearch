@@ -150,6 +150,9 @@ public class CFGPrinter {
         out.println();
 
         out.print("flags ");
+        if (block.isStandardEntry()) {
+            out.print("\"std\" ");
+        }
         if (block.isExceptionEntry()) {
             out.print("\"ex\" ");
         }

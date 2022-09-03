@@ -270,9 +270,6 @@ public abstract class Value extends Node {
         for (int i = 0; i < inputs().size(); i++) {
             inputs().set(i, closure.apply((Value) inputs().get(i)));
         }
-        for (int i = 0; i < successors().size(); i++) {
-            successors().set(i, closure.apply((Value) successors().get(i)));
-        }
     }
 
     @Override
