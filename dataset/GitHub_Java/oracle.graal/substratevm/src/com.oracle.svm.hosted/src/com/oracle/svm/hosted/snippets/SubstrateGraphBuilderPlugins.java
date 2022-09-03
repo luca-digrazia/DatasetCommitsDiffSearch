@@ -68,7 +68,6 @@ import org.graalvm.compiler.nodes.java.NewArrayNode;
 import org.graalvm.compiler.nodes.java.StoreIndexedNode;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.replacements.nodes.BasicObjectCloneNode;
-import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.RuntimeReflection;
@@ -115,7 +114,6 @@ import com.oracle.svm.hosted.GraalEdgeUnsafePartition;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.Local;
 import jdk.vm.ci.meta.LocalVariableTable;
@@ -136,7 +134,6 @@ public class SubstrateGraphBuilderPlugins {
 
         // register the substratevm plugins
         registerSystemPlugins(metaAccess, plugins);
-        registerImageInfoPlugins(metaAccess, plugins);
         registerProxyPlugins(snippetReflection, plugins, analysis);
         registerAtomicUpdaterPlugins(metaAccess, snippetReflection, plugins, analysis);
         registerObjectPlugins(plugins);
@@ -162,31 +159,6 @@ public class SubstrateGraphBuilderPlugins {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 /* System.getSecurityManager() always returns null. */
                 b.addPush(JavaKind.Object, ConstantNode.forConstant(SubstrateObjectConstant.forObject(null), metaAccess, b.getGraph()));
-                return true;
-            }
-        });
-    }
-
-    private static void registerImageInfoPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
-        Registration proxyRegistration = new Registration(plugins, ImageInfo.class);
-        proxyRegistration.register0("inImageCode", new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.push(JavaKind.Boolean, ConstantNode.forConstant(JavaConstant.TRUE, b.getMetaAccess(), b.getGraph()));
-                return true;
-            }
-        });
-        proxyRegistration.register0("inImageBuildtimeCode", new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.push(JavaKind.Boolean, ConstantNode.forConstant(JavaConstant.FALSE, b.getMetaAccess(), b.getGraph()));
-                return true;
-            }
-        });
-        proxyRegistration.register0("inImageRuntimeCode", new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.push(JavaKind.Boolean, ConstantNode.forConstant(JavaConstant.TRUE, b.getMetaAccess(), b.getGraph()));
                 return true;
             }
         });
@@ -616,18 +588,6 @@ public class SubstrateGraphBuilderPlugins {
                 long elementSize = longValue(b, targetMethod, elementSizeNode, "elementSize");
                 StackSlotIdentity slotIdentity = new StackSlotIdentity(b.getGraph().method().asStackTraceElement(b.bci()).toString());
                 b.addPush(JavaKind.Object, new StackValueNode(numElements, elementSize, slotIdentity));
-                return true;
-            }
-        });
-        r.register2("get", int.class, Class.class, new InvocationPlugin() {
-            @SuppressWarnings("unchecked")
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unused, ValueNode numElementsNode, ValueNode classNode) {
-                long numElements = longValue(b, targetMethod, numElementsNode, "numElements");
-                Class<? extends PointerBase> clazz = constantObjectParameter(b, snippetReflection, targetMethod, 0, Class.class, classNode);
-                int size = SizeOf.get(clazz);
-                StackSlotIdentity slotIdentity = new StackSlotIdentity(b.getGraph().method().asStackTraceElement(b.bci()).toString());
-                b.addPush(JavaKind.Object, new StackValueNode(numElements, size, slotIdentity));
                 return true;
             }
         });
