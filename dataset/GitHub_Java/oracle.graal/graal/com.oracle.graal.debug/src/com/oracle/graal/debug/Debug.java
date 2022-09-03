@@ -107,8 +107,7 @@ public class Debug {
 
     public static void sandbox(String name, DebugConfig config, Runnable runnable) {
         if (ENABLED) {
-            DebugConfig sandboxConfig = config == null ? DebugScope.getConfig() : config;
-            DebugScope.getInstance().scope(name, runnable, null, sandboxConfig, new Object[0]);
+            DebugScope.getInstance().scope(name, runnable, null, true, config, new Object[0]);
         } else {
             runnable.run();
         }
@@ -125,8 +124,7 @@ public class Debug {
      */
     public static void sandbox(String name, Object[] context, DebugConfig config, Runnable runnable) {
         if (ENABLED) {
-            DebugConfig sandboxConfig = config == null ? DebugScope.getConfig() : config;
-            DebugScope.getInstance().scope(name, runnable, null, sandboxConfig, context);
+            DebugScope.getInstance().scope(name, runnable, null, true, config, context);
         } else {
             runnable.run();
         }
@@ -143,8 +141,7 @@ public class Debug {
      */
     public static <T> T sandbox(String name, Object[] context, DebugConfig config, Callable<T> callable) {
         if (ENABLED) {
-            DebugConfig sandboxConfig = config == null ? DebugScope.getConfig() : config;
-            return DebugScope.getInstance().scope(name, null, callable, sandboxConfig, context);
+            return DebugScope.getInstance().scope(name, null, callable, true, config, context);
         } else {
             return DebugScope.call(callable);
         }
@@ -164,7 +161,7 @@ public class Debug {
 
     public static void scope(String name, Object[] context, Runnable runnable) {
         if (ENABLED) {
-            DebugScope.getInstance().scope(name, runnable, null, null, context);
+            DebugScope.getInstance().scope(name, runnable, null, false, null, context);
         } else {
             runnable.run();
         }
@@ -184,7 +181,7 @@ public class Debug {
 
     public static <T> T scope(String name, Object[] context, Callable<T> callable) {
         if (ENABLED) {
-            return DebugScope.getInstance().scope(name, null, callable, null, context);
+            return DebugScope.getInstance().scope(name, null, callable, false, null, context);
         } else {
             return DebugScope.call(callable);
         }
