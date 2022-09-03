@@ -27,10 +27,6 @@ import com.oracle.graal.nodes.*;
 
 
 public abstract class LoopTransformations {
-    private LoopTransformations() {
-        // does not need to be instantiated
-    }
-
     public static void invert(LoopEx loop, FixedNode point) {
         LoopFragmentInsideBefore head = loop.insideBefore(point);
         LoopFragmentInsideBefore duplicate = head.duplicate();
