@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.lir;
 
+import java.util.*;
+
 import com.oracle.graal.asm.*;
 import com.oracle.graal.lir.StandardOp.BranchOp;
 import com.oracle.graal.lir.StandardOp.JumpOp;
@@ -74,6 +76,19 @@ public final class LabelRef {
 
     public Label label() {
         return ((StandardOp.LabelOp) lir.lir(getTargetBlock()).get(0)).getLabel();
+    }
+
+    /**
+     * Determines if the edge represented by this object is from a block to its lexical successor in
+     * the code emitting order of blocks.
+     * 
+     * @param sourceIndex the index of this edge's {@linkplain #getSourceBlock() source} in the code
+     *            emitting order
+     */
+    public boolean isCodeEmittingOrderSuccessorEdge(int sourceIndex) {
+        List<Block> order = lir.codeEmittingOrder();
+        assert order.get(sourceIndex) == block;
+        return sourceIndex < order.size() - 1 && order.get(sourceIndex + 1) == getTargetBlock();
     }
 
     @Override
