@@ -26,164 +26,94 @@ import org.junit.*;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.test.SpecializationGroupingTestFactory.TestGroupingFactory;
-import com.oracle.truffle.api.dsl.test.TypeSystemTest.SimpleTypes;
-import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
+import com.oracle.truffle.api.dsl.test.SpecializationGroupingTestFactory.TestElseConnectionBug1Factory;
+import com.oracle.truffle.api.dsl.test.SpecializationGroupingTestFactory.TestElseConnectionBug2Factory;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
+import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
 /**
  * Tests execution counts of guards. While we do not make guarantees for guard invocation except for
- * their execution order our implementation reduces the calls to guards as much as possible.
+ * their execution order our implementation reduces the calls to guards as much as possible for the
+ * generic case.
  */
 public class SpecializationGroupingTest {
 
     @Test
-    public void testGrouping() {
-        MockAssumption a1 = new MockAssumption(true);
-        MockAssumption a2 = new MockAssumption(false);
-        MockAssumption a3 = new MockAssumption(true);
-
-        TestRootNode<TestGrouping> root = TestHelper.createRoot(TestGroupingFactory.getInstance(), a1, a2, a3);
-
-        SimpleTypes.intCast = 0;
-        SimpleTypes.intCheck = 0;
-        TestGrouping.true1 = 0;
-        TestGrouping.false1 = 0;
-        TestGrouping.true2 = 0;
-        TestGrouping.false2 = 0;
-        TestGrouping.true3 = 0;
-
-        Assert.assertEquals(42, TestHelper.executeWith(root, 21, 21));
-        Assert.assertEquals(1, TestGrouping.true1);
-        Assert.assertEquals(1, TestGrouping.false1);
-        Assert.assertEquals(1, TestGrouping.true2);
-        Assert.assertEquals(1, TestGrouping.false2);
-        Assert.assertEquals(1, TestGrouping.true3);
-        Assert.assertEquals(2, SimpleTypes.intCheck);
-        Assert.assertEquals(2, SimpleTypes.intCast);
-        Assert.assertEquals(1, a1.checked);
-        Assert.assertEquals(1, a2.checked);
-        Assert.assertEquals(1, a3.checked);
-
-        Assert.assertEquals(42, TestHelper.executeWith(root, 21, 21));
-        Assert.assertEquals(2, TestGrouping.true1);
-        Assert.assertEquals(1, TestGrouping.false1);
-        Assert.assertEquals(2, TestGrouping.true2);
-        Assert.assertEquals(2, TestGrouping.false2);
-        Assert.assertEquals(2, TestGrouping.true3);
-
-        Assert.assertEquals(2, a1.checked);
-        Assert.assertEquals(1, a2.checked);
-        Assert.assertEquals(2, a3.checked);
-        Assert.assertEquals(2, SimpleTypes.intCheck);
-        Assert.assertEquals(2, SimpleTypes.intCast);
-
+    public void testElseConnectionBug1() {
+        CallTarget target = TestHelper.createCallTarget(TestElseConnectionBug1Factory.create(new GenericInt()));
+        Assert.assertEquals(42, target.call());
     }
 
     @SuppressWarnings("unused")
-    @NodeChildren({@NodeChild, @NodeChild})
-    @NodeAssumptions({"a1", "a2", "a3"})
-    public abstract static class TestGrouping extends ValueNode {
+    @NodeChild(value = "genericChild", type = GenericInt.class)
+    public abstract static class TestElseConnectionBug1 extends ValueNode {
 
-        private static int true1;
-        private static int false1;
-        private static int true2;
-        private static int false2;
-        private static int true3;
+        @Specialization(rewriteOn = {SlowPathException.class}, guards = "isInitialized(value)")
+        public int do1(int value) throws SlowPathException {
+            throw new SlowPathException();
+        }
 
-        protected boolean true1(int value) {
-            true1++;
+        @Specialization(contains = "do1", guards = "isInitialized(value)")
+        public int do2(int value) {
+            return value == 42 ? value : 0;
+        }
+
+        @Specialization(guards = "!isInitialized(value)")
+        public Object do3(int value) {
+            throw new AssertionError();
+        }
+
+        boolean isInitialized(int value) {
             return true;
         }
+    }
 
-        protected boolean false1(int value, int value2) {
-            false1++;
-            return false;
+    public static final class GenericInt extends ValueNode {
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            return executeInt(frame);
         }
 
-        protected boolean true2(int value) {
-            true2++;
-            return true;
-        }
-
-        protected boolean false2(int value) {
-            false2++;
-            return false;
-        }
-
-        protected boolean true3(int value) {
-            true3++;
-            return true;
-        }
-
-        @Specialization(order = 1)
-        public int fail(int value1, String value2) {
-            throw new AssertionError();
-        }
-
-        @Specialization(order = 2, guards = {"true1", "false1"})
-        public int fail1(int value1, int value2) {
-            throw new AssertionError();
-        }
-
-        @Specialization(order = 3, guards = {"true1", "true2"}, assumptions = {"a1", "a2"})
-        public int fail2(int value1, int value2) {
-            throw new AssertionError();
-        }
-
-        @Specialization(order = 4, guards = {"true1", "true2"}, assumptions = {"a1", "a3"}, rewriteOn = RuntimeException.class)
-        public int throwRewrite(int value1, int value2) {
-            throw new RuntimeException();
-        }
-
-        @Specialization(order = 5, guards = {"true1", "true2", "false2"}, assumptions = {"a1", "a3"})
-        public int fail4(int value1, int value2) {
-            throw new AssertionError();
-        }
-
-        @Specialization(order = 6, guards = {"true1", "true2", "!false2", "!true3"}, assumptions = {"a1", "a3"})
-        public int fail5(int value1, int value2) {
-            throw new AssertionError();
-        }
-
-        @Specialization(order = 7, guards = {"true1", "true2", "!false2", "true3"}, assumptions = {"a1", "a3"})
-        public int success(int value1, int value2) {
-            return value1 + value2;
+        @Override
+        public int executeInt(VirtualFrame frame) {
+            return 42;
         }
 
     }
 
-    private static class MockAssumption implements Assumption {
+    @Test
+    public void testElseConnectionBug2() {
+        TestHelper.assertRuns(TestElseConnectionBug2Factory.getInstance(), new Object[]{42}, new Object[]{42});
+    }
 
-        int checked;
+    @SuppressWarnings("unused")
+    @NodeChild
+    public abstract static class TestElseConnectionBug2 extends ValueNode {
 
-        private final boolean valid;
-
-        public MockAssumption(boolean valid) {
-            this.valid = valid;
+        @Specialization(guards = "guard0(value)")
+        public int do1(int value) {
+            throw new AssertionError();
         }
 
-        public void check() throws InvalidAssumptionException {
-            checked++;
-            if (!valid) {
-                throw new InvalidAssumptionException();
-            }
+        @Specialization(guards = "guard1(value)")
+        public int do2(int value) {
+            throw new AssertionError();
         }
 
-        public boolean isValid() {
-            checked++;
-            return valid;
+        @Specialization(guards = "!guard0(value)")
+        public int do3(int value) {
+            return value;
         }
 
-        public void invalidate() {
-            throw new UnsupportedOperationException();
+        boolean guard0(int value) {
+            return false;
         }
 
-        public String getName() {
-            throw new UnsupportedOperationException();
+        boolean guard1(int value) {
+            return false;
         }
-
     }
 
 }
