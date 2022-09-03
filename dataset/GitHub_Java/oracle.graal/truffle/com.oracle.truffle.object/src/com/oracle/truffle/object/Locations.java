@@ -22,16 +22,10 @@
  */
 package com.oracle.truffle.object;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.object.DynamicObject;
-import com.oracle.truffle.api.object.FinalLocationException;
-import com.oracle.truffle.api.object.IncompatibleLocationException;
-import com.oracle.truffle.api.object.Location;
-import com.oracle.truffle.api.object.ObjectLocation;
-import com.oracle.truffle.api.object.Property;
-import com.oracle.truffle.api.object.Shape;
-import com.oracle.truffle.api.object.TypedLocation;
-import java.util.Objects;
+import java.util.*;
+
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.object.*;
 
 /**
  * Property location.
