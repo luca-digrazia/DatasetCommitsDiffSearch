@@ -77,6 +77,7 @@ public class VMExitsNative implements VMExits, Remote {
     public void startCompiler() {
         originalOut = System.out;
         originalErr = System.err;
+        //TTY.println("startCompiler: " + originalOut);
     }
 
     public void shutdownCompiler() throws Throwable {
@@ -103,12 +104,11 @@ public class VMExitsNative implements VMExits, Remote {
     public abstract class Sandbox {
 
         public void start() throws Throwable {
-            // (ls) removed output and error stream rewiring, this influences applications and, for example, makes dacapo tests fail.
-//            PrintStream oldOut = System.out;
-//            PrintStream oldErr = System.err;
+            PrintStream oldOut = System.out;
+            PrintStream oldErr = System.err;
             run();
-//            System.setOut(oldOut);
-//            System.setErr(oldErr);
+            System.setOut(oldOut);
+            System.setErr(oldErr);
         }
 
         protected abstract void run() throws Throwable;
