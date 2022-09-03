@@ -40,6 +40,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
+import static org.junit.Assert.assertTrue;
 
 public class AsyncExecutorTest {
 
@@ -65,11 +66,22 @@ public class AsyncExecutorTest {
         for (int i = 0; i < 100; i++) {
             values.add(engine.eval(s));
         }
+        boolean atLeastOneIsOK = false;
+        boolean atLeastOneIsBad = false;
         for (int i = 0; i < 100; i++) {
             // fails because the execution is depending on a side-effect.
             // this way you can crash arbitrary languages.
-            Assert.assertEquals(i, (int) values.get(i).as(Integer.class));
+            try {
+                final int result = values.get(i).as(Integer.class);
+                Assert.assertTrue("We obtained a result", result >= 0);
+                atLeastOneIsOK = true;
+            } catch (IllegalStateException ex) {
+                assertTrue(ex.getMessage(), ex.getMessage().contains("Currently executing in Thread"));
+                atLeastOneIsBad = true;
+            }
         }
+        assertTrue("1st execution has to be OK", atLeastOneIsOK);
+        assertTrue("Executions in other threads have to be rejected", atLeastOneIsBad);
     }
 
     private static class AsyncContext {
