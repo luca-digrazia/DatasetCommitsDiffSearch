@@ -691,6 +691,9 @@ public final class GraphBuilder {
         if (!type.isResolved() || type.isArrayClass()) {
             return;
         }
+        if (assumeLeafClass(type)) {
+            check.setDirectCompare();
+        }
     }
 
     void genNewInstance(int cpi) {
@@ -733,7 +736,7 @@ public final class GraphBuilder {
         // Must copy the state here, because the field holder must still be on the stack.
         FrameState stateBefore = curState.immutableCopy(bci());
         boolean isLoaded = !C1XOptions.TestPatching && field.isResolved();
-        LoadField load = new LoadField(apop(), field, stateBefore, isLoaded);
+        LoadField load = new LoadField(apop(), field, false, stateBefore, isLoaded);
         appendOptimizedLoadField(field.kind(), load);
     }
 
@@ -742,7 +745,7 @@ public final class GraphBuilder {
         FrameState stateBefore = curState.immutableCopy(bci());
         boolean isLoaded = !C1XOptions.TestPatching && field.isResolved();
         Value value = pop(field.kind().stackKind());
-        appendOptimizedStoreField(new StoreField(apop(), field, value, stateBefore, isLoaded));
+        appendOptimizedStoreField(new StoreField(apop(), field, value, false, stateBefore, isLoaded));
     }
 
     void genGetStatic(int cpi, RiField field) {
@@ -756,7 +759,7 @@ public final class GraphBuilder {
             push(constantValue.kind.stackKind(), appendConstant(constantValue));
         } else {
             Value container = genResolveClass(RiType.Representation.StaticFields, holder, isInitialized, cpi);
-            LoadField load = new LoadField(container, field, null, isInitialized);
+            LoadField load = new LoadField(container, field, true, null, isInitialized);
             appendOptimizedLoadField(field.kind(), load);
         }
     }
@@ -766,7 +769,7 @@ public final class GraphBuilder {
         boolean isInitialized = !C1XOptions.TestPatching && field.isResolved() && holder.isResolved() && holder.isInitialized();
         Value container = genResolveClass(RiType.Representation.StaticFields, holder, isInitialized, cpi);
         Value value = pop(field.kind().stackKind());
-        StoreField store = new StoreField(container, field, value, null, isInitialized);
+        StoreField store = new StoreField(container, field, value, true, null, isInitialized);
         appendOptimizedStoreField(store);
     }
 
@@ -821,7 +824,7 @@ public final class GraphBuilder {
 
         Value[] args = curState.popArguments(target.signature().argumentSlots(false));
         if (!tryInline(target, args)) {
-            appendInvoke(INVOKESTATIC, target, args, cpi, constantPool);
+            appendInvoke(INVOKESTATIC, target, args, true, cpi, constantPool);
         }
     }
 
@@ -921,7 +924,7 @@ public final class GraphBuilder {
             }
         }
         // devirtualization failed, produce an actual invokevirtual
-        appendInvoke(opcode, target, args, cpi, constantPool);
+        appendInvoke(opcode, target, args, false, cpi, constantPool);
     }
 
     private CiKind returnKind(RiMethod target) {
@@ -931,13 +934,13 @@ public final class GraphBuilder {
     private void invokeDirect(RiMethod target, Value[] args, RiType knownHolder, int cpi, RiConstantPool constantPool) {
         if (!tryInline(target, args)) {
             // could not optimize or inline the method call
-            appendInvoke(INVOKESPECIAL, target, args, cpi, constantPool);
+            appendInvoke(INVOKESPECIAL, target, args, false, cpi, constantPool);
         }
     }
 
-    private void appendInvoke(int opcode, RiMethod target, Value[] args, int cpi, RiConstantPool constantPool) {
+    private void appendInvoke(int opcode, RiMethod target, Value[] args, boolean isStatic, int cpi, RiConstantPool constantPool) {
         CiKind resultType = returnKind(target);
-        Value result = append(new Invoke(opcode, resultType.stackKind(), args, target, target.signature().returnType(compilation.method.holder()), null));
+        Value result = append(new Invoke(opcode, resultType.stackKind(), args, isStatic, target, target.signature().returnType(compilation.method.holder()), null));
         pushReturn(resultType, result);
     }
 
