@@ -139,6 +139,8 @@ public class TargetDescription {
                 return 8;
             case Object:
                 return wordSize;
+            case Jsr:
+                return 4;
             default:
                 return 0;
         }

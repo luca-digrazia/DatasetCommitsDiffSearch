@@ -1743,7 +1743,7 @@ public final class LinearScan {
             }
         });
 
-        info.finish(registerRefMap, frameRefMap);
+        info.finish(registerRefMap, frameRefMap, frameMap);
     }
 
     private void assignLocations(List<LIRInstruction> instructions, final IntervalWalker iw) {
