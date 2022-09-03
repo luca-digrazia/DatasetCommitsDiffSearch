@@ -70,8 +70,6 @@ public final class GraalOptions {
     @Option(help = "")
     public static final OptionValue<Boolean> PartialEscapeAnalysis = new OptionValue<>(true);
     @Option(help = "")
-    public static final OptionValue<Boolean> EscapeAnalysisHistogram = new OptionValue<>(false);
-    @Option(help = "")
     public static final OptionValue<Integer> EscapeAnalysisIterations = new OptionValue<>(2);
     @Option(help = "")
     public static final OptionValue<String> EscapeAnalyzeOnly = new OptionValue<>(null);
@@ -166,6 +164,8 @@ public final class GraalOptions {
     // Other printing settings
     @Option(help = "")
     public static final OptionValue<Boolean> PrintCompilation = new OptionValue<>(false);
+    @Option(help = "")
+    public static final OptionValue<Boolean> PrintAfterCompilation = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<Boolean> PrintProfilingInformation = new OptionValue<>(false);
     @Option(help = "")
@@ -290,33 +290,6 @@ public final class GraalOptions {
     @Option(help = "")
     public static final OptionValue<Boolean> OptPushThroughPi = new OptionValue<>(true);
 
-    // Intrinsification settings
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyObjectClone = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyArrayCopy = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyObjectMethods = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifySystemMethods = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyClassMethods = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyThreadMethods = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyUnsafeMethods = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyMathMethods = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyAESMethods = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyCRC32Methods = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyReflectionMethods = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyInstalledCodeMethods = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IntrinsifyCallSiteTarget = new OptionValue<>(true);
 
     /**
      * Counts the various paths taken through snippets.
