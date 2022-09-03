@@ -135,12 +135,10 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
     }
 
     private final LoweringType loweringType;
-    private final CanonicalizerPhase canonicalizer;
 
-    public LoweringPhase(LoweringType loweringType, CanonicalizerPhase canonicalizer) {
+    public LoweringPhase(LoweringType loweringType) {
         super("Lowering (" + loweringType.name() + ")");
         this.loweringType = loweringType;
-        this.canonicalizer = canonicalizer;
     }
 
     private static boolean containsLowerable(NodeIterable<Node> nodes) {
@@ -156,11 +154,12 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
     protected void run(final StructuredGraph graph, PhaseContext context) {
         int i = 0;
         while (true) {
+            Round round = new Round(i++, context);
             int mark = graph.getMark();
 
-            IncrementalCanonicalizerPhase<PhaseContext> incrementalCanonicalizer = new IncrementalCanonicalizerPhase<>(canonicalizer);
-            incrementalCanonicalizer.appendPhase(new Round(i++, context));
-            incrementalCanonicalizer.apply(graph, context);
+            IncrementalCanonicalizerPhase<PhaseContext> canonicalizer = new IncrementalCanonicalizerPhase<>();
+            canonicalizer.appendPhase(round);
+            canonicalizer.apply(graph, context);
 
             if (!containsLowerable(graph.getNewNodes(mark))) {
                 // No new lowerable nodes - done!
