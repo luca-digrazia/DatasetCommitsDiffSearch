@@ -36,12 +36,7 @@ import com.oracle.svm.jni.nativeapi.JNIEnvironment;
  */
 public class JNIThreadLocalEnvironment {
 
-    /*
-     * The per-thread JNI environment is located at offset 0 of each thread's {@link VMThread}
-     * structure. For that reason, it has the same address as the VMThread and can be used to
-     * restore the designated VMThread register when transitioning from native to Java.
-     */
-    static final FastThreadLocalBytes<JNIEnvironment> jniFunctions = FastThreadLocalFactory.createBytes(() -> SizeOf.get(JNIEnvironment.class)).setMaxOffset(0);
+    static final FastThreadLocalBytes<JNIEnvironment> jniFunctions = FastThreadLocalFactory.createBytes(() -> SizeOf.get(JNIEnvironment.class));
 
     public static JNIEnvironment getAddress() {
         JNIEnvironment env = jniFunctions.getAddress();
