@@ -237,54 +237,11 @@ public abstract class Node implements NodeInterface, Cloneable {
         if (newChild == this) {
             throw new IllegalStateException("The parent of a node can never be the node itself.");
         }
-        assert checkSameLanguages(newChild);
         newChild.parent = this;
         if (TruffleOptions.TraceASTJSON) {
             dump(this, newChild, null);
         }
         NodeUtil.adoptChildrenHelper(newChild);
-    }
-
-    int adoptChildrenAndCount() {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        return 1 + NodeUtil.adoptChildrenAndCountHelper(this);
-    }
-
-    int adoptAndCountHelper(Node newChild) {
-        assert newChild != null;
-        if (newChild == this) {
-            throw new IllegalStateException("The parent of a node can never be the node itself.");
-        }
-        assert checkSameLanguages(newChild);
-        newChild.parent = this;
-        if (TruffleOptions.TraceASTJSON) {
-            dump(this, newChild, null);
-        }
-        return 1 + NodeUtil.adoptChildrenAndCountHelper(newChild);
-    }
-
-    private boolean checkSameLanguages(final Node newChild) {
-        if (newChild instanceof ExecutableNode && !(newChild instanceof RootNode)) {
-            RootNode root = getRootNode();
-            if (root == null) {
-                throw new IllegalStateException("Cannot adopt ExecutableNode " + newChild + " as a child of node without a root.");
-            }
-            LanguageInfo pl = root.getLanguageInfo();
-            LanguageInfo cl = ((ExecutableNode) newChild).getLanguageInfo();
-            if (cl != pl) {
-                throw new IllegalArgumentException("Can not adopt ExecutableNode under a different language." +
-                                " Parent " + this + " is of " + langId(pl) + ", child " + newChild + " is of " + langId(cl));
-            }
-        }
-        return true;
-    }
-
-    private static String langId(LanguageInfo languageInfo) {
-        if (languageInfo == null) {
-            return null;
-        } else {
-            return languageInfo.getId();
-        }
     }
 
     private void adoptUnadoptedHelper(final Node newChild) {
@@ -716,11 +673,6 @@ public abstract class Node implements NodeInterface, Cloneable {
             }
 
             @Override
-            public int adoptChildrenAndCount(RootNode rootNode) {
-                return rootNode.adoptChildrenAndCount();
-            }
-
-            @Override
             public Object getEngineObject(LanguageInfo languageInfo) {
                 return languageInfo.getEngineObject();
             }
@@ -736,8 +688,8 @@ public abstract class Node implements NodeInterface, Cloneable {
             }
 
             @Override
-            public LanguageInfo createLanguage(Object vmObject, String id, String name, String version, Set<String> mimeTypes, boolean internal) {
-                return new LanguageInfo(vmObject, id, name, version, mimeTypes, internal);
+            public LanguageInfo createLanguage(Object vmObject, String id, String name, String version, Set<String> mimeTypes) {
+                return new LanguageInfo(vmObject, id, name, version, mimeTypes);
             }
 
             @Override
