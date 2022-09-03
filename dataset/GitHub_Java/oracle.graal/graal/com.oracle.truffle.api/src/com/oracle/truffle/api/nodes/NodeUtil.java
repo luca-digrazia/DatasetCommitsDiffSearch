@@ -574,19 +574,19 @@ public final class NodeUtil {
         return countNodes(root, null, false);
     }
 
-    public static int countNodes(Node root, NodeCountFilter filter) {
+    public static int countNodes(Node root, NodeFilter filter) {
         return countNodes(root, filter, false);
     }
 
-    public static int countNodes(Node root, NodeCountFilter filter, boolean visitInlinedCallNodes) {
+    public static int countNodes(Node root, NodeFilter filter, boolean visitInlinedCallNodes) {
         NodeCountVisitor nodeCount = new NodeCountVisitor(filter, visitInlinedCallNodes);
         root.accept(nodeCount);
         return nodeCount.nodeCount;
     }
 
-    public interface NodeCountFilter {
+    public interface NodeFilter {
 
-        boolean isCounted(Node node);
+        boolean isFiltered(Node node);
 
     }
 
@@ -594,16 +594,16 @@ public final class NodeUtil {
 
         private final boolean visitInlinedCallNodes;
         int nodeCount;
-        private final NodeCountFilter filter;
+        private final NodeFilter filter;
 
-        private NodeCountVisitor(NodeCountFilter filter, boolean visitInlinedCallNodes) {
+        private NodeCountVisitor(NodeFilter filter, boolean visitInlinedCallNodes) {
             this.filter = filter;
             this.visitInlinedCallNodes = visitInlinedCallNodes;
         }
 
         @Override
         public boolean visit(Node node) {
-            if (filter == null || filter.isCounted(node)) {
+            if (filter == null || !filter.isFiltered(node)) {
                 nodeCount++;
             }
 

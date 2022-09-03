@@ -36,7 +36,7 @@ import com.oracle.truffle.api.frame.*;
  */
 public abstract class RootNode extends Node {
 
-    private RootCallTarget callTarget;
+    private CallTarget callTarget;
     private final FrameDescriptor frameDescriptor;
 
     /*
@@ -61,25 +61,10 @@ public abstract class RootNode extends Node {
         }
     }
 
-    /**
-     * Creates a split {@link RootNode} based on the current {@link RootNode}. This method should
-     * return an AST that was never executed and must not be shared with other {@link RootNode} or
-     * {@link CallTarget} instances. This method is intended to be overridden by a subclass.
-     * 
-     * @return the split {@link RootNode}
-     */
     public RootNode split() {
-        throw new UnsupportedOperationException();
+        return NodeUtil.cloneNode(this);
     }
 
-    /**
-     * Returns <code>true</code> if this {@link RootNode} can be split. A {@link RootNode} can be
-     * split inside of a {@link CallTarget} that is invoked using a {@link CallNode}. If this method
-     * returns <code>true</code> a proper implementation of {@link #split()} must also be provided.
-     * This method is intended to be overridden by a subclass.
-     * 
-     * @return <code>true</code> if splittable else <code>false</code>.
-     */
     public boolean isSplittable() {
         return false;
     }
@@ -88,7 +73,7 @@ public abstract class RootNode extends Node {
      * Reports the execution count of a loop that is a child of this node. The optimization
      * heuristics can use the loop count to guide compilation and inlining.
      */
-    public final void reportLoopCount(int count) {
+    public void reportLoopCount(int count) {
         if (getCallTarget() instanceof LoopCountReceiver) {
             ((LoopCountReceiver) getCallTarget()).reportLoopCount(count);
         }
@@ -102,7 +87,7 @@ public abstract class RootNode extends Node {
      */
     public abstract Object execute(VirtualFrame frame);
 
-    public final RootCallTarget getCallTarget() {
+    public CallTarget getCallTarget() {
         return callTarget;
     }
 
@@ -110,17 +95,17 @@ public abstract class RootNode extends Node {
         return frameDescriptor;
     }
 
-    public final void setCallTarget(RootCallTarget callTarget) {
+    public final void setCallTarget(CallTarget callTarget) {
         this.callTarget = callTarget;
     }
 
     /* Internal API. Do not use. */
-    final void addCachedCallNode(CallNode callSite) {
+    void addCachedCallNode(CallNode callSite) {
         this.cachedCallNodes.add(callSite);
     }
 
     /* Internal API. Do not use. */
-    final void removeCachedCallNode(CallNode callSite) {
+    void removeCachedCallNode(CallNode callSite) {
         this.cachedCallNodes.remove(callSite);
     }
 
