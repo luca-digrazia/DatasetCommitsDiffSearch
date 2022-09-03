@@ -23,7 +23,7 @@
 package com.oracle.graal.printer;
 
 import static com.oracle.graal.compiler.GraalDebugConfig.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.io.*;
 import java.net.*;
@@ -136,13 +136,6 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 printer = xmlPrinter;
             }
             TTY.println("Connected to the IGV on %s:%d", host, port);
-        } catch (ClosedByInterruptException | InterruptedIOException e) {
-            /*
-             * Interrupts should not count as errors because they may be caused by a cancelled Graal
-             * compilation. ClosedByInterruptException occurs if the SocketChannel could not be
-             * opened. InterruptedIOException occurs if new Socket(..) was interrupted.
-             */
-            printer = null;
         } catch (IOException e) {
             TTY.println("Could not connect to the IGV on %s:%d : %s", host, port, e);
             failuresCount++;
@@ -152,7 +145,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
 
     @Override
     public void dump(Object object, final String message) {
-        if (object instanceof Graph && PrintIdealGraph.getValue()) {
+        if (object instanceof Graph) {
             ensureInitialized();
             if (printer == null) {
                 return;
@@ -160,7 +153,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             final Graph graph = (Graph) object;
 
             if (printer != null) {
-                // Get all current JavaMethod instances in the context.
+                // Get all current RiResolvedMethod instances in the context.
                 List<String> inlineContext = getInlineContext();
 
                 // Reverse list such that inner method comes after outer method.
@@ -210,7 +203,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             JavaMethod method = asJavaMethod(o);
             if (method != null) {
                 if (lastMethodOrGraph == null || asJavaMethod(lastMethodOrGraph) == null || !asJavaMethod(lastMethodOrGraph).equals(method)) {
-                    result.add(method.format("%H::%n(%p)"));
+                    result.add(MetaUtil.format("%H::%n(%p)", method));
                 } else {
                     // This prevents multiple adjacent method context objects for the same method
                     // from resulting in multiple IGV tree levels. This works on the
@@ -272,7 +265,6 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
         }
         if (printer != null) {
             printer.close();
-            printer = null;
         }
     }
 }

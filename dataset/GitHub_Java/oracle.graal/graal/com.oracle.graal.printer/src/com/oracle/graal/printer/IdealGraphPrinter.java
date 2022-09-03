@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-
 import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
@@ -48,7 +46,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
 
     /**
      * Creates a new {@link IdealGraphPrinter} that writes to the specified output stream.
-     *
+     * 
      * @param tryToSchedule If false, no scheduling is done, which avoids exceptions for
      *            non-schedulable graphs.
      */
@@ -89,12 +87,10 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
         Set<Node> noBlockNodes = new HashSet<>();
         SchedulePhase schedule = predefinedSchedule;
         if (schedule == null && tryToSchedule) {
-            if (PrintIdealGraphSchedule.getValue()) {
-                try {
-                    schedule = new SchedulePhase();
-                    schedule.apply((StructuredGraph) graph);
-                } catch (Throwable t) {
-                }
+            try {
+                schedule = new SchedulePhase();
+                schedule.apply((StructuredGraph) graph);
+            } catch (Throwable t) {
             }
         }
         ControlFlowGraph cfg = schedule == null ? null : schedule.getCFG();
@@ -175,7 +171,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
                     printProperty(bit, "true");
                 }
             }
-            if (node.getClass() == BeginNode.class) {
+            if (node.getClass() == AbstractBeginNode.class) {
                 printProperty("shortName", "B");
             } else if (node.getClass() == AbstractEndNode.class) {
                 printProperty("shortName", "E");
