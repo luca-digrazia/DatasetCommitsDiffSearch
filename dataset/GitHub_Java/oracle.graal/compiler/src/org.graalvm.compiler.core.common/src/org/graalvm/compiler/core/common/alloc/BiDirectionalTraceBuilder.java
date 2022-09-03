@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -63,7 +61,7 @@ public final class BiDirectionalTraceBuilder {
     }
 
     private static int compare(AbstractBlockBase<?> a, AbstractBlockBase<?> b) {
-        return Double.compare(b.getRelativeFrequency(), a.getRelativeFrequency());
+        return Double.compare(b.probability(), a.probability());
     }
 
     private boolean processed(AbstractBlockBase<?> b) {
@@ -132,7 +130,7 @@ public final class BiDirectionalTraceBuilder {
     }
 
     private void addBlockToTrace(DebugContext debug, AbstractBlockBase<?> block) {
-        debug.log("add %s (freq: %f)", block, block.getRelativeFrequency());
+        debug.log("add %s (prob: %f)", block, block.probability());
         processed.set(block.getId());
     }
 
@@ -142,7 +140,7 @@ public final class BiDirectionalTraceBuilder {
     private AbstractBlockBase<?> selectPredecessor(AbstractBlockBase<?> block) {
         AbstractBlockBase<?> next = null;
         for (AbstractBlockBase<?> pred : block.getPredecessors()) {
-            if (!processed(pred) && !isBackEdge(pred, block) && (next == null || pred.getRelativeFrequency() > next.getRelativeFrequency())) {
+            if (!processed(pred) && !isBackEdge(pred, block) && (next == null || pred.probability() > next.probability())) {
                 next = pred;
             }
         }
@@ -160,7 +158,7 @@ public final class BiDirectionalTraceBuilder {
     private AbstractBlockBase<?> selectSuccessor(AbstractBlockBase<?> block) {
         AbstractBlockBase<?> next = null;
         for (AbstractBlockBase<?> succ : block.getSuccessors()) {
-            if (!processed(succ) && (next == null || succ.getRelativeFrequency() > next.getRelativeFrequency())) {
+            if (!processed(succ) && (next == null || succ.probability() > next.probability())) {
                 next = succ;
             }
         }
