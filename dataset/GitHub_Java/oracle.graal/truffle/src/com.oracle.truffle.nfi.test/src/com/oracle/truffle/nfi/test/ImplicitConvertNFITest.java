@@ -97,10 +97,10 @@ public class ImplicitConvertNFITest extends NFITest {
     @Parameter(2) public long numericValue;
     @Parameter(3) public Class<?> valueClass;
 
-    private final TruffleObject callback = new TestCallback(1, (args) -> {
+    private Object callback(Object... args) {
         Assert.assertEquals("callback argument", numericValue + 1, NumericNFITest.unboxNumber(args[0]));
         return value;
-    });
+    }
 
     /**
      * Test implicit conversion between different numeric types when used as argument to native
@@ -116,17 +116,20 @@ public class ImplicitConvertNFITest extends NFITest {
     @Test
     public void testConvert(@Inject(TestConvertNode.class) CallTarget callTarget) {
         Assume.assumeFalse(isCompileImmediately());
+        TruffleObject callback = new TestCallback(1, this::callback);
         Object ret = callTarget.call(callback, value);
 
         if (type == NativeSimpleType.POINTER) {
             Assert.assertThat("return value", ret, is(instanceOf(TruffleObject.class)));
             TruffleObject obj = (TruffleObject) ret;
-            Assert.assertTrue("isNumber", UNCACHED_INTEROP.isNumber(obj));
+            Assert.assertTrue("isBoxed", isBoxed(obj));
+            ret = unbox(obj);
+            Assert.assertThat("unboxed return value", ret, is(instanceOf(Long.class)));
         } else {
             Assert.assertThat("return value", ret, is(instanceOf(Number.class)));
         }
 
-        long retValue = NumericNFITest.unboxNumber(ret);
+        long retValue = ((Number) ret).longValue();
         Assert.assertEquals("callback return", numericValue * 2, retValue);
     }
 
