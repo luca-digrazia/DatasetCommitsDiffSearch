@@ -24,15 +24,14 @@
  */
 package com.oracle.truffle.api.frame;
 
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.Truffle;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
-
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.Truffle;
 
 /**
  * Descriptor of the slots of frame objects. Multiple frame instances are associated with one such
@@ -45,8 +44,6 @@ public final class FrameDescriptor implements Cloneable {
     private final HashMap<Object, FrameSlot> identifierToSlotMap;
     private Assumption version;
     private HashMap<Object, Assumption> identifierToNotInFrameAssumptionMap;
-
-    private static final String NEVER_PART_OF_COMPILATION_MESSAGE = "interpreter-only. includes hashmap operations.";
 
     /**
      * Constructs empty descriptor. The {@link #getDefaultValue()} is <code>null</code>.
@@ -126,13 +123,10 @@ public final class FrameDescriptor implements Cloneable {
      * @param info additional {@link FrameSlot#getInfo() information for the slot}
      * @param kind the kind of the new slot
      * @return the newly created slot
-     * @throws IllegalArgumentException if a frame slot with the same identifier exists
      */
     public FrameSlot addFrameSlot(Object identifier, Object info, FrameSlotKind kind) {
-        CompilerAsserts.neverPartOfCompilation(NEVER_PART_OF_COMPILATION_MESSAGE);
-        if (identifierToSlotMap.containsKey(identifier)) {
-            throw new IllegalArgumentException("duplicate frame slot: " + identifier);
-        }
+        CompilerAsserts.neverPartOfCompilation("interpreter-only.  includes hashmap operations.");
+        assert !identifierToSlotMap.containsKey(identifier);
         FrameSlot slot = new FrameSlot(this, identifier, info, slots.size(), kind);
         slots.add(slot);
         identifierToSlotMap.put(identifier, slot);
@@ -148,7 +142,7 @@ public final class FrameDescriptor implements Cloneable {
      * @return the slot or <code>null</code>
      */
     public FrameSlot findFrameSlot(Object identifier) {
-        CompilerAsserts.neverPartOfCompilation(NEVER_PART_OF_COMPILATION_MESSAGE);
+        CompilerAsserts.neverPartOfCompilation("interpreter-only.  includes hashmap operations.");
         return identifierToSlotMap.get(identifier);
     }
 
@@ -202,13 +196,10 @@ public final class FrameDescriptor implements Cloneable {
      * a slow operation.
      *
      * @param identifier identifies the slot to remove
-     * @throws IllegalArgumentException if no such frame slot exists
      */
     public void removeFrameSlot(Object identifier) {
-        CompilerAsserts.neverPartOfCompilation(NEVER_PART_OF_COMPILATION_MESSAGE);
-        if (!identifierToSlotMap.containsKey(identifier)) {
-            throw new IllegalArgumentException("no such frame slot: " + identifier);
-        }
+        CompilerAsserts.neverPartOfCompilation("interpreter-only.  includes hashmap operations.");
+        assert identifierToSlotMap.containsKey(identifier);
         slots.remove(identifierToSlotMap.get(identifier));
         identifierToSlotMap.remove(identifier);
         updateVersion();
