@@ -93,7 +93,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     @CompilationFinal private Assumption profiledReturnTypeAssumption;
 
     private final RootNode rootNode;
-    /** Only set for a source CallTarget with a clonable RootNode. */
     private volatile RootNode uninitializedRootNode;
 
     private TruffleInlining inlining;
