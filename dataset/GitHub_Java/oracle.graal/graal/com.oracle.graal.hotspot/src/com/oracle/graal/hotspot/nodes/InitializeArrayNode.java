@@ -23,6 +23,7 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -82,7 +83,7 @@ public final class InitializeArrayNode extends FixedWithNextNode implements Lowe
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 
