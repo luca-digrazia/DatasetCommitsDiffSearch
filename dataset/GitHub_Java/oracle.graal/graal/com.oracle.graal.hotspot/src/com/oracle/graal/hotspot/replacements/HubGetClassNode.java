@@ -22,15 +22,20 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -40,14 +45,16 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class HubGetClassNode extends FloatingGuardedNode implements Lowerable, Canonicalizable, ConvertNode {
     @Input protected ValueNode hub;
+    protected final HotSpotGraalRuntimeProvider runtime;
 
-    public static HubGetClassNode create(@InjectedNodeParameter MetaAccessProvider metaAccess, ValueNode hub) {
-        return new HubGetClassNode(hub, metaAccess);
+    public static HubGetClassNode create(@InjectedNodeParameter MetaAccessProvider metaAccess, @InjectedNodeParameter HotSpotGraalRuntimeProvider runtime, ValueNode hub) {
+        return new HubGetClassNode(hub, metaAccess, runtime);
     }
 
-    protected HubGetClassNode(ValueNode hub, MetaAccessProvider metaAccess) {
+    protected HubGetClassNode(ValueNode hub, MetaAccessProvider metaAccess, HotSpotGraalRuntimeProvider runtime) {
         super(StampFactory.declaredNonNull(metaAccess.lookupJavaType(Class.class)), null);
         this.hub = hub;
+        this.runtime = runtime;
     }
 
     public ValueNode getHub() {
@@ -72,7 +79,14 @@ public class HubGetClassNode extends FloatingGuardedNode implements Lowerable, C
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+        if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
+            return;
+        }
+
+        LocationNode location = ConstantLocationNode.create(CLASS_MIRROR_LOCATION, runtime.getConfig().classMirrorOffset, graph());
+        assert !hub.isConstant();
+        FloatingReadNode read = graph().unique(FloatingReadNode.create(hub, location, null, stamp(), getGuard(), BarrierType.NONE));
+        graph().replaceFloating(this, read);
     }
 
     @NodeIntrinsic
@@ -84,19 +98,19 @@ public class HubGetClassNode extends FloatingGuardedNode implements Lowerable, C
     }
 
     @Override
-    public Constant convert(Constant c, ConstantReflectionProvider constantReflection) {
+    public Constant convert(Constant c) {
         if (JavaConstant.NULL_POINTER.equals(c)) {
             return c;
         }
-        return constantReflection.asJavaType(c).getJavaClass();
+        return runtime.getHostProviders().getConstantReflection().asJavaType(c).getJavaClass();
     }
 
     @Override
-    public Constant reverse(Constant c, ConstantReflectionProvider constantReflection) {
+    public Constant reverse(Constant c) {
         if (JavaConstant.NULL_POINTER.equals(c)) {
             return c;
         }
-        ResolvedJavaType type = constantReflection.asJavaType(c);
+        ResolvedJavaType type = runtime.getHostProviders().getConstantReflection().asJavaType(c);
         if (type instanceof HotSpotResolvedObjectType) {
             return ((HotSpotResolvedObjectType) type).getObjectHub();
         } else {
