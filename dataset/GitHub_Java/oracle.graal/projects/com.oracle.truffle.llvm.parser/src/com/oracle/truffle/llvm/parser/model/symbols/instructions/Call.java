@@ -29,11 +29,10 @@
  */
 package com.oracle.truffle.llvm.parser.model.symbols.instructions;
 
-import com.oracle.truffle.llvm.parser.model.enums.Linkage;
-import com.oracle.truffle.llvm.parser.model.enums.Visibility;
+import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 
-interface Call extends Instruction {
+public interface Call {
 
     Symbol getArgument(int index);
 
@@ -41,7 +40,9 @@ interface Call extends Instruction {
 
     Symbol getCallTarget();
 
-    Linkage getLinkage();
+    AttributesGroup getFunctionAttributesGroup();
 
-    Visibility getVisibility();
+    AttributesGroup getReturnAttributesGroup();
+
+    AttributesGroup getParameterAttributesGroup(int idx);
 }

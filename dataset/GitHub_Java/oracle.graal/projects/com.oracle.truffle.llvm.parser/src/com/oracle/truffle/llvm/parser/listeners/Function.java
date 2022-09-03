@@ -37,40 +37,8 @@ import java.util.List;
 import com.oracle.truffle.llvm.parser.metadata.MDLocation;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
-import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
+import com.oracle.truffle.llvm.parser.model.generators.FunctionGenerator;
 import com.oracle.truffle.llvm.parser.model.symbols.Symbols;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.AllocateInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.BinaryOperationInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.BranchInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.CallInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.CastInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareExchangeInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ConditionalBranchInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractElementInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractValueInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.FenceInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.GetElementPointerInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.IndirectBranchInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.InsertElementInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.InsertValueInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.InvokeInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.LandingpadInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.LoadInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.PhiInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ReadModifyWriteInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ResumeInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ReturnInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.SelectInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ShuffleVectorInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.StoreInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchOldInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnreachableInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstruction;
 import com.oracle.truffle.llvm.parser.records.FunctionRecord;
 import com.oracle.truffle.llvm.parser.records.Records;
 import com.oracle.truffle.llvm.parser.scanner.Block;
@@ -87,15 +55,17 @@ import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 public final class Function implements ParserListener {
 
-    private final FunctionDefinition function;
+    private final FunctionGenerator generator;
 
     protected final Types types;
 
+    protected final List<Type> symbols;
+
     private final int mode;
 
-    private InstructionBlock instructionBlock = null;
+    InstructionBlock instructionBlock = null;
 
-    private boolean isLastBlockTerminated = true;
+    boolean isLastBlockTerminated = true;
 
     private MDLocation lastLocation = null;
 
@@ -103,9 +73,10 @@ public final class Function implements ParserListener {
 
     private final ParameterAttributes paramAttributes;
 
-    Function(Types types, FunctionDefinition function, int mode, ParameterAttributes paramAttributes) {
+    Function(Types types, List<Type> symbols, FunctionGenerator generator, int mode, ParameterAttributes paramAttributes) {
         this.types = types;
-        this.function = function;
+        this.symbols = symbols;
+        this.generator = generator;
         this.mode = mode;
         this.paramAttributes = paramAttributes;
     }
@@ -114,15 +85,15 @@ public final class Function implements ParserListener {
     public ParserListener enter(Block block) {
         switch (block) {
             case CONSTANTS:
-                return new Constants(types, function);
+                return new Constants(types, symbols, generator);
 
             case VALUE_SYMTAB:
-                return new ValueSymbolTable(function);
+                return new ValueSymbolTable(generator);
 
             case METADATA:
             case METADATA_ATTACHMENT:
             case METADATA_KIND:
-                return new Metadata(types, function);
+                return new Metadata(types, generator);
 
             default:
                 return ParserListener.DEFAULT;
@@ -131,7 +102,7 @@ public final class Function implements ParserListener {
 
     @Override
     public void exit() {
-        function.exitFunction();
+        generator.exitFunction();
     }
 
     @Override
@@ -149,7 +120,7 @@ public final class Function implements ParserListener {
                 return;
 
             case DECLAREBLOCKS:
-                function.allocateBlocks((int) args[0]);
+                generator.allocateBlocks((int) args[0]);
                 return;
 
             default:
@@ -157,7 +128,7 @@ public final class Function implements ParserListener {
         }
 
         if (isLastBlockTerminated) {
-            instructionBlock = function.generateBlock();
+            instructionBlock = generator.generateBlock();
             isLastBlockTerminated = false;
         }
 
@@ -288,22 +259,9 @@ public final class Function implements ParserListener {
                 createAtomicReadModifyWrite(args);
                 break;
 
-            case FENCE:
-                createFence(args);
-                break;
-
             default:
                 throw new UnsupportedOperationException("Unsupported Record: " + record);
         }
-    }
-
-    private void emit(ValueInstruction instruction) {
-        instructionBlock.append(instruction);
-        function.addSymbol(instruction, instruction.getType());
-    }
-
-    private void emit(VoidInstruction instruction) {
-        instructionBlock.append(instruction);
     }
 
     private static final int INVOKE_HASEXPLICITFUNCTIONTYPE_SHIFT = 13;
@@ -313,8 +271,8 @@ public final class Function implements ParserListener {
         final AttributesCodeEntry paramAttr = paramAttributes.getCodeEntry(args[i++]);
         final long ccInfo = args[i++];
 
-        final InstructionBlock normalSuccessor = function.getBlock(args[i++]);
-        final InstructionBlock unwindSuccessor = function.getBlock(args[i++]);
+        final int normalSuccessorBlock = (int) (args[i++]);
+        final int unwindSuccessorBlock = (int) (args[i++]);
 
         FunctionType functionType = null;
         if (((ccInfo >> INVOKE_HASEXPLICITFUNCTIONTYPE_SHIFT) & 1) != 0) {
@@ -323,10 +281,10 @@ public final class Function implements ParserListener {
 
         final int target = getIndex(args[i++]);
         final Type calleeType;
-        if (function.isValueForwardRef(target)) {
-            calleeType = types.get(args[i++]);
+        if (target < symbols.size()) {
+            calleeType = symbols.get(target);
         } else {
-            calleeType = function.getValueType(target);
+            calleeType = types.get(args[i++]);
         }
 
         if (functionType == null) {
@@ -343,24 +301,28 @@ public final class Function implements ParserListener {
         for (int j = 0; i < args.length; j++) {
             int index = getIndex(args[i++]);
             arguments[j] = index;
-            if (function.isValueForwardRef(index)) {
+            if (index >= symbols.size()) {
                 i++;
             }
         }
         final Type returnType = functionType.getReturnType();
-        if (returnType == VoidType.INSTANCE) {
-            emit(VoidInvokeInstruction.fromSymbols(function.getSymbols(), target, arguments, normalSuccessor, unwindSuccessor, paramAttr));
-        } else {
-            emit(InvokeInstruction.fromSymbols(function.getSymbols(), returnType, target, arguments, normalSuccessor, unwindSuccessor, paramAttr));
+        instructionBlock.createInvoke(returnType, target, arguments, normalSuccessorBlock, unwindSuccessorBlock, paramAttr);
+        if (!(returnType instanceof VoidType)) {
+            symbols.add(returnType);
         }
         isLastBlockTerminated = true;
     }
 
     private void createResume(long[] args) {
         int i = 0;
-        final int val = getIndex(args[i]);
-        // args[i + 1] -> type
-        emit(ResumeInstruction.fromSymbols(function.getSymbols(), val));
+        final int val = getIndex(args[i++]);
+        final Type type;
+        if (val < symbols.size()) {
+            type = symbols.get(val);
+        } else {
+            type = types.get(args[i]);
+        }
+        instructionBlock.createResume(type, val);
         isLastBlockTerminated = true;
     }
 
@@ -374,11 +336,12 @@ public final class Function implements ParserListener {
         for (int j = 0; j < numClauses; j++) {
             clauseKinds[j] = args[i++];
             clauseTypes[j] = getIndex(args[i++]);
-            if (function.isValueForwardRef(clauseTypes[j])) {
+            if (clauseTypes[j] >= symbols.size()) {
                 i++;
             }
         }
-        emit(LandingpadInstruction.generate(function.getSymbols(), type, isCleanup, clauseKinds, clauseTypes));
+        symbols.add(type);
+        instructionBlock.createLandingpad(type, isCleanup, clauseKinds, clauseTypes);
     }
 
     private void createLandingpadOld(long[] args) {
@@ -386,7 +349,7 @@ public final class Function implements ParserListener {
         final Type type = types.get(args[i++]);
 
         long persFn = getIndex(args[i++]);
-        if (function.isValueForwardRef((int) persFn)) {
+        if (persFn >= symbols.size()) {
             i++;
         }
 
@@ -397,11 +360,12 @@ public final class Function implements ParserListener {
         for (int j = 0; j < numClauses; j++) {
             clauseKinds[j] = args[i++];
             clauseTypes[j] = getIndex(args[i++]);
-            if (function.isValueForwardRef(clauseTypes[j])) {
+            if (clauseTypes[j] >= symbols.size()) {
                 i++;
             }
         }
-        emit(LandingpadInstruction.generate(function.getSymbols(), type, isCleanup, clauseKinds, clauseTypes));
+        symbols.add(type);
+        instructionBlock.createLandingpad(type, isCleanup, clauseKinds, clauseTypes);
     }
 
     private static final int CALL_HAS_FMF_SHIFT = 17;
@@ -412,21 +376,23 @@ public final class Function implements ParserListener {
         final AttributesCodeEntry paramAttr = paramAttributes.getCodeEntry(args[i++]);
         final long ccinfo = args[i++];
 
+        FunctionType functionType = null;
+        int callee = -1;
+        Type calleeType = null;
+
         if (((ccinfo >> CALL_HAS_FMF_SHIFT) & 1) != 0) {
             i++; // fast math flags
         }
 
-        FunctionType functionType = null;
         if (((ccinfo >> CALL_HAS_EXPLICITTYPE_SHIFT) & 1) != 0) {
             functionType = (FunctionType) types.get(args[i++]);
         }
 
-        int callee = getIndex(args[i++]);
-        Type calleeType;
-        if (function.isValueForwardRef(callee)) {
+        callee = getIndex(args[i++]);
+        if (callee >= symbols.size()) {
             calleeType = types.get(args[i++]);
         } else {
-            calleeType = function.getValueType(callee);
+            calleeType = symbols.get(callee);
         }
 
         if (functionType == null) {
@@ -446,7 +412,7 @@ public final class Function implements ParserListener {
         while (i < args.length) {
             int index = getIndex(args[i++]);
             arguments[j++] = index;
-            if (function.isValueForwardRef(index)) {
+            if (index >= symbols.size()) {
                 i++;
                 skipped++;
             }
@@ -456,12 +422,12 @@ public final class Function implements ParserListener {
         }
 
         final Type returnType = functionType.getReturnType();
-        final Symbols symbols = function.getSymbols();
-        if (returnType == VoidType.INSTANCE) {
-            emit(VoidCallInstruction.fromSymbols(symbols, callee, arguments, paramAttr));
-        } else {
-            emit(CallInstruction.fromSymbols(function.getSymbols(), returnType, callee, arguments, paramAttr));
+        instructionBlock.createCall(returnType, callee, arguments, paramAttr);
+
+        if (returnType != VoidType.INSTANCE) {
+            symbols.add(returnType);
         }
+
     }
 
     private static final long SWITCH_CASERANGE_SHIFT = 16;
@@ -485,7 +451,7 @@ public final class Function implements ParserListener {
                 caseBlocks[j] = (int) args[i++];
             }
 
-            emit(SwitchOldInstruction.generate(function, cond, defaultBlock, caseConstants, caseBlocks));
+            instructionBlock.createSwitchOld(cond, defaultBlock, caseConstants, caseBlocks);
 
         } else {
             i++; // type
@@ -500,7 +466,7 @@ public final class Function implements ParserListener {
                 caseBlocks[j] = (int) args[i++];
             }
 
-            emit(SwitchInstruction.generate(function, cond, defaultBlock, caseValues, caseBlocks));
+            instructionBlock.createSwitch(cond, defaultBlock, caseValues, caseBlocks);
         }
 
         isLastBlockTerminated = true;
@@ -526,7 +492,8 @@ public final class Function implements ParserListener {
         } else if (!(type instanceof PointerType)) {
             throw new AssertionError("Alloca must have PointerType!");
         }
-        emit(AllocateInstruction.fromSymbols(function.getSymbols(), type, count, align));
+        instructionBlock.createAllocation(type, count, align);
+        symbols.add(type);
     }
 
     private static final int LOAD_ARGS_EXPECTED_AFTER_TYPE = 3;
@@ -536,10 +503,10 @@ public final class Function implements ParserListener {
         final int src = getIndex(args[i++]);
 
         final Type srcType;
-        if (function.isValueForwardRef(src)) {
+        if (src >= symbols.size()) {
             srcType = types.get(args[i++]);
         } else {
-            srcType = function.getValueType(src);
+            srcType = symbols.get(src);
         }
 
         final Type opType;
@@ -552,7 +519,8 @@ public final class Function implements ParserListener {
         final int align = getAlign(args[i++]);
         final boolean isVolatile = args[i] != 0;
 
-        emit(LoadInstruction.fromSymbols(function.getSymbols(), opType, src, align, isVolatile));
+        instructionBlock.createLoad(opType, src, align, isVolatile);
+        symbols.add(opType);
     }
 
     private static final int LOADATOMIC_ARGS_EXPECTED_AFTER_TYPE = 5;
@@ -562,10 +530,10 @@ public final class Function implements ParserListener {
         final int src = getIndex(args[i++]);
 
         final Type srcType;
-        if (function.isValueForwardRef(src)) {
+        if (src >= symbols.size()) {
             srcType = types.get(args[i++]);
         } else {
-            srcType = function.getValueType(src);
+            srcType = symbols.get(src);
         }
 
         final Type opType;
@@ -580,21 +548,23 @@ public final class Function implements ParserListener {
         final long atomicOrdering = args[i++];
         final long synchronizationScope = args[i];
 
-        emit(LoadInstruction.fromSymbols(function.getSymbols(), opType, src, align, isVolatile, atomicOrdering, synchronizationScope));
+        instructionBlock.createAtomicLoad(opType, src, align, isVolatile, atomicOrdering, synchronizationScope);
+        symbols.add(opType);
     }
 
     private void createCompareExchange(long[] args, FunctionRecord record) {
+        final Symbols functionSymbols = instructionBlock.getFunctionSymbols();
         int i = 0;
 
         final Type ptrType;
         final int ptr = getIndex(args[i]);
-        if (function.isValueForwardRef(ptr)) {
+        if (ptr >= functionSymbols.getSize()) {
             ptrType = types.get(args[++i]);
         } else {
-            ptrType = function.getValueType(ptr);
+            ptrType = symbols.get(ptr);
         }
         final int cmp = getIndex(args[++i]);
-        if (record == FunctionRecord.CMPXCHG && function.isValueForwardRef(cmp)) {
+        if (record == FunctionRecord.CMPXCHG && cmp >= functionSymbols.getSize()) {
             ++i; // type of cmp
         }
         final int replace = getIndex(args[++i]);
@@ -607,13 +577,14 @@ public final class Function implements ParserListener {
 
         final Type type = findCmpxchgResultType(((PointerType) ptrType).getPointeeType());
 
-        emit(CompareExchangeInstruction.fromSymbols(function.getSymbols(), type, ptr, cmp, replace, isVolatile, successOrdering, synchronizationScope, failureOrdering, isWeak));
+        instructionBlock.createCompareExchange(type, ptr, cmp, replace, isVolatile, successOrdering, synchronizationScope, failureOrdering, isWeak);
+        symbols.add(type);
 
         if (addExtractValue) {
             // in older llvm versions cmpxchg just returned the new value at the pointer, to emulate
             // this we have to add an extractelvalue instruction. llvm does the same thing
             createExtractValue(new long[]{1, 0});
-            implicitIndices.add(function.getNextValueIndex() - 1); // register the implicit index
+            implicitIndices.add(symbols.size() - 1); // register the implicit index
         }
     }
 
@@ -639,7 +610,7 @@ public final class Function implements ParserListener {
     private void parseDebugLocation(long[] args) {
         // if e.g. the previous instruction was @llvm.debug.declare this will be the location of the
         // declaration of the variable in the source file
-        lastLocation = MDLocation.createFromFunctionArgs(args, function.getMetadata());
+        lastLocation = MDLocation.createFromFunctionArgs(args, generator.getMetadata());
     }
 
     private void applyDebugLocation() {
@@ -651,12 +622,12 @@ public final class Function implements ParserListener {
         int i = 0;
 
         final int destination = getIndex(args[i++]);
-        if (function.isValueForwardRef(destination)) {
+        if (destination > symbols.size()) {
             i++;
         }
 
         final int source = getIndex(args[i++]);
-        if (function.isValueForwardRef(source)) {
+        if (source > symbols.size()) {
             i++;
         }
 
@@ -665,19 +636,14 @@ public final class Function implements ParserListener {
         final long atomicOrdering = args[i++];
         final long synchronizationScope = args[i];
 
-        emit(StoreInstruction.fromSymbols(function.getSymbols(), destination, source, align, isVolatile, atomicOrdering, synchronizationScope));
+        instructionBlock.createAtomicStore(destination, source, align, isVolatile, atomicOrdering, synchronizationScope);
     }
 
     private void createAtomicReadModifyWrite(long[] args) {
         int i = 0;
 
         final int ptr = getIndex(args[i++]);
-        final Type ptrType;
-        if (function.isValueForwardRef(ptr)) {
-            ptrType = types.get(args[i++]);
-        } else {
-            ptrType = function.getValueType(ptr);
-        }
+        final Type ptrType = symbols.get(ptr);
         final int value = getIndex(args[i++]);
         final int opcode = (int) args[i++];
         final boolean isVolatile = args[i++] != 0;
@@ -686,43 +652,33 @@ public final class Function implements ParserListener {
 
         final Type type = ((PointerType) ptrType).getPointeeType();
 
-        emit(ReadModifyWriteInstruction.fromSymbols(function.getSymbols(), type, ptr, value, opcode, isVolatile, atomicOrdering, synchronizationScope));
-    }
-
-    private void createFence(long[] args) {
-        int i = 0;
-
-        final long atomicOrdering = args[i++];
-        final long synchronizationScope = args[i];
-
-        emit(FenceInstruction.generate(atomicOrdering, synchronizationScope));
+        instructionBlock.createAtomicReadModifyWrite(type, ptr, value, opcode, isVolatile, atomicOrdering, synchronizationScope);
+        symbols.add(type);
     }
 
     private void createBinaryOperation(long[] args) {
         int i = 0;
         Type type;
         int lhs = getIndex(args[i++]);
-        if (function.isValueForwardRef(lhs)) {
-            type = types.get(args[i++]);
+        if (lhs < symbols.size()) {
+            type = symbols.get(lhs);
         } else {
-            type = function.getValueType(lhs);
+            type = types.get(args[i++]);
         }
         int rhs = getIndex(args[i++]);
         int opcode = (int) args[i++];
         int flags = i < args.length ? (int) args[i] : 0;
 
-        emit(BinaryOperationInstruction.fromSymbols(function.getSymbols(), type, opcode, flags, lhs, rhs));
+        instructionBlock.createBinaryOperation(type, opcode, flags, lhs, rhs);
+
+        symbols.add(type);
     }
 
     private void createBranch(long[] args) {
         if (args.length == 1) {
-            emit(BranchInstruction.fromTarget(function.getBlock(args[0])));
-
+            instructionBlock.createBranch((int) args[0]);
         } else {
-            final int condition = getIndex(args[2]);
-            final InstructionBlock trueSuccessor = function.getBlock(args[0]);
-            final InstructionBlock falseSuccessor = function.getBlock(args[1]);
-            emit(ConditionalBranchInstruction.fromSymbols(function.getSymbols(), condition, trueSuccessor, falseSuccessor));
+            instructionBlock.createBranch(getIndex(args[2]), (int) args[0], (int) args[1]);
         }
 
         isLastBlockTerminated = true;
@@ -731,23 +687,25 @@ public final class Function implements ParserListener {
     private void createCast(long[] args) {
         int i = 0;
         int value = getIndex(args[i++]);
-        if (function.isValueForwardRef(value)) {
+        if (value >= symbols.size()) {
             i++;
         }
         Type type = types.get(args[i++]);
         int opcode = (int) args[i];
 
-        emit(CastInstruction.fromSymbols(function.getSymbols(), type, opcode, value));
+        instructionBlock.createCast(type, opcode, value);
+
+        symbols.add(type);
     }
 
     private void createCompare2(long[] args) {
         int i = 0;
         Type operandType;
         int lhs = getIndex(args[i++]);
-        if (function.isValueForwardRef(lhs)) {
-            operandType = types.get(args[i++]);
+        if (lhs < symbols.size()) {
+            operandType = symbols.get(lhs);
         } else {
-            operandType = function.getValueType(lhs);
+            operandType = types.get(args[i++]);
         }
         int rhs = getIndex(args[i++]);
         int opcode = (int) args[i];
@@ -756,7 +714,9 @@ public final class Function implements ParserListener {
                         ? new VectorType(PrimitiveType.I1, ((VectorType) operandType).getNumberOfElements())
                         : PrimitiveType.I1;
 
-        emit(CompareInstruction.fromSymbols(function.getSymbols(), type, opcode, lhs, rhs));
+        instructionBlock.createCompare(type, opcode, lhs, rhs);
+
+        symbols.add(type);
     }
 
     private void createExtractElement(long[] args) {
@@ -764,34 +724,39 @@ public final class Function implements ParserListener {
         int vector = getIndex(args[i++]);
 
         Type type;
-        if (function.isValueForwardRef(vector)) {
+        if (vector >= symbols.size()) {
             type = types.get(i++);
         } else {
-            type = ((VectorType) function.getValueType(vector)).getElementType();
+            type = ((VectorType) symbols.get(vector)).getElementType();
         }
 
         int index = getIndex(args[i]);
 
-        emit(ExtractElementInstruction.fromSymbols(function.getSymbols(), type, vector, index));
+        instructionBlock.createExtractElement(type, vector, index);
+
+        symbols.add(type);
     }
 
     private void createExtractValue(long[] args) {
         int i = 0;
         int aggregate = getIndex(args[i++]);
         Type type = null;
-        if (function.isValueForwardRef(aggregate)) {
+        if (aggregate >= symbols.size()) {
             type = types.get(i++);
         }
         int index = (int) args[i++];
         if (type == null) {
-            type = ((AggregateType) function.getValueType(aggregate)).getElementType(index);
+            type = ((AggregateType) symbols.get(aggregate)).getElementType(index);
         }
 
         if (i != args.length) {
+            // This is supported in neither parser.
             throw new UnsupportedOperationException("Multiple indices are not yet supported!");
         }
 
-        emit(ExtractValueInstruction.fromSymbols(function.getSymbols(), type, aggregate, index));
+        instructionBlock.createExtractValue(type, aggregate, index);
+
+        symbols.add(type);
     }
 
     private void createGetElementPointer(long[] args) {
@@ -800,30 +765,43 @@ public final class Function implements ParserListener {
         i++; // we do not use this parameter
         int pointer = getIndex(args[i++]);
         Type base;
-        if (function.isValueForwardRef(pointer)) {
-            base = types.get(args[i++]);
+        if (pointer < symbols.size()) {
+            base = symbols.get(pointer);
         } else {
-            base = function.getValueType(pointer);
+            base = types.get(args[i++]);
         }
         List<Integer> indices = getIndices(args, i);
         Type type = new PointerType(getElementPointerType(base, indices));
 
-        emit(GetElementPointerInstruction.fromSymbols(function.getSymbols(), type, pointer, indices, isInbounds));
+        instructionBlock.createGetElementPointer(
+                        type,
+                        pointer,
+                        indices,
+                        isInbounds);
+
+        symbols.add(type);
     }
 
     private void createGetElementPointerOld(long[] args, boolean isInbounds) {
         int i = 0;
         int pointer = getIndex(args[i++]);
         Type base;
-        if (function.isValueForwardRef(pointer)) {
-            base = types.get(args[i++]);
+        if (pointer < symbols.size()) {
+            base = symbols.get(pointer);
         } else {
-            base = function.getValueType(pointer);
+            base = types.get(args[i++]);
         }
         List<Integer> indices = getIndices(args, i);
+
         Type type = new PointerType(getElementPointerType(base, indices));
 
-        emit(GetElementPointerInstruction.fromSymbols(function.getSymbols(), type, pointer, indices, isInbounds));
+        instructionBlock.createGetElementPointer(
+                        type,
+                        pointer,
+                        indices,
+                        isInbounds);
+
+        symbols.add(type);
     }
 
     private void createIndirectBranch(long[] args) {
@@ -833,7 +811,8 @@ public final class Function implements ParserListener {
             successors[i] = (int) args[i + 2];
         }
 
-        emit(IndirectBranchInstruction.generate(function, address, successors));
+        instructionBlock.createIndirectBranch(address, successors);
+
         isLastBlockTerminated = true;
     }
 
@@ -842,16 +821,18 @@ public final class Function implements ParserListener {
 
         int vector = getIndex(args[i++]);
         Type type;
-        if (function.isValueForwardRef(vector)) {
+        if (vector >= symbols.size()) {
             type = types.get(i++);
         } else {
-            type = function.getValueType(vector);
+            type = symbols.get(vector);
         }
 
         int value = getIndex(args[i++]);
         int index = getIndex(args[i]);
 
-        emit(InsertElementInstruction.fromSymbols(function.getSymbols(), type, vector, index, value));
+        instructionBlock.createInsertElement(type, vector, index, value);
+
+        symbols.add(type);
     }
 
     private void createInsertValue(long[] args) {
@@ -859,45 +840,49 @@ public final class Function implements ParserListener {
 
         int aggregate = getIndex(args[i++]);
         Type type;
-        if (function.isValueForwardRef(aggregate)) {
+        if (aggregate >= symbols.size()) {
             type = types.get(i++);
         } else {
-            type = function.getValueType(aggregate);
+            type = symbols.get(aggregate);
         }
 
         int value = getIndex(args[i++]);
-        if (function.isValueForwardRef(value)) {
+        if (value >= symbols.size()) {
             i++;
         }
 
         int index = (int) args[i++];
 
         if (args.length != i) {
+            // This is supported in neither parser.
             throw new UnsupportedOperationException("Multiple indices are not yet supported!");
         }
 
-        emit(InsertValueInstruction.fromSymbols(function.getSymbols(), type, aggregate, index, value));
+        instructionBlock.createInsertValue(type, aggregate, index, value);
+
+        symbols.add(type);
     }
 
     private void createPhi(long[] args) {
         Type type = types.get(args[0]);
         int count = (args.length) - 1 >> 1;
         int[] values = new int[count];
-        InstructionBlock[] blocks = new InstructionBlock[count];
+        int[] blocks = new int[count];
         for (int i = 0, j = 1; i < count; i++) {
             values[i] = getIndex(Records.toSignedValue(args[j++]));
-            blocks[i] = function.getBlock(args[j++]);
+            blocks[i] = (int) args[j++];
         }
 
-        emit(PhiInstruction.generate(function, type, values, blocks));
+        instructionBlock.createPhi(type, values, blocks);
+
+        symbols.add(type);
     }
 
     private void createReturn(long[] args) {
         if (args.length == 0 || args[0] == 0) {
-            emit(ReturnInstruction.generate());
+            instructionBlock.createReturn();
         } else {
-            final int value = getIndex(args[0]);
-            emit(ReturnInstruction.generate(function.getSymbols(), value));
+            instructionBlock.createReturn(getIndex(args[0]));
         }
 
         isLastBlockTerminated = true;
@@ -907,15 +892,17 @@ public final class Function implements ParserListener {
         int i = 0;
         Type type;
         int trueValue = getIndex(args[i++]);
-        if (function.isValueForwardRef(trueValue)) {
-            type = types.get(args[i++]);
+        if (trueValue < symbols.size()) {
+            type = symbols.get(trueValue);
         } else {
-            type = function.getValueType(trueValue);
+            type = types.get(args[i++]);
         }
         int falseValue = getIndex(args[i++]);
         int condition = getIndex(args[i]);
 
-        emit(SelectInstruction.fromSymbols(function.getSymbols(), type, condition, trueValue, falseValue));
+        instructionBlock.createSelect(type, condition, trueValue, falseValue);
+
+        symbols.add(type);
     }
 
     private void createShuffleVector(long[] args) {
@@ -923,46 +910,48 @@ public final class Function implements ParserListener {
 
         int vector1 = getIndex(args[i++]);
         Type vectorType;
-        if (function.isValueForwardRef(vector1)) {
+        if (vector1 >= symbols.size()) {
             vectorType = types.get(i++);
         } else {
-            vectorType = function.getValueType(vector1);
+            vectorType = symbols.get(vector1);
         }
 
         int vector2 = getIndex(args[i++]);
         int mask = getIndex(args[i]);
 
         PrimitiveType subtype = ((VectorType) vectorType).getElementType();
-        int length = ((VectorType) function.getValueType(mask)).getNumberOfElements();
+        int length = ((VectorType) symbols.get(mask)).getNumberOfElements();
         Type type = new VectorType(subtype, length);
 
-        emit(ShuffleVectorInstruction.fromSymbols(function.getSymbols(), type, vector1, vector2, mask));
+        instructionBlock.createShuffleVector(type, vector1, vector2, mask);
+
+        symbols.add(type);
     }
 
     private void createStore(long[] args) {
         int i = 0;
 
         int destination = getIndex(args[i++]);
-        if (function.isValueForwardRef(destination)) {
+        if (destination > symbols.size()) {
             i++;
         }
 
         int source = getIndex(args[i++]);
-        if (function.isValueForwardRef(source)) {
+        if (source > symbols.size()) {
             i++;
         }
 
         int align = getAlign(args[i++]);
         boolean isVolatile = args[i] != 0;
 
-        emit(StoreInstruction.fromSymbols(function.getSymbols(), destination, source, align, isVolatile));
+        instructionBlock.createStore(destination, source, align, isVolatile);
     }
 
     private void createStoreOld(long[] args) {
         int i = 0;
 
         int destination = getIndex(args[i++]);
-        if (function.isValueForwardRef(destination)) {
+        if (destination > symbols.size()) {
             i++;
         }
 
@@ -970,11 +959,11 @@ public final class Function implements ParserListener {
         int align = getAlign(args[i++]);
         boolean isVolatile = args[i] != 0;
 
-        emit(StoreInstruction.fromSymbols(function.getSymbols(), destination, source, align, isVolatile));
+        instructionBlock.createStore(destination, source, align, isVolatile);
     }
 
     private void createUnreachable(@SuppressWarnings("unused") long[] args) {
-        emit(UnreachableInstruction.generate());
+        instructionBlock.createUnreachable();
         isLastBlockTerminated = true;
     }
 
@@ -993,7 +982,7 @@ public final class Function implements ParserListener {
                 elementType = ((VectorType) elementType).getElementType();
             } else if (elementType instanceof StructureType) {
                 StructureType structure = (StructureType) elementType;
-                Type indexType = function.getValueType(indexIndex);
+                Type indexType = symbols.get(indexIndex);
                 if (!(indexType instanceof PrimitiveType)) {
                     throw new IllegalStateException("Cannot infer structure element from " + indexType);
                 }
@@ -1007,7 +996,7 @@ public final class Function implements ParserListener {
         return elementType;
     }
 
-    private int getIndex(long index) {
+    protected int getIndex(long index) {
         if (mode == 0) {
             return getIndexAbsolute(index);
         } else {
@@ -1020,7 +1009,7 @@ public final class Function implements ParserListener {
         int i = from;
         while (i < arguments.length) {
             int index = getIndex(arguments[i++]);
-            if (function.isValueForwardRef(index)) {
+            if (index >= symbols.size()) {
                 // type of forward referenced index
                 i++;
             }
@@ -1029,7 +1018,7 @@ public final class Function implements ParserListener {
         return Collections.unmodifiableList(indices);
     }
 
-    private int getIndexAbsolute(long index) {
+    protected int getIndexAbsolute(long index) {
         long actualIndex = index;
         for (int i = 0; i < implicitIndices.size() && implicitIndices.get(i) <= actualIndex; i++) {
             actualIndex++;
@@ -1037,8 +1026,8 @@ public final class Function implements ParserListener {
         return (int) actualIndex;
     }
 
-    private int getIndexRelative(long index) {
-        long actualIndex = function.getNextValueIndex() - index;
+    protected int getIndexRelative(long index) {
+        long actualIndex = symbols.size() - index;
         for (int i = implicitIndices.size() - 1; i >= 0 && implicitIndices.get(i) > actualIndex; i--) {
             actualIndex--;
         }

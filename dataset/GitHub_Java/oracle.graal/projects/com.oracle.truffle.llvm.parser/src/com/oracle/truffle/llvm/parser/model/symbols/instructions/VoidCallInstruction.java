@@ -32,30 +32,28 @@ package com.oracle.truffle.llvm.parser.model.symbols.instructions;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.oracle.truffle.llvm.parser.model.enums.Linkage;
-import com.oracle.truffle.llvm.parser.model.enums.Visibility;
+import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
+import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
+import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
+import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.symbols.Symbols;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.MetadataConstant;
 import com.oracle.truffle.llvm.parser.model.visitors.InstructionVisitor;
-import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 
-public final class VoidCallInstruction implements Call, VoidInstruction {
-
-    private final Linkage linkage;
-
-    private final Visibility visibility;
+public final class VoidCallInstruction extends VoidInstruction implements Call {
 
     private Symbol target;
 
     private final List<Symbol> arguments;
 
-    private VoidCallInstruction(Linkage linkage, Visibility visibility) {
+    private final AttributesCodeEntry paramAttr;
+
+    private VoidCallInstruction(AttributesCodeEntry paramAtt) {
         arguments = new ArrayList<>();
-        this.linkage = linkage;
-        this.visibility = visibility;
+        this.paramAttr = paramAtt;
     }
 
     @Override
@@ -79,18 +77,18 @@ public final class VoidCallInstruction implements Call, VoidInstruction {
     }
 
     @Override
-    public Linkage getLinkage() {
-        return linkage;
+    public AttributesGroup getFunctionAttributesGroup() {
+        return paramAttr.getFunctionAttributesGroup();
     }
 
     @Override
-    public Visibility getVisibility() {
-        return visibility;
+    public AttributesGroup getReturnAttributesGroup() {
+        return paramAttr.getReturnAttributesGroup();
     }
 
     @Override
-    public boolean isTerminating() {
-        return false;
+    public AttributesGroup getParameterAttributesGroup(int idx) {
+        return paramAttr.getParameterAttributesGroup(idx);
     }
 
     @Override
@@ -105,14 +103,21 @@ public final class VoidCallInstruction implements Call, VoidInstruction {
         }
     }
 
-    public static VoidCallInstruction fromSymbols(Symbols symbols, int targetIndex, int[] arguments, long visibility, long linkage) {
-        final VoidCallInstruction inst = new VoidCallInstruction(Linkage.decode(linkage), Visibility.decode(visibility));
+    public static VoidCallInstruction fromSymbols(Symbols symbols, int targetIndex, int[] arguments, AttributesCodeEntry paramAttr) {
+        final VoidCallInstruction inst = new VoidCallInstruction(paramAttr);
         inst.target = symbols.getSymbol(targetIndex, inst);
-        if (inst.target instanceof FunctionType) {
-            Type[] types = ((FunctionType) (inst.target)).getArgumentTypes();
+        final Type[] argTypes;
+        if (inst.target instanceof FunctionDefinition) {
+            argTypes = ((FunctionDefinition) (inst.target)).getType().getArgumentTypes();
+        } else if (inst.target instanceof FunctionDeclaration) {
+            argTypes = ((FunctionDeclaration) (inst.target)).getType().getArgumentTypes();
+        } else {
+            argTypes = null;
+        }
+        if (argTypes != null) {
             for (int i = 0; i < arguments.length; i++) {
-                // TODO: why it's possible to have more arguments than argument types?
-                if (types.length > i && types[i] instanceof MetaType) {
+                // TODO: why is it possible to have more arguments than argument types?
+                if (argTypes.length > i && argTypes[i] == MetaType.METADATA) {
                     inst.arguments.add(new MetadataConstant(arguments[i]));
                 } else {
                     inst.arguments.add(symbols.getSymbol(arguments[i], inst));
