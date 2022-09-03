@@ -57,6 +57,9 @@ public enum Kind implements PlatformKind {
     /** The Object kind, also used for arrays. */
     Object('a', "Object", false, null, null),
 
+    /** The narrow oop kind. */
+    NarrowOop('n', "NarrowOop", false, null, null),
+
     /** The void float kind. */
     Void('v', "void", false, java.lang.Void.TYPE, java.lang.Void.class),
 
@@ -146,10 +149,10 @@ public enum Kind implements PlatformKind {
     /**
      * Checks whether this represent an Object of some sort.
      * 
-     * @return {@code true} if this is {@link #Object}.
+     * @return {@code true} if this is {@link #Object} or {@link #NarrowOop}.
      */
     public boolean isObject() {
-        return this == Kind.Object;
+        return this == Kind.Object || this == Kind.NarrowOop;
     }
 
     /**

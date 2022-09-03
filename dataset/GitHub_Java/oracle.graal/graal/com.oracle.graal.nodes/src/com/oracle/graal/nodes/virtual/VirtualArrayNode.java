@@ -25,7 +25,7 @@ package com.oracle.graal.nodes.virtual;
 import sun.misc.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -35,11 +35,7 @@ public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthPr
     private final ResolvedJavaType componentType;
     private final int length;
 
-    public static VirtualArrayNode create(ResolvedJavaType componentType, int length) {
-        return new VirtualArrayNodeGen(componentType, length);
-    }
-
-    VirtualArrayNode(ResolvedJavaType componentType, int length) {
+    public VirtualArrayNode(ResolvedJavaType componentType, int length) {
         super(componentType.getArrayClass(), true);
         this.componentType = componentType;
         this.length = length;
@@ -60,7 +56,7 @@ public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthPr
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(LIRGeneratorTool gen) {
         // nothing to do...
     }
 
@@ -141,15 +137,15 @@ public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthPr
 
     @Override
     public VirtualArrayNode duplicate() {
-        return VirtualArrayNode.create(componentType, length);
+        return new VirtualArrayNode(componentType, length);
     }
 
     @Override
     public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
-        return AllocatedObjectNode.create(this);
+        return new AllocatedObjectNode(this);
     }
 
     public ValueNode length() {
-        return ConstantNode.forInt(length);
+        return ConstantNode.forInt(length, graph());
     }
 }

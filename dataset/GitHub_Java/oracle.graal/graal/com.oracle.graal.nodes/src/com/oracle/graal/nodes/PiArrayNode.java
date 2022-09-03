@@ -22,19 +22,18 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * A {@link PiNode} that also provides an array length in addition to a more refined stamp. A usage
  * that reads the array length, such as an {@link ArrayLengthNode}, can be canonicalized based on
  * this information.
  */
-@NodeInfo
-public class PiArrayNode extends PiNode implements ArrayLengthProvider {
+public final class PiArrayNode extends PiNode implements ArrayLengthProvider {
 
     @Input private ValueNode length;
 
