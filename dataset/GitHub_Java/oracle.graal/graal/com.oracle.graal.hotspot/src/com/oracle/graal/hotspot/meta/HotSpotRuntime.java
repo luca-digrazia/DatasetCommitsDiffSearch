@@ -59,7 +59,6 @@ import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.hotspot.snippets.*;
 import com.oracle.graal.hotspot.stubs.*;
-import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -75,7 +74,7 @@ import com.oracle.graal.word.*;
 /**
  * HotSpot implementation of {@link GraalCodeCacheProvider}.
  */
-public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetProvider, DisassemblerProvider, BytecodeDisassemblerProvider {
+public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetProvider {
 
     public final HotSpotVMConfig config;
 
@@ -350,9 +349,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetP
         }
         if (GraalOptions.IntrinsifyArrayCopy) {
             installer.installSnippets(ArrayCopySnippets.class);
-        }
-        if (GraalOptions.IntrinsifyObjectClone) {
-            installer.installSnippets(ObjectCloneSnippets.class);
         }
 
         installer.installSnippets(CheckCastSnippets.class);
@@ -709,7 +705,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetP
             assert loadHub.kind() == wordKind;
             LocationNode location = LocationNode.create(LocationNode.FINAL_LOCATION, wordKind, config.hubOffset, graph);
             ValueNode object = loadHub.object();
-            assert !object.isConstant() || object.asConstant().isNull();
+            assert !object.isConstant();
             ValueNode guard = tool.createNullCheckGuard(object);
             ReadNode hub = graph.add(new ReadNode(object, location, StampFactory.forKind(wordKind())));
             hub.dependencies().add(guard);
@@ -951,17 +947,5 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetP
     @Override
     public TargetDescription getTarget() {
         return graalRuntime.getTarget();
-    }
-
-    public String disassemble(InstalledCode code) {
-        if (code.isValid()) {
-            long nmethod = ((HotSpotInstalledCode) code).nmethod;
-            return graalRuntime.getCompilerToVM().disassembleNMethod(nmethod);
-        }
-        return "";
-    }
-
-    public String disassemble(ResolvedJavaMethod method) {
-        return new BytecodeDisassembler().disassemble(method);
     }
 }
