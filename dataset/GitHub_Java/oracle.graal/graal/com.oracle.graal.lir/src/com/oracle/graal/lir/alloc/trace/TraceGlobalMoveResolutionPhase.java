@@ -22,18 +22,16 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 import static com.oracle.graal.lir.alloc.trace.TraceUtil.asShadowedRegisterValue;
 import static com.oracle.graal.lir.alloc.trace.TraceUtil.isShadowedRegisterValue;
-import static jdk.vm.ci.code.ValueUtil.isIllegal;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isIllegal;
 
 import java.util.List;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.Architecture;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.meta.Value;
 
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
@@ -43,7 +41,7 @@ import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
 import com.oracle.graal.lir.ssi.SSIUtil;
 
@@ -56,53 +54,19 @@ final class TraceGlobalMoveResolutionPhase extends TraceAllocationPhase {
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, MoveFactory spillMoveFactory,
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
                     RegisterAllocationConfig registerAllocationConfig) {
         resolveGlobalDataFlow(resultTraces, lirGenRes, spillMoveFactory, target.arch);
     }
 
     @SuppressWarnings("try")
-    private static <B extends AbstractBlockBase<B>> void resolveGlobalDataFlow(TraceBuilderResult<B> resultTraces, LIRGenerationResult lirGenRes, MoveFactory spillMoveFactory, Architecture arch) {
+    private static <B extends AbstractBlockBase<B>> void resolveGlobalDataFlow(TraceBuilderResult<B> resultTraces, LIRGenerationResult lirGenRes, SpillMoveFactory spillMoveFactory, Architecture arch) {
         LIR lir = lirGenRes.getLIR();
         /* Resolve trace global data-flow mismatch. */
         TraceGlobalMoveResolver moveResolver = new TraceGlobalMoveResolver(lirGenRes, spillMoveFactory, arch);
         PhiValueVisitor visitor = (Value phiIn, Value phiOut) -> {
             if (!isIllegal(phiIn) && !TraceGlobalMoveResolver.isMoveToSelf(phiOut, phiIn)) {
-                // prepare input/output values.
-                final Value src;
-                final Value srcShadow;
-                if (isShadowedRegisterValue(phiOut)) {
-                    ShadowedRegisterValue phiOutSh = asShadowedRegisterValue(phiOut);
-                    src = phiOutSh.getRegister();
-                    srcShadow = phiOutSh.getStackSlot();
-                } else {
-                    src = phiOut;
-                    srcShadow = null;
-                }
-                assert src != null;
-                assert srcShadow == null || isRegister(src) && isStackSlotValue(srcShadow) : "Unexpected shadowed value: " + phiOut;
-
-                final Value dst;
-                final Value dstShadow;
-                if (isShadowedRegisterValue(phiIn)) {
-                    ShadowedRegisterValue phiInSh = asShadowedRegisterValue(phiIn);
-                    dst = phiInSh.getRegister();
-                    dstShadow = phiInSh.getStackSlot();
-                } else {
-                    dst = phiIn;
-                    dstShadow = null;
-                }
-                assert dst != null;
-                assert dstShadow == null || isRegister(dst) && isStackSlotValue(dstShadow) : "Unexpected shadowed value: " + phiIn;
-
-                // set dst
-                if (!dst.equals(src)) {
-                    moveResolver.addMapping(src, (AllocatableValue) dst);
-                }
-                // set dst_shadow
-                if (dstShadow != null && !dstShadow.equals(src)) {
-                    moveResolver.addMapping(src, (AllocatableValue) dstShadow);
-                }
+                moveResolver.addMapping(getFromValue(phiOut), (AllocatableValue) phiIn);
             }
         };
 
@@ -134,5 +98,9 @@ final class TraceGlobalMoveResolutionPhase extends TraceAllocationPhase {
                 }
             }
         }
+    }
+
+    private static Value getFromValue(Value from) {
+        return isShadowedRegisterValue(from) ? asShadowedRegisterValue(from).getRegister() : from;
     }
 }

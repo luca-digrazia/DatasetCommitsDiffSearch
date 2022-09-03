@@ -34,7 +34,6 @@ import jdk.internal.jvmci.options.OptionValue;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.alloc.TraceBuilder;
 import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
-import com.oracle.graal.compiler.common.alloc.TraceStatisticsPrinter;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
@@ -77,7 +76,6 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
         B startBlock = linearScanOrder.get(0);
         assert startBlock.equals(lir.getControlFlowGraph().getStartBlock());
         TraceBuilderResult<B> resultTraces = TraceBuilder.computeTraces(startBlock, linearScanOrder);
-        TraceStatisticsPrinter.printTraceStatistics(resultTraces, lirGenRes.getCompilationUnitName());
 
         Debug.dump(lir, "Before TraceRegisterAllocation");
         int traceNumber = 0;

@@ -24,22 +24,22 @@ package com.oracle.graal.lir.alloc.trace;
 
 import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
 import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
 import static com.oracle.graal.lir.alloc.trace.TraceRegisterAllocationPhase.Options.TraceRAshareSpillInformation;
-import static jdk.vm.ci.code.ValueUtil.isIllegal;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isIllegal;
+import static jdk.internal.jvmci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isStackSlotValue;
+import static jdk.internal.jvmci.code.ValueUtil.isVirtualStackSlot;
 
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.RegisterValue;
+import jdk.internal.jvmci.code.StackSlotValue;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.meta.Value;
 
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
@@ -54,31 +54,32 @@ import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
-import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
 import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 
 /**
  * Specialization of {@link com.oracle.graal.lir.alloc.lsra.LinearScanAssignLocationsPhase} that
  * inserts {@link ShadowedRegisterValue}s to describe {@link RegisterValue}s that are also available
- * on the {@link StackSlot stack}.
+ * on the {@link StackSlotValue stack}.
  */
 final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocationPhase {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, MoveFactory spillMoveFactory,
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
                     RegisterAllocationConfig registerAllocationConfig, TraceBuilderResult<?> traceBuilderResult, TraceLinearScan allocator) {
-        new Assigner(allocator).assignLocations();
+        new Assigner(allocator, traceBuilderResult).assignLocations();
     }
 
     private static final class Assigner {
         private final TraceLinearScan allocator;
+        private final TraceBuilderResult<?> traceBuilderResult;
 
-        private Assigner(TraceLinearScan allocator) {
+        private Assigner(TraceLinearScan allocator, TraceBuilderResult<?> traceBuilderResult) {
             this.allocator = allocator;
+            this.traceBuilderResult = traceBuilderResult;
         }
 
         /**
@@ -148,7 +149,7 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
                  * instruction is a branch, spill moves are inserted before this branch and so the
                  * wrong operand would be returned (spill moves at block boundaries are not
                  * considered in the live ranges of intervals).
-                 *
+                 * 
                  * Solution: use the first opId of the branch target block instead.
                  */
                 final LIRInstruction instr = allocator.getLIR().getLIRforBlock(block).get(allocator.getLIR().getLIRforBlock(block).size() - 1);
@@ -205,12 +206,8 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
          */
         private boolean assignLocations(LIRInstruction op) {
             assert op != null;
-            if (TraceRAshareSpillInformation.getValue()) {
-                if (op instanceof BlockEndOp) {
-                    ((BlockEndOp) op).forEachOutgoingValue(colorOutgoingIncomingValues);
-                } else if (op instanceof LabelOp) {
-                    ((LabelOp) op).forEachIncomingValue(colorOutgoingIncomingValues);
-                }
+            if (TraceRAshareSpillInformation.getValue() && isBlockEndWithEdgeToUnallocatedTrace(op)) {
+                ((BlockEndOp) op).forEachOutgoingValue(colorOutgoingValues);
             }
 
             InstructionValueProcedure assignProc = (inst, operand, mode, flags) -> isVariable(operand) ? colorLirOperand(inst, (Variable) operand, mode) : operand;
@@ -256,10 +253,10 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
             }
         }
 
-        private InstructionValueProcedure colorOutgoingIncomingValues = new InstructionValueProcedure() {
+        private InstructionValueProcedure colorOutgoingValues = new InstructionValueProcedure() {
 
             public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
-                if (isVariable(value)) {
+                if (isRegister(value) || isVariable(value)) {
                     TraceInterval interval = allocator.intervalFor(value);
                     assert interval != null : "interval must exist";
                     interval = allocator.splitChildAtOpId(interval, instruction.id(), mode);
@@ -271,6 +268,22 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
                 return value;
             }
         };
+
+        private boolean isBlockEndWithEdgeToUnallocatedTrace(LIRInstruction op) {
+            if (!(op instanceof BlockEndOp)) {
+                return false;
+            }
+            AbstractBlockBase<?> block = allocator.blockForId(op.id());
+            int currentTrace = traceBuilderResult.getTraceForBlock(block);
+
+            for (AbstractBlockBase<?> succ : block.getSuccessors()) {
+                if (currentTrace < traceBuilderResult.getTraceForBlock(succ)) {
+                    // succ is not yet allocated
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
 }

@@ -24,7 +24,7 @@ package com.oracle.graal.lir.alloc.trace;
 
 import java.util.List;
 
-import jdk.vm.ci.code.TargetDescription;
+import jdk.internal.jvmci.code.TargetDescription;
 
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
@@ -32,12 +32,12 @@ import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 
 final class TraceLinearScanRegisterAllocationPhase extends TraceLinearScanAllocationPhase {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, MoveFactory spillMoveFactory,
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
                     RegisterAllocationConfig registerAllocationConfig, TraceBuilderResult<?> traceBuilderResult, TraceLinearScan allocator) {
         allocator.printIntervals("Before register allocation");
         allocateRegisters(allocator);
@@ -48,7 +48,7 @@ final class TraceLinearScanRegisterAllocationPhase extends TraceLinearScanAlloca
     private static void allocateRegisters(TraceLinearScan allocator) {
         try (Indent indent = Debug.logAndIndent("allocate registers")) {
             FixedInterval precoloredIntervals = allocator.createFixedUnhandledList();
-            TraceInterval notPrecoloredIntervals = allocator.createUnhandledListByFrom(TraceLinearScan.IS_VARIABLE_INTERVAL);
+            TraceInterval notPrecoloredIntervals = allocator.createUnhandledList(TraceLinearScan.IS_VARIABLE_INTERVAL);
 
             // allocate cpu registers
             TraceLinearScanWalker lsw = new TraceLinearScanWalker(allocator, precoloredIntervals, notPrecoloredIntervals);
