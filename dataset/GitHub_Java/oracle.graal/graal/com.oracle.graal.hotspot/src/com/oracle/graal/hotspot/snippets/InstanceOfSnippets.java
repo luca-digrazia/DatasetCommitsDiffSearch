@@ -68,13 +68,13 @@ public class InstanceOfSnippets implements SnippetsInterface {
                     @Parameter("falseValue") Object falseValue,
                     @ConstantParameter("checkNull") boolean checkNull) {
         if (checkNull && object == null) {
-            probability(NOT_FREQUENT_PROBABILITY);
+            probability(0.01);
             isNull.inc();
             return falseValue;
         }
         Word objectHub = loadHub(object);
         if (objectHub != exactHub) {
-            probability(LIKELY_PROBABILITY);
+            probability(0.75);
             exactMiss.inc();
             return falseValue;
         }
@@ -94,13 +94,13 @@ public class InstanceOfSnippets implements SnippetsInterface {
                     @ConstantParameter("checkNull") boolean checkNull,
                     @ConstantParameter("superCheckOffset") int superCheckOffset) {
         if (checkNull && object == null) {
-            probability(NOT_FREQUENT_PROBABILITY);
+            probability(0.01);
             isNull.inc();
             return falseValue;
         }
         Word objectHub = loadHub(object);
         if (objectHub.readWord(superCheckOffset) != hub) {
-            probability(NOT_LIKELY_PROBABILITY);
+            probability(0.45);
             displayMiss.inc();
             return falseValue;
         }
@@ -120,7 +120,7 @@ public class InstanceOfSnippets implements SnippetsInterface {
                     @VarargsParameter("hints") Word[] hints,
                     @ConstantParameter("checkNull") boolean checkNull) {
         if (checkNull && object == null) {
-            probability(NOT_FREQUENT_PROBABILITY);
+            probability(0.01);
             isNull.inc();
             return falseValue;
         }
@@ -130,7 +130,7 @@ public class InstanceOfSnippets implements SnippetsInterface {
         for (int i = 0; i < hints.length; i++) {
             Word hintHub = hints[i];
             if (hintHub == objectHub) {
-                probability(NOT_FREQUENT_PROBABILITY);
+                probability(0.01);
                 hintsHit.inc();
                 return trueValue;
             }
@@ -152,7 +152,7 @@ public class InstanceOfSnippets implements SnippetsInterface {
                     @Parameter("falseValue") Object falseValue,
                     @ConstantParameter("checkNull") boolean checkNull) {
         if (checkNull && object == null) {
-            probability(NOT_FREQUENT_PROBABILITY);
+            probability(0.01);
             isNull.inc();
             return falseValue;
         }

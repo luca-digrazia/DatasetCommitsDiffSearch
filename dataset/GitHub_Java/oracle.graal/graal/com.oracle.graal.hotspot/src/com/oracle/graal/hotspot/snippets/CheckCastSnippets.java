@@ -26,7 +26,6 @@ import static com.oracle.graal.api.code.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
 import static com.oracle.graal.hotspot.snippets.TypeCheckSnippetUtils.*;
-import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 import static com.oracle.graal.snippets.SnippetTemplate.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
 import static com.oracle.graal.snippets.nodes.BranchProbabilityNode.*;
@@ -77,17 +76,17 @@ public class CheckCastSnippets implements SnippetsInterface {
         if (checkNull && object == null) {
             probability(0.1);
             isNull.inc();
-        } else {
-            Word objectHub = loadHub(object);
-            if (objectHub != exactHub) {
-                probability(0.01);
-                exactMiss.inc();
-                //bkpt(object, exactHub, objectHub);
-                DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
-            }
-            exactHit.inc();
+            return object;
         }
-        return unsafeCast(verifyOop(object), StampFactory.forNodeIntrinsic());
+        Word objectHub = loadHub(object);
+        if (objectHub != exactHub) {
+            probability(0.01);
+            exactMiss.inc();
+            //bkpt(object, exactHub, objectHub);
+            DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
+        }
+        exactHit.inc();
+        return object;
     }
 
     /**
@@ -104,18 +103,16 @@ public class CheckCastSnippets implements SnippetsInterface {
                     @ConstantParameter("checkNull") boolean checkNull,
                     @ConstantParameter("superCheckOffset") int superCheckOffset) {
         if (checkNull && object == null) {
-            probability(0.1);
             isNull.inc();
-        } else {
-            Word objectHub = loadHub(object);
-            if (objectHub.readWord(superCheckOffset) != hub) {
-                probability(0.1);
-                displayMiss.inc();
-                DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
-            }
-            displayHit.inc();
+            return object;
         }
-        return unsafeCast(verifyOop(object), StampFactory.forNodeIntrinsic());
+        Word objectHub = loadHub(object);
+        if (objectHub.readWord(superCheckOffset) != hub) {
+            displayMiss.inc();
+            DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
+        }
+        displayHit.inc();
+        return object;
     }
 
     /**
@@ -128,24 +125,23 @@ public class CheckCastSnippets implements SnippetsInterface {
                     @VarargsParameter("hints") Word[] hints,
                     @ConstantParameter("checkNull") boolean checkNull) {
         if (checkNull && object == null) {
-            probability(0.1);
             isNull.inc();
-        } else {
-            Word objectHub = loadHub(object);
-            // if we get an exact match: succeed immediately
-            ExplodeLoopNode.explodeLoop();
-            for (int i = 0; i < hints.length; i++) {
-                Word hintHub = hints[i];
-                if (hintHub == objectHub) {
-                    hintsHit.inc();
-                    return unsafeCast(verifyOop(object), StampFactory.forNodeIntrinsic());
-                }
-            }
-            if (!checkSecondarySubType(hub, objectHub)) {
-                DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
+            return object;
+        }
+        Word objectHub = loadHub(object);
+        // if we get an exact match: succeed immediately
+        ExplodeLoopNode.explodeLoop();
+        for (int i = 0; i < hints.length; i++) {
+            Word hintHub = hints[i];
+            if (hintHub == objectHub) {
+                hintsHit.inc();
+                return object;
             }
         }
-        return unsafeCast(verifyOop(object), StampFactory.forNodeIntrinsic());
+        if (!checkSecondarySubType(hub, objectHub)) {
+            DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
+        }
+        return object;
     }
 
     /**
@@ -158,15 +154,14 @@ public class CheckCastSnippets implements SnippetsInterface {
                     @Parameter("object") Object object,
                     @ConstantParameter("checkNull") boolean checkNull) {
         if (checkNull && object == null) {
-            probability(0.1);
             isNull.inc();
-        } else {
-            Word objectHub = loadHub(object);
-            if (!checkUnknownSubType(hub, objectHub)) {
-                DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
-            }
+            return object;
         }
-        return unsafeCast(verifyOop(object), StampFactory.forNodeIntrinsic());
+        Word objectHub = loadHub(object);
+        if (!checkUnknownSubType(hub, objectHub)) {
+            DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
+        }
+        return object;
     }
 
     // @formatter:on
