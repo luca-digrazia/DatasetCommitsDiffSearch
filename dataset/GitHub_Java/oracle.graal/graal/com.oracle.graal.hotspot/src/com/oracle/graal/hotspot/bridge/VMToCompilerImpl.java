@@ -166,11 +166,12 @@ public class VMToCompilerImpl implements VMToCompiler {
 
         if (config.ciTime) {
             quietMeterAndTime = (Meter.getValue() == null && Time.getValue() == null);
+            DebugEnabled.setValue(true);
             Meter.setValue("");
             Time.setValue("");
         }
 
-        if (Debug.isEnabled()) {
+        if (DebugEnabled.getValue()) {
             DebugEnvironment.initialize(log);
 
             String summary = DebugValueSummary.getValue();
