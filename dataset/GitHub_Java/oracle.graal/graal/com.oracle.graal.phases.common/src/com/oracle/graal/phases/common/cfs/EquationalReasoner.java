@@ -586,8 +586,6 @@ public final class EquationalReasoner {
             result = downcastedUtil(object, w);
         }
 
-        assert !BaseReduction.precisionLoss(object, result);
-
         return result;
     }
 
