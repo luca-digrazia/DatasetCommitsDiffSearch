@@ -27,23 +27,34 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.nodes.impl.intrinsics.interop;
+package com.oracle.truffle.llvm.nodes.impl.intrinsics.c;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
+import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsic.LLVMAddressIntrinsic;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.memory.LLVMMemory;
 
-public final class LLVMTruffleIntrinsicUtil {
-
-    @TruffleBoundary
-    public static String readString(LLVMAddress value) {
+@NodeChild(type = LLVMAddressNode.class)
+public abstract class LLVMTruffleReadBytes extends LLVMAddressIntrinsic {
+    @Specialization
+    public Object executeIntrinsic(LLVMAddress value) {
         byte c;
         LLVMAddress adr = value;
-        StringBuilder sb = new StringBuilder();
+        int count = 0;
         while ((c = LLVMMemory.getI8(adr)) != 0) {
-            sb.append((char) c);
+            count++;
             adr = adr.increment(Byte.BYTES);
         }
-        return sb.toString();
+        byte[] bytes = new byte[count];
+        count = 0;
+        adr = value;
+        while ((c = LLVMMemory.getI8(adr)) != 0) {
+            bytes[count++] = c;
+            adr = adr.increment(Byte.BYTES);
+        }
+        return bytes;
     }
+
 }
