@@ -423,7 +423,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             add(factory, node);
         }
 
-        if (node.needsFactory() || node.getNodeChildren().size() > 0) {
+        if (node.needsFactory() || childTypes.size() > 0) {
             add(new NodeFactoryFactory(context, childTypes), node);
         }
     }
@@ -515,7 +515,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 clazz.add(createCreateNodeSpecializedMethod(node, createVisibility));
                 clazz.add(createGetNodeClassMethod(node));
                 clazz.add(createGetNodeSignaturesMethod(node));
-                clazz.add(createGetInstanceMethod(node, createVisibility));
+                clazz.add(createGetInstanceMethod(node, clazz.asType(), createVisibility));
                 clazz.add(createInstanceConstant(node, clazz.asType()));
             }
 
@@ -538,9 +538,17 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 }
             }
 
-            List<NodeData> children = node.getNodeChildren();
-            if (node.getParent() == null && children.size() > 0) {
-                clazz.add(createGetFactories(node));
+            if (node.getParent() == null && node.getDeclaredChildren().size() > 0) {
+                List<NodeData> children = node.getNodeChildren();
+                List<TypeMirror> types = new ArrayList<>();
+                if (node.needsFactory()) {
+                    types.add(node.getNodeType());
+                }
+                for (NodeData child : children) {
+                    types.add(child.getTemplateType().asType());
+                }
+                TypeMirror commonSuperType = Utils.getCommonSuperType(getContext(), types.toArray(new TypeMirror[types.size()]));
+                clazz.add(createGetFactories(node, commonSuperType));
             }
 
         }
@@ -672,12 +680,8 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             return method;
         }
 
-        private ExecutableElement createGetInstanceMethod(NodeData node, Modifier visibility) {
-            Types types = getContext().getEnvironment().getTypeUtils();
-            TypeElement nodeFactoryType = Utils.fromTypeMirror(getContext().getType(NodeFactory.class));
-            TypeMirror returnType = types.getDeclaredType(nodeFactoryType, node.getNodeType());
-
-            CodeExecutableElement method = new CodeExecutableElement(modifiers(), returnType, "getInstance");
+        private ExecutableElement createGetInstanceMethod(NodeData node, TypeMirror factoryType, Modifier visibility) {
+            CodeExecutableElement method = new CodeExecutableElement(modifiers(), factoryType, "getInstance");
             if (visibility != null) {
                 method.getModifiers().add(visibility);
             }
@@ -717,33 +721,21 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             return var;
         }
 
-        private ExecutableElement createGetFactories(NodeData node) {
-            List<NodeData> children = node.getNodeChildren();
-            if (node.needsFactory()) {
-                children.add(node);
-            }
-
-            List<TypeMirror> nodeTypesList = new ArrayList<>();
-            for (NodeData child : children) {
-                nodeTypesList.add(child.getTemplateType().asType());
-            }
-            TypeMirror commonNodeSuperType = Utils.getCommonSuperType(getContext(), nodeTypesList.toArray(new TypeMirror[nodeTypesList.size()]));
-
+        private ExecutableElement createGetFactories(NodeData node, TypeMirror commonSuperType) {
             Types types = getContext().getEnvironment().getTypeUtils();
-            TypeMirror factoryType = getContext().getType(NodeFactory.class);
-            TypeMirror baseType;
-            if (children.size() == 1) {
-                baseType = types.getDeclaredType(Utils.fromTypeMirror(factoryType), commonNodeSuperType);
-            } else {
-                baseType = types.getDeclaredType(Utils.fromTypeMirror(factoryType), types.getWildcardType(commonNodeSuperType, null));
-            }
-            TypeMirror listType = types.getDeclaredType(Utils.fromTypeMirror(getContext().getType(List.class)), baseType);
+            TypeMirror classType = getContext().getType(NodeFactory.class);
+            TypeMirror classWithWildcards = types.getDeclaredType(Utils.fromTypeMirror(classType), types.getWildcardType(commonSuperType, null));
+            TypeMirror listType = types.getDeclaredType(Utils.fromTypeMirror(getContext().getType(List.class)), classWithWildcards);
 
             CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC, STATIC), listType, "getFactories");
 
             CodeTreeBuilder builder = method.createBuilder();
             builder.startReturn();
             builder.startStaticCall(getContext().getType(Arrays.class), "asList");
+            List<NodeData> children = node.getNodeChildren();
+            if (node.needsFactory()) {
+                children.add(node);
+            }
 
             for (NodeData child : children) {
                 builder.startGroup();
