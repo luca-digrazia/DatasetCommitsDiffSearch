@@ -37,7 +37,6 @@ import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.core.common.PermanentBailoutException;
 import org.graalvm.compiler.core.common.cfg.CFGVerifier;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
-import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.debug.Debug;
@@ -82,17 +81,9 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.InvocationPluginReceiver;
 import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin.LoopExplosionKind;
-import org.graalvm.compiler.nodes.graphbuilderconf.NodePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.ParameterPlugin;
-import org.graalvm.compiler.nodes.java.LoadFieldNode;
-import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
-import org.graalvm.compiler.nodes.java.NewArrayNode;
-import org.graalvm.compiler.nodes.java.NewInstanceNode;
-import org.graalvm.compiler.nodes.java.NewMultiArrayNode;
-import org.graalvm.compiler.nodes.java.StoreFieldNode;
-import org.graalvm.compiler.nodes.java.StoreIndexedNode;
 import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.Option;
@@ -100,8 +91,6 @@ import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.Equivalence;
 
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.code.BailoutException;
@@ -113,9 +102,7 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * A graph decoder that performs partial evaluation, i.e., that performs method inlining and
@@ -130,8 +117,6 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * {@link IntegerSwitchNode switches} with constant conditions are simplified.
  */
 public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
-
-    private static final Object NO_SPECIAL_CALL_TARGET = new Object();
 
     public static class Options {
         @Option(help = "Maximum inlining depth during partial evaluation before reporting an infinite recursion")//
@@ -305,7 +290,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         protected boolean invokeConsumed;
 
         public PEAppendGraphBuilderContext(PEMethodScope inlineScope, FixedWithNextNode lastInstr) {
-            super(inlineScope, inlineScope.invokeData != null ? inlineScope.invokeData.invoke : null);
+            super(inlineScope, inlineScope.invokeData.invoke);
             this.lastInstr = lastInstr;
         }
 
@@ -375,56 +360,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
     }
 
-    /**
-     * A graph builder context that allows appending one node to the graph. If a node is appended,
-     * the target fixed node is replaced with the new node, and clients must afterwards call commit
-     * to complete the replacement.
-     *
-     * This graph builder context is intended to be used with the {@link NodePlugin} objects passed
-     * to the graph decoder.
-     */
-    protected class PEOnDemandAppendGraphBuilderContext extends PEAppendGraphBuilderContext {
-        private final FixedNode targetNode;
-        private FixedWithNextNode predecessor;
-
-        public PEOnDemandAppendGraphBuilderContext(PEMethodScope inlineScope, FixedNode targetNode) {
-            super(inlineScope, targetNode.predecessor() instanceof FixedWithNextNode ? (FixedWithNextNode) targetNode.predecessor() : null);
-            this.targetNode = targetNode;
-            this.predecessor = targetNode.predecessor() instanceof FixedWithNextNode ? (FixedWithNextNode) targetNode.predecessor() : null;
-        }
-
-        @Override
-        public void push(JavaKind kind, ValueNode value) {
-            super.push(kind, value);
-        }
-
-        private void checkPopLastInstruction() {
-            if (predecessor != null) {
-                targetNode.replaceAtPredecessor(null);
-                lastInstr = predecessor;
-                predecessor = null;
-            }
-        }
-
-        @Override
-        public <T extends ValueNode> T append(T v) {
-            checkPopLastInstruction();
-            return super.append(v);
-        }
-
-        public FixedNode commit(LoopScope loopScope, int nodeOrderId, FixedWithNextNode oldAsFixedWithNextNode) {
-            registerNode(loopScope, nodeOrderId, pushedNode, true, false);
-            targetNode.replaceAtUsages(pushedNode);
-            if (oldAsFixedWithNextNode != null) {
-                FixedNode successor = oldAsFixedWithNextNode.next();
-                successor.replaceAtPredecessor(null);
-                lastInstr.setNext(successor);
-                deleteFixedNode(targetNode);
-            }
-            return lastInstr;
-        }
-    }
-
     @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
     static class ExceptionPlaceholderNode extends ValueNode {
         public static final NodeClass<ExceptionPlaceholderNode> TYPE = NodeClass.create(ExceptionPlaceholderNode.class);
@@ -434,53 +369,21 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
     }
 
-    protected static class SpecialCallTargetCacheKey {
-        private final InvokeKind invokeKind;
-        private final ResolvedJavaMethod targetMethod;
-        private final ResolvedJavaType contextType;
-        private final Stamp receiverStamp;
-
-        public SpecialCallTargetCacheKey(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ResolvedJavaType contextType, Stamp receiverStamp) {
-            this.invokeKind = invokeKind;
-            this.targetMethod = targetMethod;
-            this.contextType = contextType;
-            this.receiverStamp = receiverStamp;
-        }
-
-        @Override
-        public int hashCode() {
-            return invokeKind.hashCode() ^ targetMethod.hashCode() ^ contextType.hashCode() ^ receiverStamp.hashCode();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj instanceof SpecialCallTargetCacheKey) {
-                SpecialCallTargetCacheKey key = (SpecialCallTargetCacheKey) obj;
-                return key.invokeKind.equals(this.invokeKind) && key.targetMethod.equals(this.targetMethod) && key.contextType.equals(this.contextType) && key.receiverStamp.equals(this.receiverStamp);
-            }
-            return false;
-        }
-    }
-
     protected final OptionValues options;
     private final LoopExplosionPlugin loopExplosionPlugin;
     private final InvocationPlugins invocationPlugins;
     private final InlineInvokePlugin[] inlineInvokePlugins;
     private final ParameterPlugin parameterPlugin;
-    private final NodePlugin[] nodePlugins;
-    private final EconomicMap<SpecialCallTargetCacheKey, Object> specialCallTargetCache;
 
     public PEGraphDecoder(Architecture architecture, StructuredGraph graph, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
                     StampProvider stampProvider, OptionValues options, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins, InlineInvokePlugin[] inlineInvokePlugins,
-                    ParameterPlugin parameterPlugin, NodePlugin[] nodePlugins) {
+                    ParameterPlugin parameterPlugin) {
         super(architecture, graph, metaAccess, constantReflection, constantFieldProvider, stampProvider, true);
         this.loopExplosionPlugin = loopExplosionPlugin;
         this.invocationPlugins = invocationPlugins;
         this.inlineInvokePlugins = inlineInvokePlugins;
         this.parameterPlugin = parameterPlugin;
         this.options = options;
-        this.nodePlugins = nodePlugins;
-        this.specialCallTargetCache = EconomicMap.create(Equivalence.DEFAULT);
     }
 
     protected static LoopExplosionKind loopExplosionKind(ResolvedJavaMethod method, LoopExplosionPlugin loopExplosionPlugin) {
@@ -573,7 +476,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
     protected LoopScope trySimplifyInvoke(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
         // attempt to devirtualize the call
-        ResolvedJavaMethod specialCallTarget = getSpecialCallTarget(invokeData, callTarget);
+        ResolvedJavaMethod specialCallTarget = MethodCallTargetNode.findSpecialCallTarget(callTarget.invokeKind(), callTarget.receiver(), callTarget.targetMethod(), invokeData.contextType);
         if (specialCallTarget != null) {
             callTarget.setTargetMethod(specialCallTarget);
             callTarget.setInvokeKind(InvokeKind.Special);
@@ -597,30 +500,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             plugin.notifyNotInlined(new PENonAppendGraphBuilderContext(methodScope, invokeData.invoke), callTarget.targetMethod(), invokeData.invoke);
         }
         return null;
-    }
-
-    private ResolvedJavaMethod getSpecialCallTarget(InvokeData invokeData, MethodCallTargetNode callTarget) {
-        if (callTarget.invokeKind().isDirect()) {
-            return null;
-        }
-
-        // check for trivial cases (e.g. final methods, nonvirtual methods)
-        if (callTarget.targetMethod().canBeStaticallyBound()) {
-            return callTarget.targetMethod();
-        }
-
-        SpecialCallTargetCacheKey key = new SpecialCallTargetCacheKey(callTarget.invokeKind(), callTarget.targetMethod(), invokeData.contextType, callTarget.receiver().stamp());
-        Object specialCallTarget = specialCallTargetCache.get(key);
-        if (specialCallTarget == null) {
-            specialCallTarget = MethodCallTargetNode.devirtualizeCall(key.invokeKind, key.targetMethod, key.contextType, graph.getAssumptions(),
-                            key.receiverStamp);
-            if (specialCallTarget == null) {
-                specialCallTarget = NO_SPECIAL_CALL_TARGET;
-            }
-            specialCallTargetCache.put(key, specialCallTarget);
-        }
-
-        return specialCallTarget == NO_SPECIAL_CALL_TARGET ? null : (ResolvedJavaMethod) specialCallTarget;
     }
 
     protected boolean tryInvocationPlugin(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, MethodCallTargetNode callTarget) {
@@ -913,138 +792,26 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     @Override
     protected void handleFixedNode(MethodScope s, LoopScope loopScope, int nodeOrderId, FixedNode node) {
         PEMethodScope methodScope = (PEMethodScope) s;
-        FixedNode replacedNode = node;
-
         if (node instanceof ForeignCallNode) {
             ForeignCallNode foreignCall = (ForeignCallNode) node;
             if (foreignCall.getBci() == BytecodeFrame.UNKNOWN_BCI && methodScope.invokeData != null) {
                 foreignCall.setBci(methodScope.invokeData.invoke.bci());
             }
-        } else if (nodePlugins != null && nodePlugins.length > 0) {
-            if (node instanceof LoadFieldNode) {
-                PEOnDemandAppendGraphBuilderContext graphBuilderContext = new PEOnDemandAppendGraphBuilderContext(methodScope, node);
-                LoadFieldNode loadFieldNode = (LoadFieldNode) node;
-                ResolvedJavaField field = loadFieldNode.field();
-                if (loadFieldNode.isStatic()) {
-                    for (NodePlugin nodePlugin : nodePlugins) {
-                        if (nodePlugin.handleLoadStaticField(graphBuilderContext, field)) {
-                            replacedNode = graphBuilderContext.commit(loopScope, nodeOrderId, loadFieldNode);
-                            break;
-                        }
-                    }
-                } else {
-                    ValueNode object = loadFieldNode.object();
-                    for (NodePlugin nodePlugin : nodePlugins) {
-                        if (nodePlugin.handleLoadField(graphBuilderContext, object, field)) {
-                            replacedNode = graphBuilderContext.commit(loopScope, nodeOrderId, loadFieldNode);
-                            break;
-                        }
-                    }
-                }
-            } else if (node instanceof StoreFieldNode) {
-                PEOnDemandAppendGraphBuilderContext graphBuilderContext = new PEOnDemandAppendGraphBuilderContext(methodScope, node);
-                StoreFieldNode storeFieldNode = (StoreFieldNode) node;
-                ResolvedJavaField field = storeFieldNode.field();
-                if (storeFieldNode.isStatic()) {
-                    ValueNode value = storeFieldNode.value();
-                    for (NodePlugin nodePlugin : nodePlugins) {
-                        if (nodePlugin.handleStoreStaticField(graphBuilderContext, field, value)) {
-                            replacedNode = graphBuilderContext.commit(loopScope, nodeOrderId, storeFieldNode);
-                            break;
-                        }
-                    }
-                } else {
-                    ValueNode object = storeFieldNode.object();
-                    ValueNode value = storeFieldNode.value();
-                    for (NodePlugin nodePlugin : nodePlugins) {
-                        if (nodePlugin.handleStoreField(graphBuilderContext, object, field, value)) {
-                            replacedNode = graphBuilderContext.commit(loopScope, nodeOrderId, storeFieldNode);
-                            break;
-                        }
-                    }
-                }
-            } else if (node instanceof LoadIndexedNode) {
-                PEOnDemandAppendGraphBuilderContext graphBuilderContext = new PEOnDemandAppendGraphBuilderContext(methodScope, node);
-                LoadIndexedNode loadIndexedNode = (LoadIndexedNode) node;
-                ValueNode array = loadIndexedNode.array();
-                ValueNode index = loadIndexedNode.index();
-                for (NodePlugin nodePlugin : nodePlugins) {
-                    if (nodePlugin.handleLoadIndexed(graphBuilderContext, array, index, loadIndexedNode.elementKind())) {
-                        replacedNode = graphBuilderContext.commit(loopScope, nodeOrderId, loadIndexedNode);
-                        break;
-                    }
-                }
-            } else if (node instanceof StoreIndexedNode) {
-                PEOnDemandAppendGraphBuilderContext graphBuilderContext = new PEOnDemandAppendGraphBuilderContext(methodScope, node);
-                StoreIndexedNode storeIndexedNode = (StoreIndexedNode) node;
-                ValueNode array = storeIndexedNode.array();
-                ValueNode index = storeIndexedNode.index();
-                ValueNode value = storeIndexedNode.value();
-                for (NodePlugin nodePlugin : nodePlugins) {
-                    if (nodePlugin.handleStoreIndexed(graphBuilderContext, array, index, storeIndexedNode.elementKind(), value)) {
-                        replacedNode = graphBuilderContext.commit(loopScope, nodeOrderId, storeIndexedNode);
-                        break;
-                    }
-                }
-            } else if (node instanceof NewInstanceNode) {
-                PEOnDemandAppendGraphBuilderContext graphBuilderContext = new PEOnDemandAppendGraphBuilderContext(methodScope, node);
-                NewInstanceNode newInstanceNode = (NewInstanceNode) node;
-                ResolvedJavaType type = newInstanceNode.instanceClass();
-                for (NodePlugin nodePlugin : nodePlugins) {
-                    if (nodePlugin.handleNewInstance(graphBuilderContext, type)) {
-                        replacedNode = graphBuilderContext.commit(loopScope, nodeOrderId, newInstanceNode);
-                        break;
-                    }
-                }
-            } else if (node instanceof NewArrayNode) {
-                PEOnDemandAppendGraphBuilderContext graphBuilderContext = new PEOnDemandAppendGraphBuilderContext(methodScope, node);
-                NewArrayNode newArrayNode = (NewArrayNode) node;
-                ResolvedJavaType elementType = newArrayNode.elementType();
-                ValueNode length = newArrayNode.length();
-                for (NodePlugin nodePlugin : nodePlugins) {
-                    if (nodePlugin.handleNewArray(graphBuilderContext, elementType, length)) {
-                        replacedNode = graphBuilderContext.commit(loopScope, nodeOrderId, newArrayNode);
-                        break;
-                    }
-                }
-            } else if (node instanceof NewMultiArrayNode) {
-                PEOnDemandAppendGraphBuilderContext graphBuilderContext = new PEOnDemandAppendGraphBuilderContext(methodScope, node);
-                NewMultiArrayNode newArrayNode = (NewMultiArrayNode) node;
-                ResolvedJavaType elementType = newArrayNode.type();
-                ValueNode[] dimensions = newArrayNode.dimensions().toArray(new ValueNode[0]);
-                for (NodePlugin nodePlugin : nodePlugins) {
-                    if (nodePlugin.handleNewMultiArray(graphBuilderContext, elementType, dimensions)) {
-                        replacedNode = graphBuilderContext.commit(loopScope, nodeOrderId, newArrayNode);
-                        break;
-                    }
-                }
-            }
         }
 
-        NodeSourcePosition pos = replacedNode.getNodeSourcePosition();
+        NodeSourcePosition pos = node.getNodeSourcePosition();
         if (pos != null && methodScope.isInlinedMethod()) {
             NodeSourcePosition newPosition = pos.addCaller(methodScope.getCallerBytecodePosition());
-            try (DebugCloseable scope = replacedNode.graph().withNodeSourcePosition(newPosition)) {
-                super.handleFixedNode(s, loopScope, nodeOrderId, replacedNode);
+            try (DebugCloseable scope = node.graph().withNodeSourcePosition(newPosition)) {
+                super.handleFixedNode(s, loopScope, nodeOrderId, node);
             }
-            if (replacedNode.isAlive()) {
-                replacedNode.setNodeSourcePosition(newPosition);
+            if (node.isAlive()) {
+                node.setNodeSourcePosition(newPosition);
             }
         } else {
-            super.handleFixedNode(s, loopScope, nodeOrderId, replacedNode);
+            super.handleFixedNode(s, loopScope, nodeOrderId, node);
         }
 
-    }
-
-    private static void deleteFixedNode(FixedNode node) {
-        FrameState frameState = null;
-        if (node instanceof StateSplit) {
-            frameState = ((StateSplit) node).stateAfter();
-        }
-        node.safeDelete();
-        if (frameState != null && frameState.hasNoUsages()) {
-            frameState.safeDelete();
-        }
     }
 
     @Override

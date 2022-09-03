@@ -465,7 +465,7 @@ public class StandardGraphBuilderPlugins {
                 cond = cond.negate();
             }
 
-            LogicNode compare = CompareNode.createCompareNode(graph, b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, cond, lhs, rhs);
+            LogicNode compare = CompareNode.createCompareNode(graph, cond, lhs, rhs, b.getConstantReflection());
             b.addPush(JavaKind.Boolean, new ConditionalNode(compare, trueValue, falseValue));
             return true;
         }
@@ -884,8 +884,7 @@ public class StandardGraphBuilderPlugins {
                             b.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.TransferToInterpreter));
                         } else if (falseCount == 0 || trueCount == 0) {
                             boolean expected = falseCount == 0;
-                            LogicNode condition = b.addWithInputs(
-                                            IntegerEqualsNode.create(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, result, b.add(ConstantNode.forBoolean(!expected))));
+                            LogicNode condition = b.addWithInputs(IntegerEqualsNode.create(result, b.add(ConstantNode.forBoolean(!expected))));
                             b.append(new FixedGuardNode(condition, DeoptimizationReason.UnreachedCode, DeoptimizationAction.InvalidateReprofile, true));
                             newResult = b.add(ConstantNode.forBoolean(expected));
                         } else {

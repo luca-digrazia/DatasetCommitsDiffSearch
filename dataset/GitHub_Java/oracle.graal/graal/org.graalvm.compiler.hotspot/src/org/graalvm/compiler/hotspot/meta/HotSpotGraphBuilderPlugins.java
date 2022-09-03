@@ -125,7 +125,7 @@ public class HotSpotGraphBuilderPlugins {
      */
     public static Plugins create(GraalHotSpotVMConfig config, HotSpotWordTypes wordTypes, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection,
                     SnippetReflectionProvider snippetReflection, ForeignCallsProvider foreignCalls, StampProvider stampProvider, ReplacementsImpl replacements) {
-        InvocationPlugins invocationPlugins = new HotSpotInvocationPlugins(config);
+        InvocationPlugins invocationPlugins = new HotSpotInvocationPlugins(config, metaAccess);
 
         Plugins plugins = new Plugins(invocationPlugins);
         NodeIntrinsificationProvider nodeIntrinsificationProvider = new NodeIntrinsificationProvider(metaAccess, snippetReflection, foreignCalls, wordTypes);
