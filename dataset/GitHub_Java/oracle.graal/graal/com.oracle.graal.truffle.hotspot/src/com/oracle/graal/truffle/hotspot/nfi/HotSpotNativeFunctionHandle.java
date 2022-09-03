@@ -26,7 +26,6 @@ import java.util.Arrays;
 
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.code.InvalidInstalledCodeException;
-import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.JavaKind;
 
 import com.oracle.graal.debug.Debug;
@@ -83,8 +82,7 @@ public class HotSpotNativeFunctionHandle implements NativeFunctionHandle {
     @Override
     public Object call(Object... args) {
         assert checkArgs(args);
-        int attempts = 10;
-        while (--attempts >= 0) {
+        while (true) {
             try {
                 if (CompilerDirectives.inInterpreter()) {
                     traceCall(args);
@@ -103,7 +101,6 @@ public class HotSpotNativeFunctionHandle implements NativeFunctionHandle {
                 graphBuilder.installNativeFunctionStub(this);
             }
         }
-        throw JVMCIError.shouldNotReachHere("NFI call stub for " + pointer.getName() + " was invalidated and could not be recompiled");
     }
 
     private boolean checkArgs(Object... args) {
