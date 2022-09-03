@@ -23,21 +23,14 @@
 
 package com.oracle.graal.hotspot.test;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.*;
+import java.util.concurrent.atomic.*;
 
-import jdk.vm.ci.hotspot.HotSpotInstalledCode;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.junit.*;
 
-import org.junit.Assert;
-import org.junit.Test;
-
-import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.hotspot.meta.*;
 
 /**
  * The following tests perform object/array equality and assignments in various ways. The selected
@@ -392,7 +385,7 @@ public class CompressedOopTest extends GraalCompilerTest {
 
         public Object[] a = new Object[10];
 
-        ArrayContainer() {
+        public ArrayContainer() {
             for (int i = 0; i < 10; i++) {
                 a[i] = new Object();
             }
@@ -403,7 +396,7 @@ public class CompressedOopTest extends GraalCompilerTest {
 
         public HashMap<Object, Object> a = new HashMap<>();
 
-        HashMapContainer() {
+        public HashMapContainer() {
             for (int i = 0; i < 10; i++) {
                 a.put(new Object(), new Object());
             }
@@ -414,7 +407,7 @@ public class CompressedOopTest extends GraalCompilerTest {
 
         public char[] value = new char[5];
 
-        StringContainer1() {
+        public StringContainer1() {
             value[0] = 'T';
             value[1] = 'e';
             value[2] = 's';
@@ -428,7 +421,7 @@ public class CompressedOopTest extends GraalCompilerTest {
 
         public char[] value = new char[6];
 
-        StringContainer2() {
+        public StringContainer2() {
             value[0] = 'S';
             value[1] = 't';
             value[2] = 'r';
@@ -443,7 +436,7 @@ public class CompressedOopTest extends GraalCompilerTest {
         public final Object a = new Object();
         public final Object b = new Object();
 
-        ConstantContainer() {
+        public ConstantContainer() {
 
         }
     }
