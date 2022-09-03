@@ -25,7 +25,6 @@ package com.oracle.graal.graphbuilderconf;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -58,19 +57,11 @@ public interface GraphBuilderContext {
          * intrinsic will restart the interpreter at the intrinsified call.
          */
         boolean isIntrinsic();
-
-        /**
-         * Determines if a call within the compilation scope of this replacement represents a call
-         * to the {@linkplain #getOriginalMethod() original} method.
-         */
-        boolean isCallToOriginal(ResolvedJavaMethod method);
     }
 
     /**
      * Raw operation for adding a node to the graph when neither {@link #add},
      * {@link #addPush(ValueNode)} nor {@link #addPush(Kind, ValueNode)} can be used.
-     *
-     * @return either the node added or an equivalent node
      */
     <T extends ValueNode> T append(T value);
 
@@ -94,31 +85,28 @@ public interface GraphBuilderContext {
     void push(Kind kind, ValueNode value);
 
     /**
-     * Adds a node to the graph. If the returned node is a {@link StateSplit} with a null
-     * {@linkplain StateSplit#stateAfter() frame state}, the frame state is initialized.
+     * Appends a node with a void kind to the graph. If the returned node is a {@link StateSplit},
+     * with a null {@linkplain StateSplit#stateAfter() frame state}, the frame state is initialized.
      *
      * @param value the value to add to the graph and push to the stack. The {@code value.getKind()}
      *            kind is used when type checking this operation.
      * @return a node equivalent to {@code value} in the graph
      */
     default <T extends ValueNode> T add(T value) {
-        if (value.graph() != null) {
-            assert !(value instanceof StateSplit) || ((StateSplit) value).stateAfter() != null;
-            return value;
-        }
-        T equivalentValue = append(value);
-        if (equivalentValue instanceof StateSplit) {
-            StateSplit stateSplit = (StateSplit) equivalentValue;
+        assert value.getKind() == Kind.Void;
+        T appended = append(value);
+        if (appended instanceof StateSplit) {
+            StateSplit stateSplit = (StateSplit) appended;
             if (stateSplit.stateAfter() == null) {
                 stateSplit.setStateAfter(createStateAfter());
             }
         }
-        return equivalentValue;
+        return appended;
     }
 
     /**
      * Adds a node with a non-void kind to the graph, pushes it to the stack. If the returned node
-     * is a {@link StateSplit} with a null {@linkplain StateSplit#stateAfter() frame state}, the
+     * is a {@link StateSplit}, with a null {@linkplain StateSplit#stateAfter() frame state}, the
      * frame state is initialized.
      *
      * @param value the value to add to the graph and push to the stack. The {@code value.getKind()}
@@ -131,7 +119,7 @@ public interface GraphBuilderContext {
 
     /**
      * Adds a node with a non-void kind to the graph, pushes it to the stack. If the returned node
-     * is a {@link StateSplit} with a null {@linkplain StateSplit#stateAfter() frame state}, the
+     * is a {@link StateSplit}, with a null {@linkplain StateSplit#stateAfter() frame state}, the
      * frame state is initialized.
      *
      * @param kind the kind to use when type checking this operation
@@ -139,27 +127,16 @@ public interface GraphBuilderContext {
      * @return a node equivalent to {@code value} in the graph
      */
     default <T extends ValueNode> T addPush(Kind kind, T value) {
-        T equivalentValue = value.graph() != null ? value : append(value);
-        push(kind.getStackKind(), equivalentValue);
-        if (equivalentValue instanceof StateSplit) {
-            StateSplit stateSplit = (StateSplit) equivalentValue;
+        T appended = append(value);
+        push(kind, appended);
+        if (appended instanceof StateSplit) {
+            StateSplit stateSplit = (StateSplit) appended;
             if (stateSplit.stateAfter() == null) {
                 stateSplit.setStateAfter(createStateAfter());
             }
         }
-        return equivalentValue;
+        return appended;
     }
-
-    /**
-     * Handles an invocation that a plugin determines can replace the original invocation (i.e., the
-     * one for which the plugin was applied). This applies all standard graph builder processing to
-     * the replaced invocation including applying any relevant plugins to it.
-     *
-     * @param invokeKind the kind of the replacement invocation
-     * @param targetMethod the target of the replacement invocation
-     * @param args the arguments to the replacement invocation
-     */
-    void handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args);
 
     StampProvider getStampProvider();
 
@@ -198,16 +175,6 @@ public interface GraphBuilderContext {
      * Gets the index of the bytecode instruction currently being parsed.
      */
     int bci();
-
-    /**
-     * Gets the kind of invocation currently being parsed.
-     */
-    InvokeKind getInvokeKind();
-
-    /**
-     * Gets the return type of the invocation currently being parsed.
-     */
-    JavaType getInvokeReturnType();
 
     /**
      * Gets the inline depth of this context. 0 implies this is the context for the
