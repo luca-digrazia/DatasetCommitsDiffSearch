@@ -155,10 +155,6 @@ public final class TraceGlobalMoveResolutionPhase {
         // GLI
         Value[] locFrom = livenessInfo.getOutLocation(fromBlock);
         Value[] locTo = livenessInfo.getInLocation(toBlock);
-        if (locFrom == locTo) {
-            // a strategy might reuse the locations array if locations are the same
-            return;
-        }
         assert locFrom.length == locTo.length;
 
         for (int i = 0; i < locFrom.length; i++) {
