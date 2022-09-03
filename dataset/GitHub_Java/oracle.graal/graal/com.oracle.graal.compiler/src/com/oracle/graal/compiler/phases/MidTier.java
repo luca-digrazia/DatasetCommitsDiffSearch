@@ -42,8 +42,6 @@ public class MidTier extends PhaseSuite<MidTierContext> {
             appendPhase(canonicalizer);
         }
 
-        appendPhase(new LockEliminationPhase());
-
         if (OptFloatingReads.getValue()) {
             IncrementalCanonicalizerPhase<MidTierContext> incCanonicalizer = new IncrementalCanonicalizerPhase<>();
             incCanonicalizer.appendPhase(new FloatingReadPhase());
