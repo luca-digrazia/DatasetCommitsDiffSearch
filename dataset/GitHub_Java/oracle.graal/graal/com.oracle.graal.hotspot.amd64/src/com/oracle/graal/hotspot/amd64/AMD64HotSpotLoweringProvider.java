@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_EXP;
 import static com.oracle.graal.hotspot.HotSpotBackend.Options.GraalArithmeticStubs;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotForeignCallsProvider.ARITHMETIC_COS_STUB;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotForeignCallsProvider.ARITHMETIC_LOG10_STUB;
@@ -71,7 +72,7 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
     }
 
     @Override
-    protected ForeignCallDescriptor toForeignCall(UnaryOperation operation) {
+    protected ForeignCallDescriptor foreignCallForUnaryOperation(UnaryOperation operation) {
         if (GraalArithmeticStubs.getValue()) {
             switch (operation) {
                 case LOG:
@@ -87,7 +88,7 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
             }
         }
         if (operation == UnaryOperation.EXP) {
-            return operation.foreignCallDescriptor;
+            return ARITHMETIC_EXP;
         }
         // Lower only using LIRGenerator
         return null;
