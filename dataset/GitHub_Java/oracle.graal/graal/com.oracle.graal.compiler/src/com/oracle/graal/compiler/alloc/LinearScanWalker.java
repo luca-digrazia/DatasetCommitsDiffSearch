@@ -654,12 +654,12 @@ final class LinearScanWalker extends IntervalWalker {
             int number = availableReg.number;
             if (usePos[number] >= intervalTo) {
                 // this register is free for the full interval
-                if (minFullReg == null || availableReg.equals(hint) || (usePos[number] < usePos[minFullReg.number] && !minFullReg.equals(hint))) {
+                if (minFullReg == null || availableReg == hint || (usePos[number] < usePos[minFullReg.number] && minFullReg != hint)) {
                     minFullReg = availableReg;
                 }
             } else if (usePos[number] > regNeededUntil) {
                 // this register is at least free until regNeededUntil
-                if (maxPartialReg == null || availableReg.equals(hint) || (usePos[number] > usePos[maxPartialReg.number] && !maxPartialReg.equals(hint))) {
+                if (maxPartialReg == null || availableReg == hint || (usePos[number] > usePos[maxPartialReg.number] && maxPartialReg != hint)) {
                     maxPartialReg = availableReg;
                 }
             }
@@ -816,9 +816,7 @@ final class LinearScanWalker extends IntervalWalker {
     static boolean isMove(LIRInstruction op, Interval from, Interval to) {
         if (op instanceof MoveOp) {
             MoveOp move = (MoveOp) op;
-            if (isVariable(move.getInput()) && isVariable(move.getResult())) {
-                return move.getInput() != null && move.getInput().equals(from.operand) && move.getResult() != null && move.getResult().equals(to.operand);
-            }
+            return isVariable(move.getInput()) && isVariable(move.getResult()) && move.getInput() == from.operand && move.getResult() == to.operand;
         }
         return false;
     }
@@ -936,7 +934,7 @@ final class LinearScanWalker extends IntervalWalker {
         if (interval.insertMoveWhenActivated()) {
             assert interval.isSplitChild();
             assert interval.currentSplitChild() != null;
-            assert !interval.currentSplitChild().operand.equals(operand) : "cannot insert move between same interval";
+            assert interval.currentSplitChild().operand != operand : "cannot insert move between same interval";
             if (GraalOptions.TraceLinearScanLevel >= 4) {
                 TTY.println("Inserting move from interval %d to %d because insertMoveWhenActivated is set", interval.currentSplitChild().operandNumber, interval.operandNumber);
             }

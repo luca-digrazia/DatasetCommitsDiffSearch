@@ -38,8 +38,6 @@ public final class Variable extends AllocatableValue {
      */
     public final int index;
 
-    private String name;
-
     /**
      * Creates a new variable.
      * 
@@ -52,34 +50,13 @@ public final class Variable extends AllocatableValue {
         this.index = index;
     }
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getName() {
-        return name;
+    @Override
+    public int hashCode() {
+        return (index << 4) | getKind().ordinal();
     }
 
     @Override
     public String toString() {
-        if (name != null) {
-            return name;
-        } else {
-            return "v" + index + getKindSuffix();
-        }
-    }
-
-    @Override
-    public int hashCode() {
-        return 71 * super.hashCode() + index;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof Variable) {
-            Variable other = (Variable) obj;
-            return super.equals(other) && index == other.index;
-        }
-        return false;
+        return "v" + index + getKindSuffix();
     }
 }

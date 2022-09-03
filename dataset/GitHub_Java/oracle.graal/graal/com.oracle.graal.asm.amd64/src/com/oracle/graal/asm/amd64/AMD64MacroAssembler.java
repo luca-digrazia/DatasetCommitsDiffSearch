@@ -218,12 +218,17 @@ public class AMD64MacroAssembler extends AMD64Assembler {
     }
 
     public final void flog(Register dest, Register value, boolean base10) {
+        assert dest.getRegisterCategory() == AMD64.XMM && value.getRegisterCategory() == AMD64.XMM;
+
+        AMD64Address tmp = new AMD64Address(AMD64.rsp);
         if (base10) {
             fldlg2();
         } else {
             fldln2();
         }
-        AMD64Address tmp = trigPrologue(value);
+        subq(AMD64.rsp, 8);
+        movsd(tmp, value);
+        fld(tmp);
         fyl2x();
         trigEpilogue(dest, tmp);
     }
@@ -247,23 +252,18 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         trigEpilogue(dest, tmp);
     }
 
-    public final void fpop() {
-        ffree(0);
-        fincstp();
-    }
-
     private AMD64Address trigPrologue(Register value) {
         assert value.getRegisterCategory() == AMD64.XMM;
         AMD64Address tmp = new AMD64Address(AMD64.rsp);
         subq(AMD64.rsp, 8);
         movsd(tmp, value);
-        fld_d(tmp);
+        fld(tmp);
         return tmp;
     }
 
     private void trigEpilogue(Register dest, AMD64Address tmp) {
         assert dest.getRegisterCategory() == AMD64.XMM;
-        fstp_d(tmp);
+        fstp(tmp);
         movsd(dest, tmp);
         addq(AMD64.rsp, 8);
     }

@@ -31,6 +31,7 @@ import org.junit.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.compiler.test.*;
 
@@ -97,11 +98,12 @@ public class AMD64HotSpotFrameOmissionTest extends GraalCompilerTest {
 
     private void testHelper(String name, CodeGenerator gen) {
         Method method = getMethod(name);
-        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
+        ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
         InstalledCode installedCode = getCode(javaMethod, parse(method));
 
-        TargetDescription target = getCodeCache().getTarget();
-        RegisterConfig registerConfig = getCodeCache().getRegisterConfig();
+        CodeCacheProvider codeCache = Graal.getRequiredCapability(CodeCacheProvider.class);
+        TargetDescription target = codeCache.getTarget();
+        RegisterConfig registerConfig = codeCache.lookupRegisterConfig();
         AMD64Assembler asm = new AMD64Assembler(target, registerConfig);
 
         gen.generateCode(asm);
@@ -115,7 +117,7 @@ public class AMD64HotSpotFrameOmissionTest extends GraalCompilerTest {
     }
 
     private Register getArgumentRegister(int index, Kind kind) {
-        Register[] regs = getCodeCache().getRegisterConfig().getCallingConventionRegisters(CallingConvention.Type.JavaCall, kind);
+        Register[] regs = runtime.lookupRegisterConfig().getCallingConventionRegisters(CallingConvention.Type.JavaCall, kind);
         return regs[index];
     }
 }

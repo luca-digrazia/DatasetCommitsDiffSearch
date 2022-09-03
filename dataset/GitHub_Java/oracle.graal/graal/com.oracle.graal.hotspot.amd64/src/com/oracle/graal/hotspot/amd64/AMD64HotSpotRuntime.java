@@ -62,7 +62,7 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                /*             ret */ ret(Kind.Void),
                /* arg0: exception */ rax.asValue(Kind.Object));
 
-        addRuntimeCall(UNCOMMON_TRAP, config.uncommonTrapStub,
+        addRuntimeCall(DEOPTIMIZE, config.deoptimizeStub,
                 /*           temps */ null,
                 /*             ret */ ret(Kind.Void));
 

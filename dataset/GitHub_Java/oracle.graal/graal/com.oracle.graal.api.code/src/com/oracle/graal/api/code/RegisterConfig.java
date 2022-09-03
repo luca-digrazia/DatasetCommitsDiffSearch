@@ -22,15 +22,12 @@
  */
 package com.oracle.graal.api.code;
 
-import java.util.*;
-
-import com.oracle.graal.api.code.CallingConvention.*;
-import com.oracle.graal.api.code.Register.*;
+import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 
 /**
- * A register configuration binds roles and {@linkplain RegisterAttributes attributes}
- * to physical registers.
+ * A register configuration binds roles and {@linkplain RegisterAttributes attributes} to physical
+ * registers.
  */
 public interface RegisterConfig {
 
@@ -44,28 +41,27 @@ public interface RegisterConfig {
      */
     Register getFrameRegister();
 
-    Register getScratchRegister();
-
     /**
      * Gets the calling convention describing how arguments are passed.
-     *
+     * 
      * @param type the type of calling convention being requested
-     * @param parameters the types of the arguments of the call
+     * @param returnType the return type (can be null for methods returning {@code void})
+     * @param parameterTypes the types of the arguments of the call
      * @param target the target platform
      * @param stackOnly ignore registers
      */
-    CallingConvention getCallingConvention(Type type, Kind[] parameters, TargetDescription target, boolean stackOnly);
+    CallingConvention getCallingConvention(Type type, JavaType returnType, JavaType[] parameterTypes, TargetDescription target, boolean stackOnly);
 
     /**
-     * Gets the ordered set of registers that are can be used to pass parameters
-     * according to a given calling convention.
-     *
+     * Gets the ordered set of registers that are can be used to pass parameters according to a
+     * given calling convention.
+     * 
      * @param type the type of calling convention
-     * @param flag specifies whether registers for {@linkplain RegisterFlag#CPU integral} or
-     *             {@linkplain} RegisterFlag#FPU floating point} parameters are being requested
-     * @return the ordered set of registers that may be used to pass parameters in a call conforming to {@code type}
+     * @param kind specifies what kind of registers is being requested
+     * @return the ordered set of registers that may be used to pass parameters in a call conforming
+     *         to {@code type}
      */
-    Register[] getCallingConventionRegisters(Type type, RegisterFlag flag);
+    Register[] getCallingConventionRegisters(Type type, Kind kind);
 
     /**
      * Gets the set of registers that can be used by the register allocator.
@@ -73,14 +69,10 @@ public interface RegisterConfig {
     Register[] getAllocatableRegisters();
 
     /**
-     * Gets the set of registers that can be used by the register allocator,
-     * {@linkplain Register#categorize(Register[]) categorized} by register {@linkplain RegisterFlag flags}.
-     *
-     * @return a map from each {@link RegisterFlag} constant to the list of {@linkplain #getAllocatableRegisters()
-     *         allocatable} registers for which the flag is {@linkplain #isSet(RegisterFlag) set}
-     *
+     * Gets the set of registers that can be used by the register allocator for a value of a
+     * particular kind.
      */
-    EnumMap<RegisterFlag, Register[]> getCategorizedAllocatableRegisters();
+    Register[] getAllocatableRegisters(PlatformKind kind);
 
     /**
      * Gets the registers whose values must be preserved by a method across any call it makes.
@@ -89,7 +81,7 @@ public interface RegisterConfig {
 
     /**
      * Gets the layout of the callee save area of this register configuration.
-     *
+     * 
      * @return {@code null} if there is no callee save area
      */
     CalleeSaveLayout getCalleeSaveLayout();
@@ -97,15 +89,15 @@ public interface RegisterConfig {
     /**
      * Gets a map from register {@linkplain Register#number numbers} to register
      * {@linkplain RegisterAttributes attributes} for this register configuration.
-     *
-     * @return an array where an element at index i holds the attributes of the register whose number is i
-     * @see Register#categorize(Register[])
+     * 
+     * @return an array where an element at index i holds the attributes of the register whose
+     *         number is i
      */
     RegisterAttributes[] getAttributesMap();
 
     /**
      * Gets the register corresponding to a runtime-defined role.
-     *
+     * 
      * @param id the identifier of a runtime-defined register role
      * @return the register playing the role specified by {@code id}
      */
