@@ -573,9 +573,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
         @Override
         public <T> T installJavaInteropCodeCache(Object languageContext, Object key, T value, Class<T> expectedType) {
-            if (languageContext == null) {
-                return value;
-            }
             T result = expectedType.cast(((PolyglotLanguageContext) languageContext).context.engine.javaInteropCodeCache.putIfAbsent(key, value));
             if (result != null) {
                 return result;
@@ -586,10 +583,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
         @Override
         public <T> T lookupJavaInteropCodeCache(Object languageContext, Object key, Class<T> expectedType) {
-            if (languageContext == null) {
-                return null;
-            }
-
             return expectedType.cast(((PolyglotLanguageContext) languageContext).context.engine.javaInteropCodeCache.get(key));
         }
 

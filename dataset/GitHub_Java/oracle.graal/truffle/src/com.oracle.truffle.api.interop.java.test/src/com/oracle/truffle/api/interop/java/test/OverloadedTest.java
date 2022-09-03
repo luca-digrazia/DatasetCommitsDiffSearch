@@ -206,13 +206,13 @@ public class OverloadedTest {
         assertEquals("double", num.parameter);
         ForeignAccess.sendInvoke(n, numobj, "d", 42.1d);
         assertEquals("double", num.parameter);
-        ForeignAccess.sendInvoke(n, numobj, "d", 0x8000_0000L);
+        ForeignAccess.sendInvoke(n, numobj, "d", 0x8000_0000l);
         assertEquals("double", num.parameter);
 
-        ForeignAccess.sendInvoke(n, numobj, "d", 42L);
+        ForeignAccess.sendInvoke(n, numobj, "d", 42l);
         assertEquals("int", num.parameter);
 
-        ForeignAccess.sendInvoke(n, numobj, "f", 42L);
+        ForeignAccess.sendInvoke(n, numobj, "f", 42l);
         assertEquals("int", num.parameter);
     }
 

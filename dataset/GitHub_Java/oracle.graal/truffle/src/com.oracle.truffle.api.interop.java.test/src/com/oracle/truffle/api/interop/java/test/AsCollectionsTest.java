@@ -54,10 +54,10 @@ import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
-@SuppressWarnings({"rawtypes", "unchecked", "deprecation"})
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class AsCollectionsTest {
 
     private Context context;
@@ -65,28 +65,6 @@ public class AsCollectionsTest {
     @Before
     public void enterContext() {
         context = Context.create();
-        ProxyLanguage.setDelegate(new ProxyLanguage() {
-            @Override
-            protected boolean isObjectOfLanguage(Object object) {
-                if (object instanceof ListBasedTO) {
-                    return true;
-                } else if (object instanceof MapBasedTO) {
-                    return true;
-                }
-                return super.isObjectOfLanguage(object);
-            }
-
-            @Override
-            protected String toString(LanguageContext c, Object value) {
-                if (value instanceof ListBasedTO) {
-                    return ((ListBasedTO) value).list.toString();
-                } else if (value instanceof MapBasedTO) {
-                    return ((MapBasedTO) value).map.toString();
-                }
-                return super.toString(c, value);
-            }
-        });
-        context.initialize(ProxyLanguage.ID);
         context.enter();
     }
 
@@ -101,9 +79,8 @@ public class AsCollectionsTest {
         List origList = Arrays.asList(new String[]{"a", "b", "c"});
         TruffleObject to = new ListBasedTO(origList);
         assertTrue(JavaInteropTest.isArray(to));
-        List interopList = com.oracle.truffle.api.interop.java.JavaInterop.asJavaObject(List.class, to);
+        List interopList = JavaInterop.asJavaObject(List.class, to);
         assertEquals(origList.size(), interopList.size());
-        assertEquals(origList.toString(), new ArrayList<>(interopList).toString());
         assertEquals(origList.toString(), interopList.toString());
         // Test get out of bounds
         try {
@@ -132,9 +109,8 @@ public class AsCollectionsTest {
         }
         TruffleObject to = new MapBasedTO(origMap);
         assertFalse(JavaInteropTest.isArray(to));
-        Map interopMap = com.oracle.truffle.api.interop.java.JavaInterop.asJavaObject(Map.class, to);
+        Map interopMap = JavaInterop.asJavaObject(Map.class, to);
         assertEquals(origMap.size(), interopMap.size());
-        assertEquals(origMap.toString(), new LinkedHashMap<>(interopMap).toString());
         assertEquals(origMap.toString(), interopMap.toString());
         assertNull(interopMap.get("unknown"));
         Object old = interopMap.put("10", "101010");
@@ -146,7 +122,7 @@ public class AsCollectionsTest {
 
         TruffleObject badMapObject = new JavaInteropTest.HasKeysObject(false);
         try {
-            interopMap = com.oracle.truffle.api.interop.java.JavaInterop.asJavaObject(Map.class, badMapObject);
+            interopMap = JavaInterop.asJavaObject(Map.class, badMapObject);
             fail();
         } catch (Exception ex) {
             assertThat(ex, instanceOf(ClassCastException.class));
@@ -157,7 +133,7 @@ public class AsCollectionsTest {
     public void testAsJavaObjectMapArray() {
         MapBasedTO to = new MapBasedTO(Collections.singletonMap("foo", "bar"));
         MapBasedTO[] array = new MapBasedTO[]{to};
-        Map<?, ?>[] result = com.oracle.truffle.api.interop.java.JavaInterop.asJavaObject(Map[].class, com.oracle.truffle.api.interop.java.JavaInterop.asTruffleObject(array));
+        Map<?, ?>[] result = JavaInterop.asJavaObject(Map[].class, JavaInterop.asTruffleObject(array));
         assertEquals(1, result.length);
         assertEquals(1, result[0].size());
         assertEquals("bar", result[0].get("foo"));
@@ -167,7 +143,7 @@ public class AsCollectionsTest {
     public void testAsJavaObjectListArray() {
         ListBasedTO to = new ListBasedTO(Collections.singletonList("bar"));
         ListBasedTO[] array = new ListBasedTO[]{to};
-        List<?>[] result = com.oracle.truffle.api.interop.java.JavaInterop.asJavaObject(List[].class, com.oracle.truffle.api.interop.java.JavaInterop.asTruffleObject(array));
+        List<?>[] result = JavaInterop.asJavaObject(List[].class, JavaInterop.asTruffleObject(array));
         assertEquals(1, result.length);
         assertEquals(1, result[0].size());
         assertEquals("bar", result[0].get(0));
@@ -205,14 +181,14 @@ public class AsCollectionsTest {
 
     @Test
     public void testInvokeMap() throws InteropException {
-        TruffleObject validator = com.oracle.truffle.api.interop.java.JavaInterop.asTruffleObject(new Validator());
+        TruffleObject validator = JavaInterop.asTruffleObject(new Validator());
         MapBasedTO mapTO = new MapBasedTO(Collections.singletonMap("foo", "bar"));
         assertEquals(Boolean.TRUE, ForeignAccess.sendInvoke(Message.createInvoke(1).createNode(), validator, "validateMap", mapTO, mapTO));
     }
 
     @Test
     public void testInvokeArrayOfMap() throws InteropException {
-        TruffleObject validator = com.oracle.truffle.api.interop.java.JavaInterop.asTruffleObject(new Validator());
+        TruffleObject validator = JavaInterop.asTruffleObject(new Validator());
         MapBasedTO mapTO = new MapBasedTO(Collections.singletonMap("foo", "bar"));
         TruffleObject listOfMapTO = new ListBasedTO(Arrays.asList(mapTO));
         assertEquals(Boolean.TRUE, ForeignAccess.sendInvoke(Message.createInvoke(1).createNode(), validator, "validateArrayOfMap", listOfMapTO, listOfMapTO));
@@ -220,7 +196,7 @@ public class AsCollectionsTest {
 
     @Test
     public void testInvokeListOfMap() throws InteropException {
-        TruffleObject validator = com.oracle.truffle.api.interop.java.JavaInterop.asTruffleObject(new Validator());
+        TruffleObject validator = JavaInterop.asTruffleObject(new Validator());
         MapBasedTO mapTO = new MapBasedTO(Collections.singletonMap("foo", "bar"));
         TruffleObject listOfMapTO = new ListBasedTO(Arrays.asList(mapTO));
         assertEquals(Boolean.TRUE, ForeignAccess.sendInvoke(Message.createInvoke(1).createNode(), validator, "validateListOfMap", listOfMapTO, listOfMapTO));
@@ -232,15 +208,14 @@ public class AsCollectionsTest {
 
     @Test
     public void testInvokeListOfMapProxy() throws InteropException {
-        TruffleObject validator = com.oracle.truffle.api.interop.java.JavaInterop.asTruffleObject(
-                        Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[]{ProxyValidator.class}, (p, method, args) -> {
-                            List<Map> listOfMap = (List<Map>) args[0];
-                            assertEquals(1, listOfMap.size());
-                            Map map = listOfMap.get(0);
-                            assertEquals(1, map.size());
-                            assertEquals("bar", map.get("foo"));
-                            return true;
-                        }));
+        TruffleObject validator = JavaInterop.asTruffleObject(Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[]{ProxyValidator.class}, (p, method, args) -> {
+            List<Map> listOfMap = (List<Map>) args[0];
+            assertEquals(1, listOfMap.size());
+            Map map = listOfMap.get(0);
+            assertEquals(1, map.size());
+            assertEquals("bar", map.get("foo"));
+            return true;
+        }));
         MapBasedTO mapTO = new MapBasedTO(Collections.singletonMap("foo", "bar"));
         TruffleObject listOfMapTO = new ListBasedTO(Arrays.asList(mapTO));
         assertEquals(Boolean.TRUE, ForeignAccess.sendInvoke(Message.createInvoke(1).createNode(), validator, "test", listOfMapTO));
@@ -248,7 +223,7 @@ public class AsCollectionsTest {
 
     static final class ListBasedTO implements TruffleObject {
 
-        final List list;
+        private final List list;
 
         ListBasedTO(List list) {
             this.list = list;
@@ -314,7 +289,7 @@ public class AsCollectionsTest {
 
     static final class MapBasedTO implements TruffleObject {
 
-        final Map map;
+        private final Map map;
 
         MapBasedTO(Map map) {
             this.map = map;

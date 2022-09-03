@@ -349,7 +349,8 @@ public abstract class TruffleTCK {
     /**
      * Name of a function to return global object. The function can be executed without providing
      * any arguments and should return global object of the language, if the language supports it.
-     * The global scopes are accessible via {@link TruffleLanguage#findTopScopes(java.lang.Object)}.
+     * Global object is the one accessible via
+     * {@link TruffleLanguage#getLanguageGlobal(java.lang.Object)}.
      *
      * @return name of globally exported symbol, return <code>null</code> if the language doesn't
      *         support the concept of global object
@@ -429,16 +430,15 @@ public abstract class TruffleTCK {
     }
 
     /**
-     * Name of a function that returns an object supporting {@link Message#KEY_INFO} and having six
-     * properties named "ro", "wo", "rw", "rm", "invocable" and "intern". The "ro" property should
-     * be read-only (readable and not writable), the "wo" property should be write-only (writable
-     * and not readable), "rw" property readable and writable, "rm" property should be removable,
-     * "invocable" property should return an "invoked" String on {@link Message#createInvoke(int)
-     * invoke message} and the "intern" property should be internal. The object should support
-     * {@link Message#KEYS KEYS message} as well and it should provide the "intern" property iff it
-     * gets a boolean true as an argument. When the language does not support some attribute, it can
-     * skip the appropriate property (that should result in returning <code>0</code> as the key info
-     * of such skipped property).
+     * Name of a function that returns an object supporting {@link Message#KEY_INFO} and having five
+     * properties named "ro", "wo", "rw", "invocable" and "intern". The "ro" property should be
+     * read-only (readable and not writable), the "wo" property should be write-only (writable and
+     * not readable), "rw" property readable and writable, "invocable" property should return an
+     * "invoked" String on {@link Message#createInvoke(int) invoke message} and the "intern"
+     * property should be internal. The object should support {@link Message#KEYS KEYS message} as
+     * well and it should provide the "intern" property iff it gets a boolean true as an argument.
+     * When the language does not support some attribute, it can skip the appropriate property (that
+     * should result in returning <code>0</code> as the key info of such skipped property).
      *
      * @since 0.26
      */
@@ -2029,67 +2029,52 @@ public abstract class TruffleTCK {
         assertIsObjectOfLanguage(obj);
         KeyInfoInterface object = JavaInterop.asJavaObject(KeyInfoInterface.class, obj);
 
-        int numKeys = KeyInfo.NONE;
-        int keyInfo = object.unknown();
-        assertFalse("An unknown property", KeyInfo.isExisting(keyInfo));
+        int numKeys = 0;
+        assertEquals("An unknown property", 0, object.unknown());
         int ro = object.ro();
-        if (KeyInfo.isExisting(ro)) {
-            assertTrue(KeyInfo.isReadable(ro));
-            assertFalse(KeyInfo.isWritable(ro));
-            assertFalse(KeyInfo.isInternal(ro));
+        if (ro != 0) {
+            assertEquals("Read-only property", 0b00011, ro);
             numKeys++;
         }
         int wo = object.wo();
-        if (KeyInfo.isExisting(wo)) {
-            assertFalse(KeyInfo.isReadable(wo));
-            assertTrue(KeyInfo.isWritable(wo));
-            assertFalse(KeyInfo.isInternal(wo));
+        if (wo != 0) {
+            assertEquals("Write-only property", 0b00101, wo);
             numKeys++;
         }
         int rw = object.rw();
-        if (KeyInfo.isExisting(rw)) {
-            assertTrue(KeyInfo.isReadable(rw));
-            assertTrue(KeyInfo.isWritable(rw));
-            assertFalse(KeyInfo.isInternal(rw));
-            numKeys++;
-        }
-        int rm = object.rm();
-        if (KeyInfo.isExisting(rm)) {
-            assertTrue(KeyInfo.isRemovable(rm));
+        if (rw != 0) {
+            assertEquals("Read-only property", 0b00111, rw);
             numKeys++;
         }
         int invocable = object.invocable();
-        if (KeyInfo.isExisting(invocable)) {
+        if (invocable != 0) {
             assertTrue(KeyInfo.isInvocable(invocable));
             assertFalse(KeyInfo.isInternal(invocable));
             numKeys++;
         }
         int intern = object.intern();
-        if (KeyInfo.isExisting(intern)) {
+        if (intern != 0) {
             assertTrue(KeyInfo.isInternal(intern));
         }
 
         Map map = JavaInterop.asJavaObject(Map.class, obj);
         assertEquals(map.toString(), numKeys, map.size());
-        if (KeyInfo.isExisting(ro)) {
+        if (ro != 0) {
             assertTrue(map.containsKey("ro"));
         }
-        if (KeyInfo.isExisting(wo)) {
+        if (wo != 0) {
             assertTrue(map.containsKey("wo"));
         }
-        if (KeyInfo.isExisting(rw)) {
+        if (rw != 0) {
             assertTrue(map.containsKey("rw"));
         }
-        if (KeyInfo.isExisting(rm)) {
-            assertTrue(map.containsKey("rm"));
-        }
-        if (KeyInfo.isExisting(invocable)) {
+        if (invocable != 0) {
             assertTrue(map.containsKey("invocable"));
         }
         assertFalse(map.containsKey("intern"));
 
         map = JavaInterop.getMapView(map, true);
-        if (KeyInfo.isExisting(intern)) {
+        if (intern != 0) {
             assertEquals(numKeys + 1, map.size());
             assertTrue(map.containsKey("intern"));
         } else {
@@ -2107,9 +2092,6 @@ public abstract class TruffleTCK {
 
         @MethodMessage(message = "KEY_INFO")
         int rw();
-
-        @MethodMessage(message = "KEY_INFO")
-        int rm();
 
         @MethodMessage(message = "KEY_INFO")
         int invocable();

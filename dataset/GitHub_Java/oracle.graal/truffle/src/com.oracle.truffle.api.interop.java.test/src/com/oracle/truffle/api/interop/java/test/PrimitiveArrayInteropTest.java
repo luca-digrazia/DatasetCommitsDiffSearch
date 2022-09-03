@@ -31,6 +31,7 @@ import java.util.List;
 
 import org.graalvm.polyglot.Context;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -105,6 +106,7 @@ public class PrimitiveArrayInteropTest {
     }
 
     @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public void stringAsList() {
         stringArr = new Object[]{"Hello", "World", "!"};
         List<String> list = interop.stringArr();
@@ -118,6 +120,15 @@ public class PrimitiveArrayInteropTest {
 
         list.set(0, null);
         assertNull("set to null", stringArr[0]);
+
+        List rawList = list;
+        try {
+            rawList.set(0, 42);
+            Assert.fail();
+        } catch (ClassCastException ex) {
+            // OK
+        }
+        assertNull("still set to null", stringArr[0]);
     }
 
     @Test

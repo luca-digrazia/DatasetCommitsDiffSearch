@@ -66,6 +66,20 @@ public class TestMemberAccess {
     private final Node keysNode = Message.KEYS.createNode();
     private final Node keyInfoNode = Message.KEY_INFO.createNode();
 
+    private Context context;
+
+    @Before
+    public void enterContext() {
+        context = Context.create();
+        context.enter();
+    }
+
+    @After
+    public void leaveContext() {
+        context.leave();
+        context.close();
+    }
+
     @Test
     public void testFields() throws IllegalAccessException, InteropException {
         TestClass t = new TestClass();
