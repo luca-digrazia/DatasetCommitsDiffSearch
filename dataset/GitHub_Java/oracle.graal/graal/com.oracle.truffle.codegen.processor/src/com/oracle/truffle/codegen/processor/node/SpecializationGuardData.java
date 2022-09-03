@@ -23,25 +23,26 @@
 package com.oracle.truffle.codegen.processor.node;
 
 import javax.lang.model.element.*;
-import javax.lang.model.type.*;
 
 import com.oracle.truffle.codegen.processor.template.*;
+import com.oracle.truffle.codegen.processor.typesystem.*;
 
-public class SpecializationThrowsData extends MessageContainer {
+public class SpecializationGuardData extends MessageContainer {
 
-    private final AnnotationValue annotationValue;
-    private final AnnotationMirror annotationMirror;
-    private final TypeMirror javaClass;
-    private SpecializationData specialization;
+    private final SpecializationData specialization;
+    private final AnnotationValue value;
+    private final String guardMethod;
+    private final boolean onSpecialization;
+    private final boolean onExecution;
 
-    public SpecializationThrowsData(AnnotationMirror annotationMirror, AnnotationValue value, TypeMirror javaClass) {
-        this.annotationMirror = annotationMirror;
-        this.annotationValue = value;
-        this.javaClass = javaClass;
-    }
+    private GuardData guardDeclaration;
 
-    void setSpecialization(SpecializationData specialization) {
+    public SpecializationGuardData(SpecializationData specialization, AnnotationValue value, String guardMethod, boolean onSpecialization, boolean onExecution) {
         this.specialization = specialization;
+        this.guardMethod = guardMethod;
+        this.onSpecialization = onSpecialization;
+        this.onExecution = onExecution;
+        this.value = value;
     }
 
     @Override
@@ -51,27 +52,32 @@ public class SpecializationThrowsData extends MessageContainer {
 
     @Override
     public AnnotationMirror getMessageAnnotation() {
-        return annotationMirror;
+        return specialization.getMessageAnnotation();
     }
 
     @Override
     public AnnotationValue getMessageAnnotationValue() {
-        return annotationValue;
+        return value;
     }
 
-    public TypeMirror getJavaClass() {
-        return javaClass;
+    public String getGuardMethod() {
+        return guardMethod;
     }
 
-    public SpecializationData getSpecialization() {
-        return specialization;
+    public boolean isOnExecution() {
+        return onExecution;
     }
 
-    public AnnotationMirror getAnnotationMirror() {
-        return annotationMirror;
+    public boolean isOnSpecialization() {
+        return onSpecialization;
     }
 
-    public SpecializationData getTransitionTo() {
-        return specialization.findNextSpecialization();
+    public void setGuardDeclaration(GuardData compatibleGuard) {
+        this.guardDeclaration = compatibleGuard;
     }
+
+    public GuardData getGuardDeclaration() {
+        return guardDeclaration;
+    }
+
 }

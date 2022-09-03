@@ -32,7 +32,7 @@ import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.node.NodeFieldData.ExecutionKind;
 import com.oracle.truffle.codegen.processor.template.*;
 
-public class ShortCircuitParser extends NodeMethodParser<ShortCircuitData> {
+public class ShortCircuitParser extends MethodParser<ShortCircuitData> {
 
     private final Set<String> shortCircuitValues;
 
@@ -49,12 +49,12 @@ public class ShortCircuitParser extends NodeMethodParser<ShortCircuitData> {
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
         String shortCircuitValue = Utils.getAnnotationValue(String.class, mirror, "value");
-        return createDefaultMethodSpec(method, mirror, true, shortCircuitValue);
+        return createDefaultMethodSpec(method, mirror, shortCircuitValue);
     }
 
     @Override
     protected ParameterSpec createReturnParameterSpec() {
-        return new ParameterSpec("has", getContext().getType(boolean.class));
+        return new ParameterSpec("has", getContext().getType(boolean.class), false);
     }
 
     @Override

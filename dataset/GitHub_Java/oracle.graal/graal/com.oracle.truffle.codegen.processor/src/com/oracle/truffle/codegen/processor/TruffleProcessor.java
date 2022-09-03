@@ -28,6 +28,7 @@ import java.util.*;
 import javax.annotation.processing.*;
 import javax.lang.model.*;
 import javax.lang.model.element.*;
+import javax.tools.Diagnostic.*;
 
 import com.oracle.truffle.codegen.processor.ProcessorContext.ProcessCallback;
 import com.oracle.truffle.codegen.processor.node.*;
@@ -36,17 +37,18 @@ import com.oracle.truffle.codegen.processor.typesystem.*;
 /**
  * THIS IS NOT PUBLIC API.
  */
-//@SupportedAnnotationTypes({"com.oracle.truffle.codegen.Operation", "com.oracle.truffle.codegen.TypeLattice"})
+// @SupportedAnnotationTypes({"com.oracle.truffle.codegen.Operation",
+// "com.oracle.truffle.codegen.TypeLattice"})
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
 public class TruffleProcessor extends AbstractProcessor implements ProcessCallback {
 
     private ProcessorContext context;
-    private List<AnnotationProcessor< ? >> generators;
+    private List<AnnotationProcessor<?>> generators;
 
     private RoundEnvironment round;
 
     @Override
-    public boolean process(Set< ? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         if (!roundEnv.processingOver()) {
             processImpl(roundEnv);
         }
@@ -55,7 +57,8 @@ public class TruffleProcessor extends AbstractProcessor implements ProcessCallba
 
     private void processImpl(RoundEnvironment env) {
         this.round = env;
-        // TODO run verifications that other annotations are not processed out of scope of the operation or typelattice.
+        // TODO run verifications that other annotations are not processed out of scope of the
+        // operation or typelattice.
         try {
             for (AnnotationProcessor generator : getGenerators()) {
                 AbstractParser<?> parser = generator.getParser();
@@ -93,7 +96,7 @@ public class TruffleProcessor extends AbstractProcessor implements ProcessCallba
 
     private static void handleThrowable(AnnotationProcessor generator, Throwable t, Element e) {
         String message = "Uncaught error in " + generator.getClass().getSimpleName() + " while processing " + e;
-        generator.getContext().getLog().error(e, message + ": " + Utils.printException(t));
+        generator.getContext().getLog().message(Kind.ERROR, e, null, null, message + ": " + Utils.printException(t));
     }
 
     @SuppressWarnings("unchecked")
@@ -113,18 +116,16 @@ public class TruffleProcessor extends AbstractProcessor implements ProcessCallba
     @Override
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> annotations = new HashSet<>();
-        for (AnnotationProcessor< ? > generator : getGenerators()) {
-            for (Class<? extends Annotation> annotationClass : generator.getParser().getAllAnnotationTypes()) {
-                if (annotationClass == null) {
-                    throw new NullPointerException("class is null");
-                }
-                annotations.add(annotationClass.getCanonicalName());
-            }
+        List<Class<? extends Annotation>> annotationsTypes = new ArrayList<>();
+        annotationsTypes.addAll(NodeParser.ANNOTATIONS);
+        annotationsTypes.addAll(TypeSystemParser.ANNOTATIONS);
+        for (Class<? extends Annotation> type : annotationsTypes) {
+            annotations.add(type.getCanonicalName());
         }
         return annotations;
     }
 
-    private List<AnnotationProcessor< ? >> getGenerators() {
+    private List<AnnotationProcessor<?>> getGenerators() {
         if (generators == null && processingEnv != null) {
             generators = new ArrayList<>();
             generators.add(new AnnotationProcessor<>(getContext(), new TypeSystemParser(getContext()), new TypeSystemCodeGenerator(getContext())));

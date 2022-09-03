@@ -28,20 +28,16 @@ import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 
 import com.oracle.truffle.codegen.processor.*;
-import com.oracle.truffle.codegen.processor.typesystem.*;
 
-/**
- * Note: this class has a natural ordering that is inconsistent with equals.
- */
-public class TemplateMethod extends MessageContainer implements Comparable<TemplateMethod> {
+public class TemplateMethod extends MessageContainer {
 
     private String id;
     private final Template template;
     private final MethodSpec specification;
     private final ExecutableElement method;
     private final AnnotationMirror markerAnnotation;
-    private ActualParameter returnType;
-    private List<ActualParameter> parameters;
+    private final ActualParameter returnType;
+    private final List<ActualParameter> parameters;
 
     public TemplateMethod(String id, Template template, MethodSpec specification, ExecutableElement method, AnnotationMirror markerAnnotation, ActualParameter returnType,
                     List<ActualParameter> parameters) {
@@ -63,10 +59,6 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
     public TemplateMethod(TemplateMethod method) {
         this(method.id, method.template, method.specification, method.method, method.markerAnnotation, method.returnType, method.parameters);
         getMessages().addAll(method.getMessages());
-    }
-
-    public void setParameters(List<ActualParameter> parameters) {
-        this.parameters = parameters;
     }
 
     @Override
@@ -104,38 +96,13 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
         return returnType;
     }
 
-    public void replaceParameter(String localName, ActualParameter newParameter) {
-        if (returnType.getLocalName().equals(localName)) {
-            returnType = newParameter;
-            returnType.setMethod(this);
-        }
-
-        for (ListIterator<ActualParameter> iterator = parameters.listIterator(); iterator.hasNext();) {
-            ActualParameter parameter = iterator.next();
-            if (parameter.getLocalName().equals(localName)) {
-                iterator.set(newParameter);
-                newParameter.setMethod(this);
-            }
-        }
-    }
-
-    public List<ActualParameter> getRequiredParameters() {
-        List<ActualParameter> requiredParameters = new ArrayList<>();
-        for (ActualParameter parameter : getParameters()) {
-            if (getSpecification().getRequired().contains(parameter.getSpecification())) {
-                requiredParameters.add(parameter);
-            }
-        }
-        return requiredParameters;
-    }
-
     public List<ActualParameter> getParameters() {
         return parameters;
     }
 
     public ActualParameter findParameter(String valueName) {
-        for (ActualParameter param : getReturnTypeAndParameters()) {
-            if (param.getLocalName().equals(valueName)) {
+        for (ActualParameter param : getParameters()) {
+            if (param.getName().equals(valueName)) {
                 return param;
             }
         }
@@ -147,6 +114,15 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
         allParameters.add(getReturnType());
         allParameters.addAll(getParameters());
         return Collections.unmodifiableList(allParameters);
+    }
+
+    public ActualParameter findParameter(ParameterSpec spec) {
+        for (ActualParameter param : getParameters()) {
+            if (param.getSpecification().getName().equals(spec.getName())) {
+                return param;
+            }
+        }
+        return null;
     }
 
     public boolean canBeAccessedByInstanceOf(TypeMirror type) {
@@ -172,7 +148,7 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
 
     @Override
     public String toString() {
-        return String.format("%s [id = %s, method = %s]", getClass().getSimpleName(), getId(), getMethod());
+        return "id = " + getId() + ", " + getClass().getSimpleName() + " [method = " + getMethod() + "]";
     }
 
     public ActualParameter getPreviousParam(ActualParameter searchParam) {
@@ -185,71 +161,4 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
         }
         return prev;
     }
-
-    public List<TypeData> getSignature(TypeSystemData typeSystem) {
-        List<TypeData> types = new ArrayList<>();
-        for (ActualParameter parameter : getReturnTypeAndParameters()) {
-            if (!parameter.getSpecification().isSignature()) {
-                continue;
-            }
-            TypeData typeData = parameter.getActualTypeData(typeSystem);
-            if (typeData != null) {
-                types.add(typeData);
-            }
-        }
-        return types;
-    }
-
-    @Override
-    public int compareTo(TemplateMethod o) {
-        if (this == o) {
-            return 0;
-        }
-
-        int compare = compareBySignature(o);
-        if (compare == 0) {
-            // if signature sorting failed sort by id
-            compare = getId().compareTo(o.getId());
-        }
-        if (compare == 0) {
-            // if still no difference sort by enclosing type name
-            TypeElement enclosingType1 = Utils.findNearestEnclosingType(getMethod());
-            TypeElement enclosingType2 = Utils.findNearestEnclosingType(o.getMethod());
-            compare = enclosingType1.getQualifiedName().toString().compareTo(enclosingType2.getQualifiedName().toString());
-        }
-        return compare;
-    }
-
-    public int compareBySignature(TemplateMethod compareMethod) {
-        TypeSystemData typeSystem = getTemplate().getTypeSystem();
-        if (typeSystem != compareMethod.getTemplate().getTypeSystem()) {
-            throw new IllegalStateException("Cannot compare two methods with different type systems.");
-        }
-
-        List<TypeData> signature1 = getSignature(typeSystem);
-        List<TypeData> signature2 = compareMethod.getSignature(typeSystem);
-        if (signature1.size() != signature2.size()) {
-            return signature2.size() - signature1.size();
-        }
-
-        int result = 0;
-        for (int i = 0; i < signature1.size(); i++) {
-            int typeResult = compareActualParameter(typeSystem, signature1.get(i), signature2.get(i));
-            if (result == 0) {
-                result = typeResult;
-            } else if (typeResult != 0 && Math.signum(result) != Math.signum(typeResult)) {
-                // We cannot define an order.
-                return 0;
-            }
-        }
-
-        return result;
-    }
-
-    private static int compareActualParameter(TypeSystemData typeSystem, TypeData t1, TypeData t2) {
-        int index1 = typeSystem.findType(t1);
-        int index2 = typeSystem.findType(t2);
-        return index1 - index2;
-    }
-
 }

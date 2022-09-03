@@ -211,16 +211,8 @@ public class NodeData extends Template {
 
     public ExecutableTypeData findAnyGenericExecutableType(ProcessorContext context) {
         List<ExecutableTypeData> types = findGenericExecutableTypes(context);
-        for (ExecutableTypeData type : types) {
-            if (type.getType().isGeneric()) {
-                return type;
-            }
-        }
-
-        for (ExecutableTypeData type : types) {
-            if (!type.getType().isVoid()) {
-                return type;
-            }
+        if (!types.isEmpty()) {
+            return types.get(0);
         }
         return null;
     }

@@ -30,10 +30,10 @@ import javax.lang.model.type.*;
 
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
-import com.oracle.truffle.codegen.processor.template.ParameterSpec.*;
+import com.oracle.truffle.codegen.processor.template.ParameterSpec.Cardinality;
 import com.oracle.truffle.codegen.processor.typesystem.*;
 
-public class ExecutableTypeMethodParser extends NodeMethodParser<ExecutableTypeData> {
+public class ExecutableTypeMethodParser extends MethodParser<ExecutableTypeData> {
 
     public ExecutableTypeMethodParser(ProcessorContext context, NodeData node) {
         super(context, node);
@@ -43,37 +43,29 @@ public class ExecutableTypeMethodParser extends NodeMethodParser<ExecutableTypeD
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        MethodSpec spec = createDefaultMethodSpec(method, mirror, false, null);
-        spec.setVariableRequiredArguments(true);
-        ParameterSpec other = new ParameterSpec("other", nodeTypeMirrors(getNode()));
-        other.setCardinality(Cardinality.MULTIPLE);
-        other.setSignature(true);
-        other.setIndexed(true);
-        spec.addRequired(other);
-        return spec;
+        List<TypeMirror> types = new ArrayList<>();
+        types.addAll(getNode().getTypeSystem().getPrimitiveTypeMirrors());
+        types.add(getContext().getType(void.class));
+
+        ParameterSpec returnTypeSpec = new ParameterSpec("executedValue", types, false, Cardinality.ONE);
+
+        List<ParameterSpec> parameters = new ArrayList<>();
+        parameters.add(new ParameterSpec("frame", getContext().getTruffleTypes().getFrame(), true));
+        return new MethodSpec(new ArrayList<TypeMirror>(), returnTypeSpec, parameters);
     }
 
     @Override
     public final boolean isParsable(ExecutableElement method) {
-        if (method.getModifiers().contains(Modifier.STATIC)) {
-            return false;
-        } else if (method.getModifiers().contains(Modifier.NATIVE)) {
-            return false;
-        }
-        return method.getSimpleName().toString().startsWith("execute");
-    }
-
-    @Override
-    protected List<TypeMirror> nodeTypeMirrors(NodeData nodeData) {
-        // executable types not yet available
-        List<TypeMirror> types = new ArrayList<>(nodeData.getTypeSystem().getPrimitiveTypeMirrors());
-        types.add(nodeData.getTypeSystem().getVoidType().getPrimitiveType());
-        return types;
+        boolean parsable = method.getSimpleName().toString().startsWith("execute");
+        return parsable;
     }
 
     @Override
     public ExecutableTypeData create(TemplateMethod method) {
-        TypeData resolvedType = method.getReturnType().getTypeSystemType();
+        TypeData resolvedType = method.getReturnType().getActualTypeData(getNode().getTypeSystem());
+        if (resolvedType == null) {
+            return null;
+        }
         return new ExecutableTypeData(method, getNode().getTypeSystem(), resolvedType);
     }
 

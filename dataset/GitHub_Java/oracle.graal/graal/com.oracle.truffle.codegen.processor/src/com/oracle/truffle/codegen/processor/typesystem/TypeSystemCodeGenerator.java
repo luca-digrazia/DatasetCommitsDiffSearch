@@ -53,8 +53,8 @@ public class TypeSystemCodeGenerator extends CompilationUnitFactory<TypeSystemDa
     }
 
     /**
-     * Finds the generated singleton field for a TypeSytemData instance. TypeSystemCodeGenerator must be applied to the
-     * TypeSystemData model before use.
+     * Finds the generated singleton field for a TypeSytemData instance. TypeSystemCodeGenerator
+     * must be applied to the TypeSystemData model before use.
      */
     public static VariableElement findSingleton(ProcessorContext context, TypeSystemData typeSystem) {
         TypeMirror type = context.findGeneratedClassBySimpleName(TypeClassFactory.typeName(typeSystem), typeSystem);
@@ -125,7 +125,6 @@ public class TypeSystemCodeGenerator extends CompilationUnitFactory<TypeSystemDa
             return new ArrayList<>(sourceTypes);
         }
 
-
         private CodeExecutableElement createConvertTo(TypeSystemData typeSystem, CodeVariableElement singleton) {
             CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), getContext().getType(Object.class), "convertTo");
             method.addParameter(new CodeVariableElement(getContext().getType(Class.class), "targetType"));
@@ -168,8 +167,8 @@ public class TypeSystemCodeGenerator extends CompilationUnitFactory<TypeSystemDa
 
             CodeTreeBuilder builder = method.createBuilder();
             builder.startReturn();
-            if (typeSystem.getTypes().length > 0) {
-                builder.typeLiteral(typeSystem.getTypes()[0].getBoxedType());
+            if (!typeSystem.getTypes().isEmpty()) {
+                builder.typeLiteral(typeSystem.getTypes().get(0).getBoxedType());
             } else {
                 builder.null_();
             }
@@ -198,8 +197,7 @@ public class TypeSystemCodeGenerator extends CompilationUnitFactory<TypeSystemDa
                 return null;
             }
 
-            CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), getContext().getType(boolean.class),
-                            TypeSystemCodeGenerator.isTypeMethodName(type));
+            CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), getContext().getType(boolean.class), TypeSystemCodeGenerator.isTypeMethodName(type));
             method.addParameter(new CodeVariableElement(getContext().getType(Object.class), LOCAL_VALUE));
 
             CodeTreeBuilder body = method.createBuilder();
@@ -213,11 +211,11 @@ public class TypeSystemCodeGenerator extends CompilationUnitFactory<TypeSystemDa
                 return null;
             }
 
-            CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), type.getPrimitiveType(),
-                            TypeSystemCodeGenerator.asTypeMethodName(type));
+            CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), type.getPrimitiveType(), TypeSystemCodeGenerator.asTypeMethodName(type));
             method.addParameter(new CodeVariableElement(getContext().getType(Object.class), LOCAL_VALUE));
 
             CodeTreeBuilder body = method.createBuilder();
+            body.startAssert().startCall(isTypeMethodName(type)).string(LOCAL_VALUE).end().end();
             body.startReturn().cast(type.getPrimitiveType(), body.create().string(LOCAL_VALUE).getTree()).end();
 
             return method;
@@ -236,5 +234,6 @@ public class TypeSystemCodeGenerator extends CompilationUnitFactory<TypeSystemDa
 
             return method;
         }
+
     }
 }
