@@ -466,7 +466,7 @@ public class JniEnv extends NativeEnv {
      */
     @JniImpl
     public int GetStringLength(@Type(String.class) StaticObject string) {
-        if (StaticObject.isNull(string)) {
+        if (string == StaticObject.NULL) {
             return 0;
         }
         return (int) meta(string).method("length", int.class).invokeDirect();
@@ -1600,7 +1600,7 @@ public class JniEnv extends NativeEnv {
      */
     @JniImpl
     public boolean IsInstanceOf(Object obj, @Type(Class.class) StaticObjectClass clazz) {
-        if (StaticObject.isNull(obj)) {
+        if (obj == StaticObject.NULL) {
             return true;
         }
         return EspressoLanguage.getCurrentContext().getInterpreterToVM().instanceOf(obj, clazz.getMirror());
