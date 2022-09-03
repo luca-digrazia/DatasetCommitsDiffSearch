@@ -115,7 +115,7 @@ public final class PosixJavaThreads extends JavaThreads {
                         "PosixJavaThreads.start0: pthread_attr_setguardsize");
 
         ThreadStartData startData = UnmanagedMemory.malloc(SizeOf.get(ThreadStartData.class));
-        startData.setIsolate(CEntryPointContext.getCurrentIsolate());
+        startData.setVirtualMachine(CEntryPointContext.getCurrentIsolate());
         startData.setThreadHandle(ObjectHandles.getGlobal().create(thread));
 
         Pthread.pthread_tPointer newThread = StackValue.get(SizeOf.get(Pthread.pthread_tPointer.class));
@@ -167,10 +167,10 @@ public final class PosixJavaThreads extends JavaThreads {
         void setThreadHandle(ObjectHandle handle);
 
         @RawField
-        Isolate getIsolate();
+        Isolate getVirtualMachine();
 
         @RawField
-        void setIsolate(Isolate vm);
+        void setVirtualMachine(Isolate vm);
     }
 
     private static final CEntryPointLiteral<CFunctionPointer> pthreadStartRoutine = CEntryPointLiteral.create(PosixJavaThreads.class, "pthreadStartRoutine", ThreadStartData.class);
@@ -178,7 +178,7 @@ public final class PosixJavaThreads extends JavaThreads {
     private static class PthreadStartRoutinePrologue {
         @SuppressWarnings("unused")
         static void enter(ThreadStartData data) {
-            CEntryPointActions.enterAttachThread(data.getIsolate());
+            CEntryPointActions.enterAttachThread(data.getVirtualMachine());
         }
     }
 
@@ -190,7 +190,7 @@ public final class PosixJavaThreads extends JavaThreads {
 
         Thread thread = ObjectHandles.getGlobal().get(threadHandle);
 
-        boolean status = singleton().assignJavaThread(thread);
+        boolean status = JavaThreads.currentThread.compareAndSet(null, thread);
         VMError.guarantee(status, "currentThread already initialized");
 
         /*
@@ -203,12 +203,20 @@ public final class PosixJavaThreads extends JavaThreads {
         setPthreadIdentifier(thread, Pthread.pthread_self());
         singleton().setNativeName(thread, thread.getName());
 
+        boolean daemon = thread.isDaemon();
+        if (!daemon) {
+            singleton().nonDaemonThreads.incrementAndGet();
+        }
+
         try {
             thread.run();
         } catch (Throwable ex) {
             SnippetRuntime.reportUnhandledExceptionJava(ex);
         } finally {
             exit(thread);
+            if (!daemon) {
+                singleton().nonDaemonThreads.decrementAndGet();
+            }
         }
 
         return WordFactory.nullPointer();
