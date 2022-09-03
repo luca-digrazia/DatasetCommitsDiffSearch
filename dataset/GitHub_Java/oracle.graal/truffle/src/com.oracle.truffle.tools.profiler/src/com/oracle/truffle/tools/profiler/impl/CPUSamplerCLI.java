@@ -24,13 +24,13 @@
  */
 package com.oracle.truffle.tools.profiler.impl;
 
+import com.oracle.truffle.api.Option;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.tools.profiler.CPUSampler;
-import com.oracle.truffle.tools.profiler.CallTreeNode;
-import org.graalvm.options.OptionDescriptor;
-import org.graalvm.options.OptionDescriptors;
+import com.oracle.truffle.tools.profiler.ProfilerNode;
+import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionType;
 
@@ -40,11 +40,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+@Option.Group(CPUSamplerInstrument.ID)
 class CPUSamplerCLI extends ProfilerCLI {
 
     enum Output {
@@ -52,68 +53,67 @@ class CPUSamplerCLI extends ProfilerCLI {
         CALLTREE
     }
 
-    enum Mode {
-        COMPILED,
-        ROOTS,
-        STATEMENTS
-    }
-
     static final OptionType<Output> CLI_OUTPUT_TYPE = new OptionType<>("Output",
-            Output.HISTOGRAM,
-            new Function<String, Output>() {
-                @Override
-                public Output apply(String s) {
-                    try {
-                        return Output.valueOf(s.toUpperCase());
-                    } catch (IllegalArgumentException e) {
-                        throw new IllegalArgumentException("Output can be: histogram or calltree");
-                    }
-                }
-            });
+                    Output.HISTOGRAM,
+                    new Function<String, Output>() {
+                        @Override
+                        public Output apply(String s) {
+                            try {
+                                return Output.valueOf(s.toUpperCase());
+                            } catch (IllegalArgumentException e) {
+                                throw new IllegalArgumentException("Output can be: histogram or calltree");
+                            }
+                        }
+                    });
 
-    static final OptionType<Mode> CLI_MODE_TYPE = new OptionType<>("Mode",
-            Mode.COMPILED,
-            new Function<String, Mode>() {
-                @Override
-                public Mode apply(String s) {
-                    try {
-                        return Mode.valueOf(s.toUpperCase());
-                    } catch (IllegalArgumentException e) {
-                        throw new IllegalArgumentException("Mode can be: compiled, roots or statements.");
-                    }
-                }
-            });
+    static final OptionType<CPUSampler.Mode> CLI_MODE_TYPE = new OptionType<>("Mode",
+                    CPUSampler.Mode.EXCLUDE_INLINED_ROOTS,
+                    new Function<String, CPUSampler.Mode>() {
+                        @Override
+                        public CPUSampler.Mode apply(String s) {
+                            try {
+                                return CPUSampler.Mode.valueOf(s.toUpperCase());
+                            } catch (IllegalArgumentException e) {
+                                throw new IllegalArgumentException("Mode can be: compiled, roots or statements.");
+                            }
+                        }
+                    });
 
-    static final OptionKey<Boolean> ENABLED = new OptionKey<>(false);
-    static final OptionKey<Mode> MODE = new OptionKey<>(Mode.COMPILED, CLI_MODE_TYPE);
-    static final OptionKey<Long> SAMPLE_PERIOD = new OptionKey<>(1L);
-    static final OptionKey<Long> DELAY_PERIOD = new OptionKey<>(0L);
-    static final OptionKey<Integer> STACK_LIMIT = new OptionKey<>(10000);
-    static final OptionKey<Output> OUTPUT = new OptionKey<>(Output.HISTOGRAM, CLI_OUTPUT_TYPE);
+    @Option(name = "", help = "Enable the CPU sampler.", category = OptionCategory.USER) static final OptionKey<Boolean> ENABLED = new OptionKey<>(false);
 
-    static final OptionKey<Object[]> FILTER_ROOT = new OptionKey<>(new Object[0], WILDCARD_FILTER_TYPE);
-    static final OptionKey<Object[]> FILTER_FILE = new OptionKey<>(new Object[0], WILDCARD_FILTER_TYPE);
-    static final OptionKey<String> FILTER_LANGUAGE = new OptionKey<>("");
+    // @formatter:off
+    @Option(name = "Mode",
+            help = "Describes level of sampling detail. NOTE: Increased detail can lead to reduced accuracy. Modes: 'exclude_inlined_roots' - samples roots excluding inlined functions (default), " +
+                    "'roots' - samples roots including inlined functions, 'statements' - samples all statements.", category = OptionCategory.USER)
+    static final OptionKey<CPUSampler.Mode> MODE = new OptionKey<>(CPUSampler.Mode.EXCLUDE_INLINED_ROOTS, CLI_MODE_TYPE);
+    // @formatter:om
+    @Option(name = "Period", help = "Period in milliseconds to sample the stack.", category = OptionCategory.USER) static final OptionKey<Long> SAMPLE_PERIOD = new OptionKey<>(1L);
 
-    static final OptionKey<Boolean> SAMPLE_INTERNAL = new OptionKey<>(false);
+    @Option(name = "Delay", help = "Delay the sampling for this many milliseconds (default: 0).", category = OptionCategory.USER) static final OptionKey<Long> DELAY_PERIOD = new OptionKey<>(0L);
 
-    static void handleOutput(TruffleInstrument.Env env, CPUSampler sampler, OptionDescriptors descriptors) {
+    @Option(name = "StackLimit", help = "Maximum number of maximum stack elements.", category = OptionCategory.USER) static final OptionKey<Integer> STACK_LIMIT = new OptionKey<>(10000);
+
+    @Option(name = "Output", help = "Print a 'histogram' or 'calltree' as output (default:HISTOGRAM).", category = OptionCategory.USER) static final OptionKey<Output> OUTPUT = new OptionKey<>(
+                    Output.HISTOGRAM, CLI_OUTPUT_TYPE);
+
+    @Option(name = "FilterRootName", help = "Wildcard filter for program roots. (eg. Math.*, default:*).", category = OptionCategory.USER) static final OptionKey<Object[]> FILTER_ROOT = new OptionKey<>(
+                    new Object[0], WILDCARD_FILTER_TYPE);
+
+    @Option(name = "FilterFile", help = "Wildcard filter for source file paths. (eg. *program*.sl, default:*).", category = OptionCategory.USER) static final OptionKey<Object[]> FILTER_FILE = new OptionKey<>(
+                    new Object[0], WILDCARD_FILTER_TYPE);
+
+    @Option(name = "FilterLanguage", help = "Only profile languages with mime-type. (eg. +, default:no filter).", category = OptionCategory.USER) static final OptionKey<String> FILTER_LANGUAGE = new OptionKey<>(
+                    "");
+
+    @Option(name = "SampleInternal", help = "Capture internal elements (default:false).", category = OptionCategory.USER) static final OptionKey<Boolean> SAMPLE_INTERNAL = new OptionKey<>(false);
+
+    static void handleOutput(TruffleInstrument.Env env, CPUSampler sampler) {
         PrintStream out = new PrintStream(env.out());
         if (sampler.hasStackOverflowed()) {
             out.println("-------------------------------------------------------------------------------- ");
             out.println("ERROR: Shadow stack has overflowed its capacity of " + env.getOptions().get(STACK_LIMIT) + " during execution!");
             out.println("The gathered data is incomplete and incorrect!");
-            String name = "";
-            Iterator<OptionDescriptor> iterator = descriptors.iterator();
-            while (iterator.hasNext()) {
-                OptionDescriptor descriptor = iterator.next();
-                if (descriptor.getKey().equals(STACK_LIMIT)) {
-                    name = descriptor.getName();
-                    break;
-                }
-            }
-            assert !name.equals("");
-            out.println("Use --" + name + "=<" + STACK_LIMIT.getType().getName() + "> to set stack capacity.");
+            out.println("Use --" + CPUSamplerInstrument.ID + ".StackLimit=<" + STACK_LIMIT.getType().getName() + "> to set stack capacity.");
             out.println("-------------------------------------------------------------------------------- ");
             return;
         }
@@ -127,21 +127,41 @@ class CPUSamplerCLI extends ProfilerCLI {
         }
     }
 
+    private static Map<SourceLocation, List<ProfilerNode<CPUSampler.Payload>>> computeHistogram(CPUSampler sampler) {
+        Map<SourceLocation, List<ProfilerNode<CPUSampler.Payload>>> histogram = new HashMap<>();
+        computeHistogramImpl(sampler.getRootNodes(), histogram);
+        return histogram;
+    }
+
+    private static void computeHistogramImpl(Collection<ProfilerNode<CPUSampler.Payload>> children, Map<SourceLocation, List<ProfilerNode<CPUSampler.Payload>>> histogram) {
+        for (ProfilerNode<CPUSampler.Payload> treeNode : children) {
+            List<ProfilerNode<CPUSampler.Payload>> nodes = histogram.computeIfAbsent(new SourceLocation(treeNode.getSourceSection(), treeNode.getRootName()),
+                            new Function<SourceLocation, List<ProfilerNode<CPUSampler.Payload>>>() {
+                                @Override
+                                public List<ProfilerNode<CPUSampler.Payload>> apply(SourceLocation s) {
+                                    return new ArrayList<>();
+                                }
+                            });
+            nodes.add(treeNode);
+            computeHistogramImpl(treeNode.getChildren(), histogram);
+        }
+    }
+
     private static void printSamplingHistogram(PrintStream out, CPUSampler sampler) {
 
-        final Map<SourceLocation, List<CallTreeNode<CPUSampler.HitCounts>>> histogram = sampler.computeHistogram();
+        final Map<SourceLocation, List<ProfilerNode<CPUSampler.Payload>>> histogram = computeHistogram(sampler);
 
-        List<List<CallTreeNode<CPUSampler.HitCounts>>> lines = new ArrayList<>(histogram.values());
-        Collections.sort(lines, new Comparator<List<CallTreeNode<CPUSampler.HitCounts>>>() {
+        List<List<ProfilerNode<CPUSampler.Payload>>> lines = new ArrayList<>(histogram.values());
+        Collections.sort(lines, new Comparator<List<ProfilerNode<CPUSampler.Payload>>>() {
             @Override
-            public int compare(List<CallTreeNode<CPUSampler.HitCounts>> o1, List<CallTreeNode<CPUSampler.HitCounts>> o2) {
+            public int compare(List<ProfilerNode<CPUSampler.Payload>> o1, List<ProfilerNode<CPUSampler.Payload>> o2) {
                 long sum1 = 0;
-                for (CallTreeNode<CPUSampler.HitCounts> tree : o1) {
+                for (ProfilerNode<CPUSampler.Payload> tree : o1) {
                     sum1 += tree.getPayload().getSelfHitCount();
                 }
 
                 long sum2 = 0;
-                for (CallTreeNode<CPUSampler.HitCounts> tree : o2) {
+                for (ProfilerNode<CPUSampler.Payload> tree : o2) {
                     sum2 += tree.getPayload().getSelfHitCount();
                 }
                 return Long.compare(sum2, sum1);
@@ -149,12 +169,12 @@ class CPUSamplerCLI extends ProfilerCLI {
         });
 
         int maxLength = 10;
-        for (List<CallTreeNode<CPUSampler.HitCounts>> line : lines) {
+        for (List<ProfilerNode<CPUSampler.Payload>> line : lines) {
             maxLength = Math.max(computeRootNameMaxLength(line.get(0)), maxLength);
         }
 
         String title = String.format(" %-" + maxLength + "s |      Total Time     |  Opt %% ||       Self Time     |  Opt %% | Location             ", "Name");
-        long samples = sampler.getTotalSamples();
+        long samples = sampler.getSampleCount();
         String sep = repeat("-", title.length());
         out.println(sep);
         out.println(String.format("Sampling Histogram. Recorded %s samples with period %dms", samples, sampler.getPeriod()));
@@ -164,7 +184,7 @@ class CPUSamplerCLI extends ProfilerCLI {
         out.println(sep);
         out.println(title);
         out.println(sep);
-        for (List<CallTreeNode<CPUSampler.HitCounts>> line : lines) {
+        for (List<ProfilerNode<CPUSampler.Payload>> line : lines) {
             printAttributes(out, sampler, "", line, maxLength);
         }
         out.println(sep);
@@ -175,7 +195,7 @@ class CPUSamplerCLI extends ProfilerCLI {
         String title = String.format(" %-" + maxLength + "s |      Total Time     |  Opt %% ||       Self Time     |  Opt %% | Location             ", "Name");
         String sep = repeat("-", title.length());
         out.println(sep);
-        out.println(String.format("Sampling CallTree. Recorded %s samples with period %dms.", sampler.getTotalSamples(), sampler.getPeriod()));
+        out.println(String.format("Sampling CallTree. Recorded %s samples with period %dms.", sampler.getSampleCount(), sampler.getPeriod()));
         out.println("  Self Time: Time spent on the top of the stack.");
         out.println("  Total Time: Time spent somewhere on the stack. ");
         out.println("  Opt %: Percent of time spent in compiled and therfore non-interpreted code.");
@@ -186,16 +206,16 @@ class CPUSamplerCLI extends ProfilerCLI {
         out.println(sep);
     }
 
-    private static void printSamplingCallTreeRec(CPUSampler sampler, int maxRootLength, String prefix, Collection<CallTreeNode<CPUSampler.HitCounts>> children, PrintStream out) {
-        List<CallTreeNode<CPUSampler.HitCounts>> sortedChildren = new ArrayList<>(children);
-        Collections.sort(sortedChildren, new Comparator<CallTreeNode<CPUSampler.HitCounts>>() {
+    private static void printSamplingCallTreeRec(CPUSampler sampler, int maxRootLength, String prefix, Collection<ProfilerNode<CPUSampler.Payload>> children, PrintStream out) {
+        List<ProfilerNode<CPUSampler.Payload>> sortedChildren = new ArrayList<>(children);
+        Collections.sort(sortedChildren, new Comparator<ProfilerNode<CPUSampler.Payload>>() {
             @Override
-            public int compare(CallTreeNode<CPUSampler.HitCounts> o1, CallTreeNode<CPUSampler.HitCounts> o2) {
+            public int compare(ProfilerNode<CPUSampler.Payload> o1, ProfilerNode<CPUSampler.Payload> o2) {
                 return Long.compare(o2.getPayload().getHitCount(), o1.getPayload().getHitCount());
             }
         });
 
-        for (CallTreeNode<CPUSampler.HitCounts> treeNode : sortedChildren) {
+        for (ProfilerNode<CPUSampler.Payload> treeNode : sortedChildren) {
             if (treeNode == null) {
                 continue;
             }
@@ -204,9 +224,9 @@ class CPUSamplerCLI extends ProfilerCLI {
         }
     }
 
-    private static int computeTitleMaxLength(Collection<CallTreeNode<CPUSampler.HitCounts>> children, int baseLength) {
+    private static int computeTitleMaxLength(Collection<ProfilerNode<CPUSampler.Payload>> children, int baseLength) {
         int maxLength = baseLength;
-        for (CallTreeNode<CPUSampler.HitCounts> treeNode : children) {
+        for (ProfilerNode<CPUSampler.Payload> treeNode : children) {
             int rootNameLength = computeRootNameMaxLength(treeNode);
             maxLength = Math.max(baseLength + rootNameLength, maxLength);
             maxLength = Math.max(maxLength, computeTitleMaxLength(treeNode.getChildren(), baseLength + 1));
@@ -222,16 +242,16 @@ class CPUSamplerCLI extends ProfilerCLI {
         return x2 >= y1 && y2 >= x1;
     }
 
-    private static void printAttributes(PrintStream out, CPUSampler sampler, String prefix, List<CallTreeNode<CPUSampler.HitCounts>> nodes, int maxRootLength) {
+    private static void printAttributes(PrintStream out, CPUSampler sampler, String prefix, List<ProfilerNode<CPUSampler.Payload>> nodes, int maxRootLength) {
         long samplePeriod = sampler.getPeriod();
-        long samples = sampler.getTotalSamples();
+        long samples = sampler.getSampleCount();
 
         long selfInterpreted = 0;
         long selfCompiled = 0;
         long totalInterpreted = 0;
         long totalCompiled = 0;
-        for (CallTreeNode<CPUSampler.HitCounts> tree : nodes) {
-            CPUSampler.HitCounts payload = tree.getPayload();
+        for (ProfilerNode<CPUSampler.Payload> tree : nodes) {
+            CPUSampler.Payload payload = tree.getPayload();
             selfInterpreted += payload.getSelfInterpretedHitCount();
             selfCompiled += payload.getSelfCompiledHitCount();
             if (!tree.isRecursive()) {
@@ -246,7 +266,7 @@ class CPUSamplerCLI extends ProfilerCLI {
             return;
         }
         assert totalSamples < samples;
-        CallTreeNode<CPUSampler.HitCounts> firstNode = nodes.get(0);
+        ProfilerNode<CPUSampler.Payload> firstNode = nodes.get(0);
         SourceSection sourceSection = firstNode.getSourceSection();
         String rootName = firstNode.getRootName();
 
@@ -271,13 +291,13 @@ class CPUSamplerCLI extends ProfilerCLI {
         String location = getShortDescription(sourceSection);
 
         out.println(String.format(" %-" + Math.max(maxRootLength, 10) + "s | %s || %s | %s ", //
-                prefix + rootName, totalTimes, selfTimes, location));
+                        prefix + rootName, totalTimes, selfTimes, location));
     }
 
-    private static boolean needsColumnSpecifier(CallTreeNode<CPUSampler.HitCounts> firstNode) {
+    private static boolean needsColumnSpecifier(ProfilerNode<CPUSampler.Payload> firstNode) {
         boolean needsColumnsSpecifier = false;
         SourceSection sourceSection = firstNode.getSourceSection();
-        for (CallTreeNode<CPUSampler.HitCounts> node : firstNode.getParent().getChildren()) {
+        for (ProfilerNode<CPUSampler.Payload> node : firstNode.getParent().getChildren()) {
             if (node.getSourceSection() == sourceSection) {
                 continue;
             }
@@ -289,7 +309,7 @@ class CPUSamplerCLI extends ProfilerCLI {
         return needsColumnsSpecifier;
     }
 
-    private static int computeRootNameMaxLength(CallTreeNode<CPUSampler.HitCounts> treeNode) {
+    private static int computeRootNameMaxLength(ProfilerNode<CPUSampler.Payload> treeNode) {
         int length = treeNode.getRootName().length();
         if (!treeNode.getTags().contains(StandardTags.RootTag.class)) {
             // reserve some space for the line and column info
