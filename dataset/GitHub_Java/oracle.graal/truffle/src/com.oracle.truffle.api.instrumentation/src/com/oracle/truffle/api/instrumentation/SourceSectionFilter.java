@@ -165,7 +165,6 @@ public final class SourceSectionFilter {
      */
     public final class Builder {
         private List<EventFilterExpression> expressions = new ArrayList<>();
-        private boolean includeInternal = true;
 
         private Builder() {
         }
@@ -419,42 +418,12 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter that includes or excludes {@link RootNode#isInternal() internal root nodes}.
-         * By default, internal roots are included, call with <code>false</code> to exclude internal
-         * code from instrumentation.
-         *
-         * @return the builder to chain calls
-         * @since 0.29
-         */
-        public Builder includeInternal(boolean internal) {
-            this.includeInternal = internal;
-            return this;
-        }
-
-        /**
-         * Adds all the filters defined in the given {@link SourceSectionFilter filter}.
-         *
-         * @param filter an existing filter to be included
-         * @return the builder to chain calls
-         * @since 0.30
-         */
-        public Builder and(SourceSectionFilter filter) {
-            for (EventFilterExpression e : filter.expressions) {
-                expressions.add(e);
-            }
-            return this;
-        }
-
-        /**
          * Finalizes and constructs the {@link SourceSectionFilter} instance.
          *
          * @return the built filter expression
          * @since 0.12
          */
         public SourceSectionFilter build() {
-            if (!includeInternal) {
-                expressions.add(new EventFilterExpression.IgnoreInternal());
-            }
             Collections.sort(expressions);
             return new SourceSectionFilter(expressions.toArray(new EventFilterExpression[0]));
         }
@@ -477,7 +446,7 @@ public final class SourceSectionFilter {
      *
      * @since 0.17
      */
-    public interface SourcePredicate extends Predicate<Source> {
+    public interface SourcePredicate {
 
         /**
          * Returns <code>true</code> if the given source should be tested positive and
@@ -1165,33 +1134,6 @@ public final class SourceSectionFilter {
                 builder.append(")");
                 return builder.toString();
             }
-        }
-
-        private static final class IgnoreInternal extends EventFilterExpression {
-
-            IgnoreInternal() {
-            }
-
-            @Override
-            boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection s) {
-                return true;
-            }
-
-            @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
-                return rootNode == null || !rootNode.isInternal();
-            }
-
-            @Override
-            protected int getOrder() {
-                return 1;
-            }
-
-            @Override
-            public String toString() {
-                return "ignore internal";
-            }
-
         }
 
     }
