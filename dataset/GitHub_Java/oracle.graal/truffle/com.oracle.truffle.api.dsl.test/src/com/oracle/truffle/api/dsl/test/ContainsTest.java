@@ -22,14 +22,20 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import static com.oracle.truffle.api.dsl.test.TestHelper.*;
-import static org.hamcrest.CoreMatchers.*;
-import static org.junit.Assert.*;
+import static com.oracle.truffle.api.dsl.test.TestHelper.array;
+import static com.oracle.truffle.api.dsl.test.TestHelper.assertRuns;
+import static com.oracle.truffle.api.dsl.test.TestHelper.createRoot;
+import static com.oracle.truffle.api.dsl.test.TestHelper.executeWith;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertThat;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.internal.*;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.internal.SpecializedNode;
 import com.oracle.truffle.api.dsl.test.ContainsTestFactory.Contains1Factory;
 import com.oracle.truffle.api.dsl.test.ContainsTestFactory.Contains2Factory;
 import com.oracle.truffle.api.dsl.test.ContainsTestFactory.Contains3Factory;
@@ -38,7 +44,7 @@ import com.oracle.truffle.api.dsl.test.ContainsTestFactory.PolymorphicToMonomorp
 import com.oracle.truffle.api.dsl.test.TestHelper.ExecutionListener;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.NodeCost;
 
 @SuppressWarnings("unused")
 public class ContainsTest {
@@ -54,10 +60,7 @@ public class ContainsTest {
                         new ExecutionListener() {
                             public void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last) {
                                 if (value instanceof String) {
-                                    if (node.getNode() instanceof DSLNode) {
-                                        // assert that the final specialization is always Object
-                                        Assert.assertEquals(Object.class, ((DSLNode) node.getNode()).getMetadata0().getSpecializedTypes()[0]);
-                                    } else {
+                                    if (node.getNode() instanceof SpecializedNode) {
                                         Assert.assertTrue(((SpecializedNode) node.getNode()).getSpecializationNode().toString().startsWith("F2Node_"));
                                     }
                                 }
