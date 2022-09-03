@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ByteValueProfile;
 import com.oracle.truffle.api.profiles.DoubleValueProfile;
@@ -41,7 +42,6 @@ import com.oracle.truffle.api.profiles.IntValueProfile;
 import com.oracle.truffle.api.profiles.LongValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.Container.CachedLLVMAddressContainer;
@@ -249,6 +249,12 @@ public final class LLVMGlobalVariableAccess extends Node {
         return byteProfile.profile(value);
     }
 
+    public void putTruffleObject(LLVMGlobalVariable global, TruffleObject value) {
+        Container container = getContainer.executeWithTarget(global.getContainer());
+        CompilerAsserts.partialEvaluationConstant(container.getClass());
+        container.putTruffleObject(global, value);
+    }
+
     public void putLLVMTruffleObject(LLVMGlobalVariable global, LLVMTruffleObject value) {
         Container container = getContainer.executeWithTarget(global.getContainer());
         CompilerAsserts.partialEvaluationConstant(container.getClass());
@@ -259,12 +265,6 @@ public final class LLVMGlobalVariableAccess extends Node {
         Container container = getContainer.executeWithTarget(global.getContainer());
         CompilerAsserts.partialEvaluationConstant(container.getClass());
         container.putFunction(global, value);
-    }
-
-    public void putManaged(LLVMGlobalVariable global, LLVMVirtualAllocationAddress value) {
-        Container container = getContainer.executeWithTarget(global.getContainer());
-        CompilerAsserts.partialEvaluationConstant(container.getClass());
-        container.putManaged(global, value);
     }
 
     public void putBoxedPrimitive(LLVMGlobalVariable global, LLVMBoxedPrimitive value) {
