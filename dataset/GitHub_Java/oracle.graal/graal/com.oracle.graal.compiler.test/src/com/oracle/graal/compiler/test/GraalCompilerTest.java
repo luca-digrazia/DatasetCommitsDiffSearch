@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.test;
 
 import static com.oracle.graal.compiler.GraalCompilerOptions.PrintCompilation;
 import static com.oracle.graal.nodes.ConstantNode.getConstantNodes;
-import static com.oracle.graal.printer.CanonicalStringGraphPrinter.getCanonicalGraphString;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -64,7 +63,6 @@ import com.oracle.graal.java.ComputeLoopFrequenciesClosure;
 import com.oracle.graal.java.GraphBuilderPhase;
 import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
 import com.oracle.graal.lir.phases.LIRSuites;
-import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodeinfo.Verbosity;
 import com.oracle.graal.nodes.BreakpointNode;
 import com.oracle.graal.nodes.ConstantNode;
@@ -186,22 +184,12 @@ public abstract class GraalCompilerTest extends GraalTest {
             protected void run(StructuredGraph graph) {
                 ComputeLoopFrequenciesClosure.compute(graph);
             }
-
- 	    @Override
-            public float codeSizeIncrease() {
-                return NodeSize.IGNORE_SIZE_CONTRACT_FACTOR;
-            }
         });
         ret.getHighTier().appendPhase(new Phase("CheckGraphPhase") {
 
             @Override
             protected void run(StructuredGraph graph) {
                 assert checkHighTierGraph(graph) : "failed HighTier graph check";
-            }
-
- 	   @Override
-            public float codeSizeIncrease() {
-                return NodeSize.IGNORE_SIZE_CHECK_FACTOR;
             }
         });
         ret.getMidTier().appendPhase(new Phase("CheckGraphPhase") {
@@ -210,23 +198,12 @@ public abstract class GraalCompilerTest extends GraalTest {
             protected void run(StructuredGraph graph) {
                 assert checkMidTierGraph(graph) : "failed MidTier graph check";
             }
-
-            @Override
-            public float codeSizeIncrease() {
-                return NodeSize.IGNORE_SIZE_CONTRACT_FACTOR;
-            }
-
         });
         ret.getLowTier().appendPhase(new Phase("CheckGraphPhase") {
 
             @Override
             protected void run(StructuredGraph graph) {
                 assert checkLowTierGraph(graph) : "failed LowTier graph check";
-            }
-
-   	    @Override
-            public float codeSizeIncrease() {
-                return NodeSize.IGNORE_SIZE_CONTRACT_FACTOR;
             }
         });
         return ret;

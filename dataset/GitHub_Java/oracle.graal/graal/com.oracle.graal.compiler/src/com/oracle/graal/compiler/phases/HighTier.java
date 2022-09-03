@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,6 +27,7 @@ import static com.oracle.graal.compiler.common.GraalOptions.FullUnroll;
 import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
 import static com.oracle.graal.compiler.common.GraalOptions.LoopPeeling;
 import static com.oracle.graal.compiler.common.GraalOptions.LoopUnswitch;
+import static com.oracle.graal.compiler.common.GraalOptions.OptCanonicalizer;
 import static com.oracle.graal.compiler.common.GraalOptions.OptConvertDeoptsToGuards;
 import static com.oracle.graal.compiler.common.GraalOptions.OptLoopTransform;
 import static com.oracle.graal.compiler.common.GraalOptions.PartialEscapeAnalysis;
@@ -71,13 +72,15 @@ public class HighTier extends PhaseSuite<HighTierContext> {
             canonicalizer.disableReadCanonicalization();
         }
 
-        appendPhase(canonicalizer);
+        if (OptCanonicalizer.getValue()) {
+            appendPhase(canonicalizer);
+        }
 
         if (Options.Inline.getValue()) {
             appendPhase(new InliningPhase(canonicalizer));
             appendPhase(new DeadCodeEliminationPhase(Optional));
 
-            if (ConditionalElimination.getValue()) {
+            if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
                 appendPhase(canonicalizer);
                 appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, false));
             }
@@ -101,7 +104,9 @@ public class HighTier extends PhaseSuite<HighTierContext> {
             }
         }
 
-        appendPhase(canonicalizer);
+        if (OptCanonicalizer.getValue()) {
+            appendPhase(canonicalizer);
+        }
 
         if (PartialEscapeAnalysis.getValue()) {
             appendPhase(new PartialEscapePhase(true, canonicalizer));

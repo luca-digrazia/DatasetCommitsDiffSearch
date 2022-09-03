@@ -239,8 +239,9 @@ public abstract class MethodMetricsTest extends GraalCompilerTest {
     }
 
     static DebugConfig overrideGraalDebugConfig(PrintStream log, String methodFilter, String methodMeter) {
-        List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
-        List<DebugVerifyHandler> verifyHandlers = new ArrayList<>();
+        DebugConfig config = DebugScope.getConfig();
+        List<DebugDumpHandler> dumpHandlers = config == null ? new ArrayList<>() : config.dumpHandlers().stream().collect(Collectors.toList());
+        List<DebugVerifyHandler> verifyHandlers = config == null ? new ArrayList<>() : config.verifyHandlers().stream().collect(Collectors.toList());
         GraalDebugConfig debugConfig = new GraalDebugConfig(
                         GraalDebugConfig.Options.Log.getValue(),
                         GraalDebugConfig.Options.Count.getValue(),
