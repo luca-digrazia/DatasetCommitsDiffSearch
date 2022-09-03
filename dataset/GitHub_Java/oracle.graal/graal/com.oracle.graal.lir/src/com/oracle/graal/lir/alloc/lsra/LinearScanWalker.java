@@ -22,24 +22,21 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
+import static com.oracle.graal.api.code.CodeUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
-import static com.oracle.jvmci.code.CodeUtil.*;
-import static com.oracle.jvmci.code.ValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.AllocatableRegisters;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.util.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.alloc.lsra.Interval.RegisterBinding;
-import com.oracle.graal.lir.alloc.lsra.Interval.RegisterPriority;
-import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
-import com.oracle.graal.lir.alloc.lsra.Interval.State;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.meta.*;
+import com.oracle.graal.lir.alloc.lsra.Interval.*;
 
 /**
  */
@@ -794,7 +791,6 @@ class LinearScanWalker extends IntervalWalker {
 
             // the register must be free at least until this position
             int firstUsage = interval.firstUsage(RegisterPriority.MustHaveRegister);
-            int firstShouldHaveUsage = interval.firstUsage(RegisterPriority.ShouldHaveRegister);
             int regNeededUntil = Math.min(firstUsage, interval.from() + 1);
             int intervalTo = interval.to();
             assert regNeededUntil > 0 && regNeededUntil < Integer.MAX_VALUE : "interval has no use";
@@ -813,7 +809,7 @@ class LinearScanWalker extends IntervalWalker {
             }
 
             int regUsePos = (reg == null ? 0 : usePos[reg.number]);
-            if (regUsePos <= firstShouldHaveUsage) {
+            if (regUsePos <= firstUsage) {
                 if (Debug.isLogEnabled()) {
                     Debug.log("able to spill current interval. firstUsage(register): %d, usePos: %d", firstUsage, regUsePos);
                 }
