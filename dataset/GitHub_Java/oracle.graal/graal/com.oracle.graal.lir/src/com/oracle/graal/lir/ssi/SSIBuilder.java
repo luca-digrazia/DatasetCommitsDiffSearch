@@ -33,7 +33,6 @@ import java.util.ListIterator;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.cfg.BlockMap;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.InstructionValueConsumer;
 import com.oracle.graal.lir.LIR;
@@ -42,11 +41,13 @@ import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
+import com.oracle.graal.lir.ValueConsumer;
 
 import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Value;
 
-public final class SSIBuilder {
+public class SSIBuilder {
 
     private static class BlockData {
 
@@ -108,7 +109,7 @@ public final class SSIBuilder {
         return lir.getControlFlowGraph().getBlocks();
     }
 
-    private LIR getLIR() {
+    protected LIR getLIR() {
         return lir;
     }
 
@@ -116,7 +117,7 @@ public final class SSIBuilder {
         if (isVariable(operand)) {
             return asVariable(operand).index;
         }
-        throw GraalError.shouldNotReachHere("Can only handle Variables: " + operand);
+        throw JVMCIError.shouldNotReachHere("Can only handle Variables: " + operand);
     }
 
     private SSIBuilder.BlockData getBlockData(AbstractBlockBase<?> block) {
@@ -128,8 +129,24 @@ public final class SSIBuilder {
     }
 
     private void init() {
+        ValueConsumer setVariableConsumer = new ValueConsumer() {
+            @Override
+            public void visitValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+                if (isVariable(value)) {
+                    if (operands[asVariable(value).index] == null) {
+                        operands[asVariable(value).index] = value;
+                    }
+                }
+            }
+        };
+
         for (AbstractBlockBase<?> block : getBlocks()) {
             initBlockData(block);
+
+            for (LIRInstruction op : getLIR().getLIRforBlock(block)) {
+                op.visitEachTemp(setVariableConsumer);
+                op.visitEachOutput(setVariableConsumer);
+            }
         }
     }
 
@@ -154,12 +171,14 @@ public final class SSIBuilder {
                     @Override
                     public void visitValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                         processLocalUse(liveGen, operand);
+                        visitUse(block, op, operand, mode, flags);
                     }
                 };
                 InstructionValueConsumer aliveConsumer = new InstructionValueConsumer() {
                     @Override
                     public void visitValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                         processLocalUse(liveGen, operand);
+                        visitAlive(block, op, operand, mode, flags);
                     }
                 };
                 InstructionValueConsumer stateConsumer = new InstructionValueConsumer() {
@@ -174,18 +193,21 @@ public final class SSIBuilder {
                                 }
                             }
                         }
+                        visitState(block, op, operand, mode, flags);
                     }
                 };
                 InstructionValueConsumer defConsumer = new InstructionValueConsumer() {
                     @Override
                     public void visitValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
-                        processLocalDef(liveGen, liveKill, operand, operands);
+                        processLocalDef(liveGen, liveKill, operand);
+                        visitDef(block, op, operand, mode, flags);
                     }
                 };
                 InstructionValueConsumer tempConsumer = new InstructionValueConsumer() {
                     @Override
                     public void visitValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
-                        processLocalDef(liveGen, liveKill, operand, operands);
+                        processLocalDef(liveGen, liveKill, operand);
+                        visitTemp(block, op, operand, mode, flags);
                     }
                 };
 
@@ -196,6 +218,7 @@ public final class SSIBuilder {
                     final LIRInstruction op = instIt.previous();
 
                     try (Indent indent2 = Debug.logAndIndent("handle op %d: %s", op.id(), op)) {
+                        visitInstruction(block, op);
                         op.visitEachOutput(defConsumer);
                         op.visitEachTemp(tempConsumer);
                         op.visitEachState(stateConsumer);
@@ -219,7 +242,7 @@ public final class SSIBuilder {
         } // end of block iteration
     }
 
-    private static void processLocalUse(final BitSet liveGen, Value operand) {
+    protected void processLocalUse(final BitSet liveGen, Value operand) {
         if (isVariable(operand)) {
             int operandNum = operandNumber(operand);
             liveGen.set(operandNum);
@@ -229,18 +252,88 @@ public final class SSIBuilder {
         }
     }
 
-    private static void processLocalDef(final BitSet liveGen, final BitSet liveKill, Value operand, Value[] operands) {
+    protected void processLocalDef(final BitSet liveGen, final BitSet liveKill, Value operand) {
         if (isVariable(operand)) {
             int operandNum = operandNumber(operand);
-            if (operands[operandNum] == null) {
-                operands[operandNum] = operand;
-            }
             liveKill.set(operandNum);
             liveGen.clear(operandNum);
             if (Debug.isLogEnabled()) {
                 Debug.log("liveKill for operand %d(%s)", operandNum, operand);
             }
         }
+    }
+
+    /**
+     * @param block
+     * @param op
+     * @param operand
+     * @param mode
+     * @param flags
+     */
+    protected void visitUse(AbstractBlockBase<?> block, LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
+    }
+
+    /**
+     * @param block
+     * @param op
+     * @param operand
+     * @param mode
+     * @param flags
+     */
+    protected void visitAlive(AbstractBlockBase<?> block, LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
+    }
+
+    /**
+     * @param block
+     * @param op
+     * @param operand
+     * @param mode
+     * @param flags
+     */
+    protected void visitDef(AbstractBlockBase<?> block, LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
+    }
+
+    /**
+     * @param block
+     * @param op
+     * @param operand
+     * @param mode
+     * @param flags
+     */
+    protected void visitTemp(AbstractBlockBase<?> block, LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
+    }
+
+    /**
+     * @param block
+     * @param op
+     * @param operand
+     * @param mode
+     * @param flags
+     */
+    protected void visitState(AbstractBlockBase<?> block, LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
+    }
+
+    /**
+     * @param op
+     * @param block
+     * @param incoming
+     */
+    protected void visitIncoming(AbstractBlockBase<?> block, LIRInstruction op, Value[] incoming) {
+    }
+
+    /**
+     * @param op
+     * @param block
+     * @param outgoing
+     */
+    protected void visitOutgoing(AbstractBlockBase<?> block, LIRInstruction op, Value[] outgoing) {
+    }
+
+    /**
+     * @param block
+     * @param op
+     */
+    protected void visitInstruction(AbstractBlockBase<?> block, LIRInstruction op) {
     }
 
     /**
@@ -329,7 +422,7 @@ public final class SSIBuilder {
             AbstractBlockBase<?> startBlock = getLIR().getControlFlowGraph().getStartBlock();
             if (getBlockData(startBlock).liveIn.cardinality() != 0) {
                 // bailout if this occurs in product mode.
-                throw new GraalError("liveIn set of first block must be empty: " + getBlockData(startBlock).liveIn);
+                throw new JVMCIError("liveIn set of first block must be empty: " + getBlockData(startBlock).liveIn);
             }
         }
     }
@@ -371,6 +464,7 @@ public final class SSIBuilder {
             values[cnt++] = liveIn.get(i) ? operands[i] : Value.ILLEGAL;
         }
         LabelOp label = SSIUtil.incoming(getLIR(), block);
+        visitIncoming(block, label, values);
         label.addIncomingValues(values);
     }
 
@@ -385,6 +479,7 @@ public final class SSIBuilder {
             values[cnt++] = operands[i];
         }
         BlockEndOp blockEndOp = SSIUtil.outgoing(getLIR(), block);
+        visitOutgoing(block, (LIRInstruction) blockEndOp, values);
         blockEndOp.addOutgoingValues(values);
     }
 }
