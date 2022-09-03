@@ -29,6 +29,15 @@ import static org.graalvm.compiler.nodes.ConstantNode.getConstantNodes;
 import java.util.HashSet;
 import java.util.List;
 
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
+import jdk.vm.ci.hotspot.HotSpotObjectConstant;
+import jdk.vm.ci.hotspot.HotSpotResolvedJavaType;
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -36,13 +45,13 @@ import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeMap;
+import org.graalvm.compiler.hotspot.FingerprintUtil;
 import org.graalvm.compiler.hotspot.meta.HotSpotConstantLoadAction;
 import org.graalvm.compiler.hotspot.nodes.aot.InitializeKlassNode;
 import org.graalvm.compiler.hotspot.nodes.aot.LoadConstantIndirectlyFixedNode;
 import org.graalvm.compiler.hotspot.nodes.aot.LoadConstantIndirectlyNode;
 import org.graalvm.compiler.hotspot.nodes.aot.LoadMethodCountersNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveConstantNode;
-import org.graalvm.compiler.hotspot.nodes.aot.ResolveDynamicConstantNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveMethodAndLoadCountersNode;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
@@ -65,15 +74,6 @@ import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.util.EconomicMap;
-
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
-import jdk.vm.ci.hotspot.HotSpotObjectConstant;
-import jdk.vm.ci.hotspot.HotSpotResolvedJavaType;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class ReplaceConstantNodesPhase extends BasePhase<PhaseContext> {
 
@@ -108,7 +108,6 @@ public class ReplaceConstantNodesPhase extends BasePhase<PhaseContext> {
         // @formatter:off
         return n instanceof LoadConstantIndirectlyNode      ||
                n instanceof LoadConstantIndirectlyFixedNode ||
-               n instanceof ResolveDynamicConstantNode      ||
                n instanceof ResolveConstantNode             ||
                n instanceof InitializeKlassNode;
         // @formatter:on
@@ -127,9 +126,9 @@ public class ReplaceConstantNodesPhase extends BasePhase<PhaseContext> {
             if (type.getElementalType().isPrimitive()) {
                 return false;
             }
-            return ((HotSpotResolvedObjectType) (type.getElementalType())).getFingerprint() == 0;
+            return FingerprintUtil.getFingerprint((HotSpotResolvedObjectType) (type.getElementalType())) == 0;
         }
-        return ((HotSpotResolvedObjectType) type).getFingerprint() == 0;
+        return FingerprintUtil.getFingerprint((HotSpotResolvedObjectType) type) == 0;
     }
 
     /**
