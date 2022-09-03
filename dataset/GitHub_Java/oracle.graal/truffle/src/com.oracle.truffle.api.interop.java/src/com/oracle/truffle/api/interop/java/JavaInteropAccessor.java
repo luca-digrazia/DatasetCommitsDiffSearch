@@ -67,11 +67,6 @@ final class JavaInteropAccessor extends Accessor {
                 }
                 return ((JavaFunctionObject) object).getDescription();
             }
-
-            @Override
-            public Object asStaticClassObject(Class<?> clazz, Object hostLanguageContext) {
-                return JavaObject.forStaticClass(clazz, hostLanguageContext);
-            }
         };
     }
 
