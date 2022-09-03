@@ -60,6 +60,9 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
 
     private final TruffleObject memmove;
     private final TruffleObject memcpy;
+    private final TruffleObject memset;
+    private final TruffleObject free;
+    private final TruffleObject malloc;
     private final TruffleObject dynamicCast;
     private final TruffleObject sulongCanCatch;
     private final TruffleObject sulongThrow;
@@ -79,6 +82,9 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
     LLVMNativeFunctionsImpl(NativeLookup nativeLookup) {
         memmove = nativeLookup == null ? null : nativeLookup.getNativeFunction("@memmove", "(POINTER,POINTER,UINT64):POINTER");
         memcpy = nativeLookup == null ? null : nativeLookup.getNativeFunction("@memcpy", "(POINTER,POINTER,UINT64):POINTER");
+        memset = nativeLookup == null ? null : nativeLookup.getNativeFunction("@memset", "(POINTER,SINT32,UINT64):VOID");
+        free = nativeLookup == null ? null : nativeLookup.getNativeFunction("@free", "(POINTER):VOID");
+        malloc = nativeLookup == null ? null : nativeLookup.getNativeFunction("@malloc", "(UINT64):POINTER");
         dynamicCast = nativeLookup == null ? null : nativeLookup.getNativeFunction("@__dynamic_cast", "(POINTER,POINTER,POINTER,UINT64):POINTER");
         sulongCanCatch = nativeLookup == null ? null : nativeLookup.getNativeFunction("@sulong_eh_canCatch", "(POINTER,POINTER,POINTER):UINT32");
         sulongThrow = nativeLookup == null ? null : nativeLookup.getNativeFunction("@sulong_eh_throw", "(POINTER,POINTER,POINTER,POINTER,POINTER):VOID");
@@ -109,6 +115,21 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
     @Override
     public MemCopyNode createMemCopyNode() {
         return new MemCopyNodeImpl(memcpy);
+    }
+
+    @Override
+    public MemSetNode createMemSetNode() {
+        return new MemSetNodeImpl(memset);
+    }
+
+    @Override
+    public FreeNode createFreeNode() {
+        return new FreeNodeImpl(free);
+    }
+
+    @Override
+    public MallocNode createMallocNode() {
+        return new MallocNodeImpl(malloc);
     }
 
     @Override
@@ -178,7 +199,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
 
     private static class SulongGetThrownObjectNodeImpl extends SulongGetThrownObjectNode {
 
-        @Child private Node asPointer = Message.AS_POINTER.createNode();
+        @Child private Node unbox = Message.UNBOX.createNode();
 
         SulongGetThrownObjectNodeImpl(TruffleObject function) {
             super(function, 1);
@@ -187,7 +208,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
         @Override
         public LLVMAddress getThrownObject(LLVMAddress ptr) {
             try {
-                return LLVMAddress.fromLong(ForeignAccess.sendAsPointer(asPointer, (TruffleObject) execute(ptr.getVal())));
+                return LLVMAddress.fromLong((long) ForeignAccess.sendUnbox(unbox, (TruffleObject) execute(ptr.getVal())));
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException(e);
@@ -197,7 +218,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
 
     private static class SulongGetExceptionPointerNodeImpl extends SulongGetExceptionPointerNode {
 
-        @Child private Node asPointer = Message.AS_POINTER.createNode();
+        @Child private Node unbox = Message.UNBOX.createNode();
 
         SulongGetExceptionPointerNodeImpl(TruffleObject function) {
             super(function, 1);
@@ -206,7 +227,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
         @Override
         public LLVMAddress getExceptionPointer(LLVMAddress ptr) {
             try {
-                return LLVMAddress.fromLong(ForeignAccess.sendAsPointer(asPointer, (TruffleObject) execute(ptr.getVal())));
+                return LLVMAddress.fromLong((long) ForeignAccess.sendUnbox(unbox, (TruffleObject) execute(ptr.getVal())));
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException(e);
@@ -216,7 +237,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
 
     private static class SulongGetDestructorNodeImpl extends SulongGetDestructorNode {
 
-        @Child private Node asPointer = Message.AS_POINTER.createNode();
+        @Child private Node unbox = Message.UNBOX.createNode();
 
         SulongGetDestructorNodeImpl(TruffleObject function) {
             super(function, 1);
@@ -225,7 +246,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
         @Override
         public LLVMAddress get(LLVMAddress ptr) {
             try {
-                return LLVMAddress.fromLong(ForeignAccess.sendAsPointer(asPointer, (TruffleObject) execute(ptr.getVal())));
+                return LLVMAddress.fromLong((long) ForeignAccess.sendUnbox(unbox, (TruffleObject) execute(ptr.getVal())));
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException(e);
@@ -235,7 +256,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
 
     private static class SulongGetExceptionTypeNodeImpl extends SulongGetExceptionTypeNode {
 
-        @Child private Node asPointer = Message.AS_POINTER.createNode();
+        @Child private Node unbox = Message.UNBOX.createNode();
 
         SulongGetExceptionTypeNodeImpl(TruffleObject function) {
             super(function, 1);
@@ -244,7 +265,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
         @Override
         public LLVMAddress get(LLVMAddress ptr) {
             try {
-                return LLVMAddress.fromLong(ForeignAccess.sendAsPointer(asPointer, (TruffleObject) execute(ptr.getVal())));
+                return LLVMAddress.fromLong((long) ForeignAccess.sendUnbox(unbox, (TruffleObject) execute(ptr.getVal())));
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException(e);
@@ -254,7 +275,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
 
     private static class SulongGetUnwindHeaderNodeImpl extends SulongGetUnwindHeaderNode {
 
-        @Child private Node asPointer = Message.AS_POINTER.createNode();
+        @Child private Node unbox = Message.UNBOX.createNode();
 
         SulongGetUnwindHeaderNodeImpl(TruffleObject function) {
             super(function, 1);
@@ -263,7 +284,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
         @Override
         public LLVMAddress getUnwind(LLVMAddress ptr) {
             try {
-                return LLVMAddress.fromLong(ForeignAccess.sendAsPointer(asPointer, (TruffleObject) execute(ptr.getVal())));
+                return LLVMAddress.fromLong((long) ForeignAccess.sendUnbox(unbox, (TruffleObject) execute(ptr.getVal())));
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException(e);
@@ -273,7 +294,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
 
     private static class DynamicCastNodeImpl extends DynamicCastNode {
 
-        @Child private Node asPointer = Message.AS_POINTER.createNode();
+        @Child private Node unbox = Message.UNBOX.createNode();
 
         DynamicCastNodeImpl(TruffleObject function) {
             super(function, 4);
@@ -282,7 +303,7 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
         @Override
         public LLVMAddress execute(LLVMAddress object, LLVMAddress type1, LLVMAddress type2, long value) {
             try {
-                return LLVMAddress.fromLong(ForeignAccess.sendAsPointer(asPointer, (TruffleObject) execute(object.getVal(), type1.getVal(), type2.getVal(), value)));
+                return LLVMAddress.fromLong((long) ForeignAccess.sendUnbox(unbox, (TruffleObject) execute(object.getVal(), type1.getVal(), type2.getVal(), value)));
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException(e);
@@ -387,11 +408,51 @@ final class LLVMNativeFunctionsImpl extends LLVMNativeFunctions {
         }
     }
 
+    private static class MemSetNodeImpl extends MemSetNode {
+
+        MemSetNodeImpl(TruffleObject function) {
+            super(function, 2);
+        }
+
+        @Override
+        public void execute(LLVMAddress target, int value, long length) {
+            UNSAFE.setMemory(target.getVal(), length, (byte) value);
+        }
+    }
+
+    private static class FreeNodeImpl extends FreeNode {
+
+        FreeNodeImpl(TruffleObject function) {
+            super(function, 1);
+        }
+
+        @Override
+        public void execute(LLVMAddress addr) {
+            UNSAFE.freeMemory(addr.getVal());
+        }
+    }
+
+    private static class MallocNodeImpl extends MallocNode {
+
+        MallocNodeImpl(TruffleObject function) {
+            super(function, 1);
+        }
+
+        @Child private Node unbox = Message.UNBOX.createNode();
+
+        @Override
+        public LLVMAddress execute(long size) {
+            return LLVMAddress.fromLong(UNSAFE.allocateMemory(size));
+        }
+    }
+
     private static class NullPointerImpl extends NullPointerNode {
 
         NullPointerImpl(TruffleObject function) {
             super(function, 0);
         }
+
+        @Child private Node unbox = Message.UNBOX.createNode();
 
         @Override
         public TruffleObject getNullPointer() {
