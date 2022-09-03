@@ -32,6 +32,7 @@ import com.oracle.truffle.api.object.Shape.Allocator;
 import com.oracle.truffle.object.LayoutImpl;
 import com.oracle.truffle.object.LayoutStrategy;
 import com.oracle.truffle.object.LocationImpl.InternalLongLocation;
+import com.oracle.truffle.object.Locations.DualLocation;
 import com.oracle.truffle.object.basic.BasicLocations.ObjectFieldLocation;
 import com.oracle.truffle.object.basic.BasicLocations.SimpleObjectFieldLocation;
 
@@ -112,7 +113,9 @@ public class BasicLayout extends LayoutImpl {
 
     @Override
     protected int objectFieldIndex(Location location) {
-        if (location instanceof ObjectFieldLocation) {
+        if (location instanceof DualLocation) {
+            return objectFieldIndex((Location) ((DualLocation) location).getObjectLocation());
+        } else if (location instanceof ObjectFieldLocation) {
             return ((ObjectFieldLocation) location).getIndex();
         } else if (location instanceof SimpleObjectFieldLocation) {
             return ((SimpleObjectFieldLocation) location).getIndex();
