@@ -94,18 +94,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
      * Used from testing using reflection. Its invalid to call it anywhere else than testing. Used
      * in ContextLookupCompilationTest and EngineAPITest.
      */
-    static Object resetSingleContextState() {
-        SingleContextState prev = singleContextState;
+    static void resetSingleContextState() {
         singleContextState = new SingleContextState();
-        return prev;
-    }
-
-    /*
-     * Used from testing using reflection. Its invalid to call it anywhere else than testing. Used
-     * in EngineAPITest.
-     */
-    static void restoreSingleContextState(Object state) {
-        singleContextState = (SingleContextState) state;
     }
 
     /*
