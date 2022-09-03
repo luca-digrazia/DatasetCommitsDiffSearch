@@ -29,12 +29,11 @@ import com.oracle.truffle.api.nodes.GraphPrintVisitor;
 import com.oracle.truffle.api.nodes.GraphPrintVisitor.GraphPrintAdapter;
 import com.oracle.truffle.api.nodes.GraphPrintVisitor.GraphPrintHandler;
 import com.oracle.truffle.api.object.Shape;
+import com.oracle.truffle.object.DebugShapeVisitor;
 import com.oracle.truffle.object.ShapeImpl;
 import com.oracle.truffle.object.Transition;
 
-@SuppressWarnings("deprecation")
-@Deprecated
-public class IGVShapeVisitor extends com.oracle.truffle.object.DebugShapeVisitor<IGVShapeVisitor> {
+public class IGVShapeVisitor extends DebugShapeVisitor<IGVShapeVisitor> {
     private final GraphPrintVisitor graphPrinter;
 
     public IGVShapeVisitor(GraphPrintVisitor printer) {
