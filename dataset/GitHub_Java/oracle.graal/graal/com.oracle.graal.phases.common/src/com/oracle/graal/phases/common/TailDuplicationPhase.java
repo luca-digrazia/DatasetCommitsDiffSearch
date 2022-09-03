@@ -36,6 +36,7 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.tiers.*;
@@ -172,6 +173,9 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
         int fixedCount = 0;
         while (fixed instanceof FixedWithNextNode) {
             fixed = ((FixedWithNextNode) fixed).next();
+            if (fixed instanceof CommitAllocationNode) {
+                return false;
+            }
             fixedCount++;
         }
         if (fixedCount > 1) {
@@ -260,11 +264,11 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
             for (final AbstractEndNode forwardEnd : merge.forwardEnds()) {
                 Map<Node, Node> duplicates;
                 if (replacements == null || replacements.get(endIndex) == null) {
-                    duplicates = graph.addDuplicates(duplicatedNodes, (DuplicationReplacement) null);
+                    duplicates = graph.addDuplicates(duplicatedNodes, graph, duplicatedNodes.size(), (DuplicationReplacement) null);
                 } else {
                     HashMap<Node, Node> replace = new HashMap<>();
                     replace.put(replacements.get(endIndex).object(), replacements.get(endIndex));
-                    duplicates = graph.addDuplicates(duplicatedNodes, replace);
+                    duplicates = graph.addDuplicates(duplicatedNodes, graph, duplicatedNodes.size(), replace);
                 }
                 for (Map.Entry<ValueNode, PhiNode> phi : bottomPhis.entrySet()) {
                     phi.getValue().initializeValueAt(merge.forwardEndIndex(forwardEnd), (ValueNode) duplicates.get(phi.getKey()));
@@ -309,7 +313,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
          * @return The new {@link ValueAnchorNode} that was created.
          */
         private ValueAnchorNode addValueAnchor() {
-            ValueAnchorNode anchor = graph.add(new ValueAnchorNode());
+            ValueAnchorNode anchor = graph.add(new ValueAnchorNode(null));
             graph.addAfterFixed(merge, anchor);
             for (Node usage : merge.usages().snapshot()) {
                 if (usage instanceof PhiNode && ((PhiNode) usage).merge() == merge) {
