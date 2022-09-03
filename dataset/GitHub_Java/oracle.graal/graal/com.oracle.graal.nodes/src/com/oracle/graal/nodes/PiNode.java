@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,12 +29,8 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * A node that changes the type of its input, usually narrowing it. For example, a PiNode refines
+ * A node that changes the type of its input, usually narrowing it. For example, a PI node refines
  * the type of a receiver during type-guarded inlining to be the type tested by the guard.
- * 
- * In contrast to a {@link GuardedValueNode}, a PiNode is useless as soon as the type of its input
- * is as narrow or narrower than the PiNode's type. The PiNode, and therefore also the scheduling
- * restriction enforced by the anchor, will go away.
  */
 public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, Node.IterableNodeType, GuardingNode, Canonicalizable {
 
@@ -76,9 +72,11 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        inferStamp();
-        if (stamp().equals(object().stamp())) {
-            return object();
+        if (getGuard() == graph().start()) {
+            inferStamp();
+            if (stamp().equals(object().stamp())) {
+                return object();
+            }
         }
         return this;
     }
