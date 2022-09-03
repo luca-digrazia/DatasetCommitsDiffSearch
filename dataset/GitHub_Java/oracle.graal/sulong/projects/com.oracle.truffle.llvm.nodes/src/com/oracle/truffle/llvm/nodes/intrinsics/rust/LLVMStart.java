@@ -34,6 +34,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.nodes.func.LLVMDispatchNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMDispatchNodeGen;
@@ -60,10 +61,7 @@ public abstract class LLVMStart extends LLVMIntrinsic {
         return LLVMClosureDispatchNodeGen.create();
     }
 
-    @NodeChild(type = LLVMExpressionNode.class)
-    @NodeChild(type = LLVMExpressionNode.class)
-    @NodeChild(type = LLVMExpressionNode.class)
-    @NodeChild(type = LLVMExpressionNode.class)
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
     public abstract static class LLVMLangStart extends LLVMStart {
 
         @Specialization
@@ -75,11 +73,8 @@ public abstract class LLVMStart extends LLVMIntrinsic {
         }
     }
 
-    @NodeChild(type = LLVMExpressionNode.class)
-    @NodeChild(type = LLVMExpressionNode.class)
-    @NodeChild(type = LLVMExpressionNode.class)
-    @NodeChild(type = LLVMExpressionNode.class)
-    @NodeChild(type = LLVMExpressionNode.class)
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class),
+                    @NodeChild(type = LLVMExpressionNode.class)})
     public abstract static class LLVMLangStartInternal extends LLVMStart {
 
         @TruffleBoundary
