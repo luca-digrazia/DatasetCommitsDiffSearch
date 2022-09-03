@@ -57,7 +57,7 @@ public class WriteBarrierSnippets implements Snippets {
             if (doLoad) {
                 previousOop = field.readWord(0);
             }
-            if (previousOop.notEqual(Word.zero())) {
+            if (((Word) previousOop).notEqual(Word.zero())) {
                 if (indexValue.notEqual(Word.zero())) {
                     Word nextIndex = indexValue.subtract(HotSpotSnippetUtils.wordSize());
                     Word logAddress = bufferAddress.add(nextIndex);
@@ -87,10 +87,10 @@ public class WriteBarrierSnippets implements Snippets {
         Word bufferAddress = thread.readWord(HotSpotSnippetUtils.g1CardQueueBufferOffset());
         Word indexAddress = thread.add(HotSpotSnippetUtils.g1CardQueueIndexOffset());
         Word indexValue = thread.readWord(HotSpotSnippetUtils.g1CardQueueIndexOffset());
-        Word xorResult = (field.xor(writtenValue)).unsignedShiftRight(HotSpotSnippetUtils.logOfHRGrainBytes());
+        Word xorResult = (((Word) field).xor((Word) writtenValue)).unsignedShiftRight(HotSpotSnippetUtils.logOfHRGrainBytes());
 
         // Card Table
-        Word cardBase = field.unsignedShiftRight(cardTableShift());
+        Word cardBase = ((Word) field).unsignedShiftRight(cardTableShift());
         long startAddress = cardTableStart();
         int displacement = 0;
         if (((int) startAddress) == startAddress) {
@@ -119,10 +119,9 @@ public class WriteBarrierSnippets implements Snippets {
     }
 
     @Snippet
-    public static void serialFieldWriteBarrier(@Parameter("object") Object obj) {
-        Object object = FixedValueAnchorNode.getObject(obj);
+    public static void serialFieldWriteBarrier(@Parameter("object") Object object) {
         Pointer oop = Word.fromObject(object);
-        Word base = (Word) oop.unsignedShiftRight(cardTableShift());
+        Word base = ((Word) oop).unsignedShiftRight(cardTableShift());
         long startAddress = cardTableStart();
         int displacement = 0;
         if (((int) startAddress) == startAddress) {
@@ -134,10 +133,9 @@ public class WriteBarrierSnippets implements Snippets {
     }
 
     @Snippet
-    public static void serialArrayWriteBarrier(@Parameter("object") Object obj, @Parameter("location") Object location) {
-        Object object = FixedValueAnchorNode.getObject(obj);
+    public static void serialArrayWriteBarrier(@Parameter("object") Object object, @Parameter("location") Object location) {
         Pointer oop = Word.fromArray(object, location);
-        Word base = (Word) oop.unsignedShiftRight(cardTableShift());
+        Word base = ((Word) oop).unsignedShiftRight(cardTableShift());
         long startAddress = cardTableStart();
         int displacement = 0;
         if (((int) startAddress) == startAddress) {
