@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
 import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
 
 import java.lang.reflect.Method;
@@ -105,10 +104,11 @@ public abstract class SnippetStub extends Stub implements Snippets {
         Plugins plugins = new Plugins(defaultPlugins);
         plugins.prependParameterPlugin(new ConstantBindingParameterPlugin(makeConstArgs(), metaAccess, providers.getSnippetReflection()));
         GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
+        config.setUseProfiling(false);
 
         // Stubs cannot have optimistic assumptions since they have
         // to be valid for the entire run of the VM.
-        final StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO, NO_PROFILING_INFO);
+        final StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO);
         graph.disableUnsafeAccessTracking();
 
         if (SnippetGraphUnderConstruction != null) {
