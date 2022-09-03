@@ -35,8 +35,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -48,7 +46,6 @@ import com.oracle.truffle.api.profiles.ConditionProfile;
 
 abstract class ExecuteMethodNode extends Node {
     static final int LIMIT = 3;
-    private static final Class<?>[] EMPTY_CLASS_ARRAY = new Class<?>[0];
 
     ExecuteMethodNode() {
     }
@@ -128,15 +125,14 @@ abstract class ExecuteMethodNode extends Node {
         return doInvoke(method, obj, convertedArguments, languageContext);
     }
 
-    // Note: checkArgTypes must be evaluated after selectOverload.
     @SuppressWarnings("unused")
     @ExplodeLoop
-    @Specialization(guards = {"method == cachedMethod", "checkArgTypes(args, cachedArgTypes, toJavaNode, asVarArgs)"}, limit = "LIMIT")
+    @Specialization(guards = {"method == cachedMethod", "checkArgTypes(args, cachedArgTypes)"}, limit = "LIMIT")
     Object doOverloadedCached(OverloadedMethodDesc method, Object obj, Object[] args, Object languageContext,
                     @Cached("method") OverloadedMethodDesc cachedMethod,
+                    @Cached(value = "getArgTypes(args)", dimensions = 1) Type[] cachedArgTypes,
                     @Cached("create()") ToJavaNode toJavaNode,
-                    @Cached(value = "createArgTypesArray(args)", dimensions = 1) Type[] cachedArgTypes,
-                    @Cached("selectOverload(method, args, languageContext, toJavaNode, cachedArgTypes)") SingleMethodDesc overload,
+                    @Cached("selectOverload(method, args, languageContext, toJavaNode)") SingleMethodDesc overload,
                     @Cached("asVarArgs(args, overload)") boolean asVarArgs) {
         assert overload == selectOverload(method, args, languageContext, toJavaNode);
         Class<?>[] types = overload.getParameterTypes();
@@ -188,80 +184,46 @@ abstract class ExecuteMethodNode extends Node {
         return convertedArguments;
     }
 
-    static Type[] createArgTypesArray(Object[] args) {
-        return new Type[args.length];
+    static Type[] getArgTypes(Object[] args) {
+        Type[] argTypes = new Type[args.length];
+        for (int i = 0; i < args.length; i++) {
+            argTypes[i] = getArgType(args[i]);
+        }
+        return argTypes;
     }
 
-    private static void fillArgTypesArray(Object[] args, Type[] cachedArgTypes, SingleMethodDesc selected, boolean varArgs, List<SingleMethodDesc> applicable) {
-        if (cachedArgTypes == null) {
-            return;
+    static Type getArgType(Object arg) {
+        if (arg == null) {
+            return null;
+        } else if (arg instanceof JavaObject) {
+            return new JavaObjectType(((JavaObject) arg).clazz);
+        } else {
+            return arg.getClass();
         }
-        boolean multiple = applicable.size() > 1;
-        for (int i = 0; i < args.length; i++) {
-            Object arg = args[i];
-            Class<?> targetType = getParameterType(selected.getParameterTypes(), i, varArgs);
-
-            Type argType;
-            if (arg == null) {
-                argType = null;
-            } else if (multiple && ToJavaNode.isAssignableFromTrufflePrimitiveType(targetType)) {
-                Class<?> currentTargetType = targetType;
-
-                ArrayList<Class<?>> otherPossibleTypes = new ArrayList<>();
-                for (SingleMethodDesc other : applicable) {
-                    if (other == selected) {
-                        continue;
-                    }
-                    Class<?> paramType = getParameterType(other.getParameterTypes(), i, varArgs);
-                    if (ToJavaNode.isAssignableFromTrufflePrimitiveType(paramType) && isAssignableFrom(targetType, paramType)) {
-                        otherPossibleTypes.add(paramType);
-                    }
-                }
-
-                argType = new PrimitiveCoercibleType(currentTargetType, otherPossibleTypes.toArray(EMPTY_CLASS_ARRAY));
-            } else if (arg instanceof JavaObject) {
-                argType = new JavaObjectType(((JavaObject) arg).clazz);
-            } else {
-                argType = arg.getClass();
-            }
-
-            cachedArgTypes[i] = argType;
-        }
-
-        assert checkArgTypes(args, cachedArgTypes, ToJavaNode.create(), false) : Arrays.toString(cachedArgTypes);
     }
 
     @ExplodeLoop
-    static boolean checkArgTypes(Object[] args, Type[] argTypes, ToJavaNode toJavaNode, @SuppressWarnings("unused") boolean dummy) {
+    static boolean checkArgTypes(Object[] args, Type[] argTypes) {
         if (args.length != argTypes.length) {
             return false;
         }
         for (int i = 0; i < argTypes.length; i++) {
             Type argType = argTypes[i];
             Object arg = args[i];
-            if (argType == null) {
-                if (arg != null) {
+            if (arg == null) {
+                if (argType != null) {
                     return false;
                 }
             } else {
-                if (arg == null) {
-                    return false;
-                }
-                if (argType instanceof Class<?>) {
-                    if (arg.getClass() != argType) {
-                        return false;
-                    }
-                } else if (argType instanceof JavaObjectType) {
+                if (argType instanceof JavaObjectType) {
                     if (!(arg instanceof JavaObject && ((JavaObject) arg).clazz == ((JavaObjectType) argType).clazz)) {
                         return false;
                     }
-                } else if (argType instanceof PrimitiveCoercibleType) {
-                    if (!((PrimitiveCoercibleType) argType).test(arg, toJavaNode)) {
+                } else {
+                    assert argType instanceof Class<?>;
+                    if (arg.getClass() != argType) {
                         return false;
                     }
-                } else {
-                    CompilerDirectives.transferToInterpreter();
-                    throw new IllegalArgumentException(String.valueOf(argType));
                 }
             }
         }
@@ -330,11 +292,6 @@ abstract class ExecuteMethodNode extends Node {
 
     @TruffleBoundary
     static SingleMethodDesc selectOverload(OverloadedMethodDesc method, Object[] args, Object languageContext, ToJavaNode toJavaNode) {
-        return selectOverload(method, args, languageContext, toJavaNode, null);
-    }
-
-    @TruffleBoundary
-    static SingleMethodDesc selectOverload(OverloadedMethodDesc method, Object[] args, Object languageContext, ToJavaNode toJavaNode, Type[] cachedArgTypes) {
         SingleMethodDesc[] overloads = method.getOverloads();
         List<SingleMethodDesc> applicableByArity = new ArrayList<>();
         int minOverallArity = Integer.MAX_VALUE;
@@ -364,20 +321,20 @@ abstract class ExecuteMethodNode extends Node {
         }
 
         SingleMethodDesc best;
-        best = findBestCandidate(applicableByArity, args, languageContext, toJavaNode, false, true, cachedArgTypes);
+        best = findBestCandidate(applicableByArity, args, languageContext, toJavaNode, false, true);
         if (best != null) {
             return best;
         }
-        best = findBestCandidate(applicableByArity, args, languageContext, toJavaNode, false, false, cachedArgTypes);
+        best = findBestCandidate(applicableByArity, args, languageContext, toJavaNode, false, false);
         if (best != null) {
             return best;
         }
         if (anyVarArgs) {
-            best = findBestCandidate(applicableByArity, args, languageContext, toJavaNode, true, true, cachedArgTypes);
+            best = findBestCandidate(applicableByArity, args, languageContext, toJavaNode, true, true);
             if (best != null) {
                 return best;
             }
-            best = findBestCandidate(applicableByArity, args, languageContext, toJavaNode, true, false, cachedArgTypes);
+            best = findBestCandidate(applicableByArity, args, languageContext, toJavaNode, true, false);
             if (best != null) {
                 return best;
             }
@@ -386,8 +343,7 @@ abstract class ExecuteMethodNode extends Node {
         throw noApplicableOverloadsException(overloads, args);
     }
 
-    private static SingleMethodDesc findBestCandidate(List<SingleMethodDesc> applicableByArity, Object[] args, Object languageContext, ToJavaNode toJavaNode, boolean varArgs, boolean strict,
-                    Type[] cachedArgTypes) {
+    private static SingleMethodDesc findBestCandidate(List<SingleMethodDesc> applicableByArity, Object[] args, Object languageContext, ToJavaNode toJavaNode, boolean varArgs, boolean strict) {
         List<SingleMethodDesc> candidates = new ArrayList<>();
 
         if (!varArgs) {
@@ -449,20 +405,10 @@ abstract class ExecuteMethodNode extends Node {
 
         if (!candidates.isEmpty()) {
             if (candidates.size() == 1) {
-                SingleMethodDesc best = candidates.get(0);
-
-                if (cachedArgTypes != null) {
-                    fillArgTypesArray(args, cachedArgTypes, best, varArgs, applicableByArity);
-                }
-
-                return best;
+                return candidates.get(0);
             } else {
                 SingleMethodDesc best = findMostSpecificOverload(candidates, args, varArgs);
                 if (best != null) {
-                    if (cachedArgTypes != null) {
-                        fillArgTypesArray(args, cachedArgTypes, best, varArgs, applicableByArity);
-                    }
-
                     return best;
                 }
                 throw ambiguousOverloadsException(candidates, args);
@@ -691,59 +637,7 @@ abstract class ExecuteMethodNode extends Node {
 
         @Override
         public String toString() {
-            return "JavaObject[" + clazz.getTypeName() + "]";
-        }
-    }
-
-    static class PrimitiveCoercibleType implements Type {
-        final Class<?> targetType;
-        @CompilationFinal(dimensions = 1) final Class<?>[] otherTypes;
-
-        PrimitiveCoercibleType(Class<?> targetType, Class<?>[] otherTypes) {
-            this.targetType = targetType;
-            this.otherTypes = otherTypes;
-        }
-
-        @Override
-        public int hashCode() {
-            return ((targetType == null) ? 0 : targetType.hashCode());
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (!(obj instanceof PrimitiveCoercibleType)) {
-                return false;
-            }
-            PrimitiveCoercibleType other = (PrimitiveCoercibleType) obj;
-            return Objects.equals(this.targetType, other.targetType) && Arrays.equals(this.otherTypes, other.otherTypes);
-        }
-
-        @Override
-        public String toString() {
-            StringBuilder sb = new StringBuilder();
-            sb.append("PrimitiveCoercible[");
-            sb.append(targetType.getTypeName());
-            if (otherTypes.length > 0) {
-                for (Class<?> otherType : otherTypes) {
-                    sb.append(", !");
-                    sb.append(otherType.getTypeName());
-                }
-            }
-            sb.append(']');
-            return sb.toString();
-        }
-
-        @ExplodeLoop
-        public boolean test(Object value, ToJavaNode toJavaNode) {
-            for (Class<?> otherType : otherTypes) {
-                if (toJavaNode.toPrimitive(value, otherType) != null) {
-                    return false;
-                }
-            }
-            return toJavaNode.toPrimitive(value, targetType) != null;
+            return "JavaObject[" + clazz.getCanonicalName() + "]";
         }
     }
 }
