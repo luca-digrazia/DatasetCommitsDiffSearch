@@ -370,7 +370,7 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
                     }
                     successorBlock = block;
                 }
-                resolveLoopBackEdge(trace);
+                resolveLocalDataFlow(trace);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
@@ -432,7 +432,7 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
          * Since forward edges are handled locally during bottom-up allocation we only need to check
          * for the second case.
          */
-        private void resolveLoopBackEdge(Trace trace) {
+        private void resolveLocalDataFlow(Trace trace) {
             AbstractBlockBase<?>[] blocks = trace.getBlocks();
             AbstractBlockBase<?> endBlock = blocks[blocks.length - 1];
             if (endBlock.isLoopEnd()) {
@@ -440,46 +440,16 @@ public final class BottomUpAllocator extends TraceAllocationPhase<TraceAllocatio
                 AbstractBlockBase<?> targetBlock = endBlock.getSuccessors()[0];
                 assert targetBlock.isLoopHeader() : String.format("Successor %s or loop end %s is not a loop header?", targetBlock, endBlock);
                 if (resultTraces.getTraceForBlock(targetBlock).equals(trace)) {
-                    resolveLoopBackEdge(endBlock, targetBlock);
+                    resolveIntraTraceEdge(endBlock, targetBlock);
                 }
             }
-        }
-
-        private void resolveLoopBackEdge(AbstractBlockBase<?> from, AbstractBlockBase<?> to) {
-            assert resultTraces.getTraceForBlock(from).equals(resultTraces.getTraceForBlock(to)) : "Not on the same trace? " + from + " -> " + to;
-            resolveFindInsertPos(from, to);
-            LIR lir = getLIR();
-
-            BlockEndOp blockEnd = SSIUtil.outgoing(lir, from);
-            LabelOp label = SSIUtil.incoming(lir, to);
-
-            for (int i = 0; i < label.getPhiSize(); i++) {
-                Value incomingValue = label.getIncomingValue(i);
-                Value outgoingValue = blockEnd.getOutgoingValue(i);
-                resolveLoopBackEdgeVisitor.visit(incomingValue, outgoingValue);
-            }
-            resolveTraceEdge(blockEnd, label);
-            moveResolver.resolveAndAppendMoves();
         }
 
         private void resolveIntraTraceEdge(AbstractBlockBase<?> from, AbstractBlockBase<?> to) {
             assert resultTraces.getTraceForBlock(from).equals(resultTraces.getTraceForBlock(to)) : "Not on the same trace? " + from + " -> " + to;
             resolveFindInsertPos(from, to);
-            LIR lir = getLIR();
-
-            BlockEndOp blockEnd = SSIUtil.outgoing(lir, from);
-            LabelOp label = SSIUtil.incoming(lir, to);
-
-            resolveTraceEdge(blockEnd, label);
+            SSIUtil.forEachValuePair(getLIR(), to, from, resolveLoopBackEdgeVisitor);
             moveResolver.resolveAndAppendMoves();
-        }
-
-        private void resolveTraceEdge(BlockEndOp blockEnd, LabelOp label) {
-            for (int i = label.getPhiSize(); i < label.getIncomingSize(); i++) {
-                Value incomingValue = label.getIncomingValue(i);
-                Value outgoingValue = blockEnd.getOutgoingValue(i);
-                resolveLoopBackEdgeVisitor.visit(incomingValue, outgoingValue);
-            }
         }
 
         /**
