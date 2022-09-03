@@ -108,8 +108,7 @@ class NativeImage {
     static String getResource(String resourceName) {
         try (InputStream input = NativeImage.class.getResourceAsStream(resourceName)) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
-            String resourceString = reader.lines().collect(Collectors.joining("\n"));
-            return resourceString.replace("%pathsep%", File.pathSeparator);
+            return reader.lines().collect(Collectors.joining("\n"));
         } catch (IOException e) {
             VMError.shouldNotReachHere(e);
         }
@@ -500,7 +499,7 @@ class NativeImage {
                         replaceArg(imageBuilderArgs, oHName, mainClass.toLowerCase());
                     } else if (imageBuilderArgs.stream().noneMatch(arg -> arg.startsWith(oHName))) {
                         /* Although very unlikely, report missing image-name if needed. */
-                        throw showError("Missing image-name. Use " + oHName + "<imagename> to provide one.");
+                        showError("Missing image-name. Use " + oHName + "<imagename> to provide one.");
                     }
                 }
             } else {
@@ -538,10 +537,10 @@ class NativeImage {
                 Process p = pb.inheritIO().start();
                 int exitStatus = p.waitFor();
                 if (exitStatus != 0) {
-                    throw showError("Image building with exit status " + exitStatus);
+                    showError("Image building with exit status " + exitStatus);
                 }
             } catch (IOException | InterruptedException e) {
-                throw showError(e.getMessage());
+                showError(e.getMessage());
             }
         }
     }
@@ -698,8 +697,9 @@ class NativeImage {
         try {
             return Files.list(dir).filter(f -> f.getFileName().toString().toLowerCase().endsWith(".jar")).collect(Collectors.toList());
         } catch (IOException e) {
-            throw showError("Unable to use jar-files from directory " + dir, e);
+            showError("Unable to use jar-files from directory " + dir, e);
         }
+        return Collections.emptyList();
     }
 
     private List<String> processNativeImageArgs(String[] args) {
