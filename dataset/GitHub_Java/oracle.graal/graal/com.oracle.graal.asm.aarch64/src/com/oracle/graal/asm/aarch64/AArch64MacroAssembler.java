@@ -40,11 +40,11 @@ import static jdk.vm.ci.aarch64.AArch64.zr;
 import com.oracle.graal.asm.AbstractAddress;
 import com.oracle.graal.asm.Label;
 import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.debug.GraalError;
 
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
 
 public class AArch64MacroAssembler extends AArch64Assembler {
 
@@ -68,7 +68,6 @@ public class AArch64MacroAssembler extends AArch64Assembler {
             return register;
         }
 
-        @Override
         public void close() {
             assert nextFreeScratchRegister > 0 : "Close called too often";
             nextFreeScratchRegister--;
@@ -215,7 +214,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
                 immediate = 0;
                 break;
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
         AArch64Address.AddressingMode addressingMode = plan.addressingMode;
         ExtendType extendType = null;
@@ -311,7 +310,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
                 movx(dst, address.getBase());
                 break;
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 
@@ -527,7 +526,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
         } else if (size == 32) {
             return ExtendType.UXTW;
         } else {
-            throw GraalError.shouldNotReachHere("No-op ");
+            throw JVMCIError.shouldNotReachHere("No-op ");
         }
     }
 
@@ -1301,7 +1300,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
     }
 
     public void pause() {
-        throw GraalError.unimplemented();
+        throw JVMCIError.unimplemented();
     }
 
     /**
@@ -1360,7 +1359,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
                 int information = instruction >>> PatchLabelKind.INFORMATION_OFFSET;
                 int sizeEncoding = information & 1;
                 int regEncoding = information >>> 1;
-                Register reg = AArch64.cpuRegisters.get(regEncoding);
+                Register reg = AArch64.cpuRegisters[regEncoding];
                 // 1 => 64; 0 => 32
                 int size = sizeEncoding * 32 + 32;
                 switch (type) {
@@ -1376,20 +1375,20 @@ public class AArch64MacroAssembler extends AArch64Assembler {
             case ADR: {
                 int information = instruction >>> PatchLabelKind.INFORMATION_OFFSET;
                 int regEncoding = information;
-                Register reg = AArch64.cpuRegisters.get(regEncoding);
+                Register reg = AArch64.cpuRegisters[regEncoding];
                 super.adr(reg, branchOffset, branch);
                 break;
             }
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 
     /**
      * Generates an address of the form {@code base + displacement}.
      *
-     * Does not change base register to fulfill this requirement. Will fail if displacement cannot
-     * be represented directly as address.
+     * Does not change base register to fulfil this requirement. Will fail if displacement cannot be
+     * represented directly as address.
      *
      * @param base general purpose register. May not be null or the zero register.
      * @param displacement arbitrary displacement added to base.
@@ -1401,7 +1400,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
     }
 
     @Override
-    public AbstractAddress getPlaceholder(int instructionStartPosition) {
+    public AbstractAddress getPlaceholder() {
         return AArch64Address.PLACEHOLDER;
     }
 }
