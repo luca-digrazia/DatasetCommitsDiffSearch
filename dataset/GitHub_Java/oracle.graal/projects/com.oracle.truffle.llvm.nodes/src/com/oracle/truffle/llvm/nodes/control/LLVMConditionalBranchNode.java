@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,41 +31,26 @@ package com.oracle.truffle.llvm.nodes.control;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.GenerateWrapper;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode;
-import com.oracle.truffle.api.instrumentation.ProbeNode;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.api.instrumentation.Instrumentable;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.nodes.wrappers.LLVMConditionalBranchNodeWrapper;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMTypesGen;
 
-@GenerateWrapper
-public abstract class LLVMConditionalBranchNode extends LLVMControlFlowNode implements InstrumentableNode {
+@Instrumentable(factory = LLVMConditionalBranchNodeWrapper.class)
+public abstract class LLVMConditionalBranchNode extends LLVMControlFlowNode {
 
     public static LLVMConditionalBranchNode create(int trueSuccessor, int falseSuccessor, LLVMExpressionNode truePhi, LLVMExpressionNode falsePhi, LLVMExpressionNode condition,
-                    LLVMSourceLocation sourceSection) {
+                    SourceSection sourceSection) {
         return new LLVMConditionalBranchNodeImpl(trueSuccessor, falseSuccessor, truePhi, falsePhi, condition, sourceSection);
     }
 
     public static final int TRUE_SUCCESSOR = 0;
     public static final int FALSE_SUCCESSOR = 1;
 
-    public LLVMConditionalBranchNode(LLVMSourceLocation sourceSection) {
+    public LLVMConditionalBranchNode(SourceSection sourceSection) {
         super(sourceSection);
-    }
-
-    protected LLVMConditionalBranchNode(LLVMConditionalBranchNode delegate) {
-        super(delegate.getSourceLocation());
-    }
-
-    @Override
-    public WrapperNode createWrapper(ProbeNode probe) {
-        return new LLVMConditionalBranchNodeWrapper(this, this, probe);
-    }
-
-    @Override
-    public boolean isInstrumentable() {
-        return getSourceLocation() != null;
     }
 
     public abstract boolean executeCondition(VirtualFrame frame);
@@ -83,7 +68,7 @@ public abstract class LLVMConditionalBranchNode extends LLVMControlFlowNode impl
         private final int falseSuccessor;
 
         private LLVMConditionalBranchNodeImpl(int trueSuccessor, int falseSuccessor, LLVMExpressionNode truePhi, LLVMExpressionNode falsePhi, LLVMExpressionNode condition,
-                        LLVMSourceLocation sourceSection) {
+                        SourceSection sourceSection) {
             super(sourceSection);
             this.trueSuccessor = trueSuccessor;
             this.falseSuccessor = falseSuccessor;
