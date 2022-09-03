@@ -137,8 +137,6 @@ public final class C1XOptions {
     public static boolean UseXmmLoadAndClearUpper       = ____;
     public static boolean UseXmmRegToRegMoveAll         = ____;
 
-    public static boolean StressImplicitExceptions       = ____;
-
     static {
         setOptimizationLevel(1);
     }
