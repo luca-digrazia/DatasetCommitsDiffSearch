@@ -111,7 +111,7 @@ public class MetadataArgumentParser implements Iterator<Type> {
             return 0;
         }
 
-        assert (args.length >= index * 2);
+        assert (args.length >= index * 2 + 1);
 
         return (args.length / 2) - index;
     }
