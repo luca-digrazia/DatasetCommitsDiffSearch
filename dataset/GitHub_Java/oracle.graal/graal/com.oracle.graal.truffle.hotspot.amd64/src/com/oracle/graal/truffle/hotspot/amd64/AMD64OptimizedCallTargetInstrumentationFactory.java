@@ -55,7 +55,7 @@ public class AMD64OptimizedCallTargetInstrumentationFactory implements Optimized
                 if (config.useCompressedOops) {
                     asm.movl(spillRegister, nMethodAddress);
                     asm.nop(AMD64HotSpotBackend.PATCHED_VERIFIED_ENTRY_POINT_INSTRUCTION_SIZE - (asm.codeBuffer.position() - verifiedEntryPoint));
-                    AMD64HotSpotMove.decodePointer(asm, spillRegister, registers.getHeapBaseRegister(), config.getOopEncoding());
+                    AMD64HotSpotMove.decodePointer(asm, spillRegister, registers.getHeapBaseRegister(), config.narrowOopBase, config.narrowOopShift, config.logMinObjAlignment());
                 } else {
                     asm.movq(spillRegister, nMethodAddress);
                     asm.nop(AMD64HotSpotBackend.PATCHED_VERIFIED_ENTRY_POINT_INSTRUCTION_SIZE - (asm.codeBuffer.position() - verifiedEntryPoint));
@@ -81,7 +81,7 @@ public class AMD64OptimizedCallTargetInstrumentationFactory implements Optimized
 
     public void setInstrumentedMethod(ResolvedJavaMethod method) {
         HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) method;
-        hsMethod.setNotInlineable();
+        hsMethod.setDontInline();
     }
 
     public String getArchitecture() {
