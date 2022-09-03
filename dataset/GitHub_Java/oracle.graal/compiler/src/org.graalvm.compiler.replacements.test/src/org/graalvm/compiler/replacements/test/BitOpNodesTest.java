@@ -71,9 +71,7 @@ public class BitOpNodesTest extends GraalCompilerTest {
             AMD64 amd64 = (AMD64) arch;
             return amd64.getFeatures().contains(AMD64.CPUFeature.POPCNT);
         } else {
-            // Even though there are AArch64 intrinsics for bitCount, they do
-            // not use BitCountNode.
-            return arch instanceof SPARC;
+            return arch instanceof SPARC || arch instanceof AArch64;
         }
     }
 

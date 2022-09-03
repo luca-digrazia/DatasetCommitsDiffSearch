@@ -884,16 +884,8 @@ public class InvocationPlugins {
     }
 
     public boolean isEmpty() {
-        if (parent != null && !parent.isEmpty()) {
-            return false;
-        }
-        UnmodifiableEconomicMap<ResolvedJavaMethod, InvocationPlugin> resolvedRegs = resolvedRegistrations;
-        if (resolvedRegs != null) {
+        if (resolvedRegistrations != null) {
             return resolvedRegistrations.isEmpty();
-        }
-        List<Runnable> deferred = deferredRegistrations;
-        if (deferred != null) {
-            return deferred.isEmpty();
         }
         return registrations.size() == 0 && lateRegistrations == null;
     }
