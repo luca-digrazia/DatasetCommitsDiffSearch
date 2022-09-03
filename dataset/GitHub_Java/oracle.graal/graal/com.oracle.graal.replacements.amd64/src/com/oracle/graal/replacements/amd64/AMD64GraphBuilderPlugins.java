@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,43 +22,72 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import static com.oracle.graal.compiler.target.Backend.*;
-import static com.oracle.graal.replacements.amd64.AMD64MathIntrinsicNode.Operation.*;
-import sun.misc.*;
+import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.COS;
+import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.EXP;
+import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.LOG;
+import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.LOG10;
+import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.SIN;
+import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.TAN;
+import static com.oracle.graal.compiler.common.util.Util.Java8OrEarlier;
+import static com.oracle.graal.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation.POW;
 
-import com.oracle.graal.amd64.*;
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.graphbuilderconf.InvocationPlugins.Registration;
-import com.oracle.graal.graphbuilderconf.MethodIdMap.Receiver;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.replacements.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.lir.amd64.AMD64ArithmeticLIRGeneratorTool.RoundingMode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin.Receiver;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
+import com.oracle.graal.nodes.java.AtomicReadAndAddNode;
+import com.oracle.graal.nodes.java.AtomicReadAndWriteNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
+import com.oracle.graal.replacements.IntegerSubstitutions;
+import com.oracle.graal.replacements.LongSubstitutions;
+import com.oracle.graal.replacements.StandardGraphBuilderPlugins.UnsafeGetPlugin;
+import com.oracle.graal.replacements.StandardGraphBuilderPlugins.UnsafePutPlugin;
+import com.oracle.graal.replacements.nodes.BinaryMathIntrinsicNode;
+import com.oracle.graal.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation;
+import com.oracle.graal.replacements.nodes.BitCountNode;
+import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode;
+import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation;
+
+import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.amd64.AMD64.CPUFeature;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import sun.misc.Unsafe;
 
 public class AMD64GraphBuilderPlugins {
 
-    public static void register(Plugins plugins, ForeignCallsProvider foreignCalls, AMD64 arch) {
+    public static void register(Plugins plugins, AMD64 arch, boolean arithmeticStubs) {
         InvocationPlugins invocationPlugins = plugins.getInvocationPlugins();
-        registerIntegerLongPlugins(invocationPlugins, IntegerSubstitutions.class, Kind.Int, arch);
-        registerIntegerLongPlugins(invocationPlugins, LongSubstitutions.class, Kind.Long, arch);
-        registerUnsafePlugins(invocationPlugins);
-        registerMathPlugins(invocationPlugins, foreignCalls);
+        invocationPlugins.defer(new Runnable() {
+            @Override
+            public void run() {
+                registerIntegerLongPlugins(invocationPlugins, IntegerSubstitutions.class, JavaKind.Int, arch);
+                registerIntegerLongPlugins(invocationPlugins, LongSubstitutions.class, JavaKind.Long, arch);
+                registerUnsafePlugins(invocationPlugins);
+                registerMathPlugins(invocationPlugins, arch, arithmeticStubs);
+            }
+        });
     }
 
-    private static void registerIntegerLongPlugins(InvocationPlugins plugins, Class<?> substituteDeclaringClass, Kind kind, AMD64 arch) {
+    private static void registerIntegerLongPlugins(InvocationPlugins plugins, Class<?> substituteDeclaringClass, JavaKind kind, AMD64 arch) {
         Class<?> declaringClass = kind.toBoxedJavaClass();
         Class<?> type = kind.toJavaClass();
         Registration r = new Registration(plugins, declaringClass);
-        if (arch.getFlags().contains(AMD64.Flag.UseCountLeadingZerosInstruction)) {
+        if (arch.getFeatures().contains(AMD64.CPUFeature.LZCNT) && arch.getFlags().contains(AMD64.Flag.UseCountLeadingZerosInstruction)) {
             r.register1("numberOfLeadingZeros", type, new InvocationPlugin() {
+                @Override
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
                     ValueNode folded = AMD64CountLeadingZerosNode.tryFold(value);
                     if (folded != null) {
-                        b.addPush(folded);
+                        b.addPush(JavaKind.Int, folded);
                     } else {
-                        b.addPush(new AMD64CountLeadingZerosNode(value));
+                        b.addPush(JavaKind.Int, new AMD64CountLeadingZerosNode(value));
                     }
                     return true;
                 }
@@ -66,14 +95,15 @@ public class AMD64GraphBuilderPlugins {
         } else {
             r.registerMethodSubstitution(substituteDeclaringClass, "numberOfLeadingZeros", type);
         }
-        if (arch.getFlags().contains(AMD64.Flag.UseCountTrailingZerosInstruction)) {
+        if (arch.getFeatures().contains(AMD64.CPUFeature.BMI1) && arch.getFlags().contains(AMD64.Flag.UseCountTrailingZerosInstruction)) {
             r.register1("numberOfTrailingZeros", type, new InvocationPlugin() {
+                @Override
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
                     ValueNode folded = AMD64CountTrailingZerosNode.tryFold(value);
                     if (folded != null) {
-                        b.addPush(folded);
+                        b.addPush(JavaKind.Int, folded);
                     } else {
-                        b.addPush(new AMD64CountTrailingZerosNode(value));
+                        b.addPush(JavaKind.Int, new AMD64CountTrailingZerosNode(value));
                     }
                     return true;
                 }
@@ -81,53 +111,110 @@ public class AMD64GraphBuilderPlugins {
         } else {
             r.registerMethodSubstitution(substituteDeclaringClass, "numberOfTrailingZeros", type);
         }
-    }
 
-    private static void registerMathPlugins(InvocationPlugins plugins, ForeignCallsProvider foreignCalls) {
-        Registration r = new Registration(plugins, Math.class);
-        r.register1("log", Double.TYPE, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
-                b.push(Kind.Double, b.recursiveAppend(AMD64MathIntrinsicNode.create(value, LOG)));
-                return true;
-            }
-        });
-        r.register1("log10", Double.TYPE, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
-                b.push(Kind.Double, b.recursiveAppend(AMD64MathIntrinsicNode.create(value, LOG10)));
-                return true;
-            }
-        });
-        r.registerMethodSubstitution(AMD64MathSubstitutions.class, "sin", double.class);
-        r.registerMethodSubstitution(AMD64MathSubstitutions.class, "cos", double.class);
-        r.registerMethodSubstitution(AMD64MathSubstitutions.class, "tan", double.class);
-        r.registerMethodSubstitution(AMD64MathSubstitutions.class, "pow", double.class, double.class);
-        r.register1("exp", Double.TYPE, new ForeignCallPlugin(foreignCalls, ARITHMETIC_EXP));
-    }
-
-    private static void registerUnsafePlugins(InvocationPlugins plugins) {
-        Registration r = new Registration(plugins, Unsafe.class);
-
-        for (Kind kind : new Kind[]{Kind.Int, Kind.Long, Kind.Object}) {
-            Class<?> javaClass = kind == Kind.Object ? Object.class : kind.toJavaClass();
-
-            r.register4("getAndSet" + kind.name(), Receiver.class, Object.class, long.class, javaClass, new InvocationPlugin() {
-                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unsafe, ValueNode object, ValueNode offset, ValueNode value) {
-                    // Emits a null-check for the otherwise unused receiver
-                    unsafe.get();
-                    b.addPush(kind.getStackKind(), new AtomicReadAndWriteNode(object, offset, value, kind, LocationIdentity.any()));
+        if (arch.getFeatures().contains(AMD64.CPUFeature.POPCNT)) {
+            r.register1("bitCount", type, new InvocationPlugin() {
+                @Override
+                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
+                    b.push(JavaKind.Int, b.recursiveAppend(new BitCountNode(value).canonical(null)));
                     return true;
                 }
             });
-            if (kind != Kind.Object) {
+        }
+    }
+
+    private static void registerMathPlugins(InvocationPlugins plugins, AMD64 arch, boolean arithmeticStubs) {
+        Registration r = new Registration(plugins, Math.class);
+        registerUnaryMath(r, "log", LOG);
+        registerUnaryMath(r, "log10", LOG10);
+        registerUnaryMath(r, "exp", EXP);
+        registerBinaryMath(r, "pow", POW);
+        if (arithmeticStubs) {
+            registerUnaryMath(r, "sin", SIN);
+            registerUnaryMath(r, "cos", COS);
+            registerUnaryMath(r, "tan", TAN);
+        } else {
+            r.registerMethodSubstitution(AMD64MathSubstitutions.class, "sin", double.class);
+            r.registerMethodSubstitution(AMD64MathSubstitutions.class, "cos", double.class);
+            r.registerMethodSubstitution(AMD64MathSubstitutions.class, "tan", double.class);
+        }
+
+        if (arch.getFeatures().contains(CPUFeature.SSE4_1)) {
+            registerRound(r, "rint", RoundingMode.NEAREST);
+            registerRound(r, "ceil", RoundingMode.UP);
+            registerRound(r, "floor", RoundingMode.DOWN);
+        }
+    }
+
+    private static void registerUnaryMath(Registration r, String name, UnaryOperation operation) {
+        r.register1(name, Double.TYPE, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
+                b.push(JavaKind.Double, b.recursiveAppend(UnaryMathIntrinsicNode.create(value, operation)));
+                return true;
+            }
+        });
+    }
+
+    private static void registerBinaryMath(Registration r, String name, BinaryOperation operation) {
+        r.register2(name, Double.TYPE, Double.TYPE, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode x, ValueNode y) {
+                b.push(JavaKind.Double, b.recursiveAppend(BinaryMathIntrinsicNode.create(x, y, operation)));
+                return true;
+            }
+        });
+    }
+
+    private static void registerRound(Registration r, String name, RoundingMode mode) {
+        r.register1(name, Double.TYPE, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg) {
+                b.push(JavaKind.Double, b.append(new AMD64RoundNode(arg, mode)));
+                return true;
+            }
+        });
+    }
+
+    private static void registerUnsafePlugins(InvocationPlugins plugins) {
+        Registration r;
+        if (Java8OrEarlier) {
+            r = new Registration(plugins, Unsafe.class);
+        } else {
+            r = new Registration(plugins, "jdk.internal.misc.Unsafe");
+        }
+        for (JavaKind kind : new JavaKind[]{JavaKind.Int, JavaKind.Long, JavaKind.Object}) {
+            Class<?> javaClass = kind == JavaKind.Object ? Object.class : kind.toJavaClass();
+
+            r.register4("getAndSet" + kind.name(), Receiver.class, Object.class, long.class, javaClass, new InvocationPlugin() {
+                @Override
+                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unsafe, ValueNode object, ValueNode offset, ValueNode value) {
+                    // Emits a null-check for the otherwise unused receiver
+                    unsafe.get();
+                    b.addPush(kind, new AtomicReadAndWriteNode(object, offset, value, kind, LocationIdentity.any()));
+                    b.getGraph().markUnsafeAccess();
+                    return true;
+                }
+            });
+            if (kind != JavaKind.Object) {
                 r.register4("getAndAdd" + kind.name(), Receiver.class, Object.class, long.class, javaClass, new InvocationPlugin() {
+                    @Override
                     public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unsafe, ValueNode object, ValueNode offset, ValueNode delta) {
                         // Emits a null-check for the otherwise unused receiver
                         unsafe.get();
-                        b.addPush(kind.getStackKind(), new AtomicReadAndAddNode(object, offset, delta, LocationIdentity.any()));
+                        AddressNode address = b.add(new OffsetAddressNode(object, offset));
+                        b.addPush(kind, new AtomicReadAndAddNode(address, delta, LocationIdentity.any()));
+                        b.getGraph().markUnsafeAccess();
                         return true;
                     }
                 });
             }
+        }
+
+        for (JavaKind kind : new JavaKind[]{JavaKind.Char, JavaKind.Short, JavaKind.Int, JavaKind.Long}) {
+            Class<?> javaClass = kind.toJavaClass();
+            r.registerOptional3("get" + kind.name() + "Unaligned", Receiver.class, Object.class, long.class, new UnsafeGetPlugin(kind, false));
+            r.registerOptional4("put" + kind.name() + "Unaligned", Receiver.class, Object.class, long.class, javaClass, new UnsafePutPlugin(kind, false));
         }
     }
 }
