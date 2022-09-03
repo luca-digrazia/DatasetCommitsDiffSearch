@@ -508,7 +508,8 @@ public class InliningPhase extends AbstractInliningPhase {
 
         public void pushGraph(StructuredGraph graph, double probability, double relevance) {
             assert !contains(graph);
-            LinkedList<Invoke> invokes = new InliningIterator(graph).apply();
+            NodeBitMap visitedFixedNodes = graph.createNodeBitMap();
+            LinkedList<Invoke> invokes = new InliningIterator(graph.start(), visitedFixedNodes).apply();
             assert invokes.size() == count(graph.getInvokes());
             graphQueue.push(new GraphInfo(graph, invokes, probability, relevance));
             assert graphQueue.size() <= maxGraphs;
