@@ -24,13 +24,11 @@ package com.oracle.graal.asm.amd64;
 
 import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.api.code.MemoryBarriers.*;
-import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.asm.NumUtil.*;
 import static com.oracle.graal.asm.amd64.AMD64AsmOptions.*;
 
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 
 /**
@@ -38,19 +36,13 @@ import com.oracle.graal.asm.*;
  */
 public class AMD64Assembler extends AbstractAssembler {
 
-    /**
-     * The kind for pointers and raw registers. Since we know we are 64 bit here, we can hardcode
-     * it.
-     */
-    private static final Kind Word = Kind.Long;
-
     private static final int MinEncodingNeedsRex = 8;
 
     /**
      * A sentinel value used as a place holder in an instruction stream for an address that will be
      * patched.
      */
-    private static final AMD64Address Placeholder = new AMD64Address(Kind.Illegal, rip.asValue());
+    private static final AMD64Address Placeholder = new AMD64Address(rip);
 
     /**
      * The x86 condition codes used for conditional jumps/moves.
@@ -232,8 +224,8 @@ public class AMD64Assembler extends AbstractAssembler {
         assert (reg & 0x07) == reg;
         int regenc = reg << 3;
 
-        Register base = isLegal(addr.getBase()) ? asRegister(addr.getBase()) : Register.None;
-        Register index = isLegal(addr.getIndex()) ? asRegister(addr.getIndex()) : Register.None;
+        Register base = addr.getBase();
+        Register index = addr.getIndex();
 
         AMD64Address.Scale scale = addr.getScale();
         int disp = addr.getDisplacement();
@@ -447,8 +439,7 @@ public class AMD64Assembler extends AbstractAssembler {
     }
 
     public final void bsfq(Register dst, AMD64Address src) {
-        emitByte(Prefix.REXW);
-        emitByte(0x0F);
+        prefixq(src, dst);
         emitByte(0xBC);
         emitOperandHelper(dst, src);
     }
@@ -461,8 +452,7 @@ public class AMD64Assembler extends AbstractAssembler {
     }
 
     public final void bsrq(Register dst, AMD64Address src) {
-        emitByte(Prefix.REXW);
-        emitByte(0x0F);
+        prefixq(src, dst);
         emitByte(0xBD);
         emitOperandHelper(dst, src);
     }
@@ -476,7 +466,6 @@ public class AMD64Assembler extends AbstractAssembler {
 
     public final void bsrl(Register dst, AMD64Address src) {
         prefix(src, dst);
-        emitByte(0x0F);
         emitByte(0xBD);
         emitOperandHelper(dst, src);
     }
@@ -1784,8 +1773,8 @@ public class AMD64Assembler extends AbstractAssembler {
         }
     }
 
-    private static boolean needsRex(Value value) {
-        return isRegister(value) && asRegister(value).encoding >= MinEncodingNeedsRex;
+    private static boolean needsRex(Register reg) {
+        return reg.encoding >= MinEncodingNeedsRex;
     }
 
     private void prefix(AMD64Address adr) {
@@ -2252,7 +2241,7 @@ public class AMD64Assembler extends AbstractAssembler {
                 // the code where this idiom is used, in particular the
                 // orderAccess code.
                 lock();
-                addl(new AMD64Address(Word, RSP, 0), 0); // Assert the lock# signal here
+                addl(new AMD64Address(rsp, 0), 0); // Assert the lock# signal here
             }
         }
     }
@@ -2293,7 +2282,7 @@ public class AMD64Assembler extends AbstractAssembler {
     }
 
     public void nullCheck(Register r) {
-        testl(AMD64.rax, new AMD64Address(Word, r.asValue(Word), 0));
+        testl(AMD64.rax, new AMD64Address(r, 0));
     }
 
     @Override
@@ -2374,8 +2363,8 @@ public class AMD64Assembler extends AbstractAssembler {
     }
 
     @Override
-    public AMD64Address makeAddress(Kind kind, Value base, int displacement) {
-        return new AMD64Address(kind, base, displacement);
+    public AMD64Address makeAddress(Register base, int displacement) {
+        return new AMD64Address(base, displacement);
     }
 
     @Override
