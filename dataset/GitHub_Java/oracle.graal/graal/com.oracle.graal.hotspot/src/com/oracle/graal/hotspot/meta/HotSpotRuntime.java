@@ -476,9 +476,9 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     }
 
     @Override
-    public int lookupArrayLength(Constant array) {
+    public Integer lookupArrayLength(Constant array) {
         if (array.getKind() != Kind.Object || array.isNull() || !array.asObject().getClass().isArray()) {
-            throw new IllegalArgumentException(array + " is not an array");
+            return null;
         }
         return Array.getLength(array.asObject());
     }
@@ -831,6 +831,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         } else if (n instanceof IntegerDivNode || n instanceof IntegerRemNode || n instanceof UnsignedDivNode || n instanceof UnsignedRemNode) {
             // Nothing to do for division nodes. The HotSpot signal handler catches divisions by
             // zero and the MIN_VALUE / -1 cases.
+        } else if (n instanceof UnwindNode || n instanceof DeoptimizeNode) {
+            // Nothing to do, using direct LIR lowering for these nodes.
         } else if (n instanceof BoxNode) {
             boxingSnippets.lower((BoxNode) n, tool);
         } else if (n instanceof UnboxNode) {
