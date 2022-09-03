@@ -40,7 +40,7 @@ public interface NativeFunctionPointer {
 
     /**
      * Returns the raw function pointer value.
-     * 
+     *
      * @return raw function pointer value
      */
     long getRawValue();

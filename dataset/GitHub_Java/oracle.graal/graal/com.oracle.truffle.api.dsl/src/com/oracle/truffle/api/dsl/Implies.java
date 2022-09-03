@@ -26,20 +26,16 @@ package com.oracle.truffle.api.dsl;
 
 import java.lang.annotation.*;
 
-import com.oracle.truffle.api.nodes.*;
-
 /**
- * References a {@link TypeSystem} on a node. Must be applied on a {@link Node} class. At least one
- * {@link TypeSystem} must be referenced in a {@link Node}'s type hierarchy.
+ * Experimental API.
  *
- * @see TypeSystem
- * @see Node
+ * @deprecated annotation has no effect anymore.
  */
 @Retention(RetentionPolicy.CLASS)
-@Target({ElementType.TYPE})
-public @interface TypeSystemReference {
+@Target({ElementType.METHOD})
+@Deprecated
+public @interface Implies {
 
-    /** The {@link TypeSystem} java type. */
-    Class<?> value();
+    String[] value();
 
 }

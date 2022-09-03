@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,116 +25,113 @@
 package com.oracle.truffle.api.frame;
 
 public final class FrameUtil {
-
     /**
-     * Write access to a local variable of type {@link Object}.
-     * 
-     * Sets the frame slot type to {@link Object} if it isn't already.
-     * 
-     * @param slot the slot of the local variable
-     * @param value the new value of the local variable
+     * Read a frame slot that is guaranteed to be of the desired kind (either previously checked by
+     * a guard or statically known).
+     *
+     * @param frameSlot the slot of the variable
+     * @throws IllegalStateException if the slot kind does not match
+     * @see Frame#getObject(FrameSlot)
      */
-    public static void setObjectSafe(Frame frame, FrameSlot slot, Object value) {
-        if (slot.getKind() != FrameSlotKind.Object) {
-            slot.setKind(FrameSlotKind.Object);
-        }
+    public static Object getObjectSafe(Frame frame, FrameSlot frameSlot) {
         try {
-            frame.setObject(slot, value);
+            return frame.getObject(frameSlot);
         } catch (FrameSlotTypeException e) {
             throw new IllegalStateException();
         }
     }
 
     /**
-     * Write access to a local variable of type {@code boolean}.
-     * 
-     * Sets the frame slot type to {@code boolean} if it isn't already.
-     * 
-     * @param slot the slot of the local variable
-     * @param value the new value of the local variable
+     * Read a frame slot that is guaranteed to be of the desired kind (either previously checked by
+     * a guard or statically known).
+     *
+     * @param frameSlot the slot of the variable
+     * @throws IllegalStateException if the slot kind does not match
+     * @see Frame#getByte(FrameSlot)
      */
-    public static void setBooleanSafe(Frame frame, FrameSlot slot, boolean value) {
-        if (slot.getKind() != FrameSlotKind.Boolean) {
-            slot.setKind(FrameSlotKind.Boolean);
-        }
+    public static byte getByteSafe(Frame frame, FrameSlot frameSlot) {
         try {
-            frame.setBoolean(slot, value);
+            return frame.getByte(frameSlot);
         } catch (FrameSlotTypeException e) {
             throw new IllegalStateException();
         }
     }
 
     /**
-     * Write access to a local variable of type {@code int}.
-     * 
-     * Sets the frame slot type to {@code int} if it isn't already.
-     * 
-     * @param slot the slot of the local variable
-     * @param value the new value of the local variable
+     * Read a frame slot that is guaranteed to be of the desired kind (either previously checked by
+     * a guard or statically known).
+     *
+     * @param frameSlot the slot of the variable
+     * @throws IllegalStateException if the slot kind does not match
+     * @see Frame#getBoolean(FrameSlot)
      */
-    public static void setIntSafe(Frame frame, FrameSlot slot, int value) {
-        if (slot.getKind() != FrameSlotKind.Int) {
-            slot.setKind(FrameSlotKind.Int);
-        }
+    public static boolean getBooleanSafe(Frame frame, FrameSlot frameSlot) {
         try {
-            frame.setInt(slot, value);
+            return frame.getBoolean(frameSlot);
         } catch (FrameSlotTypeException e) {
             throw new IllegalStateException();
         }
     }
 
     /**
-     * Write access to a local variable of type {@code long}.
-     * 
-     * Sets the frame slot type to {@code long} if it isn't already.
-     * 
-     * @param slot the slot of the local variable
-     * @param value the new value of the local variable
+     * Read a frame slot that is guaranteed to be of the desired kind (either previously checked by
+     * a guard or statically known).
+     *
+     * @param frameSlot the slot of the variable
+     * @throws IllegalStateException if the slot kind does not match
+     * @see Frame#getInt(FrameSlot)
      */
-    public static void setLongSafe(Frame frame, FrameSlot slot, long value) {
-        if (slot.getKind() != FrameSlotKind.Long) {
-            slot.setKind(FrameSlotKind.Long);
-        }
+    public static int getIntSafe(Frame frame, FrameSlot frameSlot) {
         try {
-            frame.setLong(slot, value);
+            return frame.getInt(frameSlot);
         } catch (FrameSlotTypeException e) {
             throw new IllegalStateException();
         }
     }
 
     /**
-     * Write access to a local variable of type {@code float}.
-     * 
-     * Sets the frame slot type to {@code float} if it isn't already.
-     * 
-     * @param slot the slot of the local variable
-     * @param value the new value of the local variable
+     * Read a frame slot that is guaranteed to be of the desired kind (either previously checked by
+     * a guard or statically known).
+     *
+     * @param frameSlot the slot of the variable
+     * @throws IllegalStateException if the slot kind does not match
+     * @see Frame#getLong(FrameSlot)
      */
-    public static void setFloatSafe(Frame frame, FrameSlot slot, float value) {
-        if (slot.getKind() != FrameSlotKind.Float) {
-            slot.setKind(FrameSlotKind.Float);
-        }
+    public static long getLongSafe(Frame frame, FrameSlot frameSlot) {
         try {
-            frame.setFloat(slot, value);
+            return frame.getLong(frameSlot);
         } catch (FrameSlotTypeException e) {
             throw new IllegalStateException();
         }
     }
 
     /**
-     * Write access to a local variable of type {@code double}.
-     * 
-     * Sets the frame slot type to {@code double} if it isn't already.
-     * 
-     * @param slot the slot of the local variable
-     * @param value the new value of the local variable
+     * Read a frame slot that is guaranteed to be of the desired kind (either previously checked by
+     * a guard or statically known).
+     *
+     * @param frameSlot the slot of the variable
+     * @throws IllegalStateException if the slot kind does not match
+     * @see Frame#getDouble(FrameSlot)
      */
-    public static void setDoubleSafe(Frame frame, FrameSlot slot, double value) {
-        if (slot.getKind() != FrameSlotKind.Double) {
-            slot.setKind(FrameSlotKind.Double);
-        }
+    public static double getDoubleSafe(Frame frame, FrameSlot frameSlot) {
         try {
-            frame.setDouble(slot, value);
+            return frame.getDouble(frameSlot);
+        } catch (FrameSlotTypeException e) {
+            throw new IllegalStateException();
+        }
+    }
+
+    /**
+     * Read a frame slot that is guaranteed to be of the desired kind (either previously checked by
+     * a guard or statically known).
+     *
+     * @param frameSlot the slot of the variable
+     * @throws IllegalStateException if the slot kind does not match
+     * @see Frame#getFloat(FrameSlot)
+     */
+    public static float getFloatSafe(Frame frame, FrameSlot frameSlot) {
+        try {
+            return frame.getFloat(frameSlot);
         } catch (FrameSlotTypeException e) {
             throw new IllegalStateException();
         }
