@@ -921,7 +921,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     public abstract int arrayLengthOffset();
 
-    @Override
+    public abstract int arrayBaseOffset(JavaKind elementKind);
+
     public int arrayScalingFactor(JavaKind elementKind) {
         return target.arch.getPlatformKind(elementKind).getSizeInBytes();
     }

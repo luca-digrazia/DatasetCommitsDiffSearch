@@ -111,10 +111,10 @@ public final class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow>
         }
         if (forValue instanceof NarrowNode) {
             NarrowNode narrow = (NarrowNode) forValue;
-            Stamp inputStamp = narrow.getValue().stamp(view);
+            Stamp inputStamp = narrow.getValue().stamp(NodeView.DEFAULT);
             if (inputStamp instanceof IntegerStamp) {
                 IntegerStamp istamp = (IntegerStamp) inputStamp;
-                long mask = CodeUtil.mask(PrimitiveStamp.getBits(narrow.stamp(view)));
+                long mask = CodeUtil.mask(PrimitiveStamp.getBits(narrow.stamp(NodeView.DEFAULT)));
 
                 if ((istamp.upMask() & ~mask) == 0) {
                     // The original value cannot change because of the narrow and zero extend.

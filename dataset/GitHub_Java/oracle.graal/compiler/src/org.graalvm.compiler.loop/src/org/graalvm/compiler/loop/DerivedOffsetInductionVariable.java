@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -99,8 +97,8 @@ public class DerivedOffsetInductionVariable extends DerivedInductionVariable {
     }
 
     @Override
-    public ValueNode extremumNode(boolean assumeLoopEntered, Stamp stamp) {
-        return op(base.extremumNode(assumeLoopEntered, stamp), IntegerConvertNode.convert(offset, stamp, graph(), NodeView.DEFAULT));
+    public ValueNode extremumNode(boolean assumePositiveTripCount, Stamp stamp) {
+        return op(base.extremumNode(assumePositiveTripCount, stamp), IntegerConvertNode.convert(offset, stamp, graph(), NodeView.DEFAULT));
     }
 
     @Override
@@ -150,37 +148,6 @@ public class DerivedOffsetInductionVariable extends DerivedInductionVariable {
 
     @Override
     public void deleteUnusedNodes() {
-    }
-
-    @Override
-    public boolean isConstantScale(InductionVariable ref) {
-        return super.isConstantScale(ref) || base.isConstantScale(ref);
-    }
-
-    @Override
-    public long constantScale(InductionVariable ref) {
-        assert isConstantScale(ref);
-        if (this == ref) {
-            return 1;
-        }
-        return base.constantScale(ref) * (value instanceof SubNode && base.valueNode() == value.getY() ? -1 : 1);
-    }
-
-    @Override
-    public boolean offsetIsZero(InductionVariable ref) {
-        if (this == ref) {
-            return true;
-        }
-        return false;
-    }
-
-    @Override
-    public ValueNode offsetNode(InductionVariable ref) {
-        assert !offsetIsZero(ref);
-        if (!base.offsetIsZero(ref)) {
-            return null;
-        }
-        return offset;
     }
 
     @Override

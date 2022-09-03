@@ -28,7 +28,6 @@ import static org.graalvm.compiler.loop.MathUtil.sub;
 
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
-import org.graalvm.compiler.core.common.util.UnsignedLong;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.NodeView;
@@ -160,7 +159,7 @@ public class BasicInductionVariable extends InductionVariable {
     @Override
     public ValueNode exitValueNode() {
         Stamp stamp = phi.stamp(NodeView.DEFAULT);
-        ValueNode maxTripCount = loop.counted().maxTripCountNode();
+        ValueNode maxTripCount = loop.counted().maxTripCountNode(false);
         if (!maxTripCount.stamp(NodeView.DEFAULT).isCompatible(stamp)) {
             maxTripCount = IntegerConvertNode.convert(maxTripCount, stamp, graph(), NodeView.DEFAULT);
         }
@@ -174,11 +173,7 @@ public class BasicInductionVariable extends InductionVariable {
 
     @Override
     public long constantExtremum() {
-        UnsignedLong tripCount = loop.counted().constantMaxTripCount();
-        if (tripCount.isLessThan(1)) {
-            return constantInit();
-        }
-        return tripCount.minus(1).wrappingTimes(constantStride()).wrappingPlus(constantInit()).asLong();
+        return constantStride() * (loop.counted().constantMaxTripCount() - 1) + constantInit();
     }
 
     @Override
