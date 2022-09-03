@@ -22,19 +22,18 @@
  */
 package com.oracle.max.graal.hotspot.nodes;
 
- import static com.sun.cri.ci.CiCallingConvention.Type.*;
-
 import java.lang.reflect.*;
 import java.util.*;
 
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.hotspot.*;
 import com.oracle.max.graal.hotspot.target.amd64.*;
+import com.oracle.max.graal.java.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
 
 /**
  * Performs a tail call to the specified target compiled method, with the parameter taken from the supplied FrameState.
@@ -62,18 +61,17 @@ public class TailcallNode extends FixedWithNextNode implements LIRLowerable {
         RiResolvedMethod method = frameState.method();
         boolean isStatic = Modifier.isStatic(method.accessFlags());
 
-
         CiKind[] signature = CiUtil.signatureToKinds(method.signature(), isStatic ? null : method.holder().kind(true));
-        CiCallingConvention cc = gen.compilation.registerConfig.getCallingConvention(JavaCall, signature, gen.compilation.compiler.target, false);
-        gen.compilation.frameMap().adjustOutgoingStackSize(cc, JavaCall);
-        List<ValueNode> parameters = new ArrayList<ValueNode>();
-        for (int i = 0; i < cc.locations.length; i++) {
-            parameters.add(frameState.localAt(i));
+        CiCallingConvention cc = gen.frameMap().registerConfig.getCallingConvention(CiCallingConvention.Type.JavaCall, signature, gen.target(), false);
+        gen.frameMap().callsMethod(cc, CiCallingConvention.Type.JavaCall); // TODO (aw): I think this is unnecessary for a tail call.
+        List<ValueNode> parameters = new ArrayList<>();
+        for (int i = 0, slot = 0; i < cc.locations.length; i++, slot += FrameStateBuilder.stackSlots(frameState.localAt(slot).kind())) {
+            parameters.add(frameState.localAt(slot));
         }
-        List<CiValue> argList = gen.visitInvokeArguments(cc, parameters, null);
+        List<CiValue> argList = gen.visitInvokeArguments(cc, parameters);
 
-        CiVariable entry = gen.emitLoad(new CiAddress(CiKind.Long, gen.operand(target), config.nmethodEntryOffset), CiKind.Long, false);
+        CiValue entry = gen.emitLoad(new CiAddress(CiKind.Long, gen.operand(target), config.nmethodEntryOffset), false);
 
-        gen.append(AMD64TailcallOpcode.TAILCALL.create(argList, entry, cc.locations));
+        gen.append(new AMD64TailcallOp(argList, entry, cc.locations));
     }
 }

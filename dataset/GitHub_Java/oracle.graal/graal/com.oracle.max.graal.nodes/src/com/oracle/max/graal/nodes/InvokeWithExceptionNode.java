@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.Node.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.java.*;
 import com.oracle.max.graal.nodes.spi.*;
@@ -38,7 +37,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
 
     @Input private final MethodCallTargetNode callTarget;
     @Input private FrameState stateAfter;
-    @Data private final int bci;
+    private final int bci;
     private boolean useForInlining;
 
     /**
