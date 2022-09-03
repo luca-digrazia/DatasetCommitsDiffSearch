@@ -76,8 +76,8 @@ public class EngineBenchmark extends TruffleBenchmark {
     }
 
     @Benchmark
-    public void executePolyglot1(ContextState state) {
-        state.value.execute();
+    public int executePolyglot1(ContextState state) {
+        return state.value.execute(state.intValue).asInt();
     }
 
     @Benchmark
@@ -100,19 +100,16 @@ public class EngineBenchmark extends TruffleBenchmark {
         final Node executeNode = Message.createExecute(0).createNode();
         final Integer intValue = 42;
         final CallTarget callTarget = Truffle.getRuntime().createCallTarget(new RootNode(null) {
-
-            private final Integer constant = 42;
-
             @Override
             public Object execute(VirtualFrame frame) {
-                return constant;
+                return frame.getArguments()[1];
             }
         });
     }
 
     @Benchmark
     public Object executeCallTarget1(CallTargetCallState state) {
-        return state.callTarget.call(state.internalContext.object);
+        return state.callTarget.call(state.internalContext.object, state.intValue);
     }
 
     @Benchmark
@@ -263,10 +260,9 @@ public class EngineBenchmark extends TruffleBenchmark {
         @Resolve(message = "EXECUTE")
         abstract static class ExecuteNode extends Node {
 
-            private final Integer constant = 42;
-
             public Object access(Object obj, Object[] args) {
-                return constant;
+                // identity function
+                return args[0];
             }
         }
 
