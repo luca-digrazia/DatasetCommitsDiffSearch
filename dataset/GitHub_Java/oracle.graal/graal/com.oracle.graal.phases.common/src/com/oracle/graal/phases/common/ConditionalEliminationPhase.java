@@ -28,12 +28,13 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.java.MethodCallTargetNode.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
@@ -113,7 +114,7 @@ public class ConditionalEliminationPhase extends Phase {
                         break;
                     }
                 }
-                if (type != null && type != ObjectStamp.typeOrNull(node)) {
+                if (type != null && type != node.objectStamp().type()) {
                     newKnownTypes.put(node, type);
                 }
             }
@@ -195,15 +196,15 @@ public class ConditionalEliminationPhase extends Phase {
 
         public ResolvedJavaType getNodeType(ValueNode node) {
             ResolvedJavaType result = knownTypes.get(GraphUtil.unproxify(node));
-            return result == null ? ObjectStamp.typeOrNull(node) : result;
+            return result == null ? node.objectStamp().type() : result;
         }
 
         public boolean isNull(ValueNode value) {
-            return ObjectStamp.isObjectAlwaysNull(value) || knownNull.contains(GraphUtil.unproxify(value));
+            return value.objectStamp().alwaysNull() || knownNull.contains(GraphUtil.unproxify(value));
         }
 
         public boolean isNonNull(ValueNode value) {
-            return ObjectStamp.isObjectNonNull(value) || knownNonNull.contains(GraphUtil.unproxify(value));
+            return value.objectStamp().nonNull() || knownNonNull.contains(GraphUtil.unproxify(value));
         }
 
         @Override
@@ -487,36 +488,16 @@ public class ConditionalEliminationPhase extends Phase {
                 ResolvedJavaType type = state.getNodeType(object);
                 if (isNull || (type != null && checkCast.type().isAssignableFrom(type))) {
                     boolean nonNull = state.isNonNull(object);
-                    GuardingNode replacementAnchor = null;
-                    if (nonNull) {
-                        // Search for valid instanceof anchor.
-                        for (InstanceOfNode instanceOfNode : object.usages().filter(InstanceOfNode.class)) {
-                            if (instanceOfNode.type() == checkCast.type() && state.trueConditions.containsKey(instanceOfNode)) {
-                                ValueNode v = state.trueConditions.get(instanceOfNode);
-                                if (v instanceof GuardingNode) {
-                                    replacementAnchor = (GuardingNode) v;
-                                }
-                            }
-                        }
-                    }
-                    ValueAnchorNode anchor = null;
-                    if (replacementAnchor == null) {
-                        anchor = graph.add(new ValueAnchorNode());
-                        replacementAnchor = anchor;
-                    }
+                    ValueAnchorNode anchor = graph.add(new ValueAnchorNode());
                     PiNode piNode;
                     if (isNull) {
                         ConstantNode nullObject = ConstantNode.forObject(null, metaAccessProvider, graph);
-                        piNode = graph.unique(new PiNode(nullObject, StampFactory.forConstant(nullObject.value, metaAccessProvider), replacementAnchor));
+                        piNode = graph.unique(new PiNode(nullObject, StampFactory.forConstant(nullObject.value, metaAccessProvider), anchor));
                     } else {
-                        piNode = graph.unique(new PiNode(object, StampFactory.declared(type, nonNull), replacementAnchor));
+                        piNode = graph.unique(new PiNode(object, StampFactory.declared(type, nonNull), anchor));
                     }
                     checkCast.replaceAtUsages(piNode);
-                    if (anchor != null) {
-                        graph.replaceFixedWithFixed(checkCast, anchor);
-                    } else {
-                        graph.removeFixed(checkCast);
-                    }
+                    graph.replaceFixedWithFixed(checkCast, anchor);
                     metricCheckCastRemoved.increment();
                 }
             } else if (node instanceof IfNode) {
@@ -547,26 +528,27 @@ public class ConditionalEliminationPhase extends Phase {
                 }
 
                 if (replacement != null) {
-                    if (replacementAnchor instanceof GuardNode) {
-                        ValueAnchorNode anchor = graph.add(new ValueAnchorNode(replacementAnchor));
-                        graph.addBeforeFixed(ifNode, anchor);
-                    }
-                    for (Node n : survivingSuccessor.usages().snapshot()) {
-                        if (n instanceof GuardNode || n instanceof ProxyNode) {
-                            // Keep wired to the begin node.
-                        } else {
-                            if (replacementAnchor == null) {
-                                // Cannot simplify this IfNode as there is no anchor.
-                                return;
+                    NodeIterable<Node> anchored = survivingSuccessor.anchored();
+                    if (!anchored.isEmpty() && replacementAnchor == null) {
+                        // Cannot simplify an IfNode unless we have a new anchor point
+                        // for any nodes currently anchored to the surviving branch
+                    } else {
+                        if (!anchored.isEmpty()) {
+                            // Ideally we'd simply want to re-anchor to replacementAnchor. However,
+                            // this can cause guards currently anchored to the surviving branch
+                            // to float too high in the graph. So, we insert a new anchor between
+                            // the guards and replacementAnchor.
+                            ValueAnchorNode valueAnchor = graph.add(new ValueAnchorNode());
+                            for (Node a : anchored.snapshot()) {
+                                a.replaceFirstInput(survivingSuccessor, valueAnchor);
                             }
-                            // Rewire to the replacement anchor.
-                            n.replaceFirstInput(survivingSuccessor, replacementAnchor);
+                            valueAnchor.addAnchoredNode(replacementAnchor);
+                            graph.addBeforeFixed(ifNode, valueAnchor);
                         }
-                    }
-
-                    ifNode.setCondition(replacement);
-                    if (compare.usages().isEmpty()) {
-                        GraphUtil.killWithUnusedFloatingInputs(compare);
+                        ifNode.setCondition(replacement);
+                        if (compare.usages().isEmpty()) {
+                            GraphUtil.killWithUnusedFloatingInputs(compare);
+                        }
                     }
                 }
             } else if (node instanceof AbstractEndNode) {
@@ -594,7 +576,7 @@ public class ConditionalEliminationPhase extends Phase {
                     ValueNode receiver = callTarget.receiver();
                     if (receiver != null && (callTarget.invokeKind() == InvokeKind.Interface || callTarget.invokeKind() == InvokeKind.Virtual)) {
                         ResolvedJavaType type = state.getNodeType(receiver);
-                        if (type != ObjectStamp.typeOrNull(receiver)) {
+                        if (type != receiver.objectStamp().type()) {
                             ResolvedJavaMethod method = type.resolveMethod(callTarget.targetMethod());
                             if (method != null) {
                                 if ((method.getModifiers() & Modifier.FINAL) != 0 || (type.getModifiers() & Modifier.FINAL) != 0) {
