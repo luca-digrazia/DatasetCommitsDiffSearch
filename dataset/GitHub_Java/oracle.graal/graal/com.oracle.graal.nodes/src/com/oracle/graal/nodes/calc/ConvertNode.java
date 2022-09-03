@@ -22,17 +22,16 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.graph.NodeInterface;
-import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * Represents a conversion between primitive types.
  */
-public interface ConvertNode extends NodeInterface {
+public interface ConvertNode extends ArithmeticOperation, NodeInterface {
 
     ValueNode getValue();
 

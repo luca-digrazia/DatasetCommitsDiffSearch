@@ -41,7 +41,11 @@ import com.oracle.graal.nodes.spi.*;
 public class HubGetClassNode extends FloatingGuardedNode implements Lowerable, Canonicalizable, ConvertNode {
     @Input protected ValueNode hub;
 
-    protected HubGetClassNode(@InjectedNodeParameter MetaAccessProvider metaAccess, ValueNode hub) {
+    public static HubGetClassNode create(@InjectedNodeParameter MetaAccessProvider metaAccess, ValueNode hub) {
+        return new HubGetClassNode(hub, metaAccess);
+    }
+
+    protected HubGetClassNode(ValueNode hub, MetaAccessProvider metaAccess) {
         super(StampFactory.declaredNonNull(metaAccess.lookupJavaType(Class.class)), null);
         this.hub = hub;
     }
