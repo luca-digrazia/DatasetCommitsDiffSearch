@@ -39,7 +39,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.test.TestHelper;
 
 public class SpecificationFileReader {
@@ -64,7 +64,9 @@ public class SpecificationFileReader {
     };
 
     public static TestSpecification readSpecificationFolder(File directory, File testRoot) throws IOException {
-        LLVMLogger.info("\tread specification files in " + directory);
+        if (LLVMOptions.debugEnabled()) {
+            System.out.println("\tread specification files in " + directory);
+        }
         List<File> includeFiles = getSpecificationFiles(directory, testRoot, FILE_NAME_INCLUDE_FILTER);
         List<File> excludeFiles = getSpecificationFiles(directory, testRoot, FILE_NAME_EXCLUDE_FILTER);
         return new TestSpecification(includeFiles, excludeFiles);
