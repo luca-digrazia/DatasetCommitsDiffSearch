@@ -35,17 +35,13 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.MessageResolution;
-import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
 public class JavaStringCoercionTest {
@@ -81,7 +77,7 @@ public class JavaStringCoercionTest {
 
     public static class StringConsumer2 {
         public Object call(List<?> arg) {
-            return arg.toString();
+            return arg;
         }
 
         public Object call(String arg) {
@@ -99,13 +95,6 @@ public class JavaStringCoercionTest {
     public void testStringCoercionOverloadedMethod() throws InteropException {
         TruffleObject api = (TruffleObject) env.asGuestValue(new StringConsumer2());
         testStringCoercion(api);
-    }
-
-    @Test
-    public void testPreferWrappingToStringCoercion() throws InteropException {
-        TruffleObject api = (TruffleObject) env.asGuestValue(new StringConsumer2());
-        Object list = call(api, new UnboxableArrayObject(4));
-        assertEquals("[0, 1, 2, 3]", list);
     }
 
     private static void testStringCoercion(TruffleObject api) throws InteropException {
@@ -148,57 +137,6 @@ public class JavaStringCoercionTest {
 
         static boolean isInstance(TruffleObject obj) {
             return obj instanceof NotCoercibleObject;
-        }
-    }
-
-    @MessageResolution(receiverType = UnboxableArrayObject.class)
-    static final class UnboxableArrayObject implements TruffleObject {
-        private int size;
-
-        UnboxableArrayObject(int size) {
-            this.size = size;
-        }
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return UnboxableArrayObjectForeign.ACCESS;
-        }
-
-        public static boolean isInstance(TruffleObject obj) {
-            return obj instanceof UnboxableArrayObject;
-        }
-
-        @Resolve(message = "GET_SIZE")
-        abstract static class ArrayGetSizeNode extends Node {
-            Object access(UnboxableArrayObject obj) {
-                return obj.size;
-            }
-        }
-
-        @Resolve(message = "READ")
-        abstract static class ArrayReadSizeNode extends Node {
-            Object access(UnboxableArrayObject obj, int index) {
-                if (index < 0 || index >= obj.size) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw UnknownIdentifierException.raise(String.valueOf(index));
-                }
-                return index;
-            }
-        }
-
-        @Resolve(message = "IS_BOXED")
-        abstract static class IsBoxedINode extends Node {
-            @SuppressWarnings("unused")
-            Object access(UnboxableArrayObject obj) {
-                return true;
-            }
-        }
-
-        @Resolve(message = "UNBOX")
-        abstract static class UnboxINode extends Node {
-            Object access(UnboxableArrayObject obj) {
-                return obj.size;
-            }
         }
     }
 }
