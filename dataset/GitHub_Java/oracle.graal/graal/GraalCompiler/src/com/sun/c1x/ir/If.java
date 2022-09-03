@@ -22,92 +22,61 @@
  */
 package com.sun.c1x.ir;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.util.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
 /**
  * The {@code If} instruction represents a branch that can go one of two directions
  * depending on the outcome of a comparison.
- *
- * @author Ben L. Titzer
  */
 public final class If extends BlockEnd {
 
-    Value x;
-    Value y;
-    Condition condition;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_COMPARE = 0;
 
-    /**
-     * Constructs a new If instruction.
-     * @param x the instruction producing the first input to the instruction
-     * @param cond the condition (comparison operation)
-     * @param unorderedIsTrue {@code true} if unordered is treated as true (floating point operations)
-     * @param y the instruction that produces the second input to this instruction
-     * @param trueSucc the block representing the true successor
-     * @param falseSucc the block representing the false successor
-     * @param stateAfter the state before the branch but after the input values have been popped
-     * @param isSafepoint {@code true} if this branch should be considered a safepoint
-     */
-    public If(Value x, Condition cond, boolean unorderedIsTrue, Value y,
-              BlockBegin trueSucc, BlockBegin falseSucc, FrameState stateAfter, boolean isSafepoint) {
-        super(CiKind.Illegal, stateAfter, isSafepoint);
-        this.x = x;
-        this.y = y;
-        condition = cond;
-        assert Util.archKindsEqual(x, y);
-        initFlag(Flag.UnorderedIsTrue, unorderedIsTrue);
-        successors.add(trueSucc);
-        successors.add(falseSucc);
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
     }
 
     /**
-     * Gets the instruction that produces the first input to this comparison.
-     * @return the instruction producing the first input
+     * The instruction that produces the first input to this comparison.
      */
-    public Value x() {
-        return x;
+     public Compare compare() {
+        return (Compare) inputs().get(super.inputCount() + INPUT_COMPARE);
     }
 
-    /**
-     * Gets the instruction that produces the second input to this comparison.
-     * @return the instruction producing the second input
-     */
-    public Value y() {
-        return y;
+    public Value setCompare(Compare n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_COMPARE, n);
     }
 
-    /**
-     * Gets the condition (comparison operation) for this instruction.
-     * @return the condition
-     */
-    public Condition condition() {
-        return condition;
-    }
-
-    /**
-     * Checks whether unordered inputs mean true or false.
-     * @return {@code true} if unordered inputs produce true
-     */
-    public boolean unorderedIsTrue() {
-        return checkFlag(Flag.UnorderedIsTrue);
+    public If(Compare compare, Graph graph) {
+        super(CiKind.Illegal, 2, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        setCompare(compare);
     }
 
     /**
      * Gets the block corresponding to the true successor.
      * @return the true successor
      */
-    public BlockBegin trueSuccessor() {
-        return successors.get(0);
+    public Instruction trueSuccessor() {
+        return blockSuccessor(0);
     }
 
     /**
      * Gets the block corresponding to the false successor.
      * @return the false successor
      */
-    public BlockBegin falseSuccessor() {
-        return successors.get(1);
+    public Instruction falseSuccessor() {
+        return blockSuccessor(1);
     }
 
     /**
@@ -115,46 +84,8 @@ public final class If extends BlockEnd {
      * @param istrue {@code true} if the true successor is requested, {@code false} otherwise
      * @return the corresponding successor
      */
-    public BlockBegin successor(boolean istrue) {
-        return successors.get(istrue ? 0 : 1);
-    }
-
-    /**
-     * Gets the successor of this instruction for the unordered case.
-     * @return the successor for unordered inputs
-     */
-    public BlockBegin unorderedSuccessor() {
-        return successor(unorderedIsTrue());
-    }
-
-    /**
-     * Swaps the operands to this if and reverses the condition (e.g. > goes to <=).
-     * @see Condition#mirror()
-     */
-    public void swapOperands() {
-        condition = condition.mirror();
-        Value t = x;
-        x = y;
-        y = t;
-    }
-
-    /**
-     * Swaps the successor blocks to this if and negates the condition (e.g. == goes to !=)
-     * @see Condition#negate()
-     */
-    public void swapSuccessors() {
-        setFlag(Flag.UnorderedIsTrue, !unorderedIsTrue());
-        condition = condition.negate();
-        BlockBegin t = successors.get(0);
-        BlockBegin f = successors.get(1);
-        successors.set(0, f);
-        successors.set(1, t);
-    }
-
-    @Override
-    public void inputValuesDo(ValueClosure closure) {
-        x = closure.apply(x);
-        y = closure.apply(y);
+    public Instruction successor(boolean istrue) {
+        return blockSuccessor(istrue ? 0 : 1);
     }
 
     @Override
@@ -165,17 +96,24 @@ public final class If extends BlockEnd {
     @Override
     public void print(LogStream out) {
         out.print("if ").
-        print(x()).
+        print(compare().x()).
         print(' ').
-        print(condition().operator).
+        print(compare().condition().operator).
         print(' ').
-        print(y()).
-        print(" then B").
-        print(successors().get(0).blockID).
-        print(" else B").
-        print(successors().get(1).blockID);
-        if (isSafepoint()) {
-            out.print(" (safepoint)");
-        }
+        print(compare().y()).
+        print(" then ").
+        print(blockSuccessors().get(0)).
+        print(" else ").
+        print(blockSuccessors().get(1));
+    }
+
+    @Override
+    public String shortName() {
+        return "If " + compare().condition.operator;
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        return new If(compare(), into);
     }
 }
