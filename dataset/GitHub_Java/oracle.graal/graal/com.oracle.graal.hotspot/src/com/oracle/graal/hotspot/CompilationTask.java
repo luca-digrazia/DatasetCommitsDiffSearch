@@ -32,6 +32,7 @@ import static com.oracle.graal.compiler.GraalCompilerOptions.PrintStackTraceOnEx
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.CompilationRequestResult;
+import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.hotspot.HotSpotCompilationRequest;
 import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 import jdk.vm.ci.hotspot.HotSpotInstalledCode;
@@ -78,8 +79,6 @@ public class CompilationTask {
     private final HotSpotGraalCompiler compiler;
     private final HotSpotCompilationRequest request;
 
-    private HotSpotInstalledCode installedCode;
-
     /**
      * Specifies whether the compilation result is installed as the
      * {@linkplain HotSpotNmethod#isDefault() default} nmethod for the compiled method.
@@ -121,10 +120,6 @@ public class CompilationTask {
         return request.getEntryBCI();
     }
 
-    public HotSpotInstalledCode getInstalledCode() {
-        return installedCode;
-    }
-
     /**
      * Time spent in compilation.
      */
@@ -141,6 +136,7 @@ public class CompilationTask {
     public CompilationRequestResult runCompilation() {
         HotSpotVMConfig config = jvmciRuntime.getConfig();
         final long threadId = Thread.currentThread().getId();
+        HotSpotInstalledCode installedCode = null;
         int entryBCI = getEntryBCI();
         final boolean isOSR = entryBCI != JVMCICompiler.INVOCATION_ENTRY_BCI;
         HotSpotResolvedJavaMethod method = getMethod();
@@ -203,7 +199,7 @@ public class CompilationTask {
 
             if (result != null) {
                 try (DebugCloseable b = CodeInstallationTime.start()) {
-                    installMethod(result);
+                    installedCode = (HotSpotInstalledCode) installMethod(result);
                 }
             }
             stats.finish(method, installedCode);
@@ -291,15 +287,16 @@ public class CompilationTask {
     }
 
     @SuppressWarnings("try")
-    private void installMethod(final CompilationResult compResult) {
+    private InstalledCode installMethod(final CompilationResult compResult) {
         final CodeCacheProvider codeCache = jvmciRuntime.getHostJVMCIBackend().getCodeCache();
-        installedCode = null;
+        InstalledCode installedCode = null;
         try (Scope s = Debug.scope("CodeInstall", new DebugDumpScope(String.valueOf(getId()), true), codeCache, getMethod())) {
             HotSpotCompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(request.getMethod(), request, compResult);
-            installedCode = (HotSpotInstalledCode) codeCache.installCode(request.getMethod(), compiledCode, null, request.getMethod().getSpeculationLog(), installAsDefault);
+            installedCode = codeCache.installCode(request.getMethod(), compiledCode, null, request.getMethod().getSpeculationLog(), installAsDefault);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
+        return installedCode;
     }
 
     @Override
