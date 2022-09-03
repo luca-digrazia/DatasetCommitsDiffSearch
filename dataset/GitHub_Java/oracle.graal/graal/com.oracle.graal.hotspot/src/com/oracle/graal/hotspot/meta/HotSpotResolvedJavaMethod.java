@@ -157,18 +157,14 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         return getMetaspaceMethodConstant();
     }
 
-    /**
-     * Gets the complete set of modifiers for this method which includes the JVM specification
-     * modifiers as well as the HotSpot internal modifiers.
-     */
-    public int getAllModifiers() {
+    public int getRawModifiers() {
         HotSpotVMConfig config = runtime().getConfig();
         return unsafe.getInt(metaspaceMethod + config.methodAccessFlagsOffset);
     }
 
     @Override
     public int getModifiers() {
-        return getAllModifiers() & Modifier.methodModifiers();
+        return getRawModifiers() & Modifier.methodModifiers();
     }
 
     @Override
@@ -245,9 +241,27 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     }
 
     /**
+     * Returns true if this method has a ForceInline annotation.
+     * 
+     * @return true if ForceInline annotation present, false otherwise
+     */
+    public boolean isForceInline() {
+        return forceInline;
+    }
+
+    /**
+     * Returns true if this method has a DontInline annotation.
+     * 
+     * @return true if DontInline annotation present, false otherwise
+     */
+    public boolean isDontInline() {
+        return dontInline;
+    }
+
+    /**
      * Manually adds a DontInline annotation to this method.
      */
-    public void setNotInlineable() {
+    public void setDontInline() {
         dontInline = true;
         runtime().getCompilerToVM().doNotInlineOrCompile(metaspaceMethod);
     }
@@ -414,10 +428,21 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         return javaMethod == null ? null : javaMethod.getAnnotation(annotationClass);
     }
 
+    private static final int SYNTHETIC;
+    static {
+        try {
+            Field field = Modifier.class.getDeclaredField("SYNTHETIC");
+            field.setAccessible(true);
+            SYNTHETIC = field.getInt(null);
+        } catch (IllegalArgumentException | IllegalAccessException | NoSuchFieldException | SecurityException e) {
+            throw GraalInternalError.shouldNotReachHere(e.toString());
+        }
+    }
+
     @Override
     public boolean isSynthetic() {
-        int modifiers = getAllModifiers();
-        return (runtime().getConfig().syntheticFlag & modifiers) != 0;
+        int modifiers = getRawModifiers();
+        return (SYNTHETIC & modifiers) != 0;
     }
 
     public boolean isDefault() {
@@ -470,15 +495,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         if (dontInline) {
             return false;
         }
-        return runtime().getCompilerToVM().canInlineMethod(metaspaceMethod);
-    }
-
-    @Override
-    public boolean shouldBeInlined() {
-        if (forceInline) {
-            return true;
-        }
-        return runtime().getCompilerToVM().shouldInlineMethod(metaspaceMethod);
+        return runtime().getCompilerToVM().isMethodCompilable(metaspaceMethod);
     }
 
     @Override
