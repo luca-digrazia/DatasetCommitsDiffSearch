@@ -32,9 +32,9 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.java.*;
-import com.oracle.graal.java.GraphBuilderPlugin.InvocationPlugin;
-import com.oracle.graal.java.InvocationPlugins.Registration;
-import com.oracle.graal.java.InvocationPlugins.Registration.Receiver;
+import com.oracle.graal.java.GraphBuilderPlugins.InvocationPlugin;
+import com.oracle.graal.java.GraphBuilderPlugins.Registration;
+import com.oracle.graal.java.GraphBuilderPlugins.Registration.Receiver;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -50,7 +50,7 @@ import com.oracle.truffle.api.frame.*;
  * Provider of {@link GraphBuilderPlugin}s for Truffle classes.
  */
 public class TruffleGraphBuilderPlugins {
-    public static void registerPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
+    public static void registerPlugins(MetaAccessProvider metaAccess, GraphBuilderPlugins plugins) {
 
         // OptimizedAssumption.class
         Registration r = new Registration(plugins, metaAccess, OptimizedAssumption.class);
@@ -60,9 +60,7 @@ public class TruffleGraphBuilderPlugins {
                     Constant constant = arg.asConstant();
                     OptimizedAssumption assumption = builder.getSnippetReflection().asObject(OptimizedAssumption.class, (JavaConstant) constant);
                     builder.push(Kind.Boolean.getStackKind(), builder.append(ConstantNode.forBoolean(assumption.isValid())));
-                    if (assumption.isValid()) {
-                        builder.getAssumptions().record(new AssumptionValidAssumption(assumption));
-                    }
+                    builder.getAssumptions().record(new AssumptionValidAssumption(assumption));
                 } else {
                     throw new BailoutException("assumption could not be reduced to a constant");
                 }
@@ -75,36 +73,6 @@ public class TruffleGraphBuilderPlugins {
         r.register2("addExact", Integer.TYPE, Integer.TYPE, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext builder, ValueNode x, ValueNode y) {
                 builder.push(Kind.Int.getStackKind(), builder.append(new IntegerAddExactNode(x, y)));
-                return true;
-            }
-        });
-        r.register2("addExact", Long.TYPE, Long.TYPE, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext builder, ValueNode x, ValueNode y) {
-                builder.push(Kind.Long, builder.append(new IntegerAddExactNode(x, y)));
-                return true;
-            }
-        });
-        r.register2("subtractExact", Integer.TYPE, Integer.TYPE, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext builder, ValueNode x, ValueNode y) {
-                builder.push(Kind.Int.getStackKind(), builder.append(new IntegerSubExactNode(x, y)));
-                return true;
-            }
-        });
-        r.register2("subtractExact", Long.TYPE, Long.TYPE, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext builder, ValueNode x, ValueNode y) {
-                builder.push(Kind.Long, builder.append(new IntegerSubExactNode(x, y)));
-                return true;
-            }
-        });
-        r.register2("multiplyExact", Integer.TYPE, Integer.TYPE, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext builder, ValueNode x, ValueNode y) {
-                builder.push(Kind.Int.getStackKind(), builder.append(new IntegerMulExactNode(x, y)));
-                return true;
-            }
-        });
-        r.register2("multiplyExact", Long.TYPE, Long.TYPE, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext builder, ValueNode x, ValueNode y) {
-                builder.push(Kind.Long, builder.append(new IntegerMulExactNode(x, y)));
                 return true;
             }
         });
@@ -170,7 +138,7 @@ public class TruffleGraphBuilderPlugins {
         });
         r.register1("materialize", Object.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext builder, ValueNode value) {
-                builder.push(Kind.Object, builder.append(new ForceMaterializeNode(value)));
+                builder.append(new ForceMaterializeNode(value));
                 return true;
             }
         });
@@ -188,7 +156,7 @@ public class TruffleGraphBuilderPlugins {
         r = new Registration(plugins, metaAccess, FrameWithoutBoxing.class);
         r.register1("materialize", Receiver.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext builder, ValueNode frame) {
-                builder.push(Kind.Object, builder.append(new MaterializeFrameNode(frame)));
+                builder.append(new MaterializeFrameNode(frame));
                 return true;
             }
         });
