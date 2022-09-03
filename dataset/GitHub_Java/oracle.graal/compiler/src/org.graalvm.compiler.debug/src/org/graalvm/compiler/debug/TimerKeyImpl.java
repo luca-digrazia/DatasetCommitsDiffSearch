@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,7 +26,7 @@ import static org.graalvm.compiler.debug.DebugCloseable.VOID_CLOSEABLE;
 
 import java.util.concurrent.TimeUnit;
 
-import org.graalvm.collections.Pair;
+import org.graalvm.util.Pair;
 
 final class TimerKeyImpl extends AccumulatedKey implements TimerKey {
     static class FlatTimer extends AbstractKey implements TimerKey {
@@ -109,7 +107,7 @@ final class TimerKeyImpl extends AccumulatedKey implements TimerKey {
         return TimeUnit.NANOSECONDS;
     }
 
-    static final class Timer extends CloseableCounter implements DebugCloseable {
+    final class Timer extends CloseableCounter implements DebugCloseable {
         final DebugContext debug;
 
         Timer(AccumulatedKey counter, DebugContext debug) {
