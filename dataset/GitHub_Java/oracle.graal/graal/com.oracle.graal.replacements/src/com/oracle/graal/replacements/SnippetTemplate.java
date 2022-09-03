@@ -34,7 +34,6 @@ import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
@@ -321,20 +320,13 @@ public class SnippetTemplate {
      */
     public abstract static class AbstractTemplates implements SnippetTemplateCache {
 
-        protected final MetaAccessProvider metaAccess;
-        protected final ConstantReflectionProvider constantReflection;
-        protected final CodeCacheProvider codeCache;
-        protected final LoweringProvider lowerer;
+        protected final MetaAccessProvider runtime;
         protected final Replacements replacements;
         protected final TargetDescription target;
         private final ConcurrentHashMap<CacheKey, SnippetTemplate> templates;
 
-        protected AbstractTemplates(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, CodeCacheProvider codeCache, LoweringProvider lowerer, Replacements replacements,
-                        TargetDescription target) {
-            this.metaAccess = metaAccess;
-            this.codeCache = codeCache;
-            this.constantReflection = constantReflection;
-            this.lowerer = lowerer;
+        protected AbstractTemplates(MetaAccessProvider runtime, Replacements replacements, TargetDescription target) {
+            this.runtime = runtime;
             this.replacements = replacements;
             this.target = target;
             this.templates = new ConcurrentHashMap<>();
@@ -354,7 +346,7 @@ public class SnippetTemplate {
                 }
             }
             assert found != null : "did not find @" + Snippet.class.getSimpleName() + " method in " + declaringClass + (methodName == null ? "" : " named " + methodName);
-            return new SnippetInfo(metaAccess.lookupJavaMethod(found));
+            return new SnippetInfo(runtime.lookupJavaMethod(found));
         }
 
         /**
@@ -368,7 +360,7 @@ public class SnippetTemplate {
 
                         @Override
                         public SnippetTemplate call() throws Exception {
-                            return new SnippetTemplate(metaAccess, constantReflection, codeCache, lowerer, replacements, args);
+                            return new SnippetTemplate(runtime, replacements, args);
                         }
                     });
                     templates.put(args.cacheKey, template);
@@ -399,21 +391,20 @@ public class SnippetTemplate {
     /**
      * Creates a snippet template.
      */
-    protected SnippetTemplate(final MetaAccessProvider metaAccess, final ConstantReflectionProvider constantReflection, final CodeCacheProvider codeCache, final LoweringProvider lowerer,
-                    final Replacements replacements, Arguments args) {
+    protected SnippetTemplate(final MetaAccessProvider runtime, final Replacements replacements, Arguments args) {
         StructuredGraph snippetGraph = replacements.getSnippet(args.info.method);
 
         ResolvedJavaMethod method = snippetGraph.method();
         Signature signature = method.getSignature();
 
-        PhaseContext context = new PhaseContext(metaAccess, codeCache, constantReflection, lowerer, replacements.getAssumptions(), replacements);
+        PhaseContext context = new PhaseContext(runtime, replacements.getAssumptions(), replacements);
 
         // Copy snippet graph, replacing constant parameters with given arguments
         final StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method());
         IdentityHashMap<Node, Node> nodeReplacements = new IdentityHashMap<>();
         nodeReplacements.put(snippetGraph.start(), snippetCopy.start());
 
-        assert checkTemplate(metaAccess, args, method, signature);
+        assert checkTemplate(runtime, args, method, signature);
 
         int parameterCount = args.info.getParameterCount();
         ConstantNode[] placeholders = new ConstantNode[parameterCount];
@@ -428,11 +419,11 @@ public class SnippetTemplate {
                 } else {
                     constantArg = Constant.forBoxed(kind, arg);
                 }
-                nodeReplacements.put(snippetGraph.getLocal(i), ConstantNode.forConstant(constantArg, metaAccess, snippetCopy));
+                nodeReplacements.put(snippetGraph.getLocal(i), ConstantNode.forConstant(constantArg, runtime, snippetCopy));
             } else if (args.info.isVarargsParameter(i)) {
                 Varargs varargs = (Varargs) args.values[i];
                 Object array = Array.newInstance(varargs.componentType, varargs.length);
-                ConstantNode placeholder = ConstantNode.forObject(array, metaAccess, snippetCopy);
+                ConstantNode placeholder = ConstantNode.forObject(array, runtime, snippetCopy);
                 nodeReplacements.put(snippetGraph.getLocal(i), placeholder);
                 placeholders[i] = placeholder;
             }
@@ -442,7 +433,7 @@ public class SnippetTemplate {
         Debug.dump(snippetCopy, "Before specialization");
         if (!nodeReplacements.isEmpty()) {
             // Do deferred intrinsification of node intrinsics
-            new NodeIntrinsificationPhase(metaAccess).apply(snippetCopy);
+            new NodeIntrinsificationPhase(runtime).apply(snippetCopy);
             new CanonicalizerPhase(true).apply(snippetCopy, context);
         }
         NodeIntrinsificationVerificationPhase.verify(snippetCopy);
@@ -516,7 +507,7 @@ public class SnippetTemplate {
         Debug.scope("LoweringSnippetTemplate", snippetCopy, new Runnable() {
 
             public void run() {
-                PhaseContext c = new PhaseContext(metaAccess, codeCache, constantReflection, lowerer, new Assumptions(false), replacements);
+                PhaseContext c = new PhaseContext(runtime, new Assumptions(false), replacements);
                 new LoweringPhase(new CanonicalizerPhase(true)).apply(snippetCopy, c);
             }
         });
@@ -549,6 +540,7 @@ public class SnippetTemplate {
         }
 
         new DeadCodeEliminationPhase().apply(snippetCopy);
+        new CanonicalizerPhase(true).apply(snippetCopy, context);
 
         assert checkAllVarargPlaceholdersAreDeleted(parameterCount, placeholders);
 
@@ -560,7 +552,7 @@ public class SnippetTemplate {
         StartNode entryPointNode = snippet.start();
         nodes = new ArrayList<>(snippet.getNodeCount());
         boolean seenReturn = false;
-        boolean containsMemoryMap = false;
+        boolean containsMemoryState = false;
         for (Node node : snippet.getNodes()) {
             if (node == entryPointNode || node == entryPointNode.stateAfter()) {
                 // Do nothing.
@@ -568,20 +560,18 @@ public class SnippetTemplate {
                 nodes.add(node);
                 if (node instanceof ReturnNode) {
                     retNode = (ReturnNode) node;
-                    NodeIterable<MemoryMapNode> memstates = retNode.inputs().filter(MemoryMapNode.class);
-                    assert memstates.count() == 1;
-                    memoryMap = memstates.first();
-                    retNode.replaceFirstInput(memoryMap, null);
-                    memoryMap.safeDelete();
-
+                    for (MemoryState memstate : retNode.usages().filter(MemoryState.class).snapshot()) {
+                        this.memoryMap = memstate.getMemoryMap();
+                        memstate.safeDelete();
+                    }
                     assert !seenReturn : "can handle only one ReturnNode";
                     seenReturn = true;
-                } else if (node instanceof MemoryMapNode) {
-                    containsMemoryMap = true;
+                } else if (node instanceof MemoryState) {
+                    containsMemoryState = true;
                 }
             }
         }
-        assert !containsMemoryMap;
+        assert !containsMemoryState;
 
         this.sideEffectNodes = curSideEffectNodes;
         this.deoptNodes = curDeoptNodes;
@@ -601,9 +591,9 @@ public class SnippetTemplate {
         return true;
     }
 
-    private static boolean checkConstantArgument(MetaAccessProvider metaAccess, final ResolvedJavaMethod method, Signature signature, int i, String name, Object arg, Kind kind) {
+    private static boolean checkConstantArgument(MetaAccessProvider runtime, final ResolvedJavaMethod method, Signature signature, int i, String name, Object arg, Kind kind) {
         ResolvedJavaType type = signature.getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass());
-        if (metaAccess.lookupJavaType(WordBase.class).isAssignableFrom(type)) {
+        if (runtime.lookupJavaType(WordBase.class).isAssignableFrom(type)) {
             assert arg instanceof Constant : method + ": word constant parameters must be passed boxed in a Constant value: " + arg;
             return true;
         }
@@ -616,10 +606,10 @@ public class SnippetTemplate {
         return true;
     }
 
-    private static boolean checkVarargs(MetaAccessProvider metaAccess, final ResolvedJavaMethod method, Signature signature, int i, String name, Varargs varargs) {
+    private static boolean checkVarargs(MetaAccessProvider runtime, final ResolvedJavaMethod method, Signature signature, int i, String name, Varargs varargs) {
         ResolvedJavaType type = (ResolvedJavaType) signature.getParameterType(i, method.getDeclaringClass());
         assert type.isArray() : "varargs parameter must be an array type";
-        assert type.getComponentType().isAssignableFrom(metaAccess.lookupJavaType(varargs.componentType)) : "componentType for " + name + " not matching " + MetaUtil.toJavaName(type) + " instance: " +
+        assert type.getComponentType().isAssignableFrom(runtime.lookupJavaType(varargs.componentType)) : "componentType for " + name + " not matching " + MetaUtil.toJavaName(type) + " instance: " +
                         varargs.componentType;
         return true;
     }
@@ -667,14 +657,14 @@ public class SnippetTemplate {
     /**
      * map of killing locations to memory checkpoints (nodes).
      */
-    private MemoryMapNode memoryMap;
+    private MemoryMap<Node> memoryMap;
 
     /**
      * Gets the instantiation-time bindings to this template's parameters.
      * 
      * @return the map that will be used to bind arguments to parameters when inlining this template
      */
-    private IdentityHashMap<Node, Node> bind(StructuredGraph replaceeGraph, MetaAccessProvider metaAccess, Arguments args) {
+    private IdentityHashMap<Node, Node> bind(StructuredGraph replaceeGraph, MetaAccessProvider runtime, Arguments args) {
         IdentityHashMap<Node, Node> replacements = new IdentityHashMap<>();
         assert args.info.getParameterCount() == parameters.length : "number of args (" + args.info.getParameterCount() + ") != number of parameters (" + parameters.length + ")";
         for (int i = 0; i < parameters.length; i++) {
@@ -688,7 +678,7 @@ public class SnippetTemplate {
                     Kind kind = ((LocalNode) parameter).kind();
                     assert argument != null || kind == Kind.Object : this + " cannot accept null for non-object parameter named " + args.info.names[i];
                     Constant constant = forBoxed(argument, kind);
-                    replacements.put((LocalNode) parameter, ConstantNode.forConstant(constant, metaAccess, replaceeGraph));
+                    replacements.put((LocalNode) parameter, ConstantNode.forConstant(constant, runtime, replaceeGraph));
                 }
             } else if (parameter instanceof LocalNode[]) {
                 LocalNode[] locals = (LocalNode[]) parameter;
@@ -713,7 +703,7 @@ public class SnippetTemplate {
                         replacements.put(local, (ValueNode) value);
                     } else {
                         Constant constant = forBoxed(value, local.kind());
-                        ConstantNode element = ConstantNode.forConstant(constant, metaAccess, replaceeGraph);
+                        ConstantNode element = ConstantNode.forConstant(constant, runtime, replaceeGraph);
                         replacements.put(local, element);
                     }
                 }
@@ -761,7 +751,7 @@ public class SnippetTemplate {
         /**
          * Replaces all usages of {@code oldNode} with direct or indirect usages of {@code newNode}.
          */
-        void replace(ValueNode oldNode, ValueNode newNode, MemoryMapNode mmap);
+        void replace(ValueNode oldNode, ValueNode newNode, MemoryMap<Node> mmap);
     }
 
     /**
@@ -771,7 +761,7 @@ public class SnippetTemplate {
     public static final UsageReplacer DEFAULT_REPLACER = new UsageReplacer() {
 
         @Override
-        public void replace(ValueNode oldNode, ValueNode newNode, MemoryMapNode mmap) {
+        public void replace(ValueNode oldNode, ValueNode newNode, MemoryMap<Node> mmap) {
             oldNode.replaceAtUsages(newNode);
             if (mmap == null || newNode == null) {
                 return;
@@ -802,7 +792,7 @@ public class SnippetTemplate {
             return true;
         }
 
-        Set<LocationIdentity> kills = new HashSet<>(((MemoryMapImpl) memoryMap).getLocations());
+        Set<LocationIdentity> kills = ((MemoryMapImpl) memoryMap).getLocations();
 
         if (replacee instanceof MemoryCheckpoint.Single) {
             // check if some node in snippet graph also kills the same location
@@ -838,7 +828,7 @@ public class SnippetTemplate {
         return true;
     }
 
-    private class DuplicateMapper extends MemoryMapNode {
+    private class DuplicateMapper implements MemoryMap<Node> {
 
         Map<Node, Node> duplicates;
         StartNode replaceeStart;
@@ -864,13 +854,13 @@ public class SnippetTemplate {
     /**
      * Replaces a given fixed node with this specialized snippet.
      * 
-     * @param metaAccess
+     * @param runtime
      * @param replacee the node that will be replaced
      * @param replacer object that replaces the usages of {@code replacee}
      * @param args the arguments to be bound to the flattened positional parameters of the snippet
      * @return the map of duplicated nodes (original -> duplicate)
      */
-    public Map<Node, Node> instantiate(MetaAccessProvider metaAccess, FixedNode replacee, UsageReplacer replacer, Arguments args) {
+    public Map<Node, Node> instantiate(MetaAccessProvider runtime, FixedNode replacee, UsageReplacer replacer, Arguments args) {
         assert checkSnippetKills(replacee);
         try (TimerCloseable a = instantiationTimer.start()) {
             instantiationCounter.increment();
@@ -878,7 +868,7 @@ public class SnippetTemplate {
             StartNode entryPointNode = snippet.start();
             FixedNode firstCFGNode = entryPointNode.next();
             StructuredGraph replaceeGraph = replacee.graph();
-            IdentityHashMap<Node, Node> replacements = bind(replaceeGraph, metaAccess, args);
+            IdentityHashMap<Node, Node> replacements = bind(replaceeGraph, runtime, args);
             replacements.put(entryPointNode, replaceeGraph.start());
             Map<Node, Node> duplicates = replaceeGraph.addDuplicates(nodes, snippet, snippet.getNodeCount(), replacements);
             Debug.dump(replaceeGraph, "After inlining snippet %s", snippet.method());
@@ -925,7 +915,7 @@ public class SnippetTemplate {
                     returnValue = (ValueNode) duplicates.get(returnNode.result());
                 }
                 Node returnDuplicate = duplicates.get(returnNode);
-                MemoryMapNode mmap = new DuplicateMapper(duplicates, replaceeGraph.start());
+                MemoryMap<Node> mmap = new DuplicateMapper(duplicates, replaceeGraph.start());
                 if (returnValue == null && replacee.usages().isNotEmpty() && replacee instanceof MemoryCheckpoint) {
                     replacer.replace(replacee, (ValueNode) returnDuplicate.predecessor(), mmap);
                 } else {
@@ -958,12 +948,12 @@ public class SnippetTemplate {
     /**
      * Replaces a given floating node with this specialized snippet.
      * 
-     * @param metaAccess
+     * @param runtime
      * @param replacee the node that will be replaced
      * @param replacer object that replaces the usages of {@code replacee}
      * @param args the arguments to be bound to the flattened positional parameters of the snippet
      */
-    public void instantiate(MetaAccessProvider metaAccess, FloatingNode replacee, UsageReplacer replacer, LoweringTool tool, Arguments args) {
+    public void instantiate(MetaAccessProvider runtime, FloatingNode replacee, UsageReplacer replacer, LoweringTool tool, Arguments args) {
         assert checkSnippetKills(replacee);
         try (TimerCloseable a = instantiationTimer.start()) {
             instantiationCounter.increment();
@@ -974,7 +964,7 @@ public class SnippetTemplate {
             StartNode entryPointNode = snippet.start();
             FixedNode firstCFGNode = entryPointNode.next();
             StructuredGraph replaceeGraph = replacee.graph();
-            IdentityHashMap<Node, Node> replacements = bind(replaceeGraph, metaAccess, args);
+            IdentityHashMap<Node, Node> replacements = bind(replaceeGraph, runtime, args);
             replacements.put(entryPointNode, replaceeGraph.start());
             Map<Node, Node> duplicates = replaceeGraph.addDuplicates(nodes, snippet, snippet.getNodeCount(), replacements);
             Debug.dump(replaceeGraph, "After inlining snippet %s", snippetCopy.method());
@@ -1046,16 +1036,16 @@ public class SnippetTemplate {
         return buf.append(')').toString();
     }
 
-    private static boolean checkTemplate(MetaAccessProvider metaAccess, Arguments args, ResolvedJavaMethod method, Signature signature) {
+    private static boolean checkTemplate(MetaAccessProvider runtime, Arguments args, ResolvedJavaMethod method, Signature signature) {
         for (int i = 0; i < args.info.getParameterCount(); i++) {
             if (args.info.isConstantParameter(i)) {
                 Kind kind = signature.getParameterKind(i);
-                assert checkConstantArgument(metaAccess, method, signature, i, args.info.names[i], args.values[i], kind);
+                assert checkConstantArgument(runtime, method, signature, i, args.info.names[i], args.values[i], kind);
 
             } else if (args.info.isVarargsParameter(i)) {
                 assert args.values[i] instanceof Varargs;
                 Varargs varargs = (Varargs) args.values[i];
-                assert checkVarargs(metaAccess, method, signature, i, args.info.names[i], varargs);
+                assert checkVarargs(runtime, method, signature, i, args.info.names[i], varargs);
             }
         }
         return true;
