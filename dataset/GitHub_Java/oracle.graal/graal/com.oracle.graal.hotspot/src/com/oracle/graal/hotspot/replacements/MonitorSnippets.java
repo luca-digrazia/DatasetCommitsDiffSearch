@@ -46,6 +46,7 @@ import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.useB
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.verifyOop;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.wordSize;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.FREQUENT_PROBABILITY;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.VERY_FAST_PATH_PROBABILITY;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.VERY_SLOW_PATH_PROBABILITY;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
@@ -74,7 +75,6 @@ import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
-import com.oracle.graal.hotspot.nodes.AcquiredCASLockNode;
 import com.oracle.graal.hotspot.nodes.CurrentLockNode;
 import com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode;
 import com.oracle.graal.hotspot.nodes.FastAcquireBiasedLockNode;
@@ -91,7 +91,6 @@ import com.oracle.graal.nodes.ReturnNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.debug.DynamicCounterNode;
-import com.oracle.graal.nodes.extended.BranchProbabilityNode;
 import com.oracle.graal.nodes.extended.ForeignCallNode;
 import com.oracle.graal.nodes.java.MethodCallTargetNode;
 import com.oracle.graal.nodes.java.MonitorExitNode;
@@ -196,14 +195,14 @@ public class MonitorSnippets implements Snippets {
 
         //@formatter:off
         @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> ProfileMonitors = new OptionValue<>(false);
+        private static final OptionValue<Boolean> ProfileMonitors = new OptionValue<>(false);
         //@formatter:on
     }
 
     private static final boolean PROFILE_CONTEXT = false;
 
     @Fold
-    static boolean doProfile() {
+    private static boolean doProfile() {
         return Options.ProfileMonitors.getValue();
     }
 
@@ -251,7 +250,7 @@ public class MonitorSnippets implements Snippets {
             trace(trace, "prototypeMarkWord: 0x%016lx\n", prototypeMarkWord);
             trace(trace, "           thread: 0x%016lx\n", thread);
             trace(trace, "              tmp: 0x%016lx\n", tmp);
-            if (probability(BranchProbabilityNode.NOT_LIKELY_PROBABILITY, tmp.equal(0))) {
+            if (probability(FREQUENT_PROBABILITY, tmp.equal(0))) {
                 // Object is already biased to current thread -> done
                 traceObject(trace, "+lock{bias:existing}", object, true);
                 lockBiasExisting.inc();
@@ -260,7 +259,7 @@ public class MonitorSnippets implements Snippets {
             }
 
             // Now check to see whether biasing is enabled for this object
-            if (probability(BranchProbabilityNode.FAST_PATH_PROBABILITY, biasableLockBits.notEqual(Word.unsigned(biasedLockPattern())))) {
+            if (probability(NOT_FREQUENT_PROBABILITY, biasableLockBits.notEqual(Word.unsigned(biasedLockPattern())))) {
                 // Biasing not enabled -> fall through to lightweight locking
                 unbiasable.inc();
             } else {
@@ -361,7 +360,7 @@ public class MonitorSnippets implements Snippets {
         // Test if the object's mark word is unlocked, and if so, store the
         // (address of) the lock slot into the object's mark word.
         Word currentMark = compareAndSwap(OffsetAddressNode.address(object, markOffset()), unlockedMark, lock, MARK_WORD_LOCATION);
-        if (probability(BranchProbabilityNode.SLOW_PATH_PROBABILITY, currentMark.notEqual(unlockedMark))) {
+        if (currentMark.notEqual(unlockedMark)) {
             trace(trace, "      currentMark: 0x%016lx\n", currentMark);
             // The mark word in the object header was not the same.
             // Either the object is locked by another thread or is already locked
@@ -395,7 +394,6 @@ public class MonitorSnippets implements Snippets {
         } else {
             traceObject(trace, "+lock{cas}", object, true);
             lockCas.inc();
-            AcquiredCASLockNode.mark(object);
         }
     }
 
@@ -428,7 +426,7 @@ public class MonitorSnippets implements Snippets {
             // the bias bit would be clear.
             final Word mark = loadWordFromObject(object, markOffset());
             trace(trace, "             mark: 0x%016lx\n", mark);
-            if (probability(BranchProbabilityNode.NOT_LIKELY_PROBABILITY, mark.and(biasedLockMaskInPlace()).equal(Word.unsigned(biasedLockPattern())))) {
+            if (probability(FREQUENT_PROBABILITY, mark.and(biasedLockMaskInPlace()).equal(Word.unsigned(biasedLockPattern())))) {
                 endLockScope();
                 decCounter();
                 traceObject(trace, "-lock{bias}", object, false);
@@ -443,7 +441,7 @@ public class MonitorSnippets implements Snippets {
         final Word displacedMark = lock.readWord(lockDisplacedMarkOffset(), DISPLACED_MARK_WORD_LOCATION);
         trace(trace, "    displacedMark: 0x%016lx\n", displacedMark);
 
-        if (probability(BranchProbabilityNode.NOT_LIKELY_PROBABILITY, displacedMark.equal(0))) {
+        if (displacedMark.equal(0)) {
             // Recursive locking => done
             traceObject(trace, "-lock{recursive}", object, false);
             unlockCasRecursive.inc();
@@ -671,7 +669,7 @@ public class MonitorSnippets implements Snippets {
     private static native void monitorenterStubC(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object, Word lock);
 
     @NodeIntrinsic(ForeignCallNode.class)
-    public static native void monitorexitStubC(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object, Word lock);
+    private static native void monitorexitStubC(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object, Word lock);
 
     /**
      * Counters for the various paths for acquiring a lock. The counters whose names start with

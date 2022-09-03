@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
-
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.nodeinfo.NodeInfo;
@@ -37,7 +34,7 @@ import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
  * Marks the control flow path where an object acquired a biased lock because the lock was already
  * biased to the object on the current thread.
  */
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public final class FastAcquireBiasedLockNode extends FixedWithNextNode implements LIRLowerable {
     public static final NodeClass<FastAcquireBiasedLockNode> TYPE = NodeClass.create(FastAcquireBiasedLockNode.class);
 
@@ -52,7 +49,6 @@ public final class FastAcquireBiasedLockNode extends FixedWithNextNode implement
         return object;
     }
 
-    @Override
     public void generate(NodeLIRBuilderTool generator) {
         // This is just a marker node so it generates nothing
     }
