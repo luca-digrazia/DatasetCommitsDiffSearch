@@ -52,7 +52,7 @@ public class TruffleConstantFieldProvider implements ConstantFieldProvider {
                     int stableDimensions = actualStableDimensions(field, compilationFinal.dimensions());
                     return tool.foldStableArray(tool.readValue(), stableDimensions, true);
                 } else if (!field.isStatic() && field.getAnnotation(Children.class) != null) {
-                    int stableDimensions = field.getType().isArray() ? 1 : 0;
+                    int stableDimensions = Math.min(1, getArrayDimension(field.getType()));
                     return tool.foldStableArray(verifyFieldValue(field, tool.readValue()), stableDimensions, true);
                 } else if (field.isFinal() || (!field.isStatic() && field.getAnnotation(Child.class) != null)) {
                     return tool.foldConstant(verifyFieldValue(field, tool.readValue()));
@@ -69,7 +69,7 @@ public class TruffleConstantFieldProvider implements ConstantFieldProvider {
         if (dimensions == 0) {
             return 0;
         }
-        int arrayDim = getArrayDimensions(field.getType());
+        int arrayDim = getArrayDimension(field.getType());
         if (dimensions < 0) {
             assert dimensions == -1 : "Negative @CompilationFinal dimensions";
             return arrayDim;
@@ -78,9 +78,10 @@ public class TruffleConstantFieldProvider implements ConstantFieldProvider {
         return Math.min(dimensions, arrayDim);
     }
 
-    private static int getArrayDimensions(JavaType type) {
+    private static int getArrayDimension(JavaType type) {
         int dimensions = 0;
-        for (JavaType componentType = type; componentType.isArray(); componentType = componentType.getComponentType()) {
+        JavaType componentType = type;
+        while ((componentType = componentType.getComponentType()) != null) {
             dimensions++;
         }
         return dimensions;
