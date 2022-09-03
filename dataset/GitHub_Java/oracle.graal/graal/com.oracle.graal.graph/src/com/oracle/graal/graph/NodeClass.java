@@ -1271,14 +1271,7 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     static Map<Node, Node> addGraphDuplicate(final Graph graph, final Graph oldGraph, int estimatedNodeCount, Iterable<Node> nodes, final DuplicationReplacement replacements) {
-        final Map<Node, Node> newNodes;
-        if (estimatedNodeCount > (oldGraph.getNodeCount() + oldGraph.getDeletedNodeCount() >> 4)) {
-            // Use dense map
-            newNodes = new NodeNodeMap(oldGraph);
-        } else {
-            // Use sparse map
-            newNodes = new IdentityHashMap<>();
-        }
+        final Map<Node, Node> newNodes = (estimatedNodeCount > (oldGraph.getNodeCount() + oldGraph.getDeletedNodeCount() >> 4)) ? new NodeNodeMap(oldGraph) : new IdentityHashMap<Node, Node>();
         createNodeDuplicates(graph, nodes, replacements, newNodes);
 
         InplaceUpdateClosure replacementClosure = new InplaceUpdateClosure() {
