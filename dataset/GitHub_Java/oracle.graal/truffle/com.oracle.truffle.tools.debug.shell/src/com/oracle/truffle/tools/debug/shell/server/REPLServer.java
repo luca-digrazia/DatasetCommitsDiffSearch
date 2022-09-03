@@ -36,10 +36,13 @@ import java.util.WeakHashMap;
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.ExecutionEvent;
+import com.oracle.truffle.api.debug.LineBreakpoint;
 import com.oracle.truffle.api.debug.SuspendedEvent;
+import com.oracle.truffle.api.debug.TagBreakpoint;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrument.StandardSyntaxTag;
+import com.oracle.truffle.api.instrument.SyntaxTag;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.instrument.impl.DefaultVisualizer;
 import com.oracle.truffle.api.nodes.Node;
@@ -68,19 +71,27 @@ public final class REPLServer {
     private final Map<String, REPLHandler> handlerMap = new HashMap<>();
 
     // TODO (mlvdv) Language-specific
-    private final String mimeType;
     private final PolyglotEngine.Language language;
     private final Visualizer visualizer;
 
-    // Breakpoints registered with the debugger
-    private int breakpointCounter;
+    private int nextBreakpointUID = 0;
+
+    /**
+     * Map: breakpoints => breakpoint UID.
+     * <ul>
+     * <li>Contains only pending breakpoints when the Debugger not yet available.</li>
+     * <li>When the Debugger becomes available, each pending breakpoint is replaced with a Debugger
+     * breakpoint, keeping same UID.</li>
+     * <li>Contains no disposed breakpoints.</li>
+     * <li>UIDs for disposed breakpoints are never reused.</li>
+     * </ul>
+     */
     private Map<Breakpoint, Integer> breakpoints = new WeakHashMap<>();
 
     /**
      * Create a single-language server.
      */
     public REPLServer(String mimeType, Visualizer visualizer) {
-        this.mimeType = mimeType;
         this.visualizer = visualizer == null ? new DefaultVisualizer() : visualizer;
         EventConsumer<SuspendedEvent> onHalted = new EventConsumer<SuspendedEvent>(SuspendedEvent.class) {
             @Override
@@ -91,10 +102,32 @@ public final class REPLServer {
         EventConsumer<ExecutionEvent> onExec = new EventConsumer<ExecutionEvent>(ExecutionEvent.class) {
             @Override
             protected void on(ExecutionEvent event) {
-                db = event.getDebugger();
-                if (!currentServerContext.isEval) {
-                    event.prepareStepInto();
+                if (db == null) {
+                    db = event.getDebugger();
+                    if (!breakpoints.isEmpty()) {
+                        ArrayList<? extends Breakpoint> pendingBreakpoints = new ArrayList<>(breakpoints.keySet());
+                        try {
+                            for (Breakpoint pending : pendingBreakpoints) {
+
+                                Integer uid = breakpoints.get(pending);
+                                pending.dispose();
+                                Breakpoint replacement = null;
+                                if (pending instanceof PendingLineBreakpoint) {
+                                    final PendingLineBreakpoint lineBreak = (PendingLineBreakpoint) pending;
+                                    replacement = db.setLineBreakpoint(lineBreak.getIgnoreCount(), lineBreak.getLineLocation(), lineBreak.isOneShot());
+
+                                } else if (pending instanceof PendingTagBreakpoint) {
+                                    final PendingTagBreakpoint tagBreak = (PendingTagBreakpoint) pending;
+                                    replacement = db.setTagBreakpoint(tagBreak.getIgnoreCount(), tagBreak.getTag(), tagBreak.isOneShot());
+                                }
+                                breakpoints.put(replacement, uid);
+                            }
+                        } catch (IOException e) {
+                            throw new IllegalStateException("pending breakpoints should all be valid");
+                        }
+                    }
                 }
+                event.prepareStepInto();
             }
         };
         engine = PolyglotEngine.buildNew().onEvent(onHalted).onEvent(onExec).build();
@@ -114,6 +147,13 @@ public final class REPLServer {
      */
     public void start() {
 
+        addHandlers();
+        this.replClient = new SimpleREPLClient(this);
+        this.currentServerContext = new Context(null, null);
+        replClient.start();
+    }
+
+    protected void addHandlers() {
         add(REPLHandler.BACKTRACE_HANDLER);
         add(REPLHandler.BREAK_AT_LINE_HANDLER);
         add(REPLHandler.BREAK_AT_LINE_ONCE_HANDLER);
@@ -140,9 +180,6 @@ public final class REPLServer {
         add(REPLHandler.TRUFFLE_HANDLER);
         add(REPLHandler.TRUFFLE_NODE_HANDLER);
         add(REPLHandler.UNSET_BREAK_CONDITION_HANDLER);
-        this.replClient = new SimpleREPLClient(this);
-        this.currentServerContext = new Context(null, null);
-        replClient.start();
     }
 
     void haltedAt(SuspendedEvent event) {
@@ -155,12 +192,7 @@ public final class REPLServer {
         final SourceSection src = event.getNode().getSourceSection();
         final Source source = src.getSource();
         message.put(REPLMessage.SOURCE_NAME, source.getName());
-        final String path = source.getPath();
-        if (path == null) {
-            message.put(REPLMessage.SOURCE_TEXT, source.getCode());
-        } else {
-            message.put(REPLMessage.FILE_PATH, path);
-        }
+        message.put(REPLMessage.FILE_PATH, source.getPath());
         message.put(REPLMessage.LINE_NUMBER, Integer.toString(src.getStartLine()));
         message.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
         message.put(REPLMessage.DEBUG_LEVEL, Integer.toString(currentServerContext.getLevel()));
@@ -192,7 +224,6 @@ public final class REPLServer {
         private final Context predecessor;
         private final int level;
         private final SuspendedEvent event;
-        private boolean isEval = false;  // When true, run without StepInto
 
         Context(Context predecessor, SuspendedEvent event) {
             this.level = predecessor == null ? 0 : predecessor.getLevel() + 1;
@@ -215,26 +246,19 @@ public final class REPLServer {
         }
 
         /**
-         * Evaluates a code snippet in the context of a selected frame in the currently suspended
-         * execution.
+         * Evaluates given code snippet in the context of currently suspended execution.
          *
          * @param code the snippet to evaluate
-         * @param frameNumber index of the stack frame in which to evaluate, {@code null} if the
-         *            topmost frame should be used.
+         * @param frame <code>null</code> in case the evaluation should happen in top most frame,
+         *            non-null value
          * @return result of the evaluation
          * @throws IOException if something goes wrong
          */
-        Object eval(String code, Integer frameNumber) throws IOException {
+        Object eval(String code, FrameInstance frame) throws IOException {
             if (event == null) {
-                try {
-                    isEval = true;
-                    final Value value = engine.eval(Source.fromText(code, "eval(\"" + code + "\")").withMimeType(mimeType));
-                    return value.get();
-                } finally {
-                    isEval = false;
-                }
+                throw new IOException("top level \"eval\" not yet supported");
             }
-            return event.eval(code, frameNumber);
+            return event.eval(code, frame);
         }
 
         /**
@@ -341,19 +365,29 @@ public final class REPLServer {
     }
 
     Breakpoint setLineBreakpoint(int ignoreCount, LineLocation lineLocation, boolean oneShot) throws IOException {
-        final Breakpoint breakpoint = db.setLineBreakpoint(ignoreCount, lineLocation, oneShot);
-        registerBreakpoint(breakpoint);
+        Breakpoint breakpoint;
+        if (db == null) {
+            breakpoint = new PendingLineBreakpoint(ignoreCount, lineLocation, oneShot);
+        } else {
+            breakpoint = db.setLineBreakpoint(ignoreCount, lineLocation, oneShot);
+        }
+        registerNewBreakpoint(breakpoint);
         return breakpoint;
     }
 
     Breakpoint setTagBreakpoint(int ignoreCount, StandardSyntaxTag tag, boolean oneShot) throws IOException {
-        final Breakpoint breakpoint = db.setTagBreakpoint(ignoreCount, tag, oneShot);
-        registerBreakpoint(breakpoint);
+        Breakpoint breakpoint;
+        if (db == null) {
+            breakpoint = new PendingTagBreakpoint(ignoreCount, tag, oneShot);
+        } else {
+            breakpoint = db.setTagBreakpoint(ignoreCount, tag, oneShot);
+        }
+        registerNewBreakpoint(breakpoint);
         return breakpoint;
     }
 
-    private synchronized void registerBreakpoint(Breakpoint breakpoint) {
-        breakpoints.put(breakpoint, breakpointCounter++);
+    private synchronized void registerNewBreakpoint(Breakpoint breakpoint) {
+        breakpoints.put(breakpoint, nextBreakpointUID++);
     }
 
     synchronized Breakpoint findBreakpoint(int id) {
@@ -365,8 +399,11 @@ public final class REPLServer {
         return null;
     }
 
+    /**
+     * Gets a list of the currently existing breakpoints.
+     */
     Collection<Breakpoint> getBreakpoints() {
-        return db.getBreakpoints();
+        return new ArrayList<>(breakpoints.keySet());
     }
 
     synchronized int getBreakpointID(Breakpoint breakpoint) {
@@ -382,4 +419,115 @@ public final class REPLServer {
         symbol.invoke(null);
     }
 
+    /**
+     * The intention to create a line breakpoint.
+     */
+    private final class PendingLineBreakpoint extends LineBreakpoint {
+
+        private Source conditionSource;
+
+        PendingLineBreakpoint(int ignoreCount, LineLocation lineLocation, boolean oneShot) {
+            super(Breakpoint.State.ENABLED_UNRESOLVED, lineLocation, ignoreCount, oneShot);
+        }
+
+        @Override
+        public void setEnabled(boolean enabled) {
+            switch (getState()) {
+                case ENABLED_UNRESOLVED:
+                    if (!enabled) {
+                        setState(State.DISABLED_UNRESOLVED);
+                    }
+                    break;
+                case DISABLED_UNRESOLVED:
+                    if (enabled) {
+                        setState(State.ENABLED_UNRESOLVED);
+                    }
+                    break;
+                case DISPOSED:
+                    throw new IllegalStateException("Disposed breakpoints must stay disposed");
+                default:
+                    throw new IllegalStateException("Unexpected breakpoint state");
+            }
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return getState() == State.ENABLED_UNRESOLVED;
+        }
+
+        @Override
+        public void setCondition(String expr) throws IOException {
+            this.conditionSource = Source.fromText(expr, "breakpoint condition from text: " + expr);
+        }
+
+        @Override
+        public Source getCondition() {
+            return conditionSource;
+        }
+
+        @Override
+        public void dispose() {
+            if (getState() == State.DISPOSED) {
+                throw new IllegalStateException("Breakpoint already disposed");
+            }
+            setState(State.DISPOSED);
+            breakpoints.remove(this);
+        }
+    }
+
+    /**
+     * The intention to create a line breakpoint.
+     */
+    private final class PendingTagBreakpoint extends TagBreakpoint {
+
+        private Source conditionSource;
+
+        PendingTagBreakpoint(int ignoreCount, SyntaxTag tag, boolean oneShot) {
+            super(Breakpoint.State.ENABLED_UNRESOLVED, tag, ignoreCount, oneShot);
+        }
+
+        @Override
+        public void setEnabled(boolean enabled) {
+            switch (getState()) {
+                case ENABLED_UNRESOLVED:
+                    if (!enabled) {
+                        setState(State.DISABLED_UNRESOLVED);
+                    }
+                    break;
+                case DISABLED_UNRESOLVED:
+                    if (enabled) {
+                        setState(State.ENABLED_UNRESOLVED);
+                    }
+                    break;
+                case DISPOSED:
+                    throw new IllegalStateException("Disposed breakpoints must stay disposed");
+                default:
+                    throw new IllegalStateException("Unexpected breakpoint state");
+            }
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return getState() == State.ENABLED_UNRESOLVED;
+        }
+
+        @Override
+        public void setCondition(String expr) throws IOException {
+            this.conditionSource = Source.fromText(expr, "breakpoint condition from text: " + expr);
+        }
+
+        @Override
+        public Source getCondition() {
+            return conditionSource;
+        }
+
+        @Override
+        public void dispose() {
+            if (getState() == State.DISPOSED) {
+                throw new IllegalStateException("Breakpoint already disposed");
+            }
+            setState(State.DISPOSED);
+            breakpoints.remove(this);
+        }
+    }
 }
