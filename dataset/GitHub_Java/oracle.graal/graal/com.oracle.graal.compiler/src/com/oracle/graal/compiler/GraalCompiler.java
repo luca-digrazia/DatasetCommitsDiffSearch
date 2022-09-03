@@ -23,6 +23,7 @@
 package com.oracle.graal.compiler;
 
 import static com.oracle.graal.compiler.GraalCompiler.Options.*;
+import static com.oracle.graal.compiler.MethodFilter.*;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
 
 import java.util.*;
@@ -45,6 +46,7 @@ import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
 import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
 import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase.PreAllocationOptimizationContext;
+import com.oracle.graal.lir.profiling.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
@@ -65,13 +67,69 @@ public class GraalCompiler {
     private static final DebugTimer EmitLIR = Debug.timer("EmitLIR");
     private static final DebugTimer EmitCode = Debug.timer("EmitCode");
 
+    /**
+     * The set of positive filters specified by the {@code -G:IntrinsificationsEnabled} option. To
+     * enable a fast path in {@link #shouldIntrinsify(JavaMethod)}, this field is {@code null} when
+     * no enabling/disabling filters are specified.
+     */
+    private static final MethodFilter[] positiveIntrinsificationFilter;
+
+    /**
+     * The set of negative filters specified by the {@code -G:IntrinsificationsDisabled} option.
+     */
+    private static final MethodFilter[] negativeIntrinsificationFilter;
+
     static class Options {
 
         // @formatter:off
+        /**
+         * @see MethodFilter
+         */
+        @Option(help = "Pattern for method(s) to which intrinsification (if available) will be applied. " +
+                       "By default, all available intrinsifications are applied except for methods matched " +
+                       "by IntrinsificationsDisabled. See MethodFilter class for pattern syntax.", type = OptionType.Debug)
+        public static final OptionValue<String> IntrinsificationsEnabled = new OptionValue<>(null);
+        /**
+         * @see MethodFilter
+         */
+        @Option(help = "Pattern for method(s) to which intrinsification will not be applied. " +
+                       "See MethodFilter class for pattern syntax.", type = OptionType.Debug)
+        public static final OptionValue<String> IntrinsificationsDisabled = new OptionValue<>(null);
+
         @Option(help = "Repeatedly run the LIR code generation pass to improve statistical profiling results.", type = OptionType.Debug)
         public static final OptionValue<Integer> EmitLIRRepeatCount = new OptionValue<>(0);
         // @formatter:on
 
+    }
+
+    static {
+        if (IntrinsificationsDisabled.getValue() != null) {
+            negativeIntrinsificationFilter = parse(IntrinsificationsDisabled.getValue());
+        } else {
+            negativeIntrinsificationFilter = null;
+        }
+
+        if (Options.IntrinsificationsEnabled.getValue() != null) {
+            positiveIntrinsificationFilter = parse(IntrinsificationsEnabled.getValue());
+        } else if (negativeIntrinsificationFilter != null) {
+            positiveIntrinsificationFilter = new MethodFilter[0];
+        } else {
+            positiveIntrinsificationFilter = null;
+        }
+    }
+
+    /**
+     * Determines if a given method should be intrinsified based on the values of
+     * {@link Options#IntrinsificationsEnabled} and {@link Options#IntrinsificationsDisabled}.
+     */
+    public static boolean shouldIntrinsify(JavaMethod method) {
+        if (positiveIntrinsificationFilter == null) {
+            return true;
+        }
+        if (positiveIntrinsificationFilter.length == 0 || matches(positiveIntrinsificationFilter, method)) {
+            return negativeIntrinsificationFilter == null || !matches(negativeIntrinsificationFilter, method);
+        }
+        return false;
     }
 
     /**
@@ -84,6 +142,7 @@ public class GraalCompiler {
         public final Providers providers;
         public final Backend backend;
         public final TargetDescription target;
+        public final Map<ResolvedJavaMethod, StructuredGraph> cache;
         public final PhaseSuite<HighTierContext> graphBuilderSuite;
         public final OptimisticOptimizations optimisticOpts;
         public final ProfilingInfo profilingInfo;
@@ -101,6 +160,7 @@ public class GraalCompiler {
          * @param providers
          * @param backend
          * @param target
+         * @param cache
          * @param graphBuilderSuite
          * @param optimisticOpts
          * @param profilingInfo
@@ -111,14 +171,15 @@ public class GraalCompiler {
          * @param factory
          */
         public Request(StructuredGraph graph, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend, TargetDescription target,
-                        PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, SpeculationLog speculationLog, Suites suites,
-                        LIRSuites lirSuites, T compilationResult, CompilationResultBuilderFactory factory) {
+                        Map<ResolvedJavaMethod, StructuredGraph> cache, PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo,
+                        SpeculationLog speculationLog, Suites suites, LIRSuites lirSuites, T compilationResult, CompilationResultBuilderFactory factory) {
             this.graph = graph;
             this.cc = cc;
             this.installedCodeOwner = installedCodeOwner;
             this.providers = providers;
             this.backend = backend;
             this.target = target;
+            this.cache = cache;
             this.graphBuilderSuite = graphBuilderSuite;
             this.optimisticOpts = optimisticOpts;
             this.profilingInfo = profilingInfo;
@@ -149,10 +210,10 @@ public class GraalCompiler {
      * @return the result of the compilation
      */
     public static <T extends CompilationResult> T compileGraph(StructuredGraph graph, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend,
-                    TargetDescription target, PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, SpeculationLog speculationLog,
-                    Suites suites, LIRSuites lirSuites, T compilationResult, CompilationResultBuilderFactory factory) {
-        return compile(new Request<>(graph, cc, installedCodeOwner, providers, backend, target, graphBuilderSuite, optimisticOpts, profilingInfo, speculationLog, suites, lirSuites, compilationResult,
-                        factory));
+                    TargetDescription target, Map<ResolvedJavaMethod, StructuredGraph> cache, PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts,
+                    ProfilingInfo profilingInfo, SpeculationLog speculationLog, Suites suites, LIRSuites lirSuites, T compilationResult, CompilationResultBuilderFactory factory) {
+        return compile(new Request<>(graph, cc, installedCodeOwner, providers, backend, target, cache, graphBuilderSuite, optimisticOpts, profilingInfo, speculationLog, suites, lirSuites,
+                        compilationResult, factory));
     }
 
     /**
@@ -163,7 +224,7 @@ public class GraalCompiler {
     public static <T extends CompilationResult> T compile(Request<T> r) {
         assert !r.graph.isFrozen();
         try (Scope s0 = Debug.scope("GraalCompiler", r.graph, r.providers.getCodeCache())) {
-            SchedulePhase schedule = emitFrontEnd(r.providers, r.target, r.graph, r.graphBuilderSuite, r.optimisticOpts, r.profilingInfo, r.speculationLog, r.suites);
+            SchedulePhase schedule = emitFrontEnd(r.providers, r.target, r.graph, r.cache, r.graphBuilderSuite, r.optimisticOpts, r.profilingInfo, r.speculationLog, r.suites);
             emitBackEnd(r.graph, null, r.cc, r.installedCodeOwner, r.backend, r.target, r.compilationResult, r.factory, schedule, null, r.lirSuites);
         } catch (Throwable e) {
             throw Debug.handle(e);
@@ -182,14 +243,14 @@ public class GraalCompiler {
     /**
      * Builds the graph, optimizes it.
      */
-    public static SchedulePhase emitFrontEnd(Providers providers, TargetDescription target, StructuredGraph graph, PhaseSuite<HighTierContext> graphBuilderSuite,
-                    OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, SpeculationLog speculationLog, Suites suites) {
+    public static SchedulePhase emitFrontEnd(Providers providers, TargetDescription target, StructuredGraph graph, Map<ResolvedJavaMethod, StructuredGraph> cache,
+                    PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, SpeculationLog speculationLog, Suites suites) {
         try (Scope s = Debug.scope("FrontEnd"); DebugCloseable a = FrontEnd.start()) {
             if (speculationLog != null) {
                 speculationLog.collectFailedSpeculations();
             }
 
-            HighTierContext highTierContext = new HighTierContext(providers, graphBuilderSuite, optimisticOpts);
+            HighTierContext highTierContext = new HighTierContext(providers, cache, graphBuilderSuite, optimisticOpts);
             if (graph.start().next() == null) {
                 graphBuilderSuite.apply(graph, highTierContext);
                 new DeadCodeEliminationPhase(Optional).apply(graph);

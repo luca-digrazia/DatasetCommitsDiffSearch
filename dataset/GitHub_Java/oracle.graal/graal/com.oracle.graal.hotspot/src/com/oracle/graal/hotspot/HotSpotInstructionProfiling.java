@@ -22,27 +22,19 @@
  */
 package com.oracle.graal.hotspot;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
-
-import com.oracle.graal.asm.Assembler;
-import com.oracle.graal.asm.Assembler.InstructionCounter;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.lir.ConstantValue;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInsertionBuffer;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.asm.Assembler.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.gen.BenchmarkCounterFactory;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.phases.*;
 
 public class HotSpotInstructionProfiling extends PostAllocationOptimizationPhase {
     public static final String COUNTER_GROUP = "INSTRUCTION_COUNTER";
@@ -54,20 +46,17 @@ public class HotSpotInstructionProfiling extends PostAllocationOptimizationPhase
 
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
-                    PostAllocationOptimizationContext context) {
-        BenchmarkCounterFactory counterFactory = context.counterFactory;
-        new Analyzer(target, lirGenRes.getCompilationUnitName(), lirGenRes.getLIR(), counterFactory).run();
+                    BenchmarkCounterFactory counterFactory) {
+        new Analyzer(lirGenRes.getCompilationUnitName(), lirGenRes.getLIR(), counterFactory).run();
     }
 
     private class Analyzer {
-        private final TargetDescription target;
         private final LIR lir;
         private final BenchmarkCounterFactory counterFactory;
         private final LIRInsertionBuffer buffer;
         private final String compilationUnitName;
 
-        Analyzer(TargetDescription target, String compilationUnitName, LIR lir, BenchmarkCounterFactory counterFactory) {
-            this.target = target;
+        public Analyzer(String compilationUnitName, LIR lir, BenchmarkCounterFactory counterFactory) {
             this.lir = lir;
             this.compilationUnitName = compilationUnitName;
             this.counterFactory = counterFactory;
@@ -93,9 +82,7 @@ public class HotSpotInstructionProfiling extends PostAllocationOptimizationPhase
             for (int i = 0; i < instructionsToProfile.length; i++) {
                 names[i] = compilationUnitName;
                 groups[i] = COUNTER_GROUP + " " + instructionsToProfile[i];
-                // Default is zero; this value is patched to the real instruction count after
-                // assembly in method HotSpotInstructionProfiling.countInstructions
-                increments[i] = new ConstantValue(target.getLIRKind(JavaKind.Int), JavaConstant.INT_0);
+                increments[i] = JavaConstant.INT_0;
             }
             HotSpotCounterOp op = (HotSpotCounterOp) counterFactory.createMultiBenchmarkCounter(names, groups, increments);
             LIRInstruction inst = new InstructionCounterOp(op, instructionsToProfile);
@@ -108,7 +95,7 @@ public class HotSpotInstructionProfiling extends PostAllocationOptimizationPhase
 
     /**
      * After assembly the {@link HotSpotBackend#profileInstructions(LIR, CompilationResultBuilder)}
-     * calls this method for patching the instruction counts into the counter increment code.
+     * calls this method for patching the instruction counts into the coutner increment code.
      */
     public static void countInstructions(LIR lir, Assembler asm) {
         InstructionCounterOp lastOp = null;

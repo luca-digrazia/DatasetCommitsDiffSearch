@@ -22,14 +22,13 @@
  */
 package com.oracle.graal.asm.sparc;
 
-import java.util.TreeMap;
+import java.util.*;
 
 import com.oracle.graal.asm.Assembler.InstructionCounter;
 
 public class SPARCInstructionCounter implements InstructionCounter {
     // Use a treemap to keep the order in the output
     private static final TreeMap<String, SPARCInstructionMatch> INSTRUCTION_MATCHER = new TreeMap<>();
-
     static {
         // @formatter:off
         INSTRUCTION_MATCHER.put("nop", new SPARCInstructionMatch(0xFFFF_FFFF, 0x0100_0000));
@@ -38,7 +37,6 @@ public class SPARCInstructionCounter implements InstructionCounter {
         INSTRUCTION_MATCHER.put("all", new SPARCInstructionMatch(0x0, 0x0));
         // @formatter:on
     }
-
     private final SPARCAssembler asm;
 
     public SPARCInstructionCounter(SPARCAssembler asm) {
@@ -85,7 +83,7 @@ public class SPARCInstructionCounter implements InstructionCounter {
         private final int[] op3b03;
         private final int op;
 
-        OP3LowBitsMatcher(int op, int... op3b03) {
+        public OP3LowBitsMatcher(int op, int... op3b03) {
             super(0, 0);
             this.op = op;
             this.op3b03 = op3b03;
@@ -110,7 +108,7 @@ public class SPARCInstructionCounter implements InstructionCounter {
         private final int mask;
         private final int[] patterns;
 
-        SPARCInstructionMatch(int mask, int... patterns) {
+        public SPARCInstructionMatch(int mask, int... patterns) {
             super();
             this.mask = mask;
             this.patterns = patterns;

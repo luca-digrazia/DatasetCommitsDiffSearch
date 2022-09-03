@@ -22,25 +22,19 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.asm.sparc.SPARCAssembler.isSimm13;
-import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
-import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.Value;
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 
-import com.oracle.graal.asm.Assembler;
-import com.oracle.graal.asm.sparc.SPARCAddress;
-import com.oracle.graal.asm.sparc.SPARCAssembler;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
-import com.oracle.graal.hotspot.HotSpotCounterOp;
-import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
 
 @Opcode("BenchMarkCounter")
 public class SPARCHotSpotCounterOp extends HotSpotCounterOp {
@@ -64,7 +58,7 @@ public class SPARCHotSpotCounterOp extends HotSpotCounterOp {
         TargetDescription target = crb.target;
 
         // address for counters array
-        SPARCAddress countersArrayAddr = new SPARCAddress(thread, config.jvmciCountersThreadOffset);
+        SPARCAddress countersArrayAddr = new SPARCAddress(thread, config.graalCountersThreadOffset);
         try (ScratchRegister scratch = masm.getScratchRegister()) {
             Register countersArrayReg = scratch.getRegister();
 
@@ -82,8 +76,8 @@ public class SPARCHotSpotCounterOp extends HotSpotCounterOp {
             masm.ldx(counterAddr, counterReg);
             counterPatchOffsets[counterIndex] = masm.position();
             // increment counter
-            if (isJavaConstant(increment)) {
-                masm.add(counterReg, asInt(asJavaConstant(increment)), counterReg);
+            if (isConstant(increment)) {
+                masm.add(counterReg, asInt(asConstant(increment)), counterReg);
             } else {
                 masm.add(counterReg, asRegister(increment), counterReg);
             }
@@ -131,7 +125,7 @@ public class SPARCHotSpotCounterOp extends HotSpotCounterOp {
             } else {
                 try (ScratchRegister scratch = masm.getScratchRegister()) {
                     Register tempOffsetRegister = scratch.getRegister();
-                    masm.setx(relativeDisplacement, tempOffsetRegister, false);
+                    new Setx(relativeDisplacement, tempOffsetRegister, false).emit(masm);
                     masm.add(countersArrayReg, tempOffsetRegister, countersArrayReg);
                 }
                 lastDisplacement = displacement;

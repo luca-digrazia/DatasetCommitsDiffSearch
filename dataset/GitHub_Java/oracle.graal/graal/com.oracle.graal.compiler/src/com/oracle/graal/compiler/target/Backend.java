@@ -27,7 +27,6 @@ import com.oracle.graal.api.code.stack.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
@@ -44,14 +43,6 @@ import com.oracle.graal.phases.util.*;
 public abstract class Backend {
 
     private final Providers providers;
-
-    public static final ForeignCallDescriptor ARITHMETIC_SIN = new ForeignCallDescriptor("arithmeticSin", double.class, double.class);
-    public static final ForeignCallDescriptor ARITHMETIC_COS = new ForeignCallDescriptor("arithmeticCos", double.class, double.class);
-    public static final ForeignCallDescriptor ARITHMETIC_TAN = new ForeignCallDescriptor("arithmeticTan", double.class, double.class);
-    public static final ForeignCallDescriptor ARITHMETIC_EXP = new ForeignCallDescriptor("arithmeticExp", double.class, double.class);
-    public static final ForeignCallDescriptor ARITHMETIC_LOG = new ForeignCallDescriptor("arithmeticLog", double.class, double.class);
-    public static final ForeignCallDescriptor ARITHMETIC_LOG10 = new ForeignCallDescriptor("arithmeticLog10", double.class, double.class);
-    public static final ForeignCallDescriptor ARITHMETIC_POW = new ForeignCallDescriptor("arithmeticPow", double.class, double.class, double.class);
 
     protected Backend(Providers providers) {
         this.providers = providers;
@@ -82,8 +73,6 @@ public abstract class Backend {
      * the CodeCacheProvider will be used.
      */
     public abstract FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig);
-
-    public abstract RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig);
 
     public abstract FrameMap newFrameMap(RegisterConfig registerConfig);
 

@@ -22,21 +22,18 @@
  */
 package com.oracle.graal.lir.profiling;
 
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
-import com.oracle.graal.lir.StandardOp.LoadConstantOp;
 import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.StandardOp.ValueMoveOp;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.phases.*;
 
@@ -53,8 +50,7 @@ public class MoveProfiling extends PostAllocationOptimizationPhase {
         STACK2REG("Reg", "Stack"),
         CONST2REG("Reg", "Const"),
         REG2STACK("Stack", "Reg"),
-        CONST2STACK("Stack", "Const"),
-        STACK2STACK("Stack", "Stack");
+        CONST2STACK("Stack", "Const");
 
         private final String name;
 
@@ -69,30 +65,26 @@ public class MoveProfiling extends PostAllocationOptimizationPhase {
 
         public static MoveType get(MoveOp move) {
             AllocatableValue dst = move.getResult();
-            Value src = null;
-            if (move instanceof LoadConstantOp) {
-                if (isRegister(dst)) {
+            Value src = move.getInput();
+            if (isRegister(dst)) {
+                if (isRegister(src)) {
+                    return REG2REG;
+                }
+                if (isStackSlot(src)) {
+                    return STACK2REG;
+                }
+                if (isConstant(src)) {
                     return CONST2REG;
-                } else if (isStackSlot(dst)) {
+                }
+            } else if (isStackSlot(dst)) {
+                if (isRegister(src)) {
+                    return REG2STACK;
+                }
+                if (isConstant(src)) {
                     return CONST2STACK;
                 }
-            } else if (move instanceof ValueMoveOp) {
-                src = ((ValueMoveOp) move).getInput();
-                if (isRegister(dst)) {
-                    if (isRegister(src)) {
-                        return REG2REG;
-                    } else if (isStackSlot(src)) {
-                        return STACK2REG;
-                    }
-                } else if (isStackSlot(dst)) {
-                    if (isRegister(src)) {
-                        return REG2STACK;
-                    } else if (isStackSlot(src)) {
-                        return STACK2STACK;
-                    }
-                }
             }
-            throw JVMCIError.shouldNotReachHere(String.format("Unrecognized Move: %s dst=%s, src=%s", move, dst, src));
+            throw GraalInternalError.shouldNotReachHere(String.format("Unrecognized Move: %s dst=%s, src=%s", move, dst, src));
         }
     }
 

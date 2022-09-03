@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,10 @@
  */
 package com.oracle.graal.asm;
 
-import java.nio.ByteOrder;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.*;
+import java.util.*;
 
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.code.StackSlot;
-import jdk.internal.jvmci.code.TargetDescription;
+import com.oracle.graal.api.code.*;
 
 /**
  * The platform-independent base class for the assembler.
