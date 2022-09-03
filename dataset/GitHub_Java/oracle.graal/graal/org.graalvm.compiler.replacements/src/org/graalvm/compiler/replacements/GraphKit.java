@@ -158,7 +158,16 @@ public class GraphKit implements GraphBuilderTool {
 
     @Override
     public <T extends ValueNode> T append(T node) {
-        T result = graph.addOrUniqueWithInputs(changeToWord(node));
+        T result = graph.addOrUnique(changeToWord(node));
+        if (result instanceof FixedNode) {
+            updateLastFixed((FixedNode) result);
+        }
+        return result;
+    }
+
+    @Override
+    public <T extends ValueNode> T recursiveAppend(T node) {
+        T result = graph.addOrUniqueWithInputs(node);
         if (result instanceof FixedNode) {
             updateLastFixed((FixedNode) result);
         }
