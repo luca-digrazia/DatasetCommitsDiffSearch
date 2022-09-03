@@ -335,6 +335,7 @@ import com.oracle.truffle.llvm.parser.NodeFactory;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionKind;
+import com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInfoGenerator;
 import com.oracle.truffle.llvm.parser.model.attributes.Attribute;
 import com.oracle.truffle.llvm.parser.model.attributes.Attribute.KnownAttribute;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
@@ -351,11 +352,11 @@ import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObjectBuilder;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourcePointerType;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMFrameValueAccess;
+import com.oracle.truffle.llvm.runtime.debug.LLVMDebugObjectBuilder;
+import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourcePointerType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMFrameValueAccess;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
@@ -1448,7 +1449,7 @@ public class BasicNodeFactory implements NodeFactory {
     @Override
     public RootNode createFunctionStartNode(LLVMContext context, LLVMExpressionNode functionBodyNode, SourceSection sourceSection, FrameDescriptor frame, FunctionDefinition functionHeader,
                     Source bcSource, LLVMSourceLocation location) {
-        final String originalName = functionHeader.getSourceName();
+        final String originalName = DebugInfoGenerator.getSourceFunctionName(functionHeader);
         return new LLVMFunctionStartNode(sourceSection, context.getLanguage(), functionBodyNode, frame, functionHeader.getName(), functionHeader.getParameters().size(), originalName, bcSource,
                         location);
     }
