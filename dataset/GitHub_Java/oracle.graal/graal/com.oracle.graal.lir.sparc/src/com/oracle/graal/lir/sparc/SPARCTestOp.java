@@ -27,8 +27,9 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsw;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Cmp;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -43,14 +44,15 @@ public class SPARCTestOp extends SPARCLIRInstruction {
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
+    @SuppressWarnings("unused")
+    public void emitCode(TargetMethodAssembler tasm, SPARCAssembler asm) {
         if (isRegister(y)) {
             switch (x.getKind()) {
                 case Int:
-                    new Cmp(asIntReg(x), asIntReg(y)).emit(masm);
+                    new Cmp(asm, asIntReg(x), asIntReg(y));
                     break;
                 case Long:
-                    new Cmp(asLongReg(x), asLongReg(y)).emit(masm);
+                    new Cmp(asm, asLongReg(x), asLongReg(y));
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
@@ -58,10 +60,10 @@ public class SPARCTestOp extends SPARCLIRInstruction {
         } else if (isConstant(y)) {
             switch (x.getKind()) {
                 case Int:
-                    new Cmp(asIntReg(x), tasm.asIntConst(y)).emit(masm);
+                    new Cmp(asm, asIntReg(x), tasm.asIntConst(y));
                     break;
                 case Long:
-                    new Cmp(asLongReg(x), tasm.asIntConst(y)).emit(masm);
+                    new Cmp(asm, asLongReg(x), tasm.asIntConst(y));
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
@@ -69,12 +71,12 @@ public class SPARCTestOp extends SPARCLIRInstruction {
         } else {
             switch (x.getKind()) {
                 case Int:
-                    new Ldsw((SPARCAddress) tasm.asIntAddr(y), asIntReg(y)).emit(masm);
-                    new Cmp(asIntReg(x), asIntReg(y)).emit(masm);
+                    new Ldsw(asm, (SPARCAddress) tasm.asIntAddr(y), asIntReg(y));
+                    new Cmp(asm, asIntReg(x), asIntReg(y));
                     break;
                 case Long:
-                    new Ldx((SPARCAddress) tasm.asLongAddr(y), asLongReg(y)).emit(masm);
-                    new Cmp(asLongReg(x), asLongReg(y)).emit(masm);
+                    new Ldx(asm, (SPARCAddress) tasm.asLongAddr(y), asLongReg(y));
+                    new Cmp(asm, asLongReg(x), asLongReg(y));
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();

@@ -27,15 +27,30 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.asm.sparc.SPARCAddress;
+import com.oracle.graal.asm.sparc.SPARCAssembler;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Lddf;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldf;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsb;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsh;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsw;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Lduw;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Membar;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Or;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Stb;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Sth;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Stw;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Stx;
+import com.oracle.graal.asm.sparc.SPARCAssembler.NullCheck;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setuw;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
+import com.oracle.graal.graph.GraalInternalError;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.*;
 import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.asm.*;
-
-import static com.oracle.graal.sparc.SPARC.*;
+import com.oracle.graal.lir.asm.TargetMethodAssembler;
+import com.oracle.graal.sparc.SPARC;
 
 public class SPARCMove {
 
@@ -54,32 +69,33 @@ public class SPARCMove {
         }
 
         @Override
+        @SuppressWarnings("unused")
         public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
             SPARCAddress addr = address.toAddress();
             switch (kind) {
                 case Byte:
-                    new Ldsb(addr, asRegister(result)).emit(masm);
+                    new Ldsb(masm, addr, asRegister(result));
                     break;
                 case Short:
-                    new Ldsh(addr, asRegister(result)).emit(masm);
+                    new Ldsh(masm, addr, asRegister(result));
                     break;
                 case Char:
-                    new Lduw(addr, asRegister(result)).emit(masm);
+                    new Lduw(masm, addr, asRegister(result));
                     break;
                 case Int:
-                    new Ldsw(addr, asRegister(result)).emit(masm);
+                    new Ldsw(masm, addr, asRegister(result));
                     break;
                 case Long:
-                    new Ldx(addr, asRegister(result)).emit(masm);
+                    new Ldx(masm, addr, asRegister(result));
                     break;
                 case Float:
-                    new Ldf(addr, asRegister(result)).emit(masm);
+                    new Ldf(masm, addr, asRegister(result));
                     break;
                 case Double:
-                    new Lddf(addr, asRegister(result)).emit(masm);
+                    new Lddf(masm, addr, asRegister(result));
                     break;
                 case Object:
-                    new Ldx(addr, asRegister(result)).emit(masm);
+                    new Ldx(masm, addr, asRegister(result));
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
@@ -87,6 +103,7 @@ public class SPARCMove {
         }
     }
 
+    @SuppressWarnings("unused")
     public static class MembarOp extends SPARCLIRInstruction {
 
         private final int barriers;
@@ -97,7 +114,7 @@ public class SPARCMove {
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, SPARCAssembler asm) {
-            new Membar(barriers).emit(asm);
+            new Membar(asm, barriers);
         }
     }
 
@@ -169,10 +186,11 @@ public class SPARCMove {
         @SuppressWarnings("unused")
         public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
             tasm.recordImplicitException(masm.codeBuffer.position(), state);
-            new Ldx(new SPARCAddress(asRegister(input), 0), r0);
+            new NullCheck(masm, new SPARCAddress(asRegister(input), 0));
         }
     }
 
+    @SuppressWarnings("unused")
     public static class StackLoadAddressOp extends SPARCLIRInstruction {
 
         @Def({REG}) protected AllocatableValue result;
@@ -185,7 +203,7 @@ public class SPARCMove {
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, SPARCAssembler asm) {
-            new Ldx((SPARCAddress) tasm.asAddress(slot), asLongReg(result)).emit(asm);
+            new Ldx(asm, (SPARCAddress) tasm.asAddress(slot), asLongReg(result));
         }
     }
 
@@ -204,27 +222,32 @@ public class SPARCMove {
         }
 
         @Override
+        @SuppressWarnings("unused")
         public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
             assert isRegister(input);
             SPARCAddress addr = address.toAddress();
             switch (kind) {
                 case Byte:
-                    new Stb(asRegister(input), addr).emit(masm);
+                    new Stb(masm, asRegister(input), addr);
                     break;
                 case Short:
-                    new Sth(asRegister(input), addr).emit(masm);
+                    new Sth(masm, asRegister(input), addr);
                     break;
                 case Int:
-                    new Stw(asRegister(input), addr).emit(masm);
+                    new Stw(masm, asRegister(input), addr);
                     break;
                 case Long:
-                    new Stx(asRegister(input), addr).emit(masm);
-                    break;
-                case Object:
-                    new Stx(asRegister(input), addr).emit(masm);
+                    new Stx(masm, asRegister(input), addr);
                     break;
                 case Float:
+                    new Stx(masm, asRegister(input), addr);
+                    break;
                 case Double:
+                    new Stx(masm, asRegister(input), addr);
+                    break;
+                case Object:
+                    new Stx(masm, asRegister(input), addr);
+                    break;
                 default:
                     throw GraalInternalError.shouldNotReachHere("missing: " + address.getKind());
             }
@@ -249,20 +272,27 @@ public class SPARCMove {
         }
     }
 
+    @SuppressWarnings("unused")
     private static void reg2reg(SPARCAssembler masm, Value result, Value input) {
         if (asRegister(input).equals(asRegister(result))) {
             return;
         }
         switch (input.getKind()) {
             case Int:
-                new Mov(asRegister(input), asRegister(result)).emit(masm);
+                new Or(masm, SPARC.r0, asRegister(input), asRegister(result));
                 break;
             case Long:
-                new Mov(asRegister(input), asRegister(result)).emit(masm);
+                new Or(masm, SPARC.r0, asRegister(input), asRegister(result));
                 break;
             case Float:
+                new Or(masm, SPARC.r0, asRegister(input), asRegister(result));
+                break;
             case Double:
+                new Or(masm, SPARC.r0, asRegister(input), asRegister(result));
+                break;
             case Object:
+                new Or(masm, SPARC.r0, asRegister(input), asRegister(result));
+                break;
             default:
                 throw GraalInternalError.shouldNotReachHere("missing: " + input.getKind());
         }

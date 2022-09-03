@@ -190,7 +190,7 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
             assert rs1 >= 0 && rs1 < 0x20;
             assert  rd >= 0 &&  rd < 0x20;
 
-            masm.emitInt(op << 30 | rd << 25 | op3 << 19 | rs1 << 14);
+            masm.emitInt(op << 30 | rd << 25 | op3 << 19 |  rs1 << 14);
         }
     }
 
@@ -201,16 +201,6 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
             assert fcn >= 0 && fcn < 0x40;
 
             masm.emitInt(op << 30 | fcn << 25 | op3 << 19);
-        }
-    }
-
-    public static class Fmt4a {
-        public Fmt4a(SPARCAssembler masm, int op, int op3, int cc, int rs1, int regOrImmediate, int rd) {
-            assert  op == 2;
-            assert rs1 >= 0 && rs1 < 0x20;
-            assert  rd >= 0 &&  rd < 0x10;
-
-            masm.emitInt(op << 30 | rd << 25 | op3 << 19 | rs1 << 14 | ((cc << 11) & 0x000001800) | regOrImmediate);
         }
     }
 
@@ -411,10 +401,6 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
         Fdivd(0x4D, "fdivd"),
         Fdivq(0x4E, "fdivq"),
 
-        Fsqrts(0x29, "fsqrts"),
-        Fsqrtd(0x2A, "fsqrtd"),
-        Fsqrtq(0x2B, "fsqrtq"),
-
         Fsmuld(0x69, "fsmuld"),
         Fmulq(0x6B, "fmulq"),
         Fdmuldq(0x6E, "fdmulq"),
@@ -491,7 +477,7 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
         }
     }
 
-    public enum ConditionFlag {
+    public enum Condition {
         // for FBfcc & FBPfcc instruction
 
         F_Never(0, "f_never"),
@@ -538,7 +524,7 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
         private final int value;
         private final String operator;
 
-        private ConditionFlag(int value, String op) {
+        private Condition(int value, String op) {
             this.value = value;
             this.operator = op;
         }
@@ -701,11 +687,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpa extends Fmt2c {
         public Bpa(SPARCAssembler masm, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Always.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Always.getValue(),
                             Op2s.Bp.getValue(), CC.Icc.getValue(), 1, simmm19);
         }
         public Bpa(SPARCAssembler masm, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Always.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Always.getValue(),
                             Op2s.Bp.getValue(), CC.Icc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -713,11 +699,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpcc extends Fmt2c {
         public Bpcc(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.CarryClear.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.CarryClear.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpcc(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.CarryClear.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.CarryClear.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -725,11 +711,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpcs extends Fmt2c {
         public Bpcs(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.CarrySet.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.CarrySet.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpcs(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.CarrySet.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.CarrySet.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -737,11 +723,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpe extends Fmt2c {
         public Bpe(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Equal.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Equal.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpe(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Equal.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Equal.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -749,11 +735,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpg extends Fmt2c {
         public Bpg(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Greater.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Greater.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpg(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Greater.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Greater.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -761,11 +747,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpge extends Fmt2c {
         public Bpge(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.GreaterEqual.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.GreaterEqual.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpge(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.GreaterEqual.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.GreaterEqual.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -773,11 +759,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpgu extends Fmt2c {
         public Bpgu(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.GreaterUnsigned.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.GreaterUnsigned.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpgu(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.GreaterUnsigned.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.GreaterUnsigned.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -785,11 +771,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpl extends Fmt2c {
         public Bpl(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Less.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Less.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpl(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Less.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Less.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -797,11 +783,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bple extends Fmt2c {
         public Bple(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.LessEqual.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.LessEqual.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bple(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.LessEqual.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.LessEqual.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -809,11 +795,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpleu extends Fmt2c {
         public Bpleu(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.LessEqualUnsigned.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.LessEqualUnsigned.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpleu(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.LessEqualUnsigned.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.LessEqualUnsigned.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -821,11 +807,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpn extends Fmt2c {
         public Bpn(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Never.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Never.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpn(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Never.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Never.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -833,11 +819,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpne extends Fmt2c {
         public Bpne(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.NotZero.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.NotZero.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpne(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.NotZero.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.NotZero.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -845,11 +831,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpneg extends Fmt2c {
         public Bpneg(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Negative.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Negative.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpneg(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Negative.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Negative.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -857,11 +843,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bppos extends Fmt2c {
         public Bppos(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Positive.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Positive.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bppos(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.Positive.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.Positive.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -869,11 +855,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpvc extends Fmt2c {
         public Bpvc(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.OverflowClear.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.OverflowClear.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpvc(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.OverflowClear.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.OverflowClear.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -881,11 +867,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
 
     public static class Bpvs extends Fmt2c {
         public Bpvs(SPARCAssembler masm, CC cc, int simmm19) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.OverflowSet.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.OverflowSet.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1, simmm19);
         }
         public Bpvs(SPARCAssembler masm, CC cc, Label label) {
-            super(masm, Ops.BranchOp.getValue(), 0, ConditionFlag.OverflowSet.getValue(),
+            super(masm, Ops.BranchOp.getValue(), 0, Condition.OverflowSet.getValue(),
                             Op2s.Bp.getValue(), cc.getValue(), 1,
                             label.isBound() ? label.position() : patchUnbound(masm, label));
         }
@@ -979,14 +965,6 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
         }
     }
 
-    public static class Fsqrtd extends Fmt3p {
-        public Fsqrtd(SPARCAssembler masm, Register src2, Register dst) {
-            super(masm, Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fsqrtd.getValue(),
-                  0, src2.encoding(), dst.encoding());
-        }
-    }
-
-
     public static class Fsubs extends Fmt3p {
         public Fsubs(SPARCAssembler masm, Register src1, Register src2, Register dst) {
             super(masm, Ops.ArithOp.getValue(), Op3s.Fpop1.getValue(), Opfs.Fsubs.getValue(),
@@ -1072,11 +1050,11 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
     }
 
     public static class Movcc extends Fmt4c {
-        public Movcc(SPARCAssembler masm, ConditionFlag cond, CC cca, Register src2, Register dst) {
+        public Movcc(SPARCAssembler masm, Condition cond, CC cca, Register src2, Register dst) {
             super(masm, Ops.ArithOp.getValue(), Op3s.Movcc.getValue(), cond.getValue(), cca.getValue(),
                   src2.encoding(), dst.encoding());
         }
-        public Movcc(SPARCAssembler masm, ConditionFlag cond, CC cca, int simm11a, Register dst) {
+        public Movcc(SPARCAssembler masm, Condition cond, CC cca, int simm11a, Register dst) {
             super(masm, Ops.ArithOp.getValue(), Op3s.Movcc.getValue(), cond.getValue(), cca.getValue(),
                   simm11a, dst.encoding());
         }
@@ -1428,17 +1406,6 @@ public class SPARCAssembler extends AbstractSPARCAssembler {
         }
         public Subccc(SPARCAssembler masm, Register src1, Register src2, Register dst) {
             super(masm, Ops.ArithOp.getValue(), Op3s.Subccc.getValue(), src1.encoding(), src2.encoding(), dst.encoding());
-        }
-    }
-
-    public static class Ta extends Fmt4a {
-        public Ta(SPARCAssembler asm, CC cc, Register src1, int trap) {
-            super(asm, Ops.ArithOp.getValue(), Op3s.Trap.getValue(), cc.getValue(),
-                  src1.encoding(), trap, ConditionFlag.Always.getValue());
-        }
-        public Ta(SPARCAssembler asm, CC cc, Register src1, Register src2) {
-            super(asm, Ops.ArithOp.getValue(), Op3s.Trap.getValue(), cc.getValue(),
-                  src1.encoding(), src2.encoding(), ConditionFlag.Always.getValue());
         }
     }
 
