@@ -24,14 +24,15 @@ package com.oracle.graal.phases.common.inlining.policy;
 
 import com.oracle.graal.api.meta.ProfilingInfo;
 import com.oracle.graal.api.meta.ResolvedJavaMethod;
+import com.oracle.graal.nodes.FixedNode;
 import com.oracle.graal.nodes.Invoke;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.spi.Replacements;
 import com.oracle.graal.phases.common.inlining.InliningUtil;
 import com.oracle.graal.phases.common.inlining.info.InlineInfo;
-import com.oracle.graal.phases.common.inlining.info.elem.Inlineable;
 
 import java.util.Map;
+import java.util.function.ToDoubleFunction;
 
 import static com.oracle.graal.compiler.common.GraalOptions.RelevanceCapForInlining;
 import static com.oracle.graal.phases.common.inlining.InliningPhase.Options.AlwaysInlineIntrinsics;
@@ -98,14 +99,25 @@ public abstract class AbstractInliningPolicy implements InliningPolicy {
         return size;
     }
 
-    protected static double determineInvokeProbability(InlineInfo info) {
+    protected static int determineNodeCount(InlineInfo info) {
+        int nodes = 0;
+        for (int i = 0; i < info.numberOfMethods(); i++) {
+            InliningUtil.Inlineable elem = info.inlineableElementAt(i);
+            if (elem != null) {
+                nodes += elem.getNodeCount();
+            }
+        }
+        return nodes;
+    }
+
+    protected static double determineInvokeProbability(ToDoubleFunction<FixedNode> probabilities, InlineInfo info) {
         double invokeProbability = 0;
         for (int i = 0; i < info.numberOfMethods(); i++) {
-            Inlineable callee = info.inlineableElementAt(i);
+            InliningUtil.Inlineable callee = info.inlineableElementAt(i);
             Iterable<Invoke> invokes = callee.getInvokes();
             if (invokes.iterator().hasNext()) {
                 for (Invoke invoke : invokes) {
-                    invokeProbability += callee.getProbability(invoke);
+                    invokeProbability += probabilities.applyAsDouble(invoke.asNode());
                 }
             }
         }
