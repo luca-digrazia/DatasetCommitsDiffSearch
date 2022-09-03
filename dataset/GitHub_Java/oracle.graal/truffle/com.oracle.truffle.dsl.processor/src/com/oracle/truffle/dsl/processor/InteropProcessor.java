@@ -535,6 +535,7 @@ public final class InteropProcessor extends AbstractProcessor {
         void appendImports(Writer w) throws IOException {
             super.appendImports(w);
             w.append("import java.util.List;").append("\n");
+            w.append("import com.oracle.truffle.api.nodes.ExplodeLoop;").append("\n");
         }
 
         @Override
@@ -558,6 +559,7 @@ public final class InteropProcessor extends AbstractProcessor {
                             "Gen.create();\n");
             w.append("\n");
             w.append("        @Override\n");
+            w.append("        @ExplodeLoop\n");
             w.append("        public Object execute(VirtualFrame frame) {\n");
             w.append("            try {\n");
             w.append("              Object receiver = ForeignAccess.getReceiver(frame);\n");
@@ -853,7 +855,7 @@ public final class InteropProcessor extends AbstractProcessor {
                 appendImports(w);
                 w.append("final class ").append(className).append(" implements Factory10, Factory {\n");
 
-                appendSingletonAndGetter(w);
+                appendSingelton(w);
                 appendPrivateConstructor(w);
                 appendFactoryCanHandle(w);
 
@@ -889,9 +891,8 @@ public final class InteropProcessor extends AbstractProcessor {
             w.append("import com.oracle.truffle.api.nodes.RootNode;").append("\n");
         }
 
-        private void appendSingletonAndGetter(Writer w) throws IOException {
+        private void appendSingelton(Writer w) throws IOException {
             w.append("  public static final ForeignAccess ACCESS = ForeignAccess.create(null, new ").append(className).append("());").append("\n");
-            w.append("  public static ForeignAccess createAccess() { return ForeignAccess.create(null, new ").append(className).append("());}").append("\n");
             w.append("\n");
         }
 
