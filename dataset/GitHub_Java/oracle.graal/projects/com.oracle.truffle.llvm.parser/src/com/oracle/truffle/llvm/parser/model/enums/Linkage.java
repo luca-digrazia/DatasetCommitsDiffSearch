@@ -70,15 +70,8 @@ public enum Linkage {
         return EXTERNAL;
     }
 
-    public String getIrString() {
+    @Override
+    public String toString() {
         return irString;
-    }
-
-    public static boolean isFileLocal(Linkage linkage) {
-        return linkage == Linkage.INTERNAL || linkage == Linkage.PRIVATE;
-    }
-
-    public static boolean isExtern(Linkage linkage) {
-        return linkage == Linkage.EXTERNAL || linkage == Linkage.EXTERN_WEAK;
     }
 }
