@@ -24,14 +24,9 @@
  */
 package com.oracle.truffle.api.frame;
 
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.Truffle;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+
+import com.oracle.truffle.api.*;
 
 /**
  * Descriptor of the slots of frame objects. Multiple frame instances are associated with one such
