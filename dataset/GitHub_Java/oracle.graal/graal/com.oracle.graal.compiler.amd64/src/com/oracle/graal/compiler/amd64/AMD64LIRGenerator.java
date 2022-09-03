@@ -68,7 +68,6 @@ import com.oracle.graal.lir.amd64.AMD64Move.MoveToRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.NullCheckOp;
 import com.oracle.graal.lir.amd64.AMD64Move.SpillMoveOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StackLeaOp;
-import com.oracle.graal.lir.amd64.AMD64Move.StoreConstantOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -212,18 +211,8 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value inputVal, boolean canTrap) {
         AMD64Address storeAddress = prepareAddress(kind, base, displacement, index, scale);
-        LIRFrameState state = canTrap ? state() : null;
-
-        if (isConstant(inputVal)) {
-            Constant c = asConstant(inputVal);
-            if (canStoreConstant(c)) {
-                append(new StoreConstantOp(storeAddress, c, state));
-                return;
-            }
-        }
-
-        Variable input = load(inputVal);
-        append(new StoreOp(storeAddress, input, state));
+        Value input = loadForStore(inputVal, storeAddress.getKind());
+        append(new StoreOp(storeAddress, input, canTrap ? state() : null));
     }
 
     @Override

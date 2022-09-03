@@ -46,7 +46,7 @@ public class GetObjectAddressNode extends FixedWithNextNode implements LIRLowera
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        AllocatableValue obj = gen.newVariable(gen.target().wordKind);
+        Value obj = gen.newVariable(gen.target().wordKind);
         gen.emitMove(obj, gen.operand(object));
         gen.setResult(this, obj);
     }

@@ -131,7 +131,7 @@ public class PhiResolver {
             PhiResolverNode node = variableOperands.get(i);
             if (!node.visited) {
                 loop = null;
-                move(node, null);
+                move(null, node);
                 node.startNode = true;
                 assert isIllegal(temp) : "moveTempTo() call missing";
             }
@@ -141,12 +141,12 @@ public class PhiResolver {
         for (int i = otherOperands.size() - 1; i >= 0; i--) {
             PhiResolverNode node = otherOperands.get(i);
             for (int j = node.destinations.size() - 1; j >= 0; j--) {
-                emitMove(node.destinations.get(j).operand, node.operand);
+                emitMove(node.operand, node.destinations.get(j).operand);
             }
         }
     }
 
-    public void move(Value dest, Value src) {
+    public void move(Value src, Value dest) {
         assert isVariable(dest) : "destination must be virtual";
         // tty.print("move "); src.print(); tty.print(" to "); dest.print(); tty.cr();
         assert isLegal(src) : "source for phi move is illegal";
@@ -184,7 +184,7 @@ public class PhiResolver {
         return createNode(opr, false);
     }
 
-    private void emitMove(Value dest, Value src) {
+    private void emitMove(Value src, Value dest) {
         assert isLegal(src);
         assert isLegal(dest);
         gen.emitMove(dest, src);
@@ -197,11 +197,11 @@ public class PhiResolver {
     // ie. cycle a := b, b := a start with node a
     // Call graph: move(NULL, a) -> move(a, b) -> move(b, a)
     // Generates moves in this order: move b to temp, move a to b, move temp to a
-    private void move(PhiResolverNode dest, PhiResolverNode src) {
+    private void move(PhiResolverNode src, PhiResolverNode dest) {
         if (!dest.visited) {
             dest.visited = true;
             for (int i = dest.destinations.size() - 1; i >= 0; i--) {
-                move(dest.destinations.get(i), dest);
+                move(dest, dest.destinations.get(i));
             }
         } else if (!dest.startNode) {
             // cycle in graph detected
@@ -216,7 +216,7 @@ public class PhiResolver {
                 moveTempTo(dest.operand);
                 dest.assigned = true;
             } else if (src != null) {
-                emitMove(dest.operand, src.operand);
+                emitMove(src.operand, dest.operand);
                 dest.assigned = true;
             }
         }
@@ -224,14 +224,14 @@ public class PhiResolver {
 
     private void moveTempTo(Value dest) {
         assert isLegal(temp);
-        emitMove(dest, temp);
+        emitMove(temp, dest);
         temp = ILLEGAL;
     }
 
     private void moveToTemp(Value src) {
         assert isIllegal(temp);
         temp = gen.newVariable(src.getKind());
-        emitMove(temp, src);
+        emitMove(src, temp);
     }
 
     private PhiResolverNode sourceNode(Value opr) {

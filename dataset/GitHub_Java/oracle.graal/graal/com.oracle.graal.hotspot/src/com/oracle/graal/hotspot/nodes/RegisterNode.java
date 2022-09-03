@@ -22,18 +22,18 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
  * Access the value of a specific register.
  */
-public final class RegisterNode extends FloatingNode implements LIRLowerable {
+@NodeInfo(nameTemplate = "Register %{p#register}")
+public final class RegisterNode extends FixedWithNextNode implements LIRLowerable {
 
     private final Register register;
 
@@ -42,10 +42,22 @@ public final class RegisterNode extends FloatingNode implements LIRLowerable {
         this.register = register;
     }
 
+    public RegisterNode(Register register) {
+        super(StampFactory.object());
+        this.register = register;
+    }
+
     @Override
     public void generate(LIRGeneratorTool generator) {
-        Value result = generator.newVariable(kind());
-        generator.emitMove(register.asValue(kind()), result);
+        Value result;
+        if (generator.attributes(register).isAllocatable()) {
+            // The register allocator would prefer us not to tie up an allocatable
+            // register for the complete lifetime of this node.
+            result = generator.newVariable(kind());
+            generator.emitMove(result, register.asValue(kind()));
+        } else {
+            result = register.asValue(kind());
+        }
         generator.setResult(this, result);
     }
 
@@ -56,18 +68,5 @@ public final class RegisterNode extends FloatingNode implements LIRLowerable {
         } else {
             return super.toString(verbosity);
         }
-    }
-
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("register", register.toString());
-        return properties;
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static <T> T register(@ConstantNodeParameter Register register, @ConstantNodeParameter Kind kind) {
-        throw new UnsupportedOperationException();
     }
 }

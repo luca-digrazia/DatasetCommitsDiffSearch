@@ -45,11 +45,21 @@ public abstract class LIRGeneratorTool {
      */
     public abstract boolean canInlineConstant(Constant c);
 
+    /**
+     * Checks whether the supplied constant can be used without loading it into a register for store
+     * operations, i.e., on the right hand side of a memory access.
+     * 
+     * @param c The constant to check.
+     * @return True if the constant can be used directly, false if the constant needs to be in a
+     *         register.
+     */
+    public abstract boolean canStoreConstant(Constant c);
+
     public abstract RegisterAttributes attributes(Register register);
 
     public abstract Value operand(ValueNode object);
 
-    public abstract AllocatableValue newVariable(Kind kind);
+    public abstract Value newVariable(Kind kind);
 
     public abstract Value setResult(ValueNode x, Value operand);
 
@@ -97,9 +107,9 @@ public abstract class LIRGeneratorTool {
 
     public abstract void emitMembar(int barriers);
 
-    public abstract void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason);
+    public abstract void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo);
 
-    public abstract void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason);
+    public abstract void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo);
 
     public abstract Value emitCall(RuntimeCallTarget callTarget, CallingConvention cc, boolean canTrap, Value... args);
 
