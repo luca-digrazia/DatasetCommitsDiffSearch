@@ -45,7 +45,6 @@ import com.oracle.graal.lir.debug.IntervalDumper;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 
 import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterArray;
 import jdk.vm.ci.code.RegisterAttributes;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.TargetDescription;
@@ -59,7 +58,7 @@ public final class IntervalData implements IntervalDumper {
 
     private final LIR ir;
     private final RegisterAttributes[] registerAttributes;
-    private final RegisterArray registers;
+    private final Register[] registers;
 
     /**
      * List of blocks in linear-scan order. This is only correct as long as the CFG does not change.
@@ -107,7 +106,7 @@ public final class IntervalData implements IntervalDumper {
         this.registerAttributes = regAllocConfig.getRegisterConfig().getAttributesMap();
 
         this.registers = target.arch.getRegisters();
-        this.fixedIntervals = new FixedInterval[registers.size()];
+        this.fixedIntervals = new FixedInterval[registers.length];
     }
 
     private int getFirstLirInstructionId(AbstractBlockBase<?> block) {
@@ -479,7 +478,8 @@ public final class IntervalData implements IntervalDumper {
         Value hint = null;
         AllocatableValue operand = interval.operand;
         String type = "fixed";
-        visitor.visitIntervalStart(operand, operand, operand, hint, type);
+        char typeChar = operand.getPlatformKind().getTypeChar();
+        visitor.visitIntervalStart(operand, operand, operand, hint, type, typeChar);
 
         // print ranges
         for (FixedRange range = interval.first(); range != FixedRange.EndMarker; range = range.next) {
@@ -496,7 +496,8 @@ public final class IntervalData implements IntervalDumper {
         Value hint = interval.locationHint(false) != null ? interval.locationHint(false).location() : null;
         AllocatableValue operand = interval.operand;
         String type = isRegister(operand) ? "fixed" : operand.getValueKind().getPlatformKind().toString();
-        visitor.visitIntervalStart(interval.splitParent().operand, operand, interval.location(), hint, type);
+        char typeChar = operand.getPlatformKind().getTypeChar();
+        visitor.visitIntervalStart(interval.splitParent().operand, operand, interval.location(), hint, type, typeChar);
 
         // print ranges
         visitor.visitRange(interval.from(), interval.to());
