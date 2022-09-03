@@ -335,21 +335,7 @@ public abstract class Klass implements ModifiersProvider {
             }
         }
         if (getSuperclass() != null) {
-            MethodInfo m = getSuperclass().findMethod(name, signature);
-            if (m != null) {
-                return m;
-            }
-        }
-
-        // No concrete method found, look interface methods.
-        if (isAbstract()) {
-            // Look
-            for (Klass i : getInterfaces()) {
-                MethodInfo m = i.findMethod(name, signature);
-                if (m != null) {
-                    return m;
-                }
-            }
+            return getSuperclass().findMethod(name, signature);
         }
 
         return null;
