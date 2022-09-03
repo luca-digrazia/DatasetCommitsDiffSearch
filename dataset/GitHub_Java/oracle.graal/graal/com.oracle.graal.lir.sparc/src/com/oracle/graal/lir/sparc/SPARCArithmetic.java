@@ -26,7 +26,6 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
@@ -424,11 +423,8 @@ public enum SPARCArithmetic {
                     break;
                 case DAND:
                     SPARCAddress addr = (SPARCAddress) crb.recordDataReferenceInCode(asConstant(src2), 4);
-                    try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
-                        Register scratch = sc.getRegister();
-                        addr = SPARCMove.guaranueeLoadable(addr, masm, scratch);
-                        new Lddf(addr, asDoubleReg(dst)).emit(masm);
-                    }
+                    addr = SPARCMove.guaranueeLoadable(addr, masm);
+                    new Lddf(addr, asDoubleReg(dst)).emit(masm);
                     new Fandd(asDoubleReg(src1), asDoubleReg(dst), asDoubleReg(dst)).emit(masm);
                     break;
                 case FADD:
