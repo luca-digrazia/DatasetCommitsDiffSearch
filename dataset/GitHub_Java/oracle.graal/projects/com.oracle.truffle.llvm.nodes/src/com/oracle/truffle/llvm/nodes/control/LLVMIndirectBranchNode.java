@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.nodes.control;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
@@ -41,10 +42,10 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 public final class LLVMIndirectBranchNode extends LLVMControlFlowNode {
 
     @Child private LLVMBranchAddressNode branchAddress;
-    @Children private final LLVMExpressionNode[] phiWriteNodes;
+    @CompilationFinal(dimensions = 2) private final LLVMExpressionNode[][] phiWriteNodes;
     @CompilationFinal(dimensions = 1) private final int[] successors;
 
-    public LLVMIndirectBranchNode(LLVMBranchAddressNode branchAddress, int[] indices, LLVMExpressionNode[] phiWriteNodes, SourceSection sourceSection) {
+    public LLVMIndirectBranchNode(LLVMBranchAddressNode branchAddress, int[] indices, LLVMExpressionNode[][] phiWriteNodes, SourceSection sourceSection) {
         super(sourceSection);
         assert indices.length > 1;
         this.successors = indices;
@@ -57,9 +58,12 @@ public final class LLVMIndirectBranchNode extends LLVMControlFlowNode {
         return successors.length;
     }
 
-    @Override
-    public LLVMExpressionNode getPhiNode(int successorIndex) {
-        return phiWriteNodes[successorIndex];
+    @ExplodeLoop
+    public void writePhis(VirtualFrame frame, int successorIndex) {
+        LLVMExpressionNode[] phis = phiWriteNodes[successorIndex];
+        for (int i = 0; i < phis.length; i++) {
+            phis[i].executeGeneric(frame);
+        }
     }
 
     public int executeCondition(VirtualFrame frame) {
