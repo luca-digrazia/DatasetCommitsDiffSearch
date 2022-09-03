@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.nodes.calc.*;
@@ -30,40 +30,29 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * A location for a memory access in terms of the kind of value accessed and the displacement (in
- * bytes) from a base object or address.
+ * A location for a memory access in terms of the kind of value accessed and the displacement
+ * (in bytes) from a base object or address.
  */
-@NodeInfo(nameTemplate = "Loc {p#locationIdentity/s}")
 public class LocationNode extends FloatingNode implements LIRLowerable, ValueNumberable {
 
     private int displacement;
-    private Kind valueKind;
+    private CiKind valueKind;
     private Object locationIdentity;
 
-    /**
-     * Denotes any location. A write to such a location kills all values in a memory map during an
-     * analysis of memory accesses in a graph.
-     */
     public static final Object ANY_LOCATION = new Object() {
-
         @Override
         public String toString() {
             return "ANY_LOCATION";
         }
     };
-
-    /**
-     * Denotes the location of a value that is guaranteed to be final.
-     */
     public static final Object FINAL_LOCATION = new Object() {
-
         @Override
         public String toString() {
             return "FINAL_LOCATION";
         }
     };
 
-    public static Object getArrayLocation(Kind elementKind) {
+    public static Object getArrayLocation(CiKind elementKind) {
         return elementKind;
     }
 
@@ -71,19 +60,19 @@ public class LocationNode extends FloatingNode implements LIRLowerable, ValueNum
         return displacement;
     }
 
-    public static LocationNode create(Object identity, Kind kind, int displacement, Graph graph) {
+    public static LocationNode create(Object identity, CiKind kind, int displacement, Graph graph) {
         return graph.unique(new LocationNode(identity, kind, displacement));
     }
 
-    protected LocationNode(Object identity, Kind kind, int displacement) {
+    protected LocationNode(Object identity, CiKind kind, int displacement) {
         super(StampFactory.extension());
-        assert kind != Kind.Illegal && kind != Kind.Void;
+        assert kind != CiKind.Illegal && kind != CiKind.Void;
         this.displacement = displacement;
         this.valueKind = kind;
         this.locationIdentity = identity;
     }
 
-    public Kind getValueKind() {
+    public CiKind getValueKind() {
         return valueKind;
     }
 
