@@ -24,6 +24,7 @@ package com.oracle.max.graal.compiler.schedule;
 
 import java.util.*;
 
+import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
 
@@ -37,7 +38,6 @@ public class Block {
     private Block dominator;
     private Block javaBlock;
     private final List<Block> dominators = new ArrayList<Block>();
-    private Anchor anchor;
 
     private Node firstNode;
     private Node lastNode;
@@ -48,7 +48,6 @@ public class Block {
 
     public void setFirstNode(Node node) {
         this.firstNode = node;
-        this.anchor = null;
     }
 
     public Block javaBlock() {
@@ -61,44 +60,6 @@ public class Block {
 
     public Node lastNode() {
         return lastNode;
-    }
-
-    public Anchor createAnchor() {
-        if (anchor == null) {
-            if (firstNode instanceof Anchor) {
-                this.anchor = (Anchor) firstNode;
-            } else if (firstNode == firstNode.graph().start()) {
-                StartNode start = (StartNode) firstNode;
-                if (start.start() instanceof Anchor) {
-                    this.anchor = (Anchor) start.start();
-                } else {
-                    Anchor a = new Anchor(firstNode.graph());
-                    a.setNext((FixedNode) firstNode.graph().start().start());
-                    firstNode.graph().start().setStart(a);
-                    this.anchor = a;
-                }
-            } else if (firstNode instanceof Merge) {
-                Merge merge = (Merge) firstNode;
-                if (merge.next() instanceof Anchor) {
-                    this.anchor = (Anchor) merge.next();
-                } else {
-                    Anchor a = new Anchor(firstNode.graph());
-                    a.setNext(merge.next());
-                    merge.setNext(a);
-                    this.anchor = a;
-                }
-            } else {
-                assert !(firstNode instanceof Anchor);
-                Anchor a = new Anchor(firstNode.graph());
-                assert firstNode.predecessors().size() == 1 : firstNode;
-                Node pred = firstNode.predecessors().get(0);
-                int predIndex = pred.successors().indexOf(firstNode);
-                pred.successors().set(predIndex, a);
-                a.setNext((FixedNode) firstNode);
-                this.anchor = a;
-            }
-        }
-        return anchor;
     }
 
     public void setLastNode(Node node) {
@@ -171,15 +132,53 @@ public class Block {
         return "B" + blockID;
     }
 
-    public boolean isLoopHeader() {
-        return firstNode instanceof LoopBegin;
-    }
-
     public Block dominator() {
         return dominator;
     }
 
     public void setInstructions(List<Node> instructions) {
         this.instructions = instructions;
+    }
+
+    public static void iteratePostOrder(List<Block> blocks, BlockClosure closure) {
+        ArrayList<Block> startBlocks = new ArrayList<Block>();
+        for (Block block : blocks) {
+            if (block.getPredecessors().size() == 0) {
+                startBlocks.add(block);
+            }
+        }
+        iteratePostOrder(blocks, closure, startBlocks.toArray(new Block[startBlocks.size()]));
+    }
+
+    public static void iteratePostOrder(List<Block> blocks, BlockClosure closure, Block... startBlocks) {
+        BitMap visited = new BitMap(blocks.size());
+        LinkedList<Block> workList = new LinkedList<Block>();
+        for (Block block : startBlocks) {
+            workList.add(block);
+            visited.set(block.blockID());
+        }
+
+        while (!workList.isEmpty()) {
+            Block b = workList.remove();
+
+            closure.apply(b);
+
+            for (Block succ : b.getSuccessors()) {
+                if (!visited.get(succ.blockID())) {
+                    boolean delay = false;
+                    for (Block pred : succ.getPredecessors()) {
+                        if (!visited.get(pred.blockID()) && !(pred.lastNode instanceof LoopEnd)) {
+                            delay = true;
+                            break;
+                        }
+                    }
+
+                    if (!delay) {
+                        visited.set(succ.blockID());
+                        workList.add(succ);
+                    }
+                }
+            }
+        }
     }
 }

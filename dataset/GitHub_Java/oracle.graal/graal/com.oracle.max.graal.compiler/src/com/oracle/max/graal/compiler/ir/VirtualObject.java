@@ -56,7 +56,7 @@ public class VirtualObject extends FloatingNode {
         return (VirtualObject) inputs().get(super.inputCount() + INPUT_OBJECT);
     }
 
-    private VirtualObject setObject(VirtualObject n) {
+    public VirtualObject setObject(VirtualObject n) {
         return (VirtualObject) inputs().set(super.inputCount() + INPUT_OBJECT, n);
     }
 
@@ -72,7 +72,6 @@ public class VirtualObject extends FloatingNode {
     }
 
     private EscapeField field;
-    private EscapeField[] fields;
     private RiType type;
 
     /**
@@ -80,13 +79,11 @@ public class VirtualObject extends FloatingNode {
      * @param array the instruction producing the array
      * @param newFrameState the state after executing this instruction
      */
-    public VirtualObject(VirtualObject object, Value input, EscapeField field, RiType type, EscapeField[] fields, Graph graph) {
+    public VirtualObject(VirtualObject object, EscapeField field, RiType type, Graph graph) {
         super(CiKind.Int, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.field = field;
         this.type = type;
-        this.fields = fields;
         setObject(object);
-        setInput(input);
     }
 
     public EscapeField field() {
@@ -95,10 +92,6 @@ public class VirtualObject extends FloatingNode {
 
     public RiType type() {
         return type;
-    }
-
-    public EscapeField[] fields() {
-        return fields;
     }
 
     @Override
@@ -126,7 +119,7 @@ public class VirtualObject extends FloatingNode {
 
     @Override
     public Node copy(Graph into) {
-        VirtualObject x = new VirtualObject(null, null, field, type, fields, into);
+        VirtualObject x = new VirtualObject(null, field, type, into);
         return x;
     }
 }

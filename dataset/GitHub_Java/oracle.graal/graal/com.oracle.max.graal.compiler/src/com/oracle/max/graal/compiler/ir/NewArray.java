@@ -30,12 +30,12 @@ import com.oracle.max.graal.compiler.phases.EscapeAnalysisPhase.EscapeOp;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * The {@code NewArray} class is the base of all instructions that allocate arrays.
  */
-public abstract class NewArray extends FixedNodeWithNext {
-
+public abstract class NewArray extends Instruction {
     private static final EscapeOp ESCAPE = new NewArrayEscapeOp();
 
     private static final int INPUT_COUNT = 1;
@@ -155,22 +155,11 @@ public abstract class NewArray extends FixedNodeWithNext {
                 assert x.array() == node;
                 return false;
             } else if (usage instanceof VirtualObject) {
+                VirtualObject x = (VirtualObject) usage;
                 return false;
             } else {
                 return true;
             }
-        }
-
-        @Override
-        public EscapeField[] fields(Node node) {
-            NewArray x = (NewArray) node;
-            int length = x.dimension(0).asConstant().asInt();
-            EscapeField[] fields = new EscapeField[length];
-            for (int i = 0; i < length; i++) {
-                Integer representation = i;
-                fields[i] = new EscapeField("[" + i + "]", representation, ((NewArray) node).elementKind());
-            }
-            return fields;
         }
 
         @Override
@@ -179,7 +168,7 @@ public abstract class NewArray extends FixedNodeWithNext {
                 IsNonNull x = (IsNonNull) usage;
                 if (x.usages().size() == 1 && x.usages().get(0) instanceof FixedGuard) {
                     FixedGuard guard = (FixedGuard) x.usages().get(0);
-                    guard.replaceAndDelete(guard.next());
+                    guard.replace(guard.next());
                 }
                 x.delete();
             } else if (usage instanceof IsType) {
@@ -187,15 +176,30 @@ public abstract class NewArray extends FixedNodeWithNext {
                 assert x.type() == ((NewArray) node).exactType();
                 if (x.usages().size() == 1 && x.usages().get(0) instanceof FixedGuard) {
                     FixedGuard guard = (FixedGuard) x.usages().get(0);
-                    guard.replaceAndDelete(guard.next());
+                    guard.replace(guard.next());
                 }
                 x.delete();
             } else if (usage instanceof AccessMonitor) {
                 AccessMonitor x = (AccessMonitor) usage;
-                x.replaceAndDelete(x.next());
+                x.replace(x.next());
             } else if (usage instanceof ArrayLength) {
                 ArrayLength x = (ArrayLength) usage;
-                x.replaceAndDelete(((NewArray) node).dimension(0));
+                x.replace(((NewArray) node).dimension(0));
+            }
+        }
+
+        @Override
+        public void collectField(Node node, Node usage, Map<Object, EscapeField> fields) {
+            if (usage instanceof AccessIndexed) {
+                AccessIndexed x = (AccessIndexed) usage;
+                CiConstant index = x.index().asConstant();
+                CiConstant length = ((NewArray) node).dimension(0).asConstant();
+                assert index != null && length != null && index.asInt() >= 0 && index.asInt() < length.asInt();
+
+                Integer representation = index.asInt();
+                if (!fields.containsKey(representation)) {
+                    fields.put(representation, new EscapeField("[" + representation + "]", representation, ((NewArray) node).elementKind()));
+                }
             }
         }
 
@@ -212,14 +216,14 @@ public abstract class NewArray extends FixedNodeWithNext {
                             usage.inputs().replace(x, fieldState.get(field));
                         }
                         assert x.usages().size() == 0;
-                        x.replaceAndDelete(x.next());
+                        x.replace(x.next());
                     }
                 } else if (current instanceof StoreIndexed) {
                     StoreIndexed x = (StoreIndexed) current;
                     if (x.array() == node) {
                         fieldState.put(field, x.value());
                         assert x.usages().size() == 0;
-                        x.replaceAndDelete(x.next());
+                        x.replace(x.next());
                     }
                 }
             }

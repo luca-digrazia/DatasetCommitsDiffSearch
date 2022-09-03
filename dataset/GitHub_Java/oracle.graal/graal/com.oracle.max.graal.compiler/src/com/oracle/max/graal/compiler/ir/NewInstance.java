@@ -138,6 +138,7 @@ public final class NewInstance extends FloatingNode {
                 assert x.object() == node;
                 return false;
             } else if (usage instanceof VirtualObject) {
+                VirtualObject x = (VirtualObject) usage;
                 return false;
             } else if (usage instanceof RegisterFinalizer) {
                 RegisterFinalizer x = (RegisterFinalizer) usage;
@@ -149,24 +150,12 @@ public final class NewInstance extends FloatingNode {
         }
 
         @Override
-        public EscapeField[] fields(Node node) {
-            NewInstance x = (NewInstance) node;
-            RiField[] riFields = x.instanceClass().fields();
-            EscapeField[] fields = new EscapeField[riFields.length];
-            for (int i = 0; i < riFields.length; i++) {
-                RiField field = riFields[i];
-                fields[i] = new EscapeField(field.name(), field, field.kind().stackKind());
-            }
-            return fields;
-        }
-
-        @Override
         public void beforeUpdate(Node node, Node usage) {
             if (usage instanceof IsNonNull) {
                 IsNonNull x = (IsNonNull) usage;
                 if (x.usages().size() == 1 && x.usages().get(0) instanceof FixedGuard) {
                     FixedGuard guard = (FixedGuard) x.usages().get(0);
-                    guard.replaceAndDelete(guard.next());
+                    guard.replace(guard.next());
                 }
                 x.delete();
             } else if (usage instanceof IsType) {
@@ -174,15 +163,26 @@ public final class NewInstance extends FloatingNode {
                 assert x.type() == ((NewInstance) node).instanceClass();
                 if (x.usages().size() == 1 && x.usages().get(0) instanceof FixedGuard) {
                     FixedGuard guard = (FixedGuard) x.usages().get(0);
-                    guard.replaceAndDelete(guard.next());
+                    guard.replace(guard.next());
                 }
                 x.delete();
             } else if (usage instanceof AccessMonitor) {
                 AccessMonitor x = (AccessMonitor) usage;
-                x.replaceAndDelete(x.next());
+                x.replace(x.next());
             } else if (usage instanceof RegisterFinalizer) {
                 RegisterFinalizer x = (RegisterFinalizer) usage;
-                x.replaceAndDelete(x.next());
+                x.replace(x.next());
+            }
+        }
+
+        @Override
+        public void collectField(Node node, Node usage, Map<Object, EscapeField> fields) {
+             if (usage instanceof AccessField) {
+                 AccessField x = (AccessField) usage;
+                assert x.object() == node;
+                if (!fields.containsKey(x.field())) {
+                    fields.put(x.field(), new EscapeField(x.field().name(), x.field(), x.field.kind().stackKind()));
+                }
             }
         }
 
@@ -198,14 +198,14 @@ public final class NewInstance extends FloatingNode {
                             usage.inputs().replace(x, fieldState.get(field));
                         }
                         assert x.usages().size() == 0;
-                        x.replaceAndDelete(x.next());
+                        x.replace(x.next());
                     }
                 } else if (current instanceof StoreField) {
                     StoreField x = (StoreField) current;
                     if (x.object() == node) {
                         fieldState.put(field, x.value());
                         assert x.usages().size() == 0;
-                        x.replaceAndDelete(x.next());
+                        x.replace(x.next());
                     }
                 }
             }

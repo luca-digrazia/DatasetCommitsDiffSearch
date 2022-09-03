@@ -42,7 +42,6 @@ public class EscapeAnalysisPhase extends Phase {
 
     public static class BlockExitState {
         public final Map<EscapeField, Node> fieldState;
-        public VirtualObject obj;
 
         public BlockExitState() {
             this.fieldState = new HashMap<EscapeField, Node>();
@@ -58,8 +57,6 @@ public class EscapeAnalysisPhase extends Phase {
         private final EscapeOp op;
         private Graph graph;
         private final Node node;
-        private RiType type;
-        private EscapeField[] escapeFields;
 
         public EscapementFixup(EscapeOp op, Graph graph, Node node) {
             this.op = op;
@@ -80,11 +77,7 @@ public class EscapeAnalysisPhase extends Phase {
             final HashMap<Phi, EscapeField> phis = new HashMap<Phi, EscapeField>();
             final Block startBlock = identifyBlocksPhase.getNodeToBlock().get(node);
             assert startBlock != null;
-            type = ((Value) node).exactType();
-            escapeFields = op.fields(node);
-            for (EscapeField field : escapeFields) {
-                fields.put(field.representation(), field);
-            }
+            final RiType type = ((Value) node).exactType();
 
             Block.iteratePostOrder(blocks, new BlockClosure() {
 
@@ -102,11 +95,8 @@ public class EscapeAnalysisPhase extends Phase {
 
                     BlockExitState state = new BlockExitState();
                     if (block == startBlock) {
-                        state.obj = null;
                         for (EscapeField field : fields.values()) {
-                            Constant value = Constant.defaultForKind(field.kind(), graph);
-                            state.fieldState.put(field, value);
-                            state.obj = new VirtualObject(state.obj, value, field, type, escapeFields, graph);
+                            state.fieldState.put(field, Constant.defaultForKind(field.kind(), graph));
                         }
                     } else {
                         List<Block> predecessors = block.getPredecessors();
@@ -132,7 +122,6 @@ public class EscapeAnalysisPhase extends Phase {
                                 Phi phi = new Phi(field.kind().stackKind(), (Merge) block.firstNode(), graph);
                                 state.fieldState.put(field, phi);
                                 phis.put(phi, field);
-                                state.obj = new VirtualObject(state.obj, phi, field, type, escapeFields, graph);
                             }
                         }
                     }
@@ -144,12 +133,12 @@ public class EscapeAnalysisPhase extends Phase {
                         current = block.firstNode();
                     }
                     while (current != block.lastNode()) {
-                        Node next = ((FixedNodeWithNext) current).next();
+                        Node next = ((Instruction) current).next();
                         op.updateState(node, current, fields, state.fieldState);
-                        if (!current.isDeleted() && current instanceof StateSplit) {
-                            FrameState stateAfter = ((StateSplit) current).stateAfter();
+                        if (!current.isDeleted() && current instanceof Instruction) {
+                            FrameState stateAfter = ((Instruction) current).stateAfter();
                             if (stateAfter != null) {
-                                updateFrameState(stateAfter, state.obj);
+                                updateFrameState(stateAfter, state, type, null);
                             }
                         }
                         current = next;
@@ -207,38 +196,50 @@ public class EscapeAnalysisPhase extends Phase {
                 usage.inputs().replace(node, Node.Null);
             }
 
-            if (node instanceof FixedNodeWithNext) {
-                node.replaceAndDelete(((FixedNodeWithNext) node).next());
+            if (node instanceof Instruction) {
+                node.replace(((Instruction) node).next());
             } else {
                 node.delete();
             }
         }
 
-        private VirtualObject updateFrameState(FrameState frameState, VirtualObject current) {
+        private VirtualObject updateFrameState(FrameState frameState, BlockExitState currentState, RiType type, VirtualObject current) {
             for (int i = 0; i < frameState.inputs().size(); i++) {
                 if (frameState.inputs().get(i) == node) {
+                    if (current == null) {
+                        for (EscapeField field : fields.values()) {
+                            current = new VirtualObject(current, field, type, graph);
+                            current.setInput((Value) currentState.fieldState.get(field));
+                        }
+                    }
                     frameState.inputs().set(i, current);
                 } else if (frameState.inputs().get(i) instanceof VirtualObject) {
                     VirtualObject obj = (VirtualObject) frameState.inputs().get(i);
                     do {
-                        current = updateVirtualObject(obj, current);
+                        current = updateVirtualObject(obj, currentState, type, current);
                         obj = obj.object();
                     } while (obj != null);
                 }
             }
             if (frameState.outerFrameState() != null) {
-                current = updateFrameState(frameState.outerFrameState(), current);
+                current = updateFrameState(frameState.outerFrameState(), currentState, type, current);
             }
             return current;
         }
 
-        private VirtualObject updateVirtualObject(VirtualObject obj, VirtualObject current) {
+        private VirtualObject updateVirtualObject(VirtualObject obj, BlockExitState currentState, RiType type, VirtualObject current) {
             if (obj.input() == node) {
+                if (current == null) {
+                    for (EscapeField field : fields.values()) {
+                        current = new VirtualObject(current, field, type, graph);
+                        current.setInput((Value) currentState.fieldState.get(field));
+                    }
+                }
                 obj.setInput(current);
             } else if (obj.input() instanceof VirtualObject) {
                 VirtualObject obj2 = (VirtualObject) obj.input();
                 do {
-                    current = updateVirtualObject(obj2, current);
+                    current = updateVirtualObject(obj2, currentState, type, current);
                     obj2 = obj2.object();
                 } while (obj2 != null);
             }
@@ -248,6 +249,9 @@ public class EscapeAnalysisPhase extends Phase {
         private void process() {
             for (Node usage : new ArrayList<Node>(node.usages())) {
                 op.beforeUpdate(node, usage);
+                if (!usage.isDeleted()) {
+                    op.collectField(node, usage, fields);
+                }
             }
         }
     }
@@ -279,7 +283,7 @@ public class EscapeAnalysisPhase extends Phase {
                     weight = analyze(op, node, exits, invokes);
                     if (exits.size() != 0) {
                         if (GraalOptions.TraceEscapeAnalysis) {
-                            TTY.println("####### escaping object: %d %s (%s) in %s", node.id(), node.shortName(), ((Value) node).exactType(), compilation.method);
+                            TTY.println("####### escaping object: %d %s in %s", node.id(), node.shortName(), compilation.method);
                             TTY.print("%d: new value: %d %s, weight %d, escapes at ", iterations, node.id(), node.shortName(), weight);
                             for (Node n : exits) {
                                 TTY.print("%d %s, ", n.id(), n.shortName());
@@ -293,7 +297,7 @@ public class EscapeAnalysisPhase extends Phase {
                     }
                     if (invokes.size() == 0) {
                         if (GraalOptions.TraceEscapeAnalysis) {
-                            TTY.println("!!!!!!!! non-escaping object: %d %s (%s) in %s", node.id(), node.shortName(), ((Value) node).exactType(), compilation.method);
+                            TTY.println("!!!!!!!! non-escaping object: %d %s in %s", node.id(), node.shortName(), compilation.method);
                         }
                         new EscapementFixup(op, graph, node).apply();
                         new PhiSimplifier(graph);
@@ -371,9 +375,9 @@ public class EscapeAnalysisPhase extends Phase {
 
         boolean escape(Node node, Node usage);
 
-        EscapeField[] fields(Node node);
-
         void beforeUpdate(Node node, Node usage);
+
+        void collectField(Node node, Node usage, Map<Object, EscapeField> fields);
 
         void updateState(Node node, Node current, Map<Object, EscapeField> fields, Map<EscapeField, Node> fieldState);
 
