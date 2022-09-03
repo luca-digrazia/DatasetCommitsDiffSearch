@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,16 +25,15 @@ package com.oracle.graal.lir.amd64;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.*;
+import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 
 public final class AMD64AddressValue extends CompositeValue {
+
     private static final long serialVersionUID = -4444600052487578694L;
 
     @Component({REG, OperandFlag.ILLEGAL}) protected AllocatableValue base;
@@ -42,13 +41,11 @@ public final class AMD64AddressValue extends CompositeValue {
     protected final Scale scale;
     protected final int displacement;
 
-    private static final EnumSet<OperandFlag> flags = EnumSet.of(OperandFlag.REG, OperandFlag.ILLEGAL);
-
-    public AMD64AddressValue(LIRKind kind, AllocatableValue base, int displacement) {
+    public AMD64AddressValue(PlatformKind kind, AllocatableValue base, int displacement) {
         this(kind, base, Value.ILLEGAL, Scale.Times1, displacement);
     }
 
-    public AMD64AddressValue(LIRKind kind, AllocatableValue base, AllocatableValue index, Scale scale, int displacement) {
+    public AMD64AddressValue(PlatformKind kind, AllocatableValue base, AllocatableValue index, Scale scale, int displacement) {
         super(kind);
         this.base = base;
         this.index = index;
@@ -56,16 +53,6 @@ public final class AMD64AddressValue extends CompositeValue {
         this.displacement = displacement;
 
         assert scale != null;
-    }
-
-    @Override
-    public CompositeValue forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueProcedure proc) {
-        AllocatableValue newBase = (AllocatableValue) proc.doValue(inst, base, mode, flags);
-        AllocatableValue newIndex = (AllocatableValue) proc.doValue(inst, index, mode, flags);
-        if (!base.identityEquals(newBase) || !index.identityEquals(newIndex)) {
-            return new AMD64AddressValue(getLIRKind(), newBase, newIndex, scale, displacement);
-        }
-        return this;
     }
 
     private static Register toRegister(AllocatableValue value) {
@@ -102,21 +89,17 @@ public final class AMD64AddressValue extends CompositeValue {
         return s.toString();
     }
 
-    public boolean isValidImplicitNullCheckFor(Value value, int implicitNullCheckLimit) {
-        return value.equals(base) && index.equals(Value.ILLEGAL) && displacement >= 0 && displacement < implicitNullCheckLimit;
-    }
-
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof AMD64AddressValue) {
             AMD64AddressValue addr = (AMD64AddressValue) obj;
-            return getLIRKind().equals(addr.getLIRKind()) && displacement == addr.displacement && base.equals(addr.base) && scale == addr.scale && index.equals(addr.index);
+            return getPlatformKind() == addr.getPlatformKind() && displacement == addr.displacement && base.equals(addr.base) && scale == addr.scale && index.equals(addr.index);
         }
         return false;
     }
 
     @Override
     public int hashCode() {
-        return base.hashCode() ^ index.hashCode() ^ (displacement << 4) ^ (scale.value << 8) ^ getLIRKind().hashCode();
+        return base.hashCode() ^ index.hashCode() ^ (displacement << 4) ^ (scale.value << 8) ^ getPlatformKind().hashCode();
     }
 }
