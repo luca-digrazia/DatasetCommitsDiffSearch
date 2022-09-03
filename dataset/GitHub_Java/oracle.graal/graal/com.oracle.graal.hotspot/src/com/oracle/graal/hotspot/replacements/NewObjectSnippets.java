@@ -27,7 +27,6 @@ import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.nodes.extended.UnsafeArrayCastNode.*;
 import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
-import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
 import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
 import static com.oracle.graal.replacements.nodes.ExplodeLoopNode.*;
@@ -41,6 +40,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.Snippet.VarargsParameter;
@@ -119,33 +119,6 @@ public class NewObjectSnippets implements Snippets {
         }
         BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
         return unsafeArrayCast(verifyOop(result), length, StampFactory.forNodeIntrinsic(), anchorNode);
-    }
-
-    @Snippet
-    public static Object allocateArrayDynamic(Class<?> elementType, int length, @ConstantParameter boolean fillContents) {
-        Word hub = loadWordFromObject(elementType, arrayKlassOffset());
-        if (hub.equal(Word.zero())) {
-            // the array class is not yet loaded
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
-        }
-
-        int layoutHelper = readLayoutHelper(hub);
-        //@formatter:off
-        // For arrays, layout helper is a negative number, containing four
-        // distinct bytes, as follows:
-        //    MSB:[tag, hsz, ebt, log2(esz)]:LSB
-        // where:
-        //    tag is 0x80 if the elements are oops, 0xC0 if non-oops
-        //    hsz is array header size in bytes (i.e., offset of first element)
-        //    ebt is the BasicType of the elements
-        //    esz is the element size in bytes
-        //@formatter:on
-
-        int headerSize = (layoutHelper >> 16) & 0xFF;
-        int log2ElementSize = layoutHelper & 0xFF;
-        Word prototypeMarkWord = hub.readWord(prototypeMarkWordOffset(), PROTOTYPE_MARK_WORD_LOCATION);
-
-        return allocateArray(hub, length, prototypeMarkWord, headerSize, log2ElementSize, fillContents);
     }
 
     /**
@@ -228,7 +201,6 @@ public class NewObjectSnippets implements Snippets {
 
         private final SnippetInfo allocateInstance = snippet(NewObjectSnippets.class, "allocateInstance");
         private final SnippetInfo allocateArray = snippet(NewObjectSnippets.class, "allocateArray");
-        private final SnippetInfo allocateArrayDynamic = snippet(NewObjectSnippets.class, "allocateArrayDynamic");
         private final SnippetInfo newmultiarray = snippet(NewObjectSnippets.class, "newmultiarray");
 
         public Templates(CodeCacheProvider runtime, Replacements replacements, TargetDescription target) {
@@ -281,16 +253,6 @@ public class NewObjectSnippets implements Snippets {
             template.instantiate(runtime, newArrayNode, DEFAULT_REPLACER, args);
         }
 
-        public void lower(DynamicNewArrayNode newArrayNode) {
-            Arguments args = new Arguments(allocateArrayDynamic);
-            args.add("elementType", newArrayNode.getElementType());
-            args.add("length", newArrayNode.length());
-            args.addConst("fillContents", newArrayNode.fillContents());
-
-            SnippetTemplate template = template(args);
-            template.instantiate(runtime, newArrayNode, DEFAULT_REPLACER, args);
-        }
-
         public void lower(NewMultiArrayNode newmultiarrayNode) {
             StructuredGraph graph = newmultiarrayNode.graph();
             int rank = newmultiarrayNode.dimensionCount();
@@ -316,12 +278,12 @@ public class NewObjectSnippets implements Snippets {
         }
     }
 
-    private static final SnippetCounter.Group countersNew = SnippetCounters.getValue() ? new SnippetCounter.Group("NewInstance") : null;
+    private static final SnippetCounter.Group countersNew = GraalOptions.SnippetCounters ? new SnippetCounter.Group("NewInstance") : null;
     private static final SnippetCounter new_seqInit = new SnippetCounter(countersNew, "tlabSeqInit", "TLAB alloc with unrolled zeroing");
     private static final SnippetCounter new_loopInit = new SnippetCounter(countersNew, "tlabLoopInit", "TLAB alloc with zeroing in a loop");
     private static final SnippetCounter new_stub = new SnippetCounter(countersNew, "stub", "alloc and zeroing via stub");
 
-    private static final SnippetCounter.Group countersNewArray = SnippetCounters.getValue() ? new SnippetCounter.Group("NewArray") : null;
+    private static final SnippetCounter.Group countersNewArray = GraalOptions.SnippetCounters ? new SnippetCounter.Group("NewArray") : null;
     private static final SnippetCounter newarray_loopInit = new SnippetCounter(countersNewArray, "tlabLoopInit", "TLAB alloc with zeroing in a loop");
     private static final SnippetCounter newarray_stub = new SnippetCounter(countersNewArray, "stub", "alloc and zeroing via stub");
 }
