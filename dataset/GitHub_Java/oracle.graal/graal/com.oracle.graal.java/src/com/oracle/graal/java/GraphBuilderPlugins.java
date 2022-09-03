@@ -30,20 +30,11 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 
 /**
  * Interface for managing a set of graph builder {@link GraphBuilderPlugin}s.
  */
 public interface GraphBuilderPlugins {
-
-    public interface LoadFieldPlugin extends GraphBuilderPlugin {
-        boolean apply(GraphBuilderContext builder, ValueNode receiver, ResolvedJavaField field);
-    }
-
-    public interface ParameterPlugin extends GraphBuilderPlugin {
-        FloatingNode interceptParameter(int index);
-    }
 
     /**
      * Plugin for handling a method invocation.
@@ -83,6 +74,20 @@ public interface GraphBuilderPlugins {
          */
         default boolean apply(GraphBuilderContext builder, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
             throw invalidHandler(builder, arg1, arg2, arg3);
+        }
+
+        default boolean apply(GraphBuilderContext builder, ValueNode[] args) {
+            if (args.length == 0) {
+                return apply(builder);
+            } else if (args.length == 1) {
+                return apply(builder, args[0]);
+            } else if (args.length == 2) {
+                return apply(builder, args[0], args[1]);
+            } else if (args.length == 3) {
+                return apply(builder, args[0], args[1], args[2]);
+            } else {
+                throw invalidHandler(builder, args);
+            }
         }
 
         default Error invalidHandler(@SuppressWarnings("unused") GraphBuilderContext builder, ValueNode... args) {

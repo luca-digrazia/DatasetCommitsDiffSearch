@@ -124,7 +124,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             assert method.getCode() != null : "method must contain bytecodes: " + method;
             this.currentGraph = graph;
             HIRFrameStateBuilder frameState = new HIRFrameStateBuilder(method, graph, null);
-            frameState.initializeForMethodStart(graphBuilderConfig.eagerResolving(), this.graphBuilderConfig.getParameterPlugin());
+            frameState.initializeForMethodStart(graphBuilderConfig.eagerResolving());
             TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
             try {
                 BytecodeParser parser = new BytecodeParser(metaAccess, method, graphBuilderConfig, optimisticOpts, entryBCI);
@@ -777,19 +777,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         InvocationPlugin plugin = graphBuilderPlugins.lookupInvocation(targetMethod);
                         if (plugin != null) {
                             int beforeStackSize = frameState.stackSize;
-                            boolean handled;
-                            if (args.length == 0) {
-                                handled = plugin.apply(this);
-                            } else if (args.length == 1) {
-                                handled = plugin.apply(this, args[0]);
-                            } else if (args.length == 2) {
-                                handled = plugin.apply(this, args[0], args[1]);
-                            } else if (args.length == 3) {
-                                handled = plugin.apply(this, args[0], args[1], args[2]);
-                            } else {
-                                throw GraalInternalError.shouldNotReachHere();
-                            }
-                            if (handled) {
+                            if (plugin.apply(this, args)) {
                                 assert beforeStackSize + resultType.getSlotCount() == frameState.stackSize;
                                 return;
                             }
