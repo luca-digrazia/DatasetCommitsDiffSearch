@@ -38,11 +38,9 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleOptions;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.LanguageInfo;
@@ -192,10 +190,6 @@ public abstract class Accessor {
 
         public abstract void closeInternalContext(Object impl);
 
-        public abstract boolean isCreateThreadAllowed(Object vmObject);
-
-        public abstract Thread createThread(Object vmObject, Runnable runnable, Object context);
-
     }
 
     public abstract static class LanguageSupport {
@@ -251,14 +245,6 @@ public abstract class Accessor {
 
         public abstract void onThrowable(RootNode root, Throwable e);
 
-        public abstract boolean isThreadAccessAllowed(LanguageInfo env, Thread current, boolean singleThread);
-
-        public abstract void initializeThread(Env env, Thread current);
-
-        public abstract void initializeMultiThreading(Env env);
-
-        public abstract void disposeThread(Env env, Thread thread);
-
     }
 
     public abstract static class InstrumentSupport {
@@ -312,7 +298,7 @@ public abstract class Accessor {
     }
 
     private static Accessor.LanguageSupport API;
-    @CompilationFinal private static Accessor.EngineSupport SPI;
+    private static Accessor.EngineSupport SPI;
     private static Accessor.Nodes NODES;
     private static Accessor.InstrumentSupport INSTRUMENTHANDLER;
     private static Accessor.DumpSupport DUMP;
