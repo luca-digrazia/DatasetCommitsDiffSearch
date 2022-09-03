@@ -52,9 +52,6 @@ public final class C1XOptions {
 
     // debugging settings
     public static boolean VerifyPointerMaps                  = ____;
-    public static boolean PinAllInstructions                 = ____;
-    public static boolean TestPatching                       = ____;
-    public static boolean FatalUnimplemented                 = ____;
     public static int     MethodEndBreakpointGuards          = 0;
     public static boolean ZapStackOnMethodEntry              = ____;
     public static boolean StressLinearScan                   = ____;
@@ -69,7 +66,6 @@ public final class C1XOptions {
     public static boolean PrintInliningFailures              = ____;
     public static boolean PrintLIR                           = ____;
     public static boolean PrintCFGToFile                     = ____;
-    public static boolean PrintDOTGraphToFile                = ____;
     public static boolean PrintMetrics                       = ____;
     public static boolean PrintTimers                        = ____;
     public static boolean PrintCompilation                   = ____;
