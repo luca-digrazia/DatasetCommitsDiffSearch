@@ -64,7 +64,8 @@ public class LLVMContext extends ExecutionContext {
     public LLVMContext(NodeFactoryFacade facade, LLVMOptimizationConfiguration optimizationConfig) {
         nativeLookup = new NativeLookup(facade);
         this.registry = new LLVMFunctionRegistry(optimizationConfig, facade);
-        setLastContext(this);
+
+        lastContext = this;
     }
 
     public RootCallTarget getFunction(LLVMFunctionDescriptor function) {
@@ -114,10 +115,6 @@ public class LLVMContext extends ExecutionContext {
 
     public static CallTarget getCallTarget(LLVMFunctionDescriptor function) {
         return lastContext.registry.lookup(function);
-    }
-
-    private static void setLastContext(LLVMContext context) {
-        lastContext = context;
     }
 
     public static LLVMStack getStaticStack() {
