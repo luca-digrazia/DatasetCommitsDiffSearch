@@ -362,8 +362,6 @@ public class FlatNodeGenFactory {
             clazz.add(createIsValid(assumptionType));
         }
 
-        clazz.getEnclosedElements().addAll(removeThisMethods.values());
-
         return clazz;
     }
 
@@ -442,7 +440,7 @@ public class FlatNodeGenFactory {
                 } else {
                     annotationType = CompilationFinal.class;
                     if (specialization.getMaximumNumberOfInstances() > 1) {
-                        cacheType.add(createNodeField(null, cacheType.asType(), "next_", annotationType));
+                        cacheType.add(createNodeField(null, cacheType.asType(), "next_", null, FINAL));
                     }
                 }
 
@@ -1147,7 +1145,7 @@ public class FlatNodeGenFactory {
 
                     CodeTreeBuilder accessBuilder = builder.create();
                     accessBuilder.startParantheses();
-                    accessBuilder.tree(state.createContainsOnly(frameState, sourceTypeIndex, 1, new Object[]{typeGuard}, new Object[]{typeGuard, node.getUninitializedSpecialization()}));
+                    accessBuilder.tree(state.createContainsOnly(frameState, sourceTypeIndex, 1, new Object[]{typeGuard}, new Object[]{typeGuard}));
                     accessBuilder.string(" ? ");
                     accessBuilder.string(localName);
                     accessBuilder.string(" : ");
@@ -1373,12 +1371,8 @@ public class FlatNodeGenFactory {
                 List<CodeTree> additionalChecks = new ArrayList<>();
                 for (SpecializationData specialization : reachableSpecializations) {
                     if (useSpecializationClass(specialization) && specialization.getMaximumNumberOfInstances() > 1) {
-                        String typeName = createSpecializationTypeName(specialization);
-                        String fieldName = createSpecializationFieldName(specialization);
-                        String localName = createSpecializationLocalName(specialization);
-                        builder.declaration(typeName, localName, "this." + fieldName);
-                        CodeTree check = builder.create().startParantheses().string(localName, " == null || ",
-                                        localName, ".next_ == null").end().build();
+                        CodeTree check = builder.create().string("this.", createSpecializationFieldName(specialization), " == null || ", "this.", createSpecializationFieldName(specialization),
+                                        ".next_ == null").build();
                         additionalChecks.add(check);
                     }
                 }
@@ -1959,29 +1953,28 @@ public class FlatNodeGenFactory {
             ifCount += IfTriple.materialize(builder, IfTriple.optimize(cachedTriples));
             cachedTriples = new ArrayList<>(); // reset current triples
 
-            String specializationLocalName = null;
             if (useSpecializationClass) {
-                specializationLocalName = createSpecializationLocalName(specialization);
-                builder.declaration(createSpecializationTypeName(specialization), specializationLocalName, CodeTreeBuilder.singleString(createSpecializationFieldName(specialization)));
+                String name = createSpecializationLocalName(specialization);
+                builder.declaration(createSpecializationTypeName(specialization), name, CodeTreeBuilder.singleString(createSpecializationFieldName(specialization)));
                 if (specialization.getMaximumNumberOfInstances() > 1) {
                     builder.startWhile();
                 } else {
                     builder.startIf();
                 }
-                builder.string(specializationLocalName, " != null");
+                builder.string(name, " != null");
                 builder.end();
                 builder.startBlock();
                 ifCount++;
             }
+
+            cachedTriples = createMethodGuardCheck(frameState, group, guardExpressions, mode);
+
+            int innerIfCount = IfTriple.materialize(builder, IfTriple.optimize(cachedTriples));
             if (specialization != null) {
                 if (!specialization.getAssumptionExpressions().isEmpty()) {
                     builder.tree(createFastPathAssumptionCheck(builder, specialization, forType, frameState));
                 }
             }
-            cachedTriples = createMethodGuardCheck(frameState, group, guardExpressions, mode);
-
-            int innerIfCount = IfTriple.materialize(builder, IfTriple.optimize(cachedTriples));
-
             SpecializationGroup prev = null;
             for (SpecializationGroup child : group.getChildren()) {
                 if (prev != null && !prev.hasFallthrough()) {
@@ -2119,10 +2112,16 @@ public class FlatNodeGenFactory {
 
             cachedTriples = IfTriple.optimize(cachedTriples);
 
-            if (!useClass && specialization != null) {
+            if (!useClass) {
                 IfTriple singleCondition = null;
-                if (cachedTriples.size() == 1) {
-                    singleCondition = cachedTriples.get(0);
+                for (IfTriple triple : cachedTriples) {
+                    if (!IfTriple.isEmpty(triple.condition)) {
+                        if (singleCondition != null) {
+                            singleCondition = null;
+                            break;
+                        }
+                        singleCondition = triple;
+                    }
                 }
                 if (singleCondition != null) {
                     int index = cachedTriples.indexOf(singleCondition);
@@ -2387,7 +2386,7 @@ public class FlatNodeGenFactory {
         }
         builder.end().startBlock();
         builder.tree(createTransferToInterpreterAndInvalidate());
-        builder.tree(createRemoveThis(builder, frameState, forType, specialization));
+        builder.tree(createRemoveThis(builder, frameState, forType, specialization, false, NodeExecutionMode.FAST_PATH));
         builder.end();
         return builder.build();
     }
@@ -2476,104 +2475,39 @@ public class FlatNodeGenFactory {
             builder.lineComment("implicit transferToInterpreterAndInvalidate()");
         }
 
-        builder.tree(createExcludeThis(builder, frameState, forType, specialization, mode));
+        builder.tree(createRemoveThis(builder, frameState, forType, specialization, true, mode));
 
         builder.end();
         return builder.build();
     }
 
-    private Map<SpecializationData, CodeExecutableElement> removeThisMethods = new HashMap<>();
-
-    private CodeTree createExcludeThis(CodeTreeBuilder parent, FrameState frameState, ExecutableTypeData forType, SpecializationData specialization, NodeExecutionMode mode) {
+    private CodeTree createRemoveThis(CodeTreeBuilder parent, FrameState frameState, ExecutableTypeData forType, SpecializationData specialization, boolean excludeSpecialization,
+                    NodeExecutionMode mode) {
         CodeTreeBuilder builder = parent.create();
 
-        // slow path might be already already locked
+        // slow path is already locked
         if (!mode.isSlowPath()) {
             builder.declaration(context.getType(Lock.class), "lock", "getLock()");
         }
 
         builder.statement("lock.lock()");
         builder.startTryBlock();
-        // pass null frame state to ensure values are reloaded.
-        builder.tree(this.exclude.createSet(null, Arrays.asList(specialization).toArray(new SpecializationData[0]), true, true));
-        // single instance remove
+
+        if (excludeSpecialization) {
+            // pass null frame state to ensure values are reloaded.
+            builder.tree(this.exclude.createSet(null, Arrays.asList(specialization).toArray(new SpecializationData[0]), true, true));
+        }
+
         builder.tree((state.createSet(null, Arrays.asList(specialization).toArray(new SpecializationData[0]), false, true)));
         if (useSpecializationClass(specialization)) {
-            String fieldName = createSpecializationFieldName(specialization);
-            builder.statement("this." + fieldName + " = null");
+            builder.statement("this." + createSpecializationFieldName(specialization) + " = null");
         }
+
         builder.end().startFinallyBlock();
         builder.statement("lock.unlock()");
         builder.end();
         builder.tree(createCallExecuteAndSpecialize(forType, frameState));
         builder.end();
-        return builder.build();
-    }
-
-    private CodeTree createRemoveThis(CodeTreeBuilder parent, FrameState frameState, ExecutableTypeData forType, SpecializationData specialization) {
-        CodeExecutableElement method = removeThisMethods.get(specialization);
-        String specializationLocalName = createSpecializationLocalName(specialization);
-        boolean useSpecializationClass = useSpecializationClass(specialization);
-        if (method == null) {
-            method = new CodeExecutableElement(context.getType(void.class), "remove" + specialization.getId() + "_");
-            if (useSpecializationClass) {
-                method.addParameter(new CodeVariableElement(context.getType(Object.class), specializationLocalName));
-            }
-            CodeTreeBuilder builder = method.createBuilder();
-            builder.declaration(context.getType(Lock.class), "lock", "getLock()");
-            builder.statement("lock.lock()");
-            builder.startTryBlock();
-            String fieldName = createSpecializationFieldName(specialization);
-            if (!useSpecializationClass || specialization.getMaximumNumberOfInstances() == 1) {
-                // single instance remove
-                builder.tree((state.createSet(null, Arrays.asList(specialization).toArray(new SpecializationData[0]), false, true)));
-                if (useSpecializationClass) {
-                    builder.statement("this." + fieldName + " = null");
-                }
-            } else {
-                // multi instance remove
-                String typeName = createSpecializationTypeName(specialization);
-                boolean specializedIsNode = specializationClassIsNode(specialization);
-                builder.declaration(typeName, "prev", "null");
-                builder.declaration(typeName, "cur", "this." + fieldName);
-                builder.startWhile();
-                builder.string("cur != null");
-                builder.end().startBlock();
-                builder.startIf().string("cur == ").string(specializationLocalName).end().startBlock();
-                builder.startIf().string("prev == null").end().startBlock();
-                builder.statement("this." + fieldName + " = cur.next_");
-                if (specializedIsNode) {
-                    builder.statement("this.adoptChildren()");
-                }
-                builder.end().startElseBlock();
-                builder.statement("prev.next_ = cur.next_");
-                if (specializedIsNode) {
-                    builder.statement("prev.adoptChildren()");
-                }
-                builder.end();
-                builder.statement("break");
-                builder.end(); // if block
-                builder.statement("prev = cur");
-                builder.statement("cur = cur.next_");
-                builder.end(); // while block
-
-                builder.startIf().string("this." + fieldName).string(" == null").end().startBlock();
-                builder.tree((state.createSet(null, Arrays.asList(specialization).toArray(new SpecializationData[0]), false, true)));
-                builder.end();
-            }
-
-            builder.end().startFinallyBlock();
-            builder.statement("lock.unlock()");
-            builder.end();
-            removeThisMethods.put(specialization, method);
-        }
-        CodeTreeBuilder builder = parent.create();
-        builder.startStatement().startCall(method.getSimpleName().toString());
-        if (useSpecializationClass) {
-            builder.string(specializationLocalName);
-        }
-        builder.end().end();
-        builder.tree(createCallExecuteAndSpecialize(forType, frameState));
         return builder.build();
     }
 
@@ -2962,7 +2896,7 @@ public class FlatNodeGenFactory {
             ExecutableTypeData executableType = resolveTargetExecutable(execution, sourceType);
             elseIf = builder.startIf(elseIf);
             throwsUnexpected |= executableType.hasUnexpectedValue(context);
-            builder.tree(state.createContainsOnly(frameState, sourceTypeIndex, 1, new Object[]{typeGuard}, new Object[]{typeGuard, node.getUninitializedSpecialization()}));
+            builder.tree(state.createContainsOnly(frameState, sourceTypeIndex, 1, new Object[]{typeGuard}, new Object[]{typeGuard}));
             builder.end();
             builder.startBlock();
 

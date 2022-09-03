@@ -22,11 +22,16 @@
  */
 package com.oracle.truffle.dsl.processor.expression;
 
-import java.util.*;
-import java.util.concurrent.atomic.*;
-
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.TypeMirror;
 
 public abstract class DSLExpression {
 
@@ -69,6 +74,10 @@ public abstract class DSLExpression {
         return variables;
     }
 
+    public Object resolveConstant() {
+        return null;
+    }
+
     public boolean containsComparisons() {
         final AtomicBoolean found = new AtomicBoolean();
         this.accept(new AbstractDSLExpressionVisitor() {
@@ -94,6 +103,16 @@ public abstract class DSLExpression {
 
     public abstract void accept(DSLExpressionVisitor visitor);
 
+    public abstract DSLExpression reduce(DSLExpressionReducer visitor);
+
+    private DSLExpression reduceImpl(DSLExpressionReducer reducer) {
+        DSLExpression expression = reduce(reducer);
+        if (expression == null) {
+            return this;
+        }
+        return expression;
+    }
+
     public static final class Negate extends DSLExpression {
 
         private final DSLExpression receiver;
@@ -108,8 +127,28 @@ public abstract class DSLExpression {
             visitor.visitNegate(this);
         }
 
+        @Override
+        public DSLExpression reduce(DSLExpressionReducer visitor) {
+            DSLExpression newReceiver = receiver.reduceImpl(visitor);
+            DSLExpression negate = this;
+            if (newReceiver != receiver) {
+                negate = new Negate(newReceiver);
+                negate.setResolvedTargetType(getResolvedTargetType());
+            }
+            return negate;
+        }
+
         public DSLExpression getReceiver() {
             return receiver;
+        }
+
+        @Override
+        public Object resolveConstant() {
+            Object constant = receiver.resolveConstant();
+            if (constant instanceof Integer) {
+                return -(int) constant;
+            }
+            return super.resolveConstant();
         }
 
         @Override
@@ -183,6 +222,19 @@ public abstract class DSLExpression {
         }
 
         @Override
+        public DSLExpression reduce(DSLExpressionReducer reducer) {
+            DSLExpression newLeft = left.reduceImpl(reducer);
+            DSLExpression newRight = right.reduceImpl(reducer);
+            Binary b = this;
+            if (newLeft != left || newRight != right) {
+                b = new Binary(getOperator(), newLeft, newRight);
+                b.setResolvedTargetType(getResolvedTargetType());
+                b.setResolvedType(getResolvedType());
+            }
+            return reducer.visitBinary(b);
+        }
+
+        @Override
         public TypeMirror getResolvedType() {
             return resolvedType;
         }
@@ -247,6 +299,34 @@ public abstract class DSLExpression {
                 parameter.accept(visitor);
             }
             visitor.visitCall(this);
+        }
+
+        @Override
+        public DSLExpression reduce(DSLExpressionReducer reducer) {
+            DSLExpression newReceiver = null;
+            if (receiver != null) {
+                newReceiver = receiver.reduceImpl(reducer);
+            }
+
+            boolean parameterChanged = false;
+            List<DSLExpression> newParameters = new ArrayList<>();
+            for (DSLExpression param : getParameters()) {
+                DSLExpression newParam = param.reduceImpl(reducer);
+                if (newParam != param) {
+                    parameterChanged = true;
+                    newParameters.add(newParam);
+                } else {
+                    newParameters.add(param);
+                }
+            }
+
+            Call c = this;
+            if (newReceiver != receiver || parameterChanged) {
+                c = new Call(newReceiver, getName(), newParameters);
+                c.setResolvedMethod(getResolvedMethod());
+                c.setResolvedTargetType(getResolvedTargetType());
+            }
+            return reducer.visitCall(c);
         }
 
         @Override
@@ -319,6 +399,21 @@ public abstract class DSLExpression {
         }
 
         @Override
+        public DSLExpression reduce(DSLExpressionReducer reducer) {
+            DSLExpression newReceiver = null;
+            if (receiver != null) {
+                newReceiver = receiver.reduceImpl(reducer);
+            }
+            Variable c = this;
+            if (newReceiver != receiver) {
+                c = new Variable(newReceiver, getName());
+                c.setResolvedTargetType(getResolvedTargetType());
+                c.setResolvedVariable(getResolvedVariable());
+            }
+            return reducer.visitVariable(c);
+        }
+
+        @Override
         public TypeMirror getResolvedType() {
             return resolvedVariable != null ? resolvedVariable.asType() : null;
         }
@@ -359,6 +454,11 @@ public abstract class DSLExpression {
         }
 
         @Override
+        public Object resolveConstant() {
+            return resolvedValueInt;
+        }
+
+        @Override
         public int hashCode() {
             return resolvedValueInt;
         }
@@ -390,27 +490,97 @@ public abstract class DSLExpression {
         }
 
         @Override
+        public DSLExpression reduce(DSLExpressionReducer reducer) {
+            return this;
+        }
+
+        @Override
         public String toString() {
             return "IntLiteral [literal=" + literal + ", resolvedValueInt=" + resolvedValueInt + ", resolvedType=" + resolvedType + "]";
         }
 
     }
 
-    public abstract class AbstractDSLExpressionVisitor implements DSLExpressionVisitor {
+    public static final class BooleanLiteral extends DSLExpression {
 
+        private final boolean literal;
+        private TypeMirror resolvedType;
+
+        public BooleanLiteral(boolean literal) {
+            this.literal = literal;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof BooleanLiteral) {
+                BooleanLiteral other = (BooleanLiteral) obj;
+                return literal == other.literal;
+            }
+            return false;
+        }
+
+        @Override
+        public Object resolveConstant() {
+            return literal;
+        }
+
+        @Override
+        public int hashCode() {
+            return Boolean.hashCode(literal);
+        }
+
+        public boolean getLiteral() {
+            return literal;
+        }
+
+        @Override
+        public TypeMirror getResolvedType() {
+            return resolvedType;
+        }
+
+        public void setResolvedType(TypeMirror resolvedType) {
+            this.resolvedType = resolvedType;
+        }
+
+        @Override
+        public void accept(DSLExpressionVisitor visitor) {
+            visitor.visitBooleanLiteral(this);
+        }
+
+        @Override
+        public DSLExpression reduce(DSLExpressionReducer reducer) {
+            return this;
+        }
+
+        @Override
+        public String toString() {
+            return "BooleanLiteral [literal=" + literal + ", resolvedType=" + resolvedType + "]";
+        }
+
+    }
+
+    public abstract class AbstractDSLExpressionVisitor implements DSLExpressionVisitor {
+        @Override
         public void visitBinary(Binary binary) {
         }
 
+        @Override
         public void visitCall(Call binary) {
         }
 
+        @Override
         public void visitIntLiteral(IntLiteral binary) {
         }
 
+        @Override
         public void visitNegate(Negate negate) {
         }
 
+        @Override
         public void visitVariable(Variable binary) {
+        }
+
+        public void visitBooleanLiteral(BooleanLiteral binary) {
         }
     }
 
@@ -425,6 +595,44 @@ public abstract class DSLExpression {
         void visitVariable(Variable binary);
 
         void visitIntLiteral(IntLiteral binary);
+
+        void visitBooleanLiteral(BooleanLiteral binary);
+
+    }
+
+    public abstract static class AbstractDSLExpressionReducer implements DSLExpressionReducer {
+
+        @Override
+        public DSLExpression visitBinary(Binary binary) {
+            return binary;
+        }
+
+        @Override
+        public DSLExpression visitCall(Call binary) {
+            return binary;
+        }
+
+        @Override
+        public DSLExpression visitNegate(Negate negate) {
+            return negate;
+        }
+
+        @Override
+        public DSLExpression visitVariable(Variable binary) {
+            return binary;
+        }
+
+    }
+
+    public interface DSLExpressionReducer {
+
+        DSLExpression visitBinary(Binary binary);
+
+        DSLExpression visitNegate(Negate negate);
+
+        DSLExpression visitCall(Call binary);
+
+        DSLExpression visitVariable(Variable binary);
 
     }
 
