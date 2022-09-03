@@ -138,15 +138,9 @@ abstract class PolyglotValue extends AbstractValueImpl {
     protected RuntimeException unsupported(Object receiver, String message, String useToCheck) {
         Object prev = languageContext.enter();
         try {
-            String polyglotMessage;
-            if (useToCheck != null) {
-                polyglotMessage = String.format("Unsupported operation %s.%s for %s. You can ensure that the operation is supported using %s.%s.",
-                                Value.class.getSimpleName(), message, getValueInfo(languageContext, receiver), Value.class.getSimpleName(), useToCheck);
-            } else {
-                polyglotMessage = String.format("Unsupported operation %s.%s for %s.",
-                                Value.class.getSimpleName(), message, getValueInfo(languageContext, receiver));
-            }
-            throw new PolyglotUnsupportedException(polyglotMessage);
+            throw new PolyglotUnsupportedException(
+                            String.format("Unsupported operation %s.%s for %s. You can ensure that the operation is supported using %s.%s.",
+                                            Value.class.getSimpleName(), message, getValueInfo(languageContext, receiver), Value.class.getSimpleName(), useToCheck));
         } catch (Throwable e) {
             throw wrapGuestException(languageContext, e);
         } finally {
@@ -1172,13 +1166,11 @@ abstract class PolyglotValue extends AbstractValueImpl {
         final CallTarget hasArrayElements;
         final CallTarget getArrayElement;
         final CallTarget setArrayElement;
-        final CallTarget removeArrayElement;
         final CallTarget getArraySize;
         final CallTarget hasMembers;
         final CallTarget hasMember;
         final CallTarget getMember;
         final CallTarget putMember;
-        final CallTarget removeMember;
         final CallTarget isNull;
         final CallTarget canExecute;
         final CallTarget execute;
@@ -1200,12 +1192,10 @@ abstract class PolyglotValue extends AbstractValueImpl {
             this.hasArrayElements = createTarget(new HasArrayElementsNode(this));
             this.getArrayElement = createTarget(new GetArrayElementNode(this));
             this.setArrayElement = createTarget(new SetArrayElementNode(this));
-            this.removeArrayElement = createTarget(new RemoveArrayElementNode(this));
             this.getArraySize = createTarget(new GetArraySizeNode(this));
             this.hasMember = createTarget(new HasMemberNode(this));
             this.getMember = createTarget(new GetMemberNode(this));
             this.putMember = createTarget(new PutMemberNode(this));
-            this.removeMember = createTarget(new RemoveMemberNode(this));
             this.isNull = createTarget(new IsNullNode(this));
             this.execute = createTarget(new ExecuteNode(this));
             this.executeNoArgs = createTarget(new ExecuteNoArgsNode(this));
@@ -1241,11 +1231,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
         }
 
         @Override
-        public boolean removeArrayElement(Object receiver, long index) {
-            return (boolean) VMAccessor.SPI.callProfiled(removeArrayElement, receiver, index);
-        }
-
-        @Override
         public long getArraySize(Object receiver) {
             return (long) VMAccessor.SPI.callProfiled(getArraySize, receiver);
         }
@@ -1268,11 +1253,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
         @Override
         public void putMember(Object receiver, String key, Object member) {
             VMAccessor.SPI.callProfiled(putMember, receiver, key, member);
-        }
-
-        @Override
-        public boolean removeMember(Object receiver, String key) {
-            return (boolean) VMAccessor.SPI.callProfiled(removeMember, receiver, key);
         }
 
         @Override
@@ -1695,40 +1675,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
             }
         }
 
-        private static class RemoveArrayElementNode extends PolyglotNode {
-
-            @Child private Node removeArrayNode = Message.REMOVE.createNode();
-
-            protected RemoveArrayElementNode(Interop interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{polyglot.receiverType, Long.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "removeArrayElement";
-            }
-
-            @Override
-            protected Object executeImpl(Object receiver, Object[] args) {
-                long index = (long) args[1];
-                try {
-                    return ForeignAccess.sendRemove(removeArrayNode, (TruffleObject) receiver, index);
-                } catch (UnsupportedMessageException e) {
-                    CompilerDirectives.transferToInterpreter();
-                    polyglot.removeArrayElementUnsupported(receiver);
-                } catch (UnknownIdentifierException e) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw invalidArrayIndex(polyglot.languageContext, receiver, index);
-                }
-                return false;
-            }
-        }
-
         private static class GetArraySizeNode extends PolyglotNode {
 
             @Child private Node getSizeNode = Message.GET_SIZE.createNode();
@@ -1832,41 +1778,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
                     throw invalidMemberValue(polyglot.languageContext, receiver, key, value);
                 }
                 return null;
-            }
-
-        }
-
-        private static class RemoveMemberNode extends PolyglotNode {
-
-            @Child private Node removeMemberNode = Message.REMOVE.createNode();
-
-            protected RemoveMemberNode(Interop interop) {
-                super(interop);
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "removeMember";
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{polyglot.receiverType, String.class};
-            }
-
-            @Override
-            protected Object executeImpl(Object receiver, Object[] args) {
-                String key = (String) args[1];
-                try {
-                    return ForeignAccess.sendRemove(removeMemberNode, (TruffleObject) receiver, key);
-                } catch (UnsupportedMessageException e) {
-                    CompilerDirectives.transferToInterpreter();
-                    polyglot.removeMemberUnsupported(receiver);
-                } catch (UnknownIdentifierException e) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw invalidMemberKey(polyglot.languageContext, receiver, key);
-                }
-                return false;
             }
 
         }
@@ -2250,7 +2161,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
                             try {
                                 Object result = ForeignAccess.sendRead(keysReadNode, keys, index);
                                 if (!(result instanceof String || result instanceof Character)) {
-                                    throw PolyglotImpl.wrapHostException(languageContext, new ClassCastException("Cannot cast " + result + " to String."));
+                                    throw PolyglotImpl.wrapHostException(new ClassCastException("Cannot cast " + result + " to String."));
                                 }
                                 index++;
                                 return result.toString();
