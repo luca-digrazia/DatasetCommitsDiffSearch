@@ -63,11 +63,12 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
                     OptimizedDirectCallNode.class.getName() + ".callProxy",
                     OptimizedDirectCallNode.class.getName() + ".call"
     };
-    private final Instrumentation instrumentation;
+    public static Instrumentation instrumentation = new Instrumentation();
     protected final MethodFilter[] methodFilter;
     protected final SnippetReflectionProvider snippetReflection;
+    protected final long[] accessTable;
 
-    public InstrumentPhase(OptionValues options, SnippetReflectionProvider snippetReflection, Instrumentation instrumentation) {
+    public InstrumentPhase(OptionValues options, SnippetReflectionProvider snippetReflection, long[] accessTable) {
         String filterValue = instrumentationFilter(options);
         if (filterValue != null) {
             methodFilter = MethodFilter.parse(filterValue);
@@ -75,11 +76,7 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
             methodFilter = new MethodFilter[0];
         }
         this.snippetReflection = snippetReflection;
-        this.instrumentation = instrumentation;
-    }
-
-    public Instrumentation getInstrumentation() {
-        return instrumentation;
+        this.accessTable = accessTable;
     }
 
     protected String instrumentationFilter(OptionValues options) {
@@ -108,7 +105,7 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
 
     @Override
     protected void run(StructuredGraph graph, HighTierContext context) {
-        JavaConstant tableConstant = snippetReflection.forObject(instrumentation.getAccessTable());
+        JavaConstant tableConstant = snippetReflection.forObject(accessTable);
         try {
             instrumentGraph(graph, context, tableConstant);
         } catch (Exception e) {
@@ -122,15 +119,16 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
 
     protected abstract boolean instrumentPerInlineSite(OptionValues options);
 
-    protected abstract Point createPoint(int id, int startIndex, Node n);
+    protected abstract Instrumentation.Point createPoint(int id, int startIndex, Node n);
 
-    public Point getOrCreatePoint(Node n) {
-        Point point = instrumentation.getOrCreatePoint(methodFilter, n, this);
+    public Instrumentation.Point getOrCreatePoint(Node n) {
+        Instrumentation.Point point = instrumentation.getOrCreatePoint(methodFilter, n, this);
         assert point == null || point.slotCount() == instrumentationPointSlotCount() : "Slot count mismatch between instrumentation point and expected value.";
         return point;
     }
 
     public static class Instrumentation {
+
         private Comparator<Point> pointsComparator = new Comparator<Point>() {
             @Override
             public int compare(Point x, Point y) {
@@ -144,6 +142,7 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
                 }
             }
         };
+
         private Comparator<Map.Entry<String, Point>> entriesComparator = new Comparator<Map.Entry<String, Point>>() {
             @Override
             public int compare(Map.Entry<String, Point> x, Map.Entry<String, Point> y) {
@@ -157,14 +156,9 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
                 }
             }
         };
-        private final long[] accessTable;
         public Map<String, Point> pointMap = new LinkedHashMap<>();
-        public int tableIdCount;
-        public int tableStartIndex;
-
-        public Instrumentation(long[] accessTable) {
-            this.accessTable = accessTable;
-        }
+        public int tableIdCount = 0;
+        public int tableStartIndex = 0;
 
         /*
          * Node source location is determined by its inlining chain. A flag value controls whether
@@ -311,24 +305,24 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
             }
         }
 
-        public synchronized Point getOrCreatePoint(MethodFilter[] methodFilter, Node n, InstrumentPhase phase) {
+        public synchronized Instrumentation.Point getOrCreatePoint(MethodFilter[] methodFilter, Node n, InstrumentPhase phase) {
             String key = filterAndEncode(methodFilter, n, phase);
             if (key == null) {
                 return null;
             }
-            Point existing = pointMap.get(key);
+            Instrumentation.Point existing = pointMap.get(key);
             int slotCount = phase.instrumentationPointSlotCount();
             if (existing != null) {
                 return existing;
-            } else if (tableStartIndex + slotCount < phase.getInstrumentation().getAccessTable().length) {
+            } else if (tableStartIndex + slotCount < phase.accessTable.length) {
                 int id = tableIdCount++;
                 int startIndex = tableStartIndex;
                 tableStartIndex += slotCount;
-                Point p = phase.createPoint(id, startIndex, n);
+                Instrumentation.Point p = phase.createPoint(id, startIndex, n);
                 pointMap.put(key, p);
                 return p;
             } else {
-                if (tableStartIndex < phase.getInstrumentation().getAccessTable().length) {
+                if (tableStartIndex < phase.accessTable.length) {
                     TTY.println("Maximum number of instrumentation counters exceeded.");
                     tableStartIndex += slotCount;
                 }
@@ -336,39 +330,35 @@ public abstract class InstrumentPhase extends BasePhase<HighTierContext> {
             }
         }
 
-        public long[] getAccessTable() {
-            return accessTable;
+        public abstract static class Point {
+            protected int id;
+            protected int rawIndex;
+            protected NodeSourcePosition position;
+
+            public Point(int id, int rawIndex, NodeSourcePosition position) {
+                this.id = id;
+                this.rawIndex = rawIndex;
+                this.position = position;
+            }
+
+            public int slotIndex(int offset) {
+                assert offset < slotCount() : "Offset exceeds instrumentation point's slot count: " + offset;
+                return rawIndex + offset;
+            }
+
+            public int getId() {
+                return id;
+            }
+
+            public NodeSourcePosition getPosition() {
+                return position;
+            }
+
+            public abstract int slotCount();
+
+            public abstract long getHotness();
+
+            public abstract boolean isPrettified(OptionValues options);
         }
-    }
-
-    public abstract static class Point {
-        protected int id;
-        protected int rawIndex;
-        protected NodeSourcePosition position;
-
-        public Point(int id, int rawIndex, NodeSourcePosition position) {
-            this.id = id;
-            this.rawIndex = rawIndex;
-            this.position = position;
-        }
-
-        public int slotIndex(int offset) {
-            assert offset < slotCount() : "Offset exceeds instrumentation point's slot count: " + offset;
-            return rawIndex + offset;
-        }
-
-        public int getId() {
-            return id;
-        }
-
-        public NodeSourcePosition getPosition() {
-            return position;
-        }
-
-        public abstract int slotCount();
-
-        public abstract long getHotness();
-
-        public abstract boolean isPrettified(OptionValues options);
     }
 }

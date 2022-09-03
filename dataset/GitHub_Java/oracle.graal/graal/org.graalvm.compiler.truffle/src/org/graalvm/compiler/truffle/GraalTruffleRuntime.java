@@ -145,12 +145,12 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     private final GraalTVMCI tvmci = new GraalTVMCI();
 
     /**
-     * The instrumentation object is used by the Truffle instrumentation to count executions. The
+     * The instrumentation table is used by the Truffle instrumentation to count executions. The
      * value is lazily initialized the first time it is requested because it depends on the Truffle
      * options, and tests that need the instrumentation table need to override these options after
      * the TruffleRuntime object is created.
      */
-    private volatile InstrumentPhase.Instrumentation instrumentation;
+    private volatile long[] instrumentationTable;
 
     /**
      * Utility method that casts the singleton {@link TruffleRuntime}.
@@ -481,7 +481,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         getCompilationNotify().notifyShutdown(this);
         OptionValues options = TruffleCompilerOptions.getOptions();
         if (getValue(TruffleInstrumentBranches) || getValue(TruffleInstrumentBoundaries)) {
-            instrumentation.dumpAccessTable(options);
+            InstrumentPhase.instrumentation.dumpAccessTable(options);
         }
     }
 
@@ -624,17 +624,16 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         return callMethods;
     }
 
-    public InstrumentPhase.Instrumentation getInstrumentation() {
-        if (instrumentation == null) {
+    public long[] getInstrumentationTable() {
+        if (instrumentationTable == null) {
             synchronized (this) {
-                if (instrumentation == null) {
+                if (instrumentationTable == null) {
                     OptionValues options = TruffleCompilerOptions.getOptions();
-                    long[] accessTable = new long[TruffleCompilerOptions.TruffleInstrumentationTableSize.getValue(options)];
-                    instrumentation = new InstrumentPhase.Instrumentation(accessTable);
+                    instrumentationTable = new long[TruffleCompilerOptions.TruffleInstrumentationTableSize.getValue(options)];
                 }
             }
         }
-        return instrumentation;
+        return instrumentationTable;
     }
 
     // cached field access to make it fast in the interpreter
