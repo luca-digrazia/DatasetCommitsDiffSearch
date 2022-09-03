@@ -55,7 +55,7 @@ public class AMD64StringUTF16Substitutions {
 
     @Fold
     static int byteArrayIndexScale(@InjectedParameter MetaAccessProvider metaAccess) {
-        return metaAccess.getArrayIndexScale(JavaKind.Byte);
+        return metaAccess.getArrayBaseOffset(JavaKind.Byte);
     }
 
     @Fold
@@ -96,7 +96,7 @@ public class AMD64StringUTF16Substitutions {
     @MethodSubstitution(optional = true)
     public static int indexOfCharUnsafe(byte[] value, int ch, int fromIndex, int max) {
         Pointer sourcePointer = Word.objectToTrackedPointer(value).add(byteArrayBaseOffset(INJECTED)).add(fromIndex * charArrayIndexScale(INJECTED));
-        int result = AMD64ArrayIndexOf.indexOf1Char(sourcePointer, max - fromIndex, (char) ch);
+        int result = AMD64ArrayIndexOfNode.optimizedArrayIndexOf(sourcePointer, max - fromIndex, (char) ch, JavaKind.Char);
         if (result != -1) {
             return result + fromIndex;
         }
@@ -117,7 +117,7 @@ public class AMD64StringUTF16Substitutions {
 
         Pointer srcptr = Word.objectToTrackedPointer(src).add(charArrayBaseOffset(INJECTED)).add(sndx * charArrayIndexScale(INJECTED));
         Pointer dstptr = Word.objectToTrackedPointer(dst).add(byteArrayBaseOffset(INJECTED)).add(dndx * byteArrayIndexScale(INJECTED));
-        return AMD64StringUTF16CompressNode.compress(srcptr, dstptr, len, JavaKind.Char);
+        return AMD64StringUTF16CompressNode.compress(srcptr, dstptr, len);
     }
 
     /*-
@@ -128,13 +128,13 @@ public class AMD64StringUTF16Substitutions {
      */
     @MethodSubstitution
     public static int compress(byte[] src, int sndx, byte[] dst, int dndx, int len) {
-        if (len < 0 || sndx < 0 || (sndx * 2 + len * 2 > src.length) || dndx < 0 || (dndx + len > dst.length)) {
+        if (len < 0 || sndx < 0 || (sndx + len * 2 > src.length) || dndx < 0 || (dndx + len > dst.length)) {
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.BoundsCheckException);
         }
 
         Pointer srcptr = Word.objectToTrackedPointer(src).add(byteArrayBaseOffset(INJECTED)).add(sndx * 2 * byteArrayIndexScale(INJECTED));
         Pointer dstptr = Word.objectToTrackedPointer(dst).add(byteArrayBaseOffset(INJECTED)).add(dndx * byteArrayIndexScale(INJECTED));
-        return AMD64StringUTF16CompressNode.compress(srcptr, dstptr, len, JavaKind.Byte);
+        return AMD64StringUTF16CompressNode.compress(srcptr, dstptr, len);
     }
 
 }
