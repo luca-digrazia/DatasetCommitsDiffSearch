@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.api.code.BytecodeFrame.*;
-
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
@@ -151,17 +149,6 @@ public final class FrameState extends VirtualState implements IterableNodeType {
     public void setOuterFrameState(FrameState x) {
         updateUsages(this.outerFrameState, x);
         this.outerFrameState = x;
-    }
-
-    public BytecodePosition toBytecodePosition() {
-        return toBytecodePosition(this);
-    }
-
-    public static BytecodePosition toBytecodePosition(FrameState fs) {
-        if (fs == null) {
-            return null;
-        }
-        return new BytecodePosition(toBytecodePosition(fs.outerFrameState()), fs.method(), fs.bci);
     }
 
     /**
@@ -306,7 +293,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
      * is that a stateAfter is being transformed into a stateDuring, so the stack depth may change.
      */
     private boolean checkStackDepth(int oldBci, int oldStackSize, boolean oldDuringCall, boolean oldRethrowException, int newBci, int newStackSize, boolean newDuringCall, boolean newRethrowException) {
-        if (BytecodeFrame.isPlaceholderBci(oldBci)) {
+        if (BytecodeFrame.isSyntheticBci(oldBci)) {
             return true;
         }
         /*
@@ -462,8 +449,18 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                 properties.put("sourceLine", ste.getLineNumber());
             }
         }
-        if (isPlaceholderBci(bci)) {
-            properties.put("bci", getPlaceholderBciName(bci));
+        if (bci == BytecodeFrame.AFTER_BCI) {
+            properties.put("bci", "AFTER_BCI");
+        } else if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI) {
+            properties.put("bci", "AFTER_EXCEPTION_BCI");
+        } else if (bci == BytecodeFrame.INVALID_FRAMESTATE_BCI) {
+            properties.put("bci", "INVALID_FRAMESTATE_BCI");
+        } else if (bci == BytecodeFrame.BEFORE_BCI) {
+            properties.put("bci", "BEFORE_BCI");
+        } else if (bci == BytecodeFrame.UNKNOWN_BCI) {
+            properties.put("bci", "UNKNOWN_BCI");
+        } else if (bci == BytecodeFrame.UNWIND_BCI) {
+            properties.put("bci", "UNWIND_BCI");
         }
         properties.put("locksSize", values.size() - stackSize - localsSize);
         return properties;
