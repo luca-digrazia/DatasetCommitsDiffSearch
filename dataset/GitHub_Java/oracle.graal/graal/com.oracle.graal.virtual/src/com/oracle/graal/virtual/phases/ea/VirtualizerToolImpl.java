@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,44 +22,30 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.compiler.common.GraalOptions.MaximumEscapeAnalysisArrayLength;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import java.util.List;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.java.MonitorIdNode;
-import com.oracle.graal.nodes.spi.LoweringProvider;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import jdk.internal.jvmci.meta.*;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
 
 class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
 
     private final MetaAccessProvider metaAccess;
     private final ConstantReflectionProvider constantReflection;
-    private final ConstantFieldProvider constantFieldProvider;
     private final PartialEscapeClosure<?> closure;
-    private final Assumptions assumptions;
-    private final LoweringProvider loweringProvider;
 
-    VirtualizerToolImpl(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, PartialEscapeClosure<?> closure,
-                    Assumptions assumptions, LoweringProvider loweringProvider) {
+    VirtualizerToolImpl(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, PartialEscapeClosure<?> closure) {
         this.metaAccess = metaAccess;
         this.constantReflection = constantReflection;
-        this.constantFieldProvider = constantFieldProvider;
         this.closure = closure;
-        this.assumptions = assumptions;
-        this.loweringProvider = loweringProvider;
     }
 
     private boolean deleted;
@@ -73,14 +59,8 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
         return metaAccess;
     }
 
-    @Override
     public ConstantReflectionProvider getConstantReflectionProvider() {
         return constantReflection;
-    }
-
-    @Override
-    public ConstantFieldProvider getConstantFieldProvider() {
-        return constantFieldProvider;
     }
 
     public void reset(PartialEscapeBlockState<?> newState, ValueNode newCurrent, FixedNode newPosition, GraphEffectList newEffects) {
@@ -100,7 +80,6 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
         return closure.getAliasAndResolve(state, value);
     }
 
-    @Override
     public ValueNode getEntry(VirtualObjectNode virtualObject, int index) {
         return state.getObjectState(virtualObject).getEntry(index);
     }
@@ -119,13 +98,11 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
         state.setEntry(virtual.getObjectId(), index, newValue);
     }
 
-    @Override
     public void setEnsureVirtualized(VirtualObjectNode virtualObject, boolean ensureVirtualized) {
         int id = virtualObject.getObjectId();
         state.setEnsureVirtualized(id, ensureVirtualized);
     }
 
-    @Override
     public boolean getEnsureVirtualized(VirtualObjectNode virtualObject) {
         return state.getObjectState(virtualObject).getEnsureVirtualized();
     }
@@ -186,7 +163,7 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
         }
         state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized));
         closure.addAndMarkAlias(virtualObject, virtualObject);
-        PartialEscapeClosure.COUNTER_ALLOCATION_REMOVED.increment();
+        PartialEscapeClosure.METRIC_ALLOCATION_REMOVED.increment();
     }
 
     @Override
@@ -205,32 +182,27 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
 
     @Override
     public boolean ensureMaterialized(VirtualObjectNode virtualObject) {
-        return closure.ensureMaterialized(state, virtualObject.getObjectId(), position, effects, PartialEscapeClosure.COUNTER_MATERIALIZATIONS_UNHANDLED);
+        return closure.ensureMaterialized(state, virtualObject.getObjectId(), position, effects, PartialEscapeClosure.METRIC_MATERIALIZATIONS_UNHANDLED);
     }
 
-    @Override
     public void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId) {
         int id = virtualObject.getObjectId();
         state.addLock(id, monitorId);
     }
 
-    @Override
     public MonitorIdNode removeLock(VirtualObjectNode virtualObject) {
         int id = virtualObject.getObjectId();
         return state.removeLock(id);
     }
 
-    @Override
     public MetaAccessProvider getMetaAccess() {
         return metaAccess;
     }
 
-    @Override
     public ConstantReflectionProvider getConstantReflection() {
         return constantReflection;
     }
 
-    @Override
     public boolean canonicalizeReads() {
         return false;
     }
@@ -238,19 +210,5 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
     @Override
     public boolean allUsagesAvailable() {
         return true;
-    }
-
-    @Override
-    public Assumptions getAssumptions() {
-        return assumptions;
-    }
-
-    @Override
-    public boolean supportSubwordCompare(int bits) {
-        if (loweringProvider != null) {
-            return loweringProvider.supportSubwordCompare(bits);
-        } else {
-            return false;
-        }
     }
 }

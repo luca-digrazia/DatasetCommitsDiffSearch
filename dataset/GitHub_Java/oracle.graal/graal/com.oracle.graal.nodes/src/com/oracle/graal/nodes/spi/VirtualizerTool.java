@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,98 +22,92 @@
  */
 package com.oracle.graal.nodes.spi;
 
-import com.oracle.graal.api.meta.*;
+import java.util.*;
+
+import jdk.internal.jvmci.meta.*;
+
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
- * This tool can be used to query the current state (normal/virtualized/re-materialized) of values and to describe the
- * actions that would be taken for this state.
+ * This tool can be used to query the current state (normal/virtualized/re-materialized) of values
+ * and to describe the actions that would be taken for this state.
  *
  * See also {@link Virtualizable}.
  */
 public interface VirtualizerTool {
 
     /**
-     * @return the {@link MetaAccessProvider} associated with the current compilation, which might be required for
-     *         creating constants, etc.
+     * @return the {@link MetaAccessProvider} associated with the current compilation.
      */
     MetaAccessProvider getMetaAccessProvider();
+
+    /**
+     * @return the {@link ConstantReflectionProvider} associated with the current compilation, which
+     *         can be used to access {@link JavaConstant}s.
+     */
+    ConstantReflectionProvider getConstantReflectionProvider();
+
+    /**
+     * This method should be used to query the maximum size of virtualized objects before attempting
+     * virtualization.
+     *
+     * @return the maximum number of entries for virtualized objects.
+     */
+    int getMaximumEntryCount();
 
     // methods working on virtualized/materialized objects
 
     /**
-     * Queries the current state of the given value: if it is virtualized (thread-local and the compiler knows all
-     * entries) or not.
+     * Introduces a new virtual object to the current state.
      *
-     * @param value the value whose state should be queried.
-     * @return the {@link VirtualObjectNode} representing the value if it is virtualized, null otherwise.
+     * @param virtualObject the new virtual object.
+     * @param entryState the initial state of the virtual object's fields.
+     * @param locks the initial locking depths.
+     * @param ensureVirtualized true if this object needs to stay virtual
      */
-    VirtualObjectNode getVirtualState(ValueNode value);
+    void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, boolean ensureVirtualized);
 
     /**
-     * Retrieves the entry (field or array element) with the given index in the virtualized object.
+     * Returns a VirtualObjectNode if the given value is aliased with a virtual object that is still
+     * virtual, the materialized value of the given value is aliased with a virtual object that was
+     * materialized, the replacement if the give value was replaced, otherwise the given value.
      *
-     * @param virtual the virtualized object
-     * @param index the index to be queried.
-     * @return the entry at the given index.
+     * Replacements via {@link #replaceWithValue(ValueNode)} are not immediately committed. This
+     * method can be used to determine if a value was replaced by another one (e.g., a load field by
+     * the loaded value).
      */
-    ValueNode getVirtualEntry(VirtualObjectNode virtual, int index);
+    ValueNode getAlias(ValueNode value);
 
     /**
      * Sets the entry (field or array element) with the given index in the virtualized object.
      *
-     * @param virtual the virtualized object.
      * @param index the index to be set.
      * @param value the new value for the given index.
+     * @param unsafe if true, then mismatching value {@link JavaKind}s will be accepted.
      */
-    void setVirtualEntry(VirtualObjectNode virtual, int index, ValueNode value);
+    void setVirtualEntry(VirtualObjectNode virtualObject, int index, ValueNode value, boolean unsafe);
 
-    /**
-     * Retrieves the lock count of the given virtualized object.
-     *
-     * @param virtual the virtualized object.
-     * @return the number of locks.
-     */
-    int getVirtualLockCount(VirtualObjectNode virtual);
+    ValueNode getEntry(VirtualObjectNode virtualObject, int index);
 
-    /**
-     * Sets the lock count of the given virtualized object.
-     *
-     * @param virtual the virtualized object.
-     * @param lockCount the new lock count.
-     */
-    void setVirtualLockCount(VirtualObjectNode virtual, int lockCount);
+    void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId);
 
-    /**
-     * Queries the current state of the given value: if it was materialized or not.
-     *
-     * @param value the value whose state should be queried.
-     * @return the materialized value (usually a MaterializeObjectNode or a {@link PhiNode}) if it was materialized,
-     *         null otherwise.
-     */
-    ValueNode getMaterializedValue(ValueNode value);
+    MonitorIdNode removeLock(VirtualObjectNode virtualObject);
 
-    // scalar replacement
+    void setEnsureVirtualized(VirtualObjectNode virtualObject, boolean ensureVirtualized);
 
-    /**
-     * Replacements via {@link #replaceWithValue(ValueNode)} are not immediately committed. This method can be used to
-     * determine if a value was replaced by another one (e.g., a load field by the loaded value).
-     *
-     * @param original the original input value.
-     * @return the replacement value, or the original value if there is no replacement.
-     */
-    ValueNode getReplacedValue(ValueNode original);
+    boolean getEnsureVirtualized(VirtualObjectNode virtualObject);
 
     // operations on the current node
 
     /**
      * Deletes the current node and replaces it with the given virtualized object.
      *
-     * @param virtual the virtualized object that should replace the current node.
+     * @param virtualObject the virtualized object that should replace the current node.
      */
-    void replaceWithVirtual(VirtualObjectNode virtual);
+    void replaceWithVirtual(VirtualObjectNode virtualObject);
 
     /**
      * Deletes the current node and replaces it with the given value.
@@ -136,10 +130,26 @@ public interface VirtualizerTool {
     void replaceFirstInput(Node oldInput, Node replacement);
 
     /**
-     * Performs a custom action on the current node. This action will only be performed when, and if, the changes are
-     * committed. Custom actions must not modify inputs of nodes.
+     * Adds the given node to the graph.This action will only be performed when, and if, the changes
+     * are committed.
      *
-     * @param action the custom action.
+     * @param node the node to add.
      */
-    void customAction(Runnable action);
+    void addNode(ValueNode node);
+
+    /**
+     * This method performs either {@link #replaceWithValue(ValueNode)} or
+     * {@link #replaceWithVirtual(VirtualObjectNode)}, depending on the given value.
+     *
+     * @param value the replacement value
+     */
+    void replaceWith(ValueNode value);
+
+    /**
+     *
+     * If state is virtual, materialization is performed for the given state.
+     *
+     * @return true if materialization happened, false if not.
+     */
+    boolean ensureMaterialized(VirtualObjectNode virtualObject);
 }
