@@ -97,7 +97,7 @@ class BlockState extends MergeableBlockState<BlockState> {
         for (int i = 0; i < fieldState.length; i++) {
             ObjectState valueObj = objectState(fieldState[i]);
             if (valueObj != null) {
-                if (valueObj.isVirtual()) {
+                if (valueObj.getMaterializedValue() == null) {
                     materializeChangedBefore(fixed, valueObj.virtual, deferred, deferredStores, materializeEffects);
                 }
                 if (deferred.contains(valueObj.virtual)) {

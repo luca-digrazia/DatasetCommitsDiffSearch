@@ -98,6 +98,7 @@ class ObjectState {
     }
 
     public int getLockCount() {
+        assert isVirtual();
         return lockCount;
     }
 
