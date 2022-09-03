@@ -382,11 +382,11 @@ public final class Source {
     }
 
     public static Source create(String name, URL source) throws IOException {
-        return newBuilder(source).name(name).build();
+        return newBuilder(source).setName(name).build();
     }
 
     public static Source create(String name, Reader source) throws IOException {
-        return newBuilder(source).name(name).build();
+        return newBuilder(source).setName(name).build();
     }
 
     public static class Builder {
@@ -402,10 +402,25 @@ public final class Source {
             this.origin = origin;
         }
 
-        public Builder name(String newName) {
+        /**
+         * Gives a new name to the {@link #build() to-be-built} {@link Source}.
+         *
+         * @param newName name that replaces the previously given one, cannot be <code>null</code>
+         * @return instance of <code>this</code> builder
+         * @since 1.0
+         */
+        public Builder setName(String newName) {
             Objects.requireNonNull(newName);
             this.name = newName;
             return this;
+        }
+
+        /**
+         * @deprecated use {@link #setName(String)}
+         */
+        @Deprecated
+        public Builder name(String newName) {
+            return setName(newName);
         }
 
         /**
@@ -417,9 +432,9 @@ public final class Source {
          *
          * @param code the code to be available via {@link Source#getCode()}
          * @return instance of this builder
-         * @since 1.0
+         * @since 0.15
          */
-        public Builder content(String code) {
+        public Builder setContent(String code) {
             Objects.requireNonNull(code);
             this.content = code;
             return this;
@@ -439,7 +454,7 @@ public final class Source {
          * @return the instance of this builder
          * @since 1.0
          */
-        public Builder interactive(@SuppressWarnings("hiding") boolean interactive) {
+        public Builder setInteractive(boolean interactive) {
             this.interactive = interactive;
             return this;
         }
@@ -449,7 +464,7 @@ public final class Source {
          */
         @Deprecated
         public Builder interactive() {
-            return interactive(true);
+            return setInteractive(true);
         }
 
         /**
@@ -460,7 +475,7 @@ public final class Source {
          * @return the instance of this builder
          * @since 1.0
          */
-        public Builder internal(@SuppressWarnings("hiding") boolean internal) {
+        public Builder setInternal(boolean internal) {
             this.internal = internal;
             return this;
         }
@@ -470,7 +485,7 @@ public final class Source {
          */
         @Deprecated
         public Builder internal() {
-            return internal(true);
+            return setInternal(true);
         }
 
         /**
@@ -483,10 +498,18 @@ public final class Source {
          * @return the instance of this builder
          * @since 1.0
          */
-        public Builder uri(URI newUri) {
-            Objects.requireNonNull(newUri);
-            this.uri = newUri;
+        public Builder setURI(URI ownUri) {
+            Objects.requireNonNull(ownUri);
+            this.uri = ownUri;
             return this;
+        }
+
+        /**
+         * @deprecated use {@link #setURI(String)}
+         */
+        @Deprecated
+        public Builder uri(URI newUri) {
+            return setURI(newUri);
         }
 
         /**
@@ -548,7 +571,7 @@ class SourceSnippets {
      // BEGIN: SourceSnippets#likeFileName
      File file = new File(fileName);
      Source source = Source.newBuilder(file.getCanonicalFile()).
-         name(file.getPath()).
+         setName(file.getPath()).
          build();
      // END: SourceSnippets#likeFileName
      return source;
@@ -558,7 +581,7 @@ class SourceSnippets {
      // BEGIN: SourceSnippets#fromURL
      URL resource = relativeClass.getResource("sample.js");
      Source source = Source.newBuilder(resource)
-         .name("sample.js")
+         .setName("sample.js")
          .build();
      assert resource.toExternalForm().equals(source.getPath());
      assert "sample.js".equals(source.getName());
@@ -571,8 +594,8 @@ class SourceSnippets {
      // BEGIN: SourceSnippets#fromURLWithOwnContent
      URL resource = relativeClass.getResource("sample.js");
      Source source = Source.newBuilder(resource)
-         .name("sample.js")
-         .content("{}")
+         .setName("sample.js")
+         .setContent("{}")
          .build();
      assert resource.toExternalForm().equals(source.getPath());
      assert "sample.js".equals(source.getName());
@@ -588,7 +611,7 @@ class SourceSnippets {
                      relativeClass.getResourceAsStream("sample.js")
      );
      Source source = Source.newBuilder(stream)
-         .name("sample.js")
+         .setName("sample.js")
          .build();
      assert "sample.js".equals(source.getName());
      // END: SourceSnippets#fromReader
