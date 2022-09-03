@@ -29,7 +29,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * In the following tests, the usages of local variable "a" are replaced with the integer constant
@@ -82,9 +81,8 @@ public class DegeneratedLoopsTest extends GraalCompilerTest {
 
             public void run() {
                 StructuredGraph graph = parse(snippet);
-                HighTierContext context = new HighTierContext(runtime(), new Assumptions(false), replacements, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
-                new InliningPhase().apply(graph, context);
-                new CanonicalizerPhase(true).apply(graph, context);
+                new InliningPhase(runtime(), null, new Assumptions(false), null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
+                new CanonicalizerPhase(runtime(), new Assumptions(false)).apply(graph);
                 Debug.dump(graph, "Graph");
                 StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
                 Debug.dump(referenceGraph, "ReferenceGraph");
