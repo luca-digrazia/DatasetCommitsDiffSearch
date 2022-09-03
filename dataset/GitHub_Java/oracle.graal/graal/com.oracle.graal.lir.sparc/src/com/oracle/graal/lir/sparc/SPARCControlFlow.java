@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -192,14 +192,16 @@ public class SPARCControlFlow {
                             emitCompare(masm, target, condition, CC.Icc);
                             break;
                         case Long: {
-                            SPARCMove.move(crb, masm, scratch, keyConstants[index]);
-                            new Cmp(keyRegister, asLongReg(scratch)).emit(masm);
+                            Register temp = asLongReg(scratch);
+                            SPARCMove.move(crb, masm, temp.asValue(Kind.Long), keyConstants[index]);
+                            new Cmp(keyRegister, temp).emit(masm);
                             emitCompare(masm, target, condition, CC.Xcc);
                             break;
                         }
                         case Object: {
-                            SPARCMove.move(crb, masm, scratch, keyConstants[index]);
-                            new Cmp(keyRegister, asObjectReg(scratch)).emit(masm);
+                            Register temp = asObjectReg(scratch);
+                            SPARCMove.move(crb, masm, temp.asValue(Kind.Object), keyConstants[index]);
+                            new Cmp(keyRegister, temp).emit(masm);
                             emitCompare(masm, target, condition, CC.Ptrcc);
                             break;
                         }
@@ -332,7 +334,6 @@ public class SPARCControlFlow {
         }
     }
 
-    @SuppressWarnings("unused")
     private static void cmove(CompilationResultBuilder crb, SPARCMacroAssembler masm, Kind kind, Value result, ConditionFlag cond, Value other) {
         if (!isRegister(other)) {
             SPARCMove.move(crb, masm, result, other);
@@ -372,11 +373,8 @@ public class SPARCControlFlow {
                     case F_Unordered:
                         fc = FCond.Fbu;
                         break;
-                    default:
-                        GraalInternalError.shouldNotReachHere("Unknown condition code " + cond);
-                        break;
                 }
-                new Fbfcc(masm, fc, true, 2);
+                new Fbfcc(masm, fc, true, 2).equals(masm);
                 SPARCMove.move(crb, masm, result, other);
                 break;
             default:
