@@ -45,13 +45,13 @@ public final class DefaultTruffleSplittingStrategy implements TruffleSplittingSt
     }
 
     public void forceSplitting() {
-        if (!canSplit()) {
+        if (call.isCallTargetCloned()) {
             return;
         }
         call.installSplitCallTarget(call.getCallTarget().cloneUninitialized());
     }
 
-    private boolean canSplit() {
+    private boolean shouldSplit() {
         if (call.isCallTargetCloned()) {
             return false;
         }
@@ -61,14 +61,6 @@ public final class DefaultTruffleSplittingStrategy implements TruffleSplittingSt
         if (!call.isCallTargetCloningAllowed()) {
             return false;
         }
-        return true;
-    }
-
-    private boolean shouldSplit() {
-        if (!canSplit()) {
-            return false;
-        }
-
         OptimizedCallTarget splitTarget = call.getCallTarget();
         int nodeCount = splitTarget.getNonTrivialNodeCount();
         if (nodeCount > TruffleCompilerOptions.TruffleSplittingMaxCalleeSize.getValue()) {
