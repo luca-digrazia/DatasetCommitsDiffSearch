@@ -284,13 +284,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
             @Override
             public Frame<?> enterAlwaysReached(Block b) {
-                AnchoringNode newAnchor = anchor;
-                if (parent != null && b.getLoop() != parent.block.getLoop() && !b.isLoopHeader()) {
-                    // We are exiting a loop => cannot reuse the anchor without inserting loop
-                    // proxies.
-                    newAnchor = b.getBeginNode();
-                }
-                return new ProcessFrame(b, activeGuards, newAnchor, this);
+                return new ProcessFrame(b, activeGuards, anchor, this);
             }
 
             @Override
@@ -407,7 +401,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
      *     if (alwaysReachedBlock != null &amp;&amp; alwaysReachedBlock.getDominator() == block) {
      *         processBlock(alwaysReachedBlock);
      *     }
-     *
+     * 
      *     // Now go for the other dominators.
      *     for (Block dominated : block.getDominated()) {
      *         if (dominated != alwaysReachedBlock) {
