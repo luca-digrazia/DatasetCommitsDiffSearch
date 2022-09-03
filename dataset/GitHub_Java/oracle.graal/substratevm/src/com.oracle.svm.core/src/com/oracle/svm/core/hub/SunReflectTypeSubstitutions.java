@@ -1,37 +1,31 @@
-/*
- * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+/* 
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved. 
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER. 
+ * 
+ * This code is free software; you can redistribute it and/or modify it 
+ * under the terms of the GNU General Public License version 2 only, as 
+ * published by the Free Software Foundation. 
+ * 
+ * This code is distributed in the hope that it will be useful, but WITHOUT 
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License 
+ * version 2 for more details (a copy is included in the LICENSE file that 
+ * accompanied this code). 
+ * 
+ * You should have received a copy of the GNU General Public License version 
+ * 2 along with this work; if not, write to the Free Software Foundation, 
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA. 
+ * 
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA 
+ * or visit www.oracle.com if you need additional information or have any 
+ * questions. 
  */
 package com.oracle.svm.core.hub;
 
-//Checkstyle: allow reflection
+//Checkstyle: allow reflection 
 
 import java.lang.reflect.GenericDeclaration;
-import java.lang.reflect.MalformedParameterizedTypeException;
 import java.lang.reflect.Type;
-
-import org.graalvm.compiler.core.common.SuppressFBWarnings;
-import org.graalvm.compiler.serviceprovider.GraalServices;
 
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
@@ -39,10 +33,6 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.jdk.JDK8OrEarlier;
-import com.oracle.svm.core.jdk.JDK9OrLater;
-import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -61,21 +51,10 @@ import sun.reflect.generics.tree.FieldTypeSignature;
 final class Target_sun_reflect_generics_reflectiveObjects_TypeVariableImpl {
 
     @Alias private String name;
-
     /* Cache the bounds value. */
-
-    @TargetElement(name = "bounds", onlyWith = JDK8OrEarlier.class) //
-    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = TypeVariableBoundsComputer.class) //
-    private Type[] boundsJDK8OrEarlier;
-
-    @TargetElement(name = "bounds", onlyWith = JDK9OrLater.class) //
-    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = TypeVariableBoundsComputer.class) //
-    private volatile Object[] boundsJDK9OrLater;
-
+    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = TypeVariableBoundsComputer.class) private Type[] bounds;
     /* The bounds value is cached. The boundASTs field is not used at run time. */
-    @Delete //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    private FieldTypeSignature[] boundASTs;
+    @Delete private FieldTypeSignature[] boundASTs;
 
     @Alias GenericDeclaration genericDeclaration;
 
@@ -88,20 +67,7 @@ final class Target_sun_reflect_generics_reflectiveObjects_TypeVariableImpl {
 
     @Substitute
     public Type[] getBounds() {
-        /* Variant method bodies from JDK-8 and JDK-9 to use the appropriately typed variables. */
-        if (GraalServices.Java8OrEarlier) {
-            return boundsJDK8OrEarlier;
-        } else {
-            Object[] value = boundsJDK9OrLater;
-            /* We might want to reify the bounds eagerly during image generation: GR-10494. */
-            // GR-10494: @formatter:off
-            // GR-10494: if (value instanceof FieldTypeSignature[]) {
-            // GR-10494:     value = Util_sun_reflect_generics_reflectiveObjects_TypeVariableImpl.reifyBounds(this, (FieldTypeSignature[]) value);
-            // GR-10494:     boundsJDK9OrLater = value;
-            // GR-10494: }
-            // GR-10494: @formatter:on
-            return (Type[]) value.clone();
-        }
+        return bounds;
     }
 
     /** Reason for substitutions: disable access checks in original method. */
@@ -111,33 +77,10 @@ final class Target_sun_reflect_generics_reflectiveObjects_TypeVariableImpl {
     }
 }
 
-final class Util_sun_reflect_generics_reflectiveObjects_TypeVariableImpl {
-
-    /** Emulate the Java class hierarchy. */
-    static Target_sun_reflect_generics_reflectiveObjects_LazyReflectiveObjectGenerator asLazyReflectiveObjectGenerator(
-                    Target_sun_reflect_generics_reflectiveObjects_TypeVariableImpl typeVariableImpl) {
-        /* TODO: Can I just cast between these types and get checks at runtime? */
-        return KnownIntrinsics.convertUnknownValue(typeVariableImpl, Target_sun_reflect_generics_reflectiveObjects_LazyReflectiveObjectGenerator.class);
-    }
-
-    /** Emulate virtual dispatch. */
-    static Type[] reifyBounds(Target_sun_reflect_generics_reflectiveObjects_TypeVariableImpl typeVariableImpl, FieldTypeSignature[] boundASTs) {
-        return asLazyReflectiveObjectGenerator(typeVariableImpl).reifyBounds(boundASTs);
-    }
-}
-
-@TargetClass(className = "sun.reflect.generics.reflectiveObjects.LazyReflectiveObjectGenerator", onlyWith = JDK9OrLater.class)
-final class Target_sun_reflect_generics_reflectiveObjects_LazyReflectiveObjectGenerator {
-
-    @Alias
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    native Type[] reifyBounds(FieldTypeSignature[] boundASTs);
-}
-
 class TypeVariableBoundsComputer implements RecomputeFieldValue.CustomFieldValueComputer {
     @Override
     public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
-        return GuardedBoundsAccess.getBounds((TypeVariableImpl<?>) receiver);
+        return ((TypeVariableImpl<?>) receiver).getBounds();
     }
 }
 
@@ -145,37 +88,13 @@ class TypeVariableBoundsComputer implements RecomputeFieldValue.CustomFieldValue
 final class Target_sun_reflect_generics_reflectiveObjects_WildcardTypeImpl {
 
     /* Cache the upperBounds value. */
-
-    @Alias //
-    @RecomputeFieldValue(kind = Kind.Custom, declClass = WildcardTypeImplUpperBoundsComputer.class) //
-    @TargetElement(name = "upperBounds", onlyWith = JDK8OrEarlier.class) //
-    private Type[] upperBoundsJDK8OrEarlier;
-
-    @Alias //
-    @RecomputeFieldValue(kind = Kind.Custom, declClass = WildcardTypeImplUpperBoundsComputer.class) //
-    @TargetElement(name = "upperBounds", onlyWith = JDK9OrLater.class) //
-    private Object[] upperBoundsJDK9OrLater;
-
+    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = WildcardTypeImplUpperBoundsComputer.class) private Type[] upperBounds;
     /* Cache the lowerBounds value. */
-
-    @Alias //
-    @RecomputeFieldValue(kind = Kind.Custom, declClass = WildcardTypeImplLowerBoundsComputer.class) //
-    @TargetElement(name = "lowerBounds", onlyWith = JDK8OrEarlier.class) //
-    private Type[] lowerBoundsJDK8OrEarlier;
-
-    @Alias //
-    @RecomputeFieldValue(kind = Kind.Custom, declClass = WildcardTypeImplLowerBoundsComputer.class) //
-    @TargetElement(name = "lowerBounds", onlyWith = JDK9OrLater.class) //
-    private Object[] lowerBoundsJDK9OrLater;
-
+    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = WildcardTypeImplLowerBoundsComputer.class) private Type[] lowerBounds;
     /* The upperBounds value is cached. The upperBoundASTs field is not used at run time. */
-    @Delete //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    private FieldTypeSignature[] upperBoundASTs;
+    @Delete private FieldTypeSignature[] upperBoundASTs;
     /* The lowerBounds value is cached. The lowerBoundASTs field is not used at run time. */
-    @Delete //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    private FieldTypeSignature[] lowerBoundASTs;
+    @Delete private FieldTypeSignature[] lowerBoundASTs;
 
     @Substitute
     @SuppressWarnings("unused")
@@ -186,125 +105,26 @@ final class Target_sun_reflect_generics_reflectiveObjects_WildcardTypeImpl {
 
     @Substitute
     public Type[] getUpperBounds() {
-        if (GraalServices.Java8OrEarlier) {
-            return upperBoundsJDK8OrEarlier;
-        } else {
-            Object[] value = upperBoundsJDK9OrLater;
-            if (value instanceof FieldTypeSignature[]) {
-                value = Util_sun_reflect_generics_reflectiveObjects_WildcardTypeImpl.reifyBounds(this, (FieldTypeSignature[]) value);
-                upperBoundsJDK9OrLater = value;
-            }
-            return (Type[]) value.clone();
-        }
+        return upperBounds;
     }
 
     @Substitute
     public Type[] getLowerBounds() {
-        if (GraalServices.Java8OrEarlier) {
-            return lowerBoundsJDK8OrEarlier;
-        } else {
-            Object[] value = lowerBoundsJDK9OrLater;
-            if (value instanceof FieldTypeSignature[]) {
-                value = Util_sun_reflect_generics_reflectiveObjects_WildcardTypeImpl.reifyBounds(this, (FieldTypeSignature[]) value);
-                lowerBoundsJDK9OrLater = value;
-            }
-            return (Type[]) value.clone();
-        }
+        return lowerBounds;
     }
 }
 
 class WildcardTypeImplUpperBoundsComputer implements RecomputeFieldValue.CustomFieldValueComputer {
     @Override
     public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
-        return GuardedBoundsAccess.getUpperBounds((WildcardTypeImpl) receiver);
+        return ((WildcardTypeImpl) receiver).getUpperBounds();
     }
 }
 
 class WildcardTypeImplLowerBoundsComputer implements RecomputeFieldValue.CustomFieldValueComputer {
     @Override
     public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
-        return GuardedBoundsAccess.getLowerBounds((WildcardTypeImpl) receiver);
-    }
-}
-
-final class Util_sun_reflect_generics_reflectiveObjects_WildcardTypeImpl {
-
-    /** Emulate the Java class hierarchy. */
-    @SuppressFBWarnings(value = "BC", justification = "Widening cast between @TargetClasses")
-    static Target_sun_reflect_generics_reflectiveObjects_LazyReflectiveObjectGenerator asLazyReflectiveObjectGenerator(
-                    Target_sun_reflect_generics_reflectiveObjects_WildcardTypeImpl wildCardTypeImpl) {
-        return Target_sun_reflect_generics_reflectiveObjects_LazyReflectiveObjectGenerator.class.cast(wildCardTypeImpl);
-    }
-
-    /** Emulate virtual dispatch. */
-    static Type[] reifyBounds(Target_sun_reflect_generics_reflectiveObjects_WildcardTypeImpl wildCardTypeImpl, FieldTypeSignature[] boundASTs) {
-        return asLazyReflectiveObjectGenerator(wildCardTypeImpl).reifyBounds(boundASTs);
-    }
-}
-
-class GuardedBoundsAccess {
-
-    static Type[] getLowerBounds(WildcardTypeImpl receiver) {
-        try {
-            return receiver.getLowerBounds();
-        } catch (TypeNotPresentException | MalformedParameterizedTypeException e) {
-            /*
-             * This computer is used to compute the value of the WildcardTypeImpl.lowerBounds field.
-             * As per WildcardTypeImpl.getLowerBounds() javadoc:
-             *
-             * "Returns an array of <tt>Type</tt> objects representing the lower bound(s) of this
-             * type variable. Note that if no lower bound is explicitly declared, the lower bound is
-             * the type of <tt>null</tt>. In this case, a zero length array is returned."
-             *
-             * Thus, if getLowerBounds() throws a TypeNotPresentException, i.e., any of the bounds
-             * refers to a non-existent type declaration, or a MalformedParameterizedTypeException,
-             * i.e., any of the bounds refer to a parameterized type that cannot be instantiated, we
-             * conservatively return a zero length array.
-             */
-            return new Type[0];
-        }
-    }
-
-    static Type[] getUpperBounds(WildcardTypeImpl receiver) {
-        try {
-            return receiver.getUpperBounds();
-        } catch (TypeNotPresentException | MalformedParameterizedTypeException e) {
-            /*
-             * This computer is used to compute the value of the WildcardTypeImpl.upperBounds field.
-             * As per WildcardTypeImpl.getUpperBounds() javadoc:
-             *
-             * "Returns an array of <tt>Type</tt> objects representing the upper bound(s) of this
-             * type variable. Note that if no upper bound is explicitly declared, the upper bound is
-             * <tt>Object</tt>."
-             *
-             * Thus, if getUpperBounds() throws a TypeNotPresentException, i.e., any of the bounds
-             * refers to a non-existent type declaration, or a MalformedParameterizedTypeException,
-             * i.e., any of the bounds refer to a parameterized type that cannot be instantiated, we
-             * conservatively return the upper bound.
-             */
-            return new Type[0];
-        }
-    }
-
-    static Type[] getBounds(TypeVariableImpl<?> receiver) {
-        try {
-            return receiver.getBounds();
-        } catch (TypeNotPresentException | MalformedParameterizedTypeException e) {
-            /*
-             * This computer is used to compute the value of the TypeVariableImpl.bounds field. As
-             * per TypeVariableImpl.getBounds() javadoc:
-             *
-             * "Returns an array of <tt>Type</tt> objects representing the upper bound(s) of this
-             * type variable. Note that if no upper bound is explicitly declared, the upper bound is
-             * <tt>Object</tt>."
-             *
-             * Thus, if getBounds() throws a TypeNotPresentException, i.e., any of the bounds refers
-             * to a non-existent type declaration, or a MalformedParameterizedTypeException, i.e.,
-             * any of the bounds refer to a parameterized type that cannot be instantiated, we
-             * conservatively return the upper bound.
-             */
-            return new Type[]{Object.class};
-        }
+        return ((WildcardTypeImpl) receiver).getLowerBounds();
     }
 }
 
