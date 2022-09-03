@@ -36,13 +36,12 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.LoopNode;
-import com.oracle.truffle.api.nodes.ExplodeLoop.LoopExplosionKind;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMBasicBlockNode;
 import com.oracle.truffle.llvm.nodes.impl.control.LLVMRetNode;
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
+import com.oracle.truffle.llvm.runtime.LLVMOptions;
 
 public abstract class LLVMBlockNode extends LLVMExpressionNode {
 
@@ -51,7 +50,7 @@ public abstract class LLVMBlockNode extends LLVMExpressionNode {
         @Children private final LLVMBasicBlockNode[] bodyNodes;
         @CompilationFinal private final LLVMStackFrameNuller[][] indexToSlotNuller;
         private final FrameSlot returnSlot;
-        private final boolean injectBranchProbabilities = LLVMBaseOptionFacade.injectBranchProbabilities();
+        private final boolean injectBranchProbabilities = LLVMOptions.injectBranchProbabilities();
 
         public LLVMBlockControlFlowNode(LLVMBasicBlockNode[] bodyNodes, LLVMStackFrameNuller[][] indexToSlotNuller, FrameSlot returnSlot) {
             this.bodyNodes = bodyNodes;
@@ -60,7 +59,7 @@ public abstract class LLVMBlockNode extends LLVMExpressionNode {
         }
 
         @Override
-        @ExplodeLoop(kind = LoopExplosionKind.MERGE_EXPLODE)
+        @ExplodeLoop(merge = true)
         public Object executeGeneric(VirtualFrame frame) {
             CompilerAsserts.compilationConstant(bodyNodes.length);
             int bci = 0;
