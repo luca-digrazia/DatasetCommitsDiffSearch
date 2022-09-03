@@ -68,13 +68,12 @@ public abstract class AbstractDebugCompilationListener implements GraalTruffleCo
     }
 
     public static void log(int indent, String msg, String details, Map<String, Object> properties) {
-        int spaceIndent = indent * 2;
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("[truffle] %-16s ", msg));
-        for (int i = 0; i < spaceIndent; i++) {
+        for (int i = 0; i < indent; i++) {
             sb.append(' ');
         }
-        sb.append(String.format("%-" + (60 - spaceIndent) + "s", details));
+        sb.append(String.format("%-" + (60 - indent) + "s", details));
         if (properties != null) {
             for (String property : properties.keySet()) {
                 Object value = properties.get(property);

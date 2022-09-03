@@ -113,11 +113,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     }
 
     @Override
-    public CompilerOptions createCompilerOptions() {
-        return new GraalCompilerOptions();
-    }
-
-    @Override
     public Assumption createAssumption() {
         return createAssumption(null);
     }

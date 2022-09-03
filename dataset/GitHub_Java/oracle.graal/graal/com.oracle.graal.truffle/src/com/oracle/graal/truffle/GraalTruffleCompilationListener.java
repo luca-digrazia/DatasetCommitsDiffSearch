@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.graal.code.CompilationResult;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.truffle.api.nodes.*;
 
 /**
  * Enables implementations of this interface to listen to compilation related events of the Graal
@@ -68,11 +68,11 @@ public interface GraalTruffleCompilationListener {
 
     void notifyCompilationStarted(OptimizedCallTarget target);
 
-    void notifyCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph);
+    void notifyCompilationTruffleTierFinished(OptimizedCallTarget target, StructuredGraph graph);
 
     void notifyCompilationGraalTierFinished(OptimizedCallTarget target, StructuredGraph graph);
 
-    void notifyCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, StructuredGraph graph, CompilationResult result);
+    void notifyCompilationSuccess(OptimizedCallTarget target, StructuredGraph graph, CompilationResult result);
 
     /**
      * Invoked if a compiled call target was invalidated.
