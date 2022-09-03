@@ -28,14 +28,13 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.collections.MapCursor;
 import org.graalvm.collections.UnmodifiableEconomicMap;
-import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
-import org.graalvm.compiler.options.OptionValues;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 /**
  * This class contains all inlining decisions performed on a graph during the compilation.
@@ -56,7 +55,6 @@ import java.util.function.BiConsumer;
  * {@link #addDecision} to log negative decisions.
  */
 public class InliningLog {
-
     public static final class Decision {
         private final boolean positive;
         private final String reason;
@@ -114,9 +112,9 @@ public class InliningLog {
 
         public String positionString() {
             if (parent == null) {
-                return "compilation of " + target.format("%H.%n(%p)");
+                return "<root>";
             }
-            return "at " + MetaUtil.appendLocation(new StringBuilder(100), parent.target, getBci()).toString();
+            return MetaUtil.appendLocation(new StringBuilder(100), parent.target, getBci()).toString();
         }
 
         public int getBci() {
@@ -126,13 +124,11 @@ public class InliningLog {
 
     private final Callsite root;
     private final EconomicMap<Invokable, Callsite> leaves;
-    private final OptionValues options;
 
-    public InliningLog(ResolvedJavaMethod rootMethod, OptionValues options) {
+    public InliningLog(ResolvedJavaMethod rootMethod) {
         this.root = new Callsite(null, null);
         this.root.target = rootMethod;
         this.leaves = EconomicMap.create(Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE);
-        this.options = options;
     }
 
     /**
@@ -250,23 +246,17 @@ public class InliningLog {
         }
     }
 
-    private UpdateScope noUpdates = new UpdateScope((oldNode, newNode) -> {
-    });
-
     private UpdateScope activated = null;
 
     /**
      * Used to designate scopes in which {@link Invokable} registration or cloning should be handled
      * differently.
      */
-    public final class UpdateScope implements AutoCloseable {
+    public class UpdateScope implements AutoCloseable {
         private BiConsumer<Invokable, Invokable> updater;
 
         private UpdateScope(BiConsumer<Invokable, Invokable> updater) {
             this.updater = updater;
-        }
-
-        public void activate() {
             if (activated != null) {
                 throw GraalError.shouldNotReachHere("InliningLog updating already set.");
             }
@@ -275,10 +265,8 @@ public class InliningLog {
 
         @Override
         public void close() {
-            if (GraalOptions.TraceInlining.getValue(options)) {
-                assert activated != null;
-                activated = null;
-            }
+            assert activated != null;
+            activated = null;
         }
 
         public BiConsumer<Invokable, Invokable> getUpdater() {
@@ -296,40 +284,15 @@ public class InliningLog {
     /**
      * Creates and sets a new update scope for the log.
      *
-     * The specified {@code updater} is invoked when an {@link Invokable} node is registered or
-     * cloned. If the node is newly registered, then the first argument to the {@code updater} is
-     * {@code null}. If the node is cloned, then the first argument is the node it was cloned from.
+     * The specified lambda is invoked when an {@link Invokable} node is registered or cloned. If
+     * the node is newly registered, then the first argument to the lambda is {@code null} If the
+     * node is cloned, then the first argument is the node it was cloned from.
      *
-     * @param updater an operation taking a null (or the original node), and the registered (or
-     *            cloned) {@link Invokable}
-     * @return a bound {@link UpdateScope} object, or a {@code null} if tracing is disabled
+     * @param updater a lambda taking a null (or the original node), and the registered (or cloned)
+     *            {@link Invokable}
      */
-    public UpdateScope openUpdateScope(BiConsumer<Invokable, Invokable> updater) {
-        if (GraalOptions.TraceInlining.getValue(options)) {
-            UpdateScope scope = new UpdateScope(updater);
-            scope.activate();
-            return scope;
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * Creates a new update scope that does not update the log.
-     *
-     * This update scope will not add a newly created {@code Invokable} to the log, nor will it
-     * amend its position if it was cloned. Instead, users need to update the inlining log with the
-     * new {@code Invokable} on their own.
-     *
-     * @see #openUpdateScope
-     */
-    public UpdateScope openDefaultUpdateScope() {
-        if (GraalOptions.TraceInlining.getValue(options)) {
-            noUpdates.activate();
-            return noUpdates;
-        } else {
-            return null;
-        }
+    public UpdateScope createUpdateScope(BiConsumer<Invokable, Invokable> updater) {
+        return new UpdateScope(updater);
     }
 
     public boolean containsLeafCallsite(Invokable invokable) {
@@ -361,10 +324,7 @@ public class InliningLog {
         callsite.invoke = newInvoke;
     }
 
-    public String formatAsTree(boolean requireNonEmpty) {
-        if (requireNonEmpty && root.children.isEmpty()) {
-            return null;
-        }
+    public String formatAsTree() {
         StringBuilder builder = new StringBuilder(512);
         formatAsTree(root, "", builder);
         return builder.toString();
@@ -372,19 +332,12 @@ public class InliningLog {
 
     private void formatAsTree(Callsite site, String indent, StringBuilder builder) {
         String position = site.positionString();
-        builder.append(indent).append(position).append(": ");
+        builder.append(indent).append("at ").append(position).append(": ");
         if (site.decisions.isEmpty()) {
-            if (site.parent != null) {
-                builder.append("(no decisions made)");
-            }
-            builder.append(System.lineSeparator());
-        } else if (site.decisions.size() == 1) {
-            builder.append(site.decisions.get(0).toString());
             builder.append(System.lineSeparator());
         } else {
-            builder.append(System.lineSeparator());
             for (Decision decision : site.decisions) {
-                builder.append(indent + "   |-").append(decision.toString());
+                builder.append(decision.toString());
                 builder.append(System.lineSeparator());
             }
         }

@@ -29,7 +29,6 @@ import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_UNKNOWN;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.core.common.type.StampPair;
-import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
@@ -189,7 +188,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable, 
                     ((Lowerable) nonNullReceiver).lower(tool);
                 }
             }
-            InliningUtil.inline(invoke, replacementGraph, false, targetMethod, "Replace with graph.", "LoweringPhase");
+            InliningUtil.inline(invoke, replacementGraph, false, targetMethod);
             replacementGraph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph(), "After inlining replacement %s", replacementGraph);
         } else {
             if (isPlaceholderBci(invoke.bci())) {
@@ -212,13 +211,10 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable, 
         }
     }
 
-    @SuppressWarnings("try")
     public InvokeNode replaceWithInvoke() {
-        try (DebugCloseable context = withNodeSourcePosition()) {
-            InvokeNode invoke = createInvoke();
-            graph().replaceFixedWithFixed(this, invoke);
-            return invoke;
-        }
+        InvokeNode invoke = createInvoke();
+        graph().replaceFixedWithFixed(this, invoke);
+        return invoke;
     }
 
     protected InvokeNode createInvoke() {

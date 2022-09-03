@@ -22,8 +22,6 @@
  */
 package org.graalvm.compiler.nodes;
 
-import static org.graalvm.compiler.graph.Graph.SourcePositionTracking.Default;
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -41,7 +39,6 @@ import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.JavaMethodContext;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeMap;
@@ -116,22 +113,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         }
     }
 
-    static class TraceInliningHeader {
-        static {
-            TTY.println("TraceInlining output format:");
-            TTY.println("  compilation of 'Signature of the compilation root method':");
-            TTY.println("    at 'Signature of the root method' ['Bytecode index']: <'Phase'> 'Child method signature': 'Decision made about this callsite'");
-            TTY.println("      at 'Signature of the child method' ['Bytecode index']: ");
-            TTY.println("         |-<'Phase 1'> 'Grandchild method signature': 'First decision made about this callsite'");
-            TTY.println("         |-<'Phase 2'> 'Grandchild method signature': 'Second decision made about this callsite'");
-            TTY.println("      at 'Signature of the child method' ['Bytecode index']: <'Phase'> 'Another grandchild method signature': 'The only decision made about this callsite.'");
-            TTY.println("  etc.");
-        }
-
-        static void init() {
-        }
-    }
-
     /**
      * Constants denoting whether or not {@link Assumption}s can be made while processing a graph.
      */
@@ -186,7 +167,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         private CompilationIdentifier compilationId = CompilationIdentifier.INVALID_COMPILATION_ID;
         private int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
         private boolean useProfilingInfo = true;
-        private SourcePositionTracking trackNodeSourcePosition = Default;
         private final OptionValues options;
         private Cancellable cancellable = null;
         private final DebugContext debug;
@@ -199,7 +179,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
             this.options = options;
             this.debug = debug;
             this.assumptions = allowAssumptions == AllowAssumptions.YES ? new Assumptions() : null;
-            this.trackNodeSourcePosition = Graph.trackNodeSourcePositionDefault(options, debug);
         }
 
         /**
@@ -208,8 +187,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         public Builder(OptionValues options, DebugContext debug) {
             this.options = options;
             this.debug = debug;
-            this.assumptions = null;
-            this.trackNodeSourcePosition = Graph.trackNodeSourcePositionDefault(options, debug);
+            assumptions = null;
         }
 
         public String getName() {
@@ -279,25 +257,13 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
             return this;
         }
 
-        public Builder trackNodeSourcePosition(SourcePositionTracking tracking) {
-            this.trackNodeSourcePosition = tracking;
-            return this;
-        }
-
-        public Builder trackNodeSourcePosition(boolean flag) {
-            if (flag) {
-                this.trackNodeSourcePosition = SourcePositionTracking.Track;
-            }
-            return this;
-        }
-
         public Builder callerContext(NodeSourcePosition context) {
             this.callerContext = context;
             return this;
         }
 
         public StructuredGraph build() {
-            return new StructuredGraph(name, rootMethod, entryBCI, assumptions, speculationLog, useProfilingInfo, trackNodeSourcePosition, compilationId, options, debug, cancellable, callerContext);
+            return new StructuredGraph(name, rootMethod, entryBCI, assumptions, speculationLog, useProfilingInfo, compilationId, options, debug, cancellable, callerContext);
         }
     }
 
@@ -362,7 +328,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                     Assumptions assumptions,
                     SpeculationLog speculationLog,
                     boolean useProfilingInfo,
-                    SourcePositionTracking trackNodeSourcePosition,
                     CompilationIdentifier compilationId,
                     OptionValues options,
                     DebugContext debug,
@@ -377,10 +342,8 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         this.assumptions = assumptions;
         this.speculationLog = speculationLog;
         this.useProfilingInfo = useProfilingInfo;
-        this.trackNodeSourcePosition = trackNodeSourcePosition;
-        assert trackNodeSourcePosition != null;
         this.cancellable = cancellable;
-        this.inliningLog = new InliningLog(rootMethod, options);
+        this.inliningLog = new InliningLog(rootMethod);
         this.callerContext = context;
     }
 
@@ -495,12 +458,9 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     }
 
     public void logInliningTree() {
-        if (GraalOptions.TraceInlining.getValue(getOptions())) {
-            TraceInliningHeader.init();
-            String formattedTree = getInliningLog().formatAsTree(true);
-            if (formattedTree != null) {
-                TTY.println(formattedTree);
-            }
+        switch (GraalOptions.TraceInlining.getValue(getOptions())) {
+            case Tree:
+                getDebug().log(DebugContext.BASIC_LEVEL, getInliningLog().formatAsTree());
         }
     }
 
@@ -527,7 +487,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                         assumptions == null ? null : new Assumptions(),
                         speculationLog,
                         useProfilingInfo,
-                        trackNodeSourcePosition,
                         newCompilationId,
                         getOptions(), debugForCopy, null, callerContext);
         if (allowAssumptions == AllowAssumptions.YES && assumptions != null) {
@@ -538,15 +497,17 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         copy.isAfterFloatingReadPhase = isAfterFloatingReadPhase;
         copy.hasValueProxies = hasValueProxies;
         copy.isAfterExpandLogic = isAfterExpandLogic;
-        copy.trackNodeSourcePosition = trackNodeSourcePosition;
         EconomicMap<Node, Node> replacements = EconomicMap.create(Equivalence.IDENTITY);
         replacements.put(start, copy.start);
         UnmodifiableEconomicMap<Node, Node> duplicates;
-        try (InliningLog.UpdateScope scope = copy.getInliningLog().openDefaultUpdateScope()) {
-            duplicates = copy.addDuplicates(getNodes(), this, this.getNodeCount(), replacements);
-            if (scope != null) {
-                copy.getInliningLog().replaceLog(duplicates, this.getInliningLog());
+        if (GraalOptions.TraceInlining.getValue(getOptions()).isTracing()) {
+            try (InliningLog.UpdateScope ignored = copy.getInliningLog().createUpdateScope((oldNode, newNode) -> {
+            })) {
+                duplicates = copy.addDuplicates(getNodes(), this, this.getNodeCount(), replacements);
             }
+            copy.getInliningLog().replaceLog(duplicates, this.getInliningLog());
+        } else {
+            duplicates = copy.addDuplicates(getNodes(), this, this.getNodeCount(), replacements);
         }
         if (duplicationMapCallback != null) {
             duplicationMapCallback.accept(duplicates);
@@ -1007,7 +968,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     @Override
     protected void afterRegister(Node node) {
         assert hasValueProxies() || !(node instanceof ValueProxyNode);
-        if (GraalOptions.TraceInlining.getValue(getOptions())) {
+        if (GraalOptions.TraceInlining.getValue(getOptions()).isTracing()) {
             if (node instanceof Invokable) {
                 ((Invokable) node).updateInliningLogAfterRegister(this);
             }
