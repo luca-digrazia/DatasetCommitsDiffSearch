@@ -43,7 +43,6 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.PolyglotException.StackFrame;
 
 import jline.console.ConsoleReader;
 import jline.console.UserInterruptException;
@@ -72,7 +71,7 @@ class MultiLanguageShell {
         console.setCopyPasteDetection(true);
 
         console.println("GraalVM MultiLanguage Shell " + context.getEngine().getVersion());
-        console.println("Copyright (c) 2013-2018, Oracle and/or its affiliates");
+        console.println("Copyright (c) 2013-7, Oracle and/or its affiliates");
 
         List<Language> languages = new ArrayList<>();
         Set<Language> uniqueValues = new HashSet<>();
@@ -179,6 +178,7 @@ class MultiLanguageShell {
                         input += "\n" + line;
                     }
                 }
+
                 if (!input.trim().equals("")) {
                     source = Source.newBuilder(currentLanguage.getId(), input, "<shell>").interactive(true).build();
                     context.eval(source);
@@ -203,57 +203,35 @@ class MultiLanguageShell {
                 prompt = createPrompt(currentLanguage);
                 console.resetPromptLine("", "", 0);
                 context.initialize(id);
+            } catch (ThreadDeath e) {
+                console.println("Execution killed!");
+                continue;
+            } catch (RuntimeIncompleteSourceException e) {
+                console.println();
+                input += "\n";
+                bufferSource = source;
             } catch (PolyglotException e) {
-                bufferSource = null;
-                if (e.isInternalError()) {
-                    console.println("Internal error occured: " + e.toString());
-                    if (verboseErrors) {
-                        e.printStackTrace(new PrintWriter(console.getOutput()));
-                    } else {
-                        console.println("Run with --verbose to see the full stack trace.");
-                    }
-                } else if (e.isExit()) {
+                input += "\n";
+                bufferSource = source;
+
+                if (e.isExit()) {
                     return e.getExitStatus();
-                } else if (e.isCancelled()) {
-                    console.println("Execution got cancelled.");
                 } else if (e.isIncompleteSource()) {
-                    console.println();
+                    input += "\n";
                     bufferSource = source;
-                } else if (e.isSyntaxError()) {
-                    console.println(e.getMessage());
-                } else {
-                    List<StackFrame> trace = new ArrayList<>();
-                    for (StackFrame stackFrame : e.getPolyglotStackTrace()) {
-                        trace.add(stackFrame);
-                    }
-                    // remove trailing host frames
-                    for (int i = trace.size() - 1; i >= 0; i--) {
-                        if (trace.get(i).isHostFrame()) {
-                            trace.remove(i);
-                        } else {
-                            break;
-                        }
-                    }
-                    if (e.isHostException()) {
-                        console.println(e.asHostException().toString());
+                } else if (!e.isInternalError()) {
+                    if (e.getMessage() != null && e.getMessage().isEmpty()) {
+                        console.println(e.toString());
                     } else {
-                        console.println(e.getMessage());
-                    }
-                    // no need to print stack traces with single entry
-                    if (trace.size() > 1) {
-                        for (StackFrame stackFrame : trace) {
-                            console.print("        at ");
-                            console.println(stackFrame.toString());
+                        if (verboseErrors) {
+                            e.printStackTrace(new PrintWriter(console.getOutput()));
                         }
                     }
+                } else {
+                    e.printStackTrace(new PrintWriter(console.getOutput()));
                 }
             } catch (Throwable e) {
-                console.println("Internal error occured: " + e.toString());
-                if (verboseErrors) {
-                    e.printStackTrace(new PrintWriter(console.getOutput()));
-                } else {
-                    console.println("Run with --verbose to see the full stack trace.");
-                }
+                e.printStackTrace(new PrintWriter(console.getOutput()));
             }
         }
         return 0;
@@ -308,7 +286,7 @@ class MultiLanguageShell {
     }
 
     private static String createPrompt(Language currentLanguage) {
-        return String.format("%s> ", currentLanguage.getId());
+        return String.format("%s> ", currentLanguage.getName());
     }
 
 }
