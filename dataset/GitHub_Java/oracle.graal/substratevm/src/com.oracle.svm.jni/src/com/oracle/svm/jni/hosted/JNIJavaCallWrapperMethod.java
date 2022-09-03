@@ -222,17 +222,17 @@ public final class JNIJavaCallWrapperMethod extends JNIGeneratedMethod {
 
         kit.elsePart(); // illegal parameter types
         ConstantNode exceptionObject = kit.createObject(cachedArgumentClassCastException);
-        kit.setPendingException(exceptionObject);
-        ValueNode typeMismatchResult = null;
+        kit.retainPendingException(exceptionObject);
+        ValueNode typeMismatchValue = null;
         if (returnKind != JavaKind.Void) {
-            typeMismatchResult = kit.unique(ConstantNode.defaultForKind(returnKind.getStackKind()));
+            typeMismatchValue = kit.unique(ConstantNode.defaultForKind(returnKind.getStackKind()));
         }
 
         AbstractMergeNode merge = kit.endIf();
 
         ValueNode returnValue = null;
         if (returnKind != JavaKind.Void) {
-            ValueNode[] inputs = {invokeResult, typeMismatchResult};
+            ValueNode[] inputs = {invokeResult, typeMismatchValue};
             returnValue = kit.getGraph().addWithoutUnique(new ValuePhiNode(invokeResult.stamp(NodeView.DEFAULT), merge, inputs));
             state.push(returnKind, returnValue);
         }
@@ -251,17 +251,12 @@ public final class JNIJavaCallWrapperMethod extends JNIGeneratedMethod {
     }
 
     private static ValueNode createInvoke(JNIGraphKit kit, ResolvedJavaMethod invokeMethod, InvokeKind kind, FrameStateBuilder state, int bci, ValueNode... args) {
-        ValueNode formerPendingException = kit.getAndClearPendingException();
-
         int exceptionEdgeBci = kit.bci();
         InvokeWithExceptionNode invoke = kit.startInvokeWithException(invokeMethod, kind, state, bci, exceptionEdgeBci, args);
 
-        kit.noExceptionPart(); // no new exception was thrown, restore the formerly pending one
-        kit.setPendingException(formerPendingException);
-
         kit.exceptionPart();
         ExceptionObjectNode exceptionObject = kit.exceptionObject();
-        kit.setPendingException(exceptionObject);
+        kit.retainPendingException(exceptionObject);
         ValueNode exceptionValue = null;
         if (invoke.getStackKind() != JavaKind.Void) {
             exceptionValue = kit.unique(ConstantNode.defaultForKind(invoke.getStackKind()));
