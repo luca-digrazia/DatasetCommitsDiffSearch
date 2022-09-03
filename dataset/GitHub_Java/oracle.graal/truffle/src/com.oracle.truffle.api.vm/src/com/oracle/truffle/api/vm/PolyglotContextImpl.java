@@ -575,7 +575,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
         if (cancelIfExecuting) {
             engine.getCancelHandler().waitForClosing(this);
         }
-        if (engine.boundEngine && parent == null) {
+        if (engine.boundEngine) {
             engine.ensureClosed(cancelIfExecuting, false);
         }
     }
