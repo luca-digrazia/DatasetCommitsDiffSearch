@@ -186,6 +186,7 @@ public class ForeignCallStub extends Stub {
         boolean isObjectResult = linkage.getOutgoingCallingConvention().getReturn().getKind() == Kind.Object;
 
         StructuredGraph graph = new StructuredGraph(toString(), null);
+        graph.replaceFixed(graph.start(), graph.add(new StubStartNode(this)));
 
         GraphKit kit = new GraphKit(graph, providers);
         ParameterNode[] params = createParameters(kit, args);
