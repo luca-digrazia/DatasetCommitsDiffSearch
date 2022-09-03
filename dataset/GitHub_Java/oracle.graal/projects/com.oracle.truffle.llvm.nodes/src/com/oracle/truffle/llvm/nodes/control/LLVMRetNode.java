@@ -35,27 +35,24 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMBasicBlockNode;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
-import com.oracle.truffle.llvm.runtime.LLVMGlobalVariableDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
-import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
-import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions.MemCopyNode;
-import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
+import com.oracle.truffle.llvm.nodes.base.LLVMTerminatorNode;
+import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.types.LLVMIVarBit;
+import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.types.memory.LLVMHeap;
+import com.oracle.truffle.llvm.types.vector.LLVMDoubleVector;
+import com.oracle.truffle.llvm.types.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.types.vector.LLVMI16Vector;
+import com.oracle.truffle.llvm.types.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.types.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.types.vector.LLVMI64Vector;
+import com.oracle.truffle.llvm.types.vector.LLVMI8Vector;
 
 @NodeField(name = "retSlot", type = FrameSlot.class)
-public abstract class LLVMRetNode extends LLVMControlFlowNode {
+public abstract class LLVMRetNode extends LLVMTerminatorNode {
 
     public static final int RETURN_FROM_FUNCTION = -1;
 
@@ -179,13 +176,7 @@ public abstract class LLVMRetNode extends LLVMControlFlowNode {
     public abstract static class LLVMFunctionRetNode extends LLVMRetNode {
 
         @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, LLVMFunctionHandle retResult) {
-            frame.setObject(getRetSlot(), retResult);
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
-        }
-
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, TruffleObject retResult) {
+        public int executeGetSuccessorIndex(VirtualFrame frame, LLVMFunctionDescriptor retResult) {
             frame.setObject(getRetSlot(), retResult);
             return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
         }
@@ -243,25 +234,12 @@ public abstract class LLVMRetNode extends LLVMControlFlowNode {
     @NodeField(name = "structSize", type = int.class)
     public abstract static class LLVMStructRetNode extends LLVMRetNode {
 
-        @Child private MemCopyNode memCopy;
-
         public abstract int getStructSize();
-
-        protected LLVMStructRetNode(LLVMNativeFunctions heapFunctions) {
-            memCopy = heapFunctions.createMemCopyNode();
-        }
 
         @Specialization
         public int executeGetSuccessorIndex(VirtualFrame frame, LLVMAddress retResult) {
             LLVMAddress retStructAddress = (LLVMAddress) FrameUtil.getObjectSafe(frame, getRetSlot());
-            memCopy.execute(retStructAddress, retResult, getStructSize());
-            return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
-        }
-
-        @Specialization
-        public int executeGetSuccessorIndex(VirtualFrame frame, LLVMGlobalVariableDescriptor retResult) {
-            LLVMAddress retStructAddress = (LLVMAddress) FrameUtil.getObjectSafe(frame, getRetSlot());
-            memCopy.execute(retStructAddress, retResult.getNativeAddress(), getStructSize());
+            LLVMHeap.memCopy(retStructAddress, retResult, getStructSize());
             return LLVMBasicBlockNode.DEFAULT_SUCCESSOR;
         }
 
