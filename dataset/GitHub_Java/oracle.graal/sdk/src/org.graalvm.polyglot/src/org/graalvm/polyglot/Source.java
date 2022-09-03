@@ -1,42 +1,26 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package org.graalvm.polyglot;
 
@@ -48,7 +32,6 @@ import java.io.Reader;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.charset.Charset;
 import java.util.Objects;
 
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractSourceImpl;
@@ -126,7 +109,7 @@ import org.graalvm.polyglot.io.ByteSequence;
  * @see Source#findLanguage(URL) To detect a language using an URL.
  * @see Source#findMimeType(File) To detect a MIME type using a File.
  * @see Source#findMimeType(URL) To detect a MIME type using an URL.
- * @since 19.0
+ * @since 1.0
  */
 public final class Source {
 
@@ -156,7 +139,7 @@ public final class Source {
      * Returns the language this source created with. The string returned matches the
      * {@link Language#getId() id} of the language.
      *
-     * @since 19.0
+     * @since 1.0
      */
     public String getLanguage() {
         return language;
@@ -169,7 +152,7 @@ public final class Source {
      *
      * @return the name of the guest language program
      * @see Builder#name(String)
-     * @since 19.0
+     * @since 1.0
      */
     public String getName() {
         return getImpl().getName(impl);
@@ -177,11 +160,9 @@ public final class Source {
 
     /**
      * The fully qualified name of the source. In case this source originates from a {@link File},
-     * then the path is the normalized, {@link File#getCanonicalPath() canonical path} for absolute
-     * files, or the relative path otherwise. If the source originates from an {@link URL}, then
-     * it's the path component of the URL.
+     * then the default path is the normalized, {@link File#getCanonicalPath() canonical path}.
      *
-     * @since 19.0
+     * @since 1.0
      */
     public String getPath() {
         return getImpl().getPath(impl);
@@ -191,7 +172,7 @@ public final class Source {
      * The URL if the source is retrieved via URL.
      *
      * @return URL or <code>null</code>
-     * @since 19.0
+     * @since 1.0
      */
     public URL getURL() {
         return getImpl().getURL(impl);
@@ -205,7 +186,7 @@ public final class Source {
      * {@link Source#newBuilder(String, java.io.File) file on a disk} changes and is re-loaded.
      *
      * @return a URI, never <code>null</code>
-     * @since 19.0
+     * @since 1.0
      */
     public URI getURI() {
         return getImpl().getURI(impl);
@@ -220,7 +201,7 @@ public final class Source {
      * building it}.
      *
      * @return whether this source is marked as <em>interactive</em>
-     * @since 19.0
+     * @since 1.0
      */
     public boolean isInteractive() {
         return getImpl().isInteractive(impl);
@@ -239,7 +220,7 @@ public final class Source {
      * it}.
      *
      * @return whether this source is marked as <em>internal</em>
-     * @since 19.0
+     * @since 1.0
      */
     public boolean isInternal() {
         return getImpl().isInternal(impl);
@@ -251,14 +232,14 @@ public final class Source {
      *
      * @throws UnsupportedOperationException if this source cannot contain {@link #hasCharacters()
      *             characters}.
-     * @since 19.0
+     * @since 1.0
      */
     public Reader getReader() {
         return getImpl().getReader(impl);
     }
 
     /**
-     * @since 19.0
+     * @since 1.0
      * @deprecated use {@link #getReader()}, {@link #getCharacters()} or {@link #getBytes()}
      *             instead. The implementation is inefficient and can not distinguish byte and
      *             character based sources.
@@ -271,7 +252,7 @@ public final class Source {
     /**
      * Gets the number of characters or bytes of the source.
      *
-     * @since 19.0
+     * @since 1.0
      */
     public int getLength() {
         return getImpl().getLength(impl);
@@ -282,7 +263,7 @@ public final class Source {
      *
      * @throws UnsupportedOperationException if this source cannot contain {@link #hasCharacters()
      *             characters}.
-     * @since 19.0
+     * @since 1.0
      */
     public CharSequence getCharacters() {
         return getImpl().getCode(impl);
@@ -306,7 +287,7 @@ public final class Source {
      * @see Source#findMimeType(File)
      * @see Source#findMimeType(URL)
      * @return MIME type of this source or <code>null</code>, if not explicitly set.
-     * @since 19.0
+     * @since 1.0
      */
     public String getMimeType() {
         return getImpl().getMimeType(impl);
@@ -319,7 +300,7 @@ public final class Source {
      * @throws UnsupportedOperationException if this source cannot contain {@link #hasCharacters()
      *             characters}.
      * @see #hasCharacters()
-     * @since 19.0
+     * @since 1.0
      */
     public CharSequence getCharacters(int lineNumber) {
         return getImpl().getCode(impl, lineNumber);
@@ -331,7 +312,7 @@ public final class Source {
      * @throws UnsupportedOperationException if this source cannot contain {@link #hasBytes() bytes}
      *             .
      * @see #hasBytes()
-     * @since 19.0
+     * @since 1.0
      */
     public ByteSequence getBytes() {
         return getImpl().getBytes(impl);
@@ -354,7 +335,7 @@ public final class Source {
      * <li>{@link #getLineLength(int)}
      * </ul>
      *
-     * @since 19.0
+     * @since 1.0
      */
     public boolean hasCharacters() {
         return getImpl().hasCharacters(impl);
@@ -368,7 +349,7 @@ public final class Source {
      * The method {@link #getBytes()} is only supported if this method returns <code>true</code>.
      *
      * @see #getBytes()
-     * @since 19.0
+     * @since 1.0
      */
     public boolean hasBytes() {
         return getImpl().hasBytes(impl);
@@ -381,7 +362,7 @@ public final class Source {
      *
      * @throws UnsupportedOperationException if this source cannot contain {@link #hasCharacters()
      *             characters}.
-     * @since 19.0
+     * @since 1.0
      */
     public int getLineCount() {
         return getImpl().getLineCount(impl);
@@ -394,7 +375,7 @@ public final class Source {
      * @throws UnsupportedOperationException if this source cannot contain {@link #hasCharacters()
      *             characters}.
      * @throws IllegalArgumentException if the offset is outside the text contents
-     * @since 19.0
+     * @since 1.0
      */
     public int getLineNumber(int offset) throws IllegalArgumentException {
         return getImpl().getLineNumber(impl, offset);
@@ -407,7 +388,7 @@ public final class Source {
      * @throws UnsupportedOperationException if this source cannot contain {@link #hasCharacters()
      *             characters}.
      * @throws IllegalArgumentException if the offset is outside the text contents
-     * @since 19.0
+     * @since 1.0
      */
     public int getColumnNumber(int offset) throws IllegalArgumentException {
         return getImpl().getColumnNumber(impl, offset);
@@ -419,7 +400,7 @@ public final class Source {
      * @throws UnsupportedOperationException if this source cannot contain {@link #hasCharacters()
      *             characters}.
      * @throws IllegalArgumentException if there is no such line in the text
-     * @since 19.0
+     * @since 1.0
      */
     public int getLineStartOffset(int lineNumber) throws IllegalArgumentException {
         return getImpl().getLineStartOffset(impl, lineNumber);
@@ -432,7 +413,7 @@ public final class Source {
      * @throws UnsupportedOperationException if this source cannot contain {@link #hasCharacters()
      *             characters}.
      * @throws IllegalArgumentException if there is no such line in the text
-     * @since 19.0
+     * @since 1.0
      */
     public int getLineLength(int lineNumber) throws IllegalArgumentException {
         return getImpl().getLineLength(impl, lineNumber);
@@ -441,7 +422,7 @@ public final class Source {
     /**
      * {@inheritDoc}
      *
-     * @since 19.0
+     * @since 1.0
      */
     @Override
     public String toString() {
@@ -451,7 +432,7 @@ public final class Source {
     /**
      * {@inheritDoc}
      *
-     * @since 19.0
+     * @since 1.0
      */
     @Override
     public int hashCode() {
@@ -461,7 +442,7 @@ public final class Source {
     /**
      * {@inheritDoc}
      *
-     * @since 19.0
+     * @since 1.0
      */
     @Override
     public boolean equals(Object obj) {
@@ -475,11 +456,8 @@ public final class Source {
     }
 
     /**
-     * Creates a new character based literal source from a character sequence. The given characters
-     * must not mutate after they were accessed for the first time.
-     * <p>
-     * Use this method for sources that do originate from a literal. For file or URL sources use the
-     * appropriate builder constructor and {@link Builder#content(CharSequence)}.
+     * Creates a new character based source from a character sequence. The given characters must not
+     * mutate after they were accessed for the first time.
      * <p>
      * Example usage: {@link SourceSnippets#fromAString}
      *
@@ -487,18 +465,15 @@ public final class Source {
      * @param characters the character sequence or string, must not be <code>null</code>
      * @param name the name of the source, if <code>null</code> then <code>"Unnamed"</code> will be
      *            used as name.
-     * @since 19.0
+     * @since 1.0
      */
     public static Builder newBuilder(String language, CharSequence characters, String name) {
         return EMPTY.new Builder(language, characters).name(name);
     }
 
     /**
-     * Creates a new byte based literal source from a byte sequence. The given bytes must not mutate
-     * after they were accessed for the first time.
-     * <p>
-     * Use this method for sources that do originate from a literal. For file or URL sources use the
-     * appropriate builder constructor and {@link Builder#content(CharSequence)}.
+     * Creates a new byte based source from a byte sequence. The given bytes must not mutate after
+     * they were accessed for the first time.
      * <p>
      * Example usage: {@link SourceSnippets#fromBytes}
      *
@@ -506,7 +481,7 @@ public final class Source {
      * @param bytes the byte sequence or string, must not be <code>null</code>
      * @param name the name of the source, if <code>null</code> then <code>"Unnamed"</code> will be
      *            used as name.
-     * @since 19.0
+     * @since 1.0
      */
     public static Builder newBuilder(String language, ByteSequence bytes, String name) {
         return EMPTY.new Builder(language, bytes).name(name);
@@ -524,7 +499,7 @@ public final class Source {
      *
      * @param language the language id, must not be <code>null</code>
      * @param file the file to use, must not be <code>null</code>
-     * @since 19.0
+     * @since 1.0
      */
     public static Builder newBuilder(String language, File file) {
         return EMPTY.new Builder(language, file);
@@ -542,21 +517,18 @@ public final class Source {
      *
      * @param language the language id, must not be <code>null</code>
      * @param url the URL to use and load, must not be <code>null</code>
-     * @since 19.0
+     * @since 1.0
      */
     public static Builder newBuilder(String language, URL url) {
         return EMPTY.new Builder(language, url);
     }
 
     /**
-     * Creates new character based literal source from a reader.
-     * <p>
-     * Use this method for sources that do originate from a literal. For file or URL sources use the
-     * appropriate builder constructor and {@link Builder#content(CharSequence)}.
+     * Creates new character based source from a reader.
      * <p>
      * Example usage: {@link SourceSnippets#fromReader}
      *
-     * @since 19.0
+     * @since 1.0
      */
     public static Builder newBuilder(String language, Reader source, String name) {
         return EMPTY.new Builder(language, source).name(name);
@@ -565,11 +537,8 @@ public final class Source {
     /**
      * Shortcut for creating a source object from a language and char sequence. The given characters
      * must not mutate after they were accessed for the first time.
-     * <p>
-     * Use for sources that do not come from a file, or URL. If they do, use the appropriate builder
-     * and {@link Builder#content(CharSequence)}.
      *
-     * @since 19.0
+     * @since 1.0
      */
     public static Source create(String language, CharSequence source) {
         return newBuilder(language, source, "Unnamed").buildLiteral();
@@ -590,7 +559,7 @@ public final class Source {
      * @throws IOException if an error opening the file occurred.
      * @see #findMimeType(URL)
      * @see #findLanguage(String)
-     * @since 19.0
+     * @since 1.0
      */
     public static String findLanguage(File file) throws IOException {
         return getImpl().findLanguage(file);
@@ -611,7 +580,7 @@ public final class Source {
      * @throws IOException if an error opening the url occurred.
      * @see #findMimeType(URL)
      * @see #findLanguage(String)
-     * @since 19.0
+     * @since 1.0
      */
     public static String findLanguage(URL url) throws IOException {
         return getImpl().findLanguage(url);
@@ -624,7 +593,7 @@ public final class Source {
      *
      * @throws IOException if an error opening the file occurred.
      * @see #findLanguage(File)
-     * @since 19.0
+     * @since 1.0
      */
     public static String findMimeType(File file) throws IOException {
         return getImpl().findMimeType(file);
@@ -639,7 +608,7 @@ public final class Source {
      *
      * @throws IOException if an error opening the url occurred.
      * @see #findLanguage(URL)
-     * @since 19.0
+     * @since 1.0
      */
     public static String findMimeType(URL url) throws IOException {
         return getImpl().findMimeType(url);
@@ -651,7 +620,7 @@ public final class Source {
      * languages are queried in the same order as returned by {@link Engine#getLanguages()}.
      * Mime-types don't adhere to the MIME type format will return <code>null</code>.
      *
-     * @since 19.0
+     * @since 1.0
      */
     public static String findLanguage(String mimeType) {
         return getImpl().findLanguage(mimeType);
@@ -707,7 +676,7 @@ public final class Source {
      * Once your builder is configured, call {@link #build()} to perform the loading and
      * construction of new {@link Source}.
      *
-     * @since 19.0
+     * @since 1.0
      */
     public class Builder {
 
@@ -720,7 +689,6 @@ public final class Source {
         private boolean cached = true;
         private Object content;
         private String mimeType;
-        private Charset fileEncoding;
 
         Builder(String language, Object origin) {
             Objects.requireNonNull(language);
@@ -735,7 +703,7 @@ public final class Source {
          * @param newName name that replaces the previously given one. If set to <code>null</code>
          *            then <code>"Unnamed"</code> will be used.
          * @return instance of <code>this</code> builder
-         * @since 19.0
+         * @since 1.0
          */
         public Builder name(String newName) {
             this.name = newName;
@@ -751,7 +719,7 @@ public final class Source {
          *
          * @param code the code to be available via {@link Source#getCharacters()}
          * @return instance of this builder
-         * @since 19.0
+         * @since 1.0
          */
         public Builder content(String code) {
             return content((CharSequence) code);
@@ -768,7 +736,7 @@ public final class Source {
          * @param characters the code to be available via {@link Source#getCharacters()}
          * @return instance of this builder - which's {@link #build()} method no longer throws an
          *         {@link IOException}
-         * @since 19.0
+         * @since 1.0
          */
         public Builder content(CharSequence characters) {
             Objects.requireNonNull(characters);
@@ -787,7 +755,7 @@ public final class Source {
          * @param bytes the code to be available via {@link Source#getBytes()}
          * @return instance of this builder - which's {@link #build()} method no longer throws an
          *         {@link IOException}
-         * @since 19.0
+         * @since 1.0
          */
         public Builder content(ByteSequence bytes) {
             Objects.requireNonNull(bytes);
@@ -817,7 +785,7 @@ public final class Source {
          * @param mimeType the new mime type to be assigned, or <code>null</code> if default MIME
          *            type should be used.
          * @return instance of <code>this</code> builder ready to {@link #build() create new source}
-         * @since 19.0
+         * @since 1.0
          */
         public Builder mimeType(@SuppressWarnings("hiding") String mimeType) {
             validateMimeType(mimeType);
@@ -835,7 +803,7 @@ public final class Source {
          * influences the result of {@link Source#isInteractive()}.
          *
          * @return the instance of this builder
-         * @since 19.0
+         * @since 1.0
          */
         public Builder interactive(@SuppressWarnings("hiding") boolean interactive) {
             this.interactive = interactive;
@@ -853,7 +821,7 @@ public final class Source {
          * <p>
          *
          * @return the instance of this builder
-         * @since 19.0
+         * @since 1.0
          */
         public Builder internal(@SuppressWarnings("hiding") boolean internal) {
             this.internal = internal;
@@ -872,7 +840,7 @@ public final class Source {
          * then cached code for evaluated sources will be freed automatically.
          *
          * @return instance of <code>this</code> builder ready to {@link #build() create new source}
-         * @since 19.0
+         * @since 1.0
          */
         public Builder cached(@SuppressWarnings("hiding") boolean cached) {
             this.cached = cached;
@@ -887,7 +855,7 @@ public final class Source {
          *
          * @param newUri the URL to use instead of default one, cannot be <code>null</code>
          * @return the instance of this builder
-         * @since 19.0
+         * @since 1.0
          */
         public Builder uri(URI newUri) {
             Objects.requireNonNull(newUri);
@@ -896,28 +864,14 @@ public final class Source {
         }
 
         /**
-         * Assigns an encoding used to read the file content. If the encoding is {@code null} then
-         * the file contained encoding information is used. If the file doesn't provide an encoding
-         * information the default {@code UTF-8} encoding is used.
-         *
-         * @param encoding the new file encoding to be used for reading the content
-         * @return instance of <code>this</code> builder ready to {@link #build() create new source}
-         * @since 19.0
-         */
-        public Builder encoding(Charset encoding) {
-            this.fileEncoding = encoding;
-            return this;
-        }
-
-        /**
          * Uses configuration of this builder to create new {@link Source} object. The method throws
          * an {@link IOException} if an error loading the source occured.
          *
          * @return the source object
-         * @since 19.0
+         * @since 1.0
          */
         public Source build() throws IOException {
-            Source source = getImpl().build(language, origin, uri, name, mimeType, content, interactive, internal, cached, fileEncoding);
+            Source source = getImpl().build(language, origin, uri, name, mimeType, content, interactive, internal, cached);
 
             // make sure origin is not consumed again if builder is used twice
             if (source.hasBytes()) {
@@ -937,7 +891,7 @@ public final class Source {
          * otherwise throws an {@link UnsupportedOperationException}.
          *
          * @return the source object
-         * @since 19.0
+         * @since 1.0
          */
         public Source buildLiteral() {
             try {
