@@ -23,16 +23,8 @@
 package org.graalvm.compiler.truffle;
 
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreThrown;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationRepeats;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompileOnly;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilerThreads;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleEnableInfopoints;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrumentBoundaries;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrumentBranches;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleProfilingEnabled;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleUseFrameWithoutBoxing;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.getValue;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.overrideOptions;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -64,9 +56,7 @@ import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.serviceprovider.GraalServices;
-import org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleOptionsOverrideScope;
 import org.graalvm.compiler.truffle.debug.CompilationStatisticsListener;
 import org.graalvm.compiler.truffle.debug.PrintCallTargetProfiling;
 import org.graalvm.compiler.truffle.debug.TraceCompilationASTListener;
@@ -76,7 +66,7 @@ import org.graalvm.compiler.truffle.debug.TraceCompilationListener;
 import org.graalvm.compiler.truffle.debug.TraceCompilationPolymorphismListener;
 import org.graalvm.compiler.truffle.debug.TraceInliningListener;
 import org.graalvm.compiler.truffle.debug.TraceSplittingListener;
-import org.graalvm.compiler.truffle.phases.InstrumentPhase;
+import org.graalvm.compiler.truffle.phases.InstrumentBranchesPhase;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
@@ -119,7 +109,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         protected BackgroundCompileQueue() {
             CompilerThreadFactory factory = new CompilerThreadFactory("TruffleCompilerThread", this);
 
-            int selectedProcessors = TruffleCompilerOptions.getValue(TruffleCompilerThreads);
+            int selectedProcessors = TruffleCompilerOptions.TruffleCompilerThreads.getValue();
             if (selectedProcessors == 0) {
                 // No manual selection made, check how many processors are available.
                 int availableProcessors = Runtime.getRuntime().availableProcessors();
@@ -279,7 +269,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     @Override
     public MaterializedFrame createMaterializedFrame(Object[] arguments, FrameDescriptor frameDescriptor) {
-        if (useFrameWithoutBoxing) {
+        if (TruffleCompilerOptions.TruffleUseFrameWithoutBoxing.getValue()) {
             return new FrameWithoutBoxing(frameDescriptor, arguments);
         } else {
             return new FrameWithBoxing(frameDescriptor, arguments);
@@ -316,6 +306,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         private final FrameInstanceVisitor<T> visitor;
         private final CallMethods methods;
 
+        private boolean first = true;
         private int skipFrames;
 
         private InspectedFrame callNodeFrame;
@@ -335,12 +326,13 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
             } else if (frame.isMethod(methods.callTargetMethod)) {
                 try {
                     if (skipFrames == 0) {
-                        return visitor.visitFrame(new GraalFrameInstance(frame, callNodeFrame));
+                        return visitor.visitFrame(new GraalFrameInstance(first, frame, callNodeFrame));
                     } else {
                         skipFrames--;
                     }
                 } finally {
                     callNodeFrame = null;
+                    first = false;
                 }
             } else if (frame.isMethod(methods.callNodeMethod)) {
                 callNodeFrame = frame;
@@ -390,7 +382,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     @SuppressFBWarnings(value = "", justification = "Cache that does not need to use equals to compare.")
     final boolean acceptForCompilation(RootNode rootNode) {
-        String includesExcludes = getValue(TruffleCompileOnly);
+        String includesExcludes = TruffleCompileOnly.getValue();
         if (includesExcludes != null) {
             if (cachedIncludesExcludes != includesExcludes) {
                 parseCompileOnly();
@@ -424,7 +416,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         ArrayList<String> includesList = new ArrayList<>();
         ArrayList<String> excludesList = new ArrayList<>();
 
-        String[] items = getValue(TruffleCompileOnly).split(",");
+        String[] items = TruffleCompileOnly.getValue().split(",");
         for (String item : items) {
             if (item.startsWith("~")) {
                 excludesList.add(item.substring(1));
@@ -472,14 +464,13 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     private void shutdown() {
         getCompilationNotify().notifyShutdown(this);
-        OptionValues options = TruffleCompilerOptions.getOptions();
-        if (getValue(TruffleInstrumentBranches) || getValue(TruffleInstrumentBoundaries)) {
-            InstrumentPhase.instrumentation.dumpAccessTable(options);
+        if (TruffleCompilerOptions.TruffleInstrumentBranches.getValue()) {
+            InstrumentBranchesPhase.instrumentation.dumpAccessTable();
         }
     }
 
     protected void doCompile(OptimizedCallTarget optimizedCallTarget) {
-        int repeats = TruffleCompilerOptions.getValue(TruffleCompilationRepeats);
+        int repeats = TruffleCompilerOptions.TruffleCompilationRepeats.getValue();
         if (repeats <= 1) {
             /* Normal compilation. */
             doCompile0(optimizedCallTarget);
@@ -515,19 +506,15 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     protected abstract BackgroundCompileQueue getCompileQueue();
 
-    @SuppressWarnings("try")
     public Future<?> submitForCompilation(OptimizedCallTarget optimizedCallTarget) {
         BackgroundCompileQueue l = getCompileQueue();
         final WeakReference<OptimizedCallTarget> weakCallTarget = new WeakReference<>(optimizedCallTarget);
-        final OptionValues optionOverrides = TruffleCompilerOptions.getCurrentOptionOverrides();
         return l.compileQueue.submit(new Runnable() {
             @Override
             public void run() {
                 OptimizedCallTarget callTarget = weakCallTarget.get();
                 if (callTarget != null) {
-                    try (TruffleOptionsOverrideScope scope = optionOverrides != null ? overrideOptions(optionOverrides.getMap()) : null) {
-                        doCompile(callTarget);
-                    }
+                    doCompile(callTarget);
                 }
             }
         });
@@ -540,7 +527,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
             try {
                 future.get();
             } catch (ExecutionException e) {
-                if (TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown) && !(e.getCause() instanceof BailoutException && !((BailoutException) e.getCause()).isPermanent())) {
+                if (TruffleCompilationExceptionsAreThrown.getValue() && !(e.getCause() instanceof BailoutException && !((BailoutException) e.getCause()).isPermanent())) {
                     throw new RuntimeException(e.getCause());
                 } else {
                     // silently ignored
@@ -608,7 +595,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     public final boolean enableInfopoints() {
         /* Currently infopoints can change code generation so don't enable them automatically */
-        return platformEnableInfopoints() && TruffleCompilerOptions.getValue(TruffleEnableInfopoints);
+        return platformEnableInfopoints() && TruffleEnableInfopoints.getValue();
     }
 
     protected abstract boolean platformEnableInfopoints();
@@ -618,7 +605,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     }
 
     // cached field access to make it fast in the interpreter
-    private static final boolean PROFILING_ENABLED = TruffleCompilerOptions.getValue(TruffleProfilingEnabled);
+    private static final boolean PROFILING_ENABLED = TruffleCompilerOptions.TruffleProfilingEnabled.getValue();
 
     @Override
     public final boolean isProfilingEnabled() {
@@ -744,12 +731,4 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
             return new CallMethods(metaAccess);
         }
     }
-
-    /**
-     * The flag is checked from within a Truffle compilation and we need to constant fold the
-     * decision. In addition, we want only one of {@link FrameWithoutBoxing} and
-     * {@link FrameWithBoxing} seen as reachable in AOT mode, so we need to be able to constant fold
-     * the decision as early as possible.
-     */
-    public static final boolean useFrameWithoutBoxing = TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing);
 }
