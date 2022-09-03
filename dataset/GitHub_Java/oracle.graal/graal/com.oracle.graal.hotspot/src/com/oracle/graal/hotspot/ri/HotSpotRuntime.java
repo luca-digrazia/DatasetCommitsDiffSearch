@@ -83,12 +83,6 @@ public class HotSpotRuntime implements GraalRuntime {
     }
 
 
-    @Override
-    public int codeOffset() {
-        return 0;
-    }
-
-
     public Compiler getCompiler() {
         return compiler;
     }
@@ -208,24 +202,8 @@ public class HotSpotRuntime implements GraalRuntime {
     }
 
     @Override
-    public Object registerCompilerStub(CiTargetMethod targetMethod, String name, RiCodeInfo info) {
-        return HotSpotTargetMethod.installStub(compiler, targetMethod, name, (HotSpotCodeInfo) info);
-    }
-
-    @Override
     public int sizeOfLockData() {
         // TODO shouldn't be hard coded
-        return 8;
-    }
-
-    @Override
-    public int sizeOfBasicObjectLock() {
-        // TODO shouldn't be hard coded
-        return 2 * 8;
-    }
-
-    @Override
-    public int basicObjectLockOffsetInBytes() {
         return 8;
     }
 
@@ -482,7 +460,7 @@ public class HotSpotRuntime implements GraalRuntime {
                 StructuredGraph graph = new StructuredGraph();
                 LocalNode receiver = graph.unique(new LocalNode(0, StampFactory.objectNonNull()));
                 SafeReadNode klassOop = safeReadHub(graph, receiver, StructuredGraph.INVALID_GRAPH_ID);
-                Stamp resultStamp = StampFactory.declaredNonNull(getType(Class.class));
+                Stamp resultStamp = StampFactory.declared(getType(Class.class));
                 FloatingReadNode result = graph.unique(new FloatingReadNode(klassOop, LocationNode.create(LocationNode.FINAL_LOCATION, CiKind.Object, config.classMirrorOffset, graph), null, resultStamp));
                 ReturnNode ret = graph.add(new ReturnNode(result));
                 graph.start().setNext(klassOop);
