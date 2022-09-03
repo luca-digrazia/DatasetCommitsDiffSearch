@@ -35,12 +35,9 @@ import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.nfi.BindableNativeObject.BindSignatureNode;
-import com.oracle.truffle.nfi.BindableNativeObjectFactory.ReBindSignatureNodeGen;
 import com.oracle.truffle.nfi.LibFFIFunctionMessageResolutionFactory.CachedExecuteNodeGen;
 import com.oracle.truffle.nfi.TypeConversion.AsStringNode;
 import com.oracle.truffle.nfi.TypeConversionFactory.AsStringNodeGen;
@@ -199,18 +196,10 @@ class LibFFIFunctionMessageResolution {
 
     @Resolve(message = "INVOKE")
     abstract static class ReBindNode extends Node {
-
-        @Child private BindSignatureNode bind = ReBindSignatureNodeGen.create();
+        @Child private NativePointerMessageResolution.BindNode bind = NativePointerMessageResolutionForeignFactory.BindSubNodeGen.create();
 
         public TruffleObject access(LibFFIFunction receiver, String identifier, Object[] args) {
-            if (!"bind".equals(identifier)) {
-                throw UnknownIdentifierException.raise(identifier);
-            }
-            if (args.length != 1) {
-                throw ArityException.raise(1, args.length);
-            }
-
-            return bind.execute(receiver, args[0]);
+            return bind.access(receiver.getPointer(), identifier, args);
         }
     }
 

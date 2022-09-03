@@ -24,36 +24,48 @@
  */
 package com.oracle.truffle.nfi;
 
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.CanResolve;
+import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.nfi.LibFFIFunctionMessageResolution.CachedExecuteNode;
+import com.oracle.truffle.nfi.LibFFIFunctionMessageResolutionFactory.CachedExecuteNodeGen;
 import com.oracle.truffle.nfi.LibFFILibraryMessageResolutionFactory.CachedLookupSymbolNodeGen;
+import com.oracle.truffle.nfi.TypeConversion.AsStringNode;
+import com.oracle.truffle.nfi.TypeConversionFactory.AsStringNodeGen;
 
 @MessageResolution(receiverType = LibFFILibrary.class)
 class LibFFILibraryMessageResolution {
 
     abstract static class CachedLookupSymbolNode extends Node {
 
-        protected abstract LibFFISymbol executeLookup(LibFFILibrary receiver, String symbol);
+        private final ContextReference<NFIContext> ctxRef = NFILanguage.getCurrentContextReference();
+
+        protected abstract TruffleObject executeLookup(LibFFILibrary receiver, String symbol);
 
         @Specialization(guards = {"receiver == cachedReceiver", "symbol.equals(cachedSymbol)"})
         @SuppressWarnings("unused")
-        protected LibFFISymbol lookupCached(LibFFILibrary receiver, String symbol,
+        protected TruffleObject lookupCached(LibFFILibrary receiver, String symbol,
                         @Cached("receiver") LibFFILibrary cachedReceiver,
                         @Cached("symbol") String cachedSymbol,
-                        @Cached("lookup(cachedReceiver, cachedSymbol)") LibFFISymbol cachedRet) {
+                        @Cached("lookup(cachedReceiver, cachedSymbol)") TruffleObject cachedRet) {
             return cachedRet;
         }
 
         @Specialization(replaces = "lookupCached")
-        protected LibFFISymbol lookup(LibFFILibrary receiver, String symbol) {
+        protected TruffleObject lookup(LibFFILibrary receiver, String symbol) {
+            TruffleObject preBound = receiver.findSymbol(symbol);
+            if (preBound != null) {
+                return preBound;
+            }
             try {
-                return receiver.lookupSymbol(symbol);
+                return ctxRef.get().lookupSymbol(receiver, symbol);
             } catch (UnsatisfiedLinkError ex) {
                 throw UnknownIdentifierException.raise(symbol);
             }
@@ -64,9 +76,48 @@ class LibFFILibraryMessageResolution {
     abstract static class LookupSymbolNode extends Node {
 
         @Child private CachedLookupSymbolNode cached = CachedLookupSymbolNodeGen.create();
+        @Child private AsStringNode asString = AsStringNodeGen.create(true);
 
-        public LibFFISymbol access(LibFFILibrary receiver, String symbol) {
-            return cached.executeLookup(receiver, symbol);
+        public TruffleObject access(LibFFILibrary receiver, Object symbol) {
+            return cached.executeLookup(receiver, asString.execute(symbol));
+        }
+    }
+
+    @Resolve(message = "INVOKE")
+    abstract static class InvokeSymbolNode extends Node {
+
+        @Child private CachedLookupSymbolNode cached = CachedLookupSymbolNodeGen.create();
+        @Child private CachedExecuteNode exec = CachedExecuteNodeGen.create();
+
+        public Object access(LibFFILibrary receiver, String symbol, Object... args) {
+            LibFFIFunction obj = (LibFFIFunction) cached.executeLookup(receiver, symbol);
+            return exec.execute(obj, args);
+        }
+    }
+
+    @Resolve(message = "KEY_INFO")
+    abstract static class KeyInfoNode extends Node {
+
+        private final ContextReference<NFIContext> ctxRef = NFILanguage.getCurrentContextReference();
+
+        private static final int READABLE = KeyInfo.newBuilder().setReadable(true).build();
+        private static final int READ_AND_INVOCABLE = KeyInfo.newBuilder().setReadable(true).setInvocable(true).build();
+        private static final int NOT_EXISTING = 0;
+
+        @Child private AsStringNode asString = AsStringNodeGen.create(true);
+
+        public int access(LibFFILibrary receiver, Object arg) {
+            String symbol = asString.execute(arg);
+            if (receiver.findSymbol(symbol) == null) {
+                try {
+                    ctxRef.get().lookupSymbol(receiver, symbol);
+                    return READABLE;
+                } catch (UnsatisfiedLinkError ex) {
+                    return NOT_EXISTING;
+                }
+            } else {
+                return READ_AND_INVOCABLE;
+            }
         }
     }
 
