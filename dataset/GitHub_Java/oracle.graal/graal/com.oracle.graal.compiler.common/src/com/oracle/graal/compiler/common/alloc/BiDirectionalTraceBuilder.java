@@ -46,12 +46,12 @@ public final class BiDirectionalTraceBuilder {
 
     private final Deque<AbstractBlockBase<?>> worklist;
     private final BitSet processed;
-    private final Trace[] blockToTrace;
+    private final int[] blockToTrace;
 
     private BiDirectionalTraceBuilder(AbstractBlockBase<?>[] blocks) {
         processed = new BitSet(blocks.length);
         worklist = createQueue(blocks);
-        blockToTrace = new Trace[blocks.length];
+        blockToTrace = new int[blocks.length];
     }
 
     private static Deque<AbstractBlockBase<?>> createQueue(AbstractBlockBase<?>[] blocks) {
@@ -84,12 +84,7 @@ public final class BiDirectionalTraceBuilder {
             AbstractBlockBase<?> block = worklist.pollFirst();
             assert block != null;
             if (!processed(block)) {
-                Trace trace = new Trace(startTrace(block));
-                for (AbstractBlockBase<?> traceBlock : trace.getBlocks()) {
-                    blockToTrace[traceBlock.getId()] = trace;
-                }
-                trace.setId(traces.size());
-                traces.add(trace);
+                traces.add(new Trace(startTrace(block, traces.size())));
             }
         }
         return traces;
@@ -99,12 +94,12 @@ public final class BiDirectionalTraceBuilder {
      * Build a new trace starting at {@code block}.
      */
     @SuppressWarnings("try")
-    private Collection<AbstractBlockBase<?>> startTrace(AbstractBlockBase<?> block) {
+    private Collection<AbstractBlockBase<?>> startTrace(AbstractBlockBase<?> block, int traceNumber) {
         ArrayDeque<AbstractBlockBase<?>> trace = new ArrayDeque<>();
         try (Indent i = Debug.logAndIndent("StartTrace: %s", block)) {
             try (Indent indentFront = Debug.logAndIndent("Head:")) {
                 for (AbstractBlockBase<?> currentBlock = block; currentBlock != null; currentBlock = selectPredecessor(currentBlock)) {
-                    addBlockToTrace(currentBlock);
+                    addBlockToTrace(currentBlock, traceNumber);
                     trace.addFirst(currentBlock);
                 }
             }
@@ -116,7 +111,7 @@ public final class BiDirectionalTraceBuilder {
 
             try (Indent indentBack = Debug.logAndIndent("Tail:")) {
                 for (AbstractBlockBase<?> currentBlock = selectSuccessor(block); currentBlock != null; currentBlock = selectSuccessor(currentBlock)) {
-                    addBlockToTrace(currentBlock);
+                    addBlockToTrace(currentBlock, traceNumber);
                     trace.addLast(currentBlock);
                     /* This time we can number the blocks immediately as we go forwards. */
                     currentBlock.setLinearScanNumber(blockNr++);
@@ -127,9 +122,10 @@ public final class BiDirectionalTraceBuilder {
         return trace;
     }
 
-    private void addBlockToTrace(AbstractBlockBase<?> currentBlock) {
+    private void addBlockToTrace(AbstractBlockBase<?> currentBlock, int traceNumber) {
         Debug.log("add %s (prob: %f)", currentBlock, currentBlock.probability());
         processed.set(currentBlock.getId());
+        blockToTrace[currentBlock.getId()] = traceNumber;
     }
 
     /**
