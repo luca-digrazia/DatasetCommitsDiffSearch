@@ -34,7 +34,6 @@ import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.StackValue;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.Alias;
@@ -50,8 +49,6 @@ import com.oracle.svm.core.os.IsDefined;
 import com.oracle.svm.core.posix.headers.CSunMiscSignal;
 import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.Signal;
-import com.oracle.svm.core.posix.headers.Signal.SignalDispatcher;
-import com.oracle.svm.core.posix.headers.Time;
 import com.oracle.svm.core.util.VMError;
 
 @Platforms(Platform.HOSTED_ONLY.class)
@@ -87,6 +84,7 @@ final class Target_jdk_internal_misc_Signal {
         if (ImageInfo.isSharedLibrary()) {
             throw new IllegalArgumentException("Installing signal handlers is not allowed for native-image shared libraries.");
         }
+
         return Util_jdk_internal_misc_Signal.handle0(sig, nativeH);
     }
 
@@ -105,7 +103,6 @@ final class Target_jdk_internal_misc_Signal {
 }
 
 /** Support for Target_sun_misc_Signal. */
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Util_jdk_internal_misc_Signal {
 
     /** A thread to dispatch signals as they are raised. */
@@ -171,7 +168,7 @@ final class Util_jdk_internal_misc_Signal {
                         /* Report other failure. */
                         Log.log().string("Util_sun_misc_Signal.ensureInitialized: CSunMiscSignal.create() failed.")
                                         .string("  errno: ").signed(openErrno).string("  ").string(Errno.strerror(openErrno)).newline();
-                        throw VMError.shouldNotReachHere("Util_sun_misc_Signal.ensureInitialized: CSunMiscSignal.open() failed.");
+                        throw VMError.unsupportedFeature("Util_sun_misc_Signal.ensureInitialized: CSunMiscSignal.open() failed.");
                     }
 
                     /* Initialize the table of signal states. */
@@ -181,7 +178,7 @@ final class Util_jdk_internal_misc_Signal {
                     dispatchThread = new Thread(new DispatchThread());
                     dispatchThread.setDaemon(true);
                     dispatchThread.start();
-                    RuntimeSupport.getRuntimeSupport().addTearDownHook(() -> DispatchThread.interrupt(dispatchThread));
+                    RuntimeSupport.getRuntimeSupport().addTearDownHook(() -> DispatchThread.interruptAndWakeUp(dispatchThread));
 
                     /* Initialization is complete. */
                     initialized = true;
@@ -283,9 +280,10 @@ final class Util_jdk_internal_misc_Signal {
             /* Nothing to do. */
         }
 
-        static void interrupt(Thread thread) {
+        static void interruptAndWakeUp(Thread thread) {
             thread.interrupt();
             SignalState.wakeUp();
+
         }
 
         /**
@@ -295,18 +293,19 @@ final class Util_jdk_internal_misc_Signal {
          */
         @Override
         public void run() {
-            while (!Thread.interrupted()) {
+            for (; /* break */;) {
+                /* Check if this thread was interrupted before blocking. */
+                if (Thread.interrupted()) {
+                    break;
+                }
                 /*
                  * Block waiting for one or more signals to be raised. Or a wake up for termination.
                  */
                 SignalState.await();
-                if (Thread.interrupted()) {
-                    /* Thread was interrupted for termination. */
-                    break;
-                }
                 /* Find any counters that are non-zero. */
-                for (final SignalState entry : signalState) {
-                    final SignalDispatcher dispatcher = entry.getDispatcher();
+                for (int index = 0; index < signalState.length; index += 1) {
+                    final SignalState entry = signalState[index];
+                    final Signal.SignalDispatcher dispatcher = entry.getDispatcher();
                     /* If the handler is the Java signal handler ... */
                     if (dispatcher.equal(CSunMiscSignal.countingHandlerFunctionPointer())) {
                         /* ... and if there are outstanding signals to be dispatched. */
@@ -369,7 +368,7 @@ final class Util_jdk_internal_misc_Signal {
 
         protected static void wakeUp() {
             final int awaitResult = CSunMiscSignal.post();
-            PosixUtils.checkStatusIs0(awaitResult, "Util_sun_misc_Signal.SignalState.post(): CSunMiscSignal.post() failed.");
+            PosixUtils.checkStatusIs0(awaitResult, "Util_sun_misc_Signal.SignalState.await(): CSunMiscSignal.post() failed.");
         }
 
         /*
@@ -411,7 +410,6 @@ final class Target_sun_misc_NativeSignalHandler {
     }
 }
 
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 @AutomaticFeature
 class IgnoreSIGPIPEFeature implements Feature {
 
@@ -436,30 +434,6 @@ class IgnoreSIGPIPEFeature implements Feature {
                 VMError.guarantee(signalResult != Signal.SIG_ERR(), "IgnoreSIGPIPEFeature.run: Could not ignore SIGPIPE");
             }
         });
-    }
-}
-
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
-@TargetClass(className = "jdk.internal.misc.VM", onlyWith = JDK9OrLater.class)
-final class Target_jdk_internal_misc_VM {
-
-    /* Implementation from src/hotspot/share/prims/jvm.cpp#L286 translated to Java. */
-    @Substitute
-    public static long getNanoTimeAdjustment(long offsetInSeconds) {
-        final long maxDiffSecs = 0x0100000000L;
-        final long minDiffSecs = -maxDiffSecs;
-
-        Time.timeval tv = StackValue.get(Time.timeval.class);
-        int status = Time.gettimeofday(tv, WordFactory.nullPointer());
-        assert status != -1 : "linux error";
-        long seconds = tv.tv_sec();
-        long nanos = tv.tv_usec() * 1000;
-
-        long diff = seconds - offsetInSeconds;
-        if (diff >= maxDiffSecs || diff <= minDiffSecs) {
-            return -1;
-        }
-        return diff * 1000000000 + nanos;
     }
 }
 
