@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Mul;
@@ -93,14 +92,14 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
     }
 
     @Override
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
-        Value op1 = nodeValueMap.operand(getX());
-        Value op2 = nodeValueMap.operand(getY());
-        if (!getY().isConstant() && !BinaryArithmeticNode.livesLonger(this, getY(), nodeValueMap)) {
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        Value op1 = builder.operand(getX());
+        Value op2 = builder.operand(getY());
+        if (!getY().isConstant() && !BinaryArithmeticNode.livesLonger(this, getY(), builder)) {
             Value tmp = op1;
             op1 = op2;
             op2 = tmp;
         }
-        nodeValueMap.setResult(this, gen.emitMul(op1, op2, false));
+        builder.setResult(this, gen.emitMul(op1, op2, false));
     }
 }

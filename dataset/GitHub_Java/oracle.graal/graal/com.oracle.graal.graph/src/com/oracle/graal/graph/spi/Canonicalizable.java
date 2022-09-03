@@ -22,10 +22,8 @@
  */
 package com.oracle.graal.graph.spi;
 
-import com.oracle.graal.graph.Graph;
-import com.oracle.graal.graph.Node;
-
-import jdk.vm.ci.meta.MetaAccessProvider;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 
 /**
  * Nodes can implement {@link Canonicalizable} or one of the two sub-interfaces {@link Unary} and
@@ -48,8 +46,7 @@ public interface Canonicalizable {
     /**
      * Implementations of this method can provide local optimizations like constant folding and
      * strength reduction. Implementations should look at the properties and inputs of the current
-     * node and determine if there is a more optimal and always semantically correct replacement.
-     * <br/>
+     * node and determine if there is a more optimal and always semantically correct replacement.<br/>
      * The return value determines the effect that the canonicalization will have:
      * <ul>
      * <li>Returning an pre-existing node will replace the current node with the given one.</li>
@@ -91,10 +88,8 @@ public interface Canonicalizable {
          */
         T getValue();
 
-        @SuppressWarnings("unchecked")
-        @Override
-        default T canonical(CanonicalizerTool tool) {
-            return (T) canonical(tool, getValue());
+        default Node canonical(CanonicalizerTool tool) {
+            return canonical(tool, getValue());
         }
     }
 
@@ -129,10 +124,8 @@ public interface Canonicalizable {
          */
         T getY();
 
-        @SuppressWarnings("unchecked")
-        @Override
-        default T canonical(CanonicalizerTool tool) {
-            return (T) canonical(tool, getX(), getY());
+        default Node canonical(CanonicalizerTool tool) {
+            return canonical(tool, getX(), getY());
         }
     }
 

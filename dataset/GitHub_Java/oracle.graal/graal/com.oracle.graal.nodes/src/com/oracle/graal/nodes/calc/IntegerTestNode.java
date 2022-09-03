@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
@@ -58,20 +57,5 @@ public final class IntegerTestNode extends BinaryOpLogicNode implements BinaryCo
             }
         }
         return this;
-    }
-
-    @Override
-    public Stamp getSucceedingStampForX(boolean negated) {
-        return null;
-    }
-
-    @Override
-    public Stamp getSucceedingStampForY(boolean negated) {
-        return null;
-    }
-
-    @Override
-    public TriState tryFold(Stamp xStampGeneric, Stamp yStampGeneric) {
-        return TriState.UNKNOWN;
     }
 }

@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.And;
@@ -101,7 +100,7 @@ public final class AndNode extends BinaryArithmeticNode<And> implements Narrowab
     }
 
     @Override
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
-        nodeValueMap.setResult(this, gen.emitAnd(nodeValueMap.operand(getX()), nodeValueMap.operand(getY())));
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        builder.setResult(this, gen.emitAnd(builder.operand(getX()), builder.operand(getY())));
     }
 }
