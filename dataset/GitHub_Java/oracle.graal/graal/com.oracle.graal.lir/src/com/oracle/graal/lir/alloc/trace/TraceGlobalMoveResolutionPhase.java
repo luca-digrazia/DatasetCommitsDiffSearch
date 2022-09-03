@@ -22,56 +22,68 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.lir.alloc.trace.TraceUtil.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
+import static com.oracle.graal.lir.alloc.trace.TraceUtil.asShadowedRegisterValue;
+import static com.oracle.graal.lir.alloc.trace.TraceUtil.isShadowedRegisterValue;
+import static jdk.vm.ci.code.ValueUtil.asRegisterValue;
+import static jdk.vm.ci.code.ValueUtil.isIllegal;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import java.util.*;
+import java.util.List;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.compiler.common.alloc.*;
-import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
-import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.compiler.common.alloc.Trace;
+import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Indent;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.alloc.trace.TraceAllocationPhase.TraceAllocationContext;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
+import com.oracle.graal.lir.phases.LIRPhase;
 import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
-import com.oracle.graal.lir.ssi.*;
+import com.oracle.graal.lir.ssi.SSIUtil;
 
-public class TraceGlobalMoveResolutionPhase extends AllocationPhase {
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Value;
 
-    private final TraceBuilderResult<?> resultTraces;
+public final class TraceGlobalMoveResolutionPhase extends LIRPhase<TraceAllocationPhase.TraceAllocationContext> {
 
-    public TraceGlobalMoveResolutionPhase(TraceBuilderResult<?> resultTraces) {
-        this.resultTraces = resultTraces;
+    /**
+     * Abstract move resolver interface for testing.
+     */
+    public abstract static class MoveResolver {
+        public abstract void addMapping(Value src, AllocatableValue dst, Value fromStack);
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig) {
-        resolveGlobalDataFlow(resultTraces, lirGenRes, spillMoveFactory, target.arch);
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, TraceAllocationContext context) {
+        MoveFactory spillMoveFactory = context.spillMoveFactory;
+        resolveGlobalDataFlow(context.resultTraces, lirGenRes, spillMoveFactory, target.arch);
     }
 
-    private static <B extends AbstractBlockBase<B>> void resolveGlobalDataFlow(TraceBuilderResult<B> resultTraces, LIRGenerationResult lirGenRes, SpillMoveFactory spillMoveFactory, Architecture arch) {
+    @SuppressWarnings("try")
+    private static void resolveGlobalDataFlow(TraceBuilderResult resultTraces, LIRGenerationResult lirGenRes, MoveFactory spillMoveFactory, Architecture arch) {
         LIR lir = lirGenRes.getLIR();
         /* Resolve trace global data-flow mismatch. */
         TraceGlobalMoveResolver moveResolver = new TraceGlobalMoveResolver(lirGenRes, spillMoveFactory, arch);
         PhiValueVisitor visitor = (Value phiIn, Value phiOut) -> {
-            if (!isIllegal(phiIn) && !TraceGlobalMoveResolver.isMoveToSelf(phiOut, phiIn)) {
-                moveResolver.addMapping(getFromValue(phiOut), (AllocatableValue) phiIn);
+            if (!isIllegal(phiIn)) {
+                addMapping(moveResolver, phiOut, phiIn);
             }
         };
 
         try (Indent indent = Debug.logAndIndent("Trace global move resolution")) {
-            for (List<B> trace : resultTraces.getTraces()) {
-                for (AbstractBlockBase<?> fromBlock : trace) {
+            for (Trace trace : resultTraces.getTraces()) {
+                for (AbstractBlockBase<?> fromBlock : trace.getBlocks()) {
                     for (AbstractBlockBase<?> toBlock : fromBlock.getSuccessors()) {
                         if (resultTraces.getTraceForBlock(fromBlock) != resultTraces.getTraceForBlock(toBlock)) {
-                            try (Indent indent0 = Debug.logAndIndent("Handle trace edge from %s (Trace%d) to %s (Trace%d)", fromBlock, resultTraces.getTraceForBlock(fromBlock), toBlock,
-                                            resultTraces.getTraceForBlock(toBlock))) {
+                            try (Indent indent0 = Debug.logAndIndent("Handle trace edge from %s (Trace%d) to %s (Trace%d)", fromBlock, resultTraces.getTraceForBlock(fromBlock).getId(), toBlock,
+                                            resultTraces.getTraceForBlock(toBlock).getId())) {
 
                                 final List<LIRInstruction> instructions;
                                 final int insertIdx;
@@ -95,7 +107,49 @@ public class TraceGlobalMoveResolutionPhase extends AllocationPhase {
         }
     }
 
-    private static Value getFromValue(Value from) {
-        return isShadowedRegisterValue(from) ? asShadowedRegisterValue(from).getRegister() : from;
+    public static void addMapping(MoveResolver moveResolver, Value from, Value to) {
+        assert !isIllegal(to);
+        if (isShadowedRegisterValue(to)) {
+            ShadowedRegisterValue toSh = asShadowedRegisterValue(to);
+            addMappingToRegister(moveResolver, from, toSh.getRegister());
+            addMappingToStackSlot(moveResolver, from, toSh.getStackSlot());
+        } else {
+            if (isRegister(to)) {
+                addMappingToRegister(moveResolver, from, asRegisterValue(to));
+            } else {
+                assert isStackSlotValue(to) : "Expected stack slot: " + to;
+                addMappingToStackSlot(moveResolver, from, (AllocatableValue) to);
+            }
+        }
+    }
+
+    private static void addMappingToRegister(MoveResolver moveResolver, Value from, RegisterValue register) {
+        if (isShadowedRegisterValue(from)) {
+            RegisterValue fromReg = asShadowedRegisterValue(from).getRegister();
+            AllocatableValue fromStack = asShadowedRegisterValue(from).getStackSlot();
+            checkAndAddMapping(moveResolver, fromReg, register, fromStack);
+        } else {
+            checkAndAddMapping(moveResolver, from, register, null);
+        }
+    }
+
+    private static void addMappingToStackSlot(MoveResolver moveResolver, Value from, AllocatableValue stack) {
+        if (isShadowedRegisterValue(from)) {
+            ShadowedRegisterValue shadowedFrom = asShadowedRegisterValue(from);
+            RegisterValue fromReg = shadowedFrom.getRegister();
+            AllocatableValue fromStack = shadowedFrom.getStackSlot();
+            if (!fromStack.equals(stack)) {
+                checkAndAddMapping(moveResolver, fromReg, stack, fromStack);
+            }
+        } else {
+            checkAndAddMapping(moveResolver, from, stack, null);
+        }
+
+    }
+
+    private static void checkAndAddMapping(MoveResolver moveResolver, Value from, AllocatableValue to, AllocatableValue fromStack) {
+        if (!from.equals(to) && (fromStack == null || !fromStack.equals(to))) {
+            moveResolver.addMapping(from, to, fromStack);
+        }
     }
 }
