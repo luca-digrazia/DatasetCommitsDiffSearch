@@ -22,15 +22,19 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -44,18 +48,24 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class ClassGetHubNode extends FloatingGuardedNode implements Lowerable, Canonicalizable, ConvertNode {
     @Input protected ValueNode clazz;
+    protected final HotSpotGraalRuntimeProvider runtime;
 
-    public static ClassGetHubNode create(ValueNode clazz) {
-        return new ClassGetHubNode(clazz, null);
+    public static ClassGetHubNode create(@InjectedNodeParameter HotSpotGraalRuntimeProvider runtime, ValueNode clazz) {
+        return new ClassGetHubNode(clazz, null, runtime);
     }
 
-    public static ClassGetHubNode create(ValueNode clazz, ValueNode guard) {
-        return new ClassGetHubNode(clazz, guard);
+    public static ClassGetHubNode create(@InjectedNodeParameter HotSpotGraalRuntimeProvider runtime, ValueNode clazz, ValueNode guard) {
+        return new ClassGetHubNode(clazz, guard, runtime);
     }
 
-    protected ClassGetHubNode(ValueNode clazz, ValueNode guard) {
+    protected ClassGetHubNode(ValueNode clazz, ValueNode guard, HotSpotGraalRuntimeProvider runtime) {
         super(KlassPointerStamp.klass(), (GuardingNode) guard);
         this.clazz = clazz;
+        this.runtime = runtime;
+    }
+
+    public ValueNode getHub() {
+        return clazz;
     }
 
     @Override
@@ -86,7 +96,14 @@ public class ClassGetHubNode extends FloatingGuardedNode implements Lowerable, C
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+        if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
+            return;
+        }
+
+        LocationNode location = ConstantLocationNode.create(CLASS_KLASS_LOCATION, runtime.getConfig().klassOffset, graph());
+        assert !clazz.isConstant();
+        FloatingReadNode read = graph().unique(FloatingReadNode.create(clazz, location, null, stamp(), getGuard(), BarrierType.NONE));
+        graph().replaceFloating(this, read);
     }
 
     @NodeIntrinsic
@@ -99,9 +116,8 @@ public class ClassGetHubNode extends FloatingGuardedNode implements Lowerable, C
         return clazz;
     }
 
-    @Override
-    public Constant convert(Constant c, ConstantReflectionProvider constantReflection) {
-        ResolvedJavaType exactType = constantReflection.asJavaType(c);
+    public Constant convert(Constant c) {
+        ResolvedJavaType exactType = runtime.getHostProviders().getConstantReflection().asJavaType(c);
         if (exactType instanceof HotSpotResolvedObjectType) {
             HotSpotResolvedObjectType objectType = (HotSpotResolvedObjectType) exactType;
             return objectType.getObjectHub();
@@ -111,10 +127,9 @@ public class ClassGetHubNode extends FloatingGuardedNode implements Lowerable, C
         }
     }
 
-    @Override
-    public Constant reverse(Constant c, ConstantReflectionProvider constantReflection) {
+    public Constant reverse(Constant c) {
         assert !c.equals(JavaConstant.NULL_POINTER);
-        ResolvedJavaType objectType = constantReflection.asJavaType(c);
+        ResolvedJavaType objectType = runtime.getHostProviders().getConstantReflection().asJavaType(c);
         return objectType.getJavaClass();
     }
 
@@ -123,9 +138,9 @@ public class ClassGetHubNode extends FloatingGuardedNode implements Lowerable, C
     }
 
     @Override
-    public boolean preservesOrder(Condition op, Constant value, ConstantReflectionProvider constantReflection) {
+    public boolean preservesOrder(Condition op, Constant value) {
         assert op == Condition.EQ || op == Condition.NE;
-        ResolvedJavaType exactType = constantReflection.asJavaType(value);
+        ResolvedJavaType exactType = runtime.getHostProviders().getConstantReflection().asJavaType(value);
         return exactType instanceof HotSpotResolvedObjectType;
     }
 
