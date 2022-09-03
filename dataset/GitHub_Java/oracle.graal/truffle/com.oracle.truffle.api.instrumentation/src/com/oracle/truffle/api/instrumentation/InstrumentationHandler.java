@@ -28,17 +28,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -61,21 +61,19 @@ final class InstrumentationHandler {
     /* Enable trace output to stdout. */
     private static final boolean TRACE = Boolean.getBoolean("truffle.instrumentation.trace");
 
-    /* Load order needs to be preserved for sources, thats why we cannot use WeakHashMap. */
-    private final Map<Source, Void> sources = Collections.synchronizedMap(new WeakHashMap<Source, Void>());
-    private final WeakAsyncList<Source> sourcesList = new WeakAsyncList<>(16);
+    /* All roots that were initialized (executed at least once) */
+    private final Map<RootNode, Void> roots = Collections.synchronizedMap(new WeakHashMap<RootNode, Void>());
 
-    private final WeakAsyncList<RootNode> loadedRoots = new WeakAsyncList<>(256);
-    private final WeakAsyncList<RootNode> executedRoots = new WeakAsyncList<>(64);
+    /* All bindings that have been globally created by instrumenter instances. */
+    private final List<EventBinding<?>> bindings = new ArrayList<>();
 
-    private final EventBindingList executionBindings = new EventBindingList(8);
-    private final EventBindingList sourceSectionBindings = new EventBindingList(8);
-    private final EventBindingList sourceBindings = new EventBindingList(8);
+    /* Cached instance for reuse for newly installed root nodes. */
+    private final AddBindingsVisitor addAllBindingsVisitor = new AddBindingsVisitor(bindings);
 
     /*
      * Fast lookup of instrumenter instances based on a key provided by the accessor.
      */
-    private final Map<Object, AbstractInstrumenter> instrumenterMap = new ConcurrentHashMap<>();
+    private final Map<Object, AbstractInstrumenter> instrumenterMap = new HashMap<>();
 
     /* Has the instrumentation framework been initialized? */
     private volatile boolean instrumentationInitialized;
@@ -83,7 +81,7 @@ final class InstrumentationHandler {
     private final OutputStream out;
     private final OutputStream err;
     private final InputStream in;
-    private final Map<Class<?>, Set<Class<?>>> cachedProvidedTags = new ConcurrentHashMap<>();
+    private final Map<Class<?>, Set<Class<?>>> cachedProvidedTags = new HashMap<>();
 
     private InstrumentationHandler(OutputStream out, OutputStream err, InputStream in) {
         this.out = out;
@@ -91,55 +89,15 @@ final class InstrumentationHandler {
         this.in = in;
     }
 
-    void onLoad(RootNode root) {
+    void installRootNode(RootNode root) {
         if (!AccessorInstrumentHandler.nodesAccess().isInstrumentable(root)) {
             return;
         }
         if (!instrumentationInitialized) {
             initializeInstrumentation();
         }
-
-        SourceSection sourceSection = root.getSourceSection();
-        if (sourceSection != null) {
-            // notify sources
-            Source source = sourceSection.getSource();
-            boolean isNewSource = false;
-            synchronized (sources) {
-                if (!sources.containsKey(source)) {
-                    sources.put(source, null);
-                    sourcesList.add(new WeakReference<>(source));
-                    isNewSource = true;
-                }
-            }
-            // we don't want to invoke foreign code while we are holding a lock to avoid deadlocks.
-            if (isNewSource) {
-                notifySourceBindingsLoaded(sourceBindings, source);
-            }
-        }
-        loadedRoots.add(new WeakReference<>(root));
-
-        // fast path no bindings attached
-        if (!sourceSectionBindings.isEmpty()) {
-            visitRoot(root, new NotifyLoadedListenerVisitor(sourceSectionBindings));
-        }
-
-    }
-
-    void onFirstExecution(RootNode root) {
-        if (!AccessorInstrumentHandler.nodesAccess().isInstrumentable(root)) {
-            return;
-        }
-        if (!instrumentationInitialized) {
-            initializeInstrumentation();
-        }
-        executedRoots.add(new WeakReference<>(root));
-
-        // fast path no bindings attached
-        if (executionBindings.isEmpty()) {
-            return;
-        }
-
-        visitRoot(root, new InsertWrappersVisitor(executionBindings));
+        roots.put(root, null);
+        visitRoot(root, addAllBindingsVisitor);
     }
 
     void addInstrument(Object key, Class<?> clazz) {
@@ -150,40 +108,27 @@ final class InstrumentationHandler {
         if (TRACE) {
             trace("BEGIN: Dispose instrumenter %n", key);
         }
-
         AbstractInstrumenter disposedInstrumenter = instrumenterMap.get(key);
-        if (disposedInstrumenter != null) {
-            instrumenterMap.remove(key);
+        List<EventBinding<?>> disposedBindings = new ArrayList<>();
+        for (Iterator<EventBinding<?>> iterator = bindings.listIterator(); iterator.hasNext();) {
+            EventBinding<?> binding = iterator.next();
+            if (binding.getInstrumenter() == disposedInstrumenter) {
+                iterator.remove();
+                disposedBindings.add(binding);
+            }
         }
+        disposedInstrumenter.dispose();
+        instrumenterMap.remove(key);
 
-        if (disposedInstrumenter != null) {
-            disposedInstrumenter.dispose();
-
-            if (cleanupRequired) {
-                EventBindingList disposedExecutionBindings = filterBindingsForInstrumenter(executionBindings, disposedInstrumenter);
-                if (!disposedExecutionBindings.isEmpty()) {
-                    visitRoots(executedRoots, new DisposeWrappersWithBindingVisitor(disposedExecutionBindings));
-                }
-                disposeBindingsBulk(disposedExecutionBindings);
-                disposeBindingsBulk(filterBindingsForInstrumenter(sourceSectionBindings, disposedInstrumenter));
-                disposeBindingsBulk(filterBindingsForInstrumenter(sourceBindings, disposedInstrumenter));
+        if (cleanupRequired) {
+            DisposeBindingsVisitor disposeVisitor = new DisposeBindingsVisitor(disposedBindings);
+            for (RootNode root : roots.keySet()) {
+                visitRoot(root, disposeVisitor);
             }
         }
 
         if (TRACE) {
             trace("END: Disposed instrumenter %n", key);
-        }
-    }
-
-    private static void disposeBindingsBulk(EventBindingList list) {
-        AtomicReferenceArray<EventBinding<?>> bindingArray = list.getArray();
-        for (int i = 0; i < bindingArray.length(); i++) {
-            EventBinding<?> binding = bindingArray.get(i);
-            if (binding == null) {
-                // end of list
-                break;
-            }
-            binding.disposeBulk();
         }
     }
 
@@ -193,36 +138,26 @@ final class InstrumentationHandler {
 
     void detachLanguage(Object context) {
         if (instrumenterMap.containsKey(context)) {
+            /*
+             * TODO (chumer): do we need cleanup/invalidate here? With shared CallTargets we
+             * probably will.
+             */
             disposeInstrumenter(context, false);
         }
     }
 
-    <T> EventBinding<T> addExecutionBinding(EventBinding<T> binding) {
-        if (TRACE) {
-            trace("BEGIN: Adding execution binding %s, %s%n", binding.getFilter(), binding.getElement());
-        }
-
-        this.executionBindings.add(binding);
-
-        if (instrumentationInitialized) {
-            visitRoots(executedRoots, new InsertWrappersWithBindingVisitor(binding));
-        }
-
-        if (TRACE) {
-            trace("END: Added execution binding %s, %s%n", binding.getFilter(), binding.getElement());
-        }
-
-        return binding;
-    }
-
-    <T> EventBinding<T> addSourceSectionBinding(EventBinding<T> binding, boolean notifyLoaded) {
+    <T> EventBinding<T> addBinding(EventBinding<T> binding) {
         if (TRACE) {
             trace("BEGIN: Adding binding %s, %s%n", binding.getFilter(), binding.getElement());
         }
 
-        this.sourceSectionBindings.add(binding);
-        if (instrumentationInitialized && notifyLoaded) {
-            visitRoots(loadedRoots, new NotifyLoadedWithBindingVisitor(binding));
+        this.bindings.add(binding);
+
+        if (instrumentationInitialized) {
+            AddBindingVisitor addBindingsVisitor = new AddBindingVisitor(binding);
+            for (RootNode root : roots.keySet()) {
+                visitRoot(root, addBindingsVisitor);
+            }
         }
 
         if (TRACE) {
@@ -232,58 +167,15 @@ final class InstrumentationHandler {
         return binding;
     }
 
-    <T> EventBinding<T> addSourceBinding(EventBinding<T> binding, boolean notifyLoaded) {
-        if (TRACE) {
-            trace("BEGIN: Adding source binding %s, %s%n", binding.getFilter(), binding.getElement());
-        }
-
-        this.sourceBindings.add(binding);
-        if (instrumentationInitialized && notifyLoaded) {
-            AtomicReferenceArray<WeakReference<Source>> sourcesArray = sourcesList.getArray();
-            for (int i = 0; i < sourcesArray.length(); i++) {
-                WeakReference<Source> ref = sourcesArray.get(i);
-                if (ref == null) {
-                    break;
-                }
-                Source source = ref.get();
-                if (source == null) {
-                    continue;
-                }
-                notifySourceBindingLoaded(binding, source);
-            }
-        }
-
-        if (TRACE) {
-            trace("END: Added source binding %s, %s%n", binding.getFilter(), binding.getElement());
-        }
-
-        return binding;
-    }
-
-    private void visitRoots(WeakAsyncList<RootNode> roots, AbstractNodeVisitor addBindingsVisitor) {
-        AtomicReferenceArray<WeakReference<RootNode>> array = roots.getArray();
-        for (int i = 0; i < array.length(); i++) {
-            WeakReference<RootNode> ref = array.get(i);
-            if (ref == null) {
-                // reached end of list
-                break;
-            }
-            RootNode root = ref.get();
-            if (root == null) {
-                // gc'ed
-                continue;
-            }
-            visitRoot(root, addBindingsVisitor);
-        }
-    }
-
     void disposeBinding(EventBinding<?> binding) {
         if (TRACE) {
             trace("BEGIN: Dispose binding %s, %s%n", binding.getFilter(), binding.getElement());
         }
 
-        if (binding.isExecutionEvent()) {
-            visitRoots(executedRoots, new DisposeWrappersVisitor(binding));
+        this.bindings.remove(binding);
+        DisposeBindingVisitor disposeVisitor = new DisposeBindingVisitor(binding);
+        for (RootNode root : roots.keySet()) {
+            visitRoot(root, disposeVisitor);
         }
 
         if (TRACE) {
@@ -303,17 +195,8 @@ final class InstrumentationHandler {
         Set<Class<?>> providedTags = getProvidedTags(rootNode);
         EventChainNode root = null;
         EventChainNode parent = null;
-
-        AtomicReferenceArray<EventBinding<?>> bindingsArray = executionBindings.getArray();
-        for (int i = 0; i < bindingsArray.length(); i++) {
-            EventBinding<?> binding = bindingsArray.get(i);
-            if (binding == null) {
-                // end of list
-                break;
-            } else if (binding.isDisposed()) {
-                // non alive element found
-                continue;
-            }
+        for (int i = 0; i < bindings.size(); i++) {
+            EventBinding<?> binding = bindings.get(i);
             if (binding.isInstrumentedFull(providedTags, rootNode, instrumentedNode, sourceSection)) {
                 if (TRACE) {
                     trace("  Found binding %s, %s%n", binding.getFilter(), binding.getElement());
@@ -339,93 +222,43 @@ final class InstrumentationHandler {
         return root;
     }
 
-    private static void notifySourceBindingsLoaded(EventBindingList bindings, Source source) {
-        AtomicReferenceArray<EventBinding<?>> bindingArray = bindings.getArray();
-
-        for (int i = 0; i < bindingArray.length(); i++) {
-            EventBinding<?> binding = bindingArray.get(i);
-            if (binding == null) {
-                // end of list
-                break;
-            } else if (binding.isDisposed()) {
-                continue;
-            }
-            notifySourceBindingLoaded(binding, source);
-        }
-
-    }
-
-    private static void notifySourceBindingLoaded(EventBinding<?> binding, Source source) {
-        if (!binding.isDisposed() && binding.isInstrumentedSource(source)) {
-            try {
-                ((LoadSourceEventListener) binding.getElement()).onLoad(source);
-            } catch (Throwable t) {
-                if (binding.isLanguageBinding()) {
-                    throw t;
-                } else {
-                    ProbeNode.exceptionEventForClientInstrument(binding, "onLoad", t);
+    private void initializeInstrumentation() {
+        synchronized (this) {
+            if (!instrumentationInitialized) {
+                if (TRACE) {
+                    trace("BEGIN: Initialize instrumentation%n");
                 }
+                for (AbstractInstrumenter instrumenter : instrumenterMap.values()) {
+                    instrumenter.initialize();
+                }
+                if (TRACE) {
+                    trace("END: Initialized instrumentation%n");
+                }
+                instrumentationInitialized = true;
             }
-        }
-    }
-
-    static void notifySourceSectionLoaded(EventBinding<?> binding, Node node, SourceSection section) {
-        LoadSourceSectionEventListener listener = (LoadSourceSectionEventListener) binding.getElement();
-        try {
-            listener.onLoad(section, node);
-        } catch (Throwable t) {
-            if (binding.isLanguageBinding()) {
-                throw t;
-            } else {
-                ProbeNode.exceptionEventForClientInstrument(binding, "onLoad", t);
-            }
-        }
-    }
-
-    private synchronized void initializeInstrumentation() {
-        if (!instrumentationInitialized) {
-            if (TRACE) {
-                trace("BEGIN: Initialize instrumentation%n");
-            }
-            for (AbstractInstrumenter instrumenter : instrumenterMap.values()) {
-                instrumenter.initialize();
-            }
-            if (TRACE) {
-                trace("END: Initialized instrumentation%n");
-            }
-            instrumentationInitialized = true;
         }
     }
 
     private void addInstrumenter(Object key, AbstractInstrumenter instrumenter) throws AssertionError {
         if (instrumenterMap.containsKey(key)) {
-            return;
+            throw new AssertionError("Instrument already added.");
         }
+
         if (instrumentationInitialized) {
             instrumenter.initialize();
+            List<EventBinding<?>> addedBindings = new ArrayList<>();
+            for (EventBinding<?> binding : bindings) {
+                if (binding.getInstrumenter() == instrumenter) {
+                    addedBindings.add(binding);
+                }
+            }
+
+            AddBindingsVisitor visitor = new AddBindingsVisitor(addedBindings);
+            for (RootNode root : roots.keySet()) {
+                visitRoot(root, visitor);
+            }
         }
         instrumenterMap.put(key, instrumenter);
-    }
-
-    private static EventBindingList filterBindingsForInstrumenter(EventBindingList bindings, AbstractInstrumenter instrumenter) {
-        if (bindings.isEmpty()) {
-            return EventBindingList.EMPTY;
-        }
-        EventBindingList newBindings = new EventBindingList(16);
-        AtomicReferenceArray<EventBinding<?>> bindingsArray = bindings.getArray();
-        for (int i = 0; i < bindingsArray.length(); i++) {
-            EventBinding<?> binding = bindingsArray.get(i);
-            if (binding == null) {
-                break;
-            }
-            if (binding.isDisposed()) {
-                continue;
-            }
-            if (binding.getInstrumenter() == instrumenter) {
-                newBindings.add(binding);
-            }
-        }
-        return newBindings;
     }
 
     @SuppressWarnings("unchecked")
@@ -491,19 +324,11 @@ final class InstrumentationHandler {
     }
 
     private <T extends ExecutionEventNodeFactory> EventBinding<T> attachFactory(AbstractInstrumenter instrumenter, SourceSectionFilter filter, T factory) {
-        return addExecutionBinding(new EventBinding<>(instrumenter, filter, factory, true));
+        return addBinding(new EventBinding<>(instrumenter, filter, factory));
     }
 
     private <T extends ExecutionEventListener> EventBinding<T> attachListener(AbstractInstrumenter instrumenter, SourceSectionFilter filter, T listener) {
-        return addExecutionBinding(new EventBinding<>(instrumenter, filter, listener, true));
-    }
-
-    private <T> EventBinding<T> attachSourceListener(AbstractInstrumenter abstractInstrumenter, SourceSectionFilter filter, T listener, boolean notifyLoaded) {
-        return addSourceBinding(new EventBinding<>(abstractInstrumenter, filter, listener, false), notifyLoaded);
-    }
-
-    private <T> EventBinding<T> attachSourceSectionListener(AbstractInstrumenter abstractInstrumenter, SourceSectionFilter filter, T listener, boolean notifyLoaded) {
-        return addSourceSectionBinding(new EventBinding<>(abstractInstrumenter, filter, listener, false), notifyLoaded);
+        return addBinding(new EventBinding<>(instrumenter, filter, listener));
     }
 
     Set<Class<?>> getProvidedTags(Class<?> language) {
@@ -537,23 +362,32 @@ final class InstrumentationHandler {
 
     private void visitRoot(final RootNode root, final AbstractNodeVisitor visitor) {
         if (TRACE) {
-            trace("BEGIN: Visit root %s for %s%n", root.toString(), visitor);
+            trace("BEGIN: Visit root %s wrappers for %s%n", visitor, root.toString());
         }
 
         visitor.root = root;
         visitor.providedTags = getProvidedTags(root);
-
-        if (visitor.shouldVisit()) {
-            if (TRACE) {
-                trace("BEGIN: Traverse root %s for %s%n", root.toString(), visitor);
+        try {
+            if (visitor.shouldVisit()) {
+                if (TRACE) {
+                    trace("BEGIN: Traverse root %s wrappers for %s%n", visitor, root.toString());
+                }
+                // found a filter that matched
+                root.atomic(new Runnable() {
+                    public void run() {
+                        root.accept(visitor);
+                    }
+                });
+                if (TRACE) {
+                    trace("END: Traverse root %s wrappers for %s%n", visitor, root.toString());
+                }
             }
-            root.accept(visitor);
             if (TRACE) {
-                trace("END: Traverse root %s for %s%n", root.toString(), visitor);
+                trace("END: Visited root %s wrappers for %s%n", visitor, root.toString());
             }
-        }
-        if (TRACE) {
-            trace("END: Visited root %s for %s%n", root.toString(), visitor);
+        } finally {
+            visitor.root = null;
+            visitor.providedTags = null;
         }
     }
 
@@ -660,35 +494,21 @@ final class InstrumentationHandler {
 
     private abstract class AbstractBindingsVisitor extends AbstractNodeVisitor {
 
-        private final EventBindingList bindings;
-        private final boolean visitForEachBinding;
+        private final List<EventBinding<?>> bindings;
 
-        AbstractBindingsVisitor(EventBindingList bindings, boolean visitForEachBinding) {
+        AbstractBindingsVisitor(List<EventBinding<?>> bindings) {
             this.bindings = bindings;
-            this.visitForEachBinding = visitForEachBinding;
         }
 
         @Override
         boolean shouldVisit() {
-            if (bindings.isEmpty()) {
-                return false;
-            }
             final RootNode localRoot = root;
             if (localRoot == null) {
                 return false;
             }
             SourceSection sourceSection = localRoot.getSourceSection();
-
-            // no locking required for the atomic reference arrays
-            AtomicReferenceArray<EventBinding<?>> bindingsArray = bindings.getArray();
-            for (int i = 0; i < bindingsArray.length(); i++) {
-                EventBinding<?> binding = bindingsArray.get(i);
-                if (binding == null) {
-                    break;
-                } else if (binding.isDisposed()) {
-                    continue;
-                }
-
+            for (int i = 0; i < bindings.size(); i++) {
+                EventBinding<?> binding = bindings.get(i);
                 if (binding.isInstrumentedRoot(providedTags, localRoot, sourceSection)) {
                     return true;
                 }
@@ -699,42 +519,33 @@ final class InstrumentationHandler {
         public final boolean visit(Node node) {
             SourceSection sourceSection = node.getSourceSection();
             if (isInstrumentableNode(node, sourceSection)) {
-                // no locking required for these atomic reference arrays
-                AtomicReferenceArray<EventBinding<?>> bindingsArray = bindings.getArray();
-                for (int i = 0; i < bindingsArray.length(); i++) {
-                    EventBinding<?> binding = bindingsArray.get(i);
-                    if (binding == null) {
-                        break;
-                    } else if (binding.isDisposed()) {
-                        continue;
-                    }
+                List<EventBinding<?>> b = bindings;
+                for (int i = 0; i < b.size(); i++) {
+                    EventBinding<?> binding = b.get(i);
                     if (binding.isInstrumentedFull(providedTags, root, node, sourceSection)) {
                         if (TRACE) {
                             traceFilterCheck("hit", providedTags, binding, node, sourceSection);
                         }
-                        visitInstrumented(binding, node, sourceSection);
-                        if (!visitForEachBinding) {
-                            break;
-                        }
+                        visitInstrumented(node, sourceSection);
+                        break;
                     } else {
                         if (TRACE) {
                             traceFilterCheck("miss", providedTags, binding, node, sourceSection);
                         }
                     }
-
                 }
             }
             return true;
         }
 
-        protected abstract void visitInstrumented(EventBinding<?> binding, Node node, SourceSection section);
+        protected abstract void visitInstrumented(Node node, SourceSection section);
 
     }
 
     /* Insert wrappers for a single bindings. */
-    private final class InsertWrappersWithBindingVisitor extends AbstractBindingVisitor {
+    private final class AddBindingVisitor extends AbstractBindingVisitor {
 
-        InsertWrappersWithBindingVisitor(EventBinding<?> filter) {
+        AddBindingVisitor(EventBinding<?> filter) {
             super(filter);
         }
 
@@ -745,9 +556,9 @@ final class InstrumentationHandler {
 
     }
 
-    private final class DisposeWrappersVisitor extends AbstractBindingVisitor {
+    private final class DisposeBindingVisitor extends AbstractBindingVisitor {
 
-        DisposeWrappersVisitor(EventBinding<?> binding) {
+        DisposeBindingVisitor(EventBinding<?> binding) {
             super(binding);
         }
 
@@ -757,54 +568,29 @@ final class InstrumentationHandler {
         }
     }
 
-    private final class InsertWrappersVisitor extends AbstractBindingsVisitor {
+    private final class AddBindingsVisitor extends AbstractBindingsVisitor {
 
-        InsertWrappersVisitor(EventBindingList bindings) {
-            super(bindings, false);
+        AddBindingsVisitor(List<EventBinding<?>> bindings) {
+            super(bindings);
         }
 
         @Override
-        protected void visitInstrumented(EventBinding<?> binding, Node node, SourceSection section) {
+        protected void visitInstrumented(Node node, SourceSection section) {
             insertWrapper(node, section);
         }
     }
 
-    private final class DisposeWrappersWithBindingVisitor extends AbstractBindingsVisitor {
+    private final class DisposeBindingsVisitor extends AbstractBindingsVisitor {
 
-        DisposeWrappersWithBindingVisitor(EventBindingList bindings) {
-            super(bindings, false);
-        }
-
-        @Override
-        protected void visitInstrumented(EventBinding<?> binding, Node node, SourceSection section) {
-            invalidateWrapper(node);
-        }
-
-    }
-
-    private final class NotifyLoadedWithBindingVisitor extends AbstractBindingVisitor {
-
-        NotifyLoadedWithBindingVisitor(EventBinding<?> binding) {
-            super(binding);
+        DisposeBindingsVisitor(List<EventBinding<?>> bindings) {
+            super(bindings);
         }
 
         @Override
         protected void visitInstrumented(Node node, SourceSection section) {
-            notifySourceSectionLoaded(binding, node, section);
+            invalidateWrapper(node);
         }
 
-    }
-
-    private final class NotifyLoadedListenerVisitor extends AbstractBindingsVisitor {
-
-        NotifyLoadedListenerVisitor(EventBindingList bindings) {
-            super(bindings, true);
-        }
-
-        @Override
-        protected void visitInstrumented(EventBinding<?> binding, Node node, SourceSection section) {
-            notifySourceSectionLoaded(binding, node, section);
-        }
     }
 
     /**
@@ -1035,149 +821,7 @@ final class InstrumentationHandler {
             return InstrumentationHandler.this.attachListener(this, filter, listener);
         }
 
-        @Override
-        public <T extends LoadSourceEventListener> EventBinding<T> attachLoadSourceListener(SourceSectionFilter filter, T listener, boolean notifyLoaded) {
-            verifySourceOnly(filter);
-            verifyFilter(filter);
-            return InstrumentationHandler.this.attachSourceListener(this, filter, listener, notifyLoaded);
-        }
-
-        @Override
-        public <T extends LoadSourceSectionEventListener> EventBinding<T> attachLoadSourceSectionListener(SourceSectionFilter filter, T listener, boolean notifyLoaded) {
-            verifyFilter(filter);
-            return InstrumentationHandler.this.attachSourceSectionListener(this, filter, listener, notifyLoaded);
-        }
-
-        private void verifySourceOnly(SourceSectionFilter filter) {
-            if (!filter.isSourceOnly()) {
-                throw new IllegalArgumentException(String.format("The attached filter %s uses filters that require source sections to verifiy. " +
-                                "Source listeners can only use filter critera based on Source objects like mimeTypeIs or sourceIs.", filter));
-            }
-        }
-
         abstract void verifyFilter(SourceSectionFilter filter);
-
-    }
-
-    /**
-     * A list data structure that is optimized for fast non-blocking traversals. There is no
-     * explicit removal. Removals are based on a side effect of the element. Adds do block,
-     * automatically compact and perform cleanups whenever they were scheduled.
-     */
-    private abstract static class AbstractAsncList<T> {
-        /*
-         * We use an atomic reference list as we don't want to see wholes in the array when
-         * appending to it. This allows us to use null as a safe terminator for the array.
-         */
-        private volatile AtomicReferenceArray<T> values;
-
-        /*
-         * Size can be non volatile as its not exposed or used for traversal.
-         */
-        private int size;
-
-        AbstractAsncList(int initialCapacity) {
-            if (initialCapacity <= 0) {
-                throw new IllegalArgumentException("Invalid initial capacity " + initialCapacity);
-            }
-            this.values = new AtomicReferenceArray<>(initialCapacity);
-        }
-
-        public final synchronized void add(T reference) {
-            if (reference == null) {
-                // fail early
-                throw new NullPointerException();
-            }
-            if (size >= values.length()) {
-                compact();
-            }
-            values.set(size++, reference);
-        }
-
-        public final boolean isEmpty() {
-            return values.get(0) == null;
-        }
-
-        protected abstract boolean isAlive(T element);
-
-        private void compact() {
-            AtomicReferenceArray<T> localValues = values;
-            int liveElements = 0;
-            /*
-             * We count the still alive elements.
-             */
-            for (int i = 0; i < localValues.length(); i++) {
-                T ref = localValues.get(i);
-                if (ref == null) {
-                    break;
-                }
-                if (isAlive(ref)) {
-                    liveElements++;
-                }
-            }
-
-            /*
-             * We ensure that the capacity after compaction is always twice as big as the number of
-             * live elements. This might either to a growing or shrinking array.
-             */
-            AtomicReferenceArray<T> newValues = new AtomicReferenceArray<>(Math.max(liveElements * 2, 8));
-            int index = 0;
-            for (int i = 0; i < localValues.length(); i++) {
-                T ref = localValues.get(i);
-                if (ref == null) {
-                    break;
-                }
-                if (isAlive(ref)) {
-                    newValues.set(index++, ref);
-                }
-            }
-
-            this.size = index;
-            this.values = newValues;
-
-        }
-
-        /**
-         * Returns an array which can be traversed without a lock. A null element in the list
-         * indicates the end of the list. Non alive elements might be returned by this list as well
-         * and need to be checked during traversal.
-         */
-        public final AtomicReferenceArray<T> getArray() {
-            return values;
-        }
-
-    }
-
-    /**
-     * A async list implementation that removes elements whenever a binding was disposed.
-     */
-    private static final class EventBindingList extends AbstractAsncList<EventBinding<?>> {
-
-        public static final EventBindingList EMPTY = new EventBindingList(1);
-
-        EventBindingList(int initialCapacity) {
-            super(initialCapacity);
-        }
-
-        @Override
-        protected boolean isAlive(EventBinding<?> element) {
-            return !element.isDisposed();
-        }
-    }
-
-    /**
-     * An async list using weak references.
-     */
-    private static final class WeakAsyncList<T> extends AbstractAsncList<WeakReference<T>> {
-
-        WeakAsyncList(int initialCapacity) {
-            super(initialCapacity);
-        }
-
-        @Override
-        protected boolean isAlive(WeakReference<T> element) {
-            return element.get() != null;
-        }
 
     }
 
@@ -1251,18 +895,7 @@ final class InstrumentationHandler {
                 // enclosing
                 // engine.
                 if (instrumentationHandler != null) {
-                    ((InstrumentationHandler) instrumentationHandler).onFirstExecution(rootNode);
-                }
-            }
-
-            @Override
-            public void onLoad(RootNode rootNode) {
-                Object instrumentationHandler = engineAccess().getInstrumentationHandler(null);
-                // we want to still support cases where call targets are executed without an
-                // enclosing
-                // engine.
-                if (instrumentationHandler != null) {
-                    ((InstrumentationHandler) instrumentationHandler).onLoad(rootNode);
+                    ((InstrumentationHandler) instrumentationHandler).installRootNode(rootNode);
                 }
             }
         }
