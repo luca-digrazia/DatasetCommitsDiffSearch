@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.dsl.processor.parser;
 
-import java.lang.annotation.*;
-
 import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 
@@ -32,29 +30,29 @@ import com.oracle.truffle.dsl.processor.*;
 import com.oracle.truffle.dsl.processor.java.*;
 import com.oracle.truffle.dsl.processor.model.*;
 
-class TypeCastParser extends TypeSystemMethodParser<TypeCastData> {
+abstract class TypeSystemMethodParser<E extends TemplateMethod> extends TemplateMethodParser<TypeSystemData, E> {
 
-    public TypeCastParser(ProcessorContext context, TypeSystemData typeSystem) {
+    public TypeSystemMethodParser(ProcessorContext context, TypeSystemData typeSystem) {
         super(context, typeSystem);
     }
 
     @Override
-    public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        TypeMirror targetTypeMirror = ElementUtils.getAnnotationValue(TypeMirror.class, mirror, "value");
-        MethodSpec spec = new MethodSpec(new ParameterSpec("returnType", targetTypeMirror));
-        spec.addRequired(new ParameterSpec("value", getTypeSystem().getGenericType()));
-        return spec;
+    public final boolean isParsable(ExecutableElement method) {
+        return ElementUtils.findAnnotationMirror(getContext().getEnvironment(), method, getAnnotationType()) != null;
     }
 
-    @Override
-    public TypeCastData create(TemplateMethod method, boolean invalid) {
-        TypeData targetType = resolveCastOrCheck(method);
-        TypeData sourceType = getTypeSystem().getGenericTypeData();
-        return new TypeCastData(method, sourceType, targetType);
+    protected final TypeData resolveCastOrCheck(TemplateMethod method) {
+        Class<?> annotationType = getAnnotationType();
+        TypeMirror targetTypeMirror = ElementUtils.getAnnotationValue(TypeMirror.class, method.getMessageAnnotation(), "value");
+        TypeData targetType = getTypeSystem().findTypeData(targetTypeMirror);
+        if (targetType == null) {
+            method.addError("The type '%s' is not declared in the @%s.", ElementUtils.getSimpleName(targetTypeMirror), TypeSystem.class.getSimpleName());
+            return null;
+        }
+        if (!method.getMethod().getModifiers().contains(Modifier.PUBLIC) || !method.getMethod().getModifiers().contains(Modifier.STATIC)) {
+            method.addError("@%s annotated method %s must be public and static.", annotationType.getSimpleName(), method.getMethodName());
+        }
+        return targetType;
     }
 
-    @Override
-    public Class<? extends Annotation> getAnnotationType() {
-        return TypeCast.class;
-    }
 }

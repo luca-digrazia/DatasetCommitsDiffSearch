@@ -25,6 +25,7 @@ package com.oracle.truffle.sl.nodes;
 import java.math.*;
 
 import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.dsl.internal.*;
 import com.oracle.truffle.sl.*;
 import com.oracle.truffle.sl.runtime.*;
 
@@ -35,6 +36,7 @@ import com.oracle.truffle.sl.runtime.*;
  * generated ones would not be sufficient.
  */
 @TypeSystem({long.class, BigInteger.class, boolean.class, String.class, SLFunction.class, SLNull.class})
+@DSLOptions(useNewLayout = true)
 public abstract class SLTypes {
 
     /**
@@ -43,8 +45,8 @@ public abstract class SLTypes {
      * {@code instanceof} check, because we know that there is only a {@link SLNull#SINGLETON
      * singleton} instance.
      */
-    @TypeCheck
-    public boolean isSLNull(Object value) {
+    @TypeCheck(SLNull.class)
+    public static boolean isSLNull(Object value) {
         return value == SLNull.SINGLETON;
     }
 
@@ -53,21 +55,21 @@ public abstract class SLTypes {
      * that the Truffle DSL would generate. For {@link SLNull}, we do not need an actual cast,
      * because we know that there is only a {@link SLNull#SINGLETON singleton} instance.
      */
-    @TypeCast
-    public SLNull asSLNull(Object value) {
+    @TypeCast(SLNull.class)
+    public static SLNull asSLNull(Object value) {
         assert isSLNull(value);
         return SLNull.SINGLETON;
     }
 
     /**
-     * Informs the Truffle DSL that a primitive {@code long} value can used in all specializations
-     * where a {@link BigInteger} is expected. This models the semantic of SL: It only has an
-     * arbitrary precision Number type (implemented as {@link BigInteger}, and {@code long} is only
-     * used as a performance optimization to avoid the costly {@link BigInteger} arithmetic for
-     * values that fit into a 64-bit primitive value.
+     * Informs the Truffle DSL that a primitive {@code long} value can be used in all
+     * specializations where a {@link BigInteger} is expected. This models the semantic of SL: It
+     * only has an arbitrary precision Number type (implemented as {@link BigInteger}, and
+     * {@code long} is only used as a performance optimization to avoid the costly
+     * {@link BigInteger} arithmetic for values that fit into a 64-bit primitive value.
      */
     @ImplicitCast
-    public BigInteger castBigInteger(long value) {
+    public static BigInteger castBigInteger(long value) {
         return BigInteger.valueOf(value);
     }
 }
