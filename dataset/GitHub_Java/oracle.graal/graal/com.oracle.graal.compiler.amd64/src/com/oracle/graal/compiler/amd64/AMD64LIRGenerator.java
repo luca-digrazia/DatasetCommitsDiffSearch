@@ -38,7 +38,6 @@ import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.spi.*;
-import com.oracle.graal.compiler.common.util.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.amd64.*;
@@ -999,7 +998,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitBitCount(Value value) {
+    public Value emitBitCount(Value value) {
         Variable result = newVariable(LIRKind.derive(value).changeType(Kind.Int));
         if (value.getKind().getStackKind() == Kind.Int) {
             append(new AMD64BitManipulationOp(IPOPCNT, result, asAllocatable(value)));
@@ -1010,14 +1009,14 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitBitScanForward(Value value) {
+    public Value emitBitScanForward(Value value) {
         Variable result = newVariable(LIRKind.derive(value).changeType(Kind.Int));
         append(new AMD64BitManipulationOp(BSF, result, asAllocatable(value)));
         return result;
     }
 
     @Override
-    public Variable emitBitScanReverse(Value value) {
+    public Value emitBitScanReverse(Value value) {
         Variable result = newVariable(LIRKind.derive(value).changeType(Kind.Int));
         if (value.getKind().getStackKind() == Kind.Int) {
             append(new AMD64BitManipulationOp(IBSR, result, asAllocatable(value)));
@@ -1099,14 +1098,14 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitByteSwap(Value input) {
+    public Value emitByteSwap(Value input) {
         Variable result = newVariable(LIRKind.derive(input));
         append(new AMD64ByteSwapOp(result, input));
         return result;
     }
 
     @Override
-    public Variable emitArrayEquals(Kind kind, Value array1, Value array2, Value length) {
+    public Value emitArrayEquals(Kind kind, Value array1, Value array2, Value length) {
         Variable result = newVariable(LIRKind.value(Kind.Int));
         append(new AMD64ArrayEqualsOp(this, kind, result, array1, array2, asAllocatable(length)));
         return result;

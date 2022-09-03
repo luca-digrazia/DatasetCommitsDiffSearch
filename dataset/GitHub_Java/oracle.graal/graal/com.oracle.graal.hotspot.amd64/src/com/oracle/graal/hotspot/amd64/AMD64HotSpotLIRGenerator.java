@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,9 +24,6 @@ package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.*;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp.*;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
 
 import java.util.*;
@@ -34,16 +31,13 @@ import java.util.*;
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize;
 import com.oracle.graal.compiler.amd64.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.spi.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
 import com.oracle.graal.hotspot.amd64.AMD64HotSpotMove.HotSpotStoreConstantOp;
-import com.oracle.graal.hotspot.debug.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
@@ -56,8 +50,6 @@ import com.oracle.graal.lir.amd64.AMD64Move.LeaDataOp;
 import com.oracle.graal.lir.amd64.AMD64Move.LoadOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreOp;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
 
 /**
@@ -122,53 +114,17 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     SaveRbp saveRbp;
 
-    private static final class RescueSlotDummyOp extends LIRInstruction {
-        public static final LIRInstructionClass<RescueSlotDummyOp> TYPE = LIRInstructionClass.create(RescueSlotDummyOp.class);
-
-        @Alive({OperandFlag.STACK, OperandFlag.UNINITIALIZED}) private StackSlotValue slot;
-
-        public RescueSlotDummyOp(FrameMapBuilder frameMapBuilder, LIRKind kind) {
-            super(TYPE);
-            slot = frameMapBuilder.allocateSpillSlot(kind);
-        }
-
-        public StackSlotValue getSlot() {
-            return slot;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb) {
-        }
-    }
-
-    private RescueSlotDummyOp rescueSlotOp;
-
-    private StackSlotValue getOrInitRescueSlot() {
-        if (rescueSlotOp == null) {
-            // create dummy instruction to keep the rescue slot alive
-            rescueSlotOp = new RescueSlotDummyOp(getResult().getFrameMapBuilder(), getLIRKindTool().getWordKind());
-            // insert dummy instruction into the start block
-            LIR lir = getResult().getLIR();
-            List<LIRInstruction> instructions = lir.getLIRforBlock(lir.getControlFlowGraph().getStartBlock());
-            // Note: we do not insert at position 1 to avoid interference with the save rpb op
-            instructions.add(instructions.size() - 1, rescueSlotOp);
-            Debug.dump(lir, "created rescue dummy op");
-        }
-        return rescueSlotOp.getSlot();
-    }
-
     /**
      * List of epilogue operations that need to restore RBP.
      */
     List<AMD64HotSpotEpilogueOp> epilogueOps = new ArrayList<>(2);
 
     @Override
-    public <I extends LIRInstruction> I append(I op) {
-        I ret = super.append(op);
+    public void append(LIRInstruction op) {
+        super.append(op);
         if (op instanceof AMD64HotSpotEpilogueOp) {
             epilogueOps.add((AMD64HotSpotEpilogueOp) op);
         }
-        return ret;
     }
 
     @Override
@@ -479,10 +435,6 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         for (AMD64HotSpotEpilogueOp op : epilogueOps) {
             op.savedRbp = savedRbp;
         }
-        if (BenchmarkCounters.enabled) {
-            // ensure that the rescue slot is available
-            getOrInitRescueSlot();
-        }
     }
 
     private static LIRKind toStackKind(LIRKind kind) {
@@ -575,7 +527,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         }
     }
 
-    public Variable emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
+    public Value emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
         LIRKind kind = newValue.getLIRKind();
         assert kind.equals(expectedValue.getLIRKind());
         Kind memKind = (Kind) kind.getPlatformKind();
@@ -627,35 +579,19 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     protected void emitCompareOp(PlatformKind cmpKind, Variable left, Value right) {
-        if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(right)) {
-            append(new AMD64CompareOp(TEST, DWORD, left, left));
-        } else if (right instanceof HotSpotConstant) {
-            HotSpotConstant c = (HotSpotConstant) right;
-
-            boolean isImmutable = GraalOptions.ImmutableCode.getValue();
-            boolean generatePIC = GraalOptions.GeneratePIC.getValue();
-            if (c.isCompressed() && !(isImmutable && generatePIC)) {
-                append(new AMD64HotSpotCompareConstOp(CMP.getMIOpcode(DWORD, false), left, c));
-            } else {
-                OperandSize size = c.isCompressed() ? DWORD : QWORD;
-                append(new AMD64HotSpotComparePatchOp(CMP.getRMOpcode(size), size, left, c));
-            }
+        if (right instanceof HotSpotConstant) {
+            append(new AMD64HotSpotCompare.HotSpotCompareConstantOp(left, (JavaConstant) right));
         } else {
             super.emitCompareOp(cmpKind, left, right);
         }
     }
 
     @Override
-    protected boolean emitCompareMemoryConOp(OperandSize size, JavaConstant a, AMD64AddressValue b, LIRFrameState state) {
-        if (a.isNull()) {
-            append(new AMD64CompareMemoryConstOp(CMP.getMIOpcode(size, true), size, b, PrimitiveConstant.INT_0, state));
-            return true;
-        } else if (a instanceof HotSpotConstant && size == DWORD) {
-            assert ((HotSpotConstant) a).isCompressed();
-            append(new AMD64HotSpotCompareMemoryConstOp(CMP.getMIOpcode(size, false), b, (HotSpotConstant) a, state));
-            return true;
+    protected void emitCompareMemoryConOp(Kind kind, AMD64AddressValue address, JavaConstant value, LIRFrameState state) {
+        if (value instanceof HotSpotConstant) {
+            append(new AMD64HotSpotCompare.HotSpotCompareMemoryConstantOp(kind, address, value, state));
         } else {
-            return super.emitCompareMemoryConOp(size, a, b, state);
+            super.emitCompareMemoryConOp(kind, address, value, state);
         }
     }
 
@@ -668,21 +604,5 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         } else {
             return super.canInlineConstant(c);
         }
-    }
-
-    @Override
-    public LIRInstruction createBenchmarkCounter(String name, String group, Value increment) {
-        if (BenchmarkCounters.enabled) {
-            return new AMD64HotSpotCounterOp(name, group, increment, getProviders().getRegisters(), config, getOrInitRescueSlot());
-        }
-        return null;
-    }
-
-    @Override
-    public LIRInstruction createMultiBenchmarkCounter(String[] names, String[] groups, Value[] increments) {
-        if (BenchmarkCounters.enabled) {
-            return new AMD64HotSpotCounterOp(names, groups, increments, getProviders().getRegisters(), config, getOrInitRescueSlot());
-        }
-        return null;
     }
 }

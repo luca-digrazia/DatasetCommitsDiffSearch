@@ -189,7 +189,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitAddress(StackSlotValue address) {
+    public Value emitAddress(StackSlotValue address) {
         Variable result = newVariable(LIRKind.value(target().wordKind));
         append(new StackLoadAddressOp(result, address));
         return result;
@@ -278,9 +278,11 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             JavaConstant c = asConstant(value);
             if (c.isNull() || SPARCAssembler.isSimm11(c)) {
                 return value;
+            } else {
+                return load(c);
             }
         }
-        return load(value);
+        return emitMove(value);
     }
 
     @Override
@@ -420,7 +422,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitBitCount(Value operand) {
+    public Value emitBitCount(Value operand) {
         Variable result = newVariable(LIRKind.derive(operand).changeType(Kind.Int));
         if (operand.getKind().getStackKind() == Kind.Int) {
             append(new SPARCBitManipulationOp(IPOPCNT, result, asAllocatable(operand), this));
@@ -431,14 +433,14 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitBitScanForward(Value operand) {
+    public Value emitBitScanForward(Value operand) {
         Variable result = newVariable(LIRKind.derive(operand).changeType(Kind.Int));
         append(new SPARCBitManipulationOp(BSF, result, asAllocatable(operand), this));
         return result;
     }
 
     @Override
-    public Variable emitBitScanReverse(Value operand) {
+    public Value emitBitScanReverse(Value operand) {
         Variable result = newVariable(LIRKind.derive(operand).changeType(Kind.Int));
         if (operand.getKind().getStackKind() == Kind.Int) {
             append(new SPARCBitManipulationOp(IBSR, result, asAllocatable(operand), this));
@@ -491,14 +493,14 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitByteSwap(Value input) {
+    public Value emitByteSwap(Value input) {
         Variable result = newVariable(LIRKind.derive(input));
         append(new SPARCByteSwapOp(this, result, input));
         return result;
     }
 
     @Override
-    public Variable emitArrayEquals(Kind kind, Value array1, Value array2, Value length) {
+    public Value emitArrayEquals(Kind kind, Value array1, Value array2, Value length) {
         Variable result = newVariable(LIRKind.value(Kind.Int));
         append(new SPARCArrayEqualsOp(this, kind, result, load(array1), load(array2), asAllocatable(length)));
         return result;

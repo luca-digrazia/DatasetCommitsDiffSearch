@@ -172,7 +172,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         LIRKind wordKind = LIRKind.value(getProviders().getCodeCache().getTarget().wordKind);
         RegisterValue thread = getProviders().getRegisters().getThreadRegister().asValue(wordKind);
         SPARCAddressValue pendingDeoptAddress = new SPARCAddressValue(wordKind, thread, offset);
-        append(new StoreOp(v.getKind(), pendingDeoptAddress, load(v), null));
+        append(new StoreOp(v.getKind(), pendingDeoptAddress, emitMove(v), null));
     }
 
     @Override
@@ -220,7 +220,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         append(new StoreOp((Kind) kind.getPlatformKind(), storeAddress, input, state));
     }
 
-    public Variable emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
+    public Value emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
         Variable newValueTemp = newVariable(newValue.getLIRKind());
         emitMove(newValueTemp, newValue);
 

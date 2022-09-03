@@ -23,17 +23,17 @@
 package com.oracle.graal.compiler.test.ea;
 
 import java.lang.ref.*;
+import java.util.function.*;
 
 import org.junit.*;
 
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.graph.*;
 
 /**
  * The PartialEscapeAnalysisPhase is expected to remove all allocations and return the correct
@@ -174,59 +174,23 @@ public class PartialEscapeAnalysisTest extends EATestBase {
         assertDeepEquals(1, graph.getNodes().filter(NewInstanceNode.class).count());
     }
 
-    public static int testCanonicalizeSnippet(int v) {
-        CacheKey key = new CacheKey(v, null);
-
-        CacheKey key2;
-        if (key.idx == v) {
-            key2 = new CacheKey(v, null);
-        } else {
-            key2 = null;
-        }
-        return key2.idx;
-    }
-
-    @Test
-    public void testCanonicalize() {
-        prepareGraph("testCanonicalizeSnippet", false);
-        assertTrue(graph.getNodes().filter(ReturnNode.class).count() == 1);
-        assertTrue(graph.getNodes().filter(ReturnNode.class).first().result() == graph.getParameter(0));
-    }
-
-    public static int testBoxLoopSnippet(int n) {
-        Integer sum = 0;
-        for (Integer i = 0; i < n; i++) {
-            if (sum == null) {
-                sum = null;
-            } else {
-                sum += i;
-            }
-        }
-        return sum;
-    }
-
-    @Test
-    public void testBoxLoop() {
-        testPartialEscapeAnalysis("testBoxLoopSnippet", 0, 0, BoxNode.class, UnboxNode.class);
-    }
-
     @SafeVarargs
-    protected final void testPartialEscapeAnalysis(String snippet, double expectedProbability, int expectedCount, Class<? extends Node>... invalidNodeClasses) {
+    protected final void testPartialEscapeAnalysis(final String snippet, double expectedProbability, int expectedCount, Class<? extends Node>... invalidNodeClasses) {
         prepareGraph(snippet, false);
-        for (AbstractMergeNode merge : graph.getNodes(AbstractMergeNode.TYPE)) {
+        for (AbstractMergeNode merge : graph.getNodes(AbstractMergeNode.class)) {
             merge.setStateAfter(null);
         }
         new DeadCodeEliminationPhase().apply(graph);
-        new CanonicalizerPhase().apply(graph, context);
+        new CanonicalizerPhase(true).apply(graph, context);
         try {
             Assert.assertTrue("partial escape analysis should have removed all NewInstanceNode allocations", graph.getNodes().filter(NewInstanceNode.class).isEmpty());
             Assert.assertTrue("partial escape analysis should have removed all NewArrayNode allocations", graph.getNodes().filter(NewArrayNode.class).isEmpty());
 
-            ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, false, false);
+            ToDoubleFunction<FixedNode> nodeProbabilities = new FixedNodeProbabilityCache();
             double probabilitySum = 0;
             int materializeCount = 0;
             for (CommitAllocationNode materialize : graph.getNodes().filter(CommitAllocationNode.class)) {
-                probabilitySum += cfg.blockFor(materialize).probability() * materialize.getVirtualObjects().size();
+                probabilitySum += nodeProbabilities.applyAsDouble(materialize) * materialize.getVirtualObjects().size();
                 materializeCount += materialize.getVirtualObjects().size();
             }
             Assert.assertEquals("unexpected number of MaterializeObjectNodes", expectedCount, materializeCount);
@@ -241,4 +205,5 @@ public class PartialEscapeAnalysisTest extends EATestBase {
             throw e;
         }
     }
+
 }
