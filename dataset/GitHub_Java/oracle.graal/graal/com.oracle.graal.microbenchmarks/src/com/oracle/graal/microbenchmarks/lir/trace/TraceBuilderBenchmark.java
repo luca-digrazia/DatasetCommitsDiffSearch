@@ -31,7 +31,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import com.oracle.graal.compiler.common.alloc.BiDirectionalTraceBuilder;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.alloc.UniDirectionalTraceBuilder;
-import com.oracle.graal.lir.alloc.trace.TraceBuilderPhase;
 import com.oracle.graal.microbenchmarks.graal.GraalBenchmark;
 import com.oracle.graal.nodes.cfg.Block;
 
@@ -47,12 +46,12 @@ public class TraceBuilderBenchmark extends GraalBenchmark {
 
     @Benchmark
     public TraceBuilderResult<Block> uniDirectionalTraceBuilder(State s) {
-        return UniDirectionalTraceBuilder.computeTraces(s.cfg.getStartBlock(), Arrays.asList(s.cfg.getBlocks()), TraceBuilderPhase.getTrivialTracePredicate(s.getLIR()));
+        return UniDirectionalTraceBuilder.computeTraces(s.cfg.getStartBlock(), Arrays.asList(s.cfg.getBlocks()));
     }
 
     @Benchmark
     public TraceBuilderResult<Block> biDirectionalTraceBuilder(State s) {
-        return BiDirectionalTraceBuilder.computeTraces(s.cfg.getStartBlock(), Arrays.asList(s.cfg.getBlocks()), TraceBuilderPhase.getTrivialTracePredicate(s.getLIR()));
+        return BiDirectionalTraceBuilder.computeTraces(s.cfg.getStartBlock(), Arrays.asList(s.cfg.getBlocks()));
     }
 
 }
