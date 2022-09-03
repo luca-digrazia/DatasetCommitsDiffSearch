@@ -161,14 +161,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         }
     }
 
-    protected Class<?>[] getProfiledArgumentTypes() {
-        return getCompilationProfile().getProfiledArgumentTypes();
-    }
-
-    protected Class<?> getProfiledReturnType() {
-        return getCompilationProfile().getProfiledReturnType();
-    }
-
     @Override
     public final Object call(Object... args) {
         getCompilationProfile().profileIndirectCall();
