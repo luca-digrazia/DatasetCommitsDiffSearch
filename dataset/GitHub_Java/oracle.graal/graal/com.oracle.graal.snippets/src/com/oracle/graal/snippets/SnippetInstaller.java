@@ -37,7 +37,6 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.snippets.Snippet.DefaultSnippetInliningPolicy;
 import com.oracle.graal.snippets.Snippet.SnippetInliningPolicy;
 
 /**
@@ -123,14 +122,14 @@ public class SnippetInstaller {
         }
     }
 
-    private SnippetInliningPolicy inliningPolicy(ResolvedJavaMethod method) {
+    private static SnippetInliningPolicy inliningPolicy(ResolvedJavaMethod method) {
         Class<? extends SnippetInliningPolicy> policyClass = SnippetInliningPolicy.class;
         Snippet snippet = method.getAnnotation(Snippet.class);
         if (snippet != null) {
             policyClass = snippet.inlining();
         }
         if (policyClass == SnippetInliningPolicy.class) {
-            return new DefaultSnippetInliningPolicy(pool);
+            return SnippetInliningPolicy.Default;
         }
         try {
             return policyClass.getConstructor().newInstance();
@@ -170,7 +169,7 @@ public class SnippetInstaller {
 
                 Debug.dump(graph, "%s: %s", method.getName(), GraphBuilderPhase.class.getSimpleName());
 
-                new SnippetVerificationPhase(runtime).apply(graph);
+                new SnippetVerificationPhase().apply(graph);
 
                 new SnippetIntrinsificationPhase(runtime, pool, true).apply(graph);
 
