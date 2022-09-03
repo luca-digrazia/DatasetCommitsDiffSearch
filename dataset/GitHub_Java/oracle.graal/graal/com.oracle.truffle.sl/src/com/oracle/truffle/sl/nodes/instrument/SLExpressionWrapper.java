@@ -73,6 +73,18 @@ public final class SLExpressionWrapper extends SLExpressionNode implements Wrapp
         return probe;
     }
 
+    @Override
+    @SlowPath
+    public boolean isTaggedAs(SyntaxTag tag) {
+        return probe.isTaggedAs(tag);
+    }
+
+    @Override
+    @SlowPath
+    public Iterable<SyntaxTag> getSyntaxTags() {
+        return probe.getSyntaxTags();
+    }
+
     @SlowPath
     public void tagAs(SyntaxTag tag) {
         probe.tagAs(tag);
@@ -139,4 +151,10 @@ public final class SLExpressionWrapper extends SLExpressionNode implements Wrapp
         return SLTypesGen.SLTYPES.expectSLNull(executeGeneric(frame));
     }
 
+    /**
+     * Sets the parent pointer of this wrapper's child.
+     */
+    public void insertChild() {
+        insert(this.child);
+    }
 }

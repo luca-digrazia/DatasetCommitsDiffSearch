@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,11 +24,13 @@ package com.oracle.truffle.sl.nodes;
 
 import java.io.*;
 
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
+import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.sl.nodes.instrument.*;
+import com.oracle.truffle.sl.runtime.*;
 
 /**
  * The base class of all Truffle nodes for SL. All nodes (even expressions) can be used as
@@ -36,7 +38,7 @@ import com.oracle.truffle.sl.nodes.instrument.*;
  * local variables.
  */
 @NodeInfo(language = "Simple Language", description = "The abstract base node for all statements")
-public abstract class SLStatementNode extends Node {
+public abstract class SLStatementNode extends Node implements Instrumentable {
 
     public SLStatementNode(SourceSection src) {
         super(src);
@@ -85,13 +87,22 @@ public abstract class SLStatementNode extends Node {
     }
 
     @Override
-    public boolean isInstrumentable() {
-        return true;
-    }
+    public Probe probe(ExecutionContext context) {
+        Node parent = getParent();
 
-    @Override
-    public WrapperNode createWrapperNode() {
-        return new SLStatementWrapperNode(this);
-    }
+        if (parent == null)
+            throw new IllegalStateException("Cannot probe a node without a parent");
 
+        if (parent instanceof SLStatementWrapper) {
+            return ((SLStatementWrapper) parent).getProbe();
+        }
+
+        // Create a new wrapper/probe with this node as its child.
+        SLStatementWrapper wrapper = new SLStatementWrapper((SLContext) context, this);
+
+        // Replace this node in the AST with the wrapper
+        this.replace(wrapper);
+
+        return wrapper.getProbe();
+    }
 }
