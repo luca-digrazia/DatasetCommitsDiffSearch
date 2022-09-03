@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +22,14 @@
  */
 package com.oracle.truffle.api.dsl.test.processor;
 
-import java.io.*;
+import java.io.IOException;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.debug.*;
-import com.oracle.truffle.api.dsl.test.*;
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.dsl.test.ExpectError;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.source.Source;
 
 public class LanguageRegistrationTest {
 
@@ -47,25 +48,25 @@ public class LanguageRegistrationTest {
     public static final class MyLangNoSubclass {
     }
 
-    @ExpectError("Language must have a public constructor accepting TruffleLanguage.Env as parameter")
+    @ExpectError("Language class must have public static final singleton field called INSTANCE")
     @TruffleLanguage.Registration(name = "myLangNoCnstr", version = "0", mimeType = "text/x-my")
-    public static final class MyLangWrongConstr extends TruffleLanguage {
+    public static final class MyLangWrongConstr extends TruffleLanguage<Object> {
         private MyLangWrongConstr() {
-            super(null);
+            super();
         }
 
         @Override
-        protected Object eval(Source code) throws IOException {
+        protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
+            throw new IOException();
+        }
+
+        @Override
+        protected Object findExportedSymbol(Object context, String globalName, boolean onlyExplicit) {
             return null;
         }
 
         @Override
-        protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
-            return null;
-        }
-
-        @Override
-        protected Object getLanguageGlobal() {
+        protected Object getLanguageGlobal(Object context) {
             return null;
         }
 
@@ -75,36 +76,36 @@ public class LanguageRegistrationTest {
         }
 
         @Override
-        protected ToolSupportProvider getToolSupport() {
+        protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) {
             return null;
         }
 
         @Override
-        protected DebugSupportProvider getDebugSupport() {
-            return null;
+        protected Object createContext(Env env) {
+            throw new UnsupportedOperationException();
         }
 
     }
 
-    @ExpectError("Language must have a public constructor accepting TruffleLanguage.Env as parameter")
-    @TruffleLanguage.Registration(name = "myLangNoCnstr", version = "0", mimeType = "text/x-my")
-    public static final class MyLangNoConstr extends TruffleLanguage {
-        public MyLangNoConstr() {
-            super(null);
+    @ExpectError("Language class must have public static final singleton field called INSTANCE")
+    @TruffleLanguage.Registration(name = "myLangNoField", version = "0", mimeType = "text/x-my")
+    public static final class MyLangNoField extends TruffleLanguage<Object> {
+        public MyLangNoField() {
+            super();
         }
 
         @Override
-        protected Object eval(Source code) throws IOException {
+        protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
+            throw new IOException();
+        }
+
+        @Override
+        protected Object findExportedSymbol(Object context, String globalName, boolean onlyExplicit) {
             return null;
         }
 
         @Override
-        protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
-            return null;
-        }
-
-        @Override
-        protected Object getLanguageGlobal() {
+        protected Object getLanguageGlobal(Object context) {
             return null;
         }
 
@@ -114,35 +115,32 @@ public class LanguageRegistrationTest {
         }
 
         @Override
-        protected ToolSupportProvider getToolSupport() {
+        protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) {
             return null;
         }
 
         @Override
-        protected DebugSupportProvider getDebugSupport() {
-            return null;
+        protected Object createContext(Env env) {
+            throw new UnsupportedOperationException();
         }
 
     }
 
     @TruffleLanguage.Registration(name = "myLangGood", version = "0", mimeType = "text/x-my")
-    public static final class MyLangGood extends TruffleLanguage {
-        public MyLangGood(TruffleLanguage.Env env) {
-            super(env);
+    public static final class MyLangGood extends TruffleLanguage<Object> {
+        private MyLangGood() {
+            super();
         }
 
+        public static final MyLangGood INSTANCE = new MyLangGood();
+
         @Override
-        protected Object eval(Source code) throws IOException {
+        protected Object findExportedSymbol(Object context, String globalName, boolean onlyExplicit) {
             return null;
         }
 
         @Override
-        protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
-            return null;
-        }
-
-        @Override
-        protected Object getLanguageGlobal() {
+        protected Object getLanguageGlobal(Object context) {
             return null;
         }
 
@@ -152,13 +150,18 @@ public class LanguageRegistrationTest {
         }
 
         @Override
-        protected ToolSupportProvider getToolSupport() {
+        protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) {
             return null;
         }
 
         @Override
-        protected DebugSupportProvider getDebugSupport() {
-            return null;
+        protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
+            throw new IOException();
+        }
+
+        @Override
+        protected Object createContext(Env env) {
+            return env;
         }
 
     }
