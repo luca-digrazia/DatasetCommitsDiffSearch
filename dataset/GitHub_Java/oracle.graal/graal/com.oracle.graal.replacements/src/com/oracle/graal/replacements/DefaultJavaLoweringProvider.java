@@ -84,7 +84,6 @@ import com.oracle.graal.nodes.extended.MembarNode;
 import com.oracle.graal.nodes.extended.UnboxNode;
 import com.oracle.graal.nodes.extended.UnsafeLoadNode;
 import com.oracle.graal.nodes.extended.UnsafeStoreNode;
-import com.oracle.graal.nodes.java.AbstractNewArrayNode;
 import com.oracle.graal.nodes.java.AbstractNewObjectNode;
 import com.oracle.graal.nodes.java.AccessIndexedNode;
 import com.oracle.graal.nodes.java.ArrayLengthNode;
@@ -792,9 +791,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             readArrayLength.setGuard(nullCheck);
             arrayLength = readArrayLength;
         } else {
-            if (array instanceof AbstractNewArrayNode) {
-                arrayLength = n.graph().addOrUnique(new PiNode(arrayLength, StampFactory.positiveInt()));
-            }
             arrayLength = arrayLength.isAlive() ? arrayLength : graph.addOrUniqueWithInputs(arrayLength);
         }
 

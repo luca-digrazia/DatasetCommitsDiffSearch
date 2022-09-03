@@ -154,10 +154,10 @@ public class DominatorConditionalEliminationPhase extends Phase {
             if (fullSchedule) {
                 SchedulePhase schedule = new SchedulePhase(SchedulePhase.SchedulingStrategy.EARLIEST);
                 schedule.apply(graph);
-                ControlFlowGraph cfg = graph.getLastSchedule().getCFG();
+                ControlFlowGraph cfg = schedule.getCFG();
                 cfg.computePostdominators();
-                blockToNodes = b -> graph.getLastSchedule().getBlockToNodesMap().get(b);
-                nodeToBlock = n -> graph.getLastSchedule().getNodeToBlockMap().get(n);
+                blockToNodes = b -> schedule.getBlockToNodesMap().get(b);
+                nodeToBlock = n -> schedule.getNodeToBlockMap().get(n);
                 startBlock = cfg.getStartBlock();
             } else {
                 ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, true, true);

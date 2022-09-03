@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,38 +22,89 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.cri.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaKind;
+
+import com.oracle.graal.compiler.common.calc.Condition;
+import com.oracle.graal.compiler.common.type.FloatStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.LogicConstantNode;
+import com.oracle.graal.nodes.LogicNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 
 /**
- * Returns -1, 0, or 1 if either x < y, x == y, or x > y.
+ * Returns -1, 0, or 1 if either x &lt; y, x == y, or x &gt; y. If the comparison is undecided (one
+ * of the inputs is NaN), the result is 1 if isUnorderedLess is false and -1 if isUnorderedLess is
+ * true.
  */
+@NodeInfo
 public final class NormalizeCompareNode extends BinaryNode implements Lowerable {
-    @Data public final boolean isUnorderedLess;
 
-    /**
-     * Creates a new compare operation.
-     * @param x the first input
-     * @param y the second input
-     * @param isUnorderedLess true when an unordered floating point comparison is interpreted as less, false when greater.
-     */
+    public static final NodeClass<NormalizeCompareNode> TYPE = NodeClass.create(NormalizeCompareNode.class);
+    protected final boolean isUnorderedLess;
+
     public NormalizeCompareNode(ValueNode x, ValueNode y, boolean isUnorderedLess) {
-        super(CiKind.Int, x, y);
+        super(TYPE, StampFactory.forKind(JavaKind.Int), x, y);
         this.isUnorderedLess = isUnorderedLess;
     }
 
+    public static ValueNode create(ValueNode x, ValueNode y, boolean isUnorderedLess, ConstantReflectionProvider constantReflection) {
+        LogicNode result = CompareNode.tryConstantFold(Condition.EQ, x, y, constantReflection, false);
+        if (result instanceof LogicConstantNode) {
+            LogicConstantNode logicConstantNode = (LogicConstantNode) result;
+            LogicNode resultLT = CompareNode.tryConstantFold(Condition.LT, x, y, constantReflection, isUnorderedLess);
+            if (resultLT instanceof LogicConstantNode) {
+                LogicConstantNode logicConstantNodeLT = (LogicConstantNode) resultLT;
+                if (logicConstantNodeLT.getValue()) {
+                    return ConstantNode.forInt(-1);
+                } else if (logicConstantNode.getValue()) {
+                    return ConstantNode.forInt(0);
+                } else {
+                    return ConstantNode.forInt(1);
+                }
+            }
+        }
+
+        return new NormalizeCompareNode(x, y, isUnorderedLess);
+    }
+
     @Override
-    public void lower(CiLoweringTool tool) {
-        StructuredGraph graph = (StructuredGraph) graph();
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        // nothing to do
+        return this;
+    }
 
-        CompareNode equalComp = graph.unique(new CompareNode(x(), Condition.EQ, false, y()));
-        MaterializeNode equalValue = MaterializeNode.create(equalComp, graph, ConstantNode.forInt(0, graph), ConstantNode.forInt(1, graph));
+    @Override
+    public boolean inferStamp() {
+        return false;
+    }
 
-        CompareNode lessComp = graph.unique(new CompareNode(x(), Condition.LT, isUnorderedLess, y()));
-        MaterializeNode value =  MaterializeNode.create(lessComp, graph, ConstantNode.forInt(-1, graph), equalValue);
+    @Override
+    public void lower(LoweringTool tool) {
+        LogicNode equalComp;
+        LogicNode lessComp;
+        if (getX().stamp() instanceof FloatStamp) {
+            equalComp = graph().unique(FloatEqualsNode.create(getX(), getY(), tool.getConstantReflection()));
+            lessComp = graph().unique(FloatLessThanNode.create(getX(), getY(), isUnorderedLess, tool.getConstantReflection()));
+        } else {
+            equalComp = graph().unique(IntegerEqualsNode.create(getX(), getY(), tool.getConstantReflection()));
+            lessComp = graph().unique(IntegerLessThanNode.create(getX(), getY(), tool.getConstantReflection()));
+        }
 
-        graph.replaceFloating(this, value);
+        ConditionalNode equalValue = graph().unique(new ConditionalNode(equalComp, ConstantNode.forInt(0, graph()), ConstantNode.forInt(1, graph())));
+        ConditionalNode value = graph().unique(new ConditionalNode(lessComp, ConstantNode.forInt(-1, graph()), equalValue));
+        replaceAtUsagesAndDelete(value);
+    }
+
+    @Override
+    public Stamp foldStamp(Stamp stampX, Stamp stampY) {
+        return stamp();
     }
 }

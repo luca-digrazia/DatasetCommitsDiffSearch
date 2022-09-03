@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +22,15 @@
  */
 package com.oracle.graal.phases.common.inlining.info.elem;
 
+import static com.oracle.graal.compiler.common.GraalOptions.OptCanonicalizer;
 import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.debug.Debug;
@@ -44,9 +48,6 @@ import com.oracle.graal.phases.common.inlining.InliningUtil;
 import com.oracle.graal.phases.common.instrumentation.ExtractInstrumentationPhase;
 import com.oracle.graal.phases.graph.FixedNodeProbabilityCache;
 import com.oracle.graal.phases.tiers.HighTierContext;
-
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * <p>
@@ -97,7 +98,7 @@ public class InlineableGraph implements Inlineable {
         try (Debug.Scope s = Debug.scope("InlineGraph", graph)) {
 
             ArrayList<Node> parameterUsages = replaceParamsWithMoreInformativeArguments(invoke, context);
-            if (parameterUsages != null) {
+            if (parameterUsages != null && OptCanonicalizer.getValue()) {
                 assert !parameterUsages.isEmpty() : "The caller didn't have more information about arguments after all";
                 canonicalizer.applyIncremental(graph, context, parameterUsages);
                 return true;
@@ -163,8 +164,7 @@ public class InlineableGraph implements Inlineable {
                     Constant constant = arg.asConstant();
                     parameterUsages = trackParameterUsages(param, parameterUsages);
                     // collect param usages before replacing the param
-                    param.replaceAtUsagesAndDelete(graph.unique(
-                                    ConstantNode.forConstant(arg.stamp(), constant, ((ConstantNode) arg).getStableDimension(), ((ConstantNode) arg).isDefaultStable(), context.getMetaAccess())));
+                    param.replaceAtUsagesAndDelete(ConstantNode.forConstant(arg.stamp(), constant, context.getMetaAccess(), graph));
                     // param-node gone, leaving a gap in the sequence given by param.index()
                 } else {
                     Stamp impro = improvedStamp(arg, param);
@@ -190,8 +190,7 @@ public class InlineableGraph implements Inlineable {
     /**
      * This method builds the IR nodes for the given <code>method</code> and canonicalizes them.
      * Provided profiling info is mature, the resulting graph is cached. The caller is responsible
-     * for cloning before modification.
-     * </p>
+     * for cloning before modification. </p>
      */
     @SuppressWarnings("try")
     private static StructuredGraph parseBytecodes(ResolvedJavaMethod method, HighTierContext context, CanonicalizerPhase canonicalizer, StructuredGraph caller) {
@@ -210,7 +209,9 @@ public class InlineableGraph implements Inlineable {
             }
             new DeadCodeEliminationPhase(Optional).apply(newGraph);
 
-            canonicalizer.apply(newGraph, context);
+            if (OptCanonicalizer.getValue()) {
+                canonicalizer.apply(newGraph, context);
+            }
 
             return newGraph;
         } catch (Throwable e) {

@@ -22,6 +22,9 @@
  */
 package com.oracle.graal.compiler.test;
 
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
 import org.junit.Test;
 
 import com.oracle.graal.api.directives.GraalDirectives;
@@ -32,15 +35,12 @@ import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import com.oracle.graal.nodes.spi.LIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class CountedLoopTest extends GraalCompilerTest {
 
@@ -199,7 +199,6 @@ public class CountedLoopTest extends GraalCompilerTest {
         int j = 0;
         for (int i = 0; i < 1024; i++) {
             j += 5;
-            GraalDirectives.controlFlowAnchor();
             ret.extremum = get(InductionVariable::extremumNode, j);
         }
         ret.exitValue = get(InductionVariable::exitValueNode, j);
@@ -227,7 +226,6 @@ public class CountedLoopTest extends GraalCompilerTest {
 
         public void rewrite(LoopsData loops) {
             InductionVariable inductionVariable = loops.getInductionVariable(iv);
-            assert inductionVariable != null;
             ValueNode node = property.get(inductionVariable);
             replaceAtUsagesAndDelete(node);
         }
