@@ -23,14 +23,9 @@
 package com.oracle.graal.replacements;
 
 import static com.oracle.graal.java.BytecodeParser.Options.*;
-import static jdk.internal.jvmci.common.JVMCIError.*;
+import static com.oracle.jvmci.common.JVMCIError.*;
 
 import java.util.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -46,6 +41,10 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.options.*;
 
 /**
  * A graph decoder that performs partial evaluation, i.e., that performs method inlining and
@@ -176,7 +175,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         @Override
-        public void handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean inlineEverything) {
+        public void handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args) {
             throw unimplemented();
         }
 
