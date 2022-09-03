@@ -26,13 +26,12 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.schedule.*;
 
 /**
  * Iterates over a list of nodes, which usually comes from
  * {@link SchedulePhase#getBlockToNodesMap()}.
- *
+ * 
  * While iterating, it is possible to {@link #insert(FixedNode, FixedWithNextNode) insert} and
  * {@link #replaceCurrent(FixedWithNextNode) replace} nodes.
  */
@@ -40,14 +39,13 @@ public abstract class ScheduledNodeIterator {
 
     private FixedWithNextNode lastFixed;
     private FixedWithNextNode reconnect;
-    private ListIterator<ValueNode> iterator;
+    private ListIterator<ScheduledNode> iterator;
 
-    public void processNodes(Block block, SchedulePhase shedule) {
-        lastFixed = block.getBeginNode();
-        assert lastFixed != null;
+    public void processNodes(List<ScheduledNode> nodes, FixedWithNextNode begin) {
+        assert begin != null;
+        lastFixed = begin;
         reconnect = null;
-        iterator = shedule.nodesFor(block).listIterator();
-
+        iterator = nodes.listIterator();
         while (iterator.hasNext()) {
             Node node = iterator.next();
             if (!node.isAlive()) {
@@ -62,10 +60,7 @@ public abstract class ScheduledNodeIterator {
             }
             processNode(node);
         }
-        if (reconnect != null) {
-            assert block.getSuccessorCount() == 1;
-            reconnect.setNext(block.getFirstSuccessor().getBeginNode());
-        }
+        assert reconnect == null;
     }
 
     protected void insert(FixedNode start, FixedWithNextNode end) {
