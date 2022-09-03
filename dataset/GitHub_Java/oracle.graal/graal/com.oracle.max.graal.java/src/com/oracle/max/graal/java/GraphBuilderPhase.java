@@ -359,7 +359,6 @@ public final class GraphBuilderPhase extends Phase {
             }
         }
 
-        // TODO(tw): Merge BeginNode with ExceptionObject node to get a correct and uniform FrameState.
         BeginNode p = currentGraph.add(new BeginNode());
         p.setStateAfter(frameState.duplicateWithoutStack(bci));
 
@@ -733,8 +732,12 @@ public final class GraphBuilderPhase extends Phase {
             AnchorNode anchor = currentGraph.add(new AnchorNode());
             append(anchor);
             CheckCastNode checkCast;
-            RiResolvedType[] hints = getTypeCheckHints((RiResolvedType) type, 2);
-            checkCast = currentGraph.unique(new CheckCastNode(anchor, typeInstruction, (RiResolvedType) type, object, hints, Util.isFinalClass((RiResolvedType) type)));
+            if (type instanceof RiResolvedType) {
+                RiResolvedType[] hints = getTypeCheckHints((RiResolvedType) type, 2);
+                checkCast = currentGraph.unique(new CheckCastNode(anchor, typeInstruction, (RiResolvedType) type, object, hints, Util.isFinalClass((RiResolvedType) type)));
+            } else {
+                checkCast = currentGraph.unique(new CheckCastNode(anchor, typeInstruction, (RiResolvedType) type, object));
+            }
             append(currentGraph.add(new ValueAnchorNode(checkCast)));
             frameState.apush(checkCast);
         } else {
