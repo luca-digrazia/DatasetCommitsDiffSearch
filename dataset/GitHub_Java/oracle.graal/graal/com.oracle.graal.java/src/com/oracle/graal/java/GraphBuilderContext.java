@@ -24,7 +24,6 @@ package com.oracle.graal.java;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -42,17 +41,11 @@ public interface GraphBuilderContext {
 
     <T extends FloatingNode> T append(T value);
 
-    <T extends ValueNode> T append(T value);
-
     StampProvider getStampProvider();
 
     MetaAccessProvider getMetaAccess();
 
     Assumptions getAssumptions();
-
-    ConstantReflectionProvider getConstantReflection();
-
-    SnippetReflectionProvider getSnippetReflection();
 
     void push(Kind kind, ValueNode value);
 
