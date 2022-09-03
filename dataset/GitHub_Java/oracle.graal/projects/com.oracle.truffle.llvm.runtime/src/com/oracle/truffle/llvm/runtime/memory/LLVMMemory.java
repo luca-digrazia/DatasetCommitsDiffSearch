@@ -146,8 +146,7 @@ public final class LLVMMemory {
         if (address <= DEREF_HANDLE_SPACE_START && address > DEREF_HANDLE_SPACE_END) {
             assert isAllocated(address) : "double-free of " + Long.toHexString(address);
             synchronized (freeListLock) {
-                // We need to mask because we allow creating handles with an offset.
-                freeList = new FreeListNode(address & ~DEREF_HANDLE_OBJECT_MASK, freeList);
+                freeList = new FreeListNode(address, freeList);
             }
         } else {
             try {
