@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,6 @@ import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.writ
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.writeRegisterAsWord;
 
 import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
@@ -47,6 +46,7 @@ import com.oracle.graal.word.Word;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.LocationIdentity;
 
 /**
  * Uncommon trap stub.
@@ -134,9 +134,9 @@ public class UncommonTrapStub extends SnippetStub {
         final int actionAndReason = readPendingDeoptimization(thread);
         writePendingDeoptimization(thread, -1);
 
-        final Word unrollBlock = UncommonTrapCallNode.uncommonTrap(registerSaver, actionAndReason, deoptimizationUnpackUncommonTrap());
+        final Word unrollBlock = UncommonTrapCallNode.uncommonTrap(registerSaver, actionAndReason);
 
-        DeoptimizationStub.deoptimizationCommon(stackPointerRegister, thread, registerSaver, unrollBlock);
+        DeoptimizationStub.deoptimizationCommon(stackPointerRegister, thread, registerSaver, unrollBlock, deoptimizationUnpackUncommonTrap());
     }
 
     /**
@@ -156,7 +156,7 @@ public class UncommonTrapStub extends SnippetStub {
     }
 
     @Fold
-    static int stackShadowPages() {
+    private static int stackShadowPages() {
         return config().useStackBanging ? config().stackShadowPages : 0;
     }
 
@@ -169,52 +169,52 @@ public class UncommonTrapStub extends SnippetStub {
      */
     @Deprecated
     @Fold
-    static int stackBias() {
+    private static int stackBias() {
         return config().stackBias;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset() {
+    private static int deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset() {
         return config().deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockCallerAdjustmentOffset() {
+    private static int deoptimizationUnrollBlockCallerAdjustmentOffset() {
         return config().deoptimizationUnrollBlockCallerAdjustmentOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockNumberOfFramesOffset() {
+    private static int deoptimizationUnrollBlockNumberOfFramesOffset() {
         return config().deoptimizationUnrollBlockNumberOfFramesOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockTotalFrameSizesOffset() {
+    private static int deoptimizationUnrollBlockTotalFrameSizesOffset() {
         return config().deoptimizationUnrollBlockTotalFrameSizesOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockFrameSizesOffset() {
+    private static int deoptimizationUnrollBlockFrameSizesOffset() {
         return config().deoptimizationUnrollBlockFrameSizesOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockFramePcsOffset() {
+    private static int deoptimizationUnrollBlockFramePcsOffset() {
         return config().deoptimizationUnrollBlockFramePcsOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockInitialInfoOffset() {
+    private static int deoptimizationUnrollBlockInitialInfoOffset() {
         return config().deoptimizationUnrollBlockInitialInfoOffset;
     }
 
     @Fold
-    static int deoptimizationUnpackDeopt() {
+    private static int deoptimizationUnpackDeopt() {
         return config().deoptimizationUnpackDeopt;
     }
 
     @Fold
-    static int deoptimizationUnpackUncommonTrap() {
+    private static int deoptimizationUnpackUncommonTrap() {
         return config().deoptimizationUnpackUncommonTrap;
     }
 
