@@ -22,22 +22,28 @@
  */
 package com.sun.c1x.lir;
 
+import java.util.*;
+
+import com.oracle.graal.graph.*;
 import com.oracle.max.asm.*;
 import com.sun.c1x.alloc.*;
+import com.sun.c1x.debug.*;
+import com.sun.c1x.util.*;
+import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
 /**
  * The {@code LIRBlock} class definition.
- *
- * @author Ben L. Titzer
  */
 public final class LIRBlock {
 
-    public LIRBlock() {
-    }
-
     public final Label label = new Label();
     private LIRList lir;
+    private final int blockID;
+    private FrameState lastState;
+    private List<Node> instructions = new ArrayList<Node>(4);
+    private List<LIRBlock> predecessors = new ArrayList<LIRBlock>(4);
+    private List<LIRBlock> successors = new ArrayList<LIRBlock>(4);
 
     /**
      * Bit map specifying which {@linkplain OperandPool operands} are live upon entry to this block.
@@ -68,9 +74,37 @@ public final class LIRBlock {
      */
     public CiBitMap liveKill;
 
-    public int firstLirInstructionID;
-    public int lastLirInstructionID;
-    public int exceptionHandlerPCO;
+    private int firstLirInstructionID;
+    private int lastLirInstructionID;
+    public int blockEntryPco;
+
+    public LIRBlock(int blockID) {
+        this.blockID = blockID;
+        loopIndex = -1;
+        linearScanNumber = blockID;
+    }
+
+    public List<Node> getInstructions() {
+        return instructions;
+    }
+
+    public int firstLirInstructionId() {
+        return firstLirInstructionID;
+    }
+
+    public void setFirstLirInstructionId(int firstLirInstructionId) {
+        this.firstLirInstructionID = firstLirInstructionId;
+    }
+
+    public int lastLirInstructionId() {
+        return lastLirInstructionID;
+    }
+
+    public void setLastLirInstructionId(int lastLirInstructionId) {
+        this.lastLirInstructionID = lastLirInstructionId;
+    }
+
+    public int loopDepth;
 
     public LIRList lir() {
         return lir;
@@ -78,5 +112,148 @@ public final class LIRBlock {
 
     public void setLir(LIRList lir) {
         this.lir = lir;
+    }
+
+    public void setBlockEntryPco(int codePos) {
+        this.blockEntryPco = codePos;
+    }
+
+    public void printWithoutPhis(LogStream out) {
+        out.println("LIR Block " + blockID());
+    }
+
+    public int blockID() {
+        return blockID;
+    }
+
+    public int numberOfPreds() {
+        return predecessors.size();
+    }
+
+    public int numberOfSux() {
+        return successors.size();
+    }
+
+    public boolean isPredecessor(LIRBlock block) {
+        return predecessors.contains(block);
+    }
+
+    public LIRBlock predAt(int i) {
+        return predecessors.get(i);
+    }
+
+    public LIRBlock suxAt(int i) {
+        return successors.get(i);
+    }
+
+    public List<LIRBlock> blockSuccessors() {
+        return successors;
+    }
+
+    @Override
+    public String toString() {
+        return "B" + blockID();
+    }
+
+    public List<LIRBlock> blockPredecessors() {
+        return predecessors;
+    }
+
+    public int loopDepth() {
+        // TODO(tw): Set correct loop depth.
+        return 0;
+    }
+
+    public int loopIndex() {
+        return loopIndex;
+    }
+
+    public void setLoopIndex(int v) {
+        loopIndex = v;
+    }
+
+    public void setLoopDepth(int v) {
+        this.loopDepth = v;
+    }
+
+    private int loopIndex;
+
+    public Label label() {
+        return label;
+    }
+
+    private int linearScanNumber = -1;
+    private boolean linearScanLoopEnd;
+    private boolean linearScanLoopHeader;
+
+    public void setLinearScanNumber(int v) {
+        linearScanNumber = v;
+    }
+
+    public int linearScanNumber() {
+        return linearScanNumber;
+    }
+
+    public void setLinearScanLoopEnd() {
+        linearScanLoopEnd = true;
+    }
+
+    public boolean isLinearScanLoopEnd() {
+        return linearScanLoopEnd;
+    }
+
+    public void setLinearScanLoopHeader() {
+        this.linearScanLoopHeader = true;
+    }
+
+    public boolean isLinearScanLoopHeader() {
+        return linearScanLoopHeader;
+    }
+
+    public void replaceWith(LIRBlock other) {
+        for (LIRBlock pred : predecessors) {
+            Util.replaceAllInList(this, other, pred.successors);
+        }
+        for (int i = 0; i < other.predecessors.size(); ++i) {
+            if (other.predecessors.get(i) == this) {
+                other.predecessors.remove(i);
+                other.predecessors.addAll(i, this.predecessors);
+            }
+        }
+        successors.clear();
+        predecessors.clear();
+    }
+
+    public void setInstructions(List<Node> list) {
+        instructions = list;
+    }
+
+    public void setLastState(FrameState fs) {
+        lastState = fs;
+    }
+
+    public FrameState lastState() {
+        return lastState;
+    }
+
+    private Node first;
+    private Node last;
+
+    public Node firstInstruction() {
+        return first;
+    }
+
+
+    public Node lastInstruction() {
+        return last;
+    }
+
+    public void setFirstInstruction(Node n) {
+        first = n;
+    }
+
+
+    public void setLastInstruction(Node n) {
+        last = n;
     }
 }

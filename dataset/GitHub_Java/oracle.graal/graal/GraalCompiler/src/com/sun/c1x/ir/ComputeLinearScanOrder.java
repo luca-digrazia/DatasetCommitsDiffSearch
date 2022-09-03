@@ -27,13 +27,10 @@ import java.util.*;
 
 import com.sun.c1x.*;
 import com.sun.c1x.debug.*;
+import com.sun.c1x.lir.*;
 import com.sun.c1x.util.*;
 import com.sun.cri.ci.*;
 
-/**
- * @author Thomas Wuerthinger
- *
- */
 public final class ComputeLinearScanOrder {
 
     private final int maxBlockId; // the highest blockId of a block
@@ -41,15 +38,15 @@ public final class ComputeLinearScanOrder {
     private int numLoops; // total number of loops
     private boolean iterativeDominators; // method requires iterative computation of dominators
 
-    List<BlockBegin> linearScanOrder; // the resulting list of blocks in correct order
+    List<LIRBlock> linearScanOrder; // the resulting list of blocks in correct order
 
     final CiBitMap visitedBlocks; // used for recursive processing of blocks
     final CiBitMap activeBlocks; // used for recursive processing of blocks
     final CiBitMap dominatorBlocks; // temporary BitMap used for computation of dominator
     final int[] forwardBranches; // number of incoming forward branches for each block
-    final List<BlockBegin> loopEndBlocks; // list of all loop end blocks collected during countEdges
+    final List<LIRBlock> loopEndBlocks; // list of all loop end blocks collected during countEdges
     BitMap2D loopMap; // two-dimensional bit set: a bit is set if a block is contained in a loop
-    final List<BlockBegin> workList; // temporary list (used in markLoops and computeOrder)
+    final List<LIRBlock> workList; // temporary list (used in markLoops and computeOrder)
 
     // accessors for visitedBlocks and activeBlocks
     void initVisited() {
@@ -57,45 +54,45 @@ public final class ComputeLinearScanOrder {
         visitedBlocks.clearAll();
     }
 
-    boolean isVisited(BlockBegin b) {
-        return visitedBlocks.get(b.blockID);
+    boolean isVisited(LIRBlock b) {
+        return visitedBlocks.get(b.blockID());
     }
 
-    boolean isActive(BlockBegin b) {
-        return activeBlocks.get(b.blockID);
+    boolean isActive(LIRBlock b) {
+        return activeBlocks.get(b.blockID());
     }
 
-    void setVisited(BlockBegin b) {
+    void setVisited(LIRBlock b) {
         assert !isVisited(b) : "already set";
-        visitedBlocks.set(b.blockID);
+        visitedBlocks.set(b.blockID());
     }
 
-    void setActive(BlockBegin b) {
+    void setActive(LIRBlock b) {
         assert !isActive(b) : "already set";
-        activeBlocks.set(b.blockID);
+        activeBlocks.set(b.blockID());
     }
 
-    void clearActive(BlockBegin b) {
+    void clearActive(LIRBlock b) {
         assert isActive(b) : "not already";
-        activeBlocks.clear(b.blockID);
+        activeBlocks.clear(b.blockID());
     }
 
     // accessors for forwardBranches
-    void incForwardBranches(BlockBegin b) {
-        forwardBranches[b.blockID]++;
+    void incForwardBranches(LIRBlock b) {
+        forwardBranches[b.blockID()]++;
     }
 
-    int decForwardBranches(BlockBegin b) {
-        return --forwardBranches[b.blockID];
+    int decForwardBranches(LIRBlock b) {
+        return --forwardBranches[b.blockID()];
     }
 
     // accessors for loopMap
-    boolean isBlockInLoop(int loopIdx, BlockBegin b) {
-        return loopMap.at(loopIdx, b.blockID);
+    boolean isBlockInLoop(int loopIdx, LIRBlock b) {
+        return loopMap.at(loopIdx, b.blockID());
     }
 
-    void setBlockInLoop(int loopIdx, BlockBegin b) {
-        loopMap.setBit(loopIdx, b.blockID);
+    void setBlockInLoop(int loopIdx, LIRBlock b) {
+        loopMap.setBit(loopIdx, b.blockID());
     }
 
     void clearBlockInLoop(int loopIdx, int blockId) {
@@ -103,7 +100,7 @@ public final class ComputeLinearScanOrder {
     }
 
     // accessors for final result
-    public List<BlockBegin> linearScanOrder() {
+    public List<LIRBlock> linearScanOrder() {
         return linearScanOrder;
     }
 
@@ -111,15 +108,15 @@ public final class ComputeLinearScanOrder {
         return numLoops;
     }
 
-    public ComputeLinearScanOrder(int maxBlockId, BlockBegin startBlock) {
+    public ComputeLinearScanOrder(int maxBlockId, LIRBlock startBlock) {
 
         this.maxBlockId = maxBlockId;
         visitedBlocks = new CiBitMap(maxBlockId);
         activeBlocks = new CiBitMap(maxBlockId);
         dominatorBlocks = new CiBitMap(maxBlockId);
         forwardBranches = new int[maxBlockId];
-        loopEndBlocks = new ArrayList<BlockBegin>(8);
-        workList = new ArrayList<BlockBegin>(8);
+        loopEndBlocks = new ArrayList<LIRBlock>(8);
+        workList = new ArrayList<LIRBlock>(8);
 
         splitCriticalEdges();
 
@@ -132,7 +129,6 @@ public final class ComputeLinearScanOrder {
         }
 
         computeOrder(startBlock);
-        computeDominators();
 
         printBlocks();
         assert verify();
@@ -150,11 +146,10 @@ public final class ComputeLinearScanOrder {
      * 3. Number loop header blocks.
      * 4. Create a list with all loop end blocks.
      */
-    void countEdges(BlockBegin cur, BlockBegin parent) {
+    void countEdges(LIRBlock cur, LIRBlock parent) {
         if (C1XOptions.TraceLinearScanLevel >= 3) {
-            TTY.println("Counting edges for block B%d%s", cur.blockID, parent == null ? "" : " coming from B" + parent.blockID);
+            TTY.println("Counting edges for block B%d%s", cur.blockID(), parent == null ? "" : " coming from B" + parent.blockID());
         }
-        assert cur.dominator() == null : "dominator already initialized";
 
         if (isActive(cur)) {
             if (C1XOptions.TraceLinearScanLevel >= 3) {
@@ -163,20 +158,8 @@ public final class ComputeLinearScanOrder {
             assert isVisited(cur) : "block must be visited when block is active";
             assert parent != null : "must have parent";
 
-            cur.setBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader);
-            cur.setBlockFlag(BlockBegin.BlockFlag.BackwardBranchTarget);
-
-            parent.setBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd);
-
-            // When a loop header is also the start of an exception handler, then the backward branch is
-            // an exception edge. Because such edges are usually critical edges which cannot be split, the
-            // loop must be excluded here from processing.
-            if (cur.checkBlockFlag(BlockBegin.BlockFlag.ExceptionEntry)) {
-                // Make sure that dominators are correct in this weird situation
-                iterativeDominators = true;
-                return;
-            }
-//            assert parent.numberOfSux() == 1 && parent.suxAt(0) == cur : "loop end blocks must have one successor (critical edges are split)";
+            cur.setLinearScanLoopHeader();
+            parent.setLinearScanLoopEnd();
 
             loopEndBlocks.add(parent);
             return;
@@ -201,9 +184,6 @@ public final class ComputeLinearScanOrder {
         for (i = cur.numberOfSux() - 1; i >= 0; i--) {
             countEdges(cur.suxAt(i), cur);
         }
-        for (i = cur.numberOfExceptionHandlers() - 1; i >= 0; i--) {
-            countEdges(cur.exceptionHandlerAt(i), cur);
-        }
 
         clearActive(cur);
 
@@ -212,10 +192,10 @@ public final class ComputeLinearScanOrder {
         // innermost loop has the lowest number. This is guaranteed by setting
         // the loop number after the recursive calls for the successors above
         // have returned.
-        if (cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader)) {
+        if (cur.isLinearScanLoopHeader()) {
             assert cur.loopIndex() == -1 : "cannot set loop-index twice";
             if (C1XOptions.TraceLinearScanLevel >= 3) {
-                TTY.println("Block B%d is loop header of loop %d", cur.blockID, numLoops);
+                TTY.println("Block B%d is loop header of loop %d", cur.blockID(), numLoops);
             }
 
             cur.setLoopIndex(numLoops);
@@ -223,7 +203,7 @@ public final class ComputeLinearScanOrder {
         }
 
         if (C1XOptions.TraceLinearScanLevel >= 3) {
-            TTY.println("Finished counting edges for block B%d", cur.blockID);
+            TTY.println("Finished counting edges for block B%d", cur.blockID());
         }
     }
 
@@ -235,16 +215,16 @@ public final class ComputeLinearScanOrder {
         loopMap = new BitMap2D(numLoops, maxBlockId);
 
         for (int i = loopEndBlocks.size() - 1; i >= 0; i--) {
-            BlockBegin loopEnd = loopEndBlocks.get(i);
-            BlockBegin loopStart = loopEnd.suxAt(0);
+            LIRBlock loopEnd = loopEndBlocks.get(i);
+            LIRBlock loopStart = loopEnd.suxAt(0);
             int loopIdx = loopStart.loopIndex();
 
             if (C1XOptions.TraceLinearScanLevel >= 3) {
-                TTY.println("Processing loop from B%d to B%d (loop %d):", loopStart.blockID, loopEnd.blockID, loopIdx);
+                TTY.println("Processing loop from B%d to B%d (loop %d):", loopStart.blockID(), loopEnd.blockID(), loopIdx);
             }
-            assert loopEnd.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd) : "loop end flag must be set";
+            assert loopEnd.isLinearScanLoopEnd() : "loop end flag must be set";
 //            assert loopEnd.numberOfSux() == 1 : "incorrect number of successors";
-            assert loopStart.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader) : "loop header flag must be set";
+            assert loopStart.isLinearScanLoopHeader() : "loop header flag must be set";
             assert loopIdx >= 0 && loopIdx < numLoops : "loop index not set";
             assert workList.isEmpty() : "work list must be empty before processing";
 
@@ -252,22 +232,22 @@ public final class ComputeLinearScanOrder {
             workList.add(loopEnd);
             setBlockInLoop(loopIdx, loopEnd);
             do {
-                BlockBegin cur = workList.remove(workList.size() - 1);
+                LIRBlock cur = workList.remove(workList.size() - 1);
 
                 if (C1XOptions.TraceLinearScanLevel >= 3) {
-                    TTY.println("    processing B%d", cur.blockID);
+                    TTY.println("    processing B%d", cur.blockID());
                 }
                 assert isBlockInLoop(loopIdx, cur) : "bit in loop map must be set when block is in work list";
 
                 // recursive processing of all predecessors ends when start block of loop is reached
-                if (cur != loopStart && !cur.checkBlockFlag(BlockBegin.BlockFlag.OsrEntry)) {
+                if (cur != loopStart) {
                     for (int j = cur.numberOfPreds() - 1; j >= 0; j--) {
-                        BlockBegin pred = cur.predAt(j);
+                        LIRBlock pred = cur.predAt(j);
 
                         if (!isBlockInLoop(loopIdx, pred)) {
                             // this predecessor has not been processed yet, so add it to work list
                             if (C1XOptions.TraceLinearScanLevel >= 3) {
-                                TTY.println("    pushing B%d", pred.blockID);
+                                TTY.println("    pushing B%d", pred.blockID());
                             }
                             workList.add(pred);
                             setBlockInLoop(loopIdx, pred);
@@ -281,7 +261,7 @@ public final class ComputeLinearScanOrder {
     // check for non-natural loops (loops where the loop header does not dominate
     // all other loop blocks = loops with multiple entries).
     // such loops are ignored
-    void clearNonNaturalLoops(BlockBegin startBlock) {
+    void clearNonNaturalLoops(LIRBlock startBlock) {
         for (int i = numLoops - 1; i >= 0; i--) {
             if (isBlockInLoop(i, startBlock)) {
                 // loop i contains the entry block of the method.
@@ -298,7 +278,7 @@ public final class ComputeLinearScanOrder {
         }
     }
 
-    void assignLoopDepth(BlockBegin startBlock) {
+    void assignLoopDepth(LIRBlock startBlock) {
         if (C1XOptions.TraceLinearScanLevel >= 3) {
             TTY.println("----- computing loop-depth and weight");
         }
@@ -308,12 +288,12 @@ public final class ComputeLinearScanOrder {
         workList.add(startBlock);
 
         do {
-            BlockBegin cur = workList.remove(workList.size() - 1);
+            LIRBlock cur = workList.remove(workList.size() - 1);
 
             if (!isVisited(cur)) {
                 setVisited(cur);
                 if (C1XOptions.TraceLinearScanLevel >= 4) {
-                    TTY.println("Computing loop depth for block B%d", cur.blockID);
+                    TTY.println("Computing loop depth for block B%d", cur.blockID());
                 }
 
                 // compute loop-depth and loop-index for the block
@@ -334,54 +314,12 @@ public final class ComputeLinearScanOrder {
                 for (i = cur.numberOfSux() - 1; i >= 0; i--) {
                     workList.add(cur.suxAt(i));
                 }
-                for (i = cur.numberOfExceptionHandlers() - 1; i >= 0; i--) {
-                    workList.add(cur.exceptionHandlerAt(i));
-                }
             }
         } while (!workList.isEmpty());
     }
 
-    BlockBegin commonDominator(BlockBegin a, BlockBegin b) {
-        assert a != null && b != null : "must have input blocks";
-
-        dominatorBlocks.clearAll();
-        while (a != null) {
-            dominatorBlocks.set(a.blockID);
-            assert a.dominator() != null || a == linearScanOrder.get(0) : "dominator must be initialized";
-            a = a.dominator();
-        }
-        while (b != null && !dominatorBlocks.get(b.blockID)) {
-            assert b.dominator() != null || b == linearScanOrder.get(0) : "dominator must be initialized";
-            b = b.dominator();
-        }
-
-        assert b != null : "could not find dominator";
-        return b;
-    }
-
-    void computeDominator(BlockBegin cur, BlockBegin parent) {
-        if (cur.dominator() == null) {
-            if (C1XOptions.TraceLinearScanLevel >= 4) {
-                TTY.println("DOM: initializing dominator of B%d to B%d", cur.blockID, parent.blockID);
-            }
-            if (cur.isExceptionEntry()) {
-                assert parent.dominator() != null;
-                cur.setDominator(parent.dominator());
-            } else {
-                cur.setDominator(parent);
-            }
-
-        } else if (!(cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader) && parent.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd))) {
-            if (C1XOptions.TraceLinearScanLevel >= 4) {
-                TTY.println("DOM: computing dominator of B%d: common dominator of B%d and B%d is B%d", cur.blockID, parent.blockID, cur.dominator().blockID, commonDominator(cur.dominator(), parent).blockID);
-            }
-            assert cur.numberOfPreds() > 1 : "";
-            cur.setDominator(commonDominator(cur.dominator(), parent));
-        }
-    }
-
-    int computeWeight(BlockBegin cur) {
-        BlockBegin singleSux = null;
+    int computeWeight(LIRBlock cur) {
+        LIRBlock singleSux = null;
         if (cur.numberOfSux() == 1) {
             singleSux = cur.suxAt(0);
         }
@@ -394,41 +332,41 @@ public final class ComputeLinearScanOrder {
         // this is necessary for the (very rare) case that two successive blocks have
         // the same loop depth, but a different loop index (can happen for endless loops
         // with exception handlers)
-        if (!cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader)) {
-            weight |= (1 << curBit);
+        if (!cur.isLinearScanLoopHeader()) {
+            weight |= 1 << curBit;
         }
         curBit--;
 
         // loop end blocks (blocks that end with a backward branch) are added
         // after all other blocks of the loop.
-        if (!cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd)) {
-            weight |= (1 << curBit);
+        if (!cur.isLinearScanLoopEnd()) {
+            weight |= 1 << curBit;
         }
         curBit--;
 
         // critical edge split blocks are preferred because then they have a greater
         // probability to be completely empty
-        if (cur.isCriticalEdgeSplit()) {
-            weight |= (1 << curBit);
-        }
-        curBit--;
+        //if (cur.isCriticalEdgeSplit()) {
+        //    weight |= 1 << curBit;
+        //}
+        //curBit--;
 
         // exceptions should not be thrown in normal control flow, so these blocks
         // are added as late as possible
-        if (!(cur.end() instanceof Throw) && (singleSux == null || !(singleSux.end() instanceof Throw))) {
-            weight |= (1 << curBit);
-        }
-        curBit--;
-        if (!(cur.end() instanceof Return) && (singleSux == null || !(singleSux.end() instanceof Return))) {
-            weight |= (1 << curBit);
-        }
-        curBit--;
+//        if (!(cur.end() instanceof Throw) && (singleSux == null || !(singleSux.end() instanceof Throw))) {
+//            weight |= 1 << curBit;
+//        }
+//        curBit--;
+//        if (!(cur.end() instanceof Return) && (singleSux == null || !(singleSux.end() instanceof Return))) {
+//            weight |= 1 << curBit;
+//        }
+//        curBit--;
 
         // exceptions handlers are added as late as possible
-        if (!cur.checkBlockFlag(BlockBegin.BlockFlag.ExceptionEntry)) {
-            weight |= (1 << curBit);
-        }
-        curBit--;
+//        if (!cur.isExceptionEntry()) {
+//            weight |= 1 << curBit;
+//        }
+//        curBit--;
 
         // guarantee that weight is > 0
         weight |= 1;
@@ -439,7 +377,7 @@ public final class ComputeLinearScanOrder {
         return weight;
     }
 
-    boolean readyForProcessing(BlockBegin cur) {
+    boolean readyForProcessing(LIRBlock cur) {
         // Discount the edge just traveled.
         // When the number drops to zero, all forward branches were processed
         if (decForwardBranches(cur) != 0) {
@@ -451,7 +389,7 @@ public final class ComputeLinearScanOrder {
         return true;
     }
 
-    void sortIntoWorkList(BlockBegin cur) {
+    void sortIntoWorkList(LIRBlock cur) {
         assert !workList.contains(cur) : "block already in work list";
 
         int curWeight = computeWeight(cur);
@@ -474,9 +412,9 @@ public final class ComputeLinearScanOrder {
         workList.set(insertIdx, cur);
 
         if (C1XOptions.TraceLinearScanLevel >= 3) {
-            TTY.println("Sorted B%d into worklist. new worklist:", cur.blockID);
+            TTY.println("Sorted B%d into worklist. new worklist:", cur.blockID());
             for (int i = 0; i < workList.size(); i++) {
-                TTY.println(String.format("%8d B%02d  weight:%6x", i, workList.get(i).blockID, workList.get(i).linearScanNumber()));
+                TTY.println(String.format("%8d B%02d  weight:%6x", i, workList.get(i).blockID(), workList.get(i).linearScanNumber()));
             }
         }
 
@@ -486,9 +424,9 @@ public final class ComputeLinearScanOrder {
         }
     }
 
-    void appendBlock(BlockBegin cur) {
+    void appendBlock(LIRBlock cur) {
         if (C1XOptions.TraceLinearScanLevel >= 3) {
-            TTY.println("appending block B%d (weight 0x%06x) to linear-scan order", cur.blockID, cur.linearScanNumber());
+            TTY.println("appending block B%d (weight 0x%06x) to linear-scan order", cur.blockID(), cur.linearScanNumber());
         }
         assert !linearScanOrder.contains(cur) : "cannot add the same block twice";
 
@@ -499,34 +437,16 @@ public final class ComputeLinearScanOrder {
         linearScanOrder.add(cur);
     }
 
-    void computeOrder(BlockBegin startBlock) {
+    void computeOrder(LIRBlock startBlock) {
         if (C1XOptions.TraceLinearScanLevel >= 3) {
             TTY.println("----- computing final block order");
         }
 
         // the start block is always the first block in the linear scan order
-        linearScanOrder = new ArrayList<BlockBegin>(numBlocks);
-        appendBlock(startBlock);
+        linearScanOrder = new ArrayList<LIRBlock>(numBlocks);
+//        appendBlock(startBlock);
 
-        assert startBlock.end() instanceof Base : "start block must end with Base-instruction";
-        BlockBegin stdEntry = ((Base) startBlock.end()).standardEntry();
-        BlockBegin osrEntry = ((Base) startBlock.end()).osrEntry();
-
-        BlockBegin suxOfOsrEntry = null;
-        if (osrEntry != null) {
-            // special handling for osr entry:
-            // ignore the edge between the osr entry and its successor for processing
-            // the osr entry block is added manually below
-            assert osrEntry.numberOfSux() == 1 : "osr entry must have exactly one successor";
-            assert osrEntry.suxAt(0).numberOfPreds() >= 2 : "sucessor of osr entry must have two predecessors (otherwise it is not present in normal control flow)";
-
-            suxOfOsrEntry = osrEntry.suxAt(0);
-            decForwardBranches(suxOfOsrEntry);
-
-            computeDominator(osrEntry, startBlock);
-            iterativeDominators = true;
-        }
-        computeDominator(stdEntry, startBlock);
+        LIRBlock stdEntry = startBlock; //.suxAt(0);
 
         // start processing with standard entry block
         assert workList.isEmpty() : "list must be empty before processing";
@@ -538,30 +458,15 @@ public final class ComputeLinearScanOrder {
         }
 
         do {
-            BlockBegin cur = workList.remove(workList.size() - 1);
+            LIRBlock cur = workList.remove(workList.size() - 1);
 
-            if (cur == suxOfOsrEntry) {
-                // the osr entry block is ignored in normal processing : it is never added to the
-                // work list. Instead : it is added as late as possible manually here.
-                appendBlock(osrEntry);
-                computeDominator(cur, osrEntry);
-            }
             appendBlock(cur);
 
             int i;
             int numSux = cur.numberOfSux();
             // changed loop order to get "intuitive" order of if- and else-blocks
             for (i = 0; i < numSux; i++) {
-                BlockBegin sux = cur.suxAt(i);
-                computeDominator(sux, cur);
-                if (readyForProcessing(sux)) {
-                    sortIntoWorkList(sux);
-                }
-            }
-            numSux = cur.numberOfExceptionHandlers();
-            for (i = 0; i < numSux; i++) {
-                BlockBegin sux = cur.exceptionHandlerAt(i);
-                computeDominator(sux, cur);
+                LIRBlock sux = cur.suxAt(i);
                 if (readyForProcessing(sux)) {
                     sortIntoWorkList(sux);
                 }
@@ -569,66 +474,11 @@ public final class ComputeLinearScanOrder {
         } while (workList.size() > 0);
     }
 
-    boolean computeDominatorsIter() {
-        boolean changed = false;
-        int numBlocks = linearScanOrder.size();
-
-        assert linearScanOrder.get(0).dominator() == null : "must not have dominator";
-        assert linearScanOrder.get(0).numberOfPreds() == 0 : "must not have predecessors";
-        for (int i = 1; i < numBlocks; i++) {
-            BlockBegin block = linearScanOrder.get(i);
-
-            assert block.numberOfPreds() > 0;
-            BlockBegin dominator = block.predAt(0);
-            if (block.isExceptionEntry()) {
-                dominator = dominator.dominator();
-            }
-
-            int numPreds = block.numberOfPreds();
-            for (int j = 1; j < numPreds; j++) {
-                BlockBegin curPred = block.predAt(j);
-                if (block.isExceptionEntry()) {
-                    curPred = curPred.dominator();
-                }
-                dominator = commonDominator(dominator, curPred);
-            }
-
-            if (dominator != block.dominator()) {
-                if (C1XOptions.TraceLinearScanLevel >= 4) {
-                    TTY.println("DOM: updating dominator of B%d from B%d to B%d", block.blockID, block.dominator().blockID, dominator.blockID);
-                }
-                block.setDominator(dominator);
-                changed = true;
-            }
-        }
-        return changed;
-    }
-
-    void computeDominators() {
-        if (C1XOptions.TraceLinearScanLevel >= 3) {
-            TTY.println("----- computing dominators (iterative computation reqired: %b)", iterativeDominators);
-        }
-
-        // iterative computation of dominators is only required for methods with non-natural loops
-        // and OSR-methods. For all other methods : the dominators computed when generating the
-        // linear scan block order are correct.
-        if (iterativeDominators) {
-            do {
-                if (C1XOptions.TraceLinearScanLevel >= 1) {
-                    TTY.println("DOM: next iteration of fix-point calculation");
-                }
-            } while (computeDominatorsIter());
-        }
-
-        // check that dominators are correct
-        assert !computeDominatorsIter() : "fix point not reached";
-    }
-
     public void printBlocks() {
         if (C1XOptions.TraceLinearScanLevel >= 2) {
             TTY.println("----- loop information:");
-            for (BlockBegin cur : linearScanOrder) {
-                TTY.print(String.format("%4d: B%02d: ", cur.linearScanNumber(), cur.blockID));
+            for (LIRBlock cur : linearScanOrder) {
+                TTY.print(String.format("%4d: B%02d: ", cur.linearScanNumber(), cur.blockID()));
                 for (int loopIdx = 0; loopIdx < numLoops; loopIdx++) {
                     TTY.print(String.format("%d = %b ", loopIdx, isBlockInLoop(loopIdx, cur)));
                 }
@@ -638,39 +488,27 @@ public final class ComputeLinearScanOrder {
 
         if (C1XOptions.TraceLinearScanLevel >= 1) {
             TTY.println("----- linear-scan block order:");
-            for (BlockBegin cur : linearScanOrder) {
-                TTY.print(String.format("%4d: B%02d    loop: %2d  depth: %2d", cur.linearScanNumber(), cur.blockID, cur.loopIndex(), cur.loopDepth()));
+            for (LIRBlock cur : linearScanOrder) {
+                TTY.print(String.format("%4d: B%02d    loop: %2d  depth: %2d", cur.linearScanNumber(), cur.blockID(), cur.loopIndex(), cur.loopDepth()));
 
-                TTY.print(cur.isExceptionEntry() ? " ex" : "   ");
-                TTY.print(cur.isCriticalEdgeSplit() ? " ce" : "   ");
-                TTY.print(cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader) ? " lh" : "   ");
-                TTY.print(cur.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopEnd) ? " le" : "   ");
+                TTY.print(cur.isLinearScanLoopHeader() ? " lh" : "   ");
+                TTY.print(cur.isLinearScanLoopEnd() ? " le" : "   ");
 
-                if (cur.dominator() != null) {
-                    TTY.print("    dom: B%d ", cur.dominator().blockID);
-                } else {
-                    TTY.print("    dom: null ");
-                }
+                TTY.print("    dom: null ");
+
 
                 if (cur.numberOfPreds() > 0) {
                     TTY.print("    preds: ");
                     for (int j = 0; j < cur.numberOfPreds(); j++) {
-                        BlockBegin pred = cur.predAt(j);
-                        TTY.print("B%d ", pred.blockID);
+                        LIRBlock pred = cur.predAt(j);
+                        TTY.print("B%d ", pred.blockID());
                     }
                 }
                 if (cur.numberOfSux() > 0) {
                     TTY.print("    sux: ");
                     for (int j = 0; j < cur.numberOfSux(); j++) {
-                        BlockBegin sux = cur.suxAt(j);
-                        TTY.print("B%d ", sux.blockID);
-                    }
-                }
-                if (cur.numberOfExceptionHandlers() > 0) {
-                    TTY.print("    ex: ");
-                    for (int j = 0; j < cur.numberOfExceptionHandlers(); j++) {
-                        BlockBegin ex = cur.exceptionHandlerAt(j);
-                        TTY.print("B%d ", ex.blockID);
+                        LIRBlock sux = cur.suxAt(j);
+                        TTY.print("B%d ", sux.blockID());
                     }
                 }
                 TTY.println();
@@ -679,7 +517,7 @@ public final class ComputeLinearScanOrder {
     }
 
     boolean verify() {
-        assert linearScanOrder.size() == numBlocks : "wrong number of blocks in list";
+       /* assert linearScanOrder.size() == numBlocks : "wrong number of blocks in list";
 
         if (C1XOptions.StressLinearScan) {
             // blocks are scrambled when StressLinearScan is used
@@ -746,7 +584,7 @@ public final class ComputeLinearScanOrder {
                 blockIdx++;
             }
         }
-
+*/
         return true;
     }
 }
