@@ -34,6 +34,7 @@ package com.oracle.truffle.api.instrument;
  * <strong>Disclaimer:</strong> experimental interface under development.
  *
  * @see Probe
+ * @see Wrapper
  */
 public enum StandardSyntaxTag implements SyntaxTag {
 
