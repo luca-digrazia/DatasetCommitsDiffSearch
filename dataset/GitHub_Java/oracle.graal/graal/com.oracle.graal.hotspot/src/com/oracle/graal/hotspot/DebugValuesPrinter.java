@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import jdk.vm.ci.common.JVMCIError;
+import jdk.internal.jvmci.common.JVMCIError;
 
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.debug.internal.DebugValue;
@@ -153,7 +153,7 @@ public class DebugValuesPrinter {
         final DebugValueMap map;
         private boolean printed;
 
-        DebugValueScope(DebugValueScope parent, DebugValueMap map) {
+        public DebugValueScope(DebugValueScope parent, DebugValueMap map) {
             this.parent = parent;
             this.map = map;
             this.level = parent == null ? 0 : parent.level + 1;

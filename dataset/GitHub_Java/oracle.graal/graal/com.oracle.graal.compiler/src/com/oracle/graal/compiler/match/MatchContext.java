@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,37 @@
  */
 package com.oracle.graal.compiler.match;
 
-import static com.oracle.graal.compiler.GraalDebugConfig.*;
+import static com.oracle.graal.debug.GraalDebugConfig.Options.LogVerbose;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.gen.*;
+import jdk.internal.jvmci.common.JVMCIError;
+
+import com.oracle.graal.compiler.gen.NodeLIRBuilder;
 import com.oracle.graal.compiler.match.MatchPattern.Result;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 
 /**
  * Container for state captured during a match.
  */
 public class MatchContext {
 
-    private final ValueNode root;
+    private final Node root;
 
-    private final List<ScheduledNode> nodes;
+    private final List<Node> nodes;
 
     private final MatchStatement rule;
 
     private Map<String, NamedNode> namedNodes;
 
-    private ArrayList<ValueNode> consumed;
+    private ArrayList<Node> consumed;
 
     private int startIndex;
 
@@ -56,16 +61,16 @@ public class MatchContext {
     private final NodeLIRBuilder builder;
 
     private static class NamedNode {
-        final Class<? extends ValueNode> type;
-        final ValueNode value;
+        final Class<? extends Node> type;
+        final Node value;
 
-        NamedNode(Class<? extends ValueNode> type, ValueNode value) {
+        NamedNode(Class<? extends Node> type, Node value) {
             this.type = type;
             this.value = value;
         }
     }
 
-    public MatchContext(NodeLIRBuilder builder, MatchStatement rule, int index, ValueNode node, List<ScheduledNode> nodes) {
+    public MatchContext(NodeLIRBuilder builder, MatchStatement rule, int index, Node node, List<Node> nodes) {
         this.builder = builder;
         this.rule = rule;
         this.root = node;
@@ -75,11 +80,11 @@ public class MatchContext {
         startIndex = endIndex = index;
     }
 
-    public ValueNode getRoot() {
+    public Node getRoot() {
         return root;
     }
 
-    public Result captureNamedValue(String name, Class<? extends ValueNode> type, ValueNode value) {
+    public Result captureNamedValue(String name, Class<? extends Node> type, Node value) {
         if (namedNodes == null) {
             namedNodes = new HashMap<>(2);
         }
@@ -90,7 +95,7 @@ public class MatchContext {
             return Result.OK;
         } else {
             if (current.value != value || current.type != type) {
-                return Result.NAMED_VALUE_MISMATCH(value, rule.getPattern());
+                return Result.namedValueMismatch(value, rule.getPattern());
             }
             return Result.OK;
         }
@@ -99,20 +104,20 @@ public class MatchContext {
     public Result validate() {
         // Ensure that there's no unsafe work in between these operations.
         for (int i = startIndex; i <= endIndex; i++) {
-            ScheduledNode node = nodes.get(i);
-            if (node instanceof ConstantNode || node instanceof LocationNode || node instanceof VirtualObjectNode || node instanceof ParameterNode) {
-                // these can be evaluated lazily so don't worry about them. This should probably be
-                // captured by some interface that indicates that their generate method is empty.
+            Node node = nodes.get(i);
+            if (node instanceof VirtualObjectNode || node instanceof FloatingNode) {
+                // The order of evaluation of these nodes controlled by data dependence so they
+                // don't interfere with this match.
                 continue;
-            } else if (consumed == null || !consumed.contains(node) && node != root) {
+            } else if ((consumed == null || !consumed.contains(node)) && node != root) {
                 if (LogVerbose.getValue()) {
                     Debug.log("unexpected node %s", node);
                     for (int j = startIndex; j <= endIndex; j++) {
-                        ScheduledNode theNode = nodes.get(j);
-                        Debug.log("%s(%s) %1s", (consumed.contains(theNode) || theNode == root) ? "*" : " ", theNode.usages().count(), theNode);
+                        Node theNode = nodes.get(j);
+                        Debug.log("%s(%s) %1s", (consumed != null && consumed.contains(theNode) || theNode == root) ? "*" : " ", theNode.getUsageCount(), theNode);
                     }
                 }
-                return Result.NOT_SAFE(node, rule.getPattern());
+                return Result.notSafe(node, rule.getPattern());
             }
         }
         return Result.OK;
@@ -126,10 +131,12 @@ public class MatchContext {
      */
     public void setResult(ComplexMatchResult result) {
         ComplexMatchValue value = new ComplexMatchValue(result);
-        Debug.log("matched %s %s", rule.getName(), rule.getPattern());
-        Debug.log("with nodes %s", rule.formatMatch(root));
+        if (Debug.isLogEnabled()) {
+            Debug.log("matched %s %s", rule.getName(), rule.getPattern());
+            Debug.log("with nodes %s", rule.formatMatch(root));
+        }
         if (consumed != null) {
-            for (ValueNode node : consumed) {
+            for (Node node : consumed) {
                 // All the interior nodes should be skipped during the normal doRoot calls in
                 // NodeLIRBuilder so mark them as interior matches. The root of the match will get a
                 // closure which will be evaluated to produce the final LIR.
@@ -144,17 +151,19 @@ public class MatchContext {
      *
      * @return Result.OK if the node can be safely consumed.
      */
-    public Result consume(ValueNode node) {
-        assert node.usages().count() <= 1 : "should have already been checked";
+    public Result consume(Node node) {
+        assert node.getUsageCount() <= 1 : "should have already been checked";
 
-        if (builder.hasOperand(node)) {
-            return Result.ALREADY_USED(node, rule.getPattern());
-        }
-
+        // Check NOT_IN_BLOCK first since that usually implies ALREADY_USED
         int index = nodes.indexOf(node);
         if (index == -1) {
-            return Result.NOT_IN_BLOCK(node, rule.getPattern());
+            return Result.notInBlock(node, rule.getPattern());
         }
+
+        if (builder.hasOperand(node)) {
+            return Result.alreadyUsed(node, rule.getPattern());
+        }
+
         startIndex = Math.min(startIndex, index);
         if (consumed == null) {
             consumed = new ArrayList<>(2);
@@ -168,16 +177,16 @@ public class MatchContext {
      *
      * @param name the name of a node in the match rule
      * @return the matched node
-     * @throws GraalInternalError is the named node doesn't exist.
+     * @throws JVMCIError is the named node doesn't exist.
      */
-    public ValueNode namedNode(String name) {
+    public Node namedNode(String name) {
         if (namedNodes != null) {
             NamedNode value = namedNodes.get(name);
             if (value != null) {
                 return value.value;
             }
         }
-        throw new GraalInternalError("missing node %s", name);
+        throw new JVMCIError("missing node %s", name);
     }
 
     @Override

@@ -28,23 +28,23 @@ import static com.oracle.graal.debug.GraalDebugConfig.Options.Log;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.MethodFilter;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.Verify;
 import static com.oracle.graal.debug.GraalDebugConfig.areScopedMetricsOrTimersEnabled;
-import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.runtime;
-import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
-import static jdk.vm.ci.inittimer.InitTimer.timer;
+import static jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntime.runtime;
+import static jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
+import static jdk.internal.jvmci.inittimer.InitTimer.timer;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.stack.StackIntrospection;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotProxified;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.inittimer.InitTimer;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.runtime.JVMCIBackend;
+import jdk.internal.jvmci.code.Architecture;
+import jdk.internal.jvmci.code.stack.StackIntrospection;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntime;
+import jdk.internal.jvmci.hotspot.HotSpotProxified;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
+import jdk.internal.jvmci.inittimer.InitTimer;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.runtime.JVMCIBackend;
 
 import com.oracle.graal.api.collections.CollectionsProvider;
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
@@ -58,8 +58,6 @@ import com.oracle.graal.graph.DefaultNodeCollectionsProvider;
 import com.oracle.graal.graph.NodeCollectionsProvider;
 import com.oracle.graal.hotspot.debug.BenchmarkCounters;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.meta.HotSpotStampProvider;
-import com.oracle.graal.nodes.spi.StampProvider;
 import com.oracle.graal.phases.tiers.CompilerConfiguration;
 import com.oracle.graal.replacements.SnippetCounter;
 import com.oracle.graal.runtime.RuntimeProvider;
@@ -203,8 +201,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
             return (T) this;
         } else if (clazz == SnippetReflectionProvider.class) {
             return (T) getHostProviders().getSnippetReflection();
-        } else if (clazz == StampProvider.class) {
-            return (T) new HotSpotStampProvider();
         }
         return null;
     }
