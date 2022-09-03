@@ -40,24 +40,68 @@
  */
 package com.oracle.truffle.sl;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.debug.*;
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.api.vm.*;
-import com.oracle.truffle.api.vm.PolyglotEngine.Value;
-import com.oracle.truffle.sl.builtins.*;
-import com.oracle.truffle.sl.nodes.*;
-import com.oracle.truffle.sl.nodes.call.*;
-import com.oracle.truffle.sl.nodes.controlflow.*;
-import com.oracle.truffle.sl.nodes.expression.*;
-import com.oracle.truffle.sl.nodes.instrument.*;
-import com.oracle.truffle.sl.nodes.local.*;
-import com.oracle.truffle.sl.parser.*;
-import com.oracle.truffle.sl.runtime.*;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.debug.DebugSupportException;
+import com.oracle.truffle.api.debug.DebugSupportProvider;
+import com.oracle.truffle.api.dsl.NodeFactory;
+import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrument.ASTProber;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentRootFactory;
+import com.oracle.truffle.api.instrument.Probe;
+import com.oracle.truffle.api.instrument.ToolSupportProvider;
+import com.oracle.truffle.api.instrument.Visualizer;
+import com.oracle.truffle.api.nodes.GraphPrintVisitor;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.api.vm.TruffleVM;
+import com.oracle.truffle.api.vm.TruffleVM.Symbol;
+import com.oracle.truffle.sl.builtins.SLBuiltinNode;
+import com.oracle.truffle.sl.builtins.SLDefineFunctionBuiltin;
+import com.oracle.truffle.sl.builtins.SLNanoTimeBuiltin;
+import com.oracle.truffle.sl.builtins.SLPrintlnBuiltin;
+import com.oracle.truffle.sl.builtins.SLReadlnBuiltin;
+import com.oracle.truffle.sl.nodes.SLRootNode;
+import com.oracle.truffle.sl.nodes.SLTypes;
+import com.oracle.truffle.sl.nodes.call.SLDispatchNode;
+import com.oracle.truffle.sl.nodes.call.SLInvokeNode;
+import com.oracle.truffle.sl.nodes.call.SLUndefinedFunctionException;
+import com.oracle.truffle.sl.nodes.controlflow.SLBlockNode;
+import com.oracle.truffle.sl.nodes.controlflow.SLBreakNode;
+import com.oracle.truffle.sl.nodes.controlflow.SLContinueNode;
+import com.oracle.truffle.sl.nodes.controlflow.SLIfNode;
+import com.oracle.truffle.sl.nodes.controlflow.SLReturnNode;
+import com.oracle.truffle.sl.nodes.controlflow.SLWhileNode;
+import com.oracle.truffle.sl.nodes.expression.SLAddNode;
+import com.oracle.truffle.sl.nodes.expression.SLBigIntegerLiteralNode;
+import com.oracle.truffle.sl.nodes.expression.SLDivNode;
+import com.oracle.truffle.sl.nodes.expression.SLEqualNode;
+import com.oracle.truffle.sl.nodes.expression.SLFunctionLiteralNode;
+import com.oracle.truffle.sl.nodes.expression.SLLessOrEqualNode;
+import com.oracle.truffle.sl.nodes.expression.SLLessThanNode;
+import com.oracle.truffle.sl.nodes.expression.SLLogicalAndNode;
+import com.oracle.truffle.sl.nodes.expression.SLLogicalOrNode;
+import com.oracle.truffle.sl.nodes.expression.SLMulNode;
+import com.oracle.truffle.sl.nodes.expression.SLStringLiteralNode;
+import com.oracle.truffle.sl.nodes.expression.SLSubNode;
+import com.oracle.truffle.sl.nodes.instrument.SLDefaultVisualizer;
+import com.oracle.truffle.sl.nodes.instrument.SLStandardASTProber;
+import com.oracle.truffle.sl.nodes.local.SLReadLocalVariableNode;
+import com.oracle.truffle.sl.nodes.local.SLWriteLocalVariableNode;
+import com.oracle.truffle.sl.parser.Parser;
+import com.oracle.truffle.sl.parser.SLNodeFactory;
+import com.oracle.truffle.sl.parser.Scanner;
+import com.oracle.truffle.sl.runtime.SLContext;
+import com.oracle.truffle.sl.runtime.SLFunction;
+import com.oracle.truffle.sl.runtime.SLFunctionRegistry;
+import com.oracle.truffle.sl.runtime.SLNull;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -180,7 +224,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
      * The main entry point. Use the mx command "mx sl" to run it with the correct class path setup.
      */
     public static void main(String[] args) throws IOException {
-        PolyglotEngine vm = PolyglotEngine.buildNew().build();
+        TruffleVM vm = TruffleVM.newVM().build();
         assert vm.getLanguages().containsKey("application/x-sl");
 
         setupToolDemos();
@@ -197,7 +241,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
             source = Source.fromFileName(args[0]);
         }
         vm.eval(source);
-        Value main = vm.findGlobalSymbol("main");
+        Symbol main = vm.findGlobalSymbol("main");
         if (main == null) {
             throw new SLException("No function main() defined in SL source file.");
         }
@@ -211,10 +255,10 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
      * Temporary method during API evolution, supports debugger integration.
      */
     public static void run(Source source) throws IOException {
-        PolyglotEngine vm = PolyglotEngine.buildNew().build();
+        TruffleVM vm = TruffleVM.newVM().build();
         assert vm.getLanguages().containsKey("application/x-sl");
         vm.eval(source);
-        Value main = vm.findGlobalSymbol("main");
+        Symbol main = vm.findGlobalSymbol("main");
         if (main == null) {
             throw new SLException("No function main() defined in SL source file.");
         }
@@ -225,7 +269,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
      * Parse and run the specified SL source. Factored out in a separate method so that it can also
      * be used by the unit test harness.
      */
-    public static long run(PolyglotEngine context, Path path, PrintWriter logOutput, PrintWriter out, int repeats, List<NodeFactory<? extends SLBuiltinNode>> currentBuiltins) throws IOException {
+    public static long run(TruffleVM context, Path path, PrintWriter logOutput, PrintWriter out, int repeats, List<NodeFactory<? extends SLBuiltinNode>> currentBuiltins) throws IOException {
         builtins = currentBuiltins;
 
         if (logOutput != null) {
@@ -241,7 +285,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
         }
 
         /* Lookup our main entry point, which is per definition always named "main". */
-        Value main = context.findGlobalSymbol("main");
+        Symbol main = context.findGlobalSymbol("main");
         if (main == null) {
             throw new SLException("No function main() defined in SL source file.");
         }

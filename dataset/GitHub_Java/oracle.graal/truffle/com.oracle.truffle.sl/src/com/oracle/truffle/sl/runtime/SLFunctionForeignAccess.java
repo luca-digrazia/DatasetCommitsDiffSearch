@@ -105,8 +105,7 @@ final class SLFunctionForeignAccess implements ForeignAccess.Factory {
             for (int i = 0; i < arr.length; i++) {
                 arr[i] = fromForeignValue(arr[i]);
             }
-            Object result = dispatch.executeDispatch(frame, function, arr);
-            return result;
+            return dispatch.executeDispatch(frame, function, arr);
         }
     }
 

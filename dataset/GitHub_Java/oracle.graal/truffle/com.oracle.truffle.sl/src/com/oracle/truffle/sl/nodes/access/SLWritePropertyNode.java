@@ -41,16 +41,8 @@
 package com.oracle.truffle.sl.nodes.access;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeChildren;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.utilities.ConditionProfile;
 import com.oracle.truffle.sl.SLException;
@@ -64,8 +56,11 @@ import com.oracle.truffle.sl.runtime.SLContext;
  * value if the property already exists or adds a new property. Finally, it returns the new value.
  */
 @NodeInfo(shortName = ".=")
-@NodeChildren({@NodeChild(value = "receiver", type = SLExpressionNode.class), @NodeChild(value = "value", type = SLExpressionNode.class)})
-public abstract class SLWritePropertyNode extends SLExpressionNode {
+public final class SLWritePropertyNode extends SLExpressionNode {
+
+    public static SLWritePropertyNode create(SourceSection src, SLExpressionNode receiverNode, String propertyName, SLExpressionNode valueNode) {
+        return new SLWritePropertyNode(src, receiverNode, propertyName, valueNode);
+    }
 
     @Child protected SLExpressionNode receiverNode;
     protected final String propertyName;
@@ -73,14 +68,18 @@ public abstract class SLWritePropertyNode extends SLExpressionNode {
     @Child protected SLWritePropertyCacheNode cacheNode;
     private final ConditionProfile receiverTypeCondition = ConditionProfile.createBinaryProfile();
 
-    SLWritePropertyNode(SourceSection src, String propertyName) {
+    private SLWritePropertyNode(SourceSection src, SLExpressionNode receiverNode, String propertyName, SLExpressionNode valueNode) {
         super(src);
+        this.receiverNode = receiverNode;
         this.propertyName = propertyName;
+        this.valueNode = valueNode;
         this.cacheNode = SLWritePropertyCacheNodeGen.create(propertyName);
     }
 
-    @Specialization(guards = "isSLObject(object)")
-    public Object doSLObject(DynamicObject object, Object value) {
+    @Override
+    public Object executeGeneric(VirtualFrame frame) {
+        Object value = valueNode.executeGeneric(frame);
+        Object object = receiverNode.executeGeneric(frame);
         if (receiverTypeCondition.profile(SLContext.isSLObject(object))) {
             cacheNode.executeObject(SLContext.castSLObject(object), value);
         } else {
@@ -88,16 +87,5 @@ public abstract class SLWritePropertyNode extends SLExpressionNode {
             throw new SLException("unexpected receiver type");
         }
         return value;
-    }
-
-    @Child private Node foreignWrite;
-
-    @Specialization
-    public Object doForeignObject(VirtualFrame frame, TruffleObject object, Object value) {
-        if (foreignWrite == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.foreignWrite = insert(Message.WRITE.createNode());
-        }
-        return ForeignAccess.execute(foreignWrite, frame, object, new Object[]{propertyName, value});
     }
 }

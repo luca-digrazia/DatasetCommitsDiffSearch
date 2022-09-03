@@ -41,7 +41,6 @@
 package com.oracle.truffle.sl.runtime;
 
 import com.oracle.truffle.api.ExecutionContext;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -49,13 +48,11 @@ import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.Layout;
 import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.builtins.SLAssertFalseBuiltinFactory;
 import com.oracle.truffle.sl.builtins.SLAssertTrueBuiltinFactory;
 import com.oracle.truffle.sl.builtins.SLBuiltinNode;
 import com.oracle.truffle.sl.builtins.SLDefineFunctionBuiltinFactory;
-import com.oracle.truffle.sl.builtins.SLEvalBuiltinFactory;
 import com.oracle.truffle.sl.builtins.SLHelloEqualsWorldBuiltinFactory;
 import com.oracle.truffle.sl.builtins.SLNanoTimeBuiltinFactory;
 import com.oracle.truffle.sl.builtins.SLNewObjectBuiltinFactory;
@@ -69,9 +66,7 @@ import com.oracle.truffle.sl.nodes.SLRootNode;
 import com.oracle.truffle.sl.nodes.local.SLReadArgumentNode;
 import com.oracle.truffle.sl.parser.Parser;
 import com.oracle.truffle.sl.parser.SLNodeFactory;
-
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.math.BigInteger;
 
@@ -93,21 +88,19 @@ public final class SLContext extends ExecutionContext {
     private final PrintWriter output;
     private final SLFunctionRegistry functionRegistry;
     private final Shape emptyShape;
-    private final TruffleLanguage.Env env;
 
-    public SLContext(SLLanguage language, TruffleLanguage.Env env, BufferedReader input, PrintWriter output) {
-        this(language, env, input, output, true);
+    public SLContext(SLLanguage language, BufferedReader input, PrintWriter output) {
+        this(language, input, output, true);
     }
 
     public SLContext(SLLanguage language) {
-        this(language, null, null, null, false);
+        this(language, null, null, false);
     }
 
-    private SLContext(SLLanguage language, TruffleLanguage.Env env, BufferedReader input, PrintWriter output, boolean installBuiltins) {
+    private SLContext(SLLanguage language, BufferedReader input, PrintWriter output, boolean installBuiltins) {
         this.language = language;
         this.input = input;
         this.output = output;
-        this.env = env;
         this.functionRegistry = new SLFunctionRegistry();
         installBuiltins(installBuiltins);
 
@@ -155,7 +148,6 @@ public final class SLContext extends ExecutionContext {
         installBuiltin(SLAssertTrueBuiltinFactory.getInstance(), registerRootNodes);
         installBuiltin(SLAssertFalseBuiltinFactory.getInstance(), registerRootNodes);
         installBuiltin(SLNewObjectBuiltinFactory.getInstance(), registerRootNodes);
-        installBuiltin(SLEvalBuiltinFactory.getInstance(), registerRootNodes);
     }
 
     public void installBuiltin(NodeFactory<? extends SLBuiltinNode> factory, boolean registerRootNodes) {
@@ -178,10 +170,8 @@ public final class SLContext extends ExecutionContext {
         SLBuiltinNode builtinBodyNode = factory.createNode(argumentNodes, this);
         /* The name of the builtin function is specified via an annotation on the node class. */
         String name = lookupNodeInfo(builtinBodyNode.getClass()).shortName();
-
-        final SourceSection srcSection = SourceSection.createUnavailable(SLLanguage.builtinKind, name);
         /* Wrap the builtin in a RootNode. Truffle requires all AST to start with a RootNode. */
-        SLRootNode rootNode = new SLRootNode(this, new FrameDescriptor(), builtinBodyNode, srcSection, name);
+        SLRootNode rootNode = new SLRootNode(this, new FrameDescriptor(), builtinBodyNode, name);
 
         if (registerRootNodes) {
             /* Register the builtin function in our function registry. */
@@ -232,9 +222,5 @@ public final class SLContext extends ExecutionContext {
             return ((Number) a).longValue();
         }
         return a;
-    }
-
-    public Object evalAny(Source source) throws IOException {
-        return env.eval(source);
     }
 }

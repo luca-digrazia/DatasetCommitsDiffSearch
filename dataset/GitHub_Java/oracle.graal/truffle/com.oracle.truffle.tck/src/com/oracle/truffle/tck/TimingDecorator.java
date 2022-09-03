@@ -34,7 +34,7 @@ class TimingDecorator extends TruffleJUnitRunListenerDecorator {
     private long startTime;
     private long classStartTime;
 
-    TimingDecorator(TruffleJUnitRunListener l) {
+    public TimingDecorator(TruffleJUnitRunListener l) {
         super(l);
     }
 

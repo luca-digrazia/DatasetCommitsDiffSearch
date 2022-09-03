@@ -107,7 +107,7 @@ public class ShapeProfiler {
         private long pas;
         private long pfs;
 
-        ShapeStats(String label) {
+        public ShapeStats(String label) {
             this.label = label;
         }
 

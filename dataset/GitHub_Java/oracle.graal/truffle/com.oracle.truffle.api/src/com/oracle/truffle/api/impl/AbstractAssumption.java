@@ -29,7 +29,7 @@ import com.oracle.truffle.api.Assumption;
 public abstract class AbstractAssumption implements Assumption {
 
     protected final String name;
-    protected volatile boolean isValid;
+    protected boolean isValid;
 
     protected AbstractAssumption(String name) {
         this.name = name;

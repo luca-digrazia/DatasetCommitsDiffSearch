@@ -22,12 +22,10 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import org.junit.Assert;
-import org.junit.Test;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.ShortCircuit;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.test.ExecuteEvaluatedTestFactory.DoubleEvaluatedNodeFactory;
 import com.oracle.truffle.api.dsl.test.ExecuteEvaluatedTestFactory.EvaluatedNodeFactory;
@@ -48,6 +46,8 @@ import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import org.junit.Assert;
+import org.junit.Test;
 
 public class ExecuteEvaluatedTest {
 
@@ -301,8 +301,7 @@ public class ExecuteEvaluatedTest {
 
         public abstract Object execute3(VirtualFrame frame, Object value, boolean hasB, Object b);
 
-        @SuppressWarnings("deprecation")
-        @com.oracle.truffle.api.dsl.ShortCircuit("b")
+        @ShortCircuit("b")
         public boolean needsB(Object a) {
             return true;
         }
@@ -323,8 +322,7 @@ public class ExecuteEvaluatedTest {
 
         public abstract Object execute3(VirtualFrame frame, Object value, boolean hasB, Object b);
 
-        @SuppressWarnings("deprecation")
-        @com.oracle.truffle.api.dsl.ShortCircuit("b")
+        @ShortCircuit("b")
         public boolean needsB(Object a) {
             return true;
         }
@@ -337,20 +335,6 @@ public class ExecuteEvaluatedTest {
         @Specialization
         int call(Object a, boolean hasB, Object b) {
             return 42;
-        }
-    }
-
-    /*
-     * Failed test where execute parameter Object[] was cased using (Object) which led to a compile
-     * error.
-     */
-    abstract static class TestExecuteWithObjectArg extends Node {
-
-        public abstract Object execute(VirtualFrame frame, Object[] args);
-
-        @Specialization
-        public Object test(@SuppressWarnings("unused") final Object[] args) {
-            return null;
         }
     }
 

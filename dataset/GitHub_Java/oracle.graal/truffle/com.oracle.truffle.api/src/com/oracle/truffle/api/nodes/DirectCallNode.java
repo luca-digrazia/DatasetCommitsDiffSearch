@@ -25,12 +25,9 @@
 package com.oracle.truffle.api.nodes;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleRuntime;
-import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 
 /**
@@ -49,16 +46,11 @@ import com.oracle.truffle.api.frame.VirtualFrame;
  * @see TruffleRuntime#createDirectCallNode(CallTarget)
  * @see #forceInlining()
  * @see #cloneCallTarget()
- * @since 0.8 or earlier
  */
 public abstract class DirectCallNode extends Node {
-    /** @since 0.8 or earlier */
+
     protected final CallTarget callTarget;
-    @Deprecated @CompilationFinal private VirtualFrame legacyFrame;
 
-    private static final Object[] EMPTY_ARGS = new Object[0];
-
-    /** @since 0.8 or earlier */
     protected DirectCallNode(CallTarget callTarget) {
         this.callTarget = callTarget;
     }
@@ -68,45 +60,8 @@ public abstract class DirectCallNode extends Node {
      *
      * @param arguments the arguments that should be passed to the callee
      * @return the return result of the call
-     * @since 0.8 or earlier
-     * @deprecated use call without frame instead
      */
-    @Deprecated
-    public Object call(@SuppressWarnings("unused") VirtualFrame frame, Object[] arguments) {
-        return call(arguments);
-    }
-
-    /**
-     * Calls the inner {@link CallTarget} returned by {@link #getCurrentCallTarget()}.
-     *
-     * @param arguments the arguments that should be passed to the callee
-     * @return the return result of the call
-     * @since 0.23
-     */
-    public Object call(Object[] arguments) {
-        // TODO change to varargs as soon as #call(VirtualFrame, Object[] will removed.
-        /*
-         * TODO the frame is for legacy support only. an up-to-date graal runtime will override this
-         * method and implement it more efficiently. As soon as the deprecated call(VirtualFrame,
-         * Object[]) is removed, then we should remove the dummyFrame as well.
-         */
-        if (legacyFrame == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            legacyFrame = createDummyFrame(this);
-        }
-        return call(legacyFrame, arguments);
-    }
-
-    static VirtualFrame createDummyFrame(Node node) {
-        FrameDescriptor descriptor;
-        RootNode root = node.getRootNode();
-        if (root == null) {
-            descriptor = new FrameDescriptor();
-        } else {
-            descriptor = root.getFrameDescriptor();
-        }
-        return Truffle.getRuntime().createVirtualFrame(EMPTY_ARGS, descriptor);
-    }
+    public abstract Object call(VirtualFrame frame, Object[] arguments);
 
     /**
      * Returns the originally supplied {@link CallTarget} when this call node was created. Please
@@ -114,7 +69,6 @@ public abstract class DirectCallNode extends Node {
      * called. For that use {@link #getCurrentCallTarget()} instead.
      *
      * @return the {@link CallTarget} provided.
-     * @since 0.8 or earlier
      */
     public CallTarget getCallTarget() {
         return callTarget;
@@ -125,7 +79,6 @@ public abstract class DirectCallNode extends Node {
      * {@link CallTarget} in this {@link DirectCallNode}.
      *
      * @return true if inlining is supported.
-     * @since 0.8 or earlier
      */
     public abstract boolean isInlinable();
 
@@ -135,7 +88,6 @@ public abstract class DirectCallNode extends Node {
      * by the runtime system which may at any point decide to inline.
      *
      * @return true if this method was inlined else false.
-     * @since 0.8 or earlier
      */
     public abstract boolean isInliningForced();
 
@@ -143,17 +95,29 @@ public abstract class DirectCallNode extends Node {
      * Enforces the runtime system to inline the {@link CallTarget} at this call site. If the
      * runtime system does not support inlining or it is already inlined this method has no effect.
      * The runtime system may decide to not inline calls which were forced to inline.
-     *
-     * @since 0.8 or earlier
      */
     public abstract void forceInlining();
+
+    /**
+     * Returns true if the runtime system has decided to inline this call-site. If the
+     * {@link DirectCallNode} was forced to inline then this does not necessarily mean that the
+     * {@link DirectCallNode} is really going to be inlined. This depends on whether or not the
+     * runtime system supports inlining. The runtime system may also decide to not inline calls
+     * which were forced to inline.
+     *
+     * @deprecated we do not expose this information any longer. returns always false.
+     */
+    @SuppressWarnings("static-method")
+    @Deprecated
+    public final boolean isInlined() {
+        return false;
+    }
 
     /**
      * Returns <code>true</code> if the runtime system supports cloning and the {@link RootNode}
      * returns <code>true</code> in {@link RootNode#isCloningAllowed()}.
      *
      * @return <code>true</code> if the target is allowed to be cloned.
-     * @since 0.8 or earlier
      */
     public abstract boolean isCallTargetCloningAllowed();
 
@@ -163,8 +127,6 @@ public abstract class DirectCallNode extends Node {
      * sensitive profiling information for this {@link DirectCallNode}. If
      * {@link #isCallTargetCloningAllowed()} returns <code>false</code> this method has no effect
      * and returns <code>false</code>.
-     *
-     * @since 0.8 or earlier
      */
     public abstract boolean cloneCallTarget();
 
@@ -173,7 +135,6 @@ public abstract class DirectCallNode extends Node {
      * runtime system or by the guest language implementation.
      *
      * @return if the target was split
-     * @since 0.8 or earlier
      */
     public final boolean isCallTargetCloned() {
         return getClonedCallTarget() != null;
@@ -183,7 +144,6 @@ public abstract class DirectCallNode extends Node {
      * Returns the split {@link CallTarget} if this call site's {@link CallTarget} is cloned.
      *
      * @return the split {@link CallTarget}
-     * @since 0.8 or earlier
      */
     public abstract CallTarget getClonedCallTarget();
 
@@ -193,7 +153,6 @@ public abstract class DirectCallNode extends Node {
      * {@link #getClonedCallTarget()}.
      *
      * @return the used {@link CallTarget} when node is called
-     * @since 0.8 or earlier
      */
     public CallTarget getCurrentCallTarget() {
         CallTarget split = getClonedCallTarget();
@@ -211,7 +170,6 @@ public abstract class DirectCallNode extends Node {
      *
      * @see #getCurrentCallTarget()
      * @return the root node of the used call target
-     * @since 0.8 or earlier
      */
     public final RootNode getCurrentRootNode() {
         CallTarget target = getCurrentCallTarget();
@@ -221,13 +179,11 @@ public abstract class DirectCallNode extends Node {
         return null;
     }
 
-    /** @since 0.8 or earlier */
     @Override
     public String toString() {
         return String.format("%s(target=%s)", getClass().getSimpleName(), getCurrentCallTarget());
     }
 
-    /** @since 0.8 or earlier */
     public static DirectCallNode create(CallTarget target) {
         return Truffle.getRuntime().createDirectCallNode(target);
     }

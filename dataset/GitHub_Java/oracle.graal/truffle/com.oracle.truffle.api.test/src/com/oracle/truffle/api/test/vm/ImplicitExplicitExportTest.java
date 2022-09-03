@@ -22,28 +22,38 @@
  */
 package com.oracle.truffle.api.test.vm;
 
-import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.debug.*;
-import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.debug.DebugSupportProvider;
+import com.oracle.truffle.api.instrument.ToolSupportProvider;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.api.vm.*;
-import java.io.*;
-import java.util.*;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.TruffleVM;
+import java.io.IOException;
+import java.io.Reader;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.Executors;
-import org.junit.*;
-import static org.junit.Assert.*;
+import org.junit.After;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
+import org.junit.Before;
+import org.junit.Test;
 
 public class ImplicitExplicitExportTest {
     private static Thread mainThread;
-    private PolyglotEngine vm;
+    private TruffleVM vm;
 
     @Before
     public void initializeVM() {
         mainThread = Thread.currentThread();
-        vm = PolyglotEngine.createNew().executor(Executors.newSingleThreadExecutor()).build();
+        vm = TruffleVM.newVM().executor(Executors.newSingleThreadExecutor()).build();
         assertTrue("Found " + L1 + " language", vm.getLanguages().containsKey(L1));
         assertTrue("Found " + L2 + " language", vm.getLanguages().containsKey(L2));
         assertTrue("Found " + L3 + " language", vm.getLanguages().containsKey(L3));

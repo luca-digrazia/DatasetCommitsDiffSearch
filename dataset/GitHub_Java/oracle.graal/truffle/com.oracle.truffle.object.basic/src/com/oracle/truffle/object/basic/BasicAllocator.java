@@ -45,7 +45,7 @@ import com.oracle.truffle.object.basic.BasicLocations.LongFieldLocation;
 import static com.oracle.truffle.object.basic.BasicLocations.OBJECT_SIZE;
 import com.oracle.truffle.object.basic.BasicLocations.ObjectArrayLocation;
 
-abstract class BasicAllocator extends ShapeImpl.BaseAllocator {
+public abstract class BasicAllocator extends ShapeImpl.BaseAllocator {
 
     public BasicAllocator(LayoutImpl layout) {
         super(layout);

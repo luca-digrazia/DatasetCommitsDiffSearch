@@ -37,11 +37,11 @@ class TruffleTextListener implements TruffleJUnitRunListener {
     private final PrintStream fWriter;
     protected Failure lastFailure;
 
-    TruffleTextListener(JUnitSystem system) {
+    public TruffleTextListener(JUnitSystem system) {
         this(system.out());
     }
 
-    TruffleTextListener(PrintStream writer) {
+    public TruffleTextListener(PrintStream writer) {
         fWriter = writer;
     }
 
@@ -120,7 +120,7 @@ class TruffleTextListener implements TruffleJUnitRunListener {
             private boolean failed;
 
             @Override
-            public void testStarted(Description description) {
+            public final void testStarted(Description description) {
                 Class<?> currentClass = description.getTestClass();
                 if (currentClass != lastClass) {
                     if (lastClass != null) {
@@ -137,13 +137,13 @@ class TruffleTextListener implements TruffleJUnitRunListener {
             }
 
             @Override
-            public void testFailure(Failure failure) {
+            public final void testFailure(Failure failure) {
                 failed = true;
                 l.testFailed(failure);
             }
 
             @Override
-            public void testFinished(Description description) {
+            public final void testFinished(Description description) {
                 // we have to do this because there is no callback for successful tests
                 if (!failed) {
                     l.testSucceeded(description);

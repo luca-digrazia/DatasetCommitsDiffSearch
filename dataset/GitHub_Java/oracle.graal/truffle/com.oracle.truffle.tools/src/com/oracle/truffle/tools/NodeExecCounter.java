@@ -24,21 +24,11 @@
  */
 package com.oracle.truffle.tools;
 
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
-
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrument.ASTProber;
 import com.oracle.truffle.api.instrument.Instrument;
-import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.InstrumentationTool;
 import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.instrument.ProbeException;
 import com.oracle.truffle.api.instrument.ProbeFailure;
@@ -50,6 +40,15 @@ import com.oracle.truffle.api.instrument.impl.DefaultStandardInstrumentListener;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.nodes.NodeVisitor;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * An {@link InstrumentationTool} that counts interpreter <em>execution calls</em> to AST nodes,
@@ -65,9 +64,9 @@ import com.oracle.truffle.api.nodes.NodeVisitor;
  * <p>
  * <ul>
  * <li>"Execution call" on a node is is defined as invocation of a node method that is instrumented
- * to produce the event {@link StandardInstrumentListener#onEnter(Probe, Node, VirtualFrame)};</li>
+ * to produce the event {@link StandardInstrumentListener#enter(Probe, Node, VirtualFrame)};</li>
  * <li>Execution calls are tabulated only at <em>instrumented</em> nodes, i.e. those for which
- * {@linkplain Instrumenter#isInstrumentable(Node) isInstrumentable() == true};</li>
+ * {@linkplain Node#isInstrumentable() isInstrumentable() == true};</li>
  * <li>Execution calls are tabulated only at nodes present in the AST when originally created;
  * dynamically added nodes will not be instrumented.</li>
  * </ul>
@@ -96,7 +95,7 @@ import com.oracle.truffle.api.nodes.NodeVisitor;
  * @see SyntaxTag
  * @see ProbeFailure
  */
-public final class NodeExecCounter extends Instrumenter.Tool<NodeExecCounter> {
+public final class NodeExecCounter extends InstrumentationTool {
 
     /**
      * Execution count for AST nodes of a particular type.
@@ -113,7 +112,7 @@ public final class NodeExecCounter extends Instrumenter.Tool<NodeExecCounter> {
      */
     private final StandardInstrumentListener instrumentListener = new DefaultStandardInstrumentListener() {
         @Override
-        public void onEnter(Probe probe, Node node, VirtualFrame vFrame) {
+        public void enter(Probe probe, Node node, VirtualFrame vFrame) {
             if (isEnabled()) {
                 final Class<?> nodeClass = node.getClass();
                 /*
@@ -171,7 +170,7 @@ public final class NodeExecCounter extends Instrumenter.Tool<NodeExecCounter> {
      * Create a per node-type execution counting tool for all nodes in subsequently created ASTs.
      */
     public NodeExecCounter() {
-        this(null);
+        this.countingTag = null;
     }
 
     /**
@@ -186,10 +185,10 @@ public final class NodeExecCounter extends Instrumenter.Tool<NodeExecCounter> {
     protected boolean internalInstall() {
         if (countingTag == null) {
             astProber = new ExecCounterASTProber();
-            getInstrumenter().registerASTProber(astProber);
+            Probe.registerASTProber(astProber);
         } else {
             probeListener = new NodeExecCounterProbeListener();
-            getInstrumenter().addProbeListener(probeListener);
+            Probe.addProbeListener(probeListener);
         }
         return true;
     }
@@ -203,10 +202,10 @@ public final class NodeExecCounter extends Instrumenter.Tool<NodeExecCounter> {
     @Override
     protected void internalDispose() {
         if (astProber != null) {
-            getInstrumenter().unregisterASTProber(astProber);
+            Probe.unregisterASTProber(astProber);
         }
         if (probeListener != null) {
-            getInstrumenter().removeProbeListener(probeListener);
+            Probe.removeProbeListener(probeListener);
         }
         for (Instrument instrument : instruments) {
             instrument.dispose();
@@ -290,28 +289,24 @@ public final class NodeExecCounter extends Instrumenter.Tool<NodeExecCounter> {
     /**
      * A prober that attempts to probe and instrument every node.
      */
-    private class ExecCounterASTProber implements ASTProber {
+    private class ExecCounterASTProber implements ASTProber, NodeVisitor {
 
-        public void probeAST(final Instrumenter instrumenter, final Node startNode) {
+        public boolean visit(Node node) {
 
-            startNode.accept(new NodeVisitor() {
-
-                public boolean visit(Node node) {
-
-                    if (instrumenter.isInstrumentable(node)) {
-                        try {
-
-                            final Probe probe = instrumenter.probe(node);
-                            final Instrument instrument = instrumenter.attach(probe, instrumentListener, "NodeExecCounter");
-                            instruments.add(instrument);
-                        } catch (ProbeException ex) {
-                            failures.add(ex.getFailure());
-                        }
-                    }
-                    return true;
+            if (node.isInstrumentable()) {
+                try {
+                    final Instrument instrument = Instrument.create(instrumentListener, "NodeExecCounter");
+                    instruments.add(instrument);
+                    node.probe().attach(instrument);
+                } catch (ProbeException ex) {
+                    failures.add(ex.getFailure());
                 }
+            }
+            return true;
+        }
 
-            });
+        public void probeAST(Node node) {
+            node.accept(this);
         }
     }
 
@@ -324,8 +319,9 @@ public final class NodeExecCounter extends Instrumenter.Tool<NodeExecCounter> {
         @Override
         public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
             if (countingTag == tag) {
-                final Instrument instrument = getInstrumenter().attach(probe, instrumentListener, NodeExecCounter.class.getSimpleName());
+                final Instrument instrument = Instrument.create(instrumentListener, NodeExecCounter.class.getSimpleName());
                 instruments.add(instrument);
+                probe.attach(instrument);
             }
         }
     }

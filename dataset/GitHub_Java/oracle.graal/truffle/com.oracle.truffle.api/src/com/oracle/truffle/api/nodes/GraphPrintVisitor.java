@@ -217,7 +217,7 @@ public class GraphPrintVisitor {
 
     protected void createElementForNode(Object node) {
         boolean exists = nodeMap.containsKey(node);
-        if (!exists) {
+        if (!exists || NodeUtil.findAnnotation(node.getClass(), GraphDuplicate.class) != null) {
             Element nodeElem = dom.createElement("node");
             nodeElem.setAttribute("id", !exists ? oldOrNextId(node) : nextId());
             nodeMap.put(node, nodeElem);
@@ -278,7 +278,7 @@ public class GraphPrintVisitor {
     }
 
     private void readNodeProperties(Node node) {
-        NodeFieldAccessor[] fields = NodeClass.get(node).getFields();
+        NodeFieldAccessor[] fields = node.getNodeClass().getFields();
         for (NodeFieldAccessor field : fields) {
             if (field.getKind() == NodeFieldKind.DATA) {
                 String key = field.getName();
@@ -323,7 +323,7 @@ public class GraphPrintVisitor {
         }
 
         // if node is visited once again, skip
-        if (getElementByObject(node) != null) {
+        if (getElementByObject(node) != null && NodeUtil.findAnnotation(node.getClass(), GraphDuplicate.class) == null) {
             return this;
         }
 
@@ -355,7 +355,7 @@ public class GraphPrintVisitor {
 
     private static LinkedHashMap<String, Node> findNamedNodeChildren(Node node) {
         LinkedHashMap<String, Node> nodes = new LinkedHashMap<>();
-        NodeClass nodeClass = NodeClass.get(node);
+        NodeClass nodeClass = node.getNodeClass();
 
         for (NodeFieldAccessor field : nodeClass.getFields()) {
             NodeFieldKind kind = field.getKind();
@@ -403,6 +403,15 @@ public class GraphPrintVisitor {
         void visit(Object node, GraphPrintAdapter gPrinter);
     }
 
+    public interface ChildSupplier {
+
+        /** Supplies an additional child if available. */
+        Object startNode(Object callNode);
+
+        void endNode(Object callNode);
+
+    }
+
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.TYPE)
     public @interface CustomGraphPrintHandler {
@@ -413,5 +422,15 @@ public class GraphPrintVisitor {
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.TYPE)
     public @interface NullGraphPrintHandler {
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
+    public @interface GraphDuplicate {
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.FIELD)
+    public @interface HiddenField {
     }
 }

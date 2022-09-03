@@ -40,15 +40,8 @@
  */
 package com.oracle.truffle.sl.parser;
 
-import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
@@ -56,9 +49,7 @@ import com.oracle.truffle.sl.nodes.SLExpressionNode;
 import com.oracle.truffle.sl.nodes.SLRootNode;
 import com.oracle.truffle.sl.nodes.SLStatementNode;
 import com.oracle.truffle.sl.nodes.access.SLReadPropertyNode;
-import com.oracle.truffle.sl.nodes.access.SLReadPropertyNodeGen;
 import com.oracle.truffle.sl.nodes.access.SLWritePropertyNode;
-import com.oracle.truffle.sl.nodes.access.SLWritePropertyNodeGen;
 import com.oracle.truffle.sl.nodes.call.SLInvokeNode;
 import com.oracle.truffle.sl.nodes.call.SLInvokeNodeGen;
 import com.oracle.truffle.sl.nodes.controlflow.SLBlockNode;
@@ -89,6 +80,11 @@ import com.oracle.truffle.sl.nodes.local.SLReadLocalVariableNodeGen;
 import com.oracle.truffle.sl.nodes.local.SLWriteLocalVariableNode;
 import com.oracle.truffle.sl.nodes.local.SLWriteLocalVariableNodeGen;
 import com.oracle.truffle.sl.runtime.SLContext;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Helper class used by the SL {@link Parser} to create nodes. The code is factored out of the
@@ -170,7 +166,8 @@ public class SLNodeFactory {
         assert lexicalScope == null : "Wrong scoping of blocks in parser";
 
         final SLFunctionBodyNode functionBodyNode = new SLFunctionBodyNode(functionSrc, methodBlock);
-        final SLRootNode rootNode = new SLRootNode(this.context, frameDescriptor, functionBodyNode, functionSrc, functionName);
+        final SLRootNode rootNode = new SLRootNode(this.context, frameDescriptor, functionBodyNode, functionName);
+        rootNode.assignSourceSection(functionSrc);
 
         context.getFunctionRegistry().register(functionName, rootNode);
 
@@ -349,8 +346,7 @@ public class SLNodeFactory {
     /**
      * Returns a {@link SLReadLocalVariableNode} if this read is a local variable or a
      * {@link SLFunctionLiteralNode} if this read is global. In Simple, the only global names are
-     * functions. </br> There is currently no instrumentation{@linkplain Instrumenter
-     * Instrumentation} for this node.
+     * functions. </br> There is currently no instrumentation for this node.
      *
      * @param nameToken The name of the variable/function being read
      * @return either:
@@ -408,7 +404,7 @@ public class SLNodeFactory {
         final int startPos = receiverNode.getSourceSection().getCharIndex();
         final int endPos = nameToken.charPos + nameToken.val.length();
         final SourceSection src = source.createSection(".", startPos, endPos - startPos);
-        return SLReadPropertyNodeGen.create(src, nameToken.val, receiverNode);
+        return SLReadPropertyNode.create(src, receiverNode, nameToken.val);
     }
 
     /**
@@ -423,7 +419,7 @@ public class SLNodeFactory {
         final int start = receiverNode.getSourceSection().getCharIndex();
         final int length = valueNode.getSourceSection().getCharEndIndex() - start;
         SourceSection src = source.createSection("=", start, length);
-        return SLWritePropertyNodeGen.create(src, nameToken.val, receiverNode, valueNode);
+        return SLWritePropertyNode.create(src, receiverNode, nameToken.val, valueNode);
     }
 
     /**

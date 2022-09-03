@@ -905,10 +905,16 @@ public abstract class Source {
 
         @Override
         String findMimeType() {
-            try {
-                return Files.probeContentType(file.toPath());
-            } catch (IOException ex) {
-                LOG.log(Level.SEVERE, null, ex);
+            if (file.getName().endsWith(".c")) {
+                return "text/x-c";
+            } else if (file.getName().endsWith(".R") || file.getName().endsWith(".r")) {
+                return "application/x-r";
+            } else {
+                try {
+                    return Files.probeContentType(file.toPath());
+                } catch (IOException ex) {
+                    LOG.log(Level.SEVERE, null, ex);
+                }
             }
             return null;
         }
@@ -987,10 +993,16 @@ public abstract class Source {
 
         @Override
         String findMimeType() {
-            try {
-                return Files.probeContentType(file.toPath());
-            } catch (IOException ex) {
-                LOG.log(Level.SEVERE, null, ex);
+            if (file.getName().endsWith(".c")) {
+                return "text/x-c";
+            } else if (file.getName().endsWith(".R") || file.getName().endsWith(".r")) {
+                return "application/x-r";
+            } else {
+                try {
+                    return Files.probeContentType(file.toPath());
+                } catch (IOException ex) {
+                    LOG.log(Level.SEVERE, null, ex);
+                }
             }
             return null;
         }

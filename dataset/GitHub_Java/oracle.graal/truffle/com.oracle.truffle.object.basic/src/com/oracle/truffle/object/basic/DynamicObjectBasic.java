@@ -47,7 +47,7 @@ public class DynamicObjectBasic extends DynamicObjectImpl {
     private Object[] objext;
     private long[] primext;
 
-    protected DynamicObjectBasic(Shape shape) {
+    public DynamicObjectBasic(Shape shape) {
         super(shape);
     }
 

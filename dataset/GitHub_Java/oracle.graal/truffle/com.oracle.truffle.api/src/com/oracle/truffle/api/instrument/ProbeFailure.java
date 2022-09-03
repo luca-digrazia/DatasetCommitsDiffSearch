@@ -24,6 +24,7 @@
  */
 package com.oracle.truffle.api.instrument;
 
+import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeFieldAccessor;
 import com.oracle.truffle.api.nodes.NodeUtil;
@@ -46,7 +47,7 @@ public final class ProbeFailure {
         WRAPPER_NODE("The node to be probed is a wrapper"),
 
         /**
-         * The node to be probed does not support {@linkplain Instrumenter Instrumentation} .
+         * The node to be probed returned {@link Node#isInstrumentable()}{@code == false}.
          */
         NOT_INSTRUMENTABLE("The node to be project is \"not instrumentable\""),
 
@@ -62,7 +63,7 @@ public final class ProbeFailure {
 
         final String message;
 
-        Reason(String message) {
+        private Reason(String message) {
             this.message = message;
         }
 
@@ -77,7 +78,7 @@ public final class ProbeFailure {
     private final Object wrapper;
 
     /**
-     * Description of an internal failure of {@link Instrumenter#probe(Node)}.
+     * Description of an internal failure of {@link Node#probe()}.
      *
      * @param reason what caused the failure
      * @param parent the parent, if known, of the child being probed

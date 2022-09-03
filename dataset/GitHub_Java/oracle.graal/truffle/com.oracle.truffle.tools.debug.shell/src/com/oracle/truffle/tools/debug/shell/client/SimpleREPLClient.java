@@ -24,12 +24,10 @@
  */
 package com.oracle.truffle.tools.debug.shell.client;
 
-import com.oracle.truffle.api.instrument.QuitException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.tools.debug.shell.REPLClient;
 import com.oracle.truffle.tools.debug.shell.REPLMessage;
-import com.oracle.truffle.tools.debug.shell.server.REPLServer;
-
+import com.oracle.truffle.tools.debug.shell.REPLServer;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -41,7 +39,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
-
 import jline.console.ConsoleReader;
 
 /**
@@ -111,7 +108,7 @@ public class SimpleREPLClient implements REPLClient {
     // Cheating for the prototype; prototype startup now happens from the language server.
     // So this isn't used.
     public static void main(String[] args) {
-        final SimpleREPLClient repl = new SimpleREPLClient(null);
+        final SimpleREPLClient repl = new SimpleREPLClient(null, null);
         repl.start();
     }
 
@@ -150,10 +147,9 @@ public class SimpleREPLClient implements REPLClient {
      */
     private Source selectedSource = null;
 
-    public SimpleREPLClient(REPLServer replServer) {
+    public SimpleREPLClient(String languageName, REPLServer replServer) {
+        this.languageName = languageName;
         this.replServer = replServer;
-        // TODO (mlvdv) language-dependent
-        this.languageName = replServer.getLanguageName();
         this.writer = System.out;
         try {
             this.reader = new ConsoleReader();
@@ -166,7 +162,6 @@ public class SimpleREPLClient implements REPLClient {
         addCommand(REPLRemoteCommand.BREAK_AT_LINE_ONCE_CMD);
         addCommand(REPLRemoteCommand.BREAK_AT_THROW_CMD);
         addCommand(REPLRemoteCommand.BREAK_AT_THROW_ONCE_CMD);
-        addCommand(REPLRemoteCommand.CALL_CMD);
         addCommand(REPLRemoteCommand.CLEAR_BREAK_CMD);
         addCommand(REPLRemoteCommand.CONDITION_BREAK_CMD);
         addCommand(REPLRemoteCommand.CONTINUE_CMD);
@@ -181,7 +176,8 @@ public class SimpleREPLClient implements REPLClient {
         addCommand(infoCommand);
         addCommand(REPLRemoteCommand.KILL_CMD);
         addCommand(listCommand);
-        addCommand(REPLRemoteCommand.LOAD_CMD);
+        addCommand(REPLRemoteCommand.LOAD_RUN_CMD);
+        addCommand(REPLRemoteCommand.LOAD_STEP_CMD);
         addCommand(quitCommand);
         addCommand(setCommand);
         addCommand(REPLRemoteCommand.STEP_INTO_CMD);
@@ -211,10 +207,18 @@ public class SimpleREPLClient implements REPLClient {
 
     public void start() {
 
+        REPLMessage startReply = replServer.start();
+
+        if (startReply.get(REPLMessage.STATUS).equals(REPLMessage.FAILED)) {
+            clientContext.displayFailReply(startReply.get(REPLMessage.DISPLAY_MSG));
+            throw new RuntimeException("Can't start REPL server");
+        }
+
         this.clientContext = new ClientContextImpl(null, null);
+
         try {
-            clientContext.startContextSession();
-        } catch (QuitException ex) {
+            clientContext.startSession();
+        } finally {
             clientContext.displayReply("Goodbye from " + languageName + "/REPL");
         }
 
@@ -259,26 +263,18 @@ public class SimpleREPLClient implements REPLClient {
             this.level = predecessor == null ? 0 : predecessor.level + 1;
 
             if (message != null) {
-                final String sourceName = message.get(REPLMessage.SOURCE_NAME);
                 try {
-                    this.haltedSource = Source.fromFileName(sourceName);
-                } catch (IOException ex) {
-                    final String code = message.get(REPLMessage.SOURCE_TEXT);
-                    if (code != null) {
-                        this.haltedSource = Source.fromText(code, sourceName);
-                    }
-                }
-                if (this.haltedSource != null) {
-                    selectedSource = haltedSource;
+                    this.haltedSource = Source.fromFileName(message.get(REPLMessage.SOURCE_NAME));
+                    selectedSource = this.haltedSource;
                     try {
                         haltedLineNumber = Integer.parseInt(message.get(REPLMessage.LINE_NUMBER));
                     } catch (NumberFormatException e) {
                         haltedLineNumber = 0;
                     }
-                } else {
+                } catch (IOException e1) {
                     this.haltedSource = null;
                     this.haltedLineNumber = 0;
-                    this.unknownSourceName = sourceName;
+                    this.unknownSourceName = message.get(REPLMessage.SOURCE_NAME);
                 }
             }
             updatePrompt();
@@ -480,7 +476,7 @@ public class SimpleREPLClient implements REPLClient {
             writer.println(TRACE_PREFIX + message);
         }
 
-        private void startContextSession() {
+        public void startSession() {
 
             while (true) {
                 try {
@@ -519,19 +515,15 @@ public class SimpleREPLClient implements REPLClient {
 
                     } else if (command instanceof REPLRemoteCommand) {
                         final REPLRemoteCommand remoteCommand = (REPLRemoteCommand) command;
+
                         final REPLMessage request = remoteCommand.createRequest(clientContext, args);
                         if (request == null) {
                             continue;
                         }
 
                         REPLMessage[] replies = sendToServer(request);
+
                         remoteCommand.processReply(clientContext, replies);
-
-                        final String path = replies[0].get(REPLMessage.FILE_PATH);
-                        if (path != null && !path.isEmpty()) {
-                            selectSource(path);
-                        }
-
                     } else {
                         assert false; // Should not happen.
                     }
@@ -659,7 +651,7 @@ public class SimpleREPLClient implements REPLClient {
         }
 
         try {
-            clientContext.startContextSession();
+            clientContext.startSession();
         } finally {
 
             // To continue execution, pop the context and return

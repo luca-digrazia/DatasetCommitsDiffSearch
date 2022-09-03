@@ -41,11 +41,11 @@
 package com.oracle.truffle.sl.nodes.instrument;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrument.EventHandlerNode;
-import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.Instrument;
+import com.oracle.truffle.api.instrument.KillException;
 import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.ProbeInstrument;
-import com.oracle.truffle.api.instrument.WrapperNode;
+import com.oracle.truffle.api.instrument.ProbeNode;
+import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -53,15 +53,15 @@ import com.oracle.truffle.sl.nodes.SLStatementNode;
 
 /**
  * A Truffle node that can be inserted into a Simple AST (assumed not to have executed yet) to
- * enable {@linkplain Instrumenter Instrumentation} of a {@link SLStatementNode}. Tools wishing to
- * interact with AST execution may attach {@link ProbeInstrument}s to the {@link Probe} uniquely
- * associated with the wrapper, and to which this wrapper routes execution events.
+ * enable "instrumentation" of a {@link SLStatementNode}. Tools wishing to interact with AST
+ * execution may attach {@link Instrument}s to the {@link Probe} uniquely associated with the
+ * wrapper, and to which this wrapper routes execution events.
  */
 @NodeInfo(cost = NodeCost.NONE)
 public final class SLStatementWrapperNode extends SLStatementNode implements WrapperNode {
 
     @Child private SLStatementNode child;
-    @Child private EventHandlerNode eventHandlerNode;
+    @Child private ProbeNode probeNode;
 
     public SLStatementWrapperNode(SLStatementNode child) {
         super(child.getSourceSection());
@@ -74,17 +74,21 @@ public final class SLStatementWrapperNode extends SLStatementNode implements Wra
     }
 
     @Override
+    public boolean isInstrumentable() {
+        return false;
+    }
+
+    @Override
     public SLStatementNode getNonWrapperNode() {
         return child;
     }
 
-    @Override
-    public void insertEventHandlerNode(EventHandlerNode eventHandler) {
-        this.eventHandlerNode = eventHandler;
+    public void insertProbe(ProbeNode newProbeNode) {
+        this.probeNode = newProbeNode;
     }
 
     public Probe getProbe() {
-        return eventHandlerNode.getProbe();
+        return probeNode.getProbe();
     }
 
     @Override
@@ -94,13 +98,15 @@ public final class SLStatementWrapperNode extends SLStatementNode implements Wra
 
     @Override
     public void executeVoid(VirtualFrame vFrame) {
-        eventHandlerNode.enter(child, vFrame);
+        probeNode.enter(child, vFrame);
 
         try {
             child.executeVoid(vFrame);
-            eventHandlerNode.returnVoid(child, vFrame);
+            probeNode.returnVoid(child, vFrame);
+        } catch (KillException e) {
+            throw (e);
         } catch (Exception e) {
-            eventHandlerNode.returnExceptional(child, vFrame, e);
+            probeNode.returnExceptional(child, vFrame, e);
             throw (e);
         }
     }

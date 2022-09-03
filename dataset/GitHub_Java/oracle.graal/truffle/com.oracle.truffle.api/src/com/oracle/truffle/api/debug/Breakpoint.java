@@ -24,19 +24,19 @@
  */
 package com.oracle.truffle.api.debug;
 
-import java.io.IOException;
-
-import javax.sound.midi.Instrument;
-
-import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.Instrument;
 import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.source.Source;
+import java.io.IOException;
 
 /**
- * Breakpoint in an executing {@link com.oracle.truffle.api.vm.PolyglotEngine}.
- *
- * @see Debugger
+ * Breakpoint in a {@link com.oracle.truffle.api.vm.TruffleVM} with
+ * {@link com.oracle.truffle.api.debug debugging turned on}. You can ask
+ * {@link Debugger#setLineBreakpoint(int, com.oracle.truffle.api.source.LineLocation, boolean)} or
+ * {@link Debugger#setTagBreakpoint(int, com.oracle.truffle.api.instrument.SyntaxTag, boolean)} to
+ * create an instance of {@link Breakpoint}.
  */
+@SuppressWarnings("javadoc")
 public abstract class Breakpoint {
 
     /**
@@ -108,15 +108,15 @@ public abstract class Breakpoint {
 
     private State state;
 
-    protected Breakpoint(State state, int ignoreCount, boolean isOneShot) {
+    Breakpoint(State state, int ignoreCount, boolean isOneShot) {
         this.state = state;
         this.isOneShot = isOneShot;
         this.ignoreCount = ignoreCount;
     }
 
     /**
-     * Enables or disables this breakpoint's AST {@linkplain Instrumenter instrumentation}. The
-     * breakpoint is enabled by default.
+     * Enables or disables this breakpoint's AST instrumentation. The breakpoint is enabled by
+     * default.
      *
      * @param enabled <code>true</code> to activate the instrumentation, <code>false</code> to
      *            deactivate the instrumentation so that it has no effect.
@@ -139,10 +139,10 @@ public abstract class Breakpoint {
     public abstract void setCondition(String expr) throws IOException;
 
     /**
-     * Gets the text that defines the current condition on this breakpoint; {@code null} if this
-     * breakpoint is currently unconditional.
+     * Gets the string, expressed in the Guest Language, that defines the current condition on this
+     * breakpoint; {@code null} if this breakpoint is currently unconditional.
      */
-    public Source getCondition() {
+    public String getCondition() {
         return null;
     }
 
@@ -197,7 +197,7 @@ public abstract class Breakpoint {
         assert state == s;
     }
 
-    protected final void setState(State state) {
+    final void setState(State state) {
         this.state = state;
     }
 

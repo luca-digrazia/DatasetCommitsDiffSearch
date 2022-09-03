@@ -29,7 +29,7 @@ import com.oracle.truffle.api.nodes.Node;
 
 public interface FrameInstance {
 
-    enum FrameAccess {
+    public static enum FrameAccess {
         NONE,
         READ_ONLY,
         READ_WRITE,

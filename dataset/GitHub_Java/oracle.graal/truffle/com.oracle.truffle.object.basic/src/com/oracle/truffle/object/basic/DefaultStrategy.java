@@ -22,9 +22,8 @@
  */
 package com.oracle.truffle.object.basic;
 
-import java.util.Objects;
-
 import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.api.object.Layout;
 import com.oracle.truffle.api.object.Location;
 import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
@@ -33,59 +32,64 @@ import com.oracle.truffle.object.LayoutStrategy;
 import com.oracle.truffle.object.LocationImpl;
 import com.oracle.truffle.object.ShapeImpl;
 import com.oracle.truffle.object.ShapeImpl.BaseAllocator;
+import java.util.Objects;
 
-class DefaultStrategy extends LayoutStrategy {
-    @Override
+class DefaultStrategy implements LayoutStrategy {
     public boolean updateShape(DynamicObject object) {
         assert object.getShape().isValid();
         return false;
     }
 
-    @Override
-    public ShapeImpl ensureValid(ShapeImpl newShape) {
+    public Shape returnCached(Shape newShape) {
         assert newShape.isValid();
         return newShape;
     }
 
-    private static boolean assertLocationInRange(ShapeImpl shape, Location location) {
+    private static boolean assertLocationInRange(Shape shape, Location location) {
         BasicLayout layout = (BasicLayout) shape.getLayout();
-        assert (shape.getPrimitiveFieldSize() + ((LocationImpl) location).primitiveFieldCount() <= layout.getPrimitiveFieldCount());
-        assert (shape.getObjectFieldSize() + ((LocationImpl) location).objectFieldCount() <= layout.getObjectFieldCount());
+        assert (((ShapeImpl) shape).getPrimitiveFieldSize() + ((LocationImpl) location).primitiveFieldCount() <= layout.getPrimitiveFieldCount());
+        assert (((ShapeImpl) shape).getObjectFieldSize() + ((LocationImpl) location).objectFieldCount() <= layout.getObjectFieldCount());
         return true;
     }
 
-    @Override
-    public ShapeImpl ensureSpace(ShapeImpl shape, Location location) {
+    public Shape ensureSpace(Shape shape, Location location) {
         Objects.requireNonNull(location);
         assert assertLocationInRange(shape, location);
         return shape;
     }
 
-    @Override
     public boolean isAutoExtArray() {
         return false;
     }
 
-    @Override
-    public ShapeAndProperty generalizeProperty(Property oldProperty, Object value, ShapeImpl currentShape, ShapeImpl nextShape) {
+    public Property generalizeProperty(DynamicObject object, Property oldProperty, Object value) {
+        Shape oldShape = object.getShape();
+        Location oldLocation = oldProperty.getLocation();
+        Location newLocation = ((BasicAllocator) oldShape.allocator()).locationForValueUpcast(value, oldLocation);
+        Property newProperty = oldProperty.relocate(newLocation);
+        Shape newShape = oldShape.replaceProperty(oldProperty, newProperty);
+        newProperty.setSafe(object, value, oldShape, newShape);
+        return newProperty;
+    }
+
+    public Property generalizeProperty(DynamicObject object, Property oldProperty, Object value, Shape currentShape, Shape oldNewShape) {
         Location oldLocation = oldProperty.getLocation();
         Location newLocation = ((BasicAllocator) currentShape.allocator()).locationForValueUpcast(value, oldLocation);
         Property newProperty = oldProperty.relocate(newLocation);
-        Shape newShape = nextShape.replaceProperty(oldProperty, newProperty);
-        return new ShapeAndProperty(newShape, newProperty);
+        Shape newShape = oldNewShape.replaceProperty(oldProperty, newProperty);
+        newProperty.setSafe(object, value, currentShape, newShape);
+        return newProperty;
     }
 
-    @Override
-    public BaseAllocator createAllocator(ShapeImpl shape) {
-        return new DefaultAllocatorImpl(shape);
+    public BaseAllocator createAllocator(Shape shape) {
+        return new DefaultAllocatorImpl((ShapeImpl) shape);
     }
 
-    @Override
-    public BaseAllocator createAllocator(LayoutImpl layout) {
-        return new DefaultAllocatorImpl(layout);
+    public BaseAllocator createAllocator(Layout layout) {
+        return new DefaultAllocatorImpl((LayoutImpl) layout);
     }
 
-    static class DefaultAllocatorImpl extends BasicAllocator {
+    public static class DefaultAllocatorImpl extends BasicAllocator {
         protected DefaultAllocatorImpl(LayoutImpl layout) {
             super(layout);
         }

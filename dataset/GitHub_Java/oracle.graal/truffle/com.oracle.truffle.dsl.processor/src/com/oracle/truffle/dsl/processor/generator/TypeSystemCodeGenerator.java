@@ -238,7 +238,7 @@ public class TypeSystemCodeGenerator extends CodeTypeElementFactory<TypeSystemDa
         private final ProcessorContext context;
         private final TypeSystemData typeSystem;
 
-        TypeClassFactory(ProcessorContext context, TypeSystemData typeSystem) {
+        public TypeClassFactory(ProcessorContext context, TypeSystemData typeSystem) {
             this.context = context;
             this.typeSystem = typeSystem;
         }

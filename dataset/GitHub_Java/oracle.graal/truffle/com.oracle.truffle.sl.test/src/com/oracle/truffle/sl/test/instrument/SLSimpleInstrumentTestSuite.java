@@ -43,10 +43,8 @@ package com.oracle.truffle.sl.test.instrument;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-@Deprecated
-@SuppressWarnings("deprecation")
 @RunWith(SLInstrumentTestRunner.class)
-@SLInstrumentTestSuite({"tests_instrumentation"})
+@SLInstrumentTestSuite({"truffle/com.oracle.truffle.sl.test/tests_instrumentation", "tests_instrumentation"})
 public class SLSimpleInstrumentTestSuite {
 
     public static void main(String[] args) throws Exception {

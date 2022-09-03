@@ -24,7 +24,6 @@ package com.oracle.truffle.dsl.processor.expression;
 
 import com.oracle.truffle.dsl.processor.ProcessorContext;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.Binary;
-import com.oracle.truffle.dsl.processor.expression.DSLExpression.BooleanLiteral;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.Call;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.DSLExpressionVisitor;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.IntLiteral;
@@ -236,10 +235,6 @@ public class DSLExpressionResolver implements DSLExpressionVisitor {
         if (variable.getResolvedVariable() == null) {
             throw new InvalidExpressionException(String.format("%s cannot be resolved.", variable.getName()));
         }
-    }
-
-    public void visitBooleanLiteral(BooleanLiteral binary) {
-        binary.setResolvedType(context.getType(boolean.class));
     }
 
     public void visitIntLiteral(IntLiteral binary) {

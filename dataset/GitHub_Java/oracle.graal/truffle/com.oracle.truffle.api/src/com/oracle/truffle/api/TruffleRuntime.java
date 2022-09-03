@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,8 +24,6 @@
  */
 package com.oracle.truffle.api;
 
-import java.util.Collection;
-
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
@@ -37,6 +35,7 @@ import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.nodes.RootNode;
+import java.util.Collection;
 
 /**
  * Interface representing a Truffle runtime object. The runtime is responsible for creating call
@@ -70,11 +69,7 @@ public interface TruffleRuntime {
     DirectCallNode createDirectCallNode(CallTarget target);
 
     /**
-     * Creates a new loop node with an implementation provided by a Truffle runtime implementation.
-     * Using Truffle loop nodes allows the runtime to do additional optimizations such as on stack
-     * replacement for loops.
-     *
-     * @see LoopNode usage example
+     * Experimental API. May change without notice.
      */
     LoopNode createLoopNode(RepeatingNode body);
 
@@ -177,14 +172,5 @@ public interface TruffleRuntime {
      * Internal API method. Do not use.
      */
     void notifyTransferToInterpreter();
-
-    /**
-     * Whether or not the {@link TruffleRuntime} implementation can or wants to use gathered
-     * profiling information Truffle compilation. If this method returns <code>false</code> then all
-     * profiles in the {@link com.oracle.truffle.api.utilities} package are returning void
-     * implementations. If it returns <code>true</code> then all implementations gather profilinig
-     * information.
-     */
-    boolean isProfilingEnabled();
 
 }

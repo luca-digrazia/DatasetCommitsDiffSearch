@@ -25,7 +25,6 @@
 package com.oracle.truffle.tools.debug.shell.server;
 
 import com.oracle.truffle.api.debug.Breakpoint;
-import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
@@ -39,7 +38,6 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.tools.debug.shell.REPLMessage;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -106,23 +104,14 @@ public abstract class REPLHandler {
         return replies;
     }
 
-    protected static final REPLMessage[] finishReplyFailed(REPLMessage reply, Exception ex) {
-        reply.put(REPLMessage.STATUS, REPLMessage.FAILED);
-        String message = ex.getMessage();
-        reply.put(REPLMessage.DISPLAY_MSG, message == null ? ex.getClass().getSimpleName() : message);
-        final REPLMessage[] replies = new REPLMessage[]{reply};
-        return replies;
-    }
-
     static final REPLMessage createBreakpointInfoMessage(Breakpoint breakpoint, REPLServerContext serverContext) {
         final REPLMessage infoMessage = new REPLMessage(REPLMessage.OP, REPLMessage.BREAKPOINT_INFO);
         infoMessage.put(REPLMessage.BREAKPOINT_ID, Integer.toString(serverContext.getBreakpointID(breakpoint)));
-        infoMessage.put(REPLMessage.BREAKPOINT_STATE, breakpoint.getState().getName());
         infoMessage.put(REPLMessage.BREAKPOINT_HIT_COUNT, Integer.toString(breakpoint.getHitCount()));
         infoMessage.put(REPLMessage.BREAKPOINT_IGNORE_COUNT, Integer.toString(breakpoint.getIgnoreCount()));
         infoMessage.put(REPLMessage.INFO_VALUE, breakpoint.getLocationDescription().toString());
         if (breakpoint.getCondition() != null) {
-            infoMessage.put(REPLMessage.BREAKPOINT_CONDITION, breakpoint.getCondition().getCode());
+            infoMessage.put(REPLMessage.BREAKPOINT_CONDITION, breakpoint.getCondition());
         }
         infoMessage.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
         return infoMessage;
@@ -180,7 +169,7 @@ public abstract class REPLHandler {
             try {
                 source = Source.fromFileName(lookupFile, true);
             } catch (Exception ex) {
-                return finishReplyFailed(reply, ex);
+                return finishReplyFailed(reply, ex.getMessage());
             }
             if (source == null) {
                 return finishReplyFailed(reply, fileName + " not found");
@@ -193,16 +182,12 @@ public abstract class REPLHandler {
             if (ignoreCount == null) {
                 ignoreCount = 0;
             }
-            final Debugger db = serverContext.db();
-            if (db == null) {
-                return finishReplyFailed(reply, "debugger not initialized");
-            }
             Breakpoint breakpoint;
             try {
-                breakpoint = db.setLineBreakpoint(DEFAULT_IGNORE_COUNT, source.createLineLocation(lineNumber), false);
+                breakpoint = serverContext.db().setLineBreakpoint(DEFAULT_IGNORE_COUNT, source.createLineLocation(lineNumber), false);
                 serverContext.registerBreakpoint(breakpoint);
             } catch (Exception ex) {
-                return finishReplyFailed(reply, ex);
+                return finishReplyFailed(reply, ex.getMessage());
             }
             reply.put(REPLMessage.SOURCE_NAME, fileName);
             reply.put(REPLMessage.FILE_PATH, source.getPath());
@@ -225,7 +210,7 @@ public abstract class REPLHandler {
             try {
                 source = Source.fromFileName(lookupFile, true);
             } catch (Exception ex) {
-                return finishReplyFailed(reply, ex);
+                return finishReplyFailed(reply, ex.getMessage());
             }
             if (source == null) {
                 return finishReplyFailed(reply, fileName + " not found");
@@ -238,7 +223,7 @@ public abstract class REPLHandler {
                 Breakpoint b = serverContext.db().setLineBreakpoint(DEFAULT_IGNORE_COUNT, source.createLineLocation(lineNumber), true);
                 serverContext.registerBreakpoint(b);
             } catch (Exception ex) {
-                return finishReplyFailed(reply, ex);
+                return finishReplyFailed(reply, ex.getMessage());
             }
             reply.put(REPLMessage.SOURCE_NAME, fileName);
             reply.put(REPLMessage.FILE_PATH, source.getPath());
@@ -257,7 +242,7 @@ public abstract class REPLHandler {
                 serverContext.registerBreakpoint(b);
                 return finishReplySucceeded(reply, "Breakpoint at any throw set");
             } catch (Exception ex) {
-                return finishReplyFailed(reply, ex);
+                return finishReplyFailed(reply, ex.getMessage());
             }
         }
     };
@@ -271,7 +256,7 @@ public abstract class REPLHandler {
                 serverContext.db().setTagBreakpoint(DEFAULT_IGNORE_COUNT, StandardSyntaxTag.THROW, true);
                 return finishReplySucceeded(reply, "One-shot breakpoint at any throw set");
             } catch (Exception ex) {
-                return finishReplyFailed(reply, ex);
+                return finishReplyFailed(reply, ex.getMessage());
             }
         }
     };
@@ -384,20 +369,20 @@ public abstract class REPLHandler {
             if (fileName == null) {
                 return finishReplyFailed(reply, "no file specified");
             }
-            reply.put(REPLMessage.SOURCE_NAME, fileName);
             try {
                 Source source = Source.fromFileName(fileName);
                 if (source == null) {
-                    return finishReplyFailed(reply, "file \"" + fileName + "\" not found");
+                    reply.put(REPLMessage.SOURCE_NAME, fileName);
+                    return finishReplyFailed(reply, " not found");
                 } else {
+                    reply.put(REPLMessage.SOURCE_NAME, fileName);
                     reply.put(REPLMessage.FILE_PATH, source.getPath());
                     reply.put(REPLMessage.CODE, source.getCode());
                     return finishReplySucceeded(reply, "file found");
                 }
-            } catch (IOException ex) {
-                return finishReplyFailed(reply, "can't read file \"" + fileName + "\"");
             } catch (Exception ex) {
-                return finishReplyFailed(reply, ex);
+                reply.put(REPLMessage.SOURCE_NAME, fileName);
+                return finishReplyFailed(reply, "file \"" + fileName + "\" not found");
             }
         }
     };
@@ -439,7 +424,7 @@ public abstract class REPLHandler {
                 }
                 return finishReplySucceeded(frameMessage, sb.toString());
             } catch (Exception ex) {
-                return finishReplyFailed(frameMessage, ex);
+                return finishReplyFailed(frameMessage, ex.toString());
             }
         }
     };
@@ -486,8 +471,6 @@ public abstract class REPLHandler {
                 return finishReplyFailed(message, "invalid condition for " + breakpointNumber);
             } catch (UnsupportedOperationException ex) {
                 return finishReplyFailed(message, "conditions not unsupported by breakpoint " + breakpointNumber);
-            } catch (Exception ex) {
-                return finishReplyFailed(message, ex);
             }
             message.put(REPLMessage.BREAKPOINT_CONDITION, expr);
             return finishReplySucceeded(message, "Breakpoint " + breakpointNumber + " condition=\"" + expr + "\"");
@@ -564,7 +547,7 @@ public abstract class REPLHandler {
                 }
 
             } catch (Exception ex) {
-                return finishReplyFailed(reply, ex);
+                return finishReplyFailed(reply, ex.toString());
             }
         }
     };
@@ -585,10 +568,10 @@ public abstract class REPLHandler {
             }
             try {
                 breakpoint.setCondition(null);
-            } catch (Exception ex) {
-                return finishReplyFailed(message, ex);
+            } catch (IOException e) {
+                return finishReplyFailed(message, e.getMessage());
             }
-            return finishReplySucceeded(message, "Breakpoint " + breakpointNumber + " condition cleared");
+            return finishReplyFailed(message, "Breakpoint " + breakpointNumber + " condition cleared");
         }
     };
 
@@ -616,7 +599,7 @@ public abstract class REPLHandler {
                 }
                 return finishReplySucceeded(reply, sb.toString());
             } catch (Exception ex) {
-                return finishReplyFailed(reply, ex);
+                return finishReplyFailed(reply, ex.toString());
             }
         }
     };

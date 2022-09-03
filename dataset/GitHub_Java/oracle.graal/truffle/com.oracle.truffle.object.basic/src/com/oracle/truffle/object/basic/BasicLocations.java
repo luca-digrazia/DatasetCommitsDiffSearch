@@ -36,7 +36,6 @@ import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.object.LocationImpl;
 import com.oracle.truffle.object.LocationImpl.InternalLongLocation;
-
 import java.lang.invoke.MethodHandle;
 
 /**
@@ -89,7 +88,7 @@ public abstract class BasicLocations {
         }
 
         @Override
-        public String getWhereString() {
+        protected String getWhereString() {
             return "[" + index + "]";
         }
     }
@@ -126,7 +125,7 @@ public abstract class BasicLocations {
         }
 
         @Override
-        public String getWhereString() {
+        protected String getWhereString() {
             return "@" + index;
         }
     }
@@ -461,11 +460,6 @@ public abstract class BasicLocations {
         public Class<Long> getType() {
             return long.class;
         }
-
-        @Override
-        public boolean equals(Object obj) {
-            return super.equals(obj) && this.allowInt == ((LongLocationDecorator) obj).allowInt;
-        }
     }
 
     public abstract static class SimpleLongFieldLocation extends FieldLocation implements InternalLongLocation {
@@ -570,16 +564,6 @@ public abstract class BasicLocations {
         @Override
         public final void accept(LocationVisitor locationVisitor) {
             ((LocationImpl) longLocation).accept(locationVisitor);
-        }
-
-        @Override
-        public String getWhereString() {
-            return longLocation.getWhereString();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            return super.equals(obj) && this.longLocation.equals(((PrimitiveLocationDecorator) obj).longLocation);
         }
     }
 
@@ -686,11 +670,6 @@ public abstract class BasicLocations {
 
         public Class<Double> getType() {
             return double.class;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            return super.equals(obj) && this.allowInt == ((DoubleLocationDecorator) obj).allowInt;
         }
     }
 

@@ -36,6 +36,11 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})
 public @interface DSLOptions {
+
+    /** Flag has no effect anymore. Is going to be removed soon. */
+    @Deprecated
+    boolean useNewLayout() default true;
+
     /**
      * Lazy class loading ensures that all generated specialization classes are loaded lazily.
      * Disabling this feature will eagerly load all classes but will also reduce the generated code
@@ -51,7 +56,7 @@ public @interface DSLOptions {
     /** Not yet implemented. */
     boolean useDisjunctiveMethodGuardOptimization() default true;
 
-    enum ImplicitCastOptimization {
+    public enum ImplicitCastOptimization {
 
         /** Perform no informed optimization for implicit casts. */
         NONE,
@@ -78,7 +83,7 @@ public @interface DSLOptions {
         }
     }
 
-    enum TypeBoxingOptimization {
+    public enum TypeBoxingOptimization {
         /** Perform the optimization for all types. */
         ALWAYS,
         /** Perform the optimization just for primitive types. */
@@ -117,7 +122,7 @@ public @interface DSLOptions {
      */
     TypeBoxingOptimization voidBoxingOptimization() default TypeBoxingOptimization.PRIMITIVE;
 
-    enum FallbackOptimization {
+    public enum FallbackOptimization {
         /** Always generate an optimized fallback specialization. */
         ALWAYS,
 

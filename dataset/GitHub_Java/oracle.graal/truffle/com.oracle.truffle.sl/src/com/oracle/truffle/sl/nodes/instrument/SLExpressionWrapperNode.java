@@ -41,11 +41,11 @@
 package com.oracle.truffle.sl.nodes.instrument;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrument.EventHandlerNode;
-import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.Instrument;
+import com.oracle.truffle.api.instrument.KillException;
 import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.ProbeInstrument;
-import com.oracle.truffle.api.instrument.WrapperNode;
+import com.oracle.truffle.api.instrument.ProbeNode;
+import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeInfo;
@@ -56,14 +56,14 @@ import com.oracle.truffle.sl.runtime.SLFunction;
 
 /**
  * A Truffle node that can be inserted into a Simple AST (assumed not to have executed yet) to
- * enable {@linkplain Instrumenter Instrumentation} of an {@link SLExpressionNode}. Tools wishing to
- * interact with AST execution may attach {@link ProbeInstrument}s to the {@link Probe} uniquely
- * associated with the wrapper, and to which this wrapper routes execution events.
+ * enable "instrumentation" of an {@link SLExpressionNode}. Tools wishing to interact with AST
+ * execution may attach {@link Instrument}s to the {@link Probe} uniquely associated with the
+ * wrapper, and to which this wrapper routes execution events.
  */
 @NodeInfo(cost = NodeCost.NONE)
 public final class SLExpressionWrapperNode extends SLExpressionNode implements WrapperNode {
     @Child private SLExpressionNode child;
-    @Child private EventHandlerNode eventHandlerNode;
+    @Child private ProbeNode probeNode;
 
     /**
      * Constructor.
@@ -81,16 +81,21 @@ public final class SLExpressionWrapperNode extends SLExpressionNode implements W
     }
 
     @Override
+    public boolean isInstrumentable() {
+        return false;
+    }
+
+    @Override
     public SLExpressionNode getNonWrapperNode() {
         return child;
     }
 
-    public void insertEventHandlerNode(EventHandlerNode eventHandler) {
-        this.eventHandlerNode = eventHandler;
+    public void insertProbe(ProbeNode newProbeNode) {
+        this.probeNode = newProbeNode;
     }
 
     public Probe getProbe() {
-        return eventHandlerNode.getProbe();
+        return probeNode.getProbe();
     }
 
     public Node getChild() {
@@ -100,14 +105,16 @@ public final class SLExpressionWrapperNode extends SLExpressionNode implements W
     @Override
     public Object executeGeneric(VirtualFrame vFrame) {
 
-        eventHandlerNode.enter(child, vFrame);
+        probeNode.enter(child, vFrame);
         Object result;
 
         try {
             result = child.executeGeneric(vFrame);
-            eventHandlerNode.returnValue(child, vFrame, result);
+            probeNode.returnValue(child, vFrame, result);
+        } catch (KillException e) {
+            throw (e);
         } catch (Exception e) {
-            eventHandlerNode.returnExceptional(child, vFrame, e);
+            probeNode.returnExceptional(child, vFrame, e);
             throw (e);
         }
         return result;
@@ -125,14 +132,14 @@ public final class SLExpressionWrapperNode extends SLExpressionNode implements W
 
     @Override
     public SLFunction executeFunction(VirtualFrame vFrame) throws UnexpectedResultException {
-        eventHandlerNode.enter(child, vFrame);
+        probeNode.enter(child, vFrame);
         SLFunction result;
 
         try {
             result = child.executeFunction(vFrame);
-            eventHandlerNode.returnValue(child, vFrame, result);
+            probeNode.returnValue(child, vFrame, result);
         } catch (Exception e) {
-            eventHandlerNode.returnExceptional(child, vFrame, e);
+            probeNode.returnExceptional(child, vFrame, e);
             throw (e);
         }
         return result;

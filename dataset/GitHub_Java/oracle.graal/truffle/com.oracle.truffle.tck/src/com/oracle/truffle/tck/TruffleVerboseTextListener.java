@@ -31,11 +31,11 @@ import org.junit.runner.notification.Failure;
 
 class TruffleVerboseTextListener extends TruffleTextListener {
 
-    TruffleVerboseTextListener(JUnitSystem system) {
+    public TruffleVerboseTextListener(JUnitSystem system) {
         this(system.out());
     }
 
-    TruffleVerboseTextListener(PrintStream writer) {
+    public TruffleVerboseTextListener(PrintStream writer) {
         super(writer);
     }
 

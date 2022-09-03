@@ -22,10 +22,6 @@
  */
 package com.oracle.truffle.api.dsl.test.processor;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -37,7 +33,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticListener;
 import javax.tools.FileObject;
@@ -48,6 +43,9 @@ import javax.tools.JavaFileObject.Kind;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 final class Compile implements DiagnosticListener<JavaFileObject> {
     private final List<Diagnostic<? extends JavaFileObject>> errors = new ArrayList<>();
@@ -140,7 +138,7 @@ final class Compile implements DiagnosticListener<JavaFileObject> {
 
                 private final String n;
 
-                VirtFO(URI uri, Kind kind, String n) {
+                public VirtFO(URI uri, Kind kind, String n) {
                     super(uri, kind);
                     this.n = n;
                 }

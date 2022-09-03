@@ -32,8 +32,8 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.instrument.impl.DefaultVisualizer;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.vm.PolyglotEngine;
-import com.oracle.truffle.api.vm.PolyglotEngine.Language;
+import com.oracle.truffle.api.vm.TruffleVM;
+import com.oracle.truffle.api.vm.TruffleVM.Language;
 import com.oracle.truffle.tools.debug.shell.REPLMessage;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -76,16 +76,7 @@ public abstract class REPLServerContext {
         return new DefaultVisualizer();
     }
 
-    public PolyglotEngine engine() {
-        return vm();
-    }
-
-    /**
-     * @deprecated use {@link #engine()}.
-     */
-    @SuppressWarnings("deprecation")
-    @Deprecated
-    public abstract com.oracle.truffle.api.vm.TruffleVM vm();
+    public abstract TruffleVM vm();
 
     protected abstract Debugger db();
 

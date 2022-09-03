@@ -115,11 +115,22 @@ import java.lang.annotation.Target;
  * @see TypeSystem
  * @see TypeSystemReference
  * @see UnsupportedSpecializationException
- * @since 0.8 or earlier
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD})
 public @interface Specialization {
+
+    /**
+     * @deprecated do not use anymore. Will get removed in the next release.
+     */
+    @Deprecated int DEFAULT_ORDER = -1;
+
+    /**
+     * @deprecated use declaration order instead. Will get removed in the next release.
+     */
+    @Deprecated
+    int order() default DEFAULT_ORDER;
+
     /**
      * References a specialization of a super class by its method name where this specialization is
      * inserted before. The declaration order of a specialization is not usable for nodes where
@@ -230,8 +241,7 @@ public @interface Specialization {
      * <li>Dynamic and cached parameters of the enclosing specialization.</li>
      * <li>Fields defined using {@link NodeField} for the enclosing node.</li>
      * <li>Non-private, static or virtual methods or fields of enclosing node.</li>
-     * <li>Non-private, static or virtual methods or fields of super types of the enclosing node.
-     * </li>
+     * <li>Non-private, static or virtual methods or fields of super types of the enclosing node.</li>
      * <li>Public and static methods or fields imported using {@link ImportStatic}.</li>
      * </ol>
      * </p>
@@ -270,8 +280,7 @@ public @interface Specialization {
      * <li>Cached parameters of the enclosing specialization.</li>
      * <li>Fields defined using {@link NodeField} for the enclosing node.</li>
      * <li>Non-private, static or virtual methods or fields of enclosing node.</li>
-     * <li>Non-private, static or virtual methods or fields of super types of the enclosing node.
-     * </li>
+     * <li>Non-private, static or virtual methods or fields of super types of the enclosing node.</li>
      * <li>Public and static methods or fields imported using {@link ImportStatic}.</li>
      * </ol>
      * </p>
@@ -314,8 +323,7 @@ public @interface Specialization {
      * <li>Cached parameters of the enclosing specialization.</li>
      * <li>Fields defined using {@link NodeField} for the enclosing node.</li>
      * <li>Non-private, static or virtual methods or fields of enclosing node.</li>
-     * <li>Non-private, static or virtual methods or fields of super types of the enclosing node.
-     * </li>
+     * <li>Non-private, static or virtual methods or fields of super types of the enclosing node.</li>
      * <li>Public and static methods or fields imported using {@link ImportStatic}.</li>
      * </ol>
      * </p>

@@ -24,7 +24,6 @@ package com.oracle.truffle.dsl.processor.generator;
 
 import com.oracle.truffle.dsl.processor.expression.DSLExpression;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.Binary;
-import com.oracle.truffle.dsl.processor.expression.DSLExpression.BooleanLiteral;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.Call;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.DSLExpressionVisitor;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.IntLiteral;
@@ -95,10 +94,6 @@ public class DSLExpressionGenerator implements DSLExpressionVisitor {
 
     public void visitIntLiteral(IntLiteral binary) {
         push(string(binary.getLiteral()));
-    }
-
-    public void visitBooleanLiteral(BooleanLiteral binary) {
-        push(string(binary.getLiteral() ? "true" : "false"));
     }
 
     public void visitNegate(Negate negate) {

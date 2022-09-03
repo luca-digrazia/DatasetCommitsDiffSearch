@@ -27,8 +27,7 @@ package com.oracle.truffle.api.instrument;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
- * A receiver of Truffle AST execution events (containing minimal information) that can act on
- * behalf of an external client.
+ * A receiver of Truffle execution events that can act on behalf of an external client.
  * <p>
  * The {@link Probe} instance provides access to the {@link SourceSection} associated with the
  * event, as well as any {@link SyntaxTag}s that have been applied at that program's location.
@@ -38,11 +37,8 @@ import com.oracle.truffle.api.source.SourceSection;
  * execution state should use {@link StandardInstrumentListener}.
  * <p>
  * Clients are free, of course, to record additional information in the listener implementation that
- * carries additional information about the context and reason for the particular
- * {@link ProbeInstrument} that is to be created from the listener.
- * <p>
- * Notification is fully synchronous, so overrides have performance implications. Non-trivial
- * methods should be coded with Truffle guidelines and cautions in mind.
+ * carries additional information about the context and reason for the particular {@link Instrument}
+ * that is to be created from the listener.
  */
 public interface SimpleInstrumentListener {
 
@@ -51,7 +47,7 @@ public interface SimpleInstrumentListener {
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
      */
-    void onEnter(Probe probe);
+    void enter(Probe probe);
 
     /**
      * Receive notification that a program location's {@code void}-valued execution has just
@@ -59,7 +55,7 @@ public interface SimpleInstrumentListener {
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
      */
-    void onReturnVoid(Probe probe);
+    void returnVoid(Probe probe);
 
     /**
      * Receive notification that a program location's execution has just completed and returned a
@@ -67,12 +63,12 @@ public interface SimpleInstrumentListener {
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
      */
-    void onReturnValue(Probe probe, Object result);
+    void returnValue(Probe probe, Object result);
 
     /**
      * Receive notification that a program location's execution has just thrown an exception.
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
      */
-    void onReturnExceptional(Probe probe, Throwable exception);
+    void returnExceptional(Probe probe, Exception exception);
 }

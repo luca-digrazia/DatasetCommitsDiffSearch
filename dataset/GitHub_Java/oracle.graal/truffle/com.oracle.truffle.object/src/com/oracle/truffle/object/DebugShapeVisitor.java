@@ -26,25 +26,13 @@ import com.oracle.truffle.api.object.Shape;
 import java.util.Collections;
 import java.util.Map;
 
-/** @since 0.17 or earlier */
-@SuppressWarnings("all")
-@Deprecated
 public abstract class DebugShapeVisitor<R> implements ShapeVisitor<R> {
-    /**
-     * @since 0.17 or earlier
-     */
-    protected DebugShapeVisitor() {
-    }
-
-    /** @since 0.17 or earlier */
     public R visitShape(Shape shape) {
         return visitShape(shape, Collections.unmodifiableMap(((ShapeImpl) shape).getTransitionMapForRead()));
     }
 
-    /** @since 0.17 or earlier */
     public abstract R visitShape(Shape shape, Map<? extends Transition, ? extends Shape> transitions);
 
-    /** @since 0.17 or earlier */
     public static String getId(Shape shape) {
         return Integer.toHexString(shape.hashCode());
     }

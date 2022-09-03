@@ -22,13 +22,6 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import static com.oracle.truffle.api.dsl.test.TestHelper.assertionsEnabled;
-import static com.oracle.truffle.api.dsl.test.TestHelper.createCallTarget;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-
-import org.junit.Test;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
@@ -42,12 +35,16 @@ import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestBoundCacheOverflowC
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestCacheFieldFactory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestCacheMethodFactory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestCacheNodeFieldFactory;
-import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestCachesOrderFactory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestGuardWithCachedAndDynamicParameterFactory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestGuardWithJustCachedParameterFactory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestMultipleCachesFactory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.UnboundCacheFactory;
+import static com.oracle.truffle.api.dsl.test.TestHelper.assertionsEnabled;
+import static com.oracle.truffle.api.dsl.test.TestHelper.createCallTarget;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import org.junit.Test;
 
 @SuppressWarnings("unused")
 public class CachedTest {
@@ -304,35 +301,6 @@ public class CachedTest {
     @Test
     public void testMultipleCaches() {
         CallTarget root = createCallTarget(TestMultipleCachesFactory.getInstance());
-        assertEquals(42, root.call(21));
-        assertEquals(42, root.call(22));
-        assertEquals(42, root.call(23));
-    }
-
-    @NodeChild
-    static class TestCachesOrder extends ValueNode {
-
-        @Specialization(guards = "boundByGuard != 0")
-        static int do1(int value, //
-                        @Cached("get(value)") int intermediateValue, //
-                        @Cached("transform(intermediateValue)") int boundByGuard, //
-                        @Cached("new()") Object notBoundByGuards) {
-            return intermediateValue;
-        }
-
-        protected int get(int i) {
-            return i * 2;
-        }
-
-        protected int transform(int i) {
-            return i * 3;
-        }
-
-    }
-
-    @Test
-    public void testCachesOrder() {
-        CallTarget root = createCallTarget(TestCachesOrderFactory.getInstance());
         assertEquals(42, root.call(21));
         assertEquals(42, root.call(22));
         assertEquals(42, root.call(23));

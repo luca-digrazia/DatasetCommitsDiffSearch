@@ -43,9 +43,10 @@ package com.oracle.truffle.sl.nodes.expression;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.nodes.SLExpressionNode;
 import com.oracle.truffle.sl.runtime.SLContext;
@@ -60,35 +61,25 @@ import com.oracle.truffle.sl.runtime.SLFunctionRegistry;
  */
 @NodeInfo(shortName = "func")
 public final class SLFunctionLiteralNode extends SLExpressionNode {
-
-    /** The name of the function. */
-    private final String functionName;
-
-    /**
-     * The resolved function. During parsing (in the constructor of this node), we do not have the
-     * {@link SLContext} available yet, so the lookup can only be done at {@link #executeGeneric
-     * first execution}. The {@link CompilationFinal} annotation ensures that the function can still
-     * be constant folded during compilation.
-     */
+    private final String value;
+    private final Node contextNode;
     @CompilationFinal private SLFunction cachedFunction;
+    @CompilationFinal private SLContext cachedContext;
 
-    private final ContextReference<SLContext> reference;
-
-    public SLFunctionLiteralNode(SLLanguage language, String functionName) {
-        this.functionName = functionName;
-        this.reference = language.getContextReference();
+    public SLFunctionLiteralNode(SourceSection src, String value) {
+        super(src);
+        this.value = value;
+        contextNode = SLLanguage.INSTANCE.createFindContextNode0();
     }
 
     @Override
     public SLFunction executeGeneric(VirtualFrame frame) {
-        if (cachedFunction == null) {
+        SLContext context = SLLanguage.INSTANCE.findContext0(contextNode);
+        if (context != cachedContext) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            /* We are about to change a @CompilationFinal field. */
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            /* First execution of the node: lookup the function in the function registry. */
-            cachedFunction = reference.get().getFunctionRegistry().lookup(functionName, true);
+            this.cachedContext = context;
+            this.cachedFunction = context.getFunctionRegistry().lookup(value);
         }
         return cachedFunction;
     }
-
 }

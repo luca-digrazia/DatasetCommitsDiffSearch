@@ -22,20 +22,28 @@
  */
 package com.oracle.truffle.dsl.processor;
 
-import java.io.*;
-import java.util.*;
-
-import javax.annotation.processing.*;
-import javax.lang.model.*;
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
-import javax.tools.Diagnostic.Kind;
-import javax.tools.*;
-
-import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeMirror;
+import javax.tools.Diagnostic.Kind;
+import javax.tools.FileObject;
+import javax.tools.StandardLocation;
 
-@SupportedAnnotationTypes("com.oracle.truffle.api.*")
+@SupportedAnnotationTypes("com.oracle.truffle.api.TruffleLanguage.Registration")
 public final class LanguageRegistrationProcessor extends AbstractProcessor {
     private final List<TypeElement> registrations = new ArrayList<>();
 
@@ -93,31 +101,32 @@ public final class LanguageRegistrationProcessor extends AbstractProcessor {
                     emitError("Registered language inner-class must be static", e);
                     continue;
                 }
-                TypeMirror truffleLang = processingEnv.getElementUtils().getTypeElement(TruffleLanguage.class.getName()).asType();
+                TypeMirror truffleLang = processingEnv.getTypeUtils().erasure(processingEnv.getElementUtils().getTypeElement(TruffleLanguage.class.getName()).asType());
                 if (!processingEnv.getTypeUtils().isAssignable(e.asType(), truffleLang)) {
                     emitError("Registered language class must subclass TruffleLanguage", e);
                     continue;
                 }
                 boolean found = false;
                 for (Element mem : e.getEnclosedElements()) {
-                    if (mem.getKind() != ElementKind.CONSTRUCTOR) {
+                    if (!mem.getModifiers().contains(Modifier.PUBLIC)) {
                         continue;
                     }
-                    ExecutableElement ee = (ExecutableElement) mem;
-                    if (ee.getParameters().size() != 1) {
+                    if (mem.getKind() != ElementKind.FIELD) {
                         continue;
                     }
-                    if (!ee.getModifiers().contains(Modifier.PUBLIC)) {
+                    if (!mem.getModifiers().contains(Modifier.FINAL)) {
                         continue;
                     }
-                    TypeMirror env = processingEnv.getElementUtils().getTypeElement(TruffleLanguage.Env.class.getCanonicalName()).asType();
-                    if (processingEnv.getTypeUtils().isSameType(ee.getParameters().get(0).asType(), env)) {
+                    if (!"INSTANCE".equals(mem.getSimpleName().toString())) {
+                        continue;
+                    }
+                    if (processingEnv.getTypeUtils().isAssignable(mem.asType(), truffleLang)) {
                         found = true;
                         break;
                     }
                 }
                 if (!found) {
-                    emitError("Language must have a public constructor accepting TruffleLanguage.Env as parameter", e);
+                    emitError("Language class must have public static final singleton field called INSTANCE", e);
                     continue;
                 }
                 assertNoErrorExpected(e);

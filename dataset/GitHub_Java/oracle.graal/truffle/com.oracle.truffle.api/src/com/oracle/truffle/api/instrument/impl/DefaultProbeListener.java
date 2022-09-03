@@ -24,22 +24,23 @@
  */
 package com.oracle.truffle.api.instrument.impl;
 
-import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.instrument.Probe;
+import com.oracle.truffle.api.instrument.ProbeListener;
+import com.oracle.truffle.api.instrument.SyntaxTag;
+import com.oracle.truffle.api.source.Source;
 
-@SuppressWarnings("deprecation")
-@Deprecated
-public abstract class DefaultProbeListener implements com.oracle.truffle.api.instrument.ProbeListener {
+public abstract class DefaultProbeListener implements ProbeListener {
 
-    public void startASTProbing(RootNode rootNode) {
+    public void startASTProbing(Source source) {
     }
 
-    public void newProbeInserted(com.oracle.truffle.api.instrument.Probe probe) {
+    public void newProbeInserted(Probe probe) {
     }
 
-    public void probeTaggedAs(com.oracle.truffle.api.instrument.Probe probe, com.oracle.truffle.api.instrument.SyntaxTag tag, Object tagValue) {
+    public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
     }
 
-    public void endASTProbing(RootNode rootNode) {
+    public void endASTProbing(Source source) {
     }
 
 }

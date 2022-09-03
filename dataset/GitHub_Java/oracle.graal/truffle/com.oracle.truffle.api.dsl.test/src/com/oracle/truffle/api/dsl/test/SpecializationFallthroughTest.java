@@ -22,12 +22,6 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import static com.oracle.truffle.api.dsl.test.TestHelper.array;
-import static com.oracle.truffle.api.dsl.test.TestHelper.assertRuns;
-
-import org.junit.Assert;
-import org.junit.Test;
-
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
@@ -39,8 +33,12 @@ import com.oracle.truffle.api.dsl.test.SpecializationFallthroughTestFactory.Fall
 import com.oracle.truffle.api.dsl.test.SpecializationFallthroughTestFactory.FallthroughTest4Factory;
 import com.oracle.truffle.api.dsl.test.SpecializationFallthroughTestFactory.FallthroughTest5Factory;
 import com.oracle.truffle.api.dsl.test.TestHelper.ExecutionListener;
+import static com.oracle.truffle.api.dsl.test.TestHelper.array;
+import static com.oracle.truffle.api.dsl.test.TestHelper.assertRuns;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
+import org.junit.Assert;
+import org.junit.Test;
 
 public class SpecializationFallthroughTest {
 
@@ -162,7 +160,7 @@ public class SpecializationFallthroughTest {
         static int fallthrough1;
         static int fallthrough2;
 
-        @Specialization(rewriteOn = ArithmeticException.class)
+        @Specialization(order = 1, rewriteOn = ArithmeticException.class)
         int do1(int a) throws ArithmeticException {
             if (a == 0) {
                 fallthrough1++;
@@ -171,7 +169,7 @@ public class SpecializationFallthroughTest {
             return a;
         }
 
-        @Specialization(rewriteOn = ArithmeticException.class)
+        @Specialization(order = 2, rewriteOn = ArithmeticException.class)
         int do2(int a) throws ArithmeticException {
             if (a == 1) {
                 fallthrough2++;
@@ -266,7 +264,7 @@ public class SpecializationFallthroughTest {
         static int fallthrough1;
         static int fallthrough2;
 
-        @Specialization(rewriteOn = ArithmeticException.class)
+        @Specialization(order = 1, rewriteOn = ArithmeticException.class)
         int do1(int a) throws ArithmeticException {
             if (a == 0) {
                 fallthrough1++;
@@ -275,7 +273,7 @@ public class SpecializationFallthroughTest {
             return a;
         }
 
-        @Specialization(rewriteOn = ArithmeticException.class)
+        @Specialization(order = 2, rewriteOn = ArithmeticException.class)
         int do2(int a) throws ArithmeticException {
             if (a == 1) {
                 fallthrough2++;

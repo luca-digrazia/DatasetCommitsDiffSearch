@@ -35,6 +35,8 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.DefaultCompilerOptions;
+import com.oracle.truffle.api.instrument.ASTProber;
+import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
@@ -185,13 +187,25 @@ public abstract class RootNode extends Node {
         }
     }
 
-    public final void applyInstrumentation() {
-        super.probeAST(this);
+    /**
+     * Apply all registered instances of {@link ASTProber} to the AST, if any, held by this root
+     * node. This can only be done once the AST is complete, notably once all parent pointers are
+     * correctly assigned. But it also must be done before any AST cloning or execution.
+     * <p>
+     * If this is not done, then the AST will not be subject to debugging or any other
+     * instrumentation-supported tooling.
+     * <p>
+     * Implementations should ensure that instrumentation is never applied more than once to an AST,
+     * as this is not guaranteed to be error-free.
+     *
+     * @see Probe#registerASTProber(com.oracle.truffle.api.instrument.ASTProber)
+     */
+    public void applyInstrumentation() {
     }
 
     /**
      * Helper method to create a root node that always returns the same value. Certain operations
-     * (especially {@link com.oracle.truffle.api.interop inter-operability} API) require return of
+     * (expecially {@link com.oracle.truffle.api.interop inter-operability} API) require return of
      * stable {@link RootNode root nodes}. To simplify creation of such nodes, here is a factory
      * method that can create {@link RootNode} that returns always the same value.
      *

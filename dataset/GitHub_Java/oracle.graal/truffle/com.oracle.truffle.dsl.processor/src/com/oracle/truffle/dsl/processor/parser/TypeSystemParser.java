@@ -32,7 +32,6 @@ import com.oracle.truffle.dsl.processor.model.Template;
 import com.oracle.truffle.dsl.processor.model.TypeCastData;
 import com.oracle.truffle.dsl.processor.model.TypeCheckData;
 import com.oracle.truffle.dsl.processor.model.TypeSystemData;
-
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,7 +40,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -60,14 +58,6 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
     @Override
     public Class<? extends Annotation> getAnnotationType() {
         return TypeSystem.class;
-    }
-
-    /**
-     * @see "https://bugs.openjdk.java.net/browse/JDK-8039214"
-     */
-    private static List<Element> newElementList(List<? extends Element> src) {
-        List<Element> workaround = new ArrayList<>(src);
-        return workaround;
     }
 
     @Override
@@ -104,7 +94,7 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
 
         verifyExclusiveMethodAnnotation(typeSystem, TypeCast.class, TypeCheck.class);
 
-        List<Element> elements = newElementList(context.getEnvironment().getElementUtils().getAllMembers(templateType));
+        List<Element> elements = new ArrayList<>(context.getEnvironment().getElementUtils().getAllMembers(templateType));
         List<ImplicitCastData> implicitCasts = new ImplicitCastParser(context, typeSystem).parse(elements);
         List<TypeCastData> casts = new TypeCastParser(context, typeSystem).parse(elements);
         List<TypeCheckData> checks = new TypeCheckParser(context, typeSystem).parse(elements);

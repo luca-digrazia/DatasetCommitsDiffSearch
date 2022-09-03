@@ -22,22 +22,20 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import java.util.List;
-
-import org.junit.Assert;
-import org.junit.Test;
-
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.ShortCircuit;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 import com.oracle.truffle.api.dsl.test.UnsupportedSpecializationTestFactory.Unsupported1Factory;
 import com.oracle.truffle.api.dsl.test.UnsupportedSpecializationTestFactory.Unsupported2Factory;
-import com.oracle.truffle.api.dsl.test.UnsupportedSpecializationTestFactory.UnsupportedNoChildNodeGen;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
+import java.util.List;
+import org.junit.Assert;
+import org.junit.Test;
 
 public class UnsupportedSpecializationTest {
 
@@ -91,8 +89,7 @@ public class UnsupportedSpecializationTest {
     @NodeChildren({@NodeChild("a"), @NodeChild("b")})
     abstract static class Unsupported2 extends ValueNode {
 
-        @SuppressWarnings("deprecation")
-        @com.oracle.truffle.api.dsl.ShortCircuit("b")
+        @ShortCircuit("b")
         public boolean needsB(Object a) {
             return false;
         }
@@ -100,38 +97,6 @@ public class UnsupportedSpecializationTest {
         @Specialization
         public int doInteger(int a, boolean hasB, int b) {
             throw new AssertionError();
-        }
-    }
-
-    @Test
-    public void testUnsupportedNoChildNode() {
-        UnsupportedNoChildNode child = UnsupportedNoChildNodeGen.create();
-
-        try {
-            child.execute(42d);
-            Assert.fail();
-        } catch (UnsupportedSpecializationException e) {
-            Assert.assertNotNull(e.getSuppliedValues());
-            Assert.assertNotNull(e.getSuppliedNodes());
-            Assert.assertEquals(1, e.getSuppliedValues().length);
-            Assert.assertEquals(1, e.getSuppliedNodes().length);
-            Assert.assertEquals(42d, e.getSuppliedValues()[0]);
-            Assert.assertNull(e.getSuppliedNodes()[0]);
-        }
-    }
-
-    abstract static class UnsupportedNoChildNode extends Node {
-
-        abstract Object execute(Object value);
-
-        @Specialization
-        String s1(String v) {
-            return v;
-        }
-
-        @Specialization
-        int s2(int v) {
-            return v;
         }
     }
 

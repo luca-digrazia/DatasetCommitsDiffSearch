@@ -43,6 +43,7 @@ package com.oracle.truffle.sl.nodes;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.sl.SLLanguage;
@@ -88,9 +89,18 @@ public final class SLRootNode extends RootNode {
         this.isCloningAllowed = isCloningAllowed;
     }
 
+    public SLExpressionNode getBodyNode() {
+        return bodyNode;
+    }
+
     @Override
     public boolean isCloningAllowed() {
         return isCloningAllowed;
+    }
+
+    @Override
+    public void applyInstrumentation() {
+        Probe.applyASTProbers(bodyNode);
     }
 
     @Override

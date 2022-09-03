@@ -23,7 +23,6 @@
 package com.oracle.truffle.object.basic;
 
 import com.oracle.truffle.api.object.DynamicObject;
-import com.oracle.truffle.api.object.Layout;
 import com.oracle.truffle.api.object.Location;
 import com.oracle.truffle.api.object.ObjectLocation;
 import com.oracle.truffle.api.object.ObjectType;
@@ -35,7 +34,6 @@ import com.oracle.truffle.object.LocationImpl.InternalLongLocation;
 import com.oracle.truffle.object.Locations.DualLocation;
 import com.oracle.truffle.object.basic.BasicLocations.ObjectFieldLocation;
 import com.oracle.truffle.object.basic.BasicLocations.SimpleObjectFieldLocation;
-
 import java.util.EnumSet;
 
 public class BasicLayout extends LayoutImpl {
@@ -52,8 +50,8 @@ public class BasicLayout extends LayoutImpl {
         this.objectArrayLocation = DynamicObjectBasic.OBJECT_ARRAY_LOCATION;
     }
 
-    static LayoutImpl createLayoutImpl(Layout.Builder builder, LayoutStrategy strategy) {
-        return new BasicLayout(getAllowedImplicitCasts(builder), strategy);
+    static LayoutImpl createLayoutImpl(EnumSet<ImplicitCast> allowedImplicitCasts, LayoutStrategy strategy) {
+        return new BasicLayout(allowedImplicitCasts, strategy);
     }
 
     @Override

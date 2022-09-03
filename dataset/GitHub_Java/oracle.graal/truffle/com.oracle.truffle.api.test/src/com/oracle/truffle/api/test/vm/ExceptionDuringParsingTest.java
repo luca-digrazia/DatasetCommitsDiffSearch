@@ -25,9 +25,11 @@ package com.oracle.truffle.api.test.vm;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.source.Source;
 import static com.oracle.truffle.api.test.vm.ImplicitExplicitExportTest.L1;
-import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.TruffleVM;
 import java.io.IOException;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 import org.junit.Test;
 
 public class ExceptionDuringParsingTest {
@@ -35,8 +37,8 @@ public class ExceptionDuringParsingTest {
 
     @Test
     public void canGetAccessToOwnLanguageInstance() throws Exception {
-        PolyglotEngine vm = PolyglotEngine.createNew().build();
-        PolyglotEngine.Language language = vm.getLanguages().get(L1);
+        TruffleVM vm = TruffleVM.newVM().build();
+        TruffleVM.Language language = vm.getLanguages().get(L1);
         assertNotNull("L1 language is defined", language);
 
         try {

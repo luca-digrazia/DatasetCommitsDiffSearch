@@ -24,16 +24,13 @@
  */
 package com.oracle.truffle.api.interop.java.test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-
-import java.util.List;
-
-import org.junit.Before;
-import org.junit.Test;
-
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
+import java.util.List;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import org.junit.Before;
+import org.junit.Test;
 
 public class PrimitiveRawArrayInteropTest {
     private Object[] objArr;

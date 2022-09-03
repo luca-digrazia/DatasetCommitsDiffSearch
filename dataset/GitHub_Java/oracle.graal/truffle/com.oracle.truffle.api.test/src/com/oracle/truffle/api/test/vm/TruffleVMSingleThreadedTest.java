@@ -23,19 +23,20 @@
 package com.oracle.truffle.api.test.vm;
 
 import com.oracle.truffle.api.source.Source;
-import java.io.*;
-import java.net.*;
-
-import org.junit.*;
-
-import com.oracle.truffle.api.vm.*;
+import com.oracle.truffle.api.vm.TruffleVM;
+import java.io.IOException;
+import java.io.StringReader;
+import java.net.URI;
+import java.net.URISyntaxException;
+import org.junit.Before;
+import org.junit.Test;
 
 public class TruffleVMSingleThreadedTest {
-    PolyglotEngine tvm;
+    TruffleVM tvm;
 
     @Before
     public void initInDifferentThread() throws InterruptedException {
-        final PolyglotEngine.Builder b = PolyglotEngine.createNew();
+        final TruffleVM.Builder b = TruffleVM.newVM();
         Thread t = new Thread("Initializer") {
             @Override
             public void run() {

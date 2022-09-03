@@ -54,7 +54,6 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.sl.SLLanguage;
 
 /**
  * Returns a string representation of the current stack. This includes the {@link CallTarget}s and
@@ -65,7 +64,7 @@ import com.oracle.truffle.sl.SLLanguage;
 public abstract class SLStackTraceBuiltin extends SLBuiltinNode {
 
     public SLStackTraceBuiltin() {
-        super(SourceSection.createUnavailable(SLLanguage.builtinKind, "stacktrace"));
+        super(SourceSection.createUnavailable("SL builtin", "stacktrace"));
     }
 
     @Specialization
@@ -78,14 +77,8 @@ public abstract class SLStackTraceBuiltin extends SLBuiltinNode {
         final StringBuilder str = new StringBuilder();
 
         Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<Integer>() {
-            private int skip = 1; // skip stack trace builtin
-
             @Override
             public Integer visitFrame(FrameInstance frameInstance) {
-                if (skip > 0) {
-                    skip--;
-                    return null;
-                }
                 CallTarget callTarget = frameInstance.getCallTarget();
                 Frame frame = frameInstance.getFrame(FrameAccess.READ_ONLY, true);
                 RootNode rn = ((RootCallTarget) callTarget).getRootNode();

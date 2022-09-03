@@ -24,18 +24,8 @@
  */
 package com.oracle.truffle.tools;
 
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.TreeSet;
-
 import com.oracle.truffle.api.instrument.Instrument;
 import com.oracle.truffle.api.instrument.InstrumentationTool;
-import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.instrument.ProbeListener;
 import com.oracle.truffle.api.instrument.SimpleInstrumentListener;
@@ -47,6 +37,14 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.LineLocation;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.TreeSet;
 
 /**
  * An {@link InstrumentationTool} that counts interpreter <em>execution calls</em> to AST nodes that
@@ -65,7 +63,7 @@ import com.oracle.truffle.api.source.SourceSection;
  * <li>"Execution call" on a node is is defined as invocation of a node method that is instrumented
  * to produce the event {@link SimpleInstrumentListener#enter(Probe)};</li>
  * <li>Execution calls are tabulated only at <em>instrumented</em> nodes, i.e. those for which
- * {@link Instrumenter#isInstrumentable(Node)}{@code == true};</li>
+ * {@linkplain Node#isInstrumentable() isInstrumentable() == true};</li>
  * <li>Execution calls are tabulated only at nodes present in the AST when originally created;
  * dynamically added nodes will not be instrumented.</li>
  * </ul>
@@ -117,11 +115,7 @@ public final class CoverageTracker extends InstrumentationTool {
 
     @Override
     protected boolean internalInstall() {
-        final Instrumenter instrumenter = getInstrumenter();
-        for (Probe probe : instrumenter.findProbesTaggedAs(countingTag)) {
-            addCoverageCounter(probe);
-        }
-        instrumenter.addProbeListener(probeListener);
+        Probe.addProbeListener(probeListener);
         return true;
     }
 
@@ -132,7 +126,7 @@ public final class CoverageTracker extends InstrumentationTool {
 
     @Override
     protected void internalDispose() {
-        getInstrumenter().removeProbeListener(probeListener);
+        Probe.removeProbeListener(probeListener);
         for (Instrument instrument : instruments) {
             instrument.dispose();
         }
@@ -279,37 +273,34 @@ public final class CoverageTracker extends InstrumentationTool {
         @Override
         public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
             if (countingTag == tag) {
-                addCoverageCounter(probe);
+
+                final SourceSection srcSection = probe.getProbedSourceSection();
+                if (srcSection == null) {
+                    // TODO (mlvdv) report this?
+                    return;
+                }
+                // Get the source line where the
+                final LineLocation lineLocation = srcSection.getLineLocation();
+                CoverageRecord record = coverageMap.get(lineLocation);
+                if (record != null) {
+                    // Another node starts on same line; count only the first (textually)
+                    if (srcSection.getCharIndex() > record.srcSection.getCharIndex()) {
+                        // Existing record, corresponds to code earlier on line
+                        return;
+                    } else {
+                        // Existing record, corresponds to code at a later position; replace it
+                        record.instrument.dispose();
+                    }
+                }
+
+                final CoverageRecord coverage = new CoverageRecord(srcSection);
+                final Instrument instrument = Instrument.create(coverage, CoverageTracker.class.getSimpleName());
+                coverage.instrument = instrument;
+                instruments.add(instrument);
+                probe.attach(instrument);
+                coverageMap.put(lineLocation, coverage);
             }
         }
-    }
-
-    private void addCoverageCounter(Probe probe) {
-        final SourceSection srcSection = probe.getProbedSourceSection();
-        if (srcSection == null) {
-            // TODO (mlvdv) report this?
-            return;
-        }
-        // Get the source line where the
-        final LineLocation lineLocation = srcSection.getLineLocation();
-        CoverageRecord record = coverageMap.get(lineLocation);
-        if (record != null) {
-            // Another node starts on same line; count only the first (textually)
-            if (srcSection.getCharIndex() > record.srcSection.getCharIndex()) {
-                // Existing record, corresponds to code earlier on line
-                return;
-            } else {
-                // Existing record, corresponds to code at a later position; replace it
-                record.instrument.dispose();
-            }
-        }
-
-        final CoverageRecord coverage = new CoverageRecord(srcSection);
-        final Instrument instrument = Instrument.create(coverage, CoverageTracker.class.getSimpleName());
-        coverage.instrument = instrument;
-        instruments.add(instrument);
-        probe.attach(instrument);
-        coverageMap.put(lineLocation, coverage);
     }
 
 }

@@ -22,13 +22,6 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import static org.junit.Assert.assertEquals;
-
-import org.junit.experimental.theories.DataPoints;
-import org.junit.experimental.theories.Theories;
-import org.junit.experimental.theories.Theory;
-import org.junit.runner.RunWith;
-
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -36,6 +29,11 @@ import com.oracle.truffle.api.dsl.test.ExecuteGroupingTestFactory.ExecuteGroupin
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import static org.junit.Assert.assertEquals;
+import org.junit.experimental.theories.DataPoints;
+import org.junit.experimental.theories.Theories;
+import org.junit.experimental.theories.Theory;
+import org.junit.runner.RunWith;
 
 /*
  * This test aims to test the reuse of execute methods with evaluated parameters as much as possible.
@@ -51,7 +49,7 @@ public class ExecuteGroupingTest {
 
         private final Object returnValue;
 
-        ExecuteGroupingChild(Object returnValue) {
+        public ExecuteGroupingChild(Object returnValue) {
             this.returnValue = returnValue;
         }
 

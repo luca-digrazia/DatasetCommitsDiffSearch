@@ -33,7 +33,7 @@ class TruffleJUnitRunListenerDecorator implements TruffleJUnitRunListener {
 
     private final TruffleJUnitRunListener l;
 
-    TruffleJUnitRunListenerDecorator(TruffleJUnitRunListener l) {
+    public TruffleJUnitRunListenerDecorator(TruffleJUnitRunListener l) {
         this.l = l;
     }
 

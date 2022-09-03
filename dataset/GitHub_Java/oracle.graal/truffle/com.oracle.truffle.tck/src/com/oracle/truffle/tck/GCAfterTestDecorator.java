@@ -28,7 +28,7 @@ import org.junit.runner.Description;
 
 final class GCAfterTestDecorator extends TruffleJUnitRunListenerDecorator {
 
-    GCAfterTestDecorator(TruffleJUnitRunListener l) {
+    public GCAfterTestDecorator(TruffleJUnitRunListener l) {
         super(l);
     }
 

@@ -52,7 +52,7 @@ class NodeFactoryFactory {
     private final NodeData node;
     private final CodeTypeElement createdFactoryElement;
 
-    NodeFactoryFactory(ProcessorContext context, NodeData node, CodeTypeElement createdClass) {
+    public NodeFactoryFactory(ProcessorContext context, NodeData node, CodeTypeElement createdClass) {
         this.context = context;
         this.node = node;
         this.createdFactoryElement = createdClass;

@@ -35,15 +35,16 @@ import com.oracle.truffle.api.nodes.Node;
  */
 public class DefaultStandardInstrumentListener implements StandardInstrumentListener {
 
-    public void onEnter(Probe probe, Node node, VirtualFrame vFrame) {
+    public void enter(Probe probe, Node node, VirtualFrame vFrame) {
     }
 
-    public void onReturnVoid(Probe probe, Node node, VirtualFrame vFrame) {
+    public void returnVoid(Probe probe, Node node, VirtualFrame vFrame) {
     }
 
-    public void onReturnValue(Probe probe, Node node, VirtualFrame vFrame, Object result) {
+    public void returnValue(Probe probe, Node node, VirtualFrame vFrame, Object result) {
     }
 
-    public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Throwable exception) {
+    public void returnExceptional(Probe probe, Node node, VirtualFrame vFrame, Exception exception) {
     }
+
 }

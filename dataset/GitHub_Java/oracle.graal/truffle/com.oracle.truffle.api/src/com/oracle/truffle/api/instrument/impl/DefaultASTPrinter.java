@@ -26,7 +26,7 @@ package com.oracle.truffle.api.instrument.impl;
 
 import com.oracle.truffle.api.instrument.ASTPrinter;
 import com.oracle.truffle.api.instrument.InstrumentationNode;
-import com.oracle.truffle.api.instrument.WrapperNode;
+import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeClass;
 import com.oracle.truffle.api.nodes.NodeFieldAccessor;
@@ -103,7 +103,7 @@ public class DefaultASTPrinter implements ASTPrinter {
 
         ArrayList<NodeFieldAccessor> childFields = new ArrayList<>();
 
-        for (NodeFieldAccessor field : NodeClass.Lookup.get(node).getFields()) {
+        for (NodeFieldAccessor field : NodeClass.get(node).getFields()) {
             if (field.getKind() == NodeFieldKind.CHILD || field.getKind() == NodeFieldKind.CHILDREN) {
                 childFields.add(field);
             } else if (field.getKind() == NodeFieldKind.DATA) {

@@ -22,16 +22,17 @@
  */
 package com.oracle.truffle.object;
 
-import java.util.Objects;
-
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.FinalLocationException;
 import com.oracle.truffle.api.object.HiddenKey;
 import com.oracle.truffle.api.object.IncompatibleLocationException;
 import com.oracle.truffle.api.object.Location;
+import com.oracle.truffle.api.object.LocationModifier;
 import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.object.Locations.DeclaredLocation;
+import java.util.EnumSet;
+import java.util.Objects;
 
 /**
  * Property objects represent the mapping between property identifiers (keys) and storage locations.
@@ -100,21 +101,15 @@ public class PropertyImpl extends Property {
         }
     }
 
-    private static boolean verifyShapeParameter(DynamicObject store, Shape shape) {
-        assert shape == null || store.getShape() == shape : "wrong shape";
-        assert shape == null || shape.isValid() : "invalid shape";
-        return true;
-    }
-
     @Override
     public final void set(DynamicObject store, Object value, Shape shape) throws IncompatibleLocationException, FinalLocationException {
-        assert verifyShapeParameter(store, shape);
+        assert shape == null || store.getShape() == shape : "wrong shape";
         getLocation().set(store, value, shape);
     }
 
     @Override
     public final void setSafe(DynamicObject store, Object value, Shape shape) {
-        assert verifyShapeParameter(store, shape);
+        assert shape == null || store.getShape() == shape : "wrong shape";
         try {
             getLocation().set(store, value, shape);
         } catch (IncompatibleLocationException | FinalLocationException ex) {
@@ -124,7 +119,7 @@ public class PropertyImpl extends Property {
 
     @Override
     public final void setGeneric(DynamicObject store, Object value, Shape shape) {
-        assert verifyShapeParameter(store, shape);
+        assert shape == null || store.getShape() == shape : "wrong shape";
         try {
             set(store, value, shape);
         } catch (IncompatibleLocationException | FinalLocationException ex) {
@@ -132,21 +127,19 @@ public class PropertyImpl extends Property {
         }
     }
 
-    private static boolean verifyShapeParameters(DynamicObject store, Shape oldShape, Shape newShape) {
-        assert store.getShape() == oldShape : "wrong shape";
-        assert newShape.isValid() : "invalid shape";
-        return true;
-    }
-
     @Override
     public final void set(DynamicObject store, Object value, Shape oldShape, Shape newShape) throws IncompatibleLocationException {
-        assert verifyShapeParameters(store, oldShape, newShape);
+        assert store.getShape() == oldShape : "wrong shape";
+        assert newShape.isValid();
+        assert getLocation() != null;
         getLocation().set(store, value, oldShape, newShape);
     }
 
     @Override
     public final void setSafe(DynamicObject store, Object value, Shape oldShape, Shape newShape) {
-        assert verifyShapeParameters(store, oldShape, newShape);
+        assert store.getShape() == oldShape : "wrong old shape";
+        assert newShape.isValid();
+        assert getLocation() != null;
         try {
             getLocation().set(store, value, oldShape, newShape);
         } catch (IncompatibleLocationException ex) {
@@ -156,7 +149,9 @@ public class PropertyImpl extends Property {
 
     @Override
     public final void setGeneric(DynamicObject store, Object value, Shape oldShape, Shape newShape) {
-        assert verifyShapeParameters(store, oldShape, newShape);
+        assert store.getShape() == oldShape : "wrong old shape";
+        assert newShape.isValid();
+        assert getLocation() != null;
         try {
             getLocation().set(store, value, oldShape, newShape);
         } catch (IncompatibleLocationException ex) {
@@ -209,7 +204,7 @@ public class PropertyImpl extends Property {
 
     @Override
     public String toString() {
-        return "\"" + key + "\"" + ":" + location + (flags == 0 ? "" : "%" + flags);
+        return "\"" + key + "\"" + ":" + location;
     }
 
     @Override
@@ -218,13 +213,27 @@ public class PropertyImpl extends Property {
     }
 
     private void setSlowCase(DynamicObject store, Object value) {
-        ShapeImpl oldShape = (ShapeImpl) store.getShape();
-        oldShape.getLayout().getStrategy().propertySetFallback(this, store, value, oldShape);
+        if (getLocation() instanceof DeclaredLocation) {
+            setDeclaredLocation(store, value);
+        } else {
+            generalize(store, value);
+        }
     }
 
-    private void setWithShapeSlowCase(DynamicObject store, Object value, Shape currentShape, Shape nextShape) {
-        ShapeImpl oldShape = (ShapeImpl) currentShape;
-        oldShape.getLayout().getStrategy().propertySetWithShapeFallback(this, store, value, oldShape, (ShapeImpl) nextShape);
+    private void setDeclaredLocation(DynamicObject store, Object value) {
+        store.updateShape();
+        Shape oldShape = store.getShape();
+        Shape newShape = oldShape.addProperty(this.relocateShadow(oldShape.allocator().locationForValue(value, EnumSet.of(LocationModifier.Final, LocationModifier.NonNull))));
+        store.updateShape();
+        newShape.getLastProperty().setGeneric(store, value, oldShape, newShape);
+    }
+
+    private Property generalize(DynamicObject store, Object value) {
+        return ((LayoutImpl) store.getShape().getLayout()).getStrategy().generalizeProperty(store, this, value);
+    }
+
+    private void setWithShapeSlowCase(DynamicObject store, Object value, Shape oldShape, Shape newShape) {
+        ((LayoutImpl) store.getShape().getLayout()).getStrategy().generalizeProperty(store, this, value, oldShape, newShape);
     }
 
     @Override
@@ -237,7 +246,7 @@ public class PropertyImpl extends Property {
         return shadow;
     }
 
-    Property relocateShadow(Location newLocation) {
+    private Property relocateShadow(Location newLocation) {
         assert !isShadow() && getLocation() instanceof DeclaredLocation && relocatable;
         return new PropertyImpl(key, newLocation, flags, true, relocatable);
     }

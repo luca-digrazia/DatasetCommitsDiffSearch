@@ -25,15 +25,15 @@ package com.oracle.truffle.api.test.instrument;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrument.AdvancedInstrumentRoot;
-import com.oracle.truffle.api.instrument.EventHandlerNode;
-import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrument.KillException;
 import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.WrapperNode;
+import com.oracle.truffle.api.instrument.ProbeNode;
+import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.test.TestingLanguage;
 
 /**
  * Tests instrumentation where a client can attach a node that gets attached into the AST.
@@ -43,12 +43,21 @@ class InstrumentationTestNodes {
     abstract static class TestLanguageNode extends Node {
         public abstract Object execute(VirtualFrame vFrame);
 
+        @Override
+        public boolean isInstrumentable() {
+            return true;
+        }
+
+        @Override
+        public WrapperNode createWrapperNode() {
+            return new TestLanguageWrapperNode(this);
+        }
     }
 
     @NodeInfo(cost = NodeCost.NONE)
     static class TestLanguageWrapperNode extends TestLanguageNode implements WrapperNode {
         @Child private TestLanguageNode child;
-        @Child private EventHandlerNode eventHandlerNode;
+        @Child private ProbeNode probeNode;
 
         public TestLanguageWrapperNode(TestLanguageNode child) {
             assert !(child instanceof TestLanguageWrapperNode);
@@ -61,13 +70,18 @@ class InstrumentationTestNodes {
         }
 
         @Override
-        public void insertEventHandlerNode(EventHandlerNode eventHandler) {
-            this.eventHandlerNode = eventHandler;
+        public boolean isInstrumentable() {
+            return false;
+        }
+
+        @Override
+        public void insertProbe(ProbeNode newProbeNode) {
+            this.probeNode = newProbeNode;
         }
 
         @Override
         public Probe getProbe() {
-            return eventHandlerNode.getProbe();
+            return probeNode.getProbe();
         }
 
         @Override
@@ -77,15 +91,15 @@ class InstrumentationTestNodes {
 
         @Override
         public Object execute(VirtualFrame vFrame) {
-            eventHandlerNode.enter(child, vFrame);
+            probeNode.enter(child, vFrame);
             Object result;
             try {
                 result = child.execute(vFrame);
-                eventHandlerNode.returnValue(child, vFrame, result);
+                probeNode.returnValue(child, vFrame, result);
             } catch (KillException e) {
                 throw (e);
             } catch (Exception e) {
-                eventHandlerNode.returnExceptional(child, vFrame, e);
+                probeNode.returnExceptional(child, vFrame, e);
                 throw (e);
             }
             return result;
@@ -131,48 +145,16 @@ class InstrumentationTestNodes {
      * of the guest language. This is necessary since creating a {@link CallTarget} is how Truffle
      * completes an AST. The root nodes serves as our entry point into a program.
      */
-    static class InstrumentationTestRootNode extends RootNode {
-        @Child private TestLanguageNode body;
-
-        /**
-         * This constructor emulates the global machinery that applies registered probers to every
-         * newly created AST. Global registry is not used, since that would interfere with other
-         * tests run in the same environment.
-         */
-        public InstrumentationTestRootNode(TestLanguageNode body) {
-            super(InstrumentationTestingLanguage.class, null, null);
-            this.body = body;
-        }
-
-        @Override
-        public Object execute(VirtualFrame vFrame) {
-            return body.execute(vFrame);
-        }
-
-        @Override
-        public boolean isCloningAllowed() {
-            return true;
-        }
-    }
-
-    /**
-     * Truffle requires that all guest languages to have a {@link RootNode} which sits atop any AST
-     * of the guest language. This is necessary since creating a {@link CallTarget} is how Truffle
-     * completes an AST. The root nodes serves as our entry point into a program.
-     */
     static class TestRootNode extends RootNode {
         @Child private TestLanguageNode body;
 
-        final Instrumenter instrumenter;
-
         /**
          * This constructor emulates the global machinery that applies registered probers to every
          * newly created AST. Global registry is not used, since that would interfere with other
          * tests run in the same environment.
          */
-        public TestRootNode(TestLanguageNode body, Instrumenter instrumenter) {
-            super(InstrumentationTestingLanguage.class, null, null);
-            this.instrumenter = instrumenter;
+        public TestRootNode(TestLanguageNode body) {
+            super(TestingLanguage.class, null, null);
             this.body = body;
         }
 
@@ -184,6 +166,11 @@ class InstrumentationTestNodes {
         @Override
         public boolean isCloningAllowed() {
             return true;
+        }
+
+        @Override
+        public void applyInstrumentation() {
+            Probe.applyASTProbers(body);
         }
     }
 
@@ -205,5 +192,4 @@ class InstrumentationTestNodes {
             return null;
         }
     }
-
 }

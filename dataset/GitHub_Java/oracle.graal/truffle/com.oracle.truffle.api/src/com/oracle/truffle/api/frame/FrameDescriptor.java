@@ -85,7 +85,6 @@ public final class FrameDescriptor implements Cloneable {
     }
 
     public FrameSlot findFrameSlot(Object identifier) {
-        CompilerAsserts.neverPartOfCompilation("interpreter-only.  includes hashmap operations.");
         return identifierToSlotMap.get(identifier);
     }
 

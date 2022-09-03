@@ -31,14 +31,13 @@ import com.oracle.truffle.api.frame.FrameInstanceVisitor;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrument.StandardSyntaxTag;
 import com.oracle.truffle.api.nodes.Node;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 /**
  * This event is delivered to all
- * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#onEvent(com.oracle.truffle.api.vm.EventConsumer)
+ * {@link com.oracle.truffle.api.vm.TruffleVM.Builder#onEvent(com.oracle.truffle.api.vm.EventConsumer)
  * registered event handlers} when an execution is suspended on a
  * {@link Debugger#setLineBreakpoint(int, com.oracle.truffle.api.source.LineLocation, boolean)
  * breakpoint} or during {@link #prepareStepInto(int) stepping}. Methods in this event can only be
@@ -83,10 +82,10 @@ public final class SuspendedEvent {
     /**
      * Debugger associated with the just suspended execution. This debugger remains valid after the
      * event is processed, it is possible and suggested to keep a reference to it and use it any
-     * time later when evaluating sources in the {@link com.oracle.truffle.api.vm.PolyglotEngine}.
+     * time later when evaluating sources in the {@link com.oracle.truffle.api.vm.TruffleVM}.
      *
      * @return instance of debugger associated with the just suspended execution and any subsequent
-     *         ones in the same {@link com.oracle.truffle.api.vm.PolyglotEngine}.
+     *         ones in the same {@link com.oracle.truffle.api.vm.TruffleVM}.
      */
     public Debugger getDebugger() {
         return debugger;
@@ -105,8 +104,8 @@ public final class SuspendedEvent {
     }
 
     /**
-     * Gets the stack frames from the currently halted
-     * {@link com.oracle.truffle.api.vm.PolyglotEngine} execution.
+     * Gets the stack frames from the currently halted {@link com.oracle.truffle.api.vm.TruffleVM}
+     * execution.
      *
      * @return list of stack frames
      */
@@ -192,19 +191,5 @@ public final class SuspendedEvent {
      */
     public void prepareStepOver(int stepCount) {
         debugger.prepareStepOver(stepCount);
-    }
-
-    /**
-     * Evaluates given code snippet in the context of currently suspended execution.
-     *
-     * @param code the snippet to evaluate
-     * @param frame <code>null</code> in case the evaluation should happen in top most frame,
-     *            non-null value to specify a frame from those {@link #getStack() currently on
-     *            stack} to perform the evaluation in context of
-     * @return the computed value
-     * @throws IOException in case an evaluation goes wrong
-     */
-    public Object eval(String code, FrameInstance frame) throws IOException {
-        return debugger.evalInContext(this, code, frame);
     }
 }

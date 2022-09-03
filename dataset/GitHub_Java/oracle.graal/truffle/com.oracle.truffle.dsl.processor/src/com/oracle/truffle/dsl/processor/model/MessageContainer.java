@@ -221,7 +221,7 @@ public abstract class MessageContainer implements Iterable<MessageContainer> {
         }
         for (MessageContainer sink : findChildContainers()) {
             if (visitedSinks.contains(sink)) {
-                continue;
+                return false;
             }
 
             visitedSinks.add(sink);

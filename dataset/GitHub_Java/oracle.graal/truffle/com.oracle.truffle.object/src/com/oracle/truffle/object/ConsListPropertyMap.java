@@ -284,7 +284,7 @@ final class ConsListPropertyMap extends PropertyMap {
     private static final class MapEntryImpl implements Map.Entry<Object, Property> {
         private final Property backingProperty;
 
-        MapEntryImpl(Property backingProperty) {
+        public MapEntryImpl(Property backingProperty) {
             this.backingProperty = backingProperty;
         }
 

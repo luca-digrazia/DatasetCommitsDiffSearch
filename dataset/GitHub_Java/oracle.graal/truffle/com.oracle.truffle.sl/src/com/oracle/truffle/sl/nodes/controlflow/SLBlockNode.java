@@ -40,10 +40,6 @@
  */
 package com.oracle.truffle.sl.nodes.controlflow;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -85,9 +81,5 @@ public final class SLBlockNode extends SLStatementNode {
         for (SLStatementNode statement : bodyNodes) {
             statement.executeVoid(frame);
         }
-    }
-
-    public List<SLStatementNode> getStatements() {
-        return Collections.unmodifiableList(Arrays.asList(bodyNodes));
     }
 }

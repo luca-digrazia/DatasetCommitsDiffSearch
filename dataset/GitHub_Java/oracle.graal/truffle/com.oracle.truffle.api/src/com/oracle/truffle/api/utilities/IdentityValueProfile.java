@@ -24,15 +24,14 @@
  */
 package com.oracle.truffle.api.utilities;
 
-import java.util.*;
-
-import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import java.util.Objects;
 
 /**
  * Represents a {@link ValueProfile} that speculates on the object identity of a value.
  */
-public final class IdentityValueProfile extends ValueProfile {
+final class IdentityValueProfile extends ValueProfile {
 
     private static final Object UNINITIALIZED = new Object();
     private static final Object GENERIC = new Object();

@@ -24,32 +24,20 @@
  */
 package com.oracle.truffle.api.debug;
 
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
 import static com.oracle.truffle.api.debug.Breakpoint.State.DISABLED;
 import static com.oracle.truffle.api.debug.Breakpoint.State.DISABLED_UNRESOLVED;
 import static com.oracle.truffle.api.debug.Breakpoint.State.DISPOSED;
 import static com.oracle.truffle.api.debug.Breakpoint.State.ENABLED;
 import static com.oracle.truffle.api.debug.Breakpoint.State.ENABLED_UNRESOLVED;
-
-import java.io.IOException;
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.debug.Debugger.BreakpointCallback;
 import com.oracle.truffle.api.debug.Debugger.WarningLog;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
 import com.oracle.truffle.api.instrument.Instrument;
-import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.instrument.StandardSyntaxTag;
 import com.oracle.truffle.api.instrument.SyntaxTag;
@@ -60,6 +48,15 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.LineLocation;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 //TODO (mlvdv) some common functionality could be factored out of this and TagBreakpointSupport
 
@@ -86,7 +83,7 @@ final class LineBreakpointFactory {
     private static final boolean TRACE = false;
     private static final PrintStream OUT = System.out;
 
-    private static final String BREAKPOINT_NAME = "Line Breakpoints";
+    private static final String BREAKPOINT_NAME = "LINE BREAKPOINT";
 
     @TruffleBoundary
     private static void trace(String format, Object... args) {
@@ -109,7 +106,6 @@ final class LineBreakpointFactory {
         }
     };
 
-    private final Debugger debugger;
     private final BreakpointCallback breakpointCallback;
     private final WarningLog warningLog;
 
@@ -131,17 +127,17 @@ final class LineBreakpointFactory {
      */
     @CompilationFinal private boolean breakpointsActive = true;
     private final CyclicAssumption breakpointsActiveUnchanged = new CyclicAssumption(BREAKPOINT_NAME + " globally active");
+    private final Debugger debugger;
 
     LineBreakpointFactory(Debugger debugger, BreakpointCallback breakpointCallback, final WarningLog warningLog) {
         this.debugger = debugger;
         this.breakpointCallback = breakpointCallback;
         this.warningLog = warningLog;
 
-        final Instrumenter instrumenter = debugger.getInstrumenter();
         lineToProbesMap = new LineToProbesMap();
-        instrumenter.install(lineToProbesMap);
+        lineToProbesMap.install();
 
-        instrumenter.addProbeListener(new DefaultProbeListener() {
+        Probe.addProbeListener(new DefaultProbeListener() {
 
             @Override
             public void probeTaggedAs(Probe probe, SyntaxTag tag, Object tagValue) {
@@ -382,12 +378,12 @@ final class LineBreakpointFactory {
                 throw new IllegalStateException("Attempt to attach a disposed " + BREAKPOINT_NAME);
             }
             Instrument newInstrument = null;
-            final Instrumenter instrumenter = debugger.getInstrumenter();
             if (conditionExpr == null) {
-                newInstrument = instrumenter.attach(newProbe, new UnconditionalLineBreakInstrumentListener(), BREAKPOINT_NAME);
+                newInstrument = Instrument.create(new UnconditionalLineBreakInstrumentListener(), BREAKPOINT_NAME);
             } else {
-                newInstrument = instrumenter.attach(newProbe, this, debugger.createAdvancedInstrumentRootFactory(newProbe, conditionExpr, this), Boolean.class, BREAKPOINT_NAME);
+                newInstrument = Instrument.create(this, debugger.createAdvancedInstrumentRootFactory(newProbe, conditionExpr, this), Boolean.class, BREAKPOINT_NAME);
             }
+            newProbe.attach(newInstrument);
             instruments.add(newInstrument);
             changeState(isEnabled ? ENABLED : DISABLED);
         }
@@ -446,7 +442,7 @@ final class LineBreakpointFactory {
             }
         }
 
-        public void onExecution(Node node, VirtualFrame vFrame, Object result) {
+        public void notifyResult(Node node, VirtualFrame vFrame, Object result) {
             final boolean condition = (Boolean) result;
             if (TRACE) {
                 trace("breakpoint condition = %b  %s", condition, getShortDescription());
@@ -456,7 +452,7 @@ final class LineBreakpointFactory {
             }
         }
 
-        public void onFailure(Node node, VirtualFrame vFrame, RuntimeException ex) {
+        public void notifyFailure(Node node, VirtualFrame vFrame, RuntimeException ex) {
             addExceptionWarning(ex);
             if (TRACE) {
                 trace("breakpoint failure = %s  %s", ex, getShortDescription());
@@ -483,7 +479,7 @@ final class LineBreakpointFactory {
         private final class UnconditionalLineBreakInstrumentListener extends DefaultStandardInstrumentListener {
 
             @Override
-            public void onEnter(Probe probe, Node node, VirtualFrame vFrame) {
+            public void enter(Probe probe, Node node, VirtualFrame vFrame) {
                 LineBreakpointImpl.this.nodeEnter(node, vFrame);
             }
         }

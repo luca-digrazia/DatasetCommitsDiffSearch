@@ -37,7 +37,7 @@ import javax.lang.model.type.TypeMirror;
 
 class TypeCastParser extends TypeSystemMethodParser<TypeCastData> {
 
-    TypeCastParser(ProcessorContext context, TypeSystemData typeSystem) {
+    public TypeCastParser(ProcessorContext context, TypeSystemData typeSystem) {
         super(context, typeSystem);
     }
 

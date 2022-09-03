@@ -43,7 +43,7 @@ public abstract class CodeNames {
 
         private final String name;
 
-        NameImpl(String name) {
+        public NameImpl(String name) {
             this.name = name;
         }
 

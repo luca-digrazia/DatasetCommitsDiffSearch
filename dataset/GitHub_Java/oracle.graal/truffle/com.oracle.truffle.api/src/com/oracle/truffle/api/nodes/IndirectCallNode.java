@@ -25,9 +25,7 @@
 package com.oracle.truffle.api.nodes;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 
 /**
@@ -38,19 +36,8 @@ import com.oracle.truffle.api.frame.VirtualFrame;
  * Please note: This class is not intended to be sub classed by guest language implementations.
  *
  * @see DirectCallNode for faster calls with a constantly known {@link CallTarget}.
- * @since 0.8 or earlier
  */
 public abstract class IndirectCallNode extends Node {
-
-    @Deprecated @CompilationFinal private VirtualFrame dummyFrame;
-
-    /**
-     * Constructor for implementation subclasses.
-     *
-     * @since 0.8 or earlier
-     */
-    protected IndirectCallNode() {
-    }
 
     /**
      * Performs an indirect call to the given {@link CallTarget} target with the provided arguments.
@@ -59,37 +46,9 @@ public abstract class IndirectCallNode extends Node {
      * @param target the {@link CallTarget} to call
      * @param arguments the arguments to provide
      * @return the return value of the call
-     * @since 0.8 or earlier
-     * @deprecated use call without frame instead
      */
-    @Deprecated
-    public Object call(VirtualFrame frame, CallTarget target, Object[] arguments) {
-        return call(target, arguments);
-    }
+    public abstract Object call(VirtualFrame frame, CallTarget target, Object[] arguments);
 
-    /**
-     * Performs an indirect call to the given {@link CallTarget} target with the provided arguments.
-     *
-     * @param target the {@link CallTarget} to call
-     * @param arguments the arguments to provide
-     * @return the return value of the call
-     * @since 0.23
-     */
-    public Object call(CallTarget target, Object[] arguments) {
-        // TODO change to varargs as soon as #call(VirtualFrame, Object[] will removed.
-        /*
-         * TODO the frame is for legacy support only. an up-to-date graal runtime will override this
-         * method and implement it more efficiently. As soon as the deprecated call(VirtualFrame,
-         * Object[]) is removed, then we should remove the dummyFrame as well.
-         */
-        if (dummyFrame == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            dummyFrame = DirectCallNode.createDummyFrame(this);
-        }
-        return call(dummyFrame, target, arguments);
-    }
-
-    /** @since 0.8 or earlier */
     public static IndirectCallNode create() {
         return Truffle.getRuntime().createIndirectCallNode();
     }

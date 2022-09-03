@@ -28,7 +28,7 @@ import org.junit.runner.notification.Failure;
 
 class EagerStackTraceDecorator extends TruffleJUnitRunListenerDecorator {
 
-    EagerStackTraceDecorator(TruffleJUnitRunListener l) {
+    public EagerStackTraceDecorator(TruffleJUnitRunListener l) {
         super(l);
     }
 

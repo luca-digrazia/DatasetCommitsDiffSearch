@@ -49,7 +49,7 @@ public class ForeignAccessSingleThreadedTest implements ForeignAccess.Factory, T
         t.join();
     }
 
-    @Test(expected = AssertionError.class)
+    @Test(expected = IllegalStateException.class)
     public void accessNodeFromWrongThread() {
         Node n = Message.IS_EXECUTABLE.createNode();
         Object ret = ForeignAccess.execute(n, null, this);

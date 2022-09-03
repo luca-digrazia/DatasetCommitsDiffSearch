@@ -54,12 +54,7 @@ public final class UnsupportedSpecializationException extends RuntimeException {
 
     @Override
     public String getMessage() {
-        StringBuilder str = new StringBuilder();
-        str.append("Unexpected values provided for ").append(node).append(": ").append(Arrays.toString(suppliedValues)).append(", [");
-        for (int i = 0; i < suppliedValues.length; i++) {
-            str.append(i == 0 ? "" : ",").append(suppliedValues[i] == null ? "null" : suppliedValues[i].getClass().getSimpleName());
-        }
-        return str.append("]").toString();
+        return String.format("Unexpected values provided for %s: %s", node, Arrays.toString(suppliedValues));
     }
 
     /**

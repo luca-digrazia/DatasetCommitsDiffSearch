@@ -40,6 +40,9 @@
  */
 package com.oracle.truffle.sl.runtime;
 
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.sl.nodes.SLRootNode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -47,33 +50,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.sl.SLLanguage;
-import com.oracle.truffle.sl.nodes.SLRootNode;
-import com.oracle.truffle.sl.parser.Parser;
-
 /**
  * Manages the mapping from function names to {@link SLFunction function objects}.
  */
 public final class SLFunctionRegistry {
 
-    private final SLLanguage language;
     private final Map<String, SLFunction> functions = new HashMap<>();
-
-    public SLFunctionRegistry(SLLanguage language) {
-        this.language = language;
-    }
 
     /**
      * Returns the canonical {@link SLFunction} object for the given name. If it does not exist yet,
      * it is created.
      */
-    public SLFunction lookup(String name, boolean createIfNotPresent) {
+    public SLFunction lookup(String name) {
         SLFunction result = functions.get(name);
-        if (result == null && createIfNotPresent) {
-            result = new SLFunction(language, name);
+        if (result == null) {
+            result = new SLFunction(name);
             functions.put(name, result);
         }
         return result;
@@ -84,21 +75,10 @@ public final class SLFunctionRegistry {
      * node. If the function did not exist before, it defines the function. If the function existed
      * before, it redefines the function and the old implementation is discarded.
      */
-    public SLFunction register(String name, SLRootNode rootNode) {
-        SLFunction function = lookup(name, true);
+    public void register(String name, SLRootNode rootNode) {
+        SLFunction function = lookup(name);
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         function.setCallTarget(callTarget);
-        return function;
-    }
-
-    public void register(Map<String, SLRootNode> newFunctions) {
-        for (Map.Entry<String, SLRootNode> entry : newFunctions.entrySet()) {
-            register(entry.getKey(), entry.getValue());
-        }
-    }
-
-    public void register(Source newFunctions) {
-        register(Parser.parseSL(language, newFunctions));
     }
 
     /**
@@ -113,5 +93,4 @@ public final class SLFunctionRegistry {
         });
         return result;
     }
-
 }

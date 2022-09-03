@@ -24,97 +24,67 @@
  */
 package com.oracle.truffle.tools.test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
-import java.io.IOException;
-import java.lang.reflect.Field;
-
-import org.junit.Test;
-
-import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.TruffleVM;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.LineLocation;
 import com.oracle.truffle.tools.LineToProbesMap;
-import com.oracle.truffle.tools.test.ToolTestUtil.ToolTestTag;
+import static com.oracle.truffle.tools.test.TestNodes.createExpr13TestRootNode;
+import static com.oracle.truffle.tools.test.TestNodes.expr13Line1;
+import static com.oracle.truffle.tools.test.TestNodes.expr13Line2;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import org.junit.Test;
 
 public class LineToProbesMapTest {
 
     @Test
-    public void testNoExecution() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
-        final TruffleVM vm = TruffleVM.newVM().build();
-        final Field field = TruffleVM.class.getDeclaredField("instrumenter");
-        field.setAccessible(true);
-        final Instrumenter instrumenter = (Instrumenter) field.get(vm);
-        final Source source = ToolTestUtil.createTestSource("testNoExecution");
-        final LineToProbesMap probesMap = new LineToProbesMap();
-        instrumenter.install(probesMap);
-        assertNull(probesMap.findFirstProbe(source.createLineLocation(1)));
-        assertNull(probesMap.findFirstProbe(source.createLineLocation(2)));
-        assertNull(probesMap.findFirstProbe(source.createLineLocation(3)));
-        probesMap.dispose();
+    public void testToolCreatedTooLate() {
+        final RootNode expr13rootNode = createExpr13TestRootNode();
+        final Node addNode = expr13rootNode.getChildren().iterator().next();
+        final Probe probe = addNode.probe();
+        final LineLocation lineLocation = probe.getProbedSourceSection().getLineLocation();
+        assertEquals(lineLocation, expr13Line2);
+
+        final LineToProbesMap tool = new LineToProbesMap();
+        tool.install();
+
+        assertNull(tool.findFirstProbe(expr13Line1));
+        assertNull(tool.findFirstProbe(expr13Line2));
+        tool.dispose();
     }
 
     @Test
-    public void testMapping1() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, IOException {
-        final TruffleVM vm = TruffleVM.newVM().build();
-        final Field field = TruffleVM.class.getDeclaredField("instrumenter");
-        field.setAccessible(true);
-        final Instrumenter instrumenter = (Instrumenter) field.get(vm);
-        final Source source = ToolTestUtil.createTestSource("testMapping1");
-        final LineToProbesMap probesMap = new LineToProbesMap();
+    public void testToolInstalledTooLate() {
+        final LineToProbesMap tool = new LineToProbesMap();
 
-        assertNull(probesMap.findFirstProbe(source.createLineLocation(1)));
-        assertNull(probesMap.findFirstProbe(source.createLineLocation(2)));
-        assertNull(probesMap.findFirstProbe(source.createLineLocation(3)));
+        final RootNode expr13rootNode = createExpr13TestRootNode();
+        final Node addNode = expr13rootNode.getChildren().iterator().next();
+        final Probe probe = addNode.probe();
+        final LineLocation lineLocation = probe.getProbedSourceSection().getLineLocation();
+        assertEquals(lineLocation, expr13Line2);
 
-        // Map installed before AST gets created
-        instrumenter.install(probesMap);
-        assertEquals(vm.eval(source).get(), 13);
+        tool.install();
 
-        final Probe probe1 = probesMap.findFirstProbe(source.createLineLocation(1));
-        assertNotNull(probe1);
-        assertTrue(probe1.isTaggedAs(ToolTestTag.VALUE_TAG));
-        final Probe probe2 = probesMap.findFirstProbe(source.createLineLocation(2));
-        assertNotNull(probe2);
-        assertTrue(probe2.isTaggedAs(ToolTestTag.ADD_TAG));
-        final Probe probe3 = probesMap.findFirstProbe(source.createLineLocation(3));
-        assertNotNull(probe3);
-        assertTrue(probe3.isTaggedAs(ToolTestTag.VALUE_TAG));
-
-        probesMap.dispose();
+        assertNull(tool.findFirstProbe(expr13Line1));
+        assertNull(tool.findFirstProbe(expr13Line2));
+        tool.dispose();
     }
 
     @Test
-    public void testMapping2() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, IOException {
-        final TruffleVM vm = TruffleVM.newVM().build();
-        final Field field = TruffleVM.class.getDeclaredField("instrumenter");
-        field.setAccessible(true);
-        final Instrumenter instrumenter = (Instrumenter) field.get(vm);
-        final Source source = ToolTestUtil.createTestSource("testMapping2");
-        final LineToProbesMap probesMap = new LineToProbesMap();
+    public void testMapping() {
+        final LineToProbesMap tool = new LineToProbesMap();
+        tool.install();
 
-        assertNull(probesMap.findFirstProbe(source.createLineLocation(1)));
-        assertNull(probesMap.findFirstProbe(source.createLineLocation(2)));
-        assertNull(probesMap.findFirstProbe(source.createLineLocation(3)));
+        final RootNode expr13rootNode = createExpr13TestRootNode();
+        final Node addNode = expr13rootNode.getChildren().iterator().next();
+        final Probe probe = addNode.probe();
+        final LineLocation lineLocation = probe.getProbedSourceSection().getLineLocation();
+        assertEquals(lineLocation, expr13Line2);
 
-        // Map installed after AST gets created
-        assertEquals(vm.eval(source).get(), 13);
-        instrumenter.install(probesMap);
-
-        final Probe probe1 = probesMap.findFirstProbe(source.createLineLocation(1));
-        assertNotNull(probe1);
-        assertTrue(probe1.isTaggedAs(ToolTestTag.VALUE_TAG));
-        final Probe probe2 = probesMap.findFirstProbe(source.createLineLocation(2));
-        assertNotNull(probe2);
-        assertTrue(probe2.isTaggedAs(ToolTestTag.ADD_TAG));
-        final Probe probe3 = probesMap.findFirstProbe(source.createLineLocation(3));
-        assertNotNull(probe3);
-        assertTrue(probe3.isTaggedAs(ToolTestTag.VALUE_TAG));
-
-        probesMap.dispose();
+        assertNull(tool.findFirstProbe(expr13Line1));
+        assertEquals(tool.findFirstProbe(expr13Line2), probe);
+        tool.dispose();
     }
+
 }

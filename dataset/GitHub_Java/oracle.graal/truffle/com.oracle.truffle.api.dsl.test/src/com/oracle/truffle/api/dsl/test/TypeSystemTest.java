@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import java.math.BigInteger;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.ImplicitCast;
@@ -38,12 +36,13 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
+import java.math.BigInteger;
 
 public class TypeSystemTest {
 
     @TypeSystem({byte.class, short.class, int.class, long.class, double.class, boolean.class, BigInteger.class, String.class, CallTarget.class, BExtendsAbstract.class, CExtendsAbstract.class,
                     Abstract.class, Interface.class, Object[].class})
-    @DSLOptions
+    @DSLOptions(useNewLayout = true)
     static class SimpleTypes {
 
         static int intCheck;

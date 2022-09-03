@@ -22,13 +22,12 @@
  */
 package com.oracle.truffle.api.test.source;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-
-import org.junit.Test;
-
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import org.junit.Ignore;
+import org.junit.Test;
 
 public class SourceSectionTest {
 
@@ -38,7 +37,7 @@ public class SourceSectionTest {
 
     private final Source shortSource = Source.fromText("01", null);
 
-    private final Source longSource = Source.fromText("01234\n67\n9\n", "long");
+    private final Source longSource = Source.fromText("01234\n67\n9\n", null);
 
     public void emptySourceTest0() {
         SourceSection section = emptySource.createSection("test", 0, 0);
@@ -57,6 +56,14 @@ public class SourceSectionTest {
         assertEquals(section.getStartColumn(), 1);
     }
 
+    @Ignore
+    @Test
+    public void emptyLineTest0a() {
+        SourceSection section = emptyLineSource.createSection("test", 0, 0);
+        assertEquals(section.getEndLine(), 1);
+        assertEquals(section.getEndColumn(), 1);
+    }
+
     @Test
     public void emptyLineTest1() {
         SourceSection section = emptyLineSource.createSection("test", 0, 1);
@@ -64,6 +71,20 @@ public class SourceSectionTest {
         assertEquals(section.getCode(), "\n");
         assertEquals(section.getCharIndex(), 0);
         assertEquals(section.getCharLength(), 1);
+        assertEquals(section.getStartLine(), 1);
+        assertEquals(section.getStartColumn(), 1);
+        assertEquals(section.getEndLine(), 1);
+        assertEquals(section.getEndColumn(), 1);
+    }
+
+    @Ignore
+    @Test
+    public void emptyLineTest2() {
+        SourceSection section = emptyLineSource.createSection("test", 1, 0);
+        assertNotNull(section);
+        assertEquals(section.getCode(), "");
+        assertEquals(section.getCharIndex(), 1);
+        assertEquals(section.getCharLength(), 0);
         assertEquals(section.getStartLine(), 1);
         assertEquals(section.getStartColumn(), 1);
         assertEquals(section.getEndLine(), 1);
@@ -84,17 +105,4 @@ public class SourceSectionTest {
         assertEquals(section.getCode(), "");
     }
 
-    @Test
-    public void testGetCode() {
-        assertEquals("01234", longSource.createSection("test", 0, 5).getCode());
-        assertEquals("67", longSource.createSection("test", 6, 2).getCode());
-        assertEquals("9", longSource.createSection("test", 9, 1).getCode());
-    }
-
-    @Test
-    public void testGetShortDescription() {
-        assertEquals("long:1", longSource.createSection("test", 0, 5).getShortDescription());
-        assertEquals("long:2", longSource.createSection("test", 6, 2).getShortDescription());
-        assertEquals("long:3", longSource.createSection("test", 9, 1).getShortDescription());
-    }
 }

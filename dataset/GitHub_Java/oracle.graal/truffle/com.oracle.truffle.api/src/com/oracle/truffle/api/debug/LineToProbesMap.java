@@ -24,21 +24,19 @@
  */
 package com.oracle.truffle.api.debug;
 
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-
 import com.oracle.truffle.api.instrument.InstrumentationTool;
-import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.instrument.ProbeListener;
 import com.oracle.truffle.api.instrument.impl.DefaultProbeListener;
 import com.oracle.truffle.api.source.LineLocation;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * An {@link InstrumentationTool} that builds a map of every {@link Probe} attached to some AST,
@@ -70,11 +68,7 @@ final class LineToProbesMap extends InstrumentationTool {
 
     @Override
     protected boolean internalInstall() {
-        final Instrumenter instrumenter = getInstrumenter();
-        for (Probe probe : instrumenter.findProbesTaggedAs(null)) {
-            addMapEntry(probe);
-        }
-        instrumenter.addProbeListener(probeListener);
+        Probe.addProbeListener(probeListener);
         return true;
     }
 
@@ -85,7 +79,7 @@ final class LineToProbesMap extends InstrumentationTool {
 
     @Override
     protected void internalDispose() {
-        getInstrumenter().removeProbeListener(probeListener);
+        Probe.removeProbeListener(probeListener);
     }
 
     /**
@@ -121,25 +115,21 @@ final class LineToProbesMap extends InstrumentationTool {
 
         @Override
         public void newProbeInserted(Probe probe) {
-            addMapEntry(probe);
-        }
-    }
-
-    private void addMapEntry(Probe probe) {
-        final SourceSection sourceSection = probe.getProbedSourceSection();
-        if (sourceSection != null && sourceSection.getSource() != null) {
-            final LineLocation lineLocation = sourceSection.getLineLocation();
-            if (TRACE) {
-                trace("ADD " + lineLocation.getShortDescription() + " ==> " + probe.getShortDescription());
+            final SourceSection sourceSection = probe.getProbedSourceSection();
+            if (sourceSection != null && sourceSection.getSource() != null) {
+                final LineLocation lineLocation = sourceSection.getLineLocation();
+                if (TRACE) {
+                    trace("ADD " + lineLocation.getShortDescription() + " ==> " + probe.getShortDescription());
+                }
+                Collection<Probe> probes = lineToProbesMap.get(lineLocation);
+                if (probes == null) {
+                    probes = new ArrayList<>(2);
+                    lineToProbesMap.put(lineLocation, probes);
+                } else {
+                    assert !probes.contains(probe);
+                }
+                probes.add(probe);
             }
-            Collection<Probe> probes = lineToProbesMap.get(lineLocation);
-            if (probes == null) {
-                probes = new ArrayList<>(2);
-                lineToProbesMap.put(lineLocation, probes);
-            } else {
-                assert !probes.contains(probe);
-            }
-            probes.add(probe);
         }
     }
 }
