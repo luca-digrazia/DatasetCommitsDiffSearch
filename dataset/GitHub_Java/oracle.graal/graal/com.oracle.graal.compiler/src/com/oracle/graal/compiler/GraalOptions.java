@@ -22,9 +22,11 @@
  */
 package com.oracle.graal.compiler;
 
+import com.oracle.max.criutils.TTY.Filter;
 
 /**
  * This class encapsulates options that control the behavior of the Graal compiler.
+ * The help message for each option is specified by a {@linkplain #helpMap help map}.
  *
  * (thomaswue) WARNING: Fields of this class are treated as final by Graal.
  */
@@ -112,6 +114,9 @@ public final class GraalOptions {
     public static boolean VerifyPhases                       = true;
     public static boolean CreateDeoptInfo                    = ____;
 
+    /**
+     * See {@link Filter#Filter(String, Object)}.
+     */
     public static String  PrintFilter                        = null;
 
     // printing settings
@@ -182,7 +187,6 @@ public final class GraalOptions {
     // Translating tableswitch instructions
     public static int     SequentialSwitchLimit              = 4;
     public static int     RangeTestsSwitchDensity            = 5;
-    public static double  MinTableSwitchDensity              = 0.5;
 
     public static boolean DetailedAsserts                    = ____;
 

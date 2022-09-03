@@ -26,7 +26,6 @@ package com.oracle.graal.bytecode;
  * A utility for processing {@link Bytecodes#TABLESWITCH} bytecodes.
  */
 public class BytecodeTableSwitch extends BytecodeSwitch {
-
     private static final int OFFSET_TO_LOW_KEY = 4;
     private static final int OFFSET_TO_HIGH_KEY = 8;
     private static final int OFFSET_TO_FIRST_JUMP_OFFSET = 12;
@@ -34,7 +33,6 @@ public class BytecodeTableSwitch extends BytecodeSwitch {
 
     /**
      * Constructor for a {@link BytecodeStream}.
-     * 
      * @param stream the {@code BytecodeStream} containing the switch instruction
      * @param bci the index in the stream of the switch instruction
      */
@@ -44,7 +42,6 @@ public class BytecodeTableSwitch extends BytecodeSwitch {
 
     /**
      * Gets the low key of the table switch.
-     * 
      * @return the low key
      */
     public int lowKey() {
@@ -53,7 +50,6 @@ public class BytecodeTableSwitch extends BytecodeSwitch {
 
     /**
      * Gets the high key of the table switch.
-     * 
      * @return the high key
      */
     public int highKey() {

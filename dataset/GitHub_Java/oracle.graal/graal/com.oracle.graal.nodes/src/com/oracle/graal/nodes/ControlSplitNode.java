@@ -62,7 +62,38 @@ public abstract class ControlSplitNode extends FixedNode {
     }
 
     public Iterable<BeginNode> blockSuccessors() {
-        return blockSuccessors;
+        return new Iterable<BeginNode>() {
+            @Override
+            public Iterator<BeginNode> iterator() {
+                return new Iterator<BeginNode>() {
+                    int i = 0;
+                    @Override
+                    public void remove() {
+                        throw new UnsupportedOperationException();
+                    }
+                    @Override
+                    public BeginNode next() {
+                        return ControlSplitNode.this.blockSuccessor(i++);
+                    }
+
+                    @Override
+                    public boolean hasNext() {
+                        return i < ControlSplitNode.this.blockSuccessorCount();
+                    }
+                };
+            }
+        };
+    }
+
+    @Override
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        StringBuilder str = new StringBuilder();
+        for (int i = 0; i < branchProbability.length; i++) {
+            str.append(i == 0 ? "" : ", ").append(String.format(Locale.ENGLISH, "%7.5f", branchProbability[i]));
+        }
+        properties.put("branchProbability", str.toString());
+        return properties;
     }
 
     public int blockSuccessorIndex(BeginNode successor) {

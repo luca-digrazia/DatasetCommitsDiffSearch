@@ -653,7 +653,7 @@ public final class GraphBuilderPhase extends Phase {
         } else {
             BlockPlaceholderNode successor = currentGraph.add(new BlockPlaceholderNode());
             DeoptimizeNode deopt = currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId));
-            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(object)), successor, deopt, 1, graphId));
+            IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(object)), successor, deopt, 0, graphId));
             append(ifNode);
             lastInstr = successor;
             frameState.ipush(appendConstant(Constant.INT_0));
@@ -757,7 +757,7 @@ public final class GraphBuilderPhase extends Phase {
     private void emitNullCheck(ValueNode receiver) {
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
         BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
-        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 0.5, graphId));
+        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IsNullNode(receiver)), trueSucc, falseSucc, 1, graphId));
 
         append(ifNode);
         lastInstr = falseSucc;
@@ -776,7 +776,7 @@ public final class GraphBuilderPhase extends Phase {
     private void emitBoundsCheck(ValueNode index, ValueNode length) {
         BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());
         BlockPlaceholderNode falseSucc = currentGraph.add(new BlockPlaceholderNode());
-        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IntegerBelowThanNode(index, length)), trueSucc, falseSucc, 0.5, graphId));
+        IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new IntegerBelowThanNode(index, length)), trueSucc, falseSucc, 1, graphId));
 
         append(ifNode);
         lastInstr = trueSucc;
@@ -1037,22 +1037,6 @@ public final class GraphBuilderPhase extends Phase {
         appendGoto(createTarget(successor, frameState));
     }
 
-    private void genTableswitch() {
-        int bci = bci();
-        ValueNode value = frameState.ipop();
-        BytecodeTableSwitch ts = new BytecodeTableSwitch(stream(), bci);
-
-        int nofCases = ts.numberOfCases() + 1; // including default case
-        assert currentBlock.numNormalSuccessors() == nofCases;
-
-        double[] probabilities = switchProbability(nofCases, bci);
-        TableSwitchNode tableSwitch = currentGraph.add(new TableSwitchNode(value, ts.lowKey(), probabilities));
-        for (int i = 0; i < nofCases; ++i) {
-            tableSwitch.setBlockSuccessor(i, createBlockTarget(probabilities[i], currentBlock.successors.get(i), frameState));
-        }
-        append(tableSwitch);
-    }
-
     private double[] switchProbability(int numberOfCases, int bci) {
         double[] prob = profilingInfo.getSwitchProbabilities(bci);
         if (prob != null) {
@@ -1077,22 +1061,35 @@ public final class GraphBuilderPhase extends Phase {
         return true;
     }
 
-    private void genLookupswitch() {
+    private void genSwitch(BytecodeSwitch bs) {
         int bci = bci();
         ValueNode value = frameState.ipop();
-        BytecodeLookupSwitch ls = new BytecodeLookupSwitch(stream(), bci);
 
-        int nofCases = ls.numberOfCases() + 1; // including default case
-        assert currentBlock.numNormalSuccessors() == nofCases;
+        int nofCases = bs.numberOfCases();
 
-        int[] keys = new int[nofCases - 1];
-        for (int i = 0; i < nofCases - 1; ++i) {
-            keys[i] = ls.keyAt(i);
+        Map<Integer, Integer> bciToSuccessorIndex = new HashMap<>();
+        int successorCount = currentBlock.successors.size();
+        for (int i = 0; i < successorCount; i++) {
+            assert !bciToSuccessorIndex.containsKey(currentBlock.successors.get(i).startBci);
+            if (!bciToSuccessorIndex.containsKey(currentBlock.successors.get(i).startBci)) {
+                bciToSuccessorIndex.put(currentBlock.successors.get(i).startBci, i);
+            }
         }
-        double[] probabilities = switchProbability(nofCases, bci);
-        LookupSwitchNode lookupSwitch = currentGraph.add(new LookupSwitchNode(value, keys, probabilities));
-        for (int i = 0; i < nofCases; ++i) {
-            lookupSwitch.setBlockSuccessor(i, createBlockTarget(probabilities[i], currentBlock.successors.get(i), frameState));
+
+        double[] keyProbabilities = switchProbability(nofCases + 1, bci);
+
+        int[] keys = new int[nofCases];
+        int[] keySuccessors = new int[nofCases + 1];
+        for (int i = 0; i < nofCases; i++) {
+            keys[i] = bs.keyAt(i);
+            keySuccessors[i] = bciToSuccessorIndex.get(bs.targetAt(i));
+        }
+        keySuccessors[nofCases] = bciToSuccessorIndex.get(bs.defaultTarget());
+
+        double[] successorProbabilities = IntegerSwitchNode.successorProbabilites(successorCount, keySuccessors, keyProbabilities);
+        IntegerSwitchNode lookupSwitch = currentGraph.add(new IntegerSwitchNode(value, successorCount, keys, keyProbabilities, keySuccessors));
+        for (int i = 0; i < successorCount; i++) {
+            lookupSwitch.setBlockSuccessor(i, createBlockTarget(successorProbabilities[i], currentBlock.successors.get(i), frameState));
         }
         append(lookupSwitch);
     }
@@ -1691,8 +1688,8 @@ public final class GraphBuilderPhase extends Phase {
             case GOTO           : genGoto(); break;
             case JSR            : genJsr(stream.readBranchDest()); break;
             case RET            : genRet(stream.readLocalIndex()); break;
-            case TABLESWITCH    : genTableswitch(); break;
-            case LOOKUPSWITCH   : genLookupswitch(); break;
+            case TABLESWITCH    : genSwitch(new BytecodeTableSwitch(stream(), bci())); break;
+            case LOOKUPSWITCH   : genSwitch(new BytecodeLookupSwitch(stream(), bci())); break;
             case IRETURN        : genReturn(frameState.ipop()); break;
             case LRETURN        : genReturn(frameState.lpop()); break;
             case FRETURN        : genReturn(frameState.fpop()); break;

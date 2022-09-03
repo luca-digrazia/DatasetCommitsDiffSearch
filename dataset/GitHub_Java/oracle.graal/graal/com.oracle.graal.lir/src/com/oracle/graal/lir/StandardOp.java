@@ -22,10 +22,12 @@
  */
 package com.oracle.graal.lir;
 
+import java.util.*;
+
+import com.oracle.max.asm.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.asm.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 /**
  * A collection of machine-independent LIR operations, as well as interfaces to be implemented for specific kinds or LIR
@@ -51,27 +53,59 @@ public class StandardOp {
     public static class LabelOp extends LIRInstruction {
         private final Label label;
         private final boolean align;
-        private final boolean softAlign;
 
-        public LabelOp(Label label, boolean align, boolean softAlign) {
+        protected LabelOp(Object opcode, Value[] outputs, LIRDebugInfo info, Value[] inputs, Value[] alives, Value[] temps, Label label, boolean align) {
+            super(opcode, outputs, info, inputs, alives, temps);
             this.label = label;
             this.align = align;
-            this.softAlign = softAlign;
+        }
+
+        public LabelOp(Label label, boolean align) {
+            this("LABEL", LIRInstruction.NO_OPERANDS, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, label, align);
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm) {
             if (align) {
-                tasm.asm.align(tasm.target.wordSize * 2);
-            }
-            if (softAlign) {
-                tasm.asm.softAlign(tasm.target.wordSize * 2);
+                tasm.asm.align(tasm.target.wordSize);
             }
             tasm.asm.bind(label);
         }
 
+        @Override
+        public String operationString() {
+            return label.toString() + " " + super.operationString();
+        }
+
+        @Override
+        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            throw GraalInternalError.shouldNotReachHere();
+        }
+
         public Label getLabel() {
             return label;
+        }
+    }
+
+    public static class PhiLabelOp extends LabelOp {
+        public PhiLabelOp(Label label, boolean align, Value[] phiDefinitions) {
+            super("PHI_LABEL", phiDefinitions, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, label, align);
+        }
+
+        @Override
+        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Output) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack);
+            }
+            throw GraalInternalError.shouldNotReachHere();
+        }
+
+        public void markResolved() {
+            outputs = EMPTY;
+        }
+
+        public Value[] getPhiDefinitions() {
+            return outputs;
         }
     }
 
@@ -84,16 +118,29 @@ public class StandardOp {
      */
     public static class JumpOp extends LIRInstruction {
         private final LabelRef destination;
-        @State protected LIRFrameState state;
 
-        public JumpOp(LabelRef destination, LIRFrameState state) {
+        protected JumpOp(Object opcode, Value[] outputs, LIRDebugInfo info, Value[] inputs, Value[] alives, Value[] temps, LabelRef destination) {
+            super(opcode, outputs, info, inputs, alives, temps);
             this.destination = destination;
-            this.state = state;
+        }
+
+        public JumpOp(LabelRef destination, LIRDebugInfo info) {
+            this("JUMP", LIRInstruction.NO_OPERANDS, info, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, destination);
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm) {
             tasm.asm.jmp(destination.label());
+        }
+
+        @Override
+        public String operationString() {
+            return  destination + " " + super.operationString();
+        }
+
+        @Override
+        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            throw GraalInternalError.shouldNotReachHere();
         }
 
         public LabelRef destination() {
@@ -102,19 +149,24 @@ public class StandardOp {
     }
 
     public static class PhiJumpOp extends JumpOp {
-        @Alive({REG, STACK, CONST}) protected Value[] phiInputs;
-
         public PhiJumpOp(LabelRef destination, Value[] phiInputs) {
-            super(destination, null);
-            this.phiInputs = phiInputs;
+            super("PHI_JUMP", LIRInstruction.NO_OPERANDS, null, LIRInstruction.NO_OPERANDS, phiInputs, LIRInstruction.NO_OPERANDS, destination);
+        }
+
+        @Override
+        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Alive) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+            }
+            throw GraalInternalError.shouldNotReachHere();
         }
 
         public void markResolved() {
-            phiInputs = EMPTY;
+            alives = EMPTY;
         }
 
         public Value[] getPhiInputs() {
-            return phiInputs;
+            return alives;
         }
     }
 
@@ -148,15 +200,21 @@ public class StandardOp {
      * In particular, it is not the actual method prologue.
      */
     public static final class ParametersOp extends LIRInstruction {
-        @Def({REG, STACK}) protected Value[] params;
-
         public ParametersOp(Value[] params) {
-            this.params = params;
+            super("PARAMS", params, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm) {
             // No code to emit.
+        }
+
+        @Override
+        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Output) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack);
+            }
+            throw GraalInternalError.shouldNotReachHere();
         }
     }
 }
