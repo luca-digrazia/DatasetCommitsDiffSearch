@@ -66,7 +66,7 @@ public abstract class AbstractInliningPolicy implements InliningPolicy {
 
     private static boolean onlyIntrinsics(Replacements replacements, InlineInfo info) {
         for (int i = 0; i < info.numberOfMethods(); i++) {
-            if (!InliningUtil.canIntrinsify(replacements, info.methodAt(i), info.invoke().bci())) {
+            if (!InliningUtil.canIntrinsify(replacements, info.methodAt(i))) {
                 return false;
             }
         }
@@ -75,7 +75,7 @@ public abstract class AbstractInliningPolicy implements InliningPolicy {
 
     private static boolean onlyForcedIntrinsics(Replacements replacements, InlineInfo info) {
         for (int i = 0; i < info.numberOfMethods(); i++) {
-            if (!InliningUtil.canIntrinsify(replacements, info.methodAt(i), info.invoke().bci())) {
+            if (!InliningUtil.canIntrinsify(replacements, info.methodAt(i))) {
                 return false;
             }
             if (!replacements.isForcedSubstitution(info.methodAt(i))) {
