@@ -34,6 +34,8 @@ import java.util.Set;
 import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
 import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.options.UniquePathOptionValue;
+
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.meta.JavaMethod;
 
@@ -102,7 +104,7 @@ public class GraalDebugConfig implements DebugConfig {
         @Option(help = "Enable dumping LIR, register allocation and code generation info to the C1Visualizer.", type = OptionType.Debug)
         public static final OptionValue<Boolean> PrintBackendCFG = new OptionValue<>(true);
         @Option(help = "Base filename when dumping C1Visualizer output to files.", type = OptionType.Debug)
-        public static final OptionValue<String> PrintCFGFileName = new OptionValue<>("compilations");
+        public static final UniquePathOptionValue PrintCFGFileName = new UniquePathOptionValue("compilations", "cfg", DumpPath);
 
         @Option(help = "Output probabilities for fixed nodes during binary graph dumping", type = OptionType.Debug)
         public static final OptionValue<Boolean> PrintGraphProbabilities = new OptionValue<>(false);
@@ -113,7 +115,13 @@ public class GraalDebugConfig implements DebugConfig {
         @Option(help = "Print Ideal graphs as opposed to sending them over the network.", type = OptionType.Debug)
         public static final OptionValue<Boolean> PrintIdealGraphFile = new OptionValue<>(false);
         @Option(help = "Base filename when dumping Ideal graphs to files.", type = OptionType.Debug)
-        public static final OptionValue<String> PrintIdealGraphFileName = new OptionValue<>("runtime-graphs");
+        public static final UniquePathOptionValue PrintIdealGraphFileName = new UniquePathOptionValue("runtime-graphs", DumpPath) {
+            @Override
+            protected String getExtension() {
+                 // Encode the kind of the file in the extension.
+                return (Options.PrintBinaryGraphs.getValue() ? "bgv" : "gv.xml");
+            }
+        };
 
         @Option(help = "", type = OptionType.Debug)
         public static final OptionValue<String> PrintIdealGraphAddress = new OptionValue<>("127.0.0.1");
@@ -129,7 +137,7 @@ public class GraalDebugConfig implements DebugConfig {
         @Option(help = "Enable dumping canonical text from for graphs.", type = OptionType.Debug)
         public static final OptionValue<Boolean> PrintCanonicalGraphStrings = new OptionValue<>(false);
         @Option(help = "Base directory when dumping graphs strings to files.", type = OptionType.Debug)
-        public static final OptionValue<String> PrintCanonicalGraphStringsDirectory = new OptionValue<>("graph-strings");
+        public static final UniquePathOptionValue PrintCanonicalGraphStringsDirectory = new UniquePathOptionValue("graph-strings", DumpPath);
         @Option(help = "Choose format used when dumping canonical text for graphs: " +
                 "0 gives a scheduled graph (better for spotting changes involving the schedule)" +
                 "while 1 gives a CFG containing expressions rooted at fixed nodes (better for spotting small structure differences)", type = OptionType.Debug)
