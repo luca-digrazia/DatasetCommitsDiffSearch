@@ -80,11 +80,7 @@ public abstract class LLVMWriteNode extends LLVMNode {
             } else {
                 identifier = String.format("assignment of %s in basic block %s in function %s", getSlot().getIdentifier(), basicBlock.getBlockName(), functionStartNode.getFunctionName());
             }
-            if (functionStartNode.getSourceSection() != null) {
-                sourceSection = functionStartNode.getSourceSection().getSource().createSection(identifier, 1);
-            } else {
-                sourceSection = SourceSection.createUnavailable("", null);
-            }
+            sourceSection = functionStartNode.getSourceSection().getSource().createSection(identifier, 1);
         }
         return sourceSection;
     }

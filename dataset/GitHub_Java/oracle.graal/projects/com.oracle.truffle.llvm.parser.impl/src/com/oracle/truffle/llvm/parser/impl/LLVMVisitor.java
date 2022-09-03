@@ -180,7 +180,6 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     private List<LLVMNode> functionEpilogue;
     private Map<FunctionHeader, Map<String, Integer>> functionToLabelMapping;
     private final Map<LLVMFunctionDescriptor, RootCallTarget> functionCallTargets = new HashMap<>();
-    private Map<String, Object> globalVariableScope = new HashMap<>();
     private Map<String, Integer> labelList;
     private FrameSlot retSlot;
     private FrameSlot stackPointerSlot;
@@ -199,11 +198,12 @@ public final class LLVMVisitor implements LLVMParserRuntime {
 
     private LLVMTypeHelper typeHelper;
 
-    public LLVMVisitor(LLVMOptimizationConfiguration optimizationConfiguration, Object[] mainArgs, Source sourceFile, Source mainSourceFile) {
+    public LLVMVisitor(LLVMOptimizationConfiguration optimizationConfiguration, Object[] mainArgs, Source sourceFile, Source mainSourceFile, List<String> resolvedVariableNames) {
         this.optimizationConfiguration = optimizationConfiguration;
         this.mainArgs = mainArgs;
         this.sourceFile = sourceFile;
         this.mainSourceFile = mainSourceFile;
+        this.resolvedVariableNames = resolvedVariableNames;
         typeHelper = new LLVMTypeHelper(this);
     }
 
@@ -357,7 +357,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
                         GlobalValueDef aliasee = alias.getAliasee().getRef();
                         Object globalVar;
                         if (aliasee instanceof GlobalVariable) {
-                            globalVar = globalVariableScope.get(((GlobalVariable) aliasee).getName());
+                            globalVar = globalVars.get(aliasee);
                         } else if (aliasee instanceof Alias) {
                             globalVar = aliases.get(aliasee);
                         } else {
@@ -389,10 +389,15 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     }
 
     private void allocateGlobals(List<EObject> objects) {
+        boolean correctLinking = LLVMBaseOptionFacade.enableCorrectExternalVariableLinking();
         for (EObject object : objects) {
             if (object instanceof GlobalVariable) {
                 GlobalVariable globalVar = (GlobalVariable) object;
-                globalVariableScope.put(globalVar.getName(), findOrAllocateGlobal(globalVar));
+                boolean hasExternalLinkage = "external".equals(globalVar.getLinkage());
+                if (!correctLinking && !hasExternalLinkage) {
+                    resolvedVariableNames.add(globalVar.getName());
+                }
+                findOrAllocateGlobal(globalVar);
             }
         }
     }
@@ -400,7 +405,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     private void addFunctionAttribute(GlobalVariable globalVar, List<LLVMNode> targetList) {
         ResolvedArrayType type = (ResolvedArrayType) typeResolver.resolve(globalVar.getType());
         int size = type.getSize();
-        Object allocGlobalVariable = globalVariableScope.get(globalVar.getName());
+        Object allocGlobalVariable = findOrAllocateGlobal(globalVar);
         ResolvedType structType = type.getContainedType(0);
         int structSize = typeHelper.getByteSize(structType);
         for (int i = 0; i < size; i++) {
@@ -476,7 +481,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             if (constant != null) {
                 ResolvedType resolvedType = resolve(globalVariable.getType());
                 int byteSize = typeHelper.getByteSize(resolvedType);
-                Object allocGlobalVariable = globalVariableScope.get(globalVariable.getName());
+                Object allocGlobalVariable = findOrAllocateGlobal(globalVariable);
                 if (byteSize == 0) {
                     return null;
                 } else {
@@ -491,12 +496,21 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         }
     }
 
+    private final Map<GlobalVariable, Object> globalVars = new HashMap<>();
     private final Map<Alias, Object> aliases = new HashMap<>();
     private final List<LLVMNode> globalDeallocations = new ArrayList<>();
     private boolean isGlobalScope;
 
+    private List<String> resolvedVariableNames = new ArrayList<>();
+
     private Object findOrAllocateGlobal(GlobalVariable globalVariable) {
-        return factoryFacade.allocateGlobalVariable(globalVariable);
+        if (globalVars.containsKey(globalVariable)) {
+            return globalVars.get(globalVariable);
+        } else {
+            Object allocation = factoryFacade.allocateGlobalVariable(globalVariable);
+            globalVars.put(globalVariable, allocation);
+            return allocation;
+        }
     }
 
     private LLVMExpressionNode visitArrayConstantStore(ArrayConstant constant) {
@@ -1092,7 +1106,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
                 return factoryFacade.createLiteral(function, LLVMBaseType.FUNCTION_ADDRESS);
             } else if (constant.getRef() instanceof GlobalVariable) {
                 GlobalVariable globalVariable = (GlobalVariable) constant.getRef();
-                Object findOrAllocateGlobal = globalVariableScope.get(globalVariable.getName());
+                Object findOrAllocateGlobal = findOrAllocateGlobal(globalVariable);
                 assert findOrAllocateGlobal != null;
                 return factoryFacade.createLiteral(findOrAllocateGlobal, LLVMBaseType.ADDRESS);
             } else if (constant instanceof ZeroInitializer) {
@@ -1129,7 +1143,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             return factoryFacade.createLiteral(function, LLVMBaseType.FUNCTION_ADDRESS);
         } else if (aliaseeRef instanceof GlobalVariable) {
             GlobalVariable originalVar = (GlobalVariable) aliaseeRef;
-            Object globalVar = globalVariableScope.get(originalVar.getName());
+            Object globalVar = globalVars.get(originalVar);
             LLVMParserAsserts.assertNotNull(globalVar);
             return factoryFacade.createLiteral(globalVar, LLVMBaseType.ADDRESS);
         } else if (aliaseeRef instanceof Alias) {
@@ -1553,7 +1567,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
 
     @Override
     public Object getGlobalAddress(GlobalVariable var) {
-        return findOrAllocateGlobal(var);
+        return globalVars.get(var);
     }
 
     @Override
@@ -1579,6 +1593,11 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     @Override
     public void addDestructor(LLVMNode destructorNode) {
         globalDeallocations.add(destructorNode);
+    }
+
+    @Override
+    public boolean isGlobalVariableDefined(String globalVarName) {
+        return resolvedVariableNames.contains(globalVarName);
     }
 
     @Override
