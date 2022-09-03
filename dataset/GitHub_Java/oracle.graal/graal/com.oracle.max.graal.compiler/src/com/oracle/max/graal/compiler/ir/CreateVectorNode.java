@@ -87,9 +87,7 @@ public final class CreateVectorNode extends AbstractVectorNode {
 
     @Override
     public Node copy(Graph into) {
-        CreateVectorNode x = new CreateVectorNode(reversed, null, into);
-        super.copyInto(x);
-        return x;
+        return new CreateVectorNode(reversed, null, into);
     }
 
     @Override
@@ -122,11 +120,7 @@ public final class CreateVectorNode extends AbstractVectorNode {
         } else {
             condition = new Compare(loopVariable, Condition.LT, length(), graph());
         }
-        int expectedLength = 100; // TODO: it may be possible to get a more accurate estimate...?
-        if (length().isConstant()) {
-            expectedLength = length().asConstant().asInt();
-        }
-        If ifNode = new If(condition, 1.0 / expectedLength, graph());
+        If ifNode = new If(condition, graph());
         loopBegin.setNext(ifNode);
         ifNode.setTrueSuccessor(loopEnd);
         this.replaceAtPredecessors(end);

@@ -52,7 +52,12 @@ public class IR {
     /**
      * The linear-scan ordered list of blocks.
      */
-    private List<LIRBlock> orderedBlocks;
+    private List<LIRBlock> linearScanOrder;
+
+    /**
+     * The order in which the code is emitted.
+     */
+    private List<LIRBlock> codeEmittingOrder;
 
     /**
      * Creates a new IR instance for the specified compilation.
@@ -76,18 +81,15 @@ public class IR {
 //            replacements.put(duplicate.start(), compilation.graph.start());
 //            compilation.graph.addDuplicate(duplicate.getNodes(), replacements);
 //        } else {
-            new GraphBuilderPhase(compilation, compilation.method, false, false).apply(compilation.graph);
+            new GraphBuilderPhase(compilation, compilation.method, false).apply(compilation.graph);
 //        }
 
-        //printGraph("After GraphBuilding", compilation.graph);
 
         if (GraalOptions.TestGraphDuplication) {
             new DuplicationPhase().apply(compilation.graph);
-            //printGraph("After Duplication", compilation.graph);
         }
 
         new DeadCodeEliminationPhase().apply(compilation.graph);
-        //printGraph("After DeadCodeElimination", compilation.graph);
 
         if (GraalOptions.Inline) {
             new InliningPhase(compilation, this, null).apply(compilation.graph);
@@ -102,15 +104,10 @@ public class IR {
 
         if (GraalOptions.OptLoops) {
             new LoopPhase().apply(graph);
-            if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase().apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
-            }
         }
 
-        if (GraalOptions.EscapeAnalysis /*&& compilation.method.toString().contains("simplify")*/) {
+        if (GraalOptions.EscapeAnalysis) {
             new EscapeAnalysisPhase(compilation, this).apply(graph);
-         //   new DeadCodeEliminationPhase().apply(graph);
             new CanonicalizerPhase().apply(graph);
             new DeadCodeEliminationPhase().apply(graph);
         }
@@ -119,17 +116,20 @@ public class IR {
             new GlobalValueNumberingPhase().apply(graph);
         }
 
+        new LoweringPhase(compilation.runtime).apply(graph);
         if (GraalOptions.Lower) {
-            new LoweringPhase(compilation.runtime).apply(graph);
             new MemoryPhase().apply(graph);
             if (GraalOptions.OptGVN) {
                 new GlobalValueNumberingPhase().apply(graph);
             }
-            new ReadEliminationPhase().apply(graph);
+            if (GraalOptions.OptReadElimination) {
+                new ReadEliminationPhase().apply(graph);
+            }
         }
 
         IdentifyBlocksPhase schedule = new IdentifyBlocksPhase(true);
         schedule.apply(graph);
+        compilation.stats.loopCount = schedule.loopCount();
 
 
         List<Block> blocks = schedule.getBlocks();
@@ -140,6 +140,16 @@ public class IR {
             map.put(b, block);
             block.setInstructions(b.getInstructions());
             block.setLinearScanNumber(b.blockID());
+            block.setLoopDepth(b.loopDepth());
+            block.setLoopIndex(b.loopIndex());
+
+            if (b.isLoopEnd()) {
+                block.setLinearScanLoopEnd();
+            }
+
+            if (b.isLoopHeader()) {
+                block.setLinearScanLoopHeader();
+            }
 
             block.setFirstInstruction(b.firstNode());
             block.setLastInstruction(b.lastNode());
@@ -156,9 +166,8 @@ public class IR {
             }
         }
 
-        orderedBlocks = lirBlocks;
         valueToBlock = new HashMap<Node, LIRBlock>();
-        for (LIRBlock b : orderedBlocks) {
+        for (LIRBlock b : lirBlocks) {
             for (Node i : b.getInstructions()) {
                 valueToBlock.put(i, b);
             }
@@ -172,12 +181,12 @@ public class IR {
             GraalTimers.COMPUTE_LINEAR_SCAN_ORDER.start();
         }
 
-        ComputeLinearScanOrder clso = new ComputeLinearScanOrder(lirBlocks.size(), startBlock);
-        orderedBlocks = clso.linearScanOrder();
-        this.compilation.stats.loopCount = clso.numLoops();
+        ComputeLinearScanOrder clso = new ComputeLinearScanOrder(lirBlocks.size(), compilation.stats.loopCount, startBlock);
+        linearScanOrder = clso.linearScanOrder();
+        codeEmittingOrder = clso.codeEmittingOrder();
 
         int z = 0;
-        for (LIRBlock b : orderedBlocks) {
+        for (LIRBlock b : linearScanOrder) {
             b.setLinearScanNumber(z++);
         }
 
@@ -194,7 +203,11 @@ public class IR {
      * @return the blocks in linear scan order
      */
     public List<LIRBlock> linearScanOrder() {
-        return orderedBlocks;
+        return linearScanOrder;
+    }
+
+    public List<LIRBlock> codeEmittingOrder() {
+        return codeEmittingOrder;
     }
 
     public void printGraph(String phase, Graph graph) {
