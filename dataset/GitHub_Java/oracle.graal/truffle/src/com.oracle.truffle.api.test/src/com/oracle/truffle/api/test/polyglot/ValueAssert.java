@@ -145,21 +145,19 @@ public class ValueAssert {
                 case HOST_OBJECT:
                     assertTrue(msg, value.isHostObject());
                     Object hostObject = value.asHostObject();
-                    // TODO temporary disabled GR-8034
-                    // assertTrue(!(hostObject instanceof Proxy));
-                    if (!value.isProxyObject()) {
-                        if (hostObject != null && !java.lang.reflect.Proxy.isProxyClass(hostObject.getClass())) {
-                            if (hostObject instanceof Class) {
-                                for (java.lang.reflect.Method m : ((Class<?>) hostObject).getMethods()) {
-                                    if (Modifier.isPublic(m.getModifiers()) && Modifier.isStatic(m.getModifiers())) {
-                                        assertTrue(m.getName(), value.hasMember(m.getName()));
-                                    }
+                    assertTrue(!(hostObject instanceof Proxy));
+
+                    if (hostObject != null && !java.lang.reflect.Proxy.isProxyClass(hostObject.getClass())) {
+                        if (hostObject instanceof Class) {
+                            for (java.lang.reflect.Method m : ((Class<?>) hostObject).getMethods()) {
+                                if (Modifier.isPublic(m.getModifiers()) && Modifier.isStatic(m.getModifiers())) {
+                                    assertTrue(m.getName(), value.hasMember(m.getName()));
                                 }
-                            } else {
-                                for (java.lang.reflect.Method m : hostObject.getClass().getMethods()) {
-                                    if (Modifier.isPublic(m.getModifiers()) && !Modifier.isStatic(m.getModifiers())) {
-                                        assertTrue(m.getName(), value.hasMember(m.getName()));
-                                    }
+                            }
+                        } else {
+                            for (java.lang.reflect.Method m : hostObject.getClass().getMethods()) {
+                                if (Modifier.isPublic(m.getModifiers()) && !Modifier.isStatic(m.getModifiers())) {
+                                    assertTrue(m.getName(), value.hasMember(m.getName()));
                                 }
                             }
                         }
@@ -362,11 +360,8 @@ public class ValueAssert {
                     }
                     break;
                 case HOST_OBJECT:
-                    // TODO temporary disabled GR-8034
-                    if (!value.isProxyObject()) {
-                        assertFalse(value.isHostObject());
-                        assertFails(() -> value.asHostObject(), ClassCastException.class);
-                    }
+                    assertFalse(value.isHostObject());
+                    assertFails(() -> value.asHostObject(), ClassCastException.class);
                     break;
                 case PROXY_OBJECT:
                     assertFalse(value.isProxyObject());
@@ -423,7 +418,7 @@ public class ValueAssert {
         assertEquals(receivedObjectsIntMap, objectMap3);
         assertEquals(receivedObjectsLongMap, objectMap4);
 
-        if (value.isHostObject() && !value.isProxyObject()) {
+        if (value.isHostObject()) {
             assertTrue(value.as(Object.class) instanceof List || value.as(Object.class).getClass().isArray());
         } else if (!value.hasMembers()) {
             List<Object> objectMap5 = (List<Object>) value.as(Object.class);

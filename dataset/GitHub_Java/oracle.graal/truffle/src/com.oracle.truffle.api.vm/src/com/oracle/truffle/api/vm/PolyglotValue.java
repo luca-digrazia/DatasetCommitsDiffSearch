@@ -148,8 +148,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
         }
     }
 
-    private static final int CHARACTER_LIMIT = 140;
-
     static String getValueInfo(PolyglotLanguageContext languageContext, Object receiver) {
         if (languageContext == null) {
             return receiver.toString();
@@ -179,7 +177,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             try {
                 Object metaObject = LANGUAGE.findMetaObject(displayEnv, receiver);
                 if (metaObject != null) {
-                    metaObjectToString = truncateString(LANGUAGE.toStringIfVisible(displayEnv, metaObject, false), CHARACTER_LIMIT);
+                    metaObjectToString = truncateString(LANGUAGE.toStringIfVisible(displayEnv, metaObject, false), 80);
                 }
             } catch (Throwable e) {
                 assert rethrow(e);
@@ -188,7 +186,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
         String valueToString = "Unknown";
         try {
-            valueToString = truncateString(LANGUAGE.toStringIfVisible(displayEnv, receiver, false), CHARACTER_LIMIT);
+            valueToString = truncateString(LANGUAGE.toStringIfVisible(displayEnv, receiver, false), 80);
         } catch (Throwable e) {
             assert rethrow(e);
         }
@@ -278,41 +276,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
     protected static RuntimeException invalidMemberValue(PolyglotLanguageContext context, Object receiver, String identifier, Object value) {
         String message = String.format("Invalid member value %s for object %s and member key '%s'.", getValueInfo(context, value), getValueInfo(context, receiver), identifier);
         throw new PolyglotIllegalArgumentException(message);
-    }
-
-    protected static RuntimeException invalidExecuteArgumentType(PolyglotLanguageContext context, Object receiver, UnsupportedTypeException e) {
-        String[] formattedArgs = formatArgs(context, e.getSuppliedValues());
-        String message = String.format("Invalid argument when executing %s with arguments %s.", getValueInfo(context, receiver), Arrays.asList(formattedArgs));
-        throw new PolyglotIllegalArgumentException(message);
-
-    }
-
-    protected static RuntimeException invalidInstantiateArgumentType(PolyglotLanguageContext context, Object receiver, Object[] arguments) {
-        String[] formattedArgs = formatArgs(context, arguments);
-        String message = String.format("Invalid argument when instantiating %s with arguments %s.", getValueInfo(context, receiver), Arrays.asList(formattedArgs));
-        throw new PolyglotIllegalArgumentException(message);
-    }
-
-    protected static RuntimeException invalidInstantiateArity(PolyglotLanguageContext context, Object receiver, Object[] arguments, int expected, int actual) {
-        String[] formattedArgs = formatArgs(context, arguments);
-        String message = String.format("Invalid argument count when instantiating %s with arguments %s. Expected %s argument(s) but got %s.",
-                        getValueInfo(context, receiver), Arrays.asList(formattedArgs), expected, actual);
-        throw new PolyglotIllegalArgumentException(message);
-    }
-
-    protected static RuntimeException invalidExecuteArity(PolyglotLanguageContext context, Object receiver, Object[] arguments, int expected, int actual) {
-        String[] formattedArgs = formatArgs(context, arguments);
-        String message = String.format("Invalid argument count when executing %s with arguments %s. Expected %s argument(s) but got %s.",
-                        getValueInfo(context, receiver), Arrays.asList(formattedArgs), expected, actual);
-        throw new PolyglotIllegalArgumentException(message);
-    }
-
-    private static String[] formatArgs(PolyglotLanguageContext context, Object[] arguments) {
-        String[] formattedArgs = new String[arguments.length];
-        for (int i = 0; i < arguments.length; i++) {
-            formattedArgs[i] = getValueInfo(context, arguments[i]);
-        }
-        return formattedArgs;
     }
 
     private static PolyglotException error(String message) {
@@ -1949,19 +1912,29 @@ abstract class PolyglotValue extends AbstractValueImpl {
             }
 
             protected final Object executeShared(Object receiver, Object[] args) {
-                Object[] guestArguments = toGuestValues.apply(polyglot.languageContext, args);
                 try {
-                    return ForeignAccess.sendExecute(executeNode, (TruffleObject) receiver, guestArguments);
+                    return ForeignAccess.sendExecute(executeNode, (TruffleObject) receiver, toGuestValues.apply(polyglot.languageContext, args));
                 } catch (UnsupportedTypeException e) {
                     CompilerDirectives.transferToInterpreter();
-                    throw invalidExecuteArgumentType(polyglot.languageContext, receiver, e);
+                    throw handleUnsupportedType(e);
                 } catch (ArityException e) {
                     CompilerDirectives.transferToInterpreter();
-                    throw invalidExecuteArity(polyglot.languageContext, receiver, guestArguments, e.getExpectedArity(), e.getActualArity());
+                    throw handleInvalidArity(e);
                 } catch (UnsupportedMessageException e) {
                     CompilerDirectives.transferToInterpreter();
                     return polyglot.executeUnsupported(receiver);
                 }
+            }
+
+            private PolyglotException handleInvalidArity(ArityException e) {
+                int actual = e.getActualArity();
+                int expected = e.getExpectedArity();
+                return error(String.format("Expected %s number of arguments but got %s when executing %s.", expected, actual, toString()));
+            }
+
+            private PolyglotException handleUnsupportedType(UnsupportedTypeException e) {
+                String arguments = polyglot.formatSuppliedValues(e);
+                return error(String.format("Invalid arguments provided %s when executing %s.", arguments, toString()));
             }
 
         }
@@ -2083,12 +2056,12 @@ abstract class PolyglotValue extends AbstractValueImpl {
 
             @Override
             protected Object executeImpl(Object receiver, Object[] args) {
-                Object[] instantiateArguments = toGuestValues.apply(polyglot.languageContext, (Object[]) args[1]);
                 try {
-                    return toHostValue.execute(ForeignAccess.sendNew(newInstanceNode, (TruffleObject) receiver, instantiateArguments));
+                    Object[] newInstanceArgs = (Object[]) args[1];
+                    return toHostValue.execute(ForeignAccess.sendNew(newInstanceNode, (TruffleObject) receiver, toGuestValues.apply(polyglot.languageContext, newInstanceArgs)));
                 } catch (UnsupportedTypeException e) {
                     CompilerDirectives.transferToInterpreter();
-                    throw invalidInstantiateArgumentType(polyglot.languageContext, receiver, args);
+                    throw handleUnsupportedType(e);
                 } catch (ArityException e) {
                     CompilerDirectives.transferToInterpreter();
                     throw handleInvalidArity(e);
@@ -2102,6 +2075,11 @@ abstract class PolyglotValue extends AbstractValueImpl {
                 int actual = e.getActualArity();
                 int expected = e.getExpectedArity();
                 return error(String.format("Expected %s number of arguments but got %s when creating a new instance of %s.", expected, actual, toString()));
+            }
+
+            private PolyglotException handleUnsupportedType(UnsupportedTypeException e) {
+                String arguments = polyglot.formatSuppliedValues(e);
+                return error(String.format("Invalid arguments provided %s when creating a new instance of %s.", arguments, toString()));
             }
 
             @Override
