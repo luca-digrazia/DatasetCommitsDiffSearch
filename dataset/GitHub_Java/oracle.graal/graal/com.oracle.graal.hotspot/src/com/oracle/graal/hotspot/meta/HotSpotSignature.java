@@ -134,7 +134,7 @@ public class HotSpotSignature extends CompilerObject implements Signature {
         }
 
         if (type instanceof HotSpotResolvedObjectType) {
-            return ((HotSpotResolvedObjectType) type).isDefinitelyResolvedWithRespectTo(accessingClass);
+            return ((HotSpotResolvedObjectType) type).isResolvedWithRespectTo(accessingClass);
         }
         return true;
     }
