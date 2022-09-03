@@ -174,7 +174,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
         AllocatableValue indexRegister;
         Scale scaleEnum;
-        if (!index.equals(Value.ILLEGAL) && scale != 0) {
+        if (index != Value.ILLEGAL && scale != 0) {
             scaleEnum = Scale.fromInt(scale);
             if (isConstant(index)) {
                 finalDisp += asConstant(index).asLong() * scale;
@@ -193,7 +193,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         } else {
             displacementInt = 0;
             AllocatableValue displacementRegister = load(Constant.forLong(finalDisp));
-            if (baseRegister.equals(Value.ILLEGAL)) {
+            if (baseRegister == Value.ILLEGAL) {
                 baseRegister = displacementRegister;
             } else if (indexRegister == Value.ILLEGAL) {
                 indexRegister = displacementRegister;
@@ -206,7 +206,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         return new AMD64AddressValue(target().wordKind, baseRegister, indexRegister, scaleEnum, displacementInt);
     }
 
-    protected AMD64AddressValue asAddressValue(Value address) {
+    private AMD64AddressValue asAddress(Value address) {
         if (address instanceof AMD64AddressValue) {
             return (AMD64AddressValue) address;
         } else {
@@ -216,7 +216,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitLoad(Kind kind, Value address, DeoptimizingNode deopting) {
-        AMD64AddressValue loadAddress = asAddressValue(address);
+        AMD64AddressValue loadAddress = asAddress(address);
         Variable result = newVariable(kind);
         append(new LoadOp(kind, result, loadAddress, deopting != null ? state(deopting) : null));
         return result;
@@ -224,7 +224,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public void emitStore(Kind kind, Value address, Value inputVal, DeoptimizingNode deopting) {
-        AMD64AddressValue storeAddress = asAddressValue(address);
+        AMD64AddressValue storeAddress = asAddress(address);
         LIRFrameState state = deopting != null ? state(deopting) : null;
 
         if (isConstant(inputVal)) {
