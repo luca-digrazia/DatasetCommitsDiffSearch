@@ -22,48 +22,33 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.compiler.GraalCompiler.compileGraph;
-import static com.oracle.graal.compiler.GraalCompiler.getProfilingInfo;
-import static jdk.internal.jvmci.code.CodeUtil.getCallingConvention;
+import static com.oracle.graal.compiler.GraalCompiler.*;
+import static jdk.internal.jvmci.code.CodeUtil.*;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
-import jdk.internal.jvmci.code.CallingConvention;
-import jdk.internal.jvmci.code.CallingConvention.Type;
-import jdk.internal.jvmci.code.CodeCacheProvider;
-import jdk.internal.jvmci.code.CompilationResult;
-import jdk.internal.jvmci.code.InstalledCode;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.CallingConvention.*;
+
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import jdk.internal.jvmci.meta.*;
 import jdk.internal.jvmci.meta.Assumptions.Assumption;
-import jdk.internal.jvmci.meta.ConstantReflectionProvider;
-import jdk.internal.jvmci.meta.MetaAccessProvider;
-import jdk.internal.jvmci.meta.ResolvedJavaType;
-import jdk.internal.jvmci.meta.SpeculationLog;
 
-import com.oracle.graal.compiler.target.Backend;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugEnvironment;
-import com.oracle.graal.debug.DebugMemUseTracker;
-import com.oracle.graal.debug.DebugTimer;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
-import com.oracle.graal.lir.phases.LIRSuites;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.tiers.HighTierContext;
-import com.oracle.graal.phases.tiers.Suites;
-import com.oracle.graal.phases.util.Providers;
-import com.oracle.graal.truffle.nodes.AssumptionValidAssumption;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.nodes.SlowPathException;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.phases.util.*;
+import com.oracle.graal.truffle.nodes.*;
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.nodes.*;
 
 /**
  * Implementation of the Truffle compiler using Graal.
@@ -161,6 +146,7 @@ public abstract class TruffleCompiler {
             CompilationResult compilationResult = compileMethodHelper(graph, compilable.toString(), graphBuilderSuite, compilable);
             compilationNotify.notifyCompilationSuccess(compilable, graph, compilationResult);
         } catch (Throwable t) {
+            System.out.println("compilation failed!?");
             compilationNotify.notifyCompilationFailed(compilable, graph, t);
             throw t;
         }

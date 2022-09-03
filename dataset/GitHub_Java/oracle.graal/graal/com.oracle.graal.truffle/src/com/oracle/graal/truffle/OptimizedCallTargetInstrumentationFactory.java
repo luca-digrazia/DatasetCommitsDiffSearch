@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.lir.asm.*;
 
 /**
@@ -35,9 +34,4 @@ public interface OptimizedCallTargetInstrumentationFactory extends CompilationRe
      * Gets the architecture supported by this factory.
      */
     String getArchitecture();
-
-    /**
-     * Notifies this object of the method that is being instrumented.
-     */
-    void setInstrumentedMethod(ResolvedJavaMethod method);
 }
