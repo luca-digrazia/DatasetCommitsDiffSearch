@@ -22,42 +22,24 @@
  */
 package com.oracle.graal.graph;
 
-import static com.oracle.graal.graph.Edges.Type.Inputs;
-import static com.oracle.graal.graph.Edges.Type.Successors;
-import static com.oracle.graal.graph.Graph.MODIFICATION_COUNTS_ENABLED;
-import static com.oracle.graal.graph.UnsafeAccess.UNSAFE;
+import static com.oracle.graal.graph.Edges.Type.*;
+import static com.oracle.graal.graph.Graph.*;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.RetentionPolicy;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.Formattable;
-import java.util.FormattableFlags;
-import java.util.Formatter;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.function.BiConsumer;
-import java.util.function.Predicate;
+import java.lang.annotation.*;
+import java.util.*;
+import java.util.function.*;
 
-import sun.misc.Unsafe;
+import sun.misc.*;
 
-import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.compiler.common.Fields;
-import com.oracle.graal.debug.Fingerprint;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.Graph.NodeEvent;
 import com.oracle.graal.graph.Graph.NodeEventListener;
 import com.oracle.graal.graph.Graph.Options;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.graph.iterators.NodePredicate;
-import com.oracle.graal.graph.spi.Simplifiable;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.debug.*;
 
 /**
  * This class is the base class for all nodes. It represents a node that can be inserted in a
@@ -182,6 +164,14 @@ public abstract class Node implements Cloneable, Formattable {
          * ignored and can therefore safely be {@code null}.
          */
         boolean setStampFromReturnType() default false;
+
+        /**
+         * Determines if this intrinsic can be compile-time executed. An attempt to execute a call
+         * (via reflection) to this intrinsic at compile-time will be made if all of its arguments
+         * are compile-time constant. If the execution succeeds without an exception, the result is
+         * inserted as a constant node in the graph.
+         */
+        boolean foldable() default false;
     }
 
     /**
@@ -824,7 +814,7 @@ public abstract class Node implements Cloneable, Formattable {
         Node newNode = null;
         try {
             if (USE_UNSAFE_TO_CLONE) {
-                newNode = (Node) UNSAFE.allocateInstance(getClass());
+                newNode = (Node) UnsafeAccess.unsafe.allocateInstance(getClass());
                 newNode.nodeClass = nodeClassTmp;
                 nodeClassTmp.getData().copy(this, newNode);
                 copyOrClearEdgesForClone(newNode, Inputs, edgesToCopy);
