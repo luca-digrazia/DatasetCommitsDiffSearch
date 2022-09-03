@@ -34,7 +34,6 @@ import javax.lang.model.util.*;
 import com.oracle.truffle.dsl.processor.*;
 import com.oracle.truffle.dsl.processor.java.model.*;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.DeclaredCodeTypeMirror;
-import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.WildcardTypeMirror;
 
 /**
  * THIS IS NOT PUBLIC API.
@@ -399,7 +398,7 @@ public class ElementUtils {
             case LONG:
                 return "long";
             case DECLARED:
-                return getDeclaredName((DeclaredType) mirror, true);
+                return getDeclaredName((DeclaredType) mirror);
             case ARRAY:
                 return getSimpleName(((ArrayType) mirror).getComponentType()) + "[]";
             case VOID:
@@ -425,10 +424,10 @@ public class ElementUtils {
         return b.toString();
     }
 
-    public static String getDeclaredName(DeclaredType element, boolean includeTypeVariables) {
+    private static String getDeclaredName(DeclaredType element) {
         String simpleName = fixECJBinaryNameIssue(element.asElement().getSimpleName().toString());
 
-        if (!includeTypeVariables || element.getTypeArguments().size() == 0) {
+        if (element.getTypeArguments().size() == 0) {
             return simpleName;
         }
 
@@ -531,7 +530,7 @@ public class ElementUtils {
     public static boolean isEnclosedIn(Element enclosedIn, Element element) {
         if (element == null) {
             return false;
-        } else if (typeEquals(enclosedIn.asType(), element.asType())) {
+        } else if (enclosedIn.equals(element)) {
             return true;
         } else {
             return isEnclosedIn(enclosedIn, element.getEnclosingElement());
@@ -654,17 +653,6 @@ public class ElementUtils {
 
     public static String getPackageName(TypeElement element) {
         return findPackageElement(element).getQualifiedName().toString();
-    }
-
-    public static String getEnclosedQualifiedName(DeclaredType mirror) {
-        Element e = ((TypeElement) mirror.asElement()).getEnclosingElement();
-        if (e.getKind() == ElementKind.PACKAGE) {
-            return ((PackageElement) e).getQualifiedName().toString();
-        } else if (e.getKind().isInterface() || e.getKind().isClass()) {
-            return getQualifiedName((TypeElement) e);
-        } else {
-            return null;
-        }
     }
 
     public static String getPackageName(TypeMirror mirror) {
@@ -1033,37 +1021,6 @@ public class ElementUtils {
 
     public static boolean isObject(TypeMirror actualType) {
         return actualType.getKind() == TypeKind.DECLARED && getQualifiedName(actualType).equals("java.lang.Object");
-    }
-
-    public static TypeMirror fillInGenericWildcards(TypeMirror type) {
-        if (type.getKind() != TypeKind.DECLARED) {
-            return type;
-        }
-        DeclaredType declaredType = (DeclaredType) type;
-        TypeElement element = (TypeElement) declaredType.asElement();
-        if (element == null) {
-            return type;
-        }
-        int typeParameters = element.getTypeParameters().size();
-        if (typeParameters > 0 && declaredType.getTypeArguments().size() != typeParameters) {
-            List<TypeMirror> genericTypes = new ArrayList<>();
-            for (int i = 0; i < typeParameters; i++) {
-                genericTypes.add(new WildcardTypeMirror(null, null));
-            }
-            return new DeclaredCodeTypeMirror(element, genericTypes);
-        }
-        return type;
-    }
-
-    public static TypeMirror eraseGenericTypes(TypeMirror type) {
-        if (type.getKind() != TypeKind.DECLARED) {
-            return type;
-        }
-        DeclaredType declaredType = (DeclaredType) type;
-        if (declaredType.getTypeArguments().size() == 0) {
-            return type;
-        }
-        return new DeclaredCodeTypeMirror((TypeElement) declaredType.asElement());
     }
 
 }
