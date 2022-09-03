@@ -22,17 +22,26 @@
  */
 package com.oracle.graal.hotspot;
 
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static jdk.vm.ci.code.ValueUtil.asStackSlot;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import java.util.*;
+import java.util.ArrayList;
 
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.Variable;
+import com.oracle.graal.lir.framemap.ReferenceMapBuilder;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.Location;
+import jdk.vm.ci.code.ReferenceMap;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.hotspot.HotSpotReferenceMap;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.Value;
 
 public final class HotSpotReferenceMapBuilder extends ReferenceMapBuilder {
 
@@ -41,23 +50,22 @@ public final class HotSpotReferenceMapBuilder extends ReferenceMapBuilder {
     private final ArrayList<Value> objectValues;
     private int objectCount;
 
-    private final TargetDescription target;
     private final int totalFrameSize;
+    private final int maxOopMapStackOffset;
 
-    public HotSpotReferenceMapBuilder(TargetDescription target, int totalFrameSize) {
+    public HotSpotReferenceMapBuilder(int totalFrameSize, int maxOopMapStackOffset) {
         this.objectValues = new ArrayList<>();
         this.objectCount = 0;
-
-        this.target = target;
+        this.maxOopMapStackOffset = maxOopMapStackOffset;
         this.totalFrameSize = totalFrameSize;
     }
 
     @Override
     public void addLiveValue(Value v) {
-        if (isConstant(v)) {
+        if (isJavaConstant(v)) {
             return;
         }
-        LIRKind lirKind = v.getLIRKind();
+        LIRKind lirKind = (LIRKind) v.getValueKind();
         if (!lirKind.isValue()) {
             objectValues.add(v);
             if (lirKind.isUnknownReference()) {
@@ -67,31 +75,42 @@ public final class HotSpotReferenceMapBuilder extends ReferenceMapBuilder {
             }
         }
         if (isRegister(v)) {
-            int size = target.getSizeInBytes(lirKind.getPlatformKind());
+            int size = lirKind.getPlatformKind().getSizeInBytes();
             if (size > maxRegisterSize) {
                 maxRegisterSize = size;
             }
         }
     }
 
+    private static final Location[] NO_LOCATIONS = {};
+    private static final int[] NO_SIZES = {};
+
     @Override
     public ReferenceMap finish(LIRFrameState state) {
-        Location[] objects = new Location[objectCount];
-        Location[] derivedBase = new Location[objectCount];
-        int[] sizeInBytes = new int[objectCount];
-
+        Location[] objects;
+        Location[] derivedBase;
+        int[] sizeInBytes;
+        if (objectCount == 0) {
+            objects = NO_LOCATIONS;
+            derivedBase = NO_LOCATIONS;
+            sizeInBytes = NO_SIZES;
+        } else {
+            objects = new Location[objectCount];
+            derivedBase = new Location[objectCount];
+            sizeInBytes = new int[objectCount];
+        }
         int idx = 0;
         for (Value obj : objectValues) {
-            LIRKind kind = obj.getLIRKind();
+            LIRKind kind = (LIRKind) obj.getValueKind();
             int bytes = bytesPerElement(kind);
             if (kind.isUnknownReference()) {
-                throw JVMCIError.unimplemented("derived references not yet implemented");
+                throw GraalError.shouldNotReachHere("unknown reference alive across safepoint");
             } else {
                 Location base = null;
                 if (kind.isDerivedReference()) {
                     Variable baseVariable = (Variable) kind.getDerivedReferenceBase();
                     Value baseValue = state.getLiveBasePointers().get(baseVariable.index);
-                    assert baseValue.getPlatformKind().getVectorLength() == 1 && baseValue.getLIRKind().isReference(0) && !baseValue.getLIRKind().isDerivedReference();
+                    assert baseValue.getPlatformKind().getVectorLength() == 1 && ((LIRKind) baseValue.getValueKind()).isReference(0) && !((LIRKind) baseValue.getValueKind()).isDerivedReference();
                     base = toLocation(baseValue, 0);
                 }
 
@@ -109,9 +128,9 @@ public final class HotSpotReferenceMapBuilder extends ReferenceMapBuilder {
         return new HotSpotReferenceMap(objects, derivedBase, sizeInBytes, maxRegisterSize);
     }
 
-    private int bytesPerElement(LIRKind kind) {
+    private static int bytesPerElement(LIRKind kind) {
         PlatformKind platformKind = kind.getPlatformKind();
-        return target.getSizeInBytes(platformKind) / platformKind.getVectorLength();
+        return platformKind.getSizeInBytes() / platformKind.getVectorLength();
     }
 
     private Location toLocation(Value v, int offset) {
@@ -119,7 +138,11 @@ public final class HotSpotReferenceMapBuilder extends ReferenceMapBuilder {
             return Location.subregister(asRegister(v), offset);
         } else {
             StackSlot s = asStackSlot(v);
-            return Location.stack(s.getOffset(totalFrameSize) + offset);
+            int totalOffset = s.getOffset(totalFrameSize) + offset;
+            if (totalOffset > maxOopMapStackOffset) {
+                throw new BailoutException("stack offset %d for oopmap is greater than encoding limit %d", totalOffset, maxOopMapStackOffset);
+            }
+            return Location.stack(totalOffset);
         }
     }
 }

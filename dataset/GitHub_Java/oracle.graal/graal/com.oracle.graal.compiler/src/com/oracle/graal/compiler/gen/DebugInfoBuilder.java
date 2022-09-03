@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,153 +22,302 @@
  */
 package com.oracle.graal.compiler.gen;
 
-import java.util.*;
-import java.util.Map.Entry;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Queue;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.compiler.gen.LIRGenerator.LockScope;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.lir.ConstantValue;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LabelRef;
+import com.oracle.graal.lir.Variable;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.NodeValueMap;
+import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.nodes.virtual.EscapeObjectState;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.virtual.nodes.MaterializedObjectState;
+import com.oracle.graal.virtual.nodes.VirtualObjectState;
 
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.code.VirtualObject;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.JavaValue;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Value;
+
+/**
+ * Builds {@link LIRFrameState}s from {@link FrameState}s.
+ */
 public class DebugInfoBuilder {
-    private final NodeMap<CiValue> nodeOperands;
 
-    public DebugInfoBuilder(NodeMap<CiValue> nodeOperands) {
-        this.nodeOperands = nodeOperands;
+    protected final NodeValueMap nodeValueMap;
+
+    public DebugInfoBuilder(NodeValueMap nodeValueMap) {
+        this.nodeValueMap = nodeValueMap;
     }
 
+    private static final JavaValue[] NO_JAVA_VALUES = {};
+    private static final JavaKind[] NO_JAVA_KINDS = {};
 
-    private HashMap<VirtualObjectNode, CiVirtualObject> virtualObjects = new HashMap<>();
+    protected final Map<VirtualObjectNode, VirtualObject> virtualObjects = Node.newMap();
+    protected final Map<VirtualObjectNode, EscapeObjectState> objectStates = Node.newIdentityMap();
 
-    public LIRDebugInfo build(FrameState topState, LockScope locks, List<CiStackSlot> pointerSlots, LabelRef exceptionEdge) {
+    protected final Queue<VirtualObjectNode> pendingVirtualObjects = new ArrayDeque<>();
+
+    public LIRFrameState build(FrameState topState, LabelRef exceptionEdge) {
         assert virtualObjects.size() == 0;
-        CiFrame frame = computeFrameForState(topState, locks);
+        assert objectStates.size() == 0;
+        assert pendingVirtualObjects.size() == 0;
 
-        CiVirtualObject[] virtualObjectsArray = null;
-        if (virtualObjects.size() != 0) {
-            // collect all VirtualObjectField instances:
-            IdentityHashMap<VirtualObjectNode, VirtualObjectFieldNode> objectStates = new IdentityHashMap<>();
-            FrameState current = topState;
-            do {
-                for (Node n : current.virtualObjectMappings()) {
-                    VirtualObjectFieldNode field = (VirtualObjectFieldNode) n;
-                    // null states occur for objects with 0 fields
-                    if (field != null && !objectStates.containsKey(field.object())) {
-                        objectStates.put(field.object(), field);
-                    }
-                }
-                current = current.outerFrameState();
-            } while (current != null);
-            // fill in the CiVirtualObject values:
-            // during this process new CiVirtualObjects might be discovered, so repeat until no more changes occur.
-            boolean changed;
-            do {
-                changed = false;
-                IdentityHashMap<VirtualObjectNode, CiVirtualObject> virtualObjectsCopy = new IdentityHashMap<>(virtualObjects);
-                for (Entry<VirtualObjectNode, CiVirtualObject> entry : virtualObjectsCopy.entrySet()) {
-                    if (entry.getValue().values() == null) {
-                        VirtualObjectNode vobj = entry.getKey();
-                        if (vobj instanceof BoxedVirtualObjectNode) {
-                            BoxedVirtualObjectNode boxedVirtualObjectNode = (BoxedVirtualObjectNode) vobj;
-                            entry.getValue().setValues(new CiValue[]{toCiValue(boxedVirtualObjectNode.getUnboxedValue())});
-                        } else {
-                            CiValue[] values = new CiValue[vobj.fieldsCount()];
-                            entry.getValue().setValues(values);
-                            if (values.length > 0) {
-                                changed = true;
-                                ValueNode currentField = objectStates.get(vobj);
-                                assert currentField != null;
-                                do {
-                                    if (currentField instanceof VirtualObjectFieldNode) {
-                                        int index = ((VirtualObjectFieldNode) currentField).index();
-                                        if (values[index] == null) {
-                                            values[index] = toCiValue(((VirtualObjectFieldNode) currentField).input());
-                                        }
-                                        currentField = ((VirtualObjectFieldNode) currentField).lastState();
-                                    } else {
-                                        assert currentField instanceof PhiNode : currentField;
-                                        currentField = ((PhiNode) currentField).valueAt(0);
-                                    }
-                                } while (currentField != null);
-                            }
+        // collect all VirtualObjectField instances:
+        FrameState current = topState;
+        do {
+            if (current.virtualObjectMappingCount() > 0) {
+                for (EscapeObjectState state : current.virtualObjectMappings()) {
+                    if (!objectStates.containsKey(state.object())) {
+                        if (!(state instanceof MaterializedObjectState) || ((MaterializedObjectState) state).materializedValue() != state.object()) {
+                            objectStates.put(state.object(), state);
                         }
                     }
                 }
-            } while (changed);
+            }
+            current = current.outerFrameState();
+        } while (current != null);
 
-            virtualObjectsArray = virtualObjects.values().toArray(new CiVirtualObject[virtualObjects.size()]);
+        BytecodeFrame frame = computeFrameForState(topState);
+
+        VirtualObject[] virtualObjectsArray = null;
+        if (virtualObjects.size() != 0) {
+            // fill in the VirtualObject values
+            VirtualObjectNode vobjNode;
+            while ((vobjNode = pendingVirtualObjects.poll()) != null) {
+                VirtualObject vobjValue = virtualObjects.get(vobjNode);
+                assert vobjValue.getValues() == null;
+
+                JavaValue[] values;
+                JavaKind[] slotKinds;
+                int entryCount = vobjNode.entryCount();
+                if (entryCount == 0) {
+                    values = NO_JAVA_VALUES;
+                    slotKinds = NO_JAVA_KINDS;
+                } else {
+                    values = new JavaValue[entryCount];
+                    slotKinds = new JavaKind[entryCount];
+                }
+                if (values.length > 0) {
+                    VirtualObjectState currentField = (VirtualObjectState) objectStates.get(vobjNode);
+                    assert currentField != null;
+                    int pos = 0;
+                    for (int i = 0; i < entryCount; i++) {
+                        if (!currentField.values().get(i).isConstant() || currentField.values().get(i).asJavaConstant().getJavaKind() != JavaKind.Illegal) {
+                            ValueNode value = currentField.values().get(i);
+                            values[pos] = toJavaValue(value);
+                            slotKinds[pos] = toSlotKind(value);
+                            pos++;
+                        } else {
+                            assert currentField.values().get(i - 1).getStackKind() == JavaKind.Double || currentField.values().get(i - 1).getStackKind() == JavaKind.Long : vobjNode + " " + i + " " +
+                                            currentField.values().get(i - 1);
+                        }
+                    }
+                    if (pos != entryCount) {
+                        values = Arrays.copyOf(values, pos);
+                        slotKinds = Arrays.copyOf(slotKinds, pos);
+                    }
+                }
+                assert checkValues(vobjValue.getType(), values, slotKinds);
+                vobjValue.setValues(values, slotKinds);
+            }
+
+            virtualObjectsArray = virtualObjects.values().toArray(new VirtualObject[virtualObjects.size()]);
             virtualObjects.clear();
         }
+        objectStates.clear();
 
-        return new LIRDebugInfo(frame, virtualObjectsArray, pointerSlots, exceptionEdge);
+        return newLIRFrameState(exceptionEdge, frame, virtualObjectsArray);
     }
 
-    private CiFrame computeFrameForState(FrameState state, LockScope locks) {
-        int numLocals = state.localsSize();
-        int numStack = state.stackSize();
-        int numLocks = (locks != null && locks.callerState == state.outerFrameState()) ? locks.stateDepth + 1 : 0;
+    private boolean checkValues(ResolvedJavaType type, JavaValue[] values, JavaKind[] slotKinds) {
+        assert (values == null) == (slotKinds == null);
+        if (values != null) {
+            assert values.length == slotKinds.length;
+            if (!type.isArray()) {
+                ResolvedJavaField[] fields = type.getInstanceFields(true);
+                int fieldIndex = 0;
+                for (int i = 0; i < values.length; i++) {
+                    ResolvedJavaField field = fields[fieldIndex++];
+                    JavaKind valKind = slotKinds[i].getStackKind();
+                    JavaKind fieldKind = storageKind(field.getType());
+                    if (fieldKind == JavaKind.Object) {
+                        assert valKind.isObject() : field + ": " + valKind + " != " + fieldKind;
+                    } else {
+                        if ((valKind == JavaKind.Double || valKind == JavaKind.Long) && fieldKind == JavaKind.Int) {
+                            assert storageKind(fields[fieldIndex].getType()) == JavaKind.Int;
+                            fieldIndex++;
+                        } else {
+                            assert valKind == fieldKind.getStackKind() : field + ": " + valKind + " != " + fieldKind;
+                        }
+                    }
+                }
+                assert fields.length == fieldIndex : type + ": fields=" + Arrays.toString(fields) + ", field values=" + Arrays.toString(values);
+            } else {
+                JavaKind componentKind = storageKind(type.getComponentType()).getStackKind();
+                if (componentKind == JavaKind.Object) {
+                    for (int i = 0; i < values.length; i++) {
+                        assert slotKinds[i].isObject() : slotKinds[i] + " != " + componentKind;
+                    }
+                } else {
+                    for (int i = 0; i < values.length; i++) {
+                        assert slotKinds[i] == componentKind || componentKind.getBitCount() >= slotKinds[i].getBitCount() ||
+                                        (componentKind == JavaKind.Int && slotKinds[i].getBitCount() >= JavaKind.Int.getBitCount()) : slotKinds[i] + " != " + componentKind;
+                    }
+                }
+            }
+        }
+        return true;
+    }
 
-        CiValue[] values = new CiValue[numLocals + numStack + numLocks];
+    /*
+     * Customization point for subclasses. For example, Word types have a kind Object, but are
+     * internally stored as a primitive value. We do not know about Word types here, but subclasses
+     * do know.
+     */
+    protected JavaKind storageKind(JavaType type) {
+        return type.getJavaKind();
+    }
+
+    protected LIRFrameState newLIRFrameState(LabelRef exceptionEdge, BytecodeFrame frame, VirtualObject[] virtualObjectsArray) {
+        return new LIRFrameState(frame, virtualObjectsArray, exceptionEdge);
+    }
+
+    protected BytecodeFrame computeFrameForState(FrameState state) {
+        try {
+            assert state.bci != BytecodeFrame.INVALID_FRAMESTATE_BCI;
+            assert state.bci != BytecodeFrame.UNKNOWN_BCI;
+            assert state.bci != BytecodeFrame.BEFORE_BCI || state.locksSize() == 0;
+            assert state.bci != BytecodeFrame.AFTER_BCI || state.locksSize() == 0;
+            assert state.bci != BytecodeFrame.AFTER_EXCEPTION_BCI || state.locksSize() == 0;
+            assert !(state.method().isSynchronized() && state.bci != BytecodeFrame.BEFORE_BCI && state.bci != BytecodeFrame.AFTER_BCI && state.bci != BytecodeFrame.AFTER_EXCEPTION_BCI) ||
+                            state.locksSize() > 0;
+            assert state.verify();
+
+            int numLocals = state.localsSize();
+            int numStack = state.stackSize();
+            int numLocks = state.locksSize();
+
+            int numValues = numLocals + numStack + numLocks;
+            int numKinds = numLocals + numStack;
+
+            JavaValue[] values = numValues == 0 ? NO_JAVA_VALUES : new JavaValue[numValues];
+            JavaKind[] slotKinds = numKinds == 0 ? NO_JAVA_KINDS : new JavaKind[numKinds];
+            computeLocals(state, numLocals, values, slotKinds);
+            computeStack(state, numLocals, numStack, values, slotKinds);
+            computeLocks(state, values);
+
+            BytecodeFrame caller = null;
+            if (state.outerFrameState() != null) {
+                caller = computeFrameForState(state.outerFrameState());
+            }
+            return new BytecodeFrame(caller, state.method(), state.bci, state.rethrowException(), state.duringCall(), values, slotKinds, numLocals, numStack, numLocks);
+        } catch (GraalError e) {
+            throw e.addContext("FrameState: ", state);
+        }
+    }
+
+    protected void computeLocals(FrameState state, int numLocals, JavaValue[] values, JavaKind[] slotKinds) {
         for (int i = 0; i < numLocals; i++) {
-            values[i] = toCiValue(state.localAt(i));
+            ValueNode local = state.localAt(i);
+            values[i] = toJavaValue(local);
+            slotKinds[i] = toSlotKind(local);
         }
-        for (int i = 0; i < numStack; i++) {
-            values[numLocals + i] = toCiValue(state.stackAt(i));
-        }
-
-        LockScope nextLock = locks;
-        for (int i = numLocks - 1; i >= 0; i--) {
-            assert locks != null && nextLock.callerState == state.outerFrameState() && nextLock.stateDepth == i;
-
-            CiValue owner = toCiValue(nextLock.monitor.object());
-            CiValue lockData = nextLock.lockData;
-            boolean eliminated = nextLock.monitor.eliminated();
-            values[numLocals + numStack + nextLock.stateDepth] = new CiMonitorValue(owner, lockData, eliminated);
-
-            nextLock = nextLock.outer;
-        }
-
-        CiFrame caller = null;
-        if (state.outerFrameState() != null) {
-            caller = computeFrameForState(state.outerFrameState(), nextLock);
-        } else {
-            if (nextLock != null) {
-                throw new CiBailout("unbalanced monitors: found monitor for unknown frame");
-            }
-        }
-        assert state.bci >= 0 || state.bci == FrameState.BEFORE_BCI;
-        CiFrame frame = new CiFrame(caller, state.method(), state.bci, state.rethrowException(), state.duringCall(), values, state.localsSize(), state.stackSize(), numLocks);
-        return frame;
     }
 
-    private CiValue toCiValue(ValueNode value) {
-        if (value instanceof VirtualObjectNode) {
-            VirtualObjectNode obj = (VirtualObjectNode) value;
-            CiVirtualObject ciObj = virtualObjects.get(value);
-            if (ciObj == null) {
-                ciObj = CiVirtualObject.get(obj.type(), null, virtualObjects.size());
-                virtualObjects.put(obj, ciObj);
-            }
-            Debug.metric("StateVirtualObjects").increment();
-            return ciObj;
+    protected void computeStack(FrameState state, int numLocals, int numStack, JavaValue[] values, JavaKind[] slotKinds) {
+        for (int i = 0; i < numStack; i++) {
+            ValueNode stack = state.stackAt(i);
+            values[numLocals + i] = toJavaValue(stack);
+            slotKinds[numLocals + i] = toSlotKind(stack);
+        }
+    }
 
-        } else if (value instanceof ConstantNode) {
-            Debug.metric("StateConstants").increment();
-            return ((ConstantNode) value).value;
+    protected void computeLocks(FrameState state, JavaValue[] values) {
+        for (int i = 0; i < state.locksSize(); i++) {
+            values[state.localsSize() + state.stackSize() + i] = computeLockValue(state, i);
+        }
+    }
 
-        } else if (value != null) {
-            Debug.metric("StateVariables").increment();
-            CiValue operand = nodeOperands.get(value);
-            assert operand != null && (operand instanceof Variable || operand instanceof CiConstant);
-            return operand;
+    protected JavaValue computeLockValue(FrameState state, int i) {
+        return toJavaValue(state.lockAt(i));
+    }
 
+    private static final DebugCounter STATE_VIRTUAL_OBJECTS = Debug.counter("StateVirtualObjects");
+    private static final DebugCounter STATE_ILLEGALS = Debug.counter("StateIllegals");
+    private static final DebugCounter STATE_VARIABLES = Debug.counter("StateVariables");
+    private static final DebugCounter STATE_CONSTANTS = Debug.counter("StateConstants");
+
+    private static JavaKind toSlotKind(ValueNode value) {
+        if (value == null) {
+            return JavaKind.Illegal;
         } else {
-            // return a dummy value because real value not needed
-            Debug.metric("StateIllegals").increment();
-            return CiValue.IllegalValue;
+            return value.getStackKind();
+        }
+    }
+
+    protected JavaValue toJavaValue(ValueNode value) {
+        try {
+            if (value instanceof VirtualObjectNode) {
+                VirtualObjectNode obj = (VirtualObjectNode) value;
+                EscapeObjectState state = objectStates.get(obj);
+                if (state == null && obj.entryCount() > 0) {
+                    // null states occur for objects with 0 fields
+                    throw new GraalError("no mapping found for virtual object %s", obj);
+                }
+                if (state instanceof MaterializedObjectState) {
+                    return toJavaValue(((MaterializedObjectState) state).materializedValue());
+                } else {
+                    assert obj.entryCount() == 0 || state instanceof VirtualObjectState;
+                    VirtualObject vobject = virtualObjects.get(obj);
+                    if (vobject == null) {
+                        vobject = VirtualObject.get(obj.type(), virtualObjects.size());
+                        virtualObjects.put(obj, vobject);
+                        pendingVirtualObjects.add(obj);
+                    }
+                    STATE_VIRTUAL_OBJECTS.increment();
+                    return vobject;
+                }
+            } else {
+                // Remove proxies from constants so the constant can be directly embedded.
+                ValueNode unproxied = GraphUtil.unproxify(value);
+                if (unproxied instanceof ConstantNode) {
+                    STATE_CONSTANTS.increment();
+                    return unproxied.asJavaConstant();
+
+                } else if (value != null) {
+                    STATE_VARIABLES.increment();
+                    Value operand = nodeValueMap.operand(value);
+                    if (operand instanceof ConstantValue && ((ConstantValue) operand).isJavaConstant()) {
+                        return ((ConstantValue) operand).getJavaConstant();
+                    } else {
+                        assert operand instanceof Variable : operand + " for " + value;
+                        return (JavaValue) operand;
+                    }
+
+                } else {
+                    // return a dummy value because real value not needed
+                    STATE_ILLEGALS.increment();
+                    return Value.ILLEGAL;
+                }
+            }
+        } catch (GraalError e) {
+            throw e.addContext("toValue: ", value);
         }
     }
 }
