@@ -16,7 +16,7 @@
 
 package org.litepal;
 
-import org.litepal.crud.DataSupport;
+import org.litepal.crud.LitePalSupport;
 import org.litepal.crud.QueryHandler;
 import org.litepal.crud.async.AverageExecutor;
 import org.litepal.crud.async.CountExecutor;
@@ -71,7 +71,7 @@ public class FluentQuery {
 	 * Declaring to query which columns in table.
 	 *
 	 * <pre>
-	 * DataSupport.select(&quot;name&quot;, &quot;age&quot;).find(Person.class);
+	 * LitePalSupport.select(&quot;name&quot;, &quot;age&quot;).find(Person.class);
 	 * </pre>
 	 *
 	 * This will find all rows with name and age columns in Person table.
@@ -83,15 +83,15 @@ public class FluentQuery {
 	 * @return A ClusterQuery instance.
 	 */
 	public FluentQuery select(String... columns) {
-		mColumns = columns;
-		return this;
+        mColumns = columns;
+        return this;
 	}
 
 	/**
 	 * Declaring to query which rows in table.
 	 *
 	 * <pre>
-	 * DataSupport.where(&quot;name = ? or age &gt; ?&quot;, &quot;Tom&quot;, &quot;14&quot;).find(Person.class);
+	 * LitePalSupport.where(&quot;name = ? or age &gt; ?&quot;, &quot;Tom&quot;, &quot;14&quot;).find(Person.class);
 	 * </pre>
 	 *
 	 * This will find rows which name is Tom or age greater than 14 in Person
@@ -103,15 +103,15 @@ public class FluentQuery {
 	 * @return A ClusterQuery instance.
 	 */
 	public FluentQuery where(String... conditions) {
-		mConditions = conditions;
-		return this;
+        mConditions = conditions;
+        return this;
 	}
 
 	/**
 	 * Declaring how to order the rows queried from table.
 	 *
 	 * <pre>
-	 * DataSupport.order(&quot;name desc&quot;).find(Person.class);
+	 * LitePalSupport.order(&quot;name desc&quot;).find(Person.class);
 	 * </pre>
 	 *
 	 * This will find all rows in Person table sorted by name with inverted
@@ -124,15 +124,15 @@ public class FluentQuery {
 	 * @return A ClusterQuery instance.
 	 */
 	public FluentQuery order(String column) {
-		mOrderBy = column;
-		return this;
+        mOrderBy = column;
+        return this;
 	}
 
 	/**
 	 * Limits the number of rows returned by the query.
 	 *
 	 * <pre>
-	 * DataSupport.limit(2).find(Person.class);
+	 * LitePalSupport.limit(2).find(Person.class);
 	 * </pre>
 	 *
 	 * This will find the top 2 rows in Person table.
@@ -143,8 +143,8 @@ public class FluentQuery {
 	 * @return A ClusterQuery instance.
 	 */
 	public FluentQuery limit(int value) {
-		mLimit = String.valueOf(value);
-		return this;
+        mLimit = String.valueOf(value);
+        return this;
 	}
 
 	/**
@@ -152,7 +152,7 @@ public class FluentQuery {
 	 * used with {@link #limit(int)}, or nothing will return.
 	 *
 	 * <pre>
-	 * DataSupport.limit(1).offset(2).find(Person.class);
+	 * LitePalSupport.limit(1).offset(2).find(Person.class);
 	 * </pre>
 	 *
 	 * This will find the third row in Person table.
@@ -162,8 +162,8 @@ public class FluentQuery {
 	 * @return A ClusterQuery instance.
 	 */
 	public FluentQuery offset(int value) {
-		mOffset = String.valueOf(value);
-		return this;
+        mOffset = String.valueOf(value);
+        return this;
 	}
 
 	/**
@@ -171,7 +171,7 @@ public class FluentQuery {
 	 * way to finish a complicated query:
 	 *
 	 * <pre>
-	 * DataSupport.select(&quot;name&quot;).where(&quot;age &gt; ?&quot;, &quot;14&quot;).order(&quot;age&quot;).limit(1).offset(2)
+	 * LitePalSupport.select(&quot;name&quot;).where(&quot;age &gt; ?&quot;, &quot;14&quot;).order(&quot;age&quot;).limit(1).offset(2)
 	 * 		.find(Person.class);
 	 * </pre>
 	 *
@@ -192,7 +192,7 @@ public class FluentQuery {
 	 * @return An object list with founded data from database, or an empty list.
 	 */
 	public <T> List<T> find(Class<T> modelClass) {
-		return find(modelClass, false);
+        return find(modelClass, false);
 	}
 
     /**
@@ -202,7 +202,7 @@ public class FluentQuery {
      *            Which table to query and the object type to return as a list.
      * @return A FindMultiExecutor instance.
      */
-    public <T> FindMultiExecutor findAsync(final Class<T> modelClass) {
+    public <T> FindMultiExecutor<T> findAsync(final Class<T> modelClass) {
         return findAsync(modelClass, false);
     }
 
@@ -219,18 +219,20 @@ public class FluentQuery {
 	 *            True to load the associated models, false not.
 	 * @return An object list with founded data from database, or an empty list.
 	 */
-	public synchronized <T> List<T> find(Class<T> modelClass, boolean isEager) {
-		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		String limit;
-		if (mOffset == null) {
-			limit = mLimit;
-		} else {
-			if (mLimit == null) {
-				mLimit = "0";
-			}
-			limit = mOffset + "," + mLimit;
-		}
-		return queryHandler.onFind(modelClass, mColumns, mConditions, mOrderBy, limit, isEager);
+	public <T> List<T> find(Class<T> modelClass, boolean isEager) {
+        synchronized (LitePalSupport.class) {
+            QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+            String limit;
+            if (mOffset == null) {
+                limit = mLimit;
+            } else {
+                if (mLimit == null) {
+                    mLimit = "0";
+                }
+                limit = mOffset + "," + mLimit;
+            }
+            return queryHandler.onFind(modelClass, mColumns, mConditions, mOrderBy, limit, isEager);
+        }
 	}
 
     /**
@@ -242,12 +244,12 @@ public class FluentQuery {
      *            True to load the associated models, false not.
      * @return A FindMultiExecutor instance.
      */
-    public <T> FindMultiExecutor findAsync(final Class<T> modelClass, final boolean isEager) {
-        final FindMultiExecutor executor = new FindMultiExecutor();
+    public <T> FindMultiExecutor<T> findAsync(final Class<T> modelClass, final boolean isEager) {
+        final FindMultiExecutor<T> executor = new FindMultiExecutor<>();
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                synchronized (DataSupport.class) {
+                synchronized (LitePalSupport.class) {
                     final List<T> t = find(modelClass, isEager);
                     if (executor.getListener() != null) {
                         LitePal.getHandler().post(new Runnable() {
@@ -269,7 +271,7 @@ public class FluentQuery {
      * way to finish a complicated query:
      *
      * <pre>
-     * DataSupport.select(&quot;name&quot;).where(&quot;age &gt; ?&quot;, &quot;14&quot;).order(&quot;age&quot;).limit(1).offset(2)
+     * LitePalSupport.select(&quot;name&quot;).where(&quot;age &gt; ?&quot;, &quot;14&quot;).order(&quot;age&quot;).limit(1).offset(2)
      * 		.findFirst(Person.class);
      * </pre>
      *
@@ -292,7 +294,7 @@ public class FluentQuery {
      *            Which table to query and the object type to return.
      * @return A FindExecutor instance.
      */
-    public <T> FindExecutor findFirstAsync(Class<T> modelClass) {
+    public <T> FindExecutor<T> findFirstAsync(Class<T> modelClass) {
         return findFirstAsync(modelClass, false);
     }
 
@@ -310,11 +312,13 @@ public class FluentQuery {
      * @return An object with founded data from database, or null.
      */
     public <T> T findFirst(Class<T> modelClass, boolean isEager) {
-        List<T> list = find(modelClass, isEager);
-        if (list.size() > 0) {
-            return list.get(0);
+        synchronized (LitePalSupport.class) {
+            List<T> list = find(modelClass, isEager);
+            if (list.size() > 0) {
+                return list.get(0);
+            }
+            return null;
         }
-        return null;
     }
 
     /**
@@ -326,12 +330,12 @@ public class FluentQuery {
      *            True to load the associated models, false not.
      * @return A FindExecutor instance.
      */
-    public <T> FindExecutor findFirstAsync(final Class<T> modelClass, final boolean isEager) {
-        final FindExecutor executor = new FindExecutor();
+    public <T> FindExecutor<T> findFirstAsync(final Class<T> modelClass, final boolean isEager) {
+        final FindExecutor<T> executor = new FindExecutor<>();
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                synchronized (DataSupport.class) {
+                synchronized (LitePalSupport.class) {
                     final T t = findFirst(modelClass, isEager);
                     if (executor.getListener() != null) {
                         LitePal.getHandler().post(new Runnable() {
@@ -353,7 +357,7 @@ public class FluentQuery {
      * way to finish a complicated query:
      *
      * <pre>
-     * DataSupport.select(&quot;name&quot;).where(&quot;age &gt; ?&quot;, &quot;14&quot;).order(&quot;age&quot;).limit(1).offset(2)
+     * LitePalSupport.select(&quot;name&quot;).where(&quot;age &gt; ?&quot;, &quot;14&quot;).order(&quot;age&quot;).limit(1).offset(2)
      * 		.findLast(Person.class);
      * </pre>
      *
@@ -376,7 +380,7 @@ public class FluentQuery {
      *            Which table to query and the object type to return.
      * @return A FindExecutor instance.
      */
-    public <T> FindExecutor findLastAsync(Class<T> modelClass) {
+    public <T> FindExecutor<T> findLastAsync(Class<T> modelClass) {
         return findLastAsync(modelClass, false);
     }
 
@@ -394,12 +398,14 @@ public class FluentQuery {
      * @return An object with founded data from database, or null.
      */
     public <T> T findLast(Class<T> modelClass, boolean isEager) {
-        List<T> list = find(modelClass, isEager);
-        int size = list.size();
-        if (size > 0) {
-            return list.get(size - 1);
+        synchronized (LitePalSupport.class) {
+            List<T> list = find(modelClass, isEager);
+            int size = list.size();
+            if (size > 0) {
+                return list.get(size - 1);
+            }
+            return null;
         }
-        return null;
     }
 
     /**
@@ -411,12 +417,12 @@ public class FluentQuery {
      *            True to load the associated models, false not.
      * @return A FindExecutor instance.
      */
-    public <T> FindExecutor findLastAsync(final Class<T> modelClass, final boolean isEager) {
-        final FindExecutor executor = new FindExecutor();
+    public <T> FindExecutor<T> findLastAsync(final Class<T> modelClass, final boolean isEager) {
+        final FindExecutor<T> executor = new FindExecutor<>();
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                synchronized (DataSupport.class) {
+                synchronized (LitePalSupport.class) {
                     final T t = findLast(modelClass, isEager);
                     if (executor.getListener() != null) {
                         LitePal.getHandler().post(new Runnable() {
@@ -437,22 +443,22 @@ public class FluentQuery {
 	 * Count the records.
 	 *
 	 * <pre>
-	 * DataSupport.count(Person.class);
+	 * LitePalSupport.count(Person.class);
 	 * </pre>
 	 *
 	 * This will count all rows in person table.<br>
 	 * You can also specify a where clause when counting.
 	 *
 	 * <pre>
-	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).count(Person.class);
+	 * LitePalSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).count(Person.class);
 	 * </pre>
 	 *
 	 * @param modelClass
 	 *            Which table to query from by class.
 	 * @return Count of the specified table.
 	 */
-	public synchronized int count(Class<?> modelClass) {
-		return count(BaseUtility.changeCase(modelClass.getSimpleName()));
+	public int count(Class<?> modelClass) {
+        return count(BaseUtility.changeCase(modelClass.getSimpleName()));
 	}
 
     /**
@@ -470,23 +476,25 @@ public class FluentQuery {
 	 * Count the records.
 	 *
 	 * <pre>
-	 * DataSupport.count(&quot;person&quot;);
+	 * LitePalSupport.count(&quot;person&quot;);
 	 * </pre>
 	 *
 	 * This will count all rows in person table.<br>
 	 * You can also specify a where clause when counting.
 	 *
 	 * <pre>
-	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).count(&quot;person&quot;);
+	 * LitePalSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).count(&quot;person&quot;);
 	 * </pre>
 	 *
 	 * @param tableName
 	 *            Which table to query from.
 	 * @return Count of the specified table.
 	 */
-	public synchronized int count(String tableName) {
-		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onCount(tableName, mConditions);
+	public int count(String tableName) {
+        synchronized (LitePalSupport.class) {
+            QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+            return queryHandler.onCount(tableName, mConditions);
+        }
 	}
 
     /**
@@ -501,7 +509,7 @@ public class FluentQuery {
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                synchronized (DataSupport.class) {
+                synchronized (LitePalSupport.class) {
                     final int count = count(tableName);
                     if (executor.getListener() != null) {
                         LitePal.getHandler().post(new Runnable() {
@@ -522,13 +530,13 @@ public class FluentQuery {
 	 * Calculates the average value on a given column.
 	 *
 	 * <pre>
-	 * DataSupport.average(Person.class, &quot;age&quot;);
+	 * LitePalSupport.average(Person.class, &quot;age&quot;);
 	 * </pre>
 	 *
 	 * You can also specify a where clause when calculating.
 	 *
 	 * <pre>
-	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).average(Person.class, &quot;age&quot;);
+	 * LitePalSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).average(Person.class, &quot;age&quot;);
 	 * </pre>
 	 *
 	 * @param modelClass
@@ -537,8 +545,8 @@ public class FluentQuery {
 	 *            The based on column to calculate.
 	 * @return The average value on a given column.
 	 */
-	public synchronized double average(Class<?> modelClass, String column) {
-		return average(BaseUtility.changeCase(modelClass.getSimpleName()), column);
+	public double average(Class<?> modelClass, String column) {
+        return average(BaseUtility.changeCase(modelClass.getSimpleName()), column);
 	}
 
     /**
@@ -558,13 +566,13 @@ public class FluentQuery {
 	 * Calculates the average value on a given column.
 	 *
 	 * <pre>
-	 * DataSupport.average(&quot;person&quot;, &quot;age&quot;);
+	 * LitePalSupport.average(&quot;person&quot;, &quot;age&quot;);
 	 * </pre>
 	 *
 	 * You can also specify a where clause when calculating.
 	 *
 	 * <pre>
-	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).average(&quot;person&quot;, &quot;age&quot;);
+	 * LitePalSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).average(&quot;person&quot;, &quot;age&quot;);
 	 * </pre>
 	 *
 	 * @param tableName
@@ -573,9 +581,11 @@ public class FluentQuery {
 	 *            The based on column to calculate.
 	 * @return The average value on a given column.
 	 */
-	public synchronized double average(String tableName, String column) {
-		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onAverage(tableName, column, mConditions);
+	public double average(String tableName, String column) {
+        synchronized (LitePalSupport.class) {
+            QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+            return queryHandler.onAverage(tableName, column, mConditions);
+        }
 	}
 
     /**
@@ -592,7 +602,7 @@ public class FluentQuery {
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                synchronized (DataSupport.class) {
+                synchronized (LitePalSupport.class) {
                     final double average = average(tableName, column);
                     if (executor.getListener() != null) {
                         LitePal.getHandler().post(new Runnable() {
@@ -614,13 +624,13 @@ public class FluentQuery {
 	 * with the same data type of the column.
 	 *
 	 * <pre>
-	 * DataSupport.max(Person.class, &quot;age&quot;, int.class);
+	 * LitePalSupport.max(Person.class, &quot;age&quot;, int.class);
 	 * </pre>
 	 *
 	 * You can also specify a where clause when calculating.
 	 *
 	 * <pre>
-	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).max(Person.class, &quot;age&quot;, Integer.TYPE);
+	 * LitePalSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).max(Person.class, &quot;age&quot;, Integer.TYPE);
 	 * </pre>
 	 *
 	 * @param modelClass
@@ -631,8 +641,8 @@ public class FluentQuery {
 	 *            The type of the based on column.
 	 * @return The maximum value on a given column.
 	 */
-	public synchronized <T> T max(Class<?> modelClass, String columnName, Class<T> columnType) {
-		return max(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
+	public <T> T max(Class<?> modelClass, String columnName, Class<T> columnType) {
+        return max(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
 	}
 
     /**
@@ -646,7 +656,7 @@ public class FluentQuery {
      *            The type of the based on column.
      * @return A FindExecutor instance.
      */
-    public <T> FindExecutor maxAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
+    public <T> FindExecutor<T> maxAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
         return maxAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())), columnName, columnType);
     }
 
@@ -655,13 +665,13 @@ public class FluentQuery {
 	 * with the same data type of the column.
 	 *
 	 * <pre>
-	 * DataSupport.max(&quot;person&quot;, &quot;age&quot;, int.class);
+	 * LitePalSupport.max(&quot;person&quot;, &quot;age&quot;, int.class);
 	 * </pre>
 	 *
 	 * You can also specify a where clause when calculating.
 	 *
 	 * <pre>
-	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).max(&quot;person&quot;, &quot;age&quot;, Integer.TYPE);
+	 * LitePalSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).max(&quot;person&quot;, &quot;age&quot;, Integer.TYPE);
 	 * </pre>
 	 *
 	 * @param tableName
@@ -672,9 +682,11 @@ public class FluentQuery {
 	 *            The type of the based on column.
 	 * @return The maximum value on a given column.
 	 */
-	public synchronized <T> T max(String tableName, String columnName, Class<T> columnType) {
-		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onMax(tableName, columnName, mConditions, columnType);
+	public <T> T max(String tableName, String columnName, Class<T> columnType) {
+        synchronized (LitePalSupport.class) {
+            QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+            return queryHandler.onMax(tableName, columnName, mConditions, columnType);
+        }
 	}
 
     /**
@@ -688,12 +700,12 @@ public class FluentQuery {
      *            The type of the based on column.
      * @return A FindExecutor instance.
      */
-    public <T> FindExecutor maxAsync(final String tableName, final String columnName, final Class<T> columnType) {
-        final FindExecutor executor = new FindExecutor();
+    public <T> FindExecutor<T> maxAsync(final String tableName, final String columnName, final Class<T> columnType) {
+        final FindExecutor<T> executor = new FindExecutor<>();
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                synchronized (DataSupport.class) {
+                synchronized (LitePalSupport.class) {
                     final T t = max(tableName, columnName, columnType);
                     if (executor.getListener() != null) {
                         LitePal.getHandler().post(new Runnable() {
@@ -715,13 +727,13 @@ public class FluentQuery {
 	 * with the same data type of the column.
 	 *
 	 * <pre>
-	 * DataSupport.min(Person.class, &quot;age&quot;, int.class);
+	 * LitePalSupport.min(Person.class, &quot;age&quot;, int.class);
 	 * </pre>
 	 *
 	 * You can also specify a where clause when calculating.
 	 *
 	 * <pre>
-	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).min(Person.class, &quot;age&quot;, Integer.TYPE);
+	 * LitePalSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).min(Person.class, &quot;age&quot;, Integer.TYPE);
 	 * </pre>
 	 *
 	 * @param modelClass
@@ -732,8 +744,8 @@ public class FluentQuery {
 	 *            The type of the based on column.
 	 * @return The minimum value on a given column.
 	 */
-	public synchronized <T> T min(Class<?> modelClass, String columnName, Class<T> columnType) {
-		return min(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
+	public <T> T min(Class<?> modelClass, String columnName, Class<T> columnType) {
+        return min(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
 	}
 
     /**
@@ -747,7 +759,7 @@ public class FluentQuery {
      *            The type of the based on column.
      * @return A FindExecutor instance.
      */
-    public <T> FindExecutor minAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
+    public <T> FindExecutor<T> minAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
         return minAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())), columnName, columnType);
     }
 
@@ -756,13 +768,13 @@ public class FluentQuery {
 	 * with the same data type of the column.
 	 *
 	 * <pre>
-	 * DataSupport.min(&quot;person&quot;, &quot;age&quot;, int.class);
+	 * LitePalSupport.min(&quot;person&quot;, &quot;age&quot;, int.class);
 	 * </pre>
 	 *
 	 * You can also specify a where clause when calculating.
 	 *
 	 * <pre>
-	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).min(&quot;person&quot;, &quot;age&quot;, Integer.TYPE);
+	 * LitePalSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).min(&quot;person&quot;, &quot;age&quot;, Integer.TYPE);
 	 * </pre>
 	 *
 	 * @param tableName
@@ -773,9 +785,11 @@ public class FluentQuery {
 	 *            The type of the based on column.
 	 * @return The minimum value on a given column.
 	 */
-	public synchronized <T> T min(String tableName, String columnName, Class<T> columnType) {
-		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onMin(tableName, columnName, mConditions, columnType);
+	public <T> T min(String tableName, String columnName, Class<T> columnType) {
+        synchronized (LitePalSupport.class) {
+            QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+            return queryHandler.onMin(tableName, columnName, mConditions, columnType);
+        }
 	}
 
     /**
@@ -789,12 +803,12 @@ public class FluentQuery {
      *            The type of the based on column.
      * @return A FindExecutor instance.
      */
-    public <T> FindExecutor minAsync(final String tableName, final String columnName, final Class<T> columnType) {
-        final FindExecutor executor = new FindExecutor();
+    public <T> FindExecutor<T> minAsync(final String tableName, final String columnName, final Class<T> columnType) {
+        final FindExecutor<T> executor = new FindExecutor<>();
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                synchronized (DataSupport.class) {
+                synchronized (LitePalSupport.class) {
                     final T t = min(tableName, columnName, columnType);
                     if (executor.getListener() != null) {
                         LitePal.getHandler().post(new Runnable() {
@@ -816,13 +830,13 @@ public class FluentQuery {
 	 * with the same data type of the column.
 	 * 
 	 * <pre>
-	 * DataSupport.sum(Person.class, &quot;age&quot;, int.class);
+	 * LitePalSupport.sum(Person.class, &quot;age&quot;, int.class);
 	 * </pre>
 	 * 
 	 * You can also specify a where clause when calculating.
 	 * 
 	 * <pre>
-	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).sum(Person.class, &quot;age&quot;, Integer.TYPE);
+	 * LitePalSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).sum(Person.class, &quot;age&quot;, Integer.TYPE);
 	 * </pre>
 	 * 
 	 * @param modelClass
@@ -833,8 +847,8 @@ public class FluentQuery {
 	 *            The type of the based on column.
 	 * @return The sum value on a given column.
 	 */
-	public synchronized <T> T sum(Class<?> modelClass, String columnName, Class<T> columnType) {
-		return sum(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
+	public <T> T sum(Class<?> modelClass, String columnName, Class<T> columnType) {
+        return sum(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
 	}
 
     /**
@@ -848,7 +862,7 @@ public class FluentQuery {
      *            The type of the based on column.
      * @return A FindExecutor instance.
      */
-    public <T> FindExecutor sumAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
+    public <T> FindExecutor<T> sumAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
         return sumAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())), columnName, columnType);
     }
 
@@ -857,13 +871,13 @@ public class FluentQuery {
 	 * with the same data type of the column.
 	 * 
 	 * <pre>
-	 * DataSupport.sum(&quot;person&quot;, &quot;age&quot;, int.class);
+	 * LitePalSupport.sum(&quot;person&quot;, &quot;age&quot;, int.class);
 	 * </pre>
 	 * 
 	 * You can also specify a where clause when calculating.
 	 * 
 	 * <pre>
-	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).sum(&quot;person&quot;, &quot;age&quot;, Integer.TYPE);
+	 * LitePalSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).sum(&quot;person&quot;, &quot;age&quot;, Integer.TYPE);
 	 * </pre>
 	 * 
 	 * @param tableName
@@ -874,9 +888,11 @@ public class FluentQuery {
 	 *            The type of the based on column.
 	 * @return The sum value on a given column.
 	 */
-	public synchronized <T> T sum(String tableName, String columnName, Class<T> columnType) {
-		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onSum(tableName, columnName, mConditions, columnType);
+	public <T> T sum(String tableName, String columnName, Class<T> columnType) {
+        synchronized (LitePalSupport.class) {
+            QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+            return queryHandler.onSum(tableName, columnName, mConditions, columnType);
+        }
 	}
 
     /**
@@ -890,12 +906,12 @@ public class FluentQuery {
      *            The type of the based on column.
      * @return A FindExecutor instance.
      */
-    public <T> FindExecutor sumAsync(final String tableName, final String columnName, final Class<T> columnType) {
-        final FindExecutor executor = new FindExecutor();
+    public <T> FindExecutor<T> sumAsync(final String tableName, final String columnName, final Class<T> columnType) {
+        final FindExecutor<T> executor = new FindExecutor<>();
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                synchronized (DataSupport.class) {
+                synchronized (LitePalSupport.class) {
                     final T t = sum(tableName, columnName, columnType);
                     if (executor.getListener() != null) {
                         LitePal.getHandler().post(new Runnable() {
