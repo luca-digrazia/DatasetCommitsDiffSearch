@@ -52,8 +52,6 @@ import com.oracle.truffle.api.dsl.test.CachedTestFactory.ChildrenAdoption2Factor
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.ChildrenAdoption3Factory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.ChildrenAdoption4Factory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.ChildrenAdoption5Factory;
-import com.oracle.truffle.api.dsl.test.CachedTestFactory.ChildrenAdoption6Factory;
-import com.oracle.truffle.api.dsl.test.CachedTestFactory.ChildrenAdoption7Factory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestBoundCacheOverflowContainsFactory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestCacheFieldFactory;
 import com.oracle.truffle.api.dsl.test.CachedTestFactory.TestCacheMethodFactory;
@@ -576,44 +574,12 @@ public class CachedTest {
         abstract Node[] execute(Object value);
 
         @Specialization
-        static Node[] do1(Node value, @Cached("createChildren(value)") Node[] cachedValue) {
+        static Node[] do1(Object value, @Cached("createChildren()") Node[] cachedValue) {
             return cachedValue;
         }
 
-        protected static Node[] createChildren(Node value) {
-            return new Node[]{value};
-        }
-
-    }
-
-    @NodeChild
-    abstract static class ChildrenAdoption6 extends ValueNode {
-
-        abstract NodeInterface execute(Node value);
-
-        @Specialization
-        static NodeInterface do1(Node value, @Cached("createChild(value)") NodeInterface cachedValue) {
-            return cachedValue;
-        }
-
-        protected static NodeInterface createChild(Node node) {
-            return node;
-        }
-
-    }
-
-    @NodeChild
-    abstract static class ChildrenAdoption7 extends ValueNode {
-
-        abstract NodeInterface[] execute(Object value);
-
-        @Specialization
-        static NodeInterface[] do1(Node value, @Cached("createChildren(value)") NodeInterface[] cachedValue) {
-            return cachedValue;
-        }
-
-        protected static NodeInterface[] createChildren(Node value) {
-            return new Node[]{value};
+        protected static Node[] createChildren() {
+            return new Node[2];
         }
 
     }
@@ -623,7 +589,7 @@ public class CachedTest {
         ChildrenAdoption1 root = createNode(ChildrenAdoption1Factory.getInstance(), false);
         Node[] children = new Node[]{new ValueNode()};
         root.execute(children);
-        Assert.assertTrue(hasParent(root, children[0]));
+        Assert.assertTrue(hasParent(root, children[0].getParent()));
     }
 
     @Test
@@ -632,7 +598,7 @@ public class CachedTest {
         Node child = new ValueNode();
         root.execute(child);
         root.adoptChildren();
-        Assert.assertTrue(hasParent(root, child));
+        Assert.assertTrue(hasParent(root, child.getParent()));
     }
 
     @Test
@@ -640,7 +606,7 @@ public class CachedTest {
         ChildrenAdoption3 root = createNode(ChildrenAdoption3Factory.getInstance(), false);
         Node[] children = new Node[]{new ValueNode()};
         root.execute(children);
-        Assert.assertTrue(hasParent(root, children[0]));
+        Assert.assertTrue(hasParent(root, children[0].getParent()));
     }
 
     @Test
@@ -648,7 +614,7 @@ public class CachedTest {
         ChildrenAdoption4 root = createNode(ChildrenAdoption4Factory.getInstance(), false);
         Node child = new ValueNode();
         root.execute(child);
-        Assert.assertTrue(hasParent(root, child));
+        Assert.assertTrue(hasParent(root, child.getParent()));
     }
 
     @Test
@@ -656,23 +622,7 @@ public class CachedTest {
         ChildrenAdoption5 root = createNode(ChildrenAdoption5Factory.getInstance(), false);
         Node child = new ValueNode();
         root.execute(child);
-        Assert.assertTrue(hasParent(root, child));
-    }
-
-    @Test
-    public void testChildrenAdoption6() {
-        ChildrenAdoption6 root = createNode(ChildrenAdoption6Factory.getInstance(), false);
-        Node child = new ValueNode();
-        root.execute(child);
-        Assert.assertTrue(hasParent(root, child));
-    }
-
-    @Test
-    public void testChildrenAdoption7() {
-        ChildrenAdoption7 root = createNode(ChildrenAdoption7Factory.getInstance(), false);
-        Node child = new ValueNode();
-        root.execute(child);
-        Assert.assertTrue(hasParent(root, child));
+        Assert.assertTrue(hasParent(root, child.getParent()));
     }
 
     private static boolean hasParent(Node parent, Node node) {
