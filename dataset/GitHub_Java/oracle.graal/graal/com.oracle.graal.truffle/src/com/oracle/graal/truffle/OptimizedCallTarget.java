@@ -97,10 +97,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     private TruffleInlining inlining;
     private volatile int cachedNonTrivialNodeCount = -1;
-    /**
-     * Index of the clone for a cloned CallTarget (set once). Tracks the next clone index for the
-     * source CallTarget (synchronized).
-     */
     private int cloneIndex;
     private volatile boolean initialized;
 
@@ -134,7 +130,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         } else {
             this.compilationProfile = new CompilationProfile();
         }
-        cloneIndex = sourceCallTarget != null ? sourceCallTarget.getNextCloneIndex() : 0;
     }
 
     private static GraalTruffleRuntime runtime() {
@@ -194,17 +189,15 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return cloneIndex;
     }
 
-    private synchronized int getNextCloneIndex() {
-        return ++cloneIndex;
-    }
-
     OptimizedCallTarget cloneUninitialized() {
         assert sourceCallTarget == null;
         if (!initialized) {
             initialize();
         }
         RootNode copiedRoot = cloneRootNode(uninitializedRootNode);
-        return (OptimizedCallTarget) runtime().createClonedCallTarget(this, copiedRoot);
+        OptimizedCallTarget splitTarget = (OptimizedCallTarget) runtime().createClonedCallTarget(this, copiedRoot);
+        splitTarget.cloneIndex = cloneIndex++;
+        return splitTarget;
     }
 
     private void initialize() {
