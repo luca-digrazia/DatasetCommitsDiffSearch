@@ -29,11 +29,9 @@ import static org.graalvm.compiler.debug.DebugOptions.Counters;
 import static org.graalvm.compiler.debug.DebugOptions.Dump;
 import static org.graalvm.compiler.debug.DebugOptions.DumpOnError;
 import static org.graalvm.compiler.debug.DebugOptions.DumpOnPhaseChange;
-import static org.graalvm.compiler.debug.DebugOptions.DumpPath;
 import static org.graalvm.compiler.debug.DebugOptions.ListMetrics;
 import static org.graalvm.compiler.debug.DebugOptions.Log;
 import static org.graalvm.compiler.debug.DebugOptions.MemUseTrackers;
-import static org.graalvm.compiler.debug.DebugOptions.ShowDumpFiles;
 import static org.graalvm.compiler.debug.DebugOptions.Time;
 import static org.graalvm.compiler.debug.DebugOptions.Timers;
 import static org.graalvm.compiler.debug.DebugOptions.TrackMemUse;
@@ -59,12 +57,14 @@ import java.util.TreeMap;
 
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.graphio.GraphOutput;
 import org.graalvm.util.EconomicMap;
 import org.graalvm.util.EconomicSet;
 import org.graalvm.util.Pair;
 
 import jdk.vm.ci.meta.JavaMethod;
+import static org.graalvm.compiler.debug.DebugOptions.DumpPath;
+import static org.graalvm.compiler.debug.DebugOptions.ShowDumpFiles;
+import org.graalvm.graphio.GraphOutput;
 
 /**
  * A facility for logging and dumping as well as a container for values associated with
@@ -122,7 +122,7 @@ public final class DebugContext implements AutoCloseable {
             return builder.build(parentOutput);
         } else {
             if (sharedChannel == null) {
-                sharedChannel = new IgvDumpChannel(() -> getDumpPath(".bgv", false), immutable.options);
+                sharedChannel = new IgvDumpChannel(this::getFilePrinterPath, immutable.options);
             }
             final GraphOutput<G, M> output = builder.build(sharedChannel);
             parentOutput = output;
@@ -130,23 +130,53 @@ public final class DebugContext implements AutoCloseable {
         }
     }
 
-    private static final Versions VERSIONS;
-    static {
-        String home = System.getProperty("java.home");
-        VERSIONS = new Versions(home == null ? null : new File(home).toPath());
+    public static Map<Object, Object> fillVersions(Map<Object, Object> properties) {
+        if (properties == null) {
+            return VERSIONS;
+        } else {
+            properties.putAll(VERSIONS);
+            return properties;
+        }
     }
 
-    /** Adds version properties to the provided map. The version properties
-     * are read at a start of the JVM from a JVM specific location. Each
-     * property identifiers a commit of a certain component in the system.
-     * The properties added to the {@code properties} map are prefixed
-     * with {@code "version."} prefix.
-     *
-     * @param properties map to add the version properties to or {@code null}
-     * @return non-{@code null}, potentially non-modifiable map
-     */
-    public static Map<Object, Object> addVersionProperties(Map<Object, Object> properties) {
-        return VERSIONS.withVersions(properties);
+    private static final Map<Object, Object> VERSIONS;
+    static {
+        Map<Object, Object> map = new HashMap<>();
+        ASSIGN: try {
+            File info = findReleaseInfo();
+            if (info == null) {
+                break ASSIGN;
+            }
+            for (String line : Files.readAllLines(info.toPath())) {
+                if (line.startsWith("SOURCE=")) {
+                    for (String versionInfo : line.substring(8).replace('"', ' ').split(" ")) {
+                        String[] idVersion = versionInfo.split(":");
+                        if (idVersion != null && idVersion.length == 2) {
+                            map.put("version." + idVersion[0], idVersion[1]);
+                        }
+                    }
+                    break ASSIGN;
+                }
+            }
+        } catch (IOException ex) {
+            // no versions file found
+        }
+        VERSIONS = Collections.unmodifiableMap(map);
+    }
+
+    private static File findReleaseInfo() {
+        String home = System.getProperty("java.home");
+        if (home == null) {
+            return null;
+        }
+        File jreDir = new File(home);
+        File releaseInJre = new File(jreDir, "release");
+        if (releaseInJre.exists()) {
+            return releaseInJre;
+        }
+        File jdkDir = jreDir.getParentFile();
+        File releaseInJdk = new File(jdkDir, "release");
+        return releaseInJdk.exists() ? releaseInJdk : null;
     }
 
     /**
@@ -440,11 +470,11 @@ public final class DebugContext implements AutoCloseable {
         }
     }
 
-    public Path getDumpPath(String extension, boolean directory) {
+    private Path getFilePrinterPath() {
         try {
             String id = description == null ? null : description.identifier;
             String label = description == null ? null : description.getLabel();
-            Path result = PathUtilities.createUnique(immutable.options, DumpPath, id, label, extension, directory);
+            Path result = PathUtilities.createUnique(immutable.options, DumpPath, id, label, ".bgv", false);
             if (ShowDumpFiles.getValue(immutable.options)) {
                 TTY.println("Dumping debug output to %s", result.toAbsolutePath().toString());
             }
