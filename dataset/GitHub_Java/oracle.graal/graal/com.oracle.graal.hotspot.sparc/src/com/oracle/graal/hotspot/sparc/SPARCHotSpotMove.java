@@ -22,30 +22,28 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import com.oracle.jvmci.code.StackSlot;
-import com.oracle.jvmci.code.Register;
-import com.oracle.jvmci.meta.JavaConstant;
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.Value;
-import com.oracle.jvmci.meta.AllocatableValue;
-import com.oracle.jvmci.sparc.*;
-
-import static com.oracle.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Annul;
+import com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict;
+import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
+import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
+import com.oracle.graal.asm.sparc.SPARCAssembler.RCondition;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
+import com.oracle.graal.sparc.*;
 
 public class SPARCHotSpotMove {
 
@@ -71,26 +69,17 @@ public class SPARCHotSpotMove {
                     try (ScratchRegister s2 = masm.getScratchRegister()) {
                         Register sr2 = s2.getRegister();
                         int stackBias = HotSpotGraalRuntime.runtime().getConfig().stackBias;
-                        int offset = crb.frameMap.offsetForStackSlot(ss);
-                        new SPARCMacroAssembler.Setx(offset + stackBias, sr2).emit(masm);
+                        new SPARCMacroAssembler.Setx(ss.getOffset(crb.frameMap.currentFrameSize()) + stackBias, sr2).emit(masm);
                         SPARCAddress addr = new SPARCAddress(SPARC.sp, sr2);
-                        Kind resultKind = (Kind) result.getPlatformKind();
-                        switch (resultKind) {
-                            case Byte:
-                                masm.stb(sr1, addr);
-                                break;
-                            case Short:
-                                masm.sth(sr1, addr);
-                                break;
-                            case Int:
+                        switch (((Kind) result.getPlatformKind()).getBitCount()) {
+                            case 32:
                                 masm.stw(sr1, addr);
                                 break;
-                            case Long:
-                            case Object:
+                            case 64:
                                 masm.stx(sr1, addr);
                                 break;
                             default:
-                                throw JVMCIError.shouldNotReachHere();
+                                throw GraalInternalError.shouldNotReachHere();
                         }
                     }
                 }
@@ -114,7 +103,7 @@ public class SPARCHotSpotMove {
                         new SPARCMacroAssembler.Setx(0xDEADDEADDEADDEADL, asRegister(dest), true).emit(masm);
                     }
                 } else {
-                    JVMCIError.unimplemented();
+                    GraalInternalError.unimplemented();
                 }
             } else if (constant instanceof HotSpotMetaspaceConstant) {
                 assert constant.getKind() == Kind.Int || constant.getKind() == Kind.Long;
@@ -124,13 +113,13 @@ public class SPARCHotSpotMove {
                 crb.recordInlineDataInCode(constant);
                 if (compressed) {
                     if (isImmutable && generatePIC) {
-                        JVMCIError.unimplemented();
+                        GraalInternalError.unimplemented();
                     } else {
                         new SPARCMacroAssembler.Setx(constant.asInt(), asRegister(dest), true).emit(masm);
                     }
                 } else {
                     if (isImmutable && generatePIC) {
-                        JVMCIError.unimplemented();
+                        GraalInternalError.unimplemented();
                     } else {
                         new SPARCMacroAssembler.Setx(constant.asLong(), asRegister(dest), true).emit(masm);
                     }
