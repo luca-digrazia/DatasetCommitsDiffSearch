@@ -117,5 +117,5 @@ public interface ConstantPool {
      *            {@code -1}
      * @return the appendix if it exists and is resolved or {@code null}
      */
-    Constant lookupAppendix(int cpi, int opcode);
+    Object lookupAppendix(int cpi, int opcode);
 }

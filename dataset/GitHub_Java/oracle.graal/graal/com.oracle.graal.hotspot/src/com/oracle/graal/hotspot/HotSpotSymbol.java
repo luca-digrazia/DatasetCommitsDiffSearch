@@ -23,22 +23,20 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.graph.UnsafeAccess.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
 import java.io.*;
 
 import com.oracle.graal.graph.*;
 
 /**
- * Represents a metaspace {@code Symbol}.
+ * Represents the VM type {@code Symbol}.
  */
 public class HotSpotSymbol {
 
-    private final long metaspaceSymbol;
+    private final long address;
 
-    public HotSpotSymbol(long metaspaceSymbol) {
-        assert metaspaceSymbol != 0;
-        this.metaspaceSymbol = metaspaceSymbol;
+    public HotSpotSymbol(long address) {
+        this.address = address;
     }
 
     /**
@@ -75,10 +73,12 @@ public class HotSpotSymbol {
     }
 
     private int getLength() {
-        return unsafe.getShort(metaspaceSymbol + runtime().getConfig().symbolLengthOffset);
+        HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
+        return unsafe.getShort(address + config.symbolLengthOffset);
     }
 
     private byte getByteAt(int index) {
-        return unsafe.getByte(metaspaceSymbol + runtime().getConfig().symbolBodyOffset + index);
+        HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
+        return unsafe.getByte(address + config.symbolBodyOffset + index);
     }
 }
