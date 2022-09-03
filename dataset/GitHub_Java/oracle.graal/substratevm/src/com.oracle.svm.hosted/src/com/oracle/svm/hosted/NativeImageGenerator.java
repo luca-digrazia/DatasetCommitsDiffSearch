@@ -1144,7 +1144,6 @@ public class NativeImageGenerator {
         return modifySuites(runtimeCallProviders, suites, featureHandler, runtimeConfig, snippetReflection, hosted, true);
     }
 
-    @SuppressWarnings("unused")
     private static Suites modifySuites(Providers runtimeCallProviders, Suites suites, FeatureHandler featureHandler, RuntimeConfiguration runtimeConfig,
                     SnippetReflectionProvider snippetReflection, boolean hosted, boolean firstTier) {
         PhaseSuite<HighTierContext> highTier = suites.getHighTier();
