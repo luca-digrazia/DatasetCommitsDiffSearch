@@ -232,14 +232,10 @@ public class HotSpotReplacementsUtil {
         return result;
     }
 
-    public static final LocationIdentity JAVA_THREAD_THREAD_OBJECT_LOCATION = new NamedLocationIdentity("JavaThread::_threadObj");
-
     @Fold
     public static int threadObjectOffset() {
         return config().threadObjectOffset;
     }
-
-    public static final LocationIdentity JAVA_THREAD_OSTHREAD_LOCATION = new NamedLocationIdentity("JavaThread::_osthread");
 
     @Fold
     public static int osThreadOffset() {
@@ -283,14 +279,10 @@ public class HotSpotReplacementsUtil {
         return config().arrayPrototypeMarkWord();
     }
 
-    public static final LocationIdentity KLASS_ACCESS_FLAGS_LOCATION = new NamedLocationIdentity("Klass::_access_flags", true);
-
     @Fold
     public static int klassAccessFlagsOffset() {
         return config().klassAccessFlagsOffset;
     }
-
-    public static final LocationIdentity KLASS_LAYOUT_HELPER_LOCATION = new NamedLocationIdentity("Klass::_layout_helper", true);
 
     @Fold
     public static int klassLayoutHelperOffset() {
@@ -298,7 +290,7 @@ public class HotSpotReplacementsUtil {
     }
 
     public static int readLayoutHelper(Word hub) {
-        return hub.readInt(klassLayoutHelperOffset(), KLASS_LAYOUT_HELPER_LOCATION);
+        return hub.readInt(klassLayoutHelperOffset(), LocationIdentity.FINAL_LOCATION);
     }
 
     /**
@@ -319,14 +311,10 @@ public class HotSpotReplacementsUtil {
         return (layoutHelper < layoutHelperNeutralValue);
     }
 
-    public static final LocationIdentity ARRAY_KLASS_COMPONENT_MIRROR = new NamedLocationIdentity("ArrayKlass::_component_mirror", true);
-
     @Fold
     public static int arrayKlassComponentMirrorOffset() {
         return config().arrayKlassComponentMirrorOffset;
     }
-
-    public static final LocationIdentity KLASS_SUPER_KLASS_LOCATION = new NamedLocationIdentity("Klass::_super", true);
 
     @Fold
     public static int klassSuperKlassOffset() {
@@ -340,9 +328,7 @@ public class HotSpotReplacementsUtil {
         return config().markOffset;
     }
 
-    public static final LocationIdentity HUB_WRITE_LOCATION = new NamedLocationIdentity("Hub");
-
-    public static final LocationIdentity HUB_LOCATION = new NamedLocationIdentity("Hub", true);
+    public static final LocationIdentity HUB_LOCATION = new NamedLocationIdentity("Hub");
 
     @Fold
     private static int hubOffset() {
@@ -478,8 +464,6 @@ public class HotSpotReplacementsUtil {
     public static int g1SATBQueueBufferOffset() {
         return config().g1SATBQueueBufferOffset();
     }
-
-    public static final LocationIdentity KLASS_SUPER_CHECK_OFFSET_LOCATION = new NamedLocationIdentity("Klass::_super_check_offset", true);
 
     @Fold
     public static int superCheckOffsetOffset() {
@@ -623,8 +607,6 @@ public class HotSpotReplacementsUtil {
         return hub.readByte(instanceKlassInitStateOffset(), CLASS_STATE_LOCATION);
     }
 
-    public static final LocationIdentity KLASS_MODIFIER_FLAGS_LOCATION = new NamedLocationIdentity("Klass::_modifier_flags", true);
-
     @Fold
     public static int klassModifierFlagsOffset() {
         return config().klassModifierFlagsOffset;
@@ -647,11 +629,14 @@ public class HotSpotReplacementsUtil {
         return config().instanceKlassNodeClassOffset;
     }
 
-    public static final LocationIdentity CLASS_MIRROR_LOCATION = new NamedLocationIdentity("Klass::_java_mirror", true);
-
     @Fold
     public static int classMirrorOffset() {
         return config().classMirrorOffset;
+    }
+
+    @Fold
+    public static int klassInstanceSizeOffset() {
+        return config().klassInstanceSizeOffset;
     }
 
     public static final LocationIdentity HEAP_TOP_LOCATION = new NamedLocationIdentity("HeapTop");
@@ -817,12 +802,4 @@ public class HotSpotReplacementsUtil {
             throw new GraalInternalError(e);
         }
     }
-
-    public static final LocationIdentity OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION = new NamedLocationIdentity("ObjArrayKlass::_element_klass", true);
-
-    public static final LocationIdentity PRIMARY_SUPERS_LOCATION = new NamedLocationIdentity("PrimarySupers", true);
-
-    public static final LocationIdentity METASPACE_ARRAY_LENGTH_LOCATION = new NamedLocationIdentity("MetaspaceArrayLength", true);
-
-    public static final LocationIdentity SECONDARY_SUPERS_ELEMENT_LOCATION = new NamedLocationIdentity("SecondarySupersElement", true);
 }

@@ -45,25 +45,41 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
     protected final ForeignCallDescriptor descriptor;
     protected int bci = BytecodeFrame.UNKNOWN_BCI;
 
-    public ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, ValueNode... arguments) {
+    public static ForeignCallNode create(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, ValueNode... arguments) {
+        return new ForeignCallNode(foreignCalls, descriptor, arguments);
+    }
+
+    protected ForeignCallNode(ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, ValueNode... arguments) {
         super(StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())));
         this.arguments = new NodeInputList<>(this, arguments);
         this.descriptor = descriptor;
         this.foreignCalls = foreignCalls;
     }
 
-    public ForeignCallNode(ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, List<ValueNode> arguments) {
+    public static ForeignCallNode create(ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, List<ValueNode> arguments) {
+        return new ForeignCallNode(foreignCalls, descriptor, arguments);
+    }
+
+    protected ForeignCallNode(ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, List<ValueNode> arguments) {
         this(foreignCalls, descriptor, StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())), arguments);
     }
 
-    public ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp, List<ValueNode> arguments) {
+    public static ForeignCallNode create(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp, List<ValueNode> arguments) {
+        return new ForeignCallNode(foreignCalls, descriptor, stamp, arguments);
+    }
+
+    protected ForeignCallNode(ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp, List<ValueNode> arguments) {
         super(stamp);
         this.arguments = new NodeInputList<>(this, arguments);
         this.descriptor = descriptor;
         this.foreignCalls = foreignCalls;
     }
 
-    public ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp) {
+    public static ForeignCallNode create(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp) {
+        return new ForeignCallNode(foreignCalls, descriptor, stamp);
+    }
+
+    protected ForeignCallNode(ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp) {
         super(stamp);
         this.arguments = new NodeInputList<>(this);
         this.descriptor = descriptor;
