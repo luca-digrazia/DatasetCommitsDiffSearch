@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,67 +22,107 @@
  */
 package com.oracle.graal.compiler.common.type;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.GraalError;
+
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Signature;
 
 public class StampFactory {
 
+    /*
+     * The marker stamp for node intrinsics must be its own class, so that it is never equal() to a
+     * regular ObjectStamp.
+     */
+    static final class NodeIntrinsicStamp extends ObjectStamp {
+        protected static final Stamp SINGLETON = new NodeIntrinsicStamp();
+
+        private NodeIntrinsicStamp() {
+            super(null, false, false, false);
+        }
+
+        @Override
+        public int hashCode() {
+            return System.identityHashCode(this);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return this == obj;
+        }
+    }
+
     // JaCoCo Exclude
 
-    private static final Stamp[] stampCache = new Stamp[Kind.values().length];
-    private static final Stamp[] illegalStampCache = new Stamp[Kind.values().length];
+    private static final Stamp[] stampCache = new Stamp[JavaKind.values().length];
+    private static final Stamp[] emptyStampCache = new Stamp[JavaKind.values().length];
     private static final Stamp objectStamp = new ObjectStamp(null, false, false, false);
     private static final Stamp objectNonNullStamp = new ObjectStamp(null, false, true, false);
     private static final Stamp objectAlwaysNullStamp = new ObjectStamp(null, false, false, true);
-    private static final Stamp nodeIntrinsicStamp = new ObjectStamp(null, false, false, false);
-    private static final Stamp positiveInt = forInteger(Kind.Int, 0, Integer.MAX_VALUE, 0, Integer.MAX_VALUE);
+    private static final Stamp positiveInt = forInteger(JavaKind.Int, 0, Integer.MAX_VALUE, 0, Integer.MAX_VALUE);
+    private static final Stamp booleanTrue = forInteger(JavaKind.Boolean, -1, -1, 1, 1);
+    private static final Stamp booleanFalse = forInteger(JavaKind.Boolean, 0, 0, 0, 0);
+    private static final Stamp rawPointer = new RawPointerStamp();
 
-    private static void setCache(Kind kind, Stamp stamp) {
+    private static void setCache(JavaKind kind, Stamp stamp) {
         stampCache[kind.ordinal()] = stamp;
     }
 
-    private static void setIntCache(Kind kind) {
+    private static void setIntCache(JavaKind kind) {
         int bits = kind.getStackKind().getBitCount();
         long mask;
         if (kind.isUnsigned()) {
-            mask = IntegerStamp.defaultMask(kind.getBitCount());
+            mask = CodeUtil.mask(kind.getBitCount());
         } else {
-            mask = IntegerStamp.defaultMask(bits);
+            mask = CodeUtil.mask(bits);
         }
         setCache(kind, new IntegerStamp(bits, kind.getMinValue(), kind.getMaxValue(), 0, mask));
     }
 
-    private static void setFloatCache(Kind kind) {
+    private static void setFloatCache(JavaKind kind) {
         setCache(kind, new FloatStamp(kind.getBitCount()));
     }
 
     static {
-        setIntCache(Kind.Boolean);
-        setIntCache(Kind.Byte);
-        setIntCache(Kind.Short);
-        setIntCache(Kind.Char);
-        setIntCache(Kind.Int);
-        setIntCache(Kind.Long);
+        setIntCache(JavaKind.Boolean);
+        setIntCache(JavaKind.Byte);
+        setIntCache(JavaKind.Short);
+        setIntCache(JavaKind.Char);
+        setIntCache(JavaKind.Int);
+        setIntCache(JavaKind.Long);
 
-        setFloatCache(Kind.Float);
-        setFloatCache(Kind.Double);
+        setFloatCache(JavaKind.Float);
+        setFloatCache(JavaKind.Double);
 
-        setCache(Kind.Object, objectStamp);
-        setCache(Kind.Void, VoidStamp.getInstance());
+        setCache(JavaKind.Object, objectStamp);
+        setCache(JavaKind.Void, VoidStamp.getInstance());
+        setCache(JavaKind.Illegal, IllegalStamp.getInstance());
 
-        for (Kind k : Kind.values()) {
+        for (JavaKind k : JavaKind.values()) {
             if (stampCache[k.ordinal()] != null) {
-                illegalStampCache[k.ordinal()] = stampCache[k.ordinal()].illegal();
-            } else {
-                illegalStampCache[k.ordinal()] = IllegalStamp.getInstance();
+                emptyStampCache[k.ordinal()] = stampCache[k.ordinal()].empty();
             }
         }
+    }
+
+    public static Stamp tautology() {
+        return booleanTrue;
+    }
+
+    public static Stamp contradiction() {
+        return booleanFalse;
     }
 
     /**
      * Return a stamp for a Java kind, as it would be represented on the bytecode stack.
      */
-    public static Stamp forKind(Kind kind) {
+    public static Stamp forKind(JavaKind kind) {
         assert stampCache[kind.ordinal()] != null : "unexpected forKind(" + kind + ")";
         return stampCache[kind.ordinal()];
     }
@@ -100,39 +140,56 @@ public class StampFactory {
      * actual stamp when the intrinsic is used, i.e., when the snippet template is instantiated.
      */
     public static Stamp forNodeIntrinsic() {
-        return nodeIntrinsicStamp;
+        return NodeIntrinsicStamp.SINGLETON;
     }
 
     public static Stamp intValue() {
-        return forKind(Kind.Int);
+        return forKind(JavaKind.Int);
     }
 
     public static Stamp positiveInt() {
         return positiveInt;
     }
 
-    public static Stamp illegal() {
-        return illegal(Kind.Illegal);
+    public static Stamp empty(JavaKind kind) {
+        return emptyStampCache[kind.ordinal()];
     }
 
-    public static Stamp illegal(Kind kind) {
-        return illegalStampCache[kind.ordinal()];
-    }
-
-    public static IntegerStamp forInteger(Kind kind, long lowerBound, long upperBound, long downMask, long upMask) {
+    public static IntegerStamp forInteger(JavaKind kind, long lowerBound, long upperBound, long downMask, long upMask) {
         return new IntegerStamp(kind.getBitCount(), lowerBound, upperBound, downMask, upMask);
     }
 
-    public static IntegerStamp forInteger(Kind kind, long lowerBound, long upperBound) {
+    public static IntegerStamp forInteger(JavaKind kind, long lowerBound, long upperBound) {
         return forInteger(kind.getBitCount(), lowerBound, upperBound);
     }
 
+    /**
+     * Create a new stamp use {@code newLowerBound} and {@code newUpperBound} computing the
+     * appropriate {@link IntegerStamp#upMask} and {@link IntegerStamp#downMask} and incorporating
+     * any mask information from {@code maskStamp}.
+     *
+     * @param bits
+     * @param newLowerBound
+     * @param newUpperBound
+     * @param maskStamp
+     * @return a new stamp with the appropriate bounds and masks
+     */
+    public static IntegerStamp forIntegerWithMask(int bits, long newLowerBound, long newUpperBound, IntegerStamp maskStamp) {
+        IntegerStamp limit = StampFactory.forInteger(bits, newLowerBound, newUpperBound);
+        return new IntegerStamp(bits, newLowerBound, newUpperBound, limit.downMask() | maskStamp.downMask(), limit.upMask() & maskStamp.upMask());
+    }
+
+    public static IntegerStamp forIntegerWithMask(int bits, long newLowerBound, long newUpperBound, long newDownMask, long newUpMask) {
+        IntegerStamp limit = StampFactory.forInteger(bits, newLowerBound, newUpperBound);
+        return new IntegerStamp(bits, newLowerBound, newUpperBound, limit.downMask() | newDownMask, limit.upMask() & newUpMask);
+    }
+
     public static IntegerStamp forInteger(int bits) {
-        return new IntegerStamp(bits, IntegerStamp.defaultMinValue(bits), IntegerStamp.defaultMaxValue(bits), 0, IntegerStamp.defaultMask(bits));
+        return new IntegerStamp(bits, CodeUtil.minValue(bits), CodeUtil.maxValue(bits), 0, CodeUtil.mask(bits));
     }
 
     public static IntegerStamp forInteger(int bits, long lowerBound, long upperBound) {
-        long defaultMask = IntegerStamp.defaultMask(bits);
+        long defaultMask = CodeUtil.mask(bits);
         if (lowerBound == upperBound) {
             return new IntegerStamp(bits, lowerBound, lowerBound, lowerBound & defaultMask, lowerBound & defaultMask);
         }
@@ -161,13 +218,13 @@ public class StampFactory {
         return new IntegerStamp(bits, lowerBound, upperBound, downMask & defaultMask, upMask & defaultMask);
     }
 
-    public static FloatStamp forFloat(Kind kind, double lowerBound, double upperBound, boolean nonNaN) {
+    public static FloatStamp forFloat(JavaKind kind, double lowerBound, double upperBound, boolean nonNaN) {
         assert kind.isNumericFloat();
         return new FloatStamp(kind.getBitCount(), lowerBound, upperBound, nonNaN);
     }
 
-    public static Stamp forConstant(Constant value) {
-        Kind kind = value.getKind();
+    public static Stamp forConstant(JavaConstant value) {
+        JavaKind kind = value.getJavaKind();
         switch (kind) {
             case Boolean:
             case Byte:
@@ -175,14 +232,14 @@ public class StampFactory {
             case Short:
             case Int:
             case Long:
-                long mask = value.asLong() & IntegerStamp.defaultMask(kind.getBitCount());
+                long mask = value.asLong() & CodeUtil.mask(kind.getBitCount());
                 return forInteger(kind.getStackKind(), value.asLong(), value.asLong(), mask, mask);
             case Float:
                 return forFloat(kind, value.asFloat(), value.asFloat(), !Float.isNaN(value.asFloat()));
             case Double:
                 return forFloat(kind, value.asDouble(), value.asDouble(), !Double.isNaN(value.asDouble()));
             case Illegal:
-                return illegal(Kind.Illegal);
+                return forKind(JavaKind.Illegal);
             case Object:
                 if (value.isNull()) {
                     return alwaysNull();
@@ -190,12 +247,12 @@ public class StampFactory {
                     return objectNonNull();
                 }
             default:
-                throw new GraalInternalError("unexpected kind: %s", kind);
+                throw new GraalError("unexpected kind: %s", kind);
         }
     }
 
-    public static Stamp forConstant(Constant value, MetaAccessProvider metaAccess) {
-        if (value.getKind() == Kind.Object) {
+    public static Stamp forConstant(JavaConstant value, MetaAccessProvider metaAccess) {
+        if (value.getJavaKind() == JavaKind.Object) {
             ResolvedJavaType type = value.isNull() ? null : metaAccess.lookupJavaType(value);
             return new ObjectStamp(type, value.isNonNull(), value.isNonNull(), value.isNull());
         } else {
@@ -215,39 +272,66 @@ public class StampFactory {
         return objectAlwaysNullStamp;
     }
 
-    public static Stamp declared(ResolvedJavaType type) {
-        return declared(type, false);
+    public static ObjectStamp object(TypeReference type) {
+        return object(type, false);
     }
 
-    public static Stamp declaredNonNull(ResolvedJavaType type) {
-        return declared(type, true);
+    public static ObjectStamp objectNonNull(TypeReference type) {
+        return object(type, true);
     }
 
-    public static Stamp declared(ResolvedJavaType type, boolean nonNull) {
-        return object(type, false, nonNull);
-    }
-
-    public static Stamp object(ResolvedJavaType type, boolean exactType, boolean nonNull) {
-        assert type != null;
-        assert type.getKind() == Kind.Object;
-        ResolvedJavaType exact = type.asExactType();
-        if (exact != null) {
-            assert !exactType || type.equals(exact);
-            return new ObjectStamp(exact, true, nonNull, false);
+    public static ObjectStamp object(TypeReference type, boolean nonNull) {
+        if (type == null) {
+            return new ObjectStamp(null, false, nonNull, false);
         } else {
-            return new ObjectStamp(type, exactType, nonNull, false);
+            return new ObjectStamp(type.getType(), type.isExact(), nonNull, false);
         }
     }
 
-    public static Stamp exactNonNull(ResolvedJavaType type) {
-        if (ObjectStamp.isConcreteType(type)) {
-            return new ObjectStamp(type, true, true, false);
-        } else {
-            return illegal(Kind.Object);
+    public static Stamp[] createParameterStamps(Assumptions assumptions, ResolvedJavaMethod method) {
+        Signature sig = method.getSignature();
+        Stamp[] result = new Stamp[sig.getParameterCount(!method.isStatic())];
+        int index = 0;
+
+        if (!method.isStatic()) {
+            result[index++] = StampFactory.objectNonNull(TypeReference.create(assumptions, method.getDeclaringClass()));
         }
+
+        int max = sig.getParameterCount(false);
+        ResolvedJavaType accessingClass = method.getDeclaringClass();
+        for (int i = 0; i < max; i++) {
+            JavaType type = sig.getParameterType(i, accessingClass);
+            JavaKind kind = type.getJavaKind();
+            Stamp stamp;
+            if (kind == JavaKind.Object && type instanceof ResolvedJavaType) {
+                stamp = StampFactory.object(TypeReference.create(assumptions, (ResolvedJavaType) type));
+            } else {
+                stamp = StampFactory.forKind(kind);
+            }
+            result[index++] = stamp;
+        }
+
+        return result;
     }
 
-    public static Stamp exact(ResolvedJavaType type) {
-        return new ObjectStamp(type, true, false, false);
+    public static Stamp pointer() {
+        return rawPointer;
+    }
+
+    public static StampPair forDeclaredType(Assumptions assumptions, JavaType returnType, boolean nonNull) {
+        if (returnType.getJavaKind() == JavaKind.Object && returnType instanceof ResolvedJavaType) {
+            ResolvedJavaType resolvedJavaType = (ResolvedJavaType) returnType;
+            TypeReference reference = TypeReference.create(assumptions, resolvedJavaType);
+            if (resolvedJavaType.isInterface()) {
+                ResolvedJavaType implementor = resolvedJavaType.getSingleImplementor();
+                if (implementor != null && !resolvedJavaType.equals(implementor)) {
+                    TypeReference uncheckedType = TypeReference.createTrusted(assumptions, implementor);
+                    return StampPair.create(StampFactory.object(reference, nonNull), StampFactory.object(uncheckedType, nonNull));
+                }
+            }
+            return StampPair.createSingle(StampFactory.object(reference, nonNull));
+        } else {
+            return StampPair.createSingle(StampFactory.forKind(returnType.getJavaKind()));
+        }
     }
 }
