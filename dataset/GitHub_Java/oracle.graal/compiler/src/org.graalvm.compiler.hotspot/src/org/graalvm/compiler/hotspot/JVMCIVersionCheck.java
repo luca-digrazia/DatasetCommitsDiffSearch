@@ -42,7 +42,7 @@ class JVMCIVersionCheck {
 
     // MAX_VALUE indicates that no current EA version is compatible with Graal.
     // Note: Keep README.md in sync with the EA version support checked here.
-    private static final int JVMCI9_MIN_EA_BUILD = 174;
+    private static final int JVMCI9_MIN_EA_BUILD = Integer.MAX_VALUE;
 
     private static void failVersionCheck(boolean exit, String reason, Object... args) {
         Formatter errorMessage = new Formatter().format(reason, args);
@@ -121,8 +121,8 @@ class JVMCIVersionCheck {
             }
             // http://openjdk.java.net/jeps/223
             // Only support EA builds until GA is available
-            if (vmVersion.startsWith("9+")) {
-                int start = "9+".length();
+            if (vmVersion.startsWith("9-ea+")) {
+                int start = "9-ea+".length();
                 int end = start;
                 end = start;
                 while (end < vmVersion.length() && Character.isDigit(vmVersion.charAt(end))) {
