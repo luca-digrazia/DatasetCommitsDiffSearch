@@ -112,13 +112,10 @@ public class CFGPrinterObserver implements DebugDumpHandler {
                     curSchedule = new SchedulePhase();
                     curSchedule.apply((StructuredGraph) object);
                 } catch (Throwable ex) {
-                    curSchedule = null;
                     // ignore
                 }
             }
-            if (curSchedule != null && curSchedule.getCFG() != null) {
-                cfgPrinter.printCFG(message, Arrays.asList(curSchedule.getCFG().getBlocks()), curSchedule);
-            }
+            cfgPrinter.printCFG(message, Arrays.asList(curSchedule.getCFG().getBlocks()), curSchedule);
 
         } else if (object instanceof CiTargetMethod) {
             cfgPrinter.printMachineCode(runtime.disassemble((CiTargetMethod) object), null);
