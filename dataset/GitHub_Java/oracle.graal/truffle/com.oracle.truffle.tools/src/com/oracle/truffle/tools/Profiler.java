@@ -554,18 +554,9 @@ public final class Profiler {
      */
     public static final class Counter {
 
-        /**
-         * Identifies the execution mode for timing results.
-         */
-        public enum TimeKind {
-
-            /** Timing results includes both modes of operation. */
+        enum TimeKind {
             INTERPRETED_AND_COMPILED,
-
-            /** Timing results include only slow-path execution. */
             INTERPRETED,
-
-            /** Timing results include only fast-path execution. */
             COMPILED
         }
 
@@ -625,8 +616,8 @@ public final class Profiler {
         }
 
         /**
-         * Total time taken executing the program element since the last time data was
-         * {@linkplain #clear() cleared}.
+         * Total time in nanoseconds taken executing the program element since the last time data
+         * was {@linkplain #clear() cleared}.
          *
          * @since 0.15
          */
@@ -644,7 +635,7 @@ public final class Profiler {
         }
 
         /**
-         * Self time taken executing the program element since the last time data was
+         * Self time in nanoseconds taken executing the program element since the last time data was
          * {@linkplain #clear() cleared}.
          *
          * @since 0.15
