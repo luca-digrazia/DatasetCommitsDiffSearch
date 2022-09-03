@@ -29,7 +29,9 @@ import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
 /**
- * Functional interface for iterating over a list of values.
+ * Iterator for iterating over a list of values. Subclasses must overwrite one of the doValue
+ * methods. Clients should not use this interface directly but call
+ * {@link InstructionValueProcedureBase#processValue} instead.
  */
 @FunctionalInterface
 public interface InstructionValueProcedure {
@@ -44,5 +46,4 @@ public interface InstructionValueProcedure {
      * @return The new value to replace the value that was passed in.
      */
     Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags);
-
 }

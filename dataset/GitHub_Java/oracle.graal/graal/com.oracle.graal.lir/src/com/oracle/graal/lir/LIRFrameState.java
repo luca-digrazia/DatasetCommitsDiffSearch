@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.framemap.*;
 
 /**
  * This class represents garbage collection and deoptimization information attached to a LIR
@@ -64,6 +63,10 @@ public class LIRFrameState {
      * @param proc The procedure called for variables.
      */
     public void forEachState(LIRInstruction inst, InstructionValueProcedure proc) {
+        forEachState(inst, InstructionValueProcedureBase.wrap(proc));
+    }
+
+    void forEachState(LIRInstruction inst, InstructionValueProcedureBase proc) {
         for (BytecodeFrame cur = topFrame; cur != null; cur = cur.caller()) {
             processValues(inst, cur.values, proc);
         }
@@ -80,18 +83,16 @@ public class LIRFrameState {
      */
     protected static final EnumSet<OperandFlag> STATE_FLAGS = EnumSet.of(OperandFlag.REG, OperandFlag.STACK);
 
-    protected void processValues(LIRInstruction inst, JavaValue[] values, InstructionValueProcedure proc) {
+    protected void processValues(LIRInstruction inst, Value[] values, InstructionValueProcedureBase proc) {
         for (int i = 0; i < values.length; i++) {
-            if (values[i] instanceof Value) {
-                Value value = (Value) values[i];
-                values[i] = (JavaValue) processValue(inst, proc, value);
-            }
+            Value value = values[i];
+            values[i] = processValue(inst, proc, value);
         }
     }
 
-    protected Value processValue(LIRInstruction inst, InstructionValueProcedure proc, Value value) {
+    protected Value processValue(LIRInstruction inst, InstructionValueProcedureBase proc, Value value) {
         if (processed(value)) {
-            return proc.doValue(inst, value, OperandMode.ALIVE, STATE_FLAGS);
+            return proc.processValue(inst, value, OperandMode.ALIVE, STATE_FLAGS);
         }
         return value;
     }
@@ -124,17 +125,13 @@ public class LIRFrameState {
     /**
      * Called by the register allocator to mark the specified location as a reference in the
      * reference map of the debug information. The tracked location can be a {@link RegisterValue}
-     * or a {@link StackSlot}. Note that a {@link JavaConstant} is automatically tracked.
+     * or a {@link StackSlot}. Note that a {@link Constant} is automatically tracked.
      *
      * @param location The location to be added to the reference map.
      * @param frameMap The frame map.
      */
     public void markLocation(Value location, FrameMap frameMap) {
         frameMap.setReference(location, debugInfo.getReferenceMap());
-    }
-
-    public void markLocation(ReferenceMap refMap) {
-        debugInfo.getReferenceMap().updateUnion(refMap);
     }
 
     /**

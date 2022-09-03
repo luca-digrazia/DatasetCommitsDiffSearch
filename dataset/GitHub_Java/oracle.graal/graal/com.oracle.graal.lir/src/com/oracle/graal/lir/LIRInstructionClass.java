@@ -63,14 +63,14 @@ public class LIRInstructionClass extends LIRIntrospection {
     private int opcodeIndex;
 
     private LIRInstructionClass(Class<? extends LIRInstruction> clazz) {
-        this(clazz, new FieldsScanner.DefaultCalcOffset());
+        this(clazz, new DefaultCalcOffset());
     }
 
-    public LIRInstructionClass(Class<? extends LIRInstruction> clazz, FieldsScanner.CalcOffset calcOffset) {
+    public LIRInstructionClass(Class<? extends LIRInstruction> clazz, CalcOffset calcOffset) {
         super(clazz);
         assert INSTRUCTION_CLASS.isAssignableFrom(clazz);
 
-        LIRInstructionFieldsScanner ifs = new LIRInstructionFieldsScanner(calcOffset);
+        InstructionFieldScanner ifs = new InstructionFieldScanner(calcOffset);
         ifs.scan(clazz);
 
         uses = new Values(ifs.valueAnnotations.get(LIRInstruction.Use.class));
@@ -89,16 +89,16 @@ public class LIRInstructionClass extends LIRIntrospection {
         }
     }
 
-    private static class LIRInstructionFieldsScanner extends LIRFieldsScanner {
+    private static class InstructionFieldScanner extends FieldScanner {
 
         private String opcodeConstant;
 
         /**
          * Field (if any) annotated by {@link Opcode}.
          */
-        private FieldsScanner.FieldInfo opcodeField;
+        private FieldInfo opcodeField;
 
-        public LIRInstructionFieldsScanner(FieldsScanner.CalcOffset calc) {
+        public InstructionFieldScanner(CalcOffset calc) {
             super(calc);
 
             valueAnnotations.put(LIRInstruction.Use.class, new OperandModeAnnotation());
@@ -134,7 +134,7 @@ public class LIRInstructionClass extends LIRIntrospection {
             }
             opcodeField = null;
 
-            super.scan(clazz, LIRInstructionBase.class, false);
+            super.scan(clazz, true);
 
             if (opcodeConstant == null && opcodeField == null) {
                 opcodeConstant = clazz.getSimpleName();
@@ -150,7 +150,7 @@ public class LIRInstructionClass extends LIRIntrospection {
             if (STATE_CLASS.isAssignableFrom(type)) {
                 assert getOperandModeAnnotation(field) == null : "Field must not have operand mode annotation: " + field;
                 assert field.getAnnotation(LIRInstruction.State.class) != null : "Field must have state annotation: " + field;
-                states.add(new FieldsScanner.FieldInfo(offset, field.getName(), type));
+                states.add(new FieldInfo(offset, field.getName(), type));
             } else {
                 super.scanField(field, offset);
             }
@@ -234,23 +234,23 @@ public class LIRInstructionClass extends LIRIntrospection {
         forEach(obj, obj, defs, OperandMode.DEF, proc, ValuePosition.ROOT_VALUE_POSITION);
     }
 
-    final void forEachUse(LIRInstruction obj, InstructionValueProcedure proc) {
+    final void forEachUse(LIRInstruction obj, InstructionValueProcedureBase proc) {
         forEach(obj, uses, OperandMode.USE, proc);
     }
 
-    final void forEachAlive(LIRInstruction obj, InstructionValueProcedure proc) {
+    final void forEachAlive(LIRInstruction obj, InstructionValueProcedureBase proc) {
         forEach(obj, alives, OperandMode.ALIVE, proc);
     }
 
-    final void forEachTemp(LIRInstruction obj, InstructionValueProcedure proc) {
+    final void forEachTemp(LIRInstruction obj, InstructionValueProcedureBase proc) {
         forEach(obj, temps, OperandMode.TEMP, proc);
     }
 
-    final void forEachDef(LIRInstruction obj, InstructionValueProcedure proc) {
+    final void forEachDef(LIRInstruction obj, InstructionValueProcedureBase proc) {
         forEach(obj, defs, OperandMode.DEF, proc);
     }
 
-    final void forEachState(LIRInstruction obj, InstructionValueProcedure proc) {
+    final void forEachState(LIRInstruction obj, InstructionValueProcedureBase proc) {
         for (int i = 0; i < states.getCount(); i++) {
             LIRFrameState state = (LIRFrameState) states.getObject(obj, i);
             if (state != null) {
@@ -268,7 +268,7 @@ public class LIRInstructionClass extends LIRIntrospection {
         }
     }
 
-    final Value forEachRegisterHint(LIRInstruction obj, OperandMode mode, InstructionValueProcedure proc) {
+    final Value forEachRegisterHint(LIRInstruction obj, OperandMode mode, InstructionValueProcedureBase proc) {
         Values hints;
         if (mode == OperandMode.USE) {
             hints = defs;
@@ -281,7 +281,7 @@ public class LIRInstructionClass extends LIRIntrospection {
         for (int i = 0; i < hints.getCount(); i++) {
             if (i < hints.getDirectCount()) {
                 Value hintValue = hints.getValue(obj, i);
-                Value result = proc.doValue(obj, hintValue, null, null);
+                Value result = proc.processValue(obj, hintValue, null, null);
                 if (result != null) {
                     return result;
                 }
@@ -289,7 +289,7 @@ public class LIRInstructionClass extends LIRIntrospection {
                 Value[] hintValues = hints.getValueArray(obj, i);
                 for (int j = 0; j < hintValues.length; j++) {
                     Value hintValue = hintValues[j];
-                    Value result = proc.doValue(obj, hintValue, null, null);
+                    Value result = proc.processValue(obj, hintValue, null, null);
                     if (result != null) {
                         return result;
                     }
