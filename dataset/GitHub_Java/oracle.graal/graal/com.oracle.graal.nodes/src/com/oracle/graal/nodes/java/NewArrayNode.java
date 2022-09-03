@@ -24,7 +24,8 @@ package com.oracle.graal.nodes.java;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -74,12 +75,12 @@ public abstract class NewArrayNode extends FixedWithNextNode implements EscapeAn
      * Gets the element type of the array.
      * @return the element type of the array
      */
-    public abstract ResolvedJavaType elementType();
+    public abstract RiResolvedType elementType();
 
     @Override
     public void typeFeedback(TypeFeedbackTool tool) {
-        assert length.kind() == Kind.Int;
-        tool.addScalar(length).constantBound(Condition.GE, Constant.INT_0);
+        assert length.kind() == CiKind.Int;
+        tool.addScalar(length).constantBound(Condition.GE, CiConstant.INT_0);
     }
 
     public EscapeOp getEscapeOp() {
@@ -91,7 +92,7 @@ public abstract class NewArrayNode extends FixedWithNextNode implements EscapeAn
         @Override
         public boolean canAnalyze(Node node) {
             NewArrayNode x = (NewArrayNode) node;
-            Constant length = x.dimension(0).asConstant();
+            CiConstant length = x.dimension(0).asConstant();
             return length != null && length.asInt() >= 0 && length.asInt() < MaximumEscapeAnalysisArrayLength;
         }
 
@@ -102,7 +103,7 @@ public abstract class NewArrayNode extends FixedWithNextNode implements EscapeAn
             EscapeField[] fields = new EscapeField[length];
             for (int i = 0; i < length; i++) {
                 Integer representation = i;
-                fields[i] = new EscapeField(Integer.toString(i), representation, ((NewArrayNode) node).elementType());
+                fields[i] = new EscapeField("[" + i + "]", representation, ((NewArrayNode) node).elementType());
             }
             return fields;
         }
