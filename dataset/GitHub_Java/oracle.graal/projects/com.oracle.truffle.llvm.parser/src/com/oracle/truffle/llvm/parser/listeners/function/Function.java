@@ -300,11 +300,12 @@ public abstract class Function implements ParserListener {
             ++i; // type of cmp
         }
         final int replace = getIndex(args[++i]);
-        final boolean isVolatile = args[++i] != 0;
+        final boolean isVolatile = args[i] != 0; // no incrementing i here, this is what llvm does,
+                                                 // but why?
         final long successOrdering = args[++i];
         final long synchronizationScope = args[++i];
-        final long failureOrdering = i < args.length - 1 ? args[++i] : -1L;
-        final boolean addExtractValue = i >= args.length - 1;
+        final long failureOrdering = i < args.length ? args[++i] : -1L;
+        final boolean addExtractValue = i >= args.length;
         final boolean isWeak = addExtractValue || (args[++i] != 0);
 
         final Type type = findCmpxchgResultType(((PointerType) ptrType).getPointeeType());
