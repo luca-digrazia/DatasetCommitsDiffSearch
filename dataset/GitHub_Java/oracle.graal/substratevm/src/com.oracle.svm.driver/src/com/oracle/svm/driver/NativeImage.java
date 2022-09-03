@@ -131,8 +131,9 @@ class NativeImage {
     static final String oH = "-H:";
     static final String oR = "-R:";
 
+    /* Boolean arguments */
     static final String enableRuntimeAssertions = "+" + SubstrateOptions.RuntimeAssertions.getName();
-    static final String enablePrintFlags = SubstrateOptions.PrintFlags.getName() + "=";
+    static final String enablePrintFlags = "+" + SubstrateOptions.PrintFlags.getName();
 
     private static <T> String oH(OptionKey<T> option) {
         return oH + option.getName() + "=";
