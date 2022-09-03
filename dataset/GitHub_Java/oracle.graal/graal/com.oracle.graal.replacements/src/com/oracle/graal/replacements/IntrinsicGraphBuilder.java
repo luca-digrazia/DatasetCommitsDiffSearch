@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.replacements;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.InvocationPlugin.Receiver;
+import com.oracle.graal.graphbuilderconf.MethodIdMap.Receiver;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
@@ -133,8 +132,8 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
         returnValue = value;
     }
 
-    public void handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean forceInlineEverything) {
-        throw JVMCIError.shouldNotReachHere();
+    public void handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args) {
+        throw GraalInternalError.shouldNotReachHere();
     }
 
     public StampProvider getStampProvider() {
@@ -153,10 +152,9 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
         return graph;
     }
 
-    public void setStateAfter(StateSplit sideEffect) {
-        assert sideEffect.hasSideEffect();
+    public void setStateAfter(StateSplit stateSplit) {
         FrameState stateAfter = getGraph().add(new FrameState(BytecodeFrame.BEFORE_BCI));
-        sideEffect.setStateAfter(stateAfter);
+        stateSplit.setStateAfter(stateAfter);
     }
 
     public GraphBuilderContext getParent() {
@@ -183,16 +181,16 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
         return 0;
     }
 
-    public boolean parsingIntrinsic() {
+    public boolean parsingReplacement() {
         return true;
     }
 
-    public IntrinsicContext getIntrinsic() {
-        throw JVMCIError.shouldNotReachHere();
+    public Replacement getReplacement() {
+        throw GraalInternalError.shouldNotReachHere();
     }
 
     public BailoutException bailout(String string) {
-        throw JVMCIError.shouldNotReachHere();
+        throw GraalInternalError.shouldNotReachHere();
     }
 
     public ValueNode get() {
@@ -210,7 +208,7 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
     }
 
     public void intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, ValueNode[] args) {
-        throw JVMCIError.shouldNotReachHere();
+        throw GraalInternalError.shouldNotReachHere();
     }
 
     @Override

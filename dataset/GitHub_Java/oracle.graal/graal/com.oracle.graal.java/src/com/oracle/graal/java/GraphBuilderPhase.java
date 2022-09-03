@@ -2084,14 +2084,9 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 int bci = block.startBci;
                 BytecodesParsed.add(block.endBci - bci);
 
-                /* Reset line number for new block */
-                if (graphBuilderConfig.insertSimpleDebugInfo()) {
-                    previousLineNumber = -1;
-                }
-
                 while (bci < endBCI) {
-                    if (graphBuilderConfig.insertNonSafepointDebugInfo()) {
-                        currentLineNumber = lnt != null ? lnt.getLineNumber(bci) : (graphBuilderConfig.insertFullDebugInfo() ? -1 : bci);
+                    if (graphBuilderConfig.insertNonSafepointDebugInfo() && lnt != null) {
+                        currentLineNumber = lnt.getLineNumber(bci);
                         if (currentLineNumber != previousLineNumber) {
                             append(createInfoPointNode(InfopointReason.LINE_NUMBER));
                             previousLineNumber = currentLineNumber;
@@ -2163,16 +2158,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 if (graphBuilderConfig.insertFullDebugInfo()) {
                     return new FullInfopointNode(reason, createFrameState(bci()));
                 } else {
-                    BytecodePosition position = createBytecodePosition();
-                    // Update the previous infopoint position if no new fixed nodes were inserted
-                    if (lastInstr instanceof SimpleInfopointNode) {
-                        SimpleInfopointNode lastInfopoint = (SimpleInfopointNode) lastInstr;
-                        if (lastInfopoint.getReason() == reason) {
-                            lastInfopoint.setPosition(position);
-                            return lastInfopoint;
-                        }
-                    }
-                    return new SimpleInfopointNode(reason, position);
+                    return new SimpleInfopointNode(reason, new BytecodePosition(null, method, bci()));
                 }
             }
 
@@ -2436,12 +2422,9 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return frameState.create(bci);
             }
 
-            public FrameState createStateAfter() {
-                return createFrameState(stream.nextBCI());
-            }
-
-            private BytecodePosition createBytecodePosition() {
-                return frameState.createBytecodePosition(bci());
+            public void setStateAfter(StateSplit stateSplit) {
+                FrameState stateAfter = createFrameState(stream.nextBCI());
+                stateSplit.setStateAfter(stateAfter);
             }
         }
     }

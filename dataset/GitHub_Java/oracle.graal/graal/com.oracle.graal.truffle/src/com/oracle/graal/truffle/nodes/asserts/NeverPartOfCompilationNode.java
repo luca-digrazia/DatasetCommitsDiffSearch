@@ -29,11 +29,10 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo
-public final class NeverPartOfCompilationNode extends ControlSinkNode implements StateSplit, IterableNodeType {
+public final class NeverPartOfCompilationNode extends AbstractStateSplit implements IterableNodeType {
 
     public static final NodeClass<NeverPartOfCompilationNode> TYPE = NodeClass.create(NeverPartOfCompilationNode.class);
     protected final String message;
-    @OptionalInput(InputType.State) protected FrameState stateAfter;
 
     public NeverPartOfCompilationNode(String message) {
         super(TYPE, StampFactory.forVoid());
@@ -42,20 +41,6 @@ public final class NeverPartOfCompilationNode extends ControlSinkNode implements
 
     public String getMessage() {
         return message;
-    }
-
-    public FrameState stateAfter() {
-        return stateAfter;
-    }
-
-    public void setStateAfter(FrameState x) {
-        assert x == null || x.isAlive() : "frame state must be in a graph";
-        updateUsages(stateAfter, x);
-        stateAfter = x;
-    }
-
-    public boolean hasSideEffect() {
-        return true;
     }
 
     public static void verifyNotFoundIn(final StructuredGraph graph) {
