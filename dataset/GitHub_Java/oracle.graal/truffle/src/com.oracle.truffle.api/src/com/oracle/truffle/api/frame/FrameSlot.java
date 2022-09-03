@@ -24,13 +24,16 @@
  */
 package com.oracle.truffle.api.frame;
 
+import java.util.Map;
+import java.util.WeakHashMap;
+
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
 /**
  * A slot in a {@link Frame} and {@link FrameDescriptor} that can store a value of a given type.
- * 
+ *
  * @since 0.8 or earlier
  */
 public final class FrameSlot implements Cloneable {
@@ -39,19 +42,8 @@ public final class FrameSlot implements Cloneable {
     private final Object identifier;
     private final Object info;
     private final int index;
+    private Map<FrameDescriptor, Object> sharedWith;
     @CompilationFinal private FrameSlotKind kind;
-
-    /**
-     * @deprecated use
-     *             {@link FrameDescriptor#addFrameSlot(java.lang.Object, java.lang.Object, com.oracle.truffle.api.frame.FrameSlotKind)}
-     *             to create new instance of the slot. This method will be made package private in
-     *             the future.
-     * @since 0.8 or earlier
-     */
-    @Deprecated
-    public FrameSlot(FrameDescriptor descriptor, Object identifier, Object info, int index, FrameSlotKind kind) {
-        this(descriptor, identifier, info, kind, index);
-    }
 
     FrameSlot(FrameDescriptor descriptor, Object identifier, Object info, FrameSlotKind kind, int index) {
         this.descriptor = descriptor;
@@ -59,6 +51,7 @@ public final class FrameSlot implements Cloneable {
         this.info = info;
         this.index = index;
         this.kind = kind;
+        this.sharedWith = null;
     }
 
     /**
@@ -121,6 +114,11 @@ public final class FrameSlot implements Cloneable {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             this.kind = kind;
             this.descriptor.updateVersion();
+            if (sharedWith != null) {
+                for (FrameDescriptor frameDescriptor : sharedWith.keySet()) {
+                    frameDescriptor.updateVersion();
+                }
+            }
         }
     }
 
@@ -132,7 +130,8 @@ public final class FrameSlot implements Cloneable {
     }
 
     /**
-     * Frame descriptor this slot is associated with.
+     * Frame descriptor this slot is associated with. When the slot was shared using
+     * {@link FrameDescriptor#shallowCopy()} it returns the original {@link FrameDescriptor}.
      *
      * @return instance of descriptor that {@link FrameDescriptor#addFrameSlot(java.lang.Object)
      *         created} the slot
@@ -140,5 +139,12 @@ public final class FrameSlot implements Cloneable {
      */
     public FrameDescriptor getFrameDescriptor() {
         return this.descriptor;
+    }
+
+    void shareWith(FrameDescriptor frameDescriptor) {
+        if (sharedWith == null) {
+            sharedWith = new WeakHashMap<>();
+        }
+        sharedWith.put(frameDescriptor, null);
     }
 }
