@@ -852,10 +852,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             case F2D:
                 return emitConvert2Op(LIRKind.derive(inputVal).changeType(Kind.Double), F2D, input);
             case I2F: {
-                AllocatableValue intEncodedFloatReg = newVariable(LIRKind.derive(input).changeType(Kind.Float));
-                moveBetweenFpGp(intEncodedFloatReg, input);
-                AllocatableValue convertedFloatReg = newVariable(intEncodedFloatReg.getLIRKind());
-                append(new Unary2Op(I2F, convertedFloatReg, intEncodedFloatReg));
+                AllocatableValue convertedFloatReg = newVariable(LIRKind.derive(input).changeType(Kind.Float));
+                moveBetweenFpGp(convertedFloatReg, input);
+                append(new Unary2Op(I2F, convertedFloatReg, convertedFloatReg));
                 return convertedFloatReg;
             }
             case I2D: {
@@ -868,10 +867,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 return convertedDoubleReg;
             }
             case L2D: {
-                AllocatableValue longEncodedDoubleReg = newVariable(LIRKind.derive(input).changeType(Kind.Double));
-                moveBetweenFpGp(longEncodedDoubleReg, input);
-                AllocatableValue convertedDoubleReg = newVariable(longEncodedDoubleReg.getLIRKind());
-                append(new Unary2Op(L2D, convertedDoubleReg, longEncodedDoubleReg));
+                AllocatableValue convertedDoubleReg = newVariable(LIRKind.derive(input).changeType(Kind.Double));
+                moveBetweenFpGp(convertedDoubleReg, input);
+                append(new Unary2Op(L2D, convertedDoubleReg, convertedDoubleReg));
                 return convertedDoubleReg;
             }
             case D2I: {
@@ -1075,9 +1073,4 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         return result;
     }
 
-    public void emitNullCheck(Value address, LIRFrameState state) {
-        PlatformKind kind = address.getPlatformKind();
-        assert kind == Kind.Object || kind == Kind.Long : address + " - " + kind + " not an object!";
-        append(new NullCheckOp(asAddressValue(address), state));
-    }
 }
