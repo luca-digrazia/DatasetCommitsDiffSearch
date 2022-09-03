@@ -47,7 +47,9 @@ import com.oracle.truffle.llvm.context.LLVMContext;
 import com.oracle.truffle.llvm.context.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.api.LLVMStackFrameNuller;
+import com.oracle.truffle.llvm.parser.api.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.api.LLVMParserResult;
+import com.oracle.truffle.llvm.parser.api.LLVMType;
 import com.oracle.truffle.llvm.parser.api.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.api.facade.NodeFactoryFacade;
 import com.oracle.truffle.llvm.parser.api.model.Model;
@@ -59,11 +61,16 @@ import com.oracle.truffle.llvm.parser.api.model.globals.GlobalAlias;
 import com.oracle.truffle.llvm.parser.api.model.globals.GlobalConstant;
 import com.oracle.truffle.llvm.parser.api.model.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.api.model.globals.GlobalVariable;
+import com.oracle.truffle.llvm.parser.api.model.symbols.Symbol;
 import com.oracle.truffle.llvm.parser.api.model.symbols.constants.aggregate.ArrayConstant;
 import com.oracle.truffle.llvm.parser.api.model.symbols.constants.aggregate.StructureConstant;
 import com.oracle.truffle.llvm.parser.api.model.symbols.instructions.ValueInstruction;
 import com.oracle.truffle.llvm.parser.api.model.symbols.instructions.VoidInstruction;
 import com.oracle.truffle.llvm.parser.api.model.target.TargetDataLayout;
+import com.oracle.truffle.llvm.parser.api.model.types.FunctionType;
+import com.oracle.truffle.llvm.parser.api.model.types.PointerType;
+import com.oracle.truffle.llvm.parser.api.model.types.StructureType;
+import com.oracle.truffle.llvm.parser.api.model.types.Type;
 import com.oracle.truffle.llvm.parser.api.model.visitors.InstructionVisitor;
 import com.oracle.truffle.llvm.parser.api.model.visitors.ReducedInstructionVisitor;
 import com.oracle.truffle.llvm.parser.api.util.LLVMParserAsserts;
@@ -73,14 +80,7 @@ import com.oracle.truffle.llvm.parser.api.util.LLVMTypeHelper;
 import com.oracle.truffle.llvm.parser.bc.nodes.LLVMSymbolResolver;
 import com.oracle.truffle.llvm.parser.bc.util.LLVMFrameIDs;
 import com.oracle.truffle.llvm.parser.bc.util.Pair;
-import com.oracle.truffle.llvm.runtime.LLVMFunction;
-import com.oracle.truffle.llvm.runtime.types.FunctionType;
-import com.oracle.truffle.llvm.runtime.types.LLVMBaseType;
-import com.oracle.truffle.llvm.runtime.types.LLVMType;
-import com.oracle.truffle.llvm.runtime.types.PointerType;
-import com.oracle.truffle.llvm.runtime.types.StructureType;
-import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
+import com.oracle.truffle.llvm.types.LLVMFunction;
 
 public final class LLVMBitcodeVisitor implements LLVMParserRuntime {
 
@@ -89,7 +89,7 @@ public final class LLVMBitcodeVisitor implements LLVMParserRuntime {
         final Model model = parserResult.getModel();
         final StackAllocation stackAllocation = parserResult.getStackAllocation();
         final TargetDataLayout layout = ((ModelModule) model.createModule()).getTargetDataLayout();
-        final DataLayoutConverter.DataSpecConverterImpl targetDataLayout = layout != null ? DataLayoutConverter.getConverter(layout.getDataLayout()) : null;
+        final DataLayoutConverter.DataSpecConverter targetDataLayout = layout != null ? DataLayoutConverter.getConverter(layout.getDataLayout()) : null;
 
         final LLVMBitcodeVisitor visitor = new LLVMBitcodeVisitor(source, context, stackAllocation, parserResult.getLabels(), parserResult.getPhis(), targetDataLayout, factoryFacade);
         final LLVMModelVisitor module = new LLVMModelVisitor(visitor, context);
@@ -134,7 +134,7 @@ public final class LLVMBitcodeVisitor implements LLVMParserRuntime {
 
     private final Map<GlobalValueSymbol, LLVMExpressionNode> globals = new HashMap<>();
 
-    private final DataLayoutConverter.DataSpecConverterImpl targetDataLayout;
+    private final DataLayoutConverter.DataSpecConverter targetDataLayout;
 
     private final NodeFactoryFacade factoryFacade;
 
@@ -147,7 +147,7 @@ public final class LLVMBitcodeVisitor implements LLVMParserRuntime {
     private final NativeLookup nativeLookup;
 
     private LLVMBitcodeVisitor(Source source, LLVMContext context, StackAllocation stack, LLVMLabelList labels, LLVMPhiManager phis,
-                    DataLayoutConverter.DataSpecConverterImpl layout, NodeFactoryFacade factoryFacade) {
+                    DataLayoutConverter.DataSpecConverter layout, NodeFactoryFacade factoryFacade) {
         this.source = source;
         this.context = context;
         this.stack = stack;
@@ -354,11 +354,11 @@ public final class LLVMBitcodeVisitor implements LLVMParserRuntime {
         for (int i = 0; i < elemCount; i++) {
             final LLVMExpressionNode globalVarAddress = factoryFacade.createLiteral(this, globalVariableDescriptor, LLVMBaseType.ADDRESS);
             final LLVMExpressionNode iNode = factoryFacade.createLiteral(this, i, LLVMBaseType.I32);
-            final LLVMExpressionNode structPointer = factoryFacade.createTypedElementPointer(this, LLVMBaseType.I32, globalVarAddress, iNode, structSize, elementType);
+            final LLVMExpressionNode structPointer = factoryFacade.createGetElementPtr(this, LLVMBaseType.I32, globalVarAddress, iNode, structSize);
             final LLVMExpressionNode loadedStruct = factoryFacade.createLoad(this, elementType, structPointer);
 
             final LLVMExpressionNode oneLiteralNode = factoryFacade.createLiteral(this, 1, LLVMBaseType.I32);
-            final LLVMExpressionNode functionLoadTarget = factoryFacade.createTypedElementPointer(this, LLVMBaseType.I32, loadedStruct, oneLiteralNode, indexedTypeLength, functionType);
+            final LLVMExpressionNode functionLoadTarget = factoryFacade.createGetElementPtr(this, LLVMBaseType.I32, loadedStruct, oneLiteralNode, indexedTypeLength);
             final LLVMExpressionNode loadedFunction = factoryFacade.createLoad(this, functionType, functionLoadTarget);
             final LLVMExpressionNode[] argNodes = new LLVMExpressionNode[]{factoryFacade.createFrameRead(this, LLVMBaseType.ADDRESS, getStackPointerSlot())};
             final LLVMType[] argTypes = new LLVMType[]{new LLVMType(LLVMBaseType.ADDRESS)};

@@ -39,7 +39,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.llvm.parser.api.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.api.model.blocks.InstructionGenerator;
 import com.oracle.truffle.llvm.parser.api.model.blocks.MetadataBlock;
@@ -150,32 +149,26 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
     }
 
     public Type getType(String instructionName) {
-        CompilerAsserts.neverPartOfCompilation();
         return namesToTypes.get(instructionName);
     }
 
     public InstructionBlock getBlock(long idx) {
-        CompilerAsserts.neverPartOfCompilation();
         return blocks[(int) idx];
     }
 
     public int getBlockCount() {
-        CompilerAsserts.neverPartOfCompilation();
         return blocks.length;
     }
 
     public List<InstructionBlock> getBlocks() {
-        CompilerAsserts.neverPartOfCompilation();
         return Arrays.asList(blocks);
     }
 
     public List<FunctionParameter> getParameters() {
-        CompilerAsserts.neverPartOfCompilation();
         return parameters;
     }
 
     public Symbols getSymbols() {
-        CompilerAsserts.neverPartOfCompilation();
         return symbols;
     }
 
@@ -266,13 +259,11 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
 
     @Override
     public MetadataBlock getMetadata() {
-        CompilerAsserts.neverPartOfCompilation();
         return metadata;
     }
 
     @Override
     public int hashCode() {
-        CompilerAsserts.neverPartOfCompilation();
         int hash = super.hashCode();
         hash = 43 * hash + ((parameters == null) ? 0 : parameters.hashCode());
         hash = 43 * hash + ((symbols == null) ? 0 : symbols.hashCode());
@@ -281,7 +272,6 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
 
     @Override
     public boolean equals(Object obj) {
-        CompilerAsserts.neverPartOfCompilation();
         if (obj instanceof FunctionDefinition) {
             FunctionDefinition other = (FunctionDefinition) obj;
             return super.equals(other) && Objects.equals(parameters, other.parameters) && Objects.equals(symbols, other.symbols) && Arrays.equals(blocks, other.blocks) &&
@@ -292,7 +282,6 @@ public final class FunctionDefinition extends FunctionType implements Constant, 
 
     @Override
     public String toString() {
-        CompilerAsserts.neverPartOfCompilation();
         return "FunctionDefinition [symbolCount=" + symbols.getSize() + ", parameters=" + parameters + ", blocks=" + blocks.length + ", currentBlock=" + currentBlock + ", name=" + getName() + "]";
     }
 }
