@@ -24,13 +24,16 @@
  */
 package com.oracle.truffle.api;
 
+import java.io.*;
+import java.lang.annotation.*;
+
 import com.oracle.truffle.api.debug.*;
 import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.*;
-import java.io.*;
-import java.lang.annotation.*;
+import com.oracle.truffle.api.vm.*;
+import com.oracle.truffle.api.vm.TruffleVM.Language;
 import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -38,16 +41,14 @@ import java.util.WeakHashMap;
 /**
  * An entry point for everyone who wants to implement a Truffle based language. By providing an
  * implementation of this type and registering it using {@link Registration} annotation, your
- * language becomes accessible to users of the {@link com.oracle.truffle.api.vm.TruffleVM Truffle
- * virtual machine} - all they will need to do is to include your JAR into their application and all
- * the Truffle goodies (multi-language support, multitenant hosting, debugging, etc.) will be made
- * available to them.
+ * language becomes accessible to users of the {@link TruffleVM Truffle virtual machine} - all they
+ * will need to do is to include your JAR into their application and all the Truffle goodies
+ * (multi-language support, multitenant hosting, debugging, etc.) will be made available to them.
  *
  * @param <C> internal state of the language associated with every thread that is executing program
  *            {@link #parse(com.oracle.truffle.api.source.Source, com.oracle.truffle.api.nodes.Node, java.lang.String...)
  *            parsed} by the language
  */
-@SuppressWarnings("javadoc")
 public abstract class TruffleLanguage<C> {
     /**
      * Constructor to be called by subclasses.
@@ -56,19 +57,18 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
-     * The annotation to use to register your language to the
-     * {@link com.oracle.truffle.api.vm.TruffleVM Truffle} system. By annotating your implementation
-     * of {@link TruffleLanguage} by this annotation you are just a
+     * The annotation to use to register your language to the {@link TruffleVM Truffle} system. By
+     * annotating your implementation of {@link TruffleLanguage} by this annotation you are just a
      * <em>one JAR drop to the class path</em> away from your users. Once they include your JAR in
-     * their application, your language will be available to the
-     * {@link com.oracle.truffle.api.vm.TruffleVM Truffle virtual machine}.
+     * their application, your language will be available to the {@link TruffleVM Truffle virtual
+     * machine}.
      */
     @Retention(RetentionPolicy.SOURCE)
     @Target(ElementType.TYPE)
     public @interface Registration {
         /**
          * Unique name of your language. This name will be exposed to users via the
-         * {@link com.oracle.truffle.api.vm.TruffleVM.Language#getName()} getter.
+         * {@link Language#getName()} getter.
          *
          * @return identifier of your language
          */
@@ -76,7 +76,7 @@ public abstract class TruffleLanguage<C> {
 
         /**
          * Unique string identifying the language version. This name will be exposed to users via
-         * the {@link com.oracle.truffle.api.vm.TruffleVM.Language#getVersion()} getter.
+         * the {@link Language#getVersion()} getter.
          *
          * @return version of your language
          */
@@ -84,9 +84,8 @@ public abstract class TruffleLanguage<C> {
 
         /**
          * List of MIME types associated with your language. Users will use them (directly or
-         * indirectly) when
-         * {@link com.oracle.truffle.api.vm.TruffleVM#eval(com.oracle.truffle.api.source.Source)
-         * executing} their code snippets or their {@link Source files}.
+         * indirectly) when {@link TruffleVM#eval(com.oracle.truffle.api.source.Source) executing}
+         * their code snippets or their {@link Source files}.
          *
          * @return array of MIME types assigned to your language files
          */
@@ -95,12 +94,11 @@ public abstract class TruffleLanguage<C> {
 
     /**
      * Creates internal representation of the executing context suitable for given environment. Each
-     * time the {@link TruffleLanguage language} is used by a new
-     * {@link com.oracle.truffle.api.vm.TruffleVM} or in a new thread, the system calls this method
-     * to let the {@link TruffleLanguage language} prepare for <em>execution</em>. The returned
-     * execution context is completely language specific; it is however expected it will contain
-     * reference to here-in provided <code>env</code> and adjust itself according to parameters
-     * provided by the <code>env</code> object.
+     * time the {@link TruffleLanguage language} is used by a new {@link TruffleVM} or in a new
+     * thread, the system calls this method to let the {@link TruffleLanguage language} prepare for
+     * <em>execution</em>. The returned execution context is completely language specific; it is
+     * however expected it will contain reference to here-in provided <code>env</code> and adjust
+     * itself according to parameters provided by the <code>env</code> object.
      *
      * @param env the environment the language is supposed to operate in
      * @return internal data of the language in given environment
@@ -124,7 +122,7 @@ public abstract class TruffleLanguage<C> {
      *         just parsed <code>code</code>
      * @throws IOException thrown when I/O or parsing goes wrong. Here-in thrown exception is
      *             propagate to the user who called one of <code>eval</code> methods of
-     *             {@link com.oracle.truffle.api.vm.TruffleVM}
+     *             {@link TruffleVM}
      */
     protected abstract CallTarget parse(Source code, Node context, String... argumentNames) throws IOException;
 
@@ -216,8 +214,6 @@ public abstract class TruffleLanguage<C> {
 
         public LangCtx(TruffleLanguage<C> lang, Env env) {
             this.lang = lang;
-            // following call verifies that Accessor.CURRENT_VM is provided
-            assert API.findLanguage(null, null) == null;
             this.ctx = lang.createContext(env);
         }
 
@@ -237,14 +233,14 @@ public abstract class TruffleLanguage<C> {
      * them.
      */
     public static final class Env {
-        private final Object vm;
+        private final TruffleVM vm;
         private final TruffleLanguage<?> lang;
         private final LangCtx<?> langCtx;
         private final Reader in;
         private final Writer err;
         private final Writer out;
 
-        Env(Object vm, TruffleLanguage<?> lang, Writer out, Writer err, Reader in) {
+        Env(TruffleVM vm, TruffleLanguage<?> lang, Writer out, Writer err, Reader in) {
             this.vm = vm;
             this.in = in;
             this.err = err;
@@ -267,8 +263,7 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Input associated with {@link com.oracle.truffle.api.vm.TruffleVM} this language is being
-         * executed in.
+         * Input associated with this {@link TruffleVM}.
          *
          * @return reader, never <code>null</code>
          */
@@ -277,8 +272,7 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Standard output writer for {@link com.oracle.truffle.api.vm.TruffleVM} this language is
-         * being executed in.
+         * Standard output writer for this {@link TruffleVM}.
          *
          * @return writer, never <code>null</code>
          */
@@ -287,8 +281,7 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Standard error writer for {@link com.oracle.truffle.api.vm.TruffleVM} this language is
-         * being executed in.
+         * Standard error writer for this {@link TruffleVM}.
          *
          * @return writer, never <code>null</code>
          */
@@ -302,13 +295,13 @@ public abstract class TruffleLanguage<C> {
     @SuppressWarnings("rawtypes")
     private static final class AccessAPI extends Accessor {
         @Override
-        protected Env attachEnv(Object vm, TruffleLanguage<?> language, Writer stdOut, Writer stdErr, Reader stdIn) {
+        protected Env attachEnv(TruffleVM vm, TruffleLanguage<?> language, Writer stdOut, Writer stdErr, Reader stdIn) {
             Env env = new Env(vm, language, stdOut, stdErr, stdIn);
             return env;
         }
 
         @Override
-        protected Object importSymbol(Object vm, TruffleLanguage<?> queryingLang, String globalName) {
+        public Object importSymbol(TruffleVM vm, TruffleLanguage<?> queryingLang, String globalName) {
             return super.importSymbol(vm, queryingLang, globalName);
         }
 
@@ -337,7 +330,7 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        protected Env findLanguage(Object vm, Class<? extends TruffleLanguage> languageClass) {
+        protected Env findLanguage(TruffleVM vm, Class<? extends TruffleLanguage> languageClass) {
             return super.findLanguage(vm, languageClass);
         }
 
