@@ -46,7 +46,7 @@ public class DegeneratedLoopsTest extends GraphTest {
         return 1;
     }
 
-    @Test
+    @Test(expected = AssertionFailedError.class)
     public void test1() {
         test("test1Snippet");
     }
