@@ -68,14 +68,14 @@ public class HotSpotRuntime implements ExtendedRiRuntime {
         System.setProperty(Backend.BACKEND_CLASS_PROPERTY, HotSpotAMD64Backend.class.getName());
     }
 
-    public void installSnippets(SnippetInstaller installer) {
-        installer.install(SystemSnippets.class);
-        installer.install(UnsafeSnippets.class);
-        installer.install(ArrayCopySnippets.class);
-        installer.install(CheckCastSnippets.class);
-        installer.install(NewInstanceSnippets.class);
+    public void installSnippets() {
+        Snippets.install(this, compiler.getTarget(), new SystemSnippets());
+        Snippets.install(this, compiler.getTarget(), new UnsafeSnippets());
+        Snippets.install(this, compiler.getTarget(), new ArrayCopySnippets());
+        Snippets.install(this, compiler.getTarget(), new CheckCastSnippets());
+        Snippets.install(this, compiler.getTarget(), new NewInstanceSnippets());
         checkcastSnippets = new CheckCastSnippets.Templates(this);
-        newInstanceSnippets = new NewInstanceSnippets.Templates(this, config.useTLAB);
+        newInstanceSnippets = new NewInstanceSnippets.Templates(this);
     }
 
 
@@ -229,6 +229,7 @@ public class HotSpotRuntime implements ExtendedRiRuntime {
     @Override
     public void lower(Node n, CiLoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) n.graph();
+
         if (n instanceof ArrayLengthNode) {
             ArrayLengthNode arrayLengthNode = (ArrayLengthNode) n;
             SafeReadNode safeReadArrayLength = safeReadArrayLength(arrayLengthNode.array(), StructuredGraph.INVALID_GRAPH_ID);
@@ -307,7 +308,7 @@ public class HotSpotRuntime implements ExtendedRiRuntime {
                 if (arrayType != null && array.objectStamp().isExactType()) {
                     ResolvedJavaType elementType = arrayType.componentType();
                     if (elementType.superType() != null) {
-                        ConstantNode type = ConstantNode.forConstant(elementType.getEncoding(Representation.ObjectHub), this, graph);
+                        ConstantNode type = ConstantNode.forCiConstant(elementType.getEncoding(Representation.ObjectHub), this, graph);
                         checkcast = graph.add(new CheckCastNode(type, elementType, value));
                         graph.addBeforeFixed(storeIndexed, checkcast);
                         value = checkcast;
@@ -366,10 +367,6 @@ public class HotSpotRuntime implements ExtendedRiRuntime {
             if (shouldLower(graph, GraalOptions.HIRLowerNewInstance)) {
                 newInstanceSnippets.lower((NewInstanceNode) n, tool);
             }
-        } else if (n instanceof TLABAllocateNode) {
-            newInstanceSnippets.lower((TLABAllocateNode) n, tool);
-        } else if (n instanceof InitializeNode) {
-            newInstanceSnippets.lower((InitializeNode) n, tool);
         } else {
             assert false : "Node implementing Lowerable not handled: " + n;
         }

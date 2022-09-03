@@ -36,7 +36,6 @@ import com.oracle.graal.nodes.type.*;
 public final class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerable, SplitTypeFeedbackProvider, Negatable {
     public static final int TRUE_EDGE = 0;
     public static final int FALSE_EDGE = 1;
-    private final long leafGraphId;
 
     @Input private BooleanNode compare;
 
@@ -49,14 +48,9 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         compare = x;
     }
 
-    public IfNode(BooleanNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double takenProbability, long leafGraphId) {
+    public IfNode(BooleanNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double takenProbability) {
         super(StampFactory.forVoid(), new BeginNode[] {BeginNode.begin(trueSuccessor), BeginNode.begin(falseSuccessor)}, new double[] {takenProbability, 1 - takenProbability});
         this.compare = condition;
-        this.leafGraphId = leafGraphId;
-    }
-
-    public long leafGraphId() {
-        return leafGraphId;
     }
 
     /**
@@ -131,7 +125,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                     if (!phis.hasNext()) {
                         // empty if construct with no phis: remove it
                         removeEmptyIf(tool);
-                        return;
                     } else {
                         PhiNode singlePhi = phis.next();
                         if (!phis.hasNext()) {
@@ -149,7 +142,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                                 MaterializeNode materialize = MaterializeNode.create(compare(), graph(), trueValue, falseValue);
                                 ((StructuredGraph) graph()).replaceFloating(singlePhi, materialize);
                                 removeEmptyIf(tool);
-                                return;
                             }
                         }
                     }

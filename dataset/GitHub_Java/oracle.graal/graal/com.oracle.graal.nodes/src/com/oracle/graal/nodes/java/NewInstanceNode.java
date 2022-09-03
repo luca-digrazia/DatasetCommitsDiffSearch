@@ -25,6 +25,7 @@ package com.oracle.graal.nodes.java;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -34,7 +35,6 @@ import com.oracle.graal.nodes.util.*;
 /**
  * The {@code NewInstanceNode} represents the allocation of an instance class object.
  */
-@NodeInfo(nameTemplate = "New {p#instanceClass/s}")
 public final class NewInstanceNode extends FixedWithNextNode implements EscapeAnalyzable, Lowerable, LIRLowerable, Node.IterableNodeType {
 
     private final ResolvedJavaType instanceClass;
@@ -57,7 +57,7 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(CiLoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 
@@ -66,8 +66,15 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
         gen.visitNewInstance(this);
     }
 
+    @Override
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("instanceClass", instanceClass);
+        return properties;
+    }
+
     public EscapeOp getEscapeOp() {
-        return instanceClass == null ? null : ESCAPE;
+        return ESCAPE;
     }
 
     private static final EscapeOp ESCAPE = new EscapeOp() {
@@ -86,12 +93,6 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
                     escapeFields.add(new EscapeField(field.name(), field, field.type()));
                 }
             }
-        }
-
-        @Override
-        public ResolvedJavaType type(Node node) {
-            NewInstanceNode x = (NewInstanceNode) node;
-            return x.instanceClass();
         }
 
         @Override

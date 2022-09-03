@@ -43,7 +43,6 @@ public class HotSpotDebugConfig implements DebugConfig {
     private final MethodFilter[] methodFilter;
     private final List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
     private final PrintStream output;
-    private final Set<Object> extraFilters = new HashSet<>();
 
     public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter, PrintStream output) {
         this.logFilter = DebugFilter.parse(logFilter);
@@ -103,18 +102,14 @@ public class HotSpotDebugConfig implements DebugConfig {
     }
 
     private boolean checkMethodFilter() {
-        if (methodFilter == null && extraFilters.isEmpty()) {
+        if (methodFilter == null) {
             return true;
         } else {
             for (Object o : Debug.context()) {
-                if (extraFilters.contains(o)) {
-                    return true;
-                } else if (methodFilter != null) {
-                    if (o instanceof JavaMethod) {
-                        for (MethodFilter filter : methodFilter) {
-                            if (filter.matches((JavaMethod) o)) {
-                                return true;
-                            }
+                if (o instanceof JavaMethod) {
+                    for (MethodFilter filter : methodFilter) {
+                        if (filter.matches((JavaMethod) o)) {
+                            return true;
                         }
                     }
                 }
@@ -180,15 +175,5 @@ public class HotSpotDebugConfig implements DebugConfig {
     @Override
     public Collection<? extends DebugDumpHandler> dumpHandlers() {
         return dumpHandlers;
-    }
-
-    @Override
-    public void addToContext(Object o) {
-        extraFilters.add(o);
-    }
-
-    @Override
-    public void removeFromContext(Object o) {
-        extraFilters.remove(o);
     }
 }

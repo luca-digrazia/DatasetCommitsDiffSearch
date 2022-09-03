@@ -42,7 +42,7 @@ public final class UnsafeCastNode extends FloatingNode implements Canonicalizabl
     }
 
     public UnsafeCastNode(ValueNode object, ResolvedJavaType toType) {
-        super(toType.kind().isObject() ? StampFactory.declared(toType, object.stamp().nonNull()) : StampFactory.forKind(toType.kind()));
+        super(StampFactory.declared(toType, object.stamp().nonNull()));
         this.object = object;
         this.toType = toType;
     }

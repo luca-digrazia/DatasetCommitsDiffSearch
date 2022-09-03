@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.snippets;
 
-import com.oracle.graal.phases.*;
+import com.oracle.graal.compiler.*;
 
 /**
  * Definition of the snippets that are VM-independent and can be intrinsified by Graal in any VM.
@@ -34,9 +34,6 @@ public class GraalIntrinsics {
             installer.install(DoubleSnippets.class);
             installer.install(FloatSnippets.class);
             installer.install(NodeClassSnippets.class);
-            installer.install(LongSnippets.class);
-            installer.install(IntegerSnippets.class);
-            installer.install(UnsignedMathSnippets.class);
         }
     }
 }

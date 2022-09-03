@@ -26,7 +26,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -93,8 +92,8 @@ public final class FixedGuardNode extends FixedWithNextNode implements Simplifia
 
     @Override
     public void lower(CiLoweringTool tool) {
-        ValueAnchorNode newAnchor = graph().add(new ValueAnchorNode());
-        newAnchor.addAnchoredNode(tool.createGuard(condition, deoptReason, action, negated, leafGraphId));
+        AnchorNode newAnchor = graph().add(new AnchorNode());
+        newAnchor.dependencies().add(tool.createGuard(condition, deoptReason, action, negated, leafGraphId));
         ((StructuredGraph) graph()).replaceFixedWithFixed(this, newAnchor);
     }
 
