@@ -115,7 +115,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             if (PrintBinaryGraphs.getValue()) {
                 printer = new BinaryGraphPrinter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW));
             } else {
-                printer = new IdealGraphPrinter(new FileOutputStream(file), true);
+                printer = new IdealGraphPrinter(new FileOutputStream(file));
             }
             TTY.println("Dumping IGV graphs to %s", file.getName());
         } catch (IOException e) {
@@ -132,7 +132,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             if (PrintBinaryGraphs.getValue()) {
                 printer = new BinaryGraphPrinter(SocketChannel.open(new InetSocketAddress(host, port)));
             } else {
-                IdealGraphPrinter xmlPrinter = new IdealGraphPrinter(new Socket(host, port).getOutputStream(), true);
+                IdealGraphPrinter xmlPrinter = new IdealGraphPrinter(new Socket(host, port).getOutputStream());
                 printer = xmlPrinter;
             }
             TTY.println("Connected to the IGV on %s:%d", host, port);
@@ -202,7 +202,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
         for (Object o : Debug.context()) {
             JavaMethod method = asJavaMethod(o);
             if (method != null) {
-                if (lastMethodOrGraph == null || asJavaMethod(lastMethodOrGraph) == null || !asJavaMethod(lastMethodOrGraph).equals(method)) {
+                if (lastMethodOrGraph == null || asJavaMethod(lastMethodOrGraph) != method) {
                     result.add(MetaUtil.format("%H::%n(%p)", method));
                 } else {
                     // This prevents multiple adjacent method context objects for the same method

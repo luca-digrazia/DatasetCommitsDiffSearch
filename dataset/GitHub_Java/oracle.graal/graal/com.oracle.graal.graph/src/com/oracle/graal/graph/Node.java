@@ -44,9 +44,9 @@ import com.oracle.graal.graph.spi.*;
  * this field points to.
  * <p>
  * Nodes which are be value numberable should implement the {@link ValueNumberable} interface.
- *
+ * 
  * <h1>Assertions and Verification</h1>
- *
+ * 
  * The Node class supplies the {@link #assertTrue(boolean, String, Object...)} and
  * {@link #assertFalse(boolean, String, Object...)} methods, which will check the supplied boolean
  * and throw a VerificationError if it has the wrong value. Both methods will always either throw an
@@ -67,7 +67,8 @@ public abstract class Node implements Cloneable, Formattable {
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.FIELD)
     public static @interface Input {
-        InputType value() default InputType.Value;
+
+        boolean notDataflow() default false;
     }
 
     @Retention(RetentionPolicy.RUNTIME)
@@ -136,8 +137,6 @@ public abstract class Node implements Cloneable, Formattable {
     private static final int INLINE_USAGE_COUNT = 2;
     private static final Node[] NO_NODES = {};
 
-    private static final boolean VERIFY_TYPES = true;
-
     /**
      * Head of usage list. The elements of the usage list in order are {@link #usage0},
      * {@link #usage1} and {@link #extraUsages}. The first null entry terminates the list.
@@ -167,7 +166,7 @@ public abstract class Node implements Cloneable, Formattable {
     /**
      * Returns an {@link NodeClassIterable iterable} which can be used to traverse all non-null
      * input edges of this node.
-     *
+     * 
      * @return an {@link NodeClassIterable iterable} for all non-null input edges.
      */
     public NodeClassIterable inputs() {
@@ -177,7 +176,7 @@ public abstract class Node implements Cloneable, Formattable {
     /**
      * Returns an {@link NodeClassIterable iterable} which can be used to traverse all non-null
      * successor edges of this node.
-     *
+     * 
      * @return an {@link NodeClassIterable iterable} for all non-null successor edges.
      */
     public NodeClassIterable successors() {
@@ -289,7 +288,7 @@ public abstract class Node implements Cloneable, Formattable {
     /**
      * Finds the index of the last non-null entry in a node array. The search assumes that all
      * non-null entries precede the first null entry in the array.
-     *
+     * 
      * @param nodes the array to search
      * @return the index of the last non-null entry in {@code nodes} if it exists, else -1
      */
@@ -322,7 +321,7 @@ public abstract class Node implements Cloneable, Formattable {
 
     /**
      * Adds a given node to this node's {@linkplain #usages() usages}.
-     *
+     * 
      * @param node the node to add
      */
     private void addUsage(Node node) {
@@ -353,7 +352,7 @@ public abstract class Node implements Cloneable, Formattable {
 
     /**
      * Removes a given node from this node's {@linkplain #usages() usages}.
-     *
+     * 
      * @param node the node to remove
      * @return whether or not {@code usage} was in the usage list
      */
@@ -459,7 +458,6 @@ public abstract class Node implements Cloneable, Formattable {
      * newInput: removes this node from oldInput's usages and adds this node to newInput's usages.
      */
     protected void updateUsages(Node oldInput, Node newInput) {
-        assert isAlive() && (newInput == null || newInput.isAlive()) : "adding " + newInput + " to " + this + " instead of " + oldInput;
         if (oldInput != newInput) {
             if (oldInput != null) {
                 if (oldInput.recordsUsages()) {
@@ -478,17 +476,12 @@ public abstract class Node implements Cloneable, Formattable {
         }
     }
 
-    protected void updateUsagesInterface(NodeInterface oldInput, NodeInterface newInput) {
-        updateUsages(oldInput == null ? null : oldInput.asNode(), newInput == null ? null : newInput.asNode());
-    }
-
     /**
      * Updates the predecessor of the given nodes after a successor slot is changed from
      * oldSuccessor to newSuccessor: removes this node from oldSuccessor's predecessors and adds
      * this node to newSuccessor's predecessors.
      */
     protected void updatePredecessor(Node oldSuccessor, Node newSuccessor) {
-        assert isAlive() && (newSuccessor == null || newSuccessor.isAlive()) : "adding " + newSuccessor + " to " + this + " instead of " + oldSuccessor;
         assert graph == null || !graph.isFrozen();
         if (oldSuccessor != newSuccessor) {
             if (oldSuccessor != null) {
@@ -518,10 +511,6 @@ public abstract class Node implements Cloneable, Formattable {
         return NodeClass.get(getClass());
     }
 
-    public boolean isAllowedUsageType(InputType type) {
-        return getNodeClass().getAllowedUsageTypes().contains(type);
-    }
-
     private boolean checkReplaceWith(Node other) {
         assert assertTrue(graph == null || !graph.isFrozen(), "cannot modify frozen graph");
         assert assertFalse(other == this, "cannot replace a node with itself");
@@ -543,19 +532,6 @@ public abstract class Node implements Cloneable, Formattable {
             }
         }
         clearUsages();
-    }
-
-    public void replaceAtUsages(InputType type, Node other) {
-        assert checkReplaceWith(other);
-        for (Node usage : usages().snapshot()) {
-            NodeClassIterator iter = usage.inputs().iterator();
-            while (iter.hasNext()) {
-                Position pos = iter.nextPosition();
-                if (pos.getInputType(usage) == type) {
-                    pos.set(usage, other);
-                }
-            }
-        }
     }
 
     private void maybeNotifyChanged(Node usage) {
@@ -678,7 +654,7 @@ public abstract class Node implements Cloneable, Formattable {
      * Must be overridden by subclasses that implement {@link Canonicalizable}. The implementation
      * in {@link Node} exists to obviate the need to cast a node before invoking
      * {@link Canonicalizable#canonical(CanonicalizerTool)}.
-     *
+     * 
      * @param tool
      */
     public Node canonical(CanonicalizerTool tool) {
@@ -689,7 +665,7 @@ public abstract class Node implements Cloneable, Formattable {
      * Must be overridden by subclasses that implement {@link Simplifiable}. The implementation in
      * {@link Node} exists to obviate the need to cast a node before invoking
      * {@link Simplifiable#simplify(SimplifierTool)}.
-     *
+     * 
      * @param tool
      */
     public void simplify(SimplifierTool tool) {
@@ -748,16 +724,6 @@ public abstract class Node implements Cloneable, Formattable {
             for (Node usage : usages()) {
                 assertFalse(usage.isDeleted(), "usage %s must never be deleted", usage);
                 assertTrue(usage.inputs().contains(this), "missing input in usage %s", usage);
-                if (VERIFY_TYPES) {
-                    NodeClassIterator iterator = usage.inputs().iterator();
-                    while (iterator.hasNext()) {
-                        Position pos = iterator.nextPosition();
-                        if (pos.get(usage) == this && pos.getInputType(usage) != InputType.Unchecked) {
-                            assert isAllowedUsageType(pos.getInputType(usage)) : "invalid input of type " + pos.getInputType(usage) + " from " + usage + " to " + this + " (" +
-                                            pos.getInputName(usage) + ")";
-                        }
-                    }
-                }
             }
         }
         if (predecessor != null) {
@@ -829,7 +795,7 @@ public abstract class Node implements Cloneable, Formattable {
      * Fills a {@link Map} with properties of this node for use in debugging (e.g., to view in the
      * ideal graph visualizer). Subclasses overriding this method should also fill the map using
      * their superclass.
-     *
+     * 
      * @param map
      */
     public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {

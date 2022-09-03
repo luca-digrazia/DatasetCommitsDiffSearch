@@ -28,7 +28,7 @@ import java.io.*;
  * Abstract base class for values manipulated by the compiler. All values have a {@linkplain Kind
  * kind} and are immutable.
  */
-public abstract class Value implements Serializable, KindProvider {
+public abstract class Value implements Serializable {
 
     private static final long serialVersionUID = -6909397188697766469L;
 
@@ -45,7 +45,7 @@ public abstract class Value implements Serializable, KindProvider {
 
     /**
      * Initializes a new value of the specified kind.
-     *
+     * 
      * @param platformKind the kind
      */
     protected Value(PlatformKind platformKind) {

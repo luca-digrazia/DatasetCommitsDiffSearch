@@ -54,7 +54,7 @@ public abstract class CompareNode extends LogicNode implements Canonicalizable, 
      * @param y the instruction that produces the second input to this instruction
      */
     public CompareNode(ValueNode x, ValueNode y) {
-        assert x != null && y != null && x.getKind() == y.getKind();
+        assert x != null && y != null && x.kind() == y.kind();
         this.x = x;
         this.y = y;
     }
@@ -169,24 +169,24 @@ public abstract class CompareNode extends LogicNode implements Canonicalizable, 
     }
 
     public static CompareNode createCompareNode(StructuredGraph graph, Condition condition, ValueNode x, ValueNode y) {
-        assert x.getKind() == y.getKind();
+        assert x.kind() == y.kind();
         assert condition.isCanonical() : "condition is not canonical: " + condition;
-        assert !x.getKind().isNumericFloat();
+        assert !x.kind().isNumericFloat();
 
         CompareNode comparison;
         if (condition == Condition.EQ) {
-            if (x.getKind() == Kind.Object) {
+            if (x.kind() == Kind.Object) {
                 comparison = new ObjectEqualsNode(x, y);
             } else {
-                assert x.getKind().isNumericInteger();
+                assert x.kind().isNumericInteger();
                 comparison = new IntegerEqualsNode(x, y);
             }
         } else if (condition == Condition.LT) {
-            assert x.getKind().isNumericInteger();
+            assert x.kind().isNumericInteger();
             comparison = new IntegerLessThanNode(x, y);
         } else {
             assert condition == Condition.BT;
-            assert x.getKind().isNumericInteger();
+            assert x.kind().isNumericInteger();
             comparison = new IntegerBelowThanNode(x, y);
         }
 

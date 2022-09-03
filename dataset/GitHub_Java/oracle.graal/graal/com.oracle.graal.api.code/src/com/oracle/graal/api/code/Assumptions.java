@@ -64,7 +64,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         public boolean equals(Object obj) {
             if (obj instanceof NoFinalizableSubclass) {
                 NoFinalizableSubclass other = (NoFinalizableSubclass) obj;
-                return other.receiverType.equals(receiverType);
+                return other.receiverType == receiverType;
             }
             return false;
         }
@@ -96,8 +96,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         public ConcreteSubtype(ResolvedJavaType context, ResolvedJavaType subtype) {
             this.context = context;
             this.subtype = subtype;
-            assert !subtype.isAbstract() : subtype.toString() + " : " + context.toString();
-            assert !subtype.isArray() || getElementalType(subtype).isFinal() : subtype.toString() + " : " + context.toString();
+            assert !subtype.isInterface() : subtype.toString() + " : " + context.toString();
         }
 
         @Override
@@ -113,7 +112,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         public boolean equals(Object obj) {
             if (obj instanceof ConcreteSubtype) {
                 ConcreteSubtype other = (ConcreteSubtype) obj;
-                return other.context.equals(context) && other.subtype.equals(subtype);
+                return other.context == context && other.subtype == subtype;
             }
             return false;
         }
@@ -167,7 +166,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         public boolean equals(Object obj) {
             if (obj instanceof ConcreteMethod) {
                 ConcreteMethod other = (ConcreteMethod) obj;
-                return other.method.equals(method) && other.context.equals(context) && other.impl.equals(impl);
+                return other.method == method && other.context == context && other.impl == impl;
             }
             return false;
         }
@@ -200,7 +199,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         public boolean equals(Object obj) {
             if (obj instanceof MethodContents) {
                 MethodContents other = (MethodContents) obj;
-                return other.method.equals(method);
+                return other.method == method;
             }
             return false;
         }
@@ -265,7 +264,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
 
     /**
      * Returns whether any assumptions have been registered.
-     *
+     * 
      * @return {@code true} if at least one assumption has been registered, {@code false} otherwise.
      */
     public boolean isEmpty() {
@@ -304,7 +303,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
 
     /**
      * Records an assumption that the specified type has no finalizable subclasses.
-     *
+     * 
      * @param receiverType the type that is assumed to have no finalizable subclasses
      */
     public void recordNoFinalizableSubclassAssumption(ResolvedJavaType receiverType) {
@@ -315,7 +314,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
     /**
      * Records that {@code subtype} is the only concrete subtype in the class hierarchy below
      * {@code context}.
-     *
+     * 
      * @param context the root of the subtree of the class hierarchy that this assumptions is about
      * @param subtype the one concrete subtype
      */
@@ -327,7 +326,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
     /**
      * Records that {@code impl} is the only possible concrete target for a virtual call to
      * {@code method} with a receiver of type {@code context}.
-     *
+     * 
      * @param method a method that is the target of a virtual call
      * @param context the receiver type of a call to {@code method}
      * @param impl the concrete method that is the only possible target for the virtual call
@@ -339,7 +338,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
 
     /**
      * Records that {@code method} was used during the compilation.
-     *
+     * 
      * @param method a method whose contents were used
      */
     public void recordMethodContents(ResolvedJavaMethod method) {

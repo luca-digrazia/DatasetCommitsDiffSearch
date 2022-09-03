@@ -43,22 +43,20 @@ public class TruffleExpansionLogger {
     }
 
     public void preExpand(MethodCallTargetNode callTarget, StructuredGraph inliningGraph) {
-        ResolvedJavaMethod sourceMethod = callTarget.invoke().stateAfter().method();
+        ResolvedJavaMethod sourceMethod = callTarget.invoke().getState().method();
 
         int sourceMethodBci = callTarget.invoke().bci();
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
         Object targetReceiver = null;
-        if (!Modifier.isStatic(sourceMethod.getModifiers()) && callTarget.receiver().isConstant()) {
-            targetReceiver = callTarget.receiver().asConstant().asObject();
+        if (!Modifier.isStatic(sourceMethod.getModifiers())) {
+            targetReceiver = callTarget.arguments().first().asConstant().asObject();
         }
 
-        if (targetReceiver != null) {
-            ExpansionTree parent = callToParentTree.get(callTarget);
-            assert parent != null;
-            callToParentTree.remove(callTarget);
-            ExpansionTree tree = new ExpansionTree(parent, targetReceiver, targetMethod, sourceMethodBci);
-            registerParentInCalls(tree, inliningGraph);
-        }
+        ExpansionTree parent = callToParentTree.get(callTarget);
+        assert parent != null;
+        callToParentTree.remove(callTarget);
+        ExpansionTree tree = new ExpansionTree(parent, targetReceiver, targetMethod, sourceMethodBci);
+        registerParentInCalls(tree, inliningGraph);
     }
 
     @SuppressWarnings("unchecked")

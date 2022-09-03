@@ -358,7 +358,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
         // - has no callee-saved registers
         // - has no incoming arguments passed on the stack
         // - has no instructions with debug info
-        FrameMap frameMap = lirGen.getFrameMap();
+        FrameMap frameMap = lirGen.frameMap;
         Assembler masm = createAssembler(frameMap);
         PTXFrameContext frameContext = new PTXFrameContext();
         CompilationResultBuilder crb = factory.createBuilder(getCodeCache(), getForeignCalls(), frameMap, masm, frameContext, compilationResult);
@@ -423,7 +423,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
 
         RegisterAnalysis registerAnalysis = new RegisterAnalysis();
 
-        for (AbstractBlock<?> b : lir.codeEmittingOrder()) {
+        for (Block b : lir.codeEmittingOrder()) {
             for (LIRInstruction op : lir.lir(b)) {
                 if (op instanceof LabelOp) {
                     // Don't consider this as a definition

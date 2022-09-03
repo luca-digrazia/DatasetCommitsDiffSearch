@@ -25,7 +25,6 @@ package com.oracle.graal.virtual.phases.ea;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.virtual.*;
 
@@ -35,10 +34,10 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
 
     static class ReadCacheEntry {
 
-        public final LocationIdentity identity;
+        public final ResolvedJavaField identity;
         public final ValueNode object;
 
-        public ReadCacheEntry(LocationIdentity identity, ValueNode object) {
+        public ReadCacheEntry(ResolvedJavaField identity, ValueNode object) {
             this.identity = identity;
             this.object = object;
         }
@@ -55,7 +54,7 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
                 return false;
             }
             ReadCacheEntry other = (ReadCacheEntry) obj;
-            return identity.equals(other.identity) && object == other.object;
+            return identity == other.identity && object == other.object;
         }
 
         @Override
@@ -65,12 +64,12 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
     }
 
     public PEReadEliminationBlockState() {
-        readCache = CollectionsFactory.newMap();
+        readCache = new HashMap<>();
     }
 
     public PEReadEliminationBlockState(PEReadEliminationBlockState other) {
         super(other);
-        readCache = CollectionsFactory.newMap(other.readCache);
+        readCache = new HashMap<>(other.readCache);
     }
 
     @Override
@@ -96,7 +95,7 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
         return super.equivalentTo(other);
     }
 
-    public void addReadCache(ValueNode object, LocationIdentity identity, ValueNode value, PartialEscapeClosure<?> closure) {
+    public void addReadCache(ValueNode object, ResolvedJavaField identity, ValueNode value, PartialEscapeClosure<?> closure) {
         ValueNode cacheObject;
         ObjectState obj = closure.getObjectState(this, object);
         if (obj != null) {
@@ -108,7 +107,7 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
         readCache.put(new ReadCacheEntry(identity, cacheObject), value);
     }
 
-    public ValueNode getReadCache(ValueNode object, LocationIdentity identity, PartialEscapeClosure<?> closure) {
+    public ValueNode getReadCache(ValueNode object, ResolvedJavaField identity, PartialEscapeClosure<?> closure) {
         ValueNode cacheObject;
         ObjectState obj = closure.getObjectState(this, object);
         if (obj != null) {
@@ -137,7 +136,7 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
         Iterator<Map.Entry<ReadCacheEntry, ValueNode>> iter = readCache.entrySet().iterator();
         while (iter.hasNext()) {
             Map.Entry<ReadCacheEntry, ValueNode> entry = iter.next();
-            if (entry.getKey().identity.equals(identity)) {
+            if (entry.getKey().identity == identity) {
                 iter.remove();
             }
         }

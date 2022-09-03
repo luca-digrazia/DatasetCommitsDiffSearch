@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.api.meta;
 
-import java.util.*;
-
 /**
  * Represents an exception handler within the bytecodes.
  */
@@ -37,7 +35,7 @@ public final class ExceptionHandler {
 
     /**
      * Creates a new exception handler with the specified ranges.
-     *
+     * 
      * @param startBCI the start index of the protected range
      * @param endBCI the end index of the protected range
      * @param catchBCI the index of the handler
@@ -83,7 +81,7 @@ public final class ExceptionHandler {
 
     /**
      * Checks whether this handler catches all exceptions.
-     *
+     * 
      * @return {@code true} if this handler catches all exceptions
      */
     public boolean isCatchAll() {
@@ -106,7 +104,10 @@ public final class ExceptionHandler {
         if (this.startBCI != that.startBCI || this.endBCI != that.endBCI || this.handlerBCI != that.handlerBCI || this.catchTypeCPI != that.catchTypeCPI) {
             return false;
         }
-        return Objects.equals(this.catchType, that.catchType);
+        if (this.catchType == null || that.catchType == null) {
+            return this.catchType == that.catchType;
+        }
+        return this.catchType.equals(that.catchType);
     }
 
     @Override

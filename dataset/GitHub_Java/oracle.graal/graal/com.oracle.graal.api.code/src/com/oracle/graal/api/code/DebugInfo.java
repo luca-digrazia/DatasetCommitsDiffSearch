@@ -32,7 +32,6 @@ package com.oracle.graal.api.code;
  * their values can be read</li>
  * <li>a map from the registers (in the caller's frame) to the slots where they are saved in the
  * current frame</li>
- * </ul>
  */
 public class DebugInfo {
 
@@ -42,7 +41,7 @@ public class DebugInfo {
 
     /**
      * Creates a new {@link DebugInfo} from the given values.
-     *
+     * 
      * @param codePos the {@linkplain BytecodePosition code position} or {@linkplain BytecodeFrame
      *            frame} info
      * @param referenceMap the reference map
@@ -61,7 +60,7 @@ public class DebugInfo {
 
     /**
      * Gets the deoptimization information for each inlined frame (if available).
-     *
+     * 
      * @return {@code null} if no frame de-opt info is {@linkplain #hasFrame() available}
      */
     public BytecodeFrame frame() {

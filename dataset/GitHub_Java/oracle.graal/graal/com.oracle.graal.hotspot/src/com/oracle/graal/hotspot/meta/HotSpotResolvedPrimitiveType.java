@@ -154,7 +154,7 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     @Override
     public boolean isAssignableFrom(ResolvedJavaType other) {
         assert other != null;
-        return other.equals(this);
+        return other == this;
     }
 
     @Override
@@ -253,6 +253,6 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
 
     @Override
     public Constant newArray(int length) {
-        return HotSpotObjectConstant.forObject(Array.newInstance(mirror(), length));
+        return Constant.forObject(Array.newInstance(mirror(), length));
     }
 }

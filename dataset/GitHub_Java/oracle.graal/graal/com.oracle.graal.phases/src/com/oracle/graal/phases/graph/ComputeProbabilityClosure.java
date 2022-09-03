@@ -24,10 +24,11 @@ package com.oracle.graal.phases.graph;
 
 import java.util.*;
 
+import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.util.*;
 
 /**
  * Computes probabilities for nodes in a graph.
@@ -45,11 +46,10 @@ import com.oracle.graal.nodes.util.*;
  * <li>{@link PropagateLoopFrequency} propagates the loop frequencies and multiplies each
  * {@link FixedNode}'s probability with its loop frequency.</li>
  * </ol>
- * TODO: add exception probability information to Invokes
  */
 public class ComputeProbabilityClosure {
 
-    private static final double EPSILON = 1d / Integer.MAX_VALUE;
+    private static final double EPSILON = Double.MIN_NORMAL;
 
     private final StructuredGraph graph;
     private final NodesToDoubles nodeProbabilities;
@@ -59,7 +59,7 @@ public class ComputeProbabilityClosure {
     public ComputeProbabilityClosure(StructuredGraph graph) {
         this.graph = graph;
         this.nodeProbabilities = new NodesToDoubles(graph.getNodeCount());
-        this.loopInfos = new HashSet<>();
+        this.loopInfos = new ArraySet<>();
         this.mergeLoops = new IdentityHashMap<>();
     }
 
@@ -76,10 +76,10 @@ public class ComputeProbabilityClosure {
      * Assume that paths with a DeoptimizeNode at their end are taken infrequently.
      */
     private void adjustControlSplitProbabilities() {
-        HashSet<ControlSplitNode> result = new HashSet<>();
+        Set<ControlSplitNode> result = new ArraySet<>();
         NodeBitMap visitedNodes = new NodeBitMap(graph);
-        for (DeoptimizeNode n : graph.getNodes(DeoptimizeNode.class)) {
-            if (n.action().doesInvalidateCompilation()) {
+        for (AbstractDeoptimizeNode n : graph.getNodes(AbstractDeoptimizeNode.class)) {
+            if (!(n instanceof DeoptimizeNode) || ((DeoptimizeNode) n).action().doesInvalidateCompilation()) {
                 findParentControlSplitNodes(result, n, visitedNodes);
             }
         }
@@ -91,7 +91,7 @@ public class ComputeProbabilityClosure {
         }
     }
 
-    private static void findParentControlSplitNodes(HashSet<ControlSplitNode> result, DeoptimizeNode n, NodeBitMap visitedNodes) {
+    private static void findParentControlSplitNodes(Set<ControlSplitNode> result, AbstractDeoptimizeNode n, NodeBitMap visitedNodes) {
         ArrayDeque<FixedNode> nodes = new ArrayDeque<>();
         nodes.push(n);
 
@@ -102,7 +102,10 @@ public class ComputeProbabilityClosure {
 
             for (Node pred : currentNode.cfgPredecessors()) {
                 FixedNode fixedPred = (FixedNode) pred;
-                if (allSuxVisited(fixedPred, visitedNodes) || fixedPred instanceof InvokeWithExceptionNode) {
+                if (visitedNodes.isMarked(fixedPred) && allPredsVisited(fixedPred, visitedNodes)) {
+                    DebugScope.dump(n.graph(), "ComputeProbabilityClosure");
+                    GraalInternalError.shouldNotReachHere(String.format("Endless loop because %s was already visited", fixedPred));
+                } else if (allSuxVisited(fixedPred, visitedNodes)) {
                     nodes.push(fixedPred);
                 } else {
                     assert fixedPred instanceof ControlSplitNode : "only control splits can have more than one sux";
@@ -112,34 +115,25 @@ public class ComputeProbabilityClosure {
         } while (!nodes.isEmpty());
     }
 
-    private static void modifyProbabilities(ControlSplitNode node, NodeBitMap visitedNodes) {
-        if (node instanceof IfNode) {
-            IfNode ifNode = (IfNode) node;
-            assert visitedNodes.isMarked(ifNode.falseSuccessor()) ^ visitedNodes.isMarked(ifNode.trueSuccessor());
-
-            if (visitedNodes.isMarked(ifNode.trueSuccessor())) {
-                if (ifNode.probability(ifNode.trueSuccessor()) > 0) {
-                    ifNode.setTrueSuccessorProbability(0);
-                }
-            } else {
-                if (ifNode.probability(ifNode.trueSuccessor()) < 1) {
-                    ifNode.setTrueSuccessorProbability(1);
-                }
+    private static void modifyProbabilities(ControlSplitNode controlSplit, NodeBitMap visitedNodes) {
+        assert !allSuxVisited(controlSplit, visitedNodes);
+        for (Node sux : controlSplit.successors()) {
+            if (visitedNodes.isMarked(sux)) {
+                controlSplit.setProbability((AbstractBeginNode) sux, 0);
             }
-        } else if (node instanceof SwitchNode) {
-            SwitchNode switchNode = (SwitchNode) node;
-            for (Node sux : switchNode.successors()) {
-                if (visitedNodes.isMarked(sux)) {
-                    switchNode.setProbability(sux, 0);
-                }
-            }
-        } else {
-            GraalInternalError.shouldNotReachHere();
         }
     }
 
-    private static boolean allSuxVisited(FixedNode fixedPred, NodeBitMap visitedNodes) {
-        for (Node sux : fixedPred.successors()) {
+    private static boolean allSuxVisited(FixedNode node, NodeBitMap visitedNodes) {
+        return allVisited(node.successors(), visitedNodes);
+    }
+
+    private static boolean allPredsVisited(FixedNode node, NodeBitMap visitedNodes) {
+        return allVisited(node.cfgPredecessors(), visitedNodes);
+    }
+
+    private static boolean allVisited(Iterable<? extends Node> nodes, NodeBitMap visitedNodes) {
+        for (Node sux : nodes) {
             if (!visitedNodes.contains(sux)) {
                 return false;
             }
@@ -149,9 +143,9 @@ public class ComputeProbabilityClosure {
 
     private boolean verifyProbabilities() {
         if (doesNotAlwaysDeopt(graph)) {
-            for (DeoptimizeNode n : graph.getNodes(DeoptimizeNode.class)) {
-                if (n.action().doesInvalidateCompilation() && nodeProbabilities.get(n) > 0.01) {
-                    throw new AssertionError(String.format("%s with reason %s and probability %f in graph %s", n, n.reason(), nodeProbabilities.get(n), graph));
+            for (AbstractDeoptimizeNode n : graph.getNodes(AbstractDeoptimizeNode.class)) {
+                if (nodeProbabilities.get(n) > 0.01 && (!(n instanceof DeoptimizeNode) || ((DeoptimizeNode) n).action().doesInvalidateCompilation())) {
+                    throw new AssertionError(String.format("%s with probability %f in graph %s", n, nodeProbabilities.get(n), graph));
                 }
             }
         }
@@ -159,7 +153,7 @@ public class ComputeProbabilityClosure {
     }
 
     private static boolean doesNotAlwaysDeopt(StructuredGraph graph) {
-        return graph.getNodes(ReturnNode.class).iterator().hasNext();
+        return graph.getNodes(ReturnNode.class).isNotEmpty();
     }
 
     private void computeLoopFactors() {
@@ -175,7 +169,7 @@ public class ComputeProbabilityClosure {
 
         public final NodeMap<Set<LoopInfo>> requires;
 
-        private double loopFrequency = -1;
+        private double loopFrequency = -1.0;
         public boolean ended = false;
 
         public LoopInfo(LoopBeginNode loopBegin) {
@@ -184,7 +178,8 @@ public class ComputeProbabilityClosure {
         }
 
         public double loopFrequency(NodesToDoubles nodeProbabilities) {
-            if (loopFrequency == -1 && ended) {
+            // loopFrequency is initialized with -1.0
+            if (loopFrequency < 0.0 && ended) {
                 double backEdgeProb = 0.0;
                 for (LoopEndNode le : loopBegin.loopEnds()) {
                     double factor = 1;
@@ -194,31 +189,47 @@ public class ComputeProbabilityClosure {
                         if (t == -1) {
                             return -1;
                         }
-                        factor *= t;
+                        factor = multiplySaturate(factor, t);
                     }
                     backEdgeProb += nodeProbabilities.get(le) * factor;
                 }
-                double d = nodeProbabilities.get(loopBegin) - backEdgeProb;
-                if (d < EPSILON) {
+                double entryProb = nodeProbabilities.get(loopBegin);
+                double d = entryProb - backEdgeProb;
+                if (d <= EPSILON) {
                     d = EPSILON;
                 }
-                loopFrequency = nodeProbabilities.get(loopBegin) / d;
+                loopFrequency = entryProb / d;
                 loopBegin.setLoopFrequency(loopFrequency);
             }
             return loopFrequency;
         }
     }
 
-    private class Probability implements MergeableState<Probability> {
+    /**
+     * Multiplies a and b and saturates the result to 1/{@link Double#MIN_NORMAL}.
+     * 
+     * @param a
+     * @param b
+     * @return a times b saturated to 1/{@link Double#MIN_NORMAL}
+     */
+    public static double multiplySaturate(double a, double b) {
+        double r = a * b;
+        if (r > 1 / Double.MIN_NORMAL) {
+            return 1 / Double.MIN_NORMAL;
+        }
+        return r;
+    }
+
+    private class Probability extends MergeableState<Probability> implements Cloneable {
 
         public double probability;
-        public HashSet<LoopInfo> loops;
+        public Set<LoopInfo> loops;
         public LoopInfo loopInfo;
 
-        public Probability(double probability, HashSet<LoopInfo> loops) {
+        public Probability(double probability, Set<LoopInfo> loops) {
             assert probability >= 0.0;
             this.probability = probability;
-            this.loops = new HashSet<>(4);
+            this.loops = new ArraySet<>(4);
             if (loops != null) {
                 this.loops.addAll(loops);
             }
@@ -232,7 +243,7 @@ public class ComputeProbabilityClosure {
         @Override
         public boolean merge(MergeNode merge, List<Probability> withStates) {
             if (merge.forwardEndCount() > 1) {
-                HashSet<LoopInfo> intersection = new HashSet<>(loops);
+                Set<LoopInfo> intersection = new ArraySet<>(loops);
                 for (Probability other : withStates) {
                     intersection.retainAll(other.loops);
                 }
@@ -242,7 +253,8 @@ public class ComputeProbabilityClosure {
                         if (loopFrequency == -1) {
                             return false;
                         }
-                        probability *= loopFrequency;
+                        probability = multiplySaturate(probability, loopFrequency);
+                        assert probability >= 0;
                     }
                 }
                 for (Probability other : withStates) {
@@ -253,13 +265,15 @@ public class ComputeProbabilityClosure {
                             if (loopFrequency == -1) {
                                 return false;
                             }
-                            prob *= loopFrequency;
+                            prob = multiplySaturate(prob, loopFrequency);
+                            assert prob >= 0;
                         }
                     }
                     probability += prob;
+                    assert probability >= 0;
                 }
                 loops = intersection;
-                mergeLoops.put(merge, new HashSet<>(intersection));
+                mergeLoops.put(merge, new ArraySet<>(intersection));
                 probability = Math.max(0.0, probability);
             }
             return true;
@@ -297,19 +311,11 @@ public class ComputeProbabilityClosure {
         public void afterSplit(AbstractBeginNode node) {
             assert node.predecessor() != null;
             Node pred = node.predecessor();
-            if (pred instanceof Invoke) {
-                Invoke x = (Invoke) pred;
-                if (x.next() != node) {
-                    probability = 0;
-                }
-            } else {
-                assert pred instanceof ControlSplitNode;
-                ControlSplitNode x = (ControlSplitNode) pred;
-                double nodeProbability = x.probability(node);
-                assert nodeProbability >= 0.0 : "Node " + x + " provided negative probability for begin " + node + ": " + nodeProbability;
-                probability *= nodeProbability;
-                assert probability >= 0.0;
-            }
+            ControlSplitNode x = (ControlSplitNode) pred;
+            double nodeProbability = x.probability(node);
+            assert nodeProbability >= 0.0 : "Node " + x + " provided negative probability for begin " + node + ": " + nodeProbability;
+            probability *= nodeProbability;
+            assert probability >= 0.0;
         }
     }
 
@@ -325,7 +331,7 @@ public class ComputeProbabilityClosure {
         }
     }
 
-    private class LoopCount implements MergeableState<LoopCount> {
+    private class LoopCount extends MergeableState<LoopCount> implements Cloneable {
 
         public double count;
 
@@ -346,7 +352,7 @@ public class ComputeProbabilityClosure {
                 assert loops != null;
                 double countProd = 1;
                 for (LoopInfo loop : loops) {
-                    countProd *= loop.loopFrequency(nodeProbabilities);
+                    countProd = multiplySaturate(countProd, loop.loopFrequency(nodeProbabilities));
                 }
                 count = countProd;
             }
@@ -355,17 +361,7 @@ public class ComputeProbabilityClosure {
 
         @Override
         public void loopBegin(LoopBeginNode loopBegin) {
-            count *= loopBegin.loopFrequency();
-        }
-
-        @Override
-        public void loopEnds(LoopBeginNode loopBegin, List<LoopCount> loopEndStates) {
-            // nothing to do...
-        }
-
-        @Override
-        public void afterSplit(AbstractBeginNode node) {
-            // nothing to do...
+            count = multiplySaturate(count, loopBegin.loopFrequency());
         }
     }
 

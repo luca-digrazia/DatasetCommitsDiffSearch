@@ -32,7 +32,6 @@ import static com.oracle.graal.phases.common.InliningUtil.*;
 
 import java.io.*;
 import java.lang.reflect.*;
-import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
@@ -51,6 +50,8 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 public class CompilationTask implements Runnable, Comparable {
 
@@ -126,11 +127,15 @@ public class CompilationTask implements Runnable, Comparable {
         return entryBCI;
     }
 
+    @SuppressFBWarnings(value = "NN_NAKED_NOTIFY")
     public void run() {
         withinEnqueue.set(Boolean.FALSE);
         try {
             runCompilation(true);
         } finally {
+            if (method.currentTask() == this) {
+                method.setCurrentTask(null);
+            }
             withinEnqueue.set(Boolean.TRUE);
             status.set(CompilationStatus.Finished);
             synchronized (this) {
@@ -235,9 +240,9 @@ public class CompilationTask implements Runnable, Comparable {
             TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
             long start = System.currentTimeMillis();
             try (Scope s = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true))) {
-                Map<ResolvedJavaMethod, StructuredGraph> graphCache = null;
-                if (GraalOptions.CacheGraphs.getValue()) {
-                    graphCache = new HashMap<>();
+                GraphCache graphCache = backend.getRuntime().getGraphCache();
+                if (graphCache != null) {
+                    graphCache.removeStaleGraphs();
                 }
 
                 HotSpotProviders providers = backend.getProviders();
@@ -279,10 +284,6 @@ public class CompilationTask implements Runnable, Comparable {
 
             try (TimerCloseable b = CodeInstallationTime.start()) {
                 installedCode = installMethod(result);
-                if (!isOSR) {
-                    ProfilingInfo profile = method.getProfilingInfo();
-                    profile.setCompilerIRSize(StructuredGraph.class, graph.getNodeCount());
-                }
             }
             stats.finish(method);
         } catch (BailoutException bailout) {

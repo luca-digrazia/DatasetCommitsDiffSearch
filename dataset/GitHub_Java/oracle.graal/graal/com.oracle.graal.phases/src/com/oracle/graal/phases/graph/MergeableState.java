@@ -26,10 +26,52 @@ import java.util.*;
 
 import com.oracle.graal.nodes.*;
 
-public interface MergeableState <T> {
-    T clone();
-    boolean merge(MergeNode merge, List<T> withStates);
-    void loopBegin(LoopBeginNode loopBegin);
-    void loopEnds(LoopBeginNode loopBegin, List<T> loopEndStates);
-    void afterSplit(FixedNode node);
+public abstract class MergeableState<T> {
+
+    @Override
+    public abstract T clone();
+
+    public abstract boolean merge(MergeNode merge, List<T> withStates);
+
+    /**
+     * This method is called before a loop is entered (before the {@link LoopBeginNode} is visited).
+     * 
+     * @param loopBegin the begin node of the loop
+     */
+    public void loopBegin(LoopBeginNode loopBegin) {
+        // empty default implementation
+    }
+
+    /**
+     * This method is called after all {@link LoopEndNode}s belonging to a loop have been visited.
+     * 
+     * @param loopBegin the begin node of the loop
+     * @param loopEndStates the states at the loop ends, sorted according to
+     *            {@link LoopBeginNode#orderedLoopEnds()}
+     */
+    public void loopEnds(LoopBeginNode loopBegin, List<T> loopEndStates) {
+        // empty default implementation
+    }
+
+    /**
+     * This method is called before the successors of a {@link ControlSplitNode} are visited.
+     * 
+     * @param node the successor of the control split that is about to be visited
+     */
+    public void afterSplit(AbstractBeginNode node) {
+        // empty default implementation
+    }
+
+    public static final class EmptyState extends MergeableState<EmptyState> implements Cloneable {
+
+        @Override
+        public EmptyState clone() {
+            return this;
+        }
+
+        @Override
+        public boolean merge(MergeNode merge, List<EmptyState> withStates) {
+            return true;
+        }
+    }
 }
