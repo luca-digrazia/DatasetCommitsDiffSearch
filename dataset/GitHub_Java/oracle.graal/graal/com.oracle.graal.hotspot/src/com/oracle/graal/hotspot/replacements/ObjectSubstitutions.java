@@ -23,8 +23,9 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.nodes.PiNode.*;
+import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -40,7 +41,7 @@ public class ObjectSubstitutions {
     @MethodSubstitution(isStatic = false, forced = true)
     public static Class<?> getClass(final Object thisObj) {
         Word hub = loadHub(thisObj);
-        return piCastExactNonNull(hub.readObject(Word.signed(classMirrorOffset()), CLASS_MIRROR_LOCATION), Class.class);
+        return unsafeCast(hub.readObject(Word.signed(classMirrorOffset()), LocationIdentity.FINAL_LOCATION), Class.class, true, true);
     }
 
     @MethodSubstitution(isStatic = false)
