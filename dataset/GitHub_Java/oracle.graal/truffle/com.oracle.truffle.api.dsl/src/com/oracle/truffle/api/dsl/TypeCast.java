@@ -24,13 +24,16 @@
  */
 package com.oracle.truffle.api.dsl;
 
-import java.lang.annotation.*;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
  * Overrides the standard way of casting a certain type in a {@link TypeSystem}. This is useful for
- * types where the guest language specific type cast can be implemented more efficiently than an
- * instanceof check. The annotated method must be contained in a {@link TypeSystem} annotated class.
- * Type checks must conform to the following signature: <code>public static Type as{TypeName}(Object
+ * types where the guest language specific type cast can be implemented more efficiently than a
+ * direct cast. The annotated method must be contained in a {@link TypeSystem} annotated class. Type
+ * checks must conform to the following signature: <code>public static Type as{TypeName}(Object
  * value)</code>. The casted type must be a type declared in the {@link TypeSystem}.
  *
  * <p>
@@ -45,6 +48,7 @@ import java.lang.annotation.*;
  * </pre>
  *
  * @see TypeCheck
+ * @since 0.8 or earlier
  */
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.METHOD})
