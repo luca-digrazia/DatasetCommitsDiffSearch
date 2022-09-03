@@ -676,16 +676,13 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     /**
-     * Determines if {@linkplain #compile(ResolvedJavaMethod, StructuredGraph) compilation} should
-     * also be attempted in a replay {@link Context} where possible.
+     * Determines if every compilation should also be attempted in a replay {@link Context}.
+     *
+     * <pre>
+     * -Dgraal.testReplay=true
+     * </pre>
      */
     private static final boolean TEST_REPLAY = Boolean.getBoolean("graal.testReplay");
-
-    /**
-     * Determines if a {@link #checkCompilationResultsEqual mismatching} replay compilation result
-     * results in a diagnostic message or a test error.
-     */
-    private static final boolean TEST_REPLAY_MISMATCH_IS_FAILURE = Boolean.getBoolean("graal.testReplay.strict");
 
     /**
      * Directory into which tests can dump content useful in debugging test failures.
@@ -713,7 +710,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         }
     }
 
-    protected void checkCompilationResultsEqual(Context c, String prefix, CompilationResult original, CompilationResult derived, ResolvedJavaMethod installedCodeOwner) {
+    protected void assertCompilationResultsEqual(Context c, String prefix, CompilationResult original, CompilationResult derived, ResolvedJavaMethod installedCodeOwner) {
         if (!derived.equals(original)) {
             Mode mode = c.getMode();
             // Temporarily force capturing mode as dumping/printing/disassembling
@@ -726,11 +723,7 @@ public abstract class GraalCompilerTest extends GraalTest {
                 if (originalDisFile != null && derivedDisFile != null) {
                     message += String.format(" [diff %s %s]", originalDisFile, derivedDisFile);
                 }
-                if (TEST_REPLAY_MISMATCH_IS_FAILURE) {
-                    Assert.fail(message);
-                } else {
-                    System.out.println(message);
-                }
+                Assert.fail(message);
             } finally {
                 c.setMode(mode);
             }
@@ -747,7 +740,7 @@ public abstract class GraalCompilerTest extends GraalTest {
             Request<CompilationResult> request = c.get(new GraalCompiler.Request<>(graphToCompile, null, cc, installedCodeOwner, getProviders(), getBackend(), getCodeCache().getTarget(), null,
                             getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graphToCompile), getSpeculationLog(), getSuites(), new CompilationResult(),
                             CompilationResultBuilderFactory.Default));
-            checkCompilationResultsEqual(c, mode.name(), originalResultInContext, GraalCompiler.compile(request), installedCodeOwner);
+            assertCompilationResultsEqual(c, mode.name(), originalResultInContext, GraalCompiler.compile(request), installedCodeOwner);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
