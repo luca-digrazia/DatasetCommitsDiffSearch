@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -80,7 +78,7 @@ import jdk.vm.ci.meta.JavaMethod;
  */
 public final class DebugContext implements AutoCloseable {
 
-    public static final Description NO_DESCRIPTION = new Description(null, "NO_DESCRIPTION");
+    public static final Description NO_DESCRIPTION = null;
     public static final GlobalMetrics NO_GLOBAL_METRIC_VALUES = null;
     public static final Iterable<DebugHandlersFactory> NO_CONFIG_CUSTOMIZERS = Collections.emptyList();
 
@@ -402,19 +400,6 @@ public final class DebugContext implements AutoCloseable {
      */
     public static DebugContext create(OptionValues options, Iterable<DebugHandlersFactory> factories) {
         return new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, DEFAULT_LOG_STREAM, Immutable.create(options), factories);
-    }
-
-
-    public static DebugContext create(OptionValues options, PrintStream logStream, DebugHandlersFactory factory) {
-        return new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, logStream, Immutable.create(options), Collections.singletonList(factory));
-    }
-
-    /**
-     * Creates a {@link DebugContext} based on a given set of option values and {@code factories}.
-     * The {@link DebugHandlersFactory#LOADER} can be used for the latter.
-     */
-    public static DebugContext create(OptionValues options, Description description, Iterable<DebugHandlersFactory> factories) {
-        return new DebugContext(description, NO_GLOBAL_METRIC_VALUES, DEFAULT_LOG_STREAM, Immutable.create(options), factories);
     }
 
     /**
