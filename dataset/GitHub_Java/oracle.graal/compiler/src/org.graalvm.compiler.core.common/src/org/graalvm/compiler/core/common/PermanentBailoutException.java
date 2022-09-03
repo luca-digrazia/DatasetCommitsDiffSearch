@@ -22,7 +22,9 @@
  */
 package org.graalvm.compiler.core.common;
 
-public class PermanentBailoutException extends GraalBailoutException {
+import jdk.vm.ci.code.BailoutException;
+
+public class PermanentBailoutException extends BailoutException {
 
     private static final long serialVersionUID = -2683649650135362549L;
 
