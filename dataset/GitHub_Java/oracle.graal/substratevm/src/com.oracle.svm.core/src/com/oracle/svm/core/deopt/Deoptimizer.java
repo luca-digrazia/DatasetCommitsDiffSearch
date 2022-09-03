@@ -49,6 +49,7 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.MonitorSupport;
 import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.amd64.FrameAccess;
 import com.oracle.svm.core.annotate.NeverInline;
@@ -143,7 +144,7 @@ import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
  */
 public final class Deoptimizer {
 
-    private static final RingBuffer<char[]> recentDeoptimizationEvents = new RingBuffer<>();
+    private static final RingBuffer<String> recentDeoptimizationEvents = new RingBuffer<>();
 
     private static final int actionShift = 0;
     private static final int actionBits = Integer.SIZE - Integer.numberOfLeadingZeros(DeoptimizationAction.values().length);
@@ -684,15 +685,16 @@ public final class Deoptimizer {
         PointerBase deoptimizedFrameAddress = deoptimizedFrame.getPin().addressOfObject();
         log.string("deoptSourceFrameOperation: DeoptimizedFrame at ").hex(deoptimizedFrameAddress).string(": ");
         printDeoptimizedFrame(log, sp, deoptimizedFrame, null);
-        recentDeoptimizationEvents.append(log.getResult().toCharArray());
+        recentDeoptimizationEvents.append(log.getResult());
     }
 
     public static void logRecentDeoptimizationEvents(Log log) {
         log.string("== [Recent Deoptimizer Events: ").newline();
         recentDeoptimizationEvents.foreach(log, (context, entry) -> {
             Log l = (Log) context;
-            for (int i = 0; i < entry.length; i++) {
-                char c = entry[i];
+            char[] chars = SubstrateUtil.getRawStringChars(entry);
+            for (int i = 0; i < entry.length(); i++) {
+                char c = chars[i];
                 if (c == '\n') {
                     l.newline();
                 } else {

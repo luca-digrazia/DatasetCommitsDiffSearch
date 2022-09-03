@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,15 +22,13 @@
  */
 package com.oracle.svm.core.genscavenge;
 
-import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.IsolateThread;
+import org.graalvm.nativeimage.c.function.CEntryPointContext;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.word.Pointer;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
-import com.oracle.svm.core.code.CodeInfo;
-import com.oracle.svm.core.code.CodeInfoAccess;
 import com.oracle.svm.core.code.CodeInfoTable;
 import com.oracle.svm.core.deopt.DeoptimizedFrame;
 import com.oracle.svm.core.heap.ObjectReferenceVisitor;
@@ -65,19 +61,19 @@ public final class StackVerifier {
         // Mutable data are passed as arguments.
     }
 
-    public boolean verifyInAllThreads(Pointer currentSp, String message) {
+    public boolean verifyInAllThreads(Pointer currentSp, CodePointer currentIp, String message) {
         final Log trace = getTraceLog();
         trace.string("[StackVerifier.verifyInAllThreads:").string(message).newline();
         // Flush thread-local allocation data.
         ThreadLocalAllocation.disableThreadLocalAllocation();
-        trace.string("Current thread ").hex(CurrentIsolate.getCurrentThread()).string(": [").newline();
-        if (!JavaStackWalker.walkCurrentThread(currentSp, stackFrameVisitor)) {
+        trace.string("Current thread ").hex(CEntryPointContext.getCurrentIsolateThread()).string(": [").newline();
+        if (!JavaStackWalker.walkCurrentThread(currentSp, currentIp, stackFrameVisitor)) {
             return false;
         }
         trace.string("]").newline();
         if (SubstrateOptions.MultiThreaded.getValue()) {
-            for (IsolateThread vmThread = VMThreads.firstThread(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
-                if (vmThread == CurrentIsolate.getCurrentThread()) {
+            for (IsolateThread vmThread = VMThreads.firstThread(); VMThreads.isNonNullThread(vmThread); vmThread = VMThreads.nextThread(vmThread)) {
+                if (vmThread == CEntryPointContext.getCurrentIsolateThread()) {
                     continue;
                 }
                 trace.string("Thread ").hex(vmThread).string(": [").newline();
@@ -91,7 +87,7 @@ public final class StackVerifier {
         return true;
     }
 
-    private static boolean verifyFrame(Pointer frameSP, CodePointer frameIP, CodeInfo codeInfo, DeoptimizedFrame deoptimizedFrame) {
+    private static boolean verifyFrame(Pointer frameSP, CodePointer frameIP, DeoptimizedFrame deoptimizedFrame) {
         final Log trace = getTraceLog();
         trace.string("[StackVerifier.verifyFrame:");
         trace.string("  frameSP: ").hex(frameSP);
@@ -99,7 +95,7 @@ public final class StackVerifier {
         trace.string("  pc: ").hex(frameIP);
         trace.newline();
 
-        if (!CodeInfoTable.visitObjectReferences(frameSP, frameIP, codeInfo, deoptimizedFrame, verifyFrameReferencesVisitor)) {
+        if (!CodeInfoTable.visitObjectReferences(frameSP, frameIP, deoptimizedFrame, verifyFrameReferencesVisitor)) {
             return false;
         }
 
@@ -112,14 +108,14 @@ public final class StackVerifier {
 
         @Override
         @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate while verifying the stack.")
-        public boolean visitFrame(Pointer currentSP, CodePointer currentIP, CodeInfo codeInfo, DeoptimizedFrame deoptimizedFrame) {
+        public boolean visitFrame(Pointer currentSP, CodePointer currentIP, DeoptimizedFrame deoptimizedFrame) {
             final Log trace = getTraceLog();
-            long totalFrameSize = CodeInfoAccess.lookupTotalFrameSize(codeInfo, CodeInfoAccess.relativeIP(codeInfo, currentIP));
+            long totalFrameSize = CodeInfoTable.lookupTotalFrameSize(currentIP);
             trace.string("  currentIP: ").hex(currentIP);
             trace.string("  currentSP: ").hex(currentSP);
             trace.string("  frameSize: ").signed(totalFrameSize).newline();
 
-            if (!verifyFrame(currentSP, currentIP, codeInfo, deoptimizedFrame)) {
+            if (!verifyFrame(currentSP, currentIP, deoptimizedFrame)) {
                 final Log witness = Log.log();
                 witness.string("  frame fails to verify");
                 witness.string("  returns false]").newline();

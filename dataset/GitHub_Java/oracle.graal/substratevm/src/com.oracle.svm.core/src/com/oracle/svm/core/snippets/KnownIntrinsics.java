@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -62,6 +60,12 @@ public class KnownIntrinsics {
     public static native Object formatArray(Pointer memory, Class<?> hub, int length, boolean rememberedSet, boolean unaligned);
 
     /**
+     * Casts the result to a new static type without any type checking. The caller is responsible
+     * for type safety.
+     */
+    public static native <T> T unsafeCast(Object obj, Class<T> toType);
+
+    /**
      * Narrow down the range of values to exclude 0 as the possible pointer value.
      *
      * @param pointer that we are narrowing to non-null
@@ -73,6 +77,12 @@ public class KnownIntrinsics {
      * Returns the value of the native stack pointer.
      */
     public static native Pointer readStackPointer();
+
+    /**
+     * Writes the stack pointer. Note that this is very dangerous. You have to know what you are
+     * doing.
+     */
+    public static native void writeStackPointer(Pointer value);
 
     /**
      * Returns the value of the native instruction pointer.

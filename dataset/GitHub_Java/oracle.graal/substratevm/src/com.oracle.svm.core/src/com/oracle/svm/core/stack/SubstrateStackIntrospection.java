@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,12 +25,12 @@ package com.oracle.svm.core.stack;
 import static com.oracle.svm.core.util.VMError.unimplemented;
 
 import org.graalvm.compiler.word.Word;
+import org.graalvm.nativeimage.c.function.CEntryPointContext;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.word.Pointer;
 
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.NeverInline;
-import com.oracle.svm.core.code.CodeInfo;
 import com.oracle.svm.core.code.CodeInfoQueryResult;
 import com.oracle.svm.core.code.CodeInfoTable;
 import com.oracle.svm.core.code.FrameInfoQueryResult;
@@ -72,9 +70,10 @@ public class SubstrateStackIntrospection implements StackIntrospection {
 
         /* Stack walking starts at the physical caller frame of this method. */
         Pointer startSP = KnownIntrinsics.readCallerStackPointer();
+        CodePointer startIP = KnownIntrinsics.readReturnAddress();
 
         PhysicalStackFrameVisitor<T> physicalFrameVisitor = new PhysicalStackFrameVisitor<>(initialMethods, matchingMethods, initialSkip, visitor);
-        JavaStackWalker.walkCurrentThread(startSP, physicalFrameVisitor);
+        JavaStackWalker.walkCurrentThread(startSP, startIP, physicalFrameVisitor);
         return physicalFrameVisitor.result;
     }
 }
@@ -96,7 +95,7 @@ class PhysicalStackFrameVisitor<T> implements StackFrameVisitor {
     }
 
     @Override
-    public boolean visitFrame(Pointer sp, CodePointer ip, CodeInfo codeInfo, DeoptimizedFrame deoptimizedFrame) {
+    public boolean visitFrame(Pointer sp, CodePointer ip, DeoptimizedFrame deoptimizedFrame) {
         VirtualFrame virtualFrame = null;
         CodeInfoQueryResult info = null;
         FrameInfoQueryResult deoptInfo = null;
@@ -104,11 +103,11 @@ class PhysicalStackFrameVisitor<T> implements StackFrameVisitor {
         if (deoptimizedFrame != null) {
             virtualFrame = deoptimizedFrame.getTopFrame();
         } else {
-            info = CodeInfoTable.lookupCodeInfoQueryResult(codeInfo, ip);
+            info = CodeInfoTable.lookupCodeInfoQueryResult(ip);
             if (info == null || info.getFrameInfo() == null) {
                 /*
                  * We do not have detailed information about this physical frame. It does not
-                 * contain Java frames that we care about, so we can move on to the caller.
+                 * contain Java frames that we care about, so we can go to the caller.
                  */
                 return true;
             }
@@ -299,7 +298,7 @@ class SubstrateInspectedFrame implements InspectedFrame {
     @Override
     public void materializeVirtualObjects(boolean invalidateCode) {
         if (virtualFrame == null) {
-            DeoptimizedFrame deoptimizedFrame = getDeoptimizer().deoptSourceFrame(ip, false);
+            DeoptimizedFrame deoptimizedFrame = getDeoptimizer().deoptSourceFrame(ip, false, CEntryPointContext.getCurrentIsolateThread());
             assert deoptimizedFrame == Deoptimizer.checkDeoptimized(sp);
         }
 
