@@ -123,14 +123,13 @@ public class WordTypeRewriterPhase extends Phase {
 
         for (AccessIndexedNode node : graph.getNodes().filter(AccessIndexedNode.class).snapshot()) {
             ValueNode array = node.array();
-            ResolvedJavaType arrayType = ObjectStamp.typeOrNull(array);
-            if (arrayType == null) {
+            if (array.objectStamp().type() == null) {
                 // There are cases where the array does not have a known type yet. Assume it is not
                 // a word type.
                 continue;
             }
-            assert arrayType.isArray();
-            if (isWord(arrayType.getComponentType())) {
+            assert array.objectStamp().type().isArray();
+            if (isWord(array.objectStamp().type().getComponentType())) {
                 /*
                  * The elementKind of the node is a final field, and other information such as the
                  * stamp depends on elementKind. Therefore, just create a new node and replace the
@@ -282,7 +281,7 @@ public class WordTypeRewriterPhase extends Phase {
     private ValueNode nodeClassOp(StructuredGraph graph, Class<? extends ValueNode> nodeClass, ValueNode left, ValueNode right, Invoke invoke) {
         try {
             Constructor<? extends ValueNode> constructor = nodeClass.getConstructor(Kind.class, ValueNode.class, ValueNode.class);
-            ValueNode result = graph.addOrUnique(constructor.newInstance(wordKind, left, right));
+            ValueNode result = graph.add(constructor.newInstance(wordKind, left, right));
             if (result instanceof FixedWithNextNode) {
                 graph.addBeforeFixed(invoke.asNode(), (FixedWithNextNode) result);
             }
@@ -375,8 +374,8 @@ public class WordTypeRewriterPhase extends Phase {
         if (node.stamp() == StampFactory.forWord()) {
             return true;
         }
-        if (node.stamp() instanceof ObjectStamp) {
-            return isWord(((ObjectStamp) node.stamp()).type());
+        if (node.kind() == Kind.Object) {
+            return isWord(node.objectStamp().type());
         }
         return false;
     }
