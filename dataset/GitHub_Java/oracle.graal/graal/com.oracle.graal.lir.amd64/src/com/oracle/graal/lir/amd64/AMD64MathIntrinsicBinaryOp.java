@@ -24,7 +24,6 @@ package com.oracle.graal.lir.amd64;
 
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import com.oracle.graal.asm.Label;
@@ -41,7 +40,6 @@ import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.gen.LIRGeneratorTool;
 
 import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.amd64.AMD64.CPUFeature;
 import jdk.vm.ci.amd64.AMD64Kind;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.meta.AllocatableValue;
@@ -114,7 +112,7 @@ public final class AMD64MathIntrinsicBinaryOp extends AMD64LIRInstruction {
         internalCrb = crb;
     }
 
-    public AMD64Address externalAddress(ArrayDataPointerConstant curPtr) {
+    private AMD64Address externalAddress(ArrayDataPointerConstant curPtr) {
         return (AMD64Address) internalCrb.recordDataReferenceInCode(curPtr);
     }
 
@@ -1007,7 +1005,7 @@ public final class AMD64MathIntrinsicBinaryOp extends AMD64LIRInstruction {
         masm.movdqu(dest, new AMD64Address(gpr8, 48));       // 0x486ececc,
                                                              // 0x3fc4635e,
                                                              // 0x161bb241,
-                                                             // 0xbf5dabe1  
+                                                             // 0xbf5dabe1
         masm.subsd(temp5, temp9);
         masm.movl(gpr3, gpr1);
         masm.sarl(gpr1, 31);
@@ -1815,6 +1813,7 @@ public final class AMD64MathIntrinsicBinaryOp extends AMD64LIRInstruction {
         masm.cmpl(gpr3, 16560);
         masm.jcc(ConditionFlag.Less, bb3);
 
+        masm.leaq(gpr7, externalAddress(lTblPowPtr));
         masm.leaq(gpr8, externalAddress(coeffHPtr));
         masm.movdqu(temp4, new AMD64Address(gpr8, 0));         // 0x00000000,
                                                                // 0xbfd61a00,
@@ -1828,7 +1827,7 @@ public final class AMD64MathIntrinsicBinaryOp extends AMD64LIRInstruction {
         masm.cvtsi2sdl(temp7, gpr1);
         masm.mulpd(temp5, dest);
         masm.mulsd(temp3, dest);
-        masm.subsd(temp5, temp2);
+        masm.subsd(temp5, temp9);
         masm.pshufd(temp1, temp4, 0xE);
         masm.pshufd(temp2, temp3, 0x44);
         masm.unpcklpd(temp5, temp3);
