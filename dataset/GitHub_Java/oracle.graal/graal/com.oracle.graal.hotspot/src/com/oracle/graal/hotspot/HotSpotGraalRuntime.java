@@ -209,15 +209,8 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
         if (config.compileTheWorldStopAt != Integer.MAX_VALUE) {
             GraalOptions.CompileTheWorldStopAt.setValue(config.compileTheWorldStopAt);
         }
-
-        // Only set HotSpotPrintCompilation and HotSpotPrintInlining if they still have their
-        // default value (false).
-        if (GraalOptions.HotSpotPrintCompilation.getValue() == false) {
-            GraalOptions.HotSpotPrintCompilation.setValue(config.printCompilation);
-        }
-        if (GraalOptions.HotSpotPrintInlining.getValue() == false) {
-            GraalOptions.HotSpotPrintInlining.setValue(config.printInlining);
-        }
+        GraalOptions.HotSpotPrintCompilation.setValue(config.printCompilation);
+        GraalOptions.HotSpotPrintInlining.setValue(config.printInlining);
 
         if (Boolean.valueOf(System.getProperty("graal.printconfig"))) {
             printConfig(config);
