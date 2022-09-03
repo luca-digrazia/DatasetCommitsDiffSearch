@@ -24,11 +24,10 @@ package com.oracle.graal.compiler.ptx.test;
 
 import java.lang.reflect.Method;
 
-import org.junit.*;
+import org.junit.Test;
 
 public class ArrayTest extends PTXTestBase {
 
-    @Ignore
     @Test
     public void testArray() {
         compile("testArray1I");
