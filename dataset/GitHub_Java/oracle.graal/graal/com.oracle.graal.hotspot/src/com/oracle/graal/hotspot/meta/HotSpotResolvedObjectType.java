@@ -80,7 +80,7 @@ public interface HotSpotResolvedObjectType extends ResolvedJavaType {
     /**
      * Gets the metaspace Klass boxed in a {@link JavaConstant}.
      */
-    Constant klass();
+    JavaConstant klass();
 
     boolean isPrimaryType();
 
@@ -91,6 +91,4 @@ public interface HotSpotResolvedObjectType extends ResolvedJavaType {
     HotSpotResolvedObjectType getEnclosingType();
 
     ResolvedJavaMethod getClassInitializer();
-
-    ResolvedJavaField createField(String name, JavaType type, long offset, int modifiers);
 }

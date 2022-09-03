@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.hotspot.meta;
 
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.*;
 
 /**
  * Implementation of {@link JavaType} for unresolved HotSpot classes.
@@ -31,30 +32,28 @@ import com.oracle.graal.hotspot.*;
 public class HotSpotUnresolvedJavaType extends HotSpotJavaType {
 
     private static final long serialVersionUID = -2320936267633521314L;
-    private final HotSpotGraalRuntimeProvider runtime;
 
-    public HotSpotUnresolvedJavaType(String name, HotSpotGraalRuntimeProvider runtime) {
+    public HotSpotUnresolvedJavaType(String name) {
         super(name);
         assert name.charAt(0) == '[' || name.charAt(name.length() - 1) == ';' : name;
-        this.runtime = runtime;
     }
 
     /**
      * Creates an unresolved type for a valid {@link JavaType#getName() type name}.
      */
-    public static HotSpotUnresolvedJavaType create(HotSpotGraalRuntimeProvider runtime, String name) {
-        return new HotSpotUnresolvedJavaType(name, runtime);
+    public static HotSpotUnresolvedJavaType create(String name) {
+        return new HotSpotUnresolvedJavaType(name);
     }
 
     @Override
     public JavaType getComponentType() {
         assert getName().charAt(0) == '[' : "no array class" + getName();
-        return new HotSpotUnresolvedJavaType(getName().substring(1), runtime);
+        return new HotSpotUnresolvedJavaType(getName().substring(1));
     }
 
     @Override
     public JavaType getArrayClass() {
-        return new HotSpotUnresolvedJavaType('[' + getName(), runtime);
+        return new HotSpotUnresolvedJavaType('[' + getName());
     }
 
     @Override
@@ -86,6 +85,6 @@ public class HotSpotUnresolvedJavaType extends HotSpotJavaType {
 
     @Override
     public ResolvedJavaType resolve(ResolvedJavaType accessingClass) {
-        return (ResolvedJavaType) runtime.lookupType(getName(), (HotSpotResolvedObjectType) accessingClass, true);
+        return (ResolvedJavaType) runtime().lookupType(getName(), (HotSpotResolvedObjectTypeImpl) accessingClass, true);
     }
 }

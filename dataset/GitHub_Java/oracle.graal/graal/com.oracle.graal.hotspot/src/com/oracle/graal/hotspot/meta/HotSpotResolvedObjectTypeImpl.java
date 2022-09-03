@@ -281,7 +281,7 @@ public final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType
     public JavaConstant getEncoding(Representation r) {
         switch (r) {
             case JavaClass:
-                return HotSpotObjectConstantImpl.forObject(mirror());
+                return HotSpotObjectConstant.forObject(mirror());
             case ObjectHub:
                 return klass();
             default:
@@ -343,7 +343,7 @@ public final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType
     @Override
     public boolean isInstance(JavaConstant obj) {
         if (obj.getKind() == Kind.Object && !obj.isNull()) {
-            return mirror().isInstance(HotSpotObjectConstantImpl.asObject(obj));
+            return mirror().isInstance(HotSpotObjectConstant.asObject(obj));
         }
         return false;
     }
@@ -862,7 +862,7 @@ public final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType
 
     @Override
     public JavaConstant newArray(int length) {
-        return HotSpotObjectConstantImpl.forObject(Array.newInstance(mirror(), length));
+        return HotSpotObjectConstant.forObject(Array.newInstance(mirror(), length));
     }
 
     @Override

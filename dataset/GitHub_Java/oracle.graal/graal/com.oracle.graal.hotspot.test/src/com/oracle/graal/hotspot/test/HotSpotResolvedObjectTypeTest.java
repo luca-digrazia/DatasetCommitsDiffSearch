@@ -22,33 +22,18 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-
 import org.junit.*;
 
-import com.oracle.graal.hotspot.nodes.type.*;
+import com.oracle.graal.hotspot.meta.*;
 
 /**
  * Tests {@link HotSpotResolvedJavaMethod} functionality.
  */
-public class HotSpotResolvedObjectTypeTest extends HotSpotGraalCompilerTest {
+public class HotSpotResolvedObjectTypeTest {
 
     @Test
     public void testGetSourceFileName() throws Throwable {
         Assert.assertEquals("Object.java", HotSpotResolvedObjectTypeImpl.fromObjectClass(Object.class).getSourceFileName());
         Assert.assertEquals("HotSpotResolvedObjectTypeTest.java", HotSpotResolvedObjectTypeImpl.fromObjectClass(this.getClass()).getSourceFileName());
-    }
-
-    @Ignore("triggers bug in CompilerToVM.getResolvedJavaType")
-    @Test
-    public void testKlassLayoutHelper() {
-        JavaConstant klass = HotSpotResolvedObjectTypeImpl.fromObjectClass(this.getClass()).klass();
-        MemoryAccessProvider memoryAccess = getProviders().getConstantReflection().getMemoryAccessProvider();
-        HotSpotVMConfig config = runtime().getConfig();
-        Constant c = KlassPointerStamp.klassNonNull().readConstant(memoryAccess, klass, config.klassLayoutHelperOffset);
-        assertTrue(c.toString(), c.getClass() == PrimitiveConstant.class);
-        PrimitiveConstant pc = (PrimitiveConstant) c;
-        assertTrue(pc.toString(), pc.getKind() == Kind.Int);
     }
 }

@@ -40,15 +40,9 @@ import com.oracle.graal.hotspot.replacements.*;
 public class HotSpotMetaAccessProvider implements MetaAccessProvider {
 
     protected final HotSpotGraalRuntime runtime;
-    protected final HotSpotMethodHandleAccessProvider methodHandleAccess;
 
     public HotSpotMetaAccessProvider(HotSpotGraalRuntime runtime) {
         this.runtime = runtime;
-        methodHandleAccess = new HotSpotMethodHandleAccessProvider();
-    }
-
-    public MethodHandleAccessProvider getMethodHandleAccess() {
-        return methodHandleAccess;
     }
 
     public HotSpotResolvedJavaType lookupJavaType(Class<?> clazz) {
@@ -62,7 +56,7 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
         if (constant.isNull() || !(constant instanceof HotSpotObjectConstant)) {
             return null;
         }
-        Object o = HotSpotObjectConstantImpl.asObject(constant);
+        Object o = HotSpotObjectConstant.asObject(constant);
         return fromObjectClass(o.getClass());
     }
 
@@ -308,7 +302,7 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
             } else {
                 if (lookupJavaType.isArray()) {
                     // TODO(tw): Add compressed pointer support.
-                    int length = Array.getLength(HotSpotObjectConstantImpl.asObject(constant));
+                    int length = Array.getLength(HotSpotObjectConstant.asObject(constant));
                     ResolvedJavaType elementType = lookupJavaType.getComponentType();
                     Kind elementKind = elementType.getKind();
                     final int headerSize = HotSpotGraalRuntime.getArrayBaseOffset(elementKind);

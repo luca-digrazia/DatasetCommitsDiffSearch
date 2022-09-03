@@ -38,7 +38,11 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public class ClassCastNode extends MacroStateSplitNode implements Canonicalizable.Binary<ValueNode> {
 
-    public ClassCastNode(Invoke invoke) {
+    public static ClassCastNode create(Invoke invoke) {
+        return new ClassCastNode(invoke);
+    }
+
+    protected ClassCastNode(Invoke invoke) {
         super(invoke);
     }
 
@@ -61,9 +65,9 @@ public class ClassCastNode extends MacroStateSplitNode implements Canonicalizabl
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forJavaClass, ValueNode forObject) {
         if (forJavaClass.isConstant()) {
-            ResolvedJavaType type = tool.getConstantReflection().asJavaType(forJavaClass.asConstant());
+            ResolvedJavaType type = tool.getConstantReflection().asJavaType(forJavaClass.asJavaConstant());
             if (type != null && !type.isPrimitive()) {
-                return new CheckCastNode(type, forObject, null, false);
+                return CheckCastNode.create(type, forObject, null, false);
             }
         }
         return this;

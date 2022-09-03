@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.hotspot.test;
 
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectTypeImpl.*;
 
 import java.lang.reflect.*;
@@ -34,7 +35,7 @@ import com.oracle.graal.hotspot.meta.*;
 /**
  * Tests {@link HotSpotResolvedJavaField} functionality.
  */
-public class HotSpotResolvedJavaFieldTest extends HotSpotGraalCompilerTest {
+public class HotSpotResolvedJavaFieldTest {
 
     private static final Class<?>[] classesWithInternalFields = {Class.class, ClassLoader.class};
 
@@ -62,7 +63,7 @@ public class HotSpotResolvedJavaFieldTest extends HotSpotGraalCompilerTest {
     @Test
     public void testCachingForInternalFields() {
         for (Class<?> c : classesWithInternalFields) {
-            HotSpotResolvedObjectType type = HotSpotResolvedObjectTypeImpl.fromObjectClass(c);
+            HotSpotResolvedObjectTypeImpl type = HotSpotResolvedObjectTypeImpl.fromObjectClass(c);
             for (ResolvedJavaField field : type.getInstanceFields(false)) {
                 if (field.isInternal()) {
                     HotSpotResolvedJavaField expected = (HotSpotResolvedJavaField) field;
@@ -76,7 +77,7 @@ public class HotSpotResolvedJavaFieldTest extends HotSpotGraalCompilerTest {
     @Test
     public void testIsInObject() {
         for (Field f : String.class.getDeclaredFields()) {
-            HotSpotResolvedJavaField rf = (HotSpotResolvedJavaField) getMetaAccess().lookupJavaField(f);
+            HotSpotResolvedJavaField rf = (HotSpotResolvedJavaField) runtime().getHostProviders().getMetaAccess().lookupJavaField(f);
             Assert.assertEquals(rf.toString(), rf.isInObject("a string"), !rf.isStatic());
         }
     }

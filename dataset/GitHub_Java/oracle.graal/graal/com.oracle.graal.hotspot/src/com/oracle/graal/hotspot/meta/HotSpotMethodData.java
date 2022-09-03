@@ -111,14 +111,12 @@ public final class HotSpotMethodData extends CompilerObject {
     }
 
     public int getDeoptimizationCount(DeoptimizationReason reason) {
-        HotSpotMetaAccessProvider metaAccess = (HotSpotMetaAccessProvider) runtime().getHostProviders().getMetaAccess();
-        int reasonIndex = metaAccess.convertDeoptReason(reason);
+        int reasonIndex = runtime().getHostProviders().getMetaAccess().convertDeoptReason(reason);
         return unsafe.getByte(metaspaceMethodData + config.methodDataOopTrapHistoryOffset + reasonIndex) & 0xFF;
     }
 
     public int getOSRDeoptimizationCount(DeoptimizationReason reason) {
-        HotSpotMetaAccessProvider metaAccess = (HotSpotMetaAccessProvider) runtime().getHostProviders().getMetaAccess();
-        int reasonIndex = metaAccess.convertDeoptReason(reason);
+        int reasonIndex = runtime().getHostProviders().getMetaAccess().convertDeoptReason(reason);
         return unsafe.getByte(metaspaceMethodData + config.methodDataOopTrapHistoryOffset + config.deoptReasonOSROffset + reasonIndex) & 0xFF;
     }
 

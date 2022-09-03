@@ -28,11 +28,11 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
-import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.word.*;
 
 /**
  * A call to the {@link NewArrayStub}.
@@ -58,7 +58,7 @@ public class NewArrayStubCall extends DeoptimizingStubCall implements LIRLowerab
     @Override
     public boolean inferStamp() {
         if (stamp() == defaultStamp && hub.isConstant()) {
-            updateStamp(StampFactory.exactNonNull(((HotSpotMetaspaceConstant) hub.asJavaConstant()).asResolvedJavaType()));
+            updateStamp(StampFactory.exactNonNull(HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(hub.asJavaConstant())));
             return true;
         }
         return false;
@@ -72,5 +72,5 @@ public class NewArrayStubCall extends DeoptimizingStubCall implements LIRLowerab
     }
 
     @NodeIntrinsic
-    public static native Object call(KlassPointer hub, int length);
+    public static native Object call(Word hub, int length);
 }

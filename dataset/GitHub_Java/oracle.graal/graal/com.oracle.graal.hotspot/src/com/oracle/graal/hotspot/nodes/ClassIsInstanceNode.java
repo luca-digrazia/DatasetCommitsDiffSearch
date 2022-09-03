@@ -40,7 +40,11 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public class ClassIsInstanceNode extends MacroNode implements Canonicalizable {
 
-    public ClassIsInstanceNode(Invoke invoke) {
+    public static ClassIsInstanceNode create(Invoke invoke) {
+        return new ClassIsInstanceNode(invoke);
+    }
+
+    protected ClassIsInstanceNode(Invoke invoke) {
         super(invoke);
     }
 
@@ -58,7 +62,7 @@ public class ClassIsInstanceNode extends MacroNode implements Canonicalizable {
         if (javaClass.isConstant()) {
             ValueNode object = getObject();
             ConstantReflectionProvider constantReflection = tool.getConstantReflection();
-            ResolvedJavaType type = constantReflection.asJavaType(javaClass.asConstant());
+            ResolvedJavaType type = constantReflection.asJavaType(javaClass.asJavaConstant());
             if (type != null) {
                 if (type.isPrimitive()) {
                     return ConstantNode.forBoolean(false);
@@ -67,8 +71,8 @@ public class ClassIsInstanceNode extends MacroNode implements Canonicalizable {
                     JavaConstant c = object.asJavaConstant();
                     return ConstantNode.forBoolean(c.isNonNull() && type.isInstance(c));
                 }
-                InstanceOfNode instanceOf = new InstanceOfNode(type, object, null);
-                return new ConditionalNode(instanceOf, ConstantNode.forBoolean(true), ConstantNode.forBoolean(false));
+                InstanceOfNode instanceOf = InstanceOfNode.create(type, object, null);
+                return ConditionalNode.create(instanceOf, ConstantNode.forBoolean(true), ConstantNode.forBoolean(false));
             }
         }
         return this;
