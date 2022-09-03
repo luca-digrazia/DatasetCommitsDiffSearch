@@ -29,13 +29,8 @@
  */
 package com.oracle.truffle.llvm.parser.util;
 
-import java.util.function.BiFunction;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.ValueSymbol;
-import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalAlias;
@@ -45,120 +40,116 @@ import com.oracle.truffle.llvm.parser.model.target.TargetDataLayout;
 import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
+import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 public final class SymbolNameMangling {
 
     public static void demangleGlobals(ModelModule model) {
-        final BiFunction<Linkage, String, String> demangler = getDemangler(model.getTargetDataLayout());
+        final Function<String, String> demangler = getDemangler(model.getTargetDataLayout());
         model.accept(new DemangleVisitor(demangler));
     }
 
-    private static final BiFunction<Linkage, String, String> DEFAULT_DEMANGLER = (linkage, name) -> name;
-
-    private static final BiFunction<Linkage, String, String> DEMANGLE_ELF = (linkage, name) -> {
-        if (linkage == Linkage.PRIVATE) {
-            if (name.startsWith(".L")) {
-                return name.substring(2);
-            }
+    private static final Function<String, String> DEFAULT_DEMANGLER = name -> {
+        if (name.startsWith("\u0001")) {
+            return name.substring(1);
+        } else {
+            return name;
         }
-
-        return name;
     };
 
-    private static final BiFunction<Linkage, String, String> DEMANGLE_MIPS = (linkage, name) -> {
-        if (linkage == Linkage.PRIVATE) {
-            if (name.startsWith("$")) {
-                return name.substring(1);
-            }
+    private static final Function<String, String> DEMANGLE_ELF = name -> {
+        if (name.startsWith(".L")) {
+            return name.substring(2);
+        } else {
+            return name;
         }
-
-        return name;
     };
 
-    private static final BiFunction<Linkage, String, String> DEMANGLE_MACHO = (linkage, name) -> {
-        String demangled = name;
-
-        if (demangled.startsWith("_")) {
-            demangled = demangled.substring(1);
+    private static final Function<String, String> DEMANGLE_MIPS = name -> {
+        if (name.startsWith("$")) {
+            return name.substring(1);
+        } else {
+            return name;
         }
-
-        if (linkage == Linkage.LINKER_PRIVATE || linkage == Linkage.LINKER_PRIVATE_WEAK) {
-            if (demangled.startsWith("l")) {
-                demangled = demangled.substring(1);
-            }
-        } else if (linkage == Linkage.PRIVATE) {
-            if (demangled.startsWith("L")) {
-                demangled = demangled.substring(1);
-            }
-        }
-
-        return demangled;
     };
+
+    private static final Function<String, String> DEMANGLE_MACHO = name -> {
+        if (name.startsWith("L") || name.startsWith("_")) {
+            return name.substring(1);
+        } else {
+            return name;
+        }
+    };
+
+    private static final Function<String, String> REMANGLE = LLVMIdentifier::toGlobalIdentifier;
 
     private static final Pattern LAYOUT_MANGLING_PATTERN = Pattern.compile(".*m:(?<mangling>[\\w]).*");
 
-    private static BiFunction<Linkage, String, String> getDemangler(TargetDataLayout targetDataLayout) {
+    private static Function<String, String> getDemangler(TargetDataLayout targetDataLayout) {
+        Function<String, String> demangler = DEFAULT_DEMANGLER;
+
         final Matcher matcher = LAYOUT_MANGLING_PATTERN.matcher(targetDataLayout.getDataLayout());
         if (matcher.matches()) {
+
             final String mangling = matcher.group("mangling");
             switch (mangling) {
                 case "e":
-                    return DEMANGLE_ELF;
+                    demangler = demangler.andThen(DEMANGLE_ELF);
+                    break;
                 case "m":
-                    return DEMANGLE_MIPS;
+                    demangler = demangler.andThen(DEMANGLE_MIPS);
+                    break;
                 case "o":
-                    return DEMANGLE_MACHO;
+                    demangler = demangler.andThen(DEMANGLE_MACHO);
+                    break;
                 default:
                     throw new AssertionError("Unsupported mangling in TargetDataLayout: " + mangling);
             }
-        } else {
-            return DEFAULT_DEMANGLER;
         }
-    }
 
-    private static final String MANGLED_PREFIX = "\u0001";
+        demangler = demangler.andThen(REMANGLE);
+        return demangler;
+    }
 
     private static final class DemangleVisitor implements ModelVisitor {
 
-        private final BiFunction<Linkage, String, String> demangler;
+        private final Function<String, String> demangler;
 
-        private DemangleVisitor(BiFunction<Linkage, String, String> demangler) {
+        private DemangleVisitor(Function<String, String> demangler) {
             this.demangler = demangler;
         }
 
-        private void demangle(Linkage linkage, ValueSymbol symbol) {
-            String name = symbol.getName();
-
-            if (name.startsWith(MANGLED_PREFIX)) {
-                name = demangler.apply(linkage, name.substring(MANGLED_PREFIX.length()));
-            }
-
-            name = LLVMIdentifier.toGlobalIdentifier(name);
-            symbol.setName(name);
+        private void demangle(ValueSymbol symbol) {
+            final String mangledName = symbol.getName();
+            final String demangledName = demangler.apply(mangledName);
+            symbol.setName(demangledName);
         }
 
         @Override
         public void visit(GlobalAlias alias) {
-            demangle(alias.getLinkage(), alias);
+            demangle(alias);
         }
 
         @Override
         public void visit(GlobalConstant constant) {
-            demangle(constant.getLinkage(), constant);
+            demangle(constant);
         }
 
         @Override
         public void visit(GlobalVariable variable) {
-            demangle(variable.getLinkage(), variable);
+            demangle(variable);
         }
 
         @Override
         public void visit(FunctionDeclaration function) {
-            demangle(function.getLinkage(), function);
+            demangle(function);
         }
 
         @Override
         public void visit(FunctionDefinition function) {
-            demangle(function.getLinkage(), function);
+            demangle(function);
         }
     }
 

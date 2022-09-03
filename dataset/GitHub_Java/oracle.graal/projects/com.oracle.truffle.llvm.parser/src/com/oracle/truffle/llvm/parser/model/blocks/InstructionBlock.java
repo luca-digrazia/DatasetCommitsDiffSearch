@@ -29,178 +29,40 @@
  */
 package com.oracle.truffle.llvm.parser.model.blocks;
 
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.TerminatingInstruction;
+import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
+import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
+
 import java.util.ArrayList;
 import java.util.List;
 
-import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.model.symbols.Symbols;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.AllocateInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.BinaryOperationInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.BranchInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.CallInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.CastInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.CompareInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ConditionalBranchInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractElementInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ExtractValueInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.GetElementPointerInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.IndirectBranchInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.InsertElementInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.InsertValueInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.LoadInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.PhiInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ReturnInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.SelectInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ShuffleVectorInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.StoreInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchOldInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnreachableInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
-import com.oracle.truffle.llvm.parser.model.visitors.InstructionVisitor;
-import com.oracle.truffle.llvm.runtime.types.MetaType;
-import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
-
-public final class InstructionBlock implements ValueSymbol {
-
-    private final FunctionDefinition function;
+public final class InstructionBlock {
 
     private final int blockIndex;
 
     private final List<Instruction> instructions = new ArrayList<>();
 
-    private String name = ValueSymbol.UNKNOWN;
+    private String name = LLVMIdentifier.UNKNOWN;
 
-    public InstructionBlock(FunctionDefinition function, int index) {
-        this.function = function;
+    public InstructionBlock(int index) {
         this.blockIndex = index;
     }
 
-    public void accept(InstructionVisitor visitor) {
+    public void accept(SymbolVisitor visitor) {
         for (Instruction instruction : instructions) {
             instruction.accept(visitor);
         }
     }
 
-    private void addInstruction(Instruction element) {
-        if (element instanceof ValueInstruction) {
-            function.getSymbols().addSymbol(element);
-        }
-        instructions.add(element);
-    }
-
-    public void createAllocation(Type type, int count, int align) {
-        addInstruction(AllocateInstruction.fromSymbols(function.getSymbols(), type, count, align));
-    }
-
-    public void createAtomicLoad(Type type, int source, int align, boolean isVolatile, long atomicOrdering, long synchronizationScope) {
-        addInstruction(LoadInstruction.fromSymbols(function.getSymbols(), type, source, align, isVolatile, atomicOrdering, synchronizationScope));
-    }
-
-    public void createAtomicStore(int destination, int source, int align, boolean isVolatile, long atomicOrdering, long synchronizationScope) {
-        addInstruction(StoreInstruction.fromSymbols(function.getSymbols(), destination, source, align, isVolatile, atomicOrdering, synchronizationScope));
-    }
-
-    public void createBinaryOperation(Type type, int opcode, int flags, int lhs, int rhs) {
-        addInstruction(BinaryOperationInstruction.fromSymbols(function.getSymbols(), type, opcode, flags, lhs, rhs));
-    }
-
-    public void createBranch(int block) {
-        addInstruction(BranchInstruction.fromTarget(function.getBlock(block)));
-    }
-
-    public void createBranch(int condition, int blockTrue, int blockFalse) {
-        addInstruction(ConditionalBranchInstruction.fromSymbols(function.getSymbols(), condition, function.getBlock(blockTrue), function.getBlock(blockFalse)));
-    }
-
-    public void createCall(Type type, int target, int[] arguments, long visibility, long linkage) {
-        if (type == MetaType.VOID) {
-            addInstruction(VoidCallInstruction.fromSymbols(function.getSymbols(), target, arguments, visibility, linkage));
-        } else {
-            addInstruction(CallInstruction.fromSymbols(function.getSymbols(), type, target, arguments, visibility, linkage));
-        }
-    }
-
-    public void createCast(Type type, int opcode, int value) {
-        addInstruction(CastInstruction.fromSymbols(function.getSymbols(), type, opcode, value));
-    }
-
-    public void createCompare(Type type, int opcode, int lhs, int rhs) {
-        addInstruction(CompareInstruction.fromSymbols(function.getSymbols(), type, opcode, lhs, rhs));
-    }
-
-    public void createExtractElement(Type type, int vector, int index) {
-        addInstruction(ExtractElementInstruction.fromSymbols(function.getSymbols(), type, vector, index));
-    }
-
-    public void createExtractValue(Type type, int aggregate, int index) {
-        addInstruction(ExtractValueInstruction.fromSymbols(function.getSymbols(), type, aggregate, index));
-    }
-
-    public void createGetElementPointer(Type type, int pointer, int[] indices, boolean isInbounds) {
-        addInstruction(GetElementPointerInstruction.fromSymbols(function.getSymbols(), type, pointer, indices, isInbounds));
-    }
-
-    public void createIndirectBranch(int address, int[] successors) {
-        addInstruction(IndirectBranchInstruction.generate(function, address, successors));
-    }
-
-    public void createInsertElement(Type type, int vector, int index, int value) {
-        addInstruction(InsertElementInstruction.fromSymbols(function.getSymbols(), type, vector, index, value));
-    }
-
-    public void createInsertValue(Type type, int aggregate, int index, int value) {
-        addInstruction(InsertValueInstruction.fromSymbols(function.getSymbols(), type, aggregate, index, value));
-    }
-
-    public void createLoad(Type type, int source, int align, boolean isVolatile) {
-        addInstruction(LoadInstruction.fromSymbols(function.getSymbols(), type, source, align, isVolatile));
-    }
-
-    public void createPhi(Type type, int[] values, int[] blocks) {
-        addInstruction(PhiInstruction.generate(function, type, values, blocks));
-    }
-
-    public void createReturn() {
-        addInstruction(ReturnInstruction.generate());
-    }
-
-    public void createReturn(int value) {
-        addInstruction(ReturnInstruction.generate(function.getSymbols(), value));
-    }
-
-    public void createSelect(Type type, int condition, int trueValue, int falseValue) {
-        addInstruction(SelectInstruction.fromSymbols(function.getSymbols(), type, condition, trueValue, falseValue));
-    }
-
-    public void createShuffleVector(Type type, int vector1, int vector2, int mask) {
-        addInstruction(ShuffleVectorInstruction.fromSymbols(function.getSymbols(), type, vector1, vector2, mask));
-    }
-
-    public void createStore(int destination, int source, int align, boolean isVolatile) {
-        addInstruction(StoreInstruction.fromSymbols(function.getSymbols(), destination, source, align, isVolatile));
-    }
-
-    public void createSwitch(int condition, int defaultBlock, int[] caseValues, int[] caseBlocks) {
-        addInstruction(SwitchInstruction.generate(function, condition, defaultBlock, caseValues, caseBlocks));
-    }
-
-    public void createSwitchOld(int condition, int defaultBlock, long[] caseConstants, int[] caseBlocks) {
-        addInstruction(SwitchOldInstruction.generate(function, condition, defaultBlock, caseConstants, caseBlocks));
-    }
-
-    public void createUnreachable() {
-        addInstruction(UnreachableInstruction.generate());
+    public void append(Instruction instruction) {
+        instructions.add(instruction);
     }
 
     public int getBlockIndex() {
         return blockIndex;
     }
 
-    @Override
     public String getName() {
         return name;
     }
@@ -209,26 +71,37 @@ public final class InstructionBlock implements ValueSymbol {
         return instructions.get(index);
     }
 
-    public Symbols getFunctionSymbols() {
-        return function.getSymbols();
-    }
-
     public int getInstructionCount() {
         return instructions.size();
     }
 
-    @Override
-    public Type getType() {
-        return MetaType.VOID;
+    public void setName(String name) {
+        this.name = LLVMIdentifier.toExplicitBlockName(name);
     }
 
-    @Override
-    public void setName(String name) {
-        this.name = String.format("%%%s", name);
+    public TerminatingInstruction getTerminatingInstruction() {
+        assert instructions.get(instructions.size() - 1) instanceof TerminatingInstruction : "last instruction must be a terminating instruction";
+        return (TerminatingInstruction) instructions.get(instructions.size() - 1);
+    }
+
+    public void replace(Instruction oldInst, Instruction newInst) {
+        for (int i = 0; i < instructions.size(); i++) {
+            if (instructions.get(i) == oldInst) {
+                instructions.set(i, newInst);
+            }
+        }
+    }
+
+    public void set(int index, Instruction instruction) {
+        instructions.set(index, instruction);
+    }
+
+    public void remove(int index) {
+        instructions.remove(index);
     }
 
     @Override
     public String toString() {
-        return "InstructionBlock [function=" + function.getName() + ", blockIndex=" + blockIndex + ", instructionCount=" + instructions.size() + ", name=" + name + "]";
+        return String.format("Block (%d) %s", blockIndex, name);
     }
 }

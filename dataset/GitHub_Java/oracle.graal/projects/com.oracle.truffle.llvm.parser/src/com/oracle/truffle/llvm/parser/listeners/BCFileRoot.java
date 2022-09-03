@@ -30,13 +30,10 @@
 package com.oracle.truffle.llvm.parser.listeners;
 
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInfoModuleProcessor;
 import com.oracle.truffle.llvm.parser.model.IRScope;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
-import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.scanner.Block;
 import com.oracle.truffle.llvm.parser.util.SymbolNameMangling;
-import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
 public final class BCFileRoot implements ParserListener {
 
@@ -68,14 +65,8 @@ public final class BCFileRoot implements ParserListener {
 
     @Override
     public void exit() {
-        int globalIndex = 0;
-        for (GlobalValueSymbol variable : module.getGlobals()) {
-            if (variable.getName().equals(LLVMIdentifier.UNKNOWN)) {
-                variable.setName(String.valueOf(globalIndex++));
-            }
-        }
         SymbolNameMangling.demangleGlobals(module);
-        DebugInfoModuleProcessor.processModule(module, source, scope.getMetadata());
+        module.exitModule(scope, source);
     }
 
     @Override

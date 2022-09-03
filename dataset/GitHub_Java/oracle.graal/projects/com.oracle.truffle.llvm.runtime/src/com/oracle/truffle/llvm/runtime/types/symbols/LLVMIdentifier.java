@@ -59,32 +59,16 @@ public final class LLVMIdentifier {
         }
     }
 
-    private static final Pattern NUMERIC_VARNAME_PATTERN = Pattern.compile("\\d+");
-
-    public static String toBlockName(String name) {
-        if (NUMERIC_VARNAME_PATTERN.matcher(name).matches()) {
-            return String.format("%%\"%s\"", name);
-        } else {
-            return "%" + escapeNameIfNecessary(name);
-        }
+    public static String toExplicitBlockName(String name) {
+        return toLocalIdentifier(name);
     }
-
-    private static final String IMPLICIT_BLOCK_PREFIX = "implicit";
 
     public static String toImplicitBlockName(int label) {
-        return IMPLICIT_BLOCK_PREFIX + String.valueOf(label);
-    }
-
-    public static String extractLabelFromImplicitBlockName(String name) {
-        return name.substring(IMPLICIT_BLOCK_PREFIX.length());
-    }
-
-    public static boolean isImplicitBlockName(String name) {
-        return name.startsWith(IMPLICIT_BLOCK_PREFIX);
+        return String.format("%d", label);
     }
 
     public static String toTypeIdentifier(String name) {
-        return escapeNameIfNecessary(name);
+        return toLocalIdentifier(name);
     }
 
     private static final Pattern UNESCAPED_VARNAME_PATTERN = Pattern.compile("[\\w\\d\\u0024_\\u002e]+");
@@ -104,12 +88,7 @@ public final class LLVMIdentifier {
             final char c = unescaped.charAt(i);
             if (c == '\"' || c < ' ' || c > '~') {
                 // use the format "\xx" where xx is the hex-value of c
-                builder.append("\\");
-                final String hexVal = Integer.toHexString(c);
-                for (int j = 0; j < hexVal.length() - 2; j++) {
-                    builder.append('0');
-                }
-                builder.append(hexVal);
+                builder.append(String.format("\\%02x", c & 0xff));
             } else {
                 builder.append(c);
             }
@@ -117,5 +96,4 @@ public final class LLVMIdentifier {
         builder.append('\"');
         return builder.toString();
     }
-
 }
