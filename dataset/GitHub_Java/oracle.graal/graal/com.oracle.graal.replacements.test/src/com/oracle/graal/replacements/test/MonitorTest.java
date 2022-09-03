@@ -22,10 +22,12 @@
  */
 package com.oracle.graal.replacements.test;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.virtual.phases.ea.*;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.replacements.BoxingSnippets;
+import com.oracle.graal.virtual.phases.ea.PartialEscapePhase;
 
 public class MonitorTest extends GraalCompilerTest {
 
@@ -33,26 +35,27 @@ public class MonitorTest extends GraalCompilerTest {
     public void test0() {
         test("lockObjectSimple", new Object(), new Object());
         test("lockObjectSimple", new Object(), null);
+        test("lockObjectSimple", null, null);
     }
 
     @Test
-    public void test0_1() {
+    public void test01() {
         test("lockThisSimple", "test1", new Object());
         test("lockThisSimple", "test1", null);
     }
 
     @Test
-    public void test0_2() {
+    public void test02() {
         test("lockObjectSimple", null, "test1");
     }
 
     @Test
-    public void test1_1() {
+    public void test101() {
         test("lockObject", new Object(), "test1", new String[1]);
     }
 
     @Test
-    public void test1_2() {
+    public void test102() {
         test("lockObject", null, "test1_1", new String[1]);
     }
 
@@ -62,7 +65,7 @@ public class MonitorTest extends GraalCompilerTest {
     }
 
     /**
-     * Tests monitor operations on {@link PartialEscapeAnalysisPhase virtual objects}.
+     * Tests monitor operations on {@link PartialEscapePhase virtual objects}.
      */
     @Test
     public void test3() {
@@ -107,7 +110,7 @@ public class MonitorTest extends GraalCompilerTest {
     public void test7() {
         char[] src = "1234567890".toCharArray();
         char[] dst = new char[src.length];
-        int n = Runtime.getRuntime().availableProcessors();
+        int n = Math.min(32, Runtime.getRuntime().availableProcessors());
         testN(n, "copyArr", src, dst, 100);
     }
 
@@ -164,11 +167,11 @@ public class MonitorTest extends GraalCompilerTest {
 
         final char[] data;
 
-        public Chars(int size) {
+        Chars(int size) {
             this.data = new char[size];
         }
 
-        public Chars(char[] data) {
+        Chars(char[] data) {
             this.data = data;
         }
     }
@@ -205,5 +208,25 @@ public class MonitorTest extends GraalCompilerTest {
             }
         }
         return new String(dst);
+    }
+
+    public static String lockBoxedLong(long value) {
+        Long lock = value;
+        synchronized (lock) {
+            return lock.toString();
+        }
+    }
+
+    /**
+     * Reproduces issue reported in https://github.com/graalvm/graal-core/issues/201. The stamp in
+     * the PiNode returned by {@link BoxingSnippets#longValueOf(long)} was overwritten when the node
+     * was subsequently canonicalized because {@code PiNode.computeValue()} ignored the
+     * {@link ValueNode#stamp()} field and used the {@code PiNode.piStamp} field.
+     */
+    @Test
+    public void test8() {
+        test("lockBoxedLong", 5L);
+        test("lockBoxedLong", Long.MAX_VALUE - 1);
+        test("lockBoxedLong", Long.MIN_VALUE + 1);
     }
 }
