@@ -22,9 +22,10 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import java.util.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -32,18 +33,12 @@ import com.oracle.graal.nodes.type.*;
 /**
  * Access the value of a specific register.
  */
-@NodeInfo(nameTemplate = "Register %{p#register}")
 public final class RegisterNode extends FixedWithNextNode implements LIRLowerable {
 
     private final Register register;
 
     public RegisterNode(Register register, Kind kind) {
         super(StampFactory.forKind(kind));
-        this.register = register;
-    }
-
-    public RegisterNode(Register register) {
-        super(StampFactory.object());
         this.register = register;
     }
 
@@ -54,7 +49,7 @@ public final class RegisterNode extends FixedWithNextNode implements LIRLowerabl
             // The register allocator would prefer us not to tie up an allocatable
             // register for the complete lifetime of this node.
             result = generator.newVariable(kind());
-            generator.emitMove(result, register.asValue(kind()));
+            generator.emitMove(register.asValue(kind()), result);
         } else {
             result = register.asValue(kind());
         }
@@ -68,5 +63,18 @@ public final class RegisterNode extends FixedWithNextNode implements LIRLowerabl
         } else {
             return super.toString(verbosity);
         }
+    }
+
+    @Override
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("register", register.toString());
+        return properties;
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static <T> T register(@ConstantNodeParameter Register register, @ConstantNodeParameter Kind kind) {
+        throw new UnsupportedOperationException();
     }
 }
