@@ -22,19 +22,13 @@
  */
 package com.oracle.graal.asm.sparc;
 
-import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
 import static com.oracle.graal.sparc.SPARC.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.*;
 
 public class SPARCMacroAssembler extends SPARCAssembler {
-
-    /**
-     * A sentinel value used as a place holder in an instruction stream for an address that will be
-     * patched.
-     */
-    private static final SPARCAddress Placeholder = new SPARCAddress(g0, 0);
 
     public SPARCMacroAssembler(TargetDescription target, RegisterConfig registerConfig) {
         super(target, registerConfig);
@@ -66,12 +60,12 @@ public class SPARCMacroAssembler extends SPARCAssembler {
 
     @Override
     public AbstractAddress makeAddress(Register base, int displacement) {
-        return new SPARCAddress(base, displacement);
+        throw new InternalError("NYI");
     }
 
     @Override
     public AbstractAddress getPlaceholder() {
-        return Placeholder;
+        throw new InternalError("NYI");
     }
 
     public static class Bclr extends Andn {

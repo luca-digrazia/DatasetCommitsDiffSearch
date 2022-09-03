@@ -27,35 +27,10 @@ import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Add;
-import com.oracle.graal.asm.sparc.SPARCAssembler.And;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Faddd;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fadds;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fdivd;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fdivs;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fdtoi;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fmuld;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fmuls;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fnegd;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fnegs;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fstoi;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fsubd;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Fsubs;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Mulx;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Or;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Sdivx;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Sll;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Sllx;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Sra;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Srax;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Srl;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Srlx;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Sub;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Xor;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler;
+import com.oracle.graal.graph.GraalInternalError;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.asm.TargetMethodAssembler;
 
 public enum SPARCArithmetic {
     // @formatter:off
@@ -89,7 +64,7 @@ public enum SPARCArithmetic {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
             SPARCMove.move(tasm, masm, result, x);
             emit(tasm, masm, opcode, result, y, null);
         }
@@ -117,7 +92,7 @@ public enum SPARCArithmetic {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
             SPARCMove.move(tasm, masm, result, x);
             emit(tasm, masm, opcode, result, x, null);
         }
@@ -139,7 +114,7 @@ public enum SPARCArithmetic {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
             emit(masm, opcode, result);
         }
     }
@@ -157,7 +132,7 @@ public enum SPARCArithmetic {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
             emit(tasm, masm, opcode, result, x, null);
         }
     }
@@ -177,7 +152,7 @@ public enum SPARCArithmetic {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
             emit(tasm, masm, opcode, result, x, y, null);
         }
 
@@ -203,7 +178,7 @@ public enum SPARCArithmetic {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
             emit(tasm, masm, opcode, result, x, y, null);
         }
 
@@ -229,7 +204,7 @@ public enum SPARCArithmetic {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
             emit(tasm, masm, opcode, result, x, y, null);
         }
 
@@ -255,6 +230,7 @@ public enum SPARCArithmetic {
         }
     }
 
+    @SuppressWarnings("unused")
     public static void emit(TargetMethodAssembler tasm, SPARCAssembler masm, SPARCArithmetic opcode, Value dst, Value src1, Value src2, LIRFrameState info) {
         int exceptionOffset = -1;
         if (isConstant(src1)) {
@@ -406,30 +382,30 @@ public enum SPARCArithmetic {
                 case LREM:
                     throw new InternalError("NYI");
                 case FADD:
-                    new Fadds(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst)).emit(masm);
+                    new Fadds(masm, asFloatReg(src1), asFloatReg(src2), asFloatReg(dst));
                     break;
                 case FSUB:
-                    new Fsubs(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst)).emit(masm);
+                    new Fsubs(masm, asFloatReg(src1), asFloatReg(src2), asFloatReg(dst));
                     break;
                 case FMUL:
-                    new Fmuls(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst)).emit(masm);
+                    new Fmuls(masm, asFloatReg(src1), asFloatReg(src2), asFloatReg(dst));
                     break;
                 case FDIV:
-                    new Fdivs(asFloatReg(src1), asFloatReg(src2), asFloatReg(dst)).emit(masm);
+                    new Fdivs(masm, asFloatReg(src1), asFloatReg(src2), asFloatReg(dst));
                     break;
                 case FREM:
                     throw new InternalError("NYI");
                 case DADD:
-                    new Faddd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst)).emit(masm);
+                    new Faddd(masm, asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
                     break;
                 case DSUB:
-                    new Fsubd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst)).emit(masm);
+                    new Fsubd(masm, asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
                     break;
                 case DMUL:
-                    new Fmuld(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst)).emit(masm);
+                    new Fmuld(masm, asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
                     break;
                 case DDIV:
-                    new Fdivd(asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst)).emit(masm);
+                    new Fdivd(masm, asDoubleReg(src1), asDoubleReg(src2), asDoubleReg(dst));
                     break;
                 case DREM:
                     throw new InternalError("NYI");
