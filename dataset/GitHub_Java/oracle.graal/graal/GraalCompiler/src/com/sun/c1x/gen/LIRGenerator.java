@@ -29,10 +29,10 @@ import static com.sun.cri.ci.CiValue.*;
 
 import java.util.*;
 
-import com.oracle.max.asm.*;
 import com.sun.c1x.*;
 import com.sun.c1x.alloc.*;
 import com.sun.c1x.alloc.OperandPool.VariableFlag;
+import com.sun.c1x.asm.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.globalstub.*;
 import com.sun.c1x.graph.*;
@@ -210,13 +210,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         return deoptimizationStubs;
     }
 
-    private void addDeoptimizationStub(DeoptimizationStub stub) {
-        if (deoptimizationStubs == null) {
-            deoptimizationStubs = new ArrayList<LIRGenerator.DeoptimizationStub>();
-        }
-        deoptimizationStubs.add(stub);
-    }
-
     public static class DeoptimizationStub {
         public final Label label = new Label();
         public final LIRDebugInfo info;
@@ -302,6 +295,13 @@ public abstract class LIRGenerator extends ValueVisitor {
             setResult(local, dest);
             javaIndex += kind.jvmSlots;
         }
+    }
+
+    @Override
+    public void visitResolveClass(ResolveClass i) {
+        LIRDebugInfo info = stateFor(i);
+        XirSnippet snippet = xir.genResolveClass(site(i), i.type, i.portion);
+        emitXir(snippet, i, info, null, true);
     }
 
     @Override
@@ -394,6 +394,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitExceptionObject(ExceptionObject x) {
+        assert currentBlock.isExceptionEntry() : "ExceptionObject only allowed in exception handler block";
         assert currentBlock.next() == x : "ExceptionObject must be first instruction of block";
 
         // no moves are created for phi functions at the begin of exception
@@ -446,23 +447,46 @@ public abstract class LIRGenerator extends ValueVisitor {
         lir.cmove(i.condition(), tVal, fVal, reg);
     }
 
-    protected FrameState stateBeforeInvokeReturn(Invoke invoke) {
-        return invoke.stateAfter().duplicateModified(invoke.bci(), invoke.kind/*, args*/);
+    protected FrameState stateBeforeInvoke(Invoke invoke) {
+        FrameState stateAfter = invoke.stateAfter();
+        FrameStateBuilder builder = new FrameStateBuilder(compilation.method, invoke.graph());
+        builder.initializeFrom(stateAfter);
+        if (invoke.kind != CiKind.Void) {
+            builder.pop(invoke.kind);
+        }
+        int argumentCount = invoke.argumentCount(); // invoke.arguments() iterable?
+        for (int i = 0; i < argumentCount; i++) {
+            Value arg = invoke.argument(i);
+            if (arg != null) {
+                //builder.push(arg.kind, arg);
+            }
+        }
+        return builder.create(invoke.bci());
     }
 
     protected FrameState stateBeforeInvokeWithArguments(Invoke invoke) {
-        Value[] args = new Value[invoke.argumentCount()];
-        for (int i = 0; i < invoke.argumentCount(); i++) {
-            args[i] = invoke.argument(i);
+
+        FrameState stateAfter = invoke.stateAfter();
+        FrameStateBuilder builder = new FrameStateBuilder(compilation.method, invoke.graph());
+        builder.initializeFrom(stateAfter);
+        if (invoke.kind != CiKind.Void) {
+            builder.pop(invoke.kind);
         }
-        return invoke.stateAfter().duplicateModified(invoke.bci(), invoke.kind, args);
+        int argumentCount = invoke.argumentCount(); // invoke.arguments() iterable?
+        for (int i = 0; i < argumentCount; i++) {
+            Value arg = invoke.argument(i);
+            if (arg != null) {
+                builder.push(arg.kind, arg);
+            }
+        }
+        return builder.create(invoke.bci());
     }
 
     @Override
     public void visitInvoke(Invoke x) {
         RiMethod target = x.target();
         LIRDebugInfo info = stateFor(x, stateBeforeInvokeWithArguments(x));
-        LIRDebugInfo info2 = stateFor(x, stateBeforeInvokeReturn(x));
+        LIRDebugInfo info2 = stateFor(x, stateBeforeInvoke(x));
 
         XirSnippet snippet = null;
 
@@ -880,13 +904,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         lir.move(exceptionOpr, argumentOperand);
 
         lir.throwException(CiValue.IllegalValue, argumentOperand, info);
-    }
-
-    @Override
-    public void visitDeoptimize(Deoptimize deoptimize) {
-        DeoptimizationStub stub = new DeoptimizationStub(deoptimize.stateBefore());
-        addDeoptimizationStub(stub);
-        lir.branch(Condition.TRUE, stub.label, stub.info);
     }
 
     private void blockDoEpilog(BlockBegin block) {
@@ -1445,7 +1462,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
 
         assert state != null;
-        return new LIRDebugInfo(state, x.exceptionEdge());
+        return new LIRDebugInfo(state, x.exceptionHandlers());
     }
 
     List<CiValue> visitInvokeArguments(CiCallingConvention cc, Invoke x, List<CiValue> pointerSlots) {
@@ -1609,16 +1626,5 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitFrameState(FrameState i) {
         // nothing to do for now
-    }
-
-    @Override
-    public void visitUnwind(Unwind x) {
-        // TODO ls: this needs some thorough testing...
-        CiValue operand = resultOperandFor(x.kind);
-        CiValue result = force(x.exception(), operand);
-        ArrayList<CiValue> args = new ArrayList<CiValue>(1);
-        args.add(result);
-        lir.callRuntime(CiRuntimeCall.UnwindException, CiValue.IllegalValue, args, null);
-        setNoResult(x);
     }
 }
