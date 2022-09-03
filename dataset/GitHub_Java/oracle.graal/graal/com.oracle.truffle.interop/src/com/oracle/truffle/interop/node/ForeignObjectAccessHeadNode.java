@@ -22,18 +22,35 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.interop.messages;
 
+package com.oracle.truffle.interop.node;
+
+import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.interop.messages.*;
 
-final class MessageUtil {
+final class ForeignObjectAccessHeadNode extends ForeignObjectAccessNode {
 
-    static boolean compareMessage(Object o1, Object o2) {
-        if (o1 instanceof Message && o2 instanceof Message) {
-            return ((Message) o1).matchStructure(o2);
-        } else if (o1 instanceof Receiver && o2 instanceof Receiver) {
-            return true;
-        }
-        throw new IllegalStateException();
+    @Child private ObjectAccessNode first;
+    private final Message accessTree;
+
+    protected ForeignObjectAccessHeadNode(Message tree) {
+        this.accessTree = tree;
+        this.first = new UnresolvedObjectAccessNode();
+        adoptChildren();
     }
+
+    protected Message getAccessTree() {
+        return accessTree;
+    }
+
+    protected ObjectAccessNode getFirst() {
+        return first;
+    }
+
+    @Override
+    public Object executeForeign(VirtualFrame frame, TruffleObject receiver, Object... arguments) {
+        return first.executeWith(frame, receiver, arguments);
+    }
+
 }

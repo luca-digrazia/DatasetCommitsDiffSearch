@@ -26,14 +26,43 @@ package com.oracle.truffle.interop.messages;
 
 import com.oracle.truffle.api.interop.messages.*;
 
-final class MessageUtil {
+public final class Execute implements Message {
+    private final Object receiver;
+    private final int arity;
 
-    static boolean compareMessage(Object o1, Object o2) {
-        if (o1 instanceof Message && o2 instanceof Message) {
-            return ((Message) o1).matchStructure(o2);
-        } else if (o1 instanceof Receiver && o2 instanceof Receiver) {
-            return true;
-        }
-        throw new IllegalStateException();
+    public static Execute create(Receiver receiver, int arity) {
+        return new Execute(receiver, arity);
     }
+
+    public static Execute create(Message receiver, int arity) {
+        return new Execute(receiver, arity);
+    }
+
+    private Execute(Object receiver, int arity) {
+        this.receiver = receiver;
+        this.arity = arity;
+    }
+
+    public Object getReceiver() {
+        return receiver;
+    }
+
+    public int getArity() {
+        return arity;
+    }
+
+    public boolean matchStructure(Object message) {
+        if (!(message instanceof Execute)) {
+            return false;
+        }
+        Execute m1 = this;
+        Execute m2 = (Execute) message;
+        return MessageUtil.compareMessage(m1.getReceiver(), m2.getReceiver());
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Execute(%s)", receiver.toString());
+    }
+
 }

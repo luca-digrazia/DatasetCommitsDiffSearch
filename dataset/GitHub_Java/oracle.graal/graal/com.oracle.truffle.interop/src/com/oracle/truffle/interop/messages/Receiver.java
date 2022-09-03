@@ -24,16 +24,18 @@
  */
 package com.oracle.truffle.interop.messages;
 
-import com.oracle.truffle.api.interop.messages.*;
+public final class Receiver {
 
-final class MessageUtil {
+    private Receiver() {
 
-    static boolean compareMessage(Object o1, Object o2) {
-        if (o1 instanceof Message && o2 instanceof Message) {
-            return ((Message) o1).matchStructure(o2);
-        } else if (o1 instanceof Receiver && o2 instanceof Receiver) {
-            return true;
-        }
-        throw new IllegalStateException();
+    }
+
+    public static Receiver create() {
+        return new Receiver();
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Receiver");
     }
 }

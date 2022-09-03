@@ -26,14 +26,21 @@ package com.oracle.truffle.interop.messages;
 
 import com.oracle.truffle.api.interop.messages.*;
 
-final class MessageUtil {
+public final class Unbox extends UnaryMessage {
+    public static Unbox create(Receiver receiver) {
+        return new Unbox(receiver);
+    }
 
-    static boolean compareMessage(Object o1, Object o2) {
-        if (o1 instanceof Message && o2 instanceof Message) {
-            return ((Message) o1).matchStructure(o2);
-        } else if (o1 instanceof Receiver && o2 instanceof Receiver) {
-            return true;
-        }
-        throw new IllegalStateException();
+    public static Unbox create(Message receiver) {
+        return new Unbox(receiver);
+    }
+
+    private Unbox(Object receiver) {
+        super(receiver);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Unbox(%s)", receiver.toString());
     }
 }

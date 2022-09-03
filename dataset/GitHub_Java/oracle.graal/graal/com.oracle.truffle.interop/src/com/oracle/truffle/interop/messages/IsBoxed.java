@@ -26,14 +26,21 @@ package com.oracle.truffle.interop.messages;
 
 import com.oracle.truffle.api.interop.messages.*;
 
-final class MessageUtil {
+public final class IsBoxed extends UnaryMessage {
+    public static IsBoxed create(Receiver receiver) {
+        return new IsBoxed(receiver);
+    }
 
-    static boolean compareMessage(Object o1, Object o2) {
-        if (o1 instanceof Message && o2 instanceof Message) {
-            return ((Message) o1).matchStructure(o2);
-        } else if (o1 instanceof Receiver && o2 instanceof Receiver) {
-            return true;
-        }
-        throw new IllegalStateException();
+    public static IsBoxed create(Message receiver) {
+        return new IsBoxed(receiver);
+    }
+
+    private IsBoxed(Object receiver) {
+        super(receiver);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("IsBoxed(%s)", receiver.toString());
     }
 }

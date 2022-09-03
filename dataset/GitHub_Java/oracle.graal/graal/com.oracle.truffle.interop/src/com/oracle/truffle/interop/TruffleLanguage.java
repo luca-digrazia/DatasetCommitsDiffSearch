@@ -22,18 +22,19 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.interop.messages;
+package com.oracle.truffle.interop;
 
-import com.oracle.truffle.api.interop.messages.*;
+import com.oracle.truffle.api.interop.*;
 
-final class MessageUtil {
+public interface TruffleLanguage {
+    String getLanguageName();
 
-    static boolean compareMessage(Object o1, Object o2) {
-        if (o1 instanceof Message && o2 instanceof Message) {
-            return ((Message) o1).matchStructure(o2);
-        } else if (o1 instanceof Receiver && o2 instanceof Receiver) {
-            return true;
-        }
-        throw new IllegalStateException();
-    }
+    TruffleObject getLanguageContext();
+
+    void setGlobalContext(TruffleObject context);
+
+    boolean hasGlobalProperty(String name);
+
+    Object run(String[] arguments);
+
 }

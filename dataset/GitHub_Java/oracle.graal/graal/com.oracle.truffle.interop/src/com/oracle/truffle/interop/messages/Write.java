@@ -26,14 +26,49 @@ package com.oracle.truffle.interop.messages;
 
 import com.oracle.truffle.api.interop.messages.*;
 
-final class MessageUtil {
+public final class Write implements Message {
+    private final Object receiver;
+    private final Argument id;
+    private final Argument value;
 
-    static boolean compareMessage(Object o1, Object o2) {
-        if (o1 instanceof Message && o2 instanceof Message) {
-            return ((Message) o1).matchStructure(o2);
-        } else if (o1 instanceof Receiver && o2 instanceof Receiver) {
-            return true;
-        }
-        throw new IllegalStateException();
+    private Write(Object receiver, Argument id, Argument value) {
+        this.receiver = receiver;
+        this.id = id;
+        this.value = value;
     }
+
+    public static Write create(Receiver receiver, Argument id, Argument value) {
+        return new Write(receiver, id, value);
+    }
+
+    public static Write create(Message receiver, Argument id, Argument value) {
+        return new Write(receiver, id, value);
+    }
+
+    public Argument getId() {
+        return id;
+    }
+
+    public Object getReceiver() {
+        return receiver;
+    }
+
+    public Argument getValue() {
+        return value;
+    }
+
+    public boolean matchStructure(Object message) {
+        if (!(message instanceof Write)) {
+            return false;
+        }
+        Write m1 = this;
+        Write m2 = (Write) message;
+        return MessageUtil.compareMessage(m1.getReceiver(), m2.getReceiver());
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Write(%s, %s, %s)", receiver.toString(), id.toString(), value.toString());
+    }
+
 }

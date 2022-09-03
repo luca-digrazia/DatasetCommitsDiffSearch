@@ -26,14 +26,21 @@ package com.oracle.truffle.interop.messages;
 
 import com.oracle.truffle.api.interop.messages.*;
 
-final class MessageUtil {
+public final class HasSize extends UnaryMessage {
+    public static HasSize create(Receiver receiver) {
+        return new HasSize(receiver);
+    }
 
-    static boolean compareMessage(Object o1, Object o2) {
-        if (o1 instanceof Message && o2 instanceof Message) {
-            return ((Message) o1).matchStructure(o2);
-        } else if (o1 instanceof Receiver && o2 instanceof Receiver) {
-            return true;
-        }
-        throw new IllegalStateException();
+    public static HasSize create(Message receiver) {
+        return new HasSize(receiver);
+    }
+
+    private HasSize(Object receiver) {
+        super(receiver);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("HasSize(%s)", receiver.toString());
     }
 }

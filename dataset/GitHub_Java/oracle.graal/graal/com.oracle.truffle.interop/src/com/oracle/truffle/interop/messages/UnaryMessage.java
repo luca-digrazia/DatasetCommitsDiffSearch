@@ -26,14 +26,29 @@ package com.oracle.truffle.interop.messages;
 
 import com.oracle.truffle.api.interop.messages.*;
 
-final class MessageUtil {
+abstract class UnaryMessage implements Message {
+    protected final Object receiver;
 
-    static boolean compareMessage(Object o1, Object o2) {
-        if (o1 instanceof Message && o2 instanceof Message) {
-            return ((Message) o1).matchStructure(o2);
-        } else if (o1 instanceof Receiver && o2 instanceof Receiver) {
-            return true;
-        }
-        throw new IllegalStateException();
+    protected UnaryMessage(Object receiver) {
+        this.receiver = receiver;
     }
+
+    public Object getReceiver() {
+        return receiver;
+    }
+
+    public boolean matchStructure(Object message) {
+        if (message == null) {
+            return false;
+        }
+        if (this.getClass() != message.getClass()) {
+            return false;
+        }
+        UnaryMessage m1 = this;
+        UnaryMessage m2 = (UnaryMessage) message;
+        return MessageUtil.compareMessage(m1.getReceiver(), m2.getReceiver());
+    }
+
+    @Override
+    public abstract String toString();
 }

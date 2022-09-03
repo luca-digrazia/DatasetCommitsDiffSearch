@@ -24,16 +24,16 @@
  */
 package com.oracle.truffle.interop.messages;
 
-import com.oracle.truffle.api.interop.messages.*;
+public final class Argument {
+    private Argument() {
+    }
 
-final class MessageUtil {
+    public static Argument create() {
+        return new Argument();
+    }
 
-    static boolean compareMessage(Object o1, Object o2) {
-        if (o1 instanceof Message && o2 instanceof Message) {
-            return ((Message) o1).matchStructure(o2);
-        } else if (o1 instanceof Receiver && o2 instanceof Receiver) {
-            return true;
-        }
-        throw new IllegalStateException();
+    @Override
+    public String toString() {
+        return String.format("Argument");
     }
 }
