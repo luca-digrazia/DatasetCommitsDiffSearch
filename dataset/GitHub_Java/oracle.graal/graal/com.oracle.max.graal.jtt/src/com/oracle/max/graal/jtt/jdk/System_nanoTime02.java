@@ -20,49 +20,33 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.max.graal.jtt.threads;
+package com.oracle.max.graal.jtt.jdk;
 
 import org.junit.*;
 
 /*
  */
+public class System_nanoTime02 {
 
-// Interrupted while running, do nothing, just set the flag and continue
-// (tw) This test will exercise deoptimization on HotSpot, because a volatile unloaded field is accessed.
-// (tw) The temporary result variable is needed, because in order to query the isInterrupted flag, the thread must be alive.
-public class Thread_isInterrupted04 {
+    public static boolean test() {
+        long minDelta = Long.MAX_VALUE;
 
-    public static boolean test() throws InterruptedException {
-        final Thread1 thread = new Thread1();
-        thread.start();
-        while (!thread.running) {
-            Thread.sleep(10);
-        }
-        Thread.sleep(100);
-        thread.interrupt();
-        boolean result = thread.isInterrupted();
-        thread.setStop(true);
-        return result;
-    }
-
-    public static class Thread1 extends java.lang.Thread {
-
-        private volatile boolean stop = false;
-        public volatile boolean running = false;
-        public long i = 0;
-
-        @Override
-        public void run() {
-            running = true;
-            while (!stop) {
-                i++;
+        // the first call to System.nanoTime might take a long time due to call resolution
+        for (int c = 0; c < 10; c++) {
+            long start = System.nanoTime();
+            long delta = 0;
+            int i;
+            for (i = 0; delta == 0 && i < 50000; i++) {
+                delta = System.nanoTime() - start;
+                // do nothing.
+            }
+            if (delta < minDelta) {
+                minDelta = delta;
             }
         }
 
-        public void setStop(boolean value) {
-            stop = value;
-        }
-
+        // better get at least 30 microsecond resolution.
+        return minDelta > 1 && minDelta < 30000;
     }
 
     @Test

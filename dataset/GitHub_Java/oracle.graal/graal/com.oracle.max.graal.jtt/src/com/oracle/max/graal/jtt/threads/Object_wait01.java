@@ -20,54 +20,60 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
+/*
+ */
 package com.oracle.max.graal.jtt.threads;
 
 import org.junit.*;
 
-/*
- */
+public class Object_wait01 implements Runnable {
 
-// Interrupted while running, do nothing, just set the flag and continue
-// (tw) This test will exercise deoptimization on HotSpot, because a volatile unloaded field is accessed.
-// (tw) The temporary result variable is needed, because in order to query the isInterrupted flag, the thread must be alive.
-public class Thread_isInterrupted04 {
+    static volatile int count = 0;
+    static volatile boolean done;
+    static final Object object = new Object();
 
-    public static boolean test() throws InterruptedException {
-        final Thread1 thread = new Thread1();
-        thread.start();
-        while (!thread.running) {
-            Thread.sleep(10);
+    public static boolean test(int i) throws InterruptedException {
+        count = 0;
+        done = false;
+        new Thread(new Object_wait01()).start();
+        synchronized (object) {
+            while (count < i) {
+                object.wait();
+            }
+            done = true;
+            return count >= i;
         }
-        Thread.sleep(100);
-        thread.interrupt();
-        boolean result = thread.isInterrupted();
-        thread.setStop(true);
-        return result;
+
     }
 
-    public static class Thread1 extends java.lang.Thread {
-
-        private volatile boolean stop = false;
-        public volatile boolean running = false;
-        public long i = 0;
-
-        @Override
-        public void run() {
-            running = true;
-            while (!stop) {
-                i++;
+    public void run() {
+        int i = 0;
+        while (i++ < 1000000 && !done) {
+            synchronized (object) {
+                count++;
+                object.notifyAll();
             }
         }
-
-        public void setStop(boolean value) {
-            stop = value;
-        }
-
     }
 
     @Test
     public void run0() throws Throwable {
-        Assert.assertEquals(true, test());
+        Assert.assertEquals(true, test(0));
+    }
+
+    @Test
+    public void run1() throws Throwable {
+        Assert.assertEquals(true, test(1));
+    }
+
+    @Test
+    public void run2() throws Throwable {
+        Assert.assertEquals(true, test(3));
+    }
+
+    @Test
+    public void run3() throws Throwable {
+        Assert.assertEquals(true, test(15));
     }
 
 }

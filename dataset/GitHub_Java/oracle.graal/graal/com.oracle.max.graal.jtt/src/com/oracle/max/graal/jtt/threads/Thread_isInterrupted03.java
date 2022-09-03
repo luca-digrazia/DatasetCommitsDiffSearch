@@ -27,42 +27,44 @@ import org.junit.*;
 /*
  */
 
-// Interrupted while running, do nothing, just set the flag and continue
-// (tw) This test will exercise deoptimization on HotSpot, because a volatile unloaded field is accessed.
-// (tw) The temporary result variable is needed, because in order to query the isInterrupted flag, the thread must be alive.
-public class Thread_isInterrupted04 {
+// Interrupted while sleeping, throws an interrupted exception
+public class Thread_isInterrupted03 {
 
     public static boolean test() throws InterruptedException {
         final Thread1 thread = new Thread1();
         thread.start();
-        while (!thread.running) {
-            Thread.sleep(10);
-        }
-        Thread.sleep(100);
+        Thread.sleep(1000);
         thread.interrupt();
-        boolean result = thread.isInterrupted();
-        thread.setStop(true);
+        Thread.sleep(1000);
+        // Did thread get interrupted?
+        final boolean result = thread.getInterrupted();
+        // This stops the thread even if the interrupt didn't!
+        thread.setInterrupted(true);
         return result;
     }
 
-    public static class Thread1 extends java.lang.Thread {
+    private static class Thread1 extends java.lang.Thread {
 
-        private volatile boolean stop = false;
-        public volatile boolean running = false;
-        public long i = 0;
+        private boolean interrupted = false;
 
         @Override
         public void run() {
-            running = true;
-            while (!stop) {
-                i++;
+            while (!interrupted) {
+                try {
+                    sleep(10000);
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
             }
         }
 
-        public void setStop(boolean value) {
-            stop = value;
+        public void setInterrupted(boolean val) {
+            interrupted = val;
         }
 
+        public boolean getInterrupted() {
+            return interrupted;
+        }
     }
 
     @Test

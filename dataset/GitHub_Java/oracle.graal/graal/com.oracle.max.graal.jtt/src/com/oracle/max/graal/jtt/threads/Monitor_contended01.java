@@ -20,49 +20,55 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
+/*
+ */
 package com.oracle.max.graal.jtt.threads;
 
 import org.junit.*;
 
-/*
- */
+@SuppressWarnings("static-method")
+public final class Monitor_contended01 implements Runnable {
 
-// Interrupted while running, do nothing, just set the flag and continue
-// (tw) This test will exercise deoptimization on HotSpot, because a volatile unloaded field is accessed.
-// (tw) The temporary result variable is needed, because in order to query the isInterrupted flag, the thread must be alive.
-public class Thread_isInterrupted04 {
+    static final Object cond = new Object();
+    static final Object obj = new Object();
+
+    boolean started = false;
+    boolean acquired = false;
 
     public static boolean test() throws InterruptedException {
-        final Thread1 thread = new Thread1();
-        thread.start();
-        while (!thread.running) {
-            Thread.sleep(10);
-        }
-        Thread.sleep(100);
-        thread.interrupt();
-        boolean result = thread.isInterrupted();
-        thread.setStop(true);
-        return result;
-    }
-
-    public static class Thread1 extends java.lang.Thread {
-
-        private volatile boolean stop = false;
-        public volatile boolean running = false;
-        public long i = 0;
-
-        @Override
-        public void run() {
-            running = true;
-            while (!stop) {
-                i++;
+        // test contention for monitor
+        final Monitor_contended01 object = new Monitor_contended01();
+        synchronized (obj) {
+            new Thread(object).start();
+            // wait for other thread to startup and contend
+            synchronized (cond) {
+                cond.wait(1000);
+                if (!object.started) {
+                    return false;
+                }
             }
         }
-
-        public void setStop(boolean value) {
-            stop = value;
+        // wait for other thread to acquire monitor and then exit
+        synchronized (cond) {
+            cond.wait(1000);
         }
+        return object.acquired;
+    }
 
+    public void run() {
+        // signal that we have started up so first thread will release lock
+        synchronized (cond) {
+            started = true;
+            cond.notifyAll();
+        }
+        synchronized (obj) {
+
+        }
+        // signal that we have successfully acquired and released the monitor
+        synchronized (cond) {
+            acquired = true;
+            cond.notifyAll();
+        }
     }
 
     @Test

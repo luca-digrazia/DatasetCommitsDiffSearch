@@ -20,54 +20,55 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.max.graal.jtt.threads;
+
+package com.oracle.max.graal.jtt.except;
 
 import org.junit.*;
 
 /*
  */
 
-// Interrupted while running, do nothing, just set the flag and continue
-// (tw) This test will exercise deoptimization on HotSpot, because a volatile unloaded field is accessed.
-// (tw) The temporary result variable is needed, because in order to query the isInterrupted flag, the thread must be alive.
-public class Thread_isInterrupted04 {
+public class Catch_NPE_07 {
 
-    public static boolean test() throws InterruptedException {
-        final Thread1 thread = new Thread1();
-        thread.start();
-        while (!thread.running) {
-            Thread.sleep(10);
-        }
-        Thread.sleep(100);
-        thread.interrupt();
-        boolean result = thread.isInterrupted();
-        thread.setStop(true);
-        return result;
+    @SuppressWarnings("serial")
+    public static class MyThrowable extends Throwable {
     }
 
-    public static class Thread1 extends java.lang.Thread {
-
-        private volatile boolean stop = false;
-        public volatile boolean running = false;
-        public long i = 0;
-
-        @Override
-        public void run() {
-            running = true;
-            while (!stop) {
-                i++;
+    @SuppressWarnings("unused")
+    public static int foo(Throwable t) {
+        try {
+            throw t;
+        } catch (Throwable t1) {
+            if (t1 == null) {
+                return -1;
             }
+            if (t1 instanceof NullPointerException) {
+                return 0;
+            }
+            if (t1 instanceof MyThrowable) {
+                return 1;
+            }
+            return -2;
         }
+    }
 
-        public void setStop(boolean value) {
-            stop = value;
+    public static int test(int i) {
+        Throwable t = (i == 0) ? null : new MyThrowable();
+        try {
+            return foo(t);
+        } catch (Throwable t1) {
+            return -3;
         }
-
     }
 
     @Test
     public void run0() throws Throwable {
-        Assert.assertEquals(true, test());
+        Assert.assertEquals(0, test(0));
+    }
+
+    @Test
+    public void run1() throws Throwable {
+        Assert.assertEquals(1, test(1));
     }
 
 }

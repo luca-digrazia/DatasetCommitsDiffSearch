@@ -20,54 +20,72 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.max.graal.jtt.threads;
+/*
+ */
+package com.oracle.max.graal.jtt.micro;
 
 import org.junit.*;
 
-/*
- */
+public class InvokeVirtual_02 {
 
-// Interrupted while running, do nothing, just set the flag and continue
-// (tw) This test will exercise deoptimization on HotSpot, because a volatile unloaded field is accessed.
-// (tw) The temporary result variable is needed, because in order to query the isInterrupted flag, the thread must be alive.
-public class Thread_isInterrupted04 {
+    static class A {
 
-    public static boolean test() throws InterruptedException {
-        final Thread1 thread = new Thread1();
-        thread.start();
-        while (!thread.running) {
-            Thread.sleep(10);
+        long plus(long a) {
+            return a;
         }
-        Thread.sleep(100);
-        thread.interrupt();
-        boolean result = thread.isInterrupted();
-        thread.setStop(true);
-        return result;
     }
 
-    public static class Thread1 extends java.lang.Thread {
-
-        private volatile boolean stop = false;
-        public volatile boolean running = false;
-        public long i = 0;
+    static class B extends A {
 
         @Override
-        public void run() {
-            running = true;
-            while (!stop) {
-                i++;
-            }
+        long plus(long a) {
+            return a + 10;
         }
+    }
 
-        public void setStop(boolean value) {
-            stop = value;
+    static class C extends A {
+
+        @Override
+        long plus(long a) {
+            return a + 20;
         }
+    }
 
+    static A objectA = new A();
+    static A objectB = new B();
+    static A objectC = new C();
+
+    public static long test(long a) {
+        if (a == 0) {
+            return objectA.plus(a);
+        }
+        if (a == 1) {
+            return objectB.plus(a);
+        }
+        if (a == 2) {
+            return objectC.plus(a);
+        }
+        return 42;
     }
 
     @Test
     public void run0() throws Throwable {
-        Assert.assertEquals(true, test());
+        Assert.assertEquals(0L, test(0L));
+    }
+
+    @Test
+    public void run1() throws Throwable {
+        Assert.assertEquals(11L, test(1L));
+    }
+
+    @Test
+    public void run2() throws Throwable {
+        Assert.assertEquals(22L, test(2L));
+    }
+
+    @Test
+    public void run3() throws Throwable {
+        Assert.assertEquals(42L, test(3L));
     }
 
 }

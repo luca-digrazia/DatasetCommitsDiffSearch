@@ -20,54 +20,54 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.max.graal.jtt.threads;
+package com.oracle.max.graal.jtt.reflect;
 
 import org.junit.*;
 
+import sun.reflect.*;
+
 /*
  */
+@SuppressWarnings("static-method")
+public final class Reflection_getCallerClass01 {
 
-// Interrupted while running, do nothing, just set the flag and continue
-// (tw) This test will exercise deoptimization on HotSpot, because a volatile unloaded field is accessed.
-// (tw) The temporary result variable is needed, because in order to query the isInterrupted flag, the thread must be alive.
-public class Thread_isInterrupted04 {
+    public static final class Caller1 {
 
-    public static boolean test() throws InterruptedException {
-        final Thread1 thread = new Thread1();
-        thread.start();
-        while (!thread.running) {
-            Thread.sleep(10);
+        private Caller1() {
         }
-        Thread.sleep(100);
-        thread.interrupt();
-        boolean result = thread.isInterrupted();
-        thread.setStop(true);
-        return result;
+
+        static String caller1(int depth) {
+            return Reflection.getCallerClass(depth).getName();
+        }
     }
 
-    public static class Thread1 extends java.lang.Thread {
+    public static final class Caller2 {
 
-        private volatile boolean stop = false;
-        public volatile boolean running = false;
-        public long i = 0;
-
-        @Override
-        public void run() {
-            running = true;
-            while (!stop) {
-                i++;
-            }
+        private Caller2() {
         }
 
-        public void setStop(boolean value) {
-            stop = value;
+        static String caller2(int depth) {
+            return Caller1.caller1(depth);
         }
+    }
 
+    public static String test(int depth) {
+        return Caller2.caller2(depth);
     }
 
     @Test
     public void run0() throws Throwable {
-        Assert.assertEquals(true, test());
+        Assert.assertEquals("sun.reflect.Reflection", test(0));
+    }
+
+    @Test
+    public void run1() throws Throwable {
+        Assert.assertEquals("com.oracle.max.graal.jtt.reflect.Reflection_getCallerClass01$Caller1", test(1));
+    }
+
+    @Test
+    public void run2() throws Throwable {
+        Assert.assertEquals("com.oracle.max.graal.jtt.reflect.Reflection_getCallerClass01$Caller2", test(2));
     }
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,42 +27,42 @@ import org.junit.*;
 /*
  */
 
-// Interrupted while running, do nothing, just set the flag and continue
-// (tw) This test will exercise deoptimization on HotSpot, because a volatile unloaded field is accessed.
-// (tw) The temporary result variable is needed, because in order to query the isInterrupted flag, the thread must be alive.
-public class Thread_isInterrupted04 {
+// Interrupted during wait, with interrupter joining
+public class Thread_isInterrupted05 {
 
     public static boolean test() throws InterruptedException {
-        final Thread1 thread = new Thread1();
-        thread.start();
-        while (!thread.running) {
-            Thread.sleep(10);
+        final WaitInterruptee waitInterruptee = new WaitInterruptee();
+        waitInterruptee.start();
+        waitInterruptee.interrupt();
+        waitInterruptee.join();
+
+        if (waitInterruptee.throwable != null) {
+            throw new RuntimeException(waitInterruptee.throwable);
         }
-        Thread.sleep(100);
-        thread.interrupt();
-        boolean result = thread.isInterrupted();
-        thread.setStop(true);
-        return result;
+        return true;
     }
 
-    public static class Thread1 extends java.lang.Thread {
+    static class WaitInterruptee extends Thread {
 
-        private volatile boolean stop = false;
-        public volatile boolean running = false;
-        public long i = 0;
+        Throwable throwable;
+
+        public WaitInterruptee() {
+            super("WaitInterruptee");
+        }
 
         @Override
         public void run() {
-            running = true;
-            while (!stop) {
-                i++;
+            try {
+                synchronized (this) {
+                    try {
+                        wait();
+                    } catch (InterruptedException ex) {
+                    }
+                }
+            } catch (Throwable t) {
+                throwable = t;
             }
         }
-
-        public void setStop(boolean value) {
-            stop = value;
-        }
-
     }
 
     @Test
