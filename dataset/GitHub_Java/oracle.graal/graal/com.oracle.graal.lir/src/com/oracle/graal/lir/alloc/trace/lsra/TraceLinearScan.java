@@ -96,6 +96,7 @@ public final class TraceLinearScan {
 
     public static final int DOMINATOR_SPILL_MOVE_ID = -2;
 
+    private final LIR ir;
     private final FrameMapBuilder frameMapBuilder;
     private final RegisterAttributes[] registerAttributes;
     private final Register[] registers;
@@ -127,25 +128,22 @@ public final class TraceLinearScan {
      * enabled} a {@link Variable} is always assigned to the same stack slot.
      */
     private final AllocatableValue[] cachedStackSlots;
-
-    private IntervalData intervalData = null;
-    private final LIRGenerationResult res;
-    private final Trace<? extends AbstractBlockBase<?>> trace;
+    private final IntervalData intervalData;
 
     public TraceLinearScan(TargetDescription target, LIRGenerationResult res, MoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig, Trace<? extends AbstractBlockBase<?>> trace,
                     TraceBuilderResult<?> traceBuilderResult, boolean neverSpillConstants, AllocatableValue[] cachedStackSlots) {
-        this.res = res;
+        this.ir = res.getLIR();
         this.moveFactory = spillMoveFactory;
         this.frameMapBuilder = res.getFrameMapBuilder();
         this.sortedBlocks = trace.getBlocks();
         this.registerAttributes = regAllocConfig.getRegisterConfig().getAttributesMap();
         this.regAllocConfig = regAllocConfig;
 
-        this.trace = trace;
         this.registers = target.arch.getRegisters();
         this.traceBuilderResult = traceBuilderResult;
         this.neverSpillConstants = neverSpillConstants;
         this.cachedStackSlots = cachedStackSlots;
+        this.intervalData = new IntervalData(target, res, regAllocConfig, trace);
     }
 
     public IntervalData getIntervalData() {
@@ -153,13 +151,13 @@ public final class TraceLinearScan {
     }
 
     public int getFirstLirInstructionId(AbstractBlockBase<?> block) {
-        int result = getLIR().getLIRforBlock(block).get(0).id();
+        int result = ir.getLIRforBlock(block).get(0).id();
         assert result >= 0;
         return result;
     }
 
     public int getLastLirInstructionId(AbstractBlockBase<?> block) {
-        List<LIRInstruction> instructions = getLIR().getLIRforBlock(block);
+        List<LIRInstruction> instructions = ir.getLIRforBlock(block);
         int result = instructions.get(instructions.size() - 1).id();
         assert result >= 0;
         return result;
@@ -195,7 +193,7 @@ public final class TraceLinearScan {
      * Gets the number of operands. This value will increase by 1 for new variable.
      */
     int operandSize() {
-        return getLIR().numVariables();
+        return ir.numVariables();
     }
 
     /**
@@ -316,7 +314,7 @@ public final class TraceLinearScan {
     }
 
     int numLoops() {
-        return getLIR().getControlFlowGraph().getLoops().size();
+        return ir.getControlFlowGraph().getLoops().size();
     }
 
     public FixedInterval fixedIntervalFor(RegisterValue reg) {
@@ -645,17 +643,13 @@ public final class TraceLinearScan {
         try (Indent indent = Debug.logAndIndent("LinearScan allocate")) {
             TraceLinearScanAllocationContext context = new TraceLinearScanAllocationContext(spillMoveFactory, registerAllocationConfig, traceBuilderResult, this);
 
-            if (intervals == null) {
-                intervalData = new IntervalData(target, res, regAllocConfig, trace);
-                TRACE_LINEAR_SCAN_LIFETIME_ANALYSIS_PHASE.apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
-            } else {
-                intervalData = intervals;
-            }
+            TRACE_LINEAR_SCAN_LIFETIME_ANALYSIS_PHASE.apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
 
             try (Scope s = Debug.scope("AfterLifetimeAnalysis", (Object) intervals())) {
 
                 printLir("Before register allocation", true);
                 printIntervals("Before register allocation");
+                assert intervals == null || compareIntervalData(intervals);
 
                 sortIntervalsBeforeAllocation();
                 sortFixedIntervalsBeforeAllocation();
@@ -682,6 +676,10 @@ public final class TraceLinearScan {
                 throw Debug.handle(e);
             }
         }
+    }
+
+    private boolean compareIntervalData(IntervalData intervals) {
+        return IntervalData.verifyEquals(getIntervalData(), intervals);
     }
 
     public void printIntervals(String label) {
@@ -837,7 +835,7 @@ public final class TraceLinearScan {
             TraceIntervalWalker iw = new TraceIntervalWalker(this, fixedInts, otherIntervals);
 
             for (AbstractBlockBase<?> block : sortedBlocks) {
-                List<LIRInstruction> instructions = getLIR().getLIRforBlock(block);
+                List<LIRInstruction> instructions = ir.getLIRforBlock(block);
 
                 for (int j = 0; j < instructions.size(); j++) {
                     LIRInstruction op = instructions.get(j);
@@ -877,7 +875,7 @@ public final class TraceLinearScan {
     }
 
     public LIR getLIR() {
-        return res.getLIR();
+        return ir;
     }
 
     public FrameMapBuilder getFrameMapBuilder() {
