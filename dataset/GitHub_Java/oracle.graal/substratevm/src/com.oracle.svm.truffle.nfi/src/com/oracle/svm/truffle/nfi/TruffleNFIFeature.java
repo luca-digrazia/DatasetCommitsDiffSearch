@@ -28,11 +28,13 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 
+import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.truffle.TruffleFeature;
 import com.oracle.truffle.nfi.NFILanguage;
+import com.oracle.truffle.nfi.impl.NativeAllocation;
 
 /**
  * Support for the default (trufflenfi/native) backend of the {@link NFILanguage} on SVM. This is
@@ -43,7 +45,7 @@ import com.oracle.truffle.nfi.NFILanguage;
  */
 public final class TruffleNFIFeature implements Feature {
 
-    public static class IsEnabled implements BooleanSupplier {
+    static class IsEnabled implements BooleanSupplier {
         @Override
         public boolean getAsBoolean() {
             return ImageSingletons.contains(TruffleNFIFeature.class);
@@ -57,22 +59,9 @@ public final class TruffleNFIFeature implements Feature {
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
+        ImageSingletons.add(TruffleNFISupport.class, new TruffleNFISupport());
         access.registerObjectReplacer(new NativeObjectReplacer(access));
-    }
 
-    @Override
-    public void beforeAnalysis(BeforeAnalysisAccess access) {
-        Class<?> closureNativePointer = access.findClassByName("com.oracle.truffle.nfi.impl.ClosureNativePointer");
-        try {
-            /*
-             * These two fields are never read, only written. It's still important to keep those
-             * fields because they prevent GC of objects that might otherwise be only reachable via
-             * weak references. See the comment in the ClosureNativePointer class.
-             */
-            access.registerAsAccessed(closureNativePointer.getDeclaredField("callTarget"));
-            access.registerAsAccessed(closureNativePointer.getDeclaredField("receiver"));
-        } catch (NoSuchFieldException ex) {
-            throw new IllegalStateException(ex);
-        }
+        RuntimeSupport.getRuntimeSupport().addTearDownHook(NativeAllocation::tearDown);
     }
 }
