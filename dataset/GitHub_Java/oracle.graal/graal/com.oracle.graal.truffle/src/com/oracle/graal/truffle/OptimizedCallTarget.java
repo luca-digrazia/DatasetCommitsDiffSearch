@@ -322,6 +322,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     private void interpreterCall() {
+        CompilerAsserts.neverPartOfCompilation();
         if (isValid()) {
             // Stubs were deoptimized => reinstall.
             this.runtime.reinstallStubs();
@@ -440,16 +441,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     public List<OptimizedDirectCallNode> getCallNodes() {
-        final List<OptimizedDirectCallNode> callNodes = new ArrayList<>();
-        getRootNode().accept(new NodeVisitor() {
-            public boolean visit(Node node) {
-                if (node instanceof OptimizedDirectCallNode) {
-                    callNodes.add((OptimizedDirectCallNode) node);
-                }
-                return true;
-            }
-        });
-        return callNodes;
+        return NodeUtil.findAllNodeInstances(getRootNode(), OptimizedDirectCallNode.class);
     }
 
     @Override
