@@ -178,7 +178,7 @@ class CodeInfoDecoder {
         return -1;
     }
 
-    public long lookupTotalFrameSize(long ip) {
+    protected long lookupTotalFrameSize(long ip) {
         long sizeEncoding = initialSizeEncoding();
         long entryIP = lookupEntryIP(ip);
         long entryOffset = loadEntryOffset(ip);

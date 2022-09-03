@@ -26,18 +26,15 @@ package com.oracle.svm.core.code;
 
 import org.graalvm.compiler.core.common.util.TypeConversion;
 import org.graalvm.compiler.core.common.util.TypeReader;
+import org.graalvm.compiler.core.common.util.UnsafeArrayTypeReader;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
-import com.oracle.svm.core.c.NonmovableArray;
-import com.oracle.svm.core.c.NonmovableArrays;
-import com.oracle.svm.core.c.NonmovableObjectArray;
 import com.oracle.svm.core.code.FrameInfoQueryResult.ValueInfo;
 import com.oracle.svm.core.code.FrameInfoQueryResult.ValueType;
-import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.meta.SharedMethod;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
-import com.oracle.svm.core.util.NonmovableByteArrayTypeReader;
+import com.oracle.svm.core.util.ByteArrayReader;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -47,8 +44,8 @@ public class FrameInfoDecoder {
     protected static final int NO_CALLER_BCI = -1;
     protected static final int NO_LOCAL_INFO_BCI = -2;
 
-    protected static boolean isFrameInfoMatch(long frameInfoIndex, NonmovableArray<Byte> frameInfoEncodings, long searchEncodedBci) {
-        NonmovableByteArrayTypeReader readBuffer = new NonmovableByteArrayTypeReader(frameInfoEncodings, frameInfoIndex);
+    protected static boolean isFrameInfoMatch(long frameInfoIndex, byte[] frameInfoEncodings, long searchEncodedBci) {
+        UnsafeArrayTypeReader readBuffer = UnsafeArrayTypeReader.create(frameInfoEncodings, frameInfoIndex, ByteArrayReader.supportsUnalignedMemoryAccess());
         long actualEncodedBci = readBuffer.getSV();
         assert actualEncodedBci != NO_CALLER_BCI;
 
@@ -76,7 +73,7 @@ public class FrameInfoDecoder {
 
         ValueInfo[][] newValueInfoArrayArray(int len);
 
-        void decodeConstant(ValueInfo valueInfo, NonmovableObjectArray<?> frameInfoObjectConstants);
+        void decodeConstant(ValueInfo valueInfo, Object[] frameInfoObjectConstants);
     }
 
     static class HeapBasedValueInfoAllocator implements ValueInfoAllocator {
@@ -100,7 +97,7 @@ public class FrameInfoDecoder {
 
         @Override
         @RestrictHeapAccess(reason = "Whitelisted because some implementations can allocate.", access = RestrictHeapAccess.Access.UNRESTRICTED, overridesCallers = true)
-        public void decodeConstant(ValueInfo valueInfo, NonmovableObjectArray<?> frameInfoObjectConstants) {
+        public void decodeConstant(ValueInfo valueInfo, Object[] frameInfoObjectConstants) {
             switch (valueInfo.type) {
                 case DefaultConstant:
                     switch (valueInfo.kind) {
@@ -115,8 +112,7 @@ public class FrameInfoDecoder {
                 case Constant:
                     switch (valueInfo.kind) {
                         case Object:
-                            valueInfo.value = SubstrateObjectConstant.forObject(NonmovableArrays.getObject(frameInfoObjectConstants, TypeConversion.asS4(valueInfo.data)),
-                                            valueInfo.isCompressedReference);
+                            valueInfo.value = SubstrateObjectConstant.forObject(frameInfoObjectConstants[TypeConversion.asS4(valueInfo.data)], valueInfo.isCompressedReference);
                             break;
                         case Float:
                             valueInfo.value = JavaConstant.forFloat(Float.intBitsToFloat(TypeConversion.asS4(valueInfo.data)));
@@ -135,7 +131,8 @@ public class FrameInfoDecoder {
 
     static final HeapBasedValueInfoAllocator HeapBasedValueInfoAllocator = new HeapBasedValueInfoAllocator();
 
-    protected static FrameInfoQueryResult decodeFrameInfo(boolean isDeoptEntry, TypeReader readBuffer, CodeInfo info,
+    protected static FrameInfoQueryResult decodeFrameInfo(boolean isDeoptEntry, TypeReader readBuffer, Object[] frameInfoObjectConstants,
+                    Class<?>[] frameInfoSourceClasses, String[] frameInfoSourceMethodNames, String[] frameInfoNames,
                     FrameInfoQueryResultAllocator resultAllocator, ValueInfoAllocator valueInfoAllocator, boolean fetchFirstFrame) {
         FrameInfoQueryResult result = null;
         FrameInfoQueryResult prev = null;
@@ -172,7 +169,7 @@ public class FrameInfoDecoder {
                 int deoptMethodIndex = readBuffer.getSVInt();
                 if (deoptMethodIndex < 0) {
                     /* Negative number is a reference to the target method. */
-                    cur.deoptMethod = (SharedMethod) NonmovableArrays.getObject(CodeInfoAccess.getFrameInfoObjectConstants(info), -1 - deoptMethodIndex);
+                    cur.deoptMethod = (SharedMethod) frameInfoObjectConstants[-1 - deoptMethodIndex];
                     cur.deoptMethodOffset = cur.deoptMethod.getDeoptOffsetInImage();
                 } else {
                     /* Positive number is a directly encoded method offset. */
@@ -180,7 +177,7 @@ public class FrameInfoDecoder {
                 }
 
                 curValueInfosLenght = readBuffer.getUVInt();
-                cur.valueInfos = decodeValues(valueInfoAllocator, curValueInfosLenght, readBuffer, CodeInfoAccess.getFrameInfoObjectConstants(info));
+                cur.valueInfos = decodeValues(valueInfoAllocator, curValueInfosLenght, readBuffer, frameInfoObjectConstants);
             }
 
             if (prev != null) {
@@ -199,7 +196,7 @@ public class FrameInfoDecoder {
                         virtualObjects = valueInfoAllocator.newValueInfoArrayArray(numVirtualObjects);
                         for (int i = 0; i < numVirtualObjects; i++) {
                             int numValues = readBuffer.getUVInt();
-                            ValueInfo[] decodedValues = decodeValues(valueInfoAllocator, numValues, readBuffer, CodeInfoAccess.getFrameInfoObjectConstants(info));
+                            ValueInfo[] decodedValues = decodeValues(valueInfoAllocator, numValues, readBuffer, frameInfoObjectConstants);
                             if (virtualObjects != null) {
                                 virtualObjects[i] = decodedValues;
                             }
@@ -219,8 +216,8 @@ public class FrameInfoDecoder {
                 cur.sourceClassIndex = sourceClassIndex;
                 cur.sourceMethodNameIndex = sourceMethodNameIndex;
 
-                cur.sourceClass = NonmovableArrays.getObject(CodeInfoAccess.getFrameInfoSourceClasses(info), sourceClassIndex);
-                cur.sourceMethodName = NonmovableArrays.getObject(CodeInfoAccess.getFrameInfoSourceMethodNames(info), sourceMethodNameIndex);
+                cur.sourceClass = frameInfoSourceClasses[sourceClassIndex];
+                cur.sourceMethodName = frameInfoSourceMethodNames[sourceMethodNameIndex];
                 cur.sourceLineNumber = sourceLineNumber;
             }
 
@@ -229,14 +226,14 @@ public class FrameInfoDecoder {
                     int nameIndex = readBuffer.getUVInt();
                     if (cur.valueInfos != null) {
                         cur.valueInfos[i].nameIndex = nameIndex;
-                        cur.valueInfos[i].name = NonmovableArrays.getObject(CodeInfoAccess.getFrameInfoNames(info), nameIndex);
+                        cur.valueInfos[i].name = frameInfoNames[nameIndex];
                     }
                 }
             }
         }
     }
 
-    private static ValueInfo[] decodeValues(ValueInfoAllocator valueInfoAllocator, int numValues, TypeReader readBuffer, NonmovableObjectArray<?> frameInfoObjectConstants) {
+    private static ValueInfo[] decodeValues(ValueInfoAllocator valueInfoAllocator, int numValues, TypeReader readBuffer, Object[] frameInfoObjectConstants) {
         ValueInfo[] valueInfos = valueInfoAllocator.newValueInfoArray(numValues);
 
         for (int i = 0; i < numValues; i++) {
@@ -284,16 +281,6 @@ public class FrameInfoDecoder {
         return decodeBci(encodedBci) +
                         ((encodedBci & DURING_CALL_MASK) != 0 ? " duringCall" : "") +
                         ((encodedBci & RETHROW_EXCEPTION_MASK) != 0 ? " rethrowException" : "");
-    }
-
-    public static void logReadableBci(Log log, long encodedBci) {
-        log.signed(decodeBci(encodedBci));
-        if ((encodedBci & DURING_CALL_MASK) != 0) {
-            log.string(" duringCall");
-        }
-        if ((encodedBci & RETHROW_EXCEPTION_MASK) != 0) {
-            log.string(" rethrowException");
-        }
     }
 
     protected static final int TYPE_BITS = 3;

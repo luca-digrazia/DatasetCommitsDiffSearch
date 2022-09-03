@@ -335,11 +335,12 @@ public class RuntimeCodeInfo {
         log.string(methodInfo.name);
         log.string("  ip: ").hex(methodInfo.getCodeStart()).string(" - ").hex(methodInfo.getCodeEnd());
         log.string("  size: ").unsigned(methodInfo.getCodeSize());
-        /*
-         * Note that we are not trying to output methodInfo.installedCode. It is not a pinned
-         * object, so when log printing (for, e.g., a fatal error) occurs during a GC, then the VM
-         * could segfault.
-         */
+        SubstrateInstalledCode installedCode = methodInfo.installedCode.get();
+        if (installedCode != null) {
+            log.string("  installedCode: ").object(installedCode).string(" at ").hex(installedCode.getAddress());
+        } else {
+            log.string("  (invalidated)");
+        }
     }
 
     long logMethodOperation(RuntimeMethodInfo methodInfo, String kind) {
