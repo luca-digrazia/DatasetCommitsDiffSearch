@@ -56,7 +56,7 @@ final class ComplexNumbersB implements TruffleObject {
     }
 
     public ForeignAccess getForeignAccess() {
-        return ComplexNumbersBMessageResolutionForeign.ACCESS;
+        return ComplexNumbersBForeign.ACCESS;
     }
 
     public static boolean isInstance(TruffleObject obj) {
