@@ -16,6 +16,8 @@
 
 package org.litepal.tablemanager.model;
 
+import android.text.TextUtils;
+
 /**
  * This is a model class for columns. It stores column name, column type, and column constraints
  * information.
@@ -69,7 +71,7 @@ public class ColumnModel {
         return isNullable;
     }
 
-    public void setIsNullable(boolean isNullable) {
+    public void setNullable(boolean isNullable) {
         this.isNullable = isNullable;
     }
 
@@ -77,7 +79,7 @@ public class ColumnModel {
         return isUnique;
     }
 
-    public void setIsUnique(boolean isUnique) {
+    public void setUnique(boolean isUnique) {
         this.isUnique = isUnique;
     }
 
@@ -86,7 +88,13 @@ public class ColumnModel {
     }
 
     public void setDefaultValue(String defaultValue) {
-        this.defaultValue = defaultValue;
+        if ("text".equalsIgnoreCase(columnType)) {
+            if (!TextUtils.isEmpty(defaultValue)) {
+                this.defaultValue = "'" + defaultValue + "'";
+            }
+        } else {
+            this.defaultValue = defaultValue;
+        }
     }
 
     /**

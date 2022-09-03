@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Used for adding constraints to a column. Besides, you can targeting a specified
- * column name instead of the default one. It's not recommended to use unless you
- * had a legacy table. The default column name created by LitePal should always be
- * your first choice.
+ * Used for adding constraints to a column. Note that this annotation won't affect id column.
  *
  * @author Tony Green
  * @since 1.3
@@ -33,7 +30,25 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
 public @interface Column {
-    String name() default "";
+
+    /**
+     * Set nullable constraint for the column.
+     */
     boolean nullable() default true;
+
+    /**
+     * Set unique constraint for the column.
+     */
     boolean unique() default false;
+
+    /**
+     * Set default value with String type for the column regardless of what column type is.
+     */
+    String defaultValue() default "";
+
+    /**
+     * Ignore to map this field into a column.
+     */
+    boolean ignore() default false;
+
 }

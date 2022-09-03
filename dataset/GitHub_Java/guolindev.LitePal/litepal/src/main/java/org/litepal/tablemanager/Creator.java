@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,9 @@ import org.litepal.util.DBUtility;
 
 import android.database.sqlite.SQLiteDatabase;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * This is a subclass of Generator. Use to create tables. It will automatically
  * build a create table SQL based on the passing TableModel object. In case of
@@ -43,10 +46,14 @@ class Creator extends AssociationCreator {
 	@Override
 	protected void createOrUpgradeTable(SQLiteDatabase db, boolean force) {
 		for (TableModel tableModel : getAllTableModels()) {
-			execute(getCreateTableSQLs(tableModel, db, force), db);
-			giveTableSchemaACopy(tableModel.getTableName(), Const.TableSchema.NORMAL_TABLE, db);
+			createOrUpgradeTable(tableModel, db, force);
 		}
 	}
+
+    protected void createOrUpgradeTable(TableModel tableModel, SQLiteDatabase db, boolean force) {
+        execute(getCreateTableSQLs(tableModel, db, force), db);
+        giveTableSchemaACopy(tableModel.getTableName(), Const.TableSchema.NORMAL_TABLE, db);
+    }
 
 	/**
 	 * When creating a new table, it should always try to drop the same name
@@ -62,17 +69,19 @@ class Creator extends AssociationCreator {
 	 * @return A SQL array contains drop table if it exists and create new
 	 *         table.
 	 */
-	protected String[] getCreateTableSQLs(TableModel tableModel, SQLiteDatabase db, boolean force) {
+	protected List<String> getCreateTableSQLs(TableModel tableModel, SQLiteDatabase db, boolean force) {
+        List<String> sqls = new ArrayList<String>();
 		if (force) {
-			return new String[] { generateDropTableSQL(tableModel),
-					generateCreateTableSQL(tableModel) };
+            sqls.add(generateDropTableSQL(tableModel));
+            sqls.add(generateCreateTableSQL(tableModel));
 		} else {
 			if (DBUtility.isTableExists(tableModel.getTableName(), db)) {
 				return null;
 			} else {
-				return new String[] { generateCreateTableSQL(tableModel) };
+                sqls.add(generateCreateTableSQL(tableModel));
 			}
 		}
+        return sqls;
 	}
 
 	/**
@@ -82,7 +91,7 @@ class Creator extends AssociationCreator {
 	 *            The table model.
 	 * @return A SQL to drop table.
 	 */
-	protected String generateDropTableSQL(TableModel tableModel) {
+    private String generateDropTableSQL(TableModel tableModel) {
 		return generateDropTableSQL(tableModel.getTableName());
 	}
 
@@ -96,8 +105,8 @@ class Creator extends AssociationCreator {
 	 *            generate SQL.
 	 * @return A generated create table SQL.
 	 */
-	protected String generateCreateTableSQL(TableModel tableModel) {
-		return generateCreateTableSQL(tableModel.getTableName(), tableModel.getColumns(), true);
+    String generateCreateTableSQL(TableModel tableModel) {
+		return generateCreateTableSQL(tableModel.getTableName(), tableModel.getColumnModels(), true);
 	}
 
 }

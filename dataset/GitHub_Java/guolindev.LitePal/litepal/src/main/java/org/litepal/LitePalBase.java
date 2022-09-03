@@ -381,11 +381,7 @@ public abstract class LitePalBase {
             Class<?> dynamicClass = Class.forName(className);
 			Field[] fields = dynamicClass.getDeclaredFields();
 			for (Field field : fields) {
-				if (isNonPrimitive(field)) {
-                    Column annotation = field.getAnnotation(Column.class);
-                    if (annotation != null && annotation.ignore()) {
-                        continue;
-                    }
+				if (isPrivateAndNonPrimitive(field)) {
 					oneToAnyConditions(className, field, action);
 					manyToAnyConditions(className, field, action);
 				}
@@ -397,26 +393,16 @@ public abstract class LitePalBase {
 	}
 
 	/**
-	 * Check the field is a non primitive field or not.
+	 * Judge the field is a private non primitive field or not.
 	 * 
 	 * @param field
-	 *            The field to check.
-	 * @return True if the field is non primitive, false otherwise.
+	 *            The field to judge.
+	 * @return True if the field is <b>private</b> and <b>non primitive</b>,
+	 *         false otherwise.
 	 */
-	private boolean isNonPrimitive(Field field) {
-		return !field.getType().isPrimitive();
+	private boolean isPrivateAndNonPrimitive(Field field) {
+		return Modifier.isPrivate(field.getModifiers()) && !field.getType().isPrimitive();
 	}
-
-    /**
-     * Check the field is a private field or not.
-     *
-     * @param field
-     *            The field to check.
-     * @return True if the field is private, false otherwise.
-     */
-	private boolean isPrivate(Field field) {
-        return Modifier.isPrivate(field.getModifiers());
-    }
 
 	/**
 	 * Deals with one to any association conditions. e.g. Song and Album. An
