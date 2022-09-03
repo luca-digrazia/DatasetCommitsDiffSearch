@@ -33,7 +33,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -114,13 +113,13 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
         @Child private ForeignToLLVM toShort = ForeignToLLVM.create(ForeignToLLVMType.I16);
 
         @Specialization
-        public short executeLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject from) {
+        public short executeLLVMTruffleObject(LLVMTruffleObject from) {
             TruffleObject base = from.getObject();
             if (ForeignAccess.sendIsNull(isNull, base)) {
                 return (short) from.getOffset();
             } else if (ForeignAccess.sendIsBoxed(isBoxed, base)) {
                 try {
-                    short ptr = (short) toShort.executeWithTarget(frame, ForeignAccess.sendUnbox(unbox, base));
+                    short ptr = (short) toShort.executeWithTarget(ForeignAccess.sendUnbox(unbox, base));
                     return (short) (ptr + from.getOffset());
                 } catch (UnsupportedMessageException e) {
                     CompilerDirectives.transferToInterpreter();
@@ -132,8 +131,8 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
         }
 
         @Specialization
-        public short executeLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
-            return (short) toShort.executeWithTarget(frame, from.getValue());
+        public short executeLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
+            return (short) toShort.executeWithTarget(from.getValue());
         }
     }
 

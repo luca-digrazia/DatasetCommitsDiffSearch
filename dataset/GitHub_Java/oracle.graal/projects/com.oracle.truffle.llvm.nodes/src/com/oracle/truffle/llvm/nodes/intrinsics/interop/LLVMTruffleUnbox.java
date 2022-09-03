@@ -30,8 +30,6 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -59,14 +57,6 @@ public abstract class LLVMTruffleUnbox extends LLVMIntrinsic {
     public Object executeIntrinsic(LLVMTruffleObject value) {
         checkLLVMTruffleObject(value);
         return doUnbox(value.getObject());
-    }
-
-    @Fallback
-    @TruffleBoundary
-    @SuppressWarnings("unused")
-    public Object fallback(Object value) {
-        System.err.println("Invalid arguments to unbox-builtin.");
-        throw new IllegalArgumentException();
     }
 
     private static void checkLLVMTruffleObject(LLVMTruffleObject value) {

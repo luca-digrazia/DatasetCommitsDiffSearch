@@ -30,9 +30,7 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -109,15 +107,6 @@ public final class LLVMTruffleWrite {
             doWrite(foreignWrite, value.getObject(), id, prepareValueForEscape.executeWithTarget(v, context));
             return null;
         }
-
-        @Fallback
-        @TruffleBoundary
-        @SuppressWarnings("unused")
-        public Object fallback(Object value, Object id, Object v) {
-            System.err.println("Invalid arguments to write-builtin.");
-            throw new IllegalArgumentException();
-        }
-
     }
 
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
@@ -136,14 +125,5 @@ public final class LLVMTruffleWrite {
             doWriteIdx(foreignWrite, value.getObject(), id, prepareValueForEscape.executeWithTarget(v, context));
             return null;
         }
-
-        @Fallback
-        @TruffleBoundary
-        @SuppressWarnings("unused")
-        public Object fallback(Object value, Object id, Object v) {
-            System.err.println("Invalid arguments to write-builtin.");
-            throw new IllegalArgumentException();
-        }
-
     }
 }

@@ -36,15 +36,16 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress.LLVMVirtualAllocationAddressTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress.LLVMVirtualAllocationAddressTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
@@ -58,6 +59,7 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 /**
  * Values that escape Sulong and flow to other languages must be primitive or TruffleObject. This
  * node ensures that.
+ *
  */
 @SuppressWarnings("unused")
 public abstract class LLVMDataEscapeNode extends Node {
@@ -71,57 +73,57 @@ public abstract class LLVMDataEscapeNode extends Node {
     public abstract Object executeWithTarget(Object escapingValue, LLVMContext context);
 
     @Specialization
-    protected Object escapingPrimitive(boolean escapingValue, LLVMContext context) {
+    public Object escapingPrimitive(boolean escapingValue, LLVMContext context) {
         return escapingValue;
     }
 
     @Specialization
-    protected Object escapingPrimitive(byte escapingValue, LLVMContext context) {
+    public Object escapingPrimitive(byte escapingValue, LLVMContext context) {
         return escapingValue;
     }
 
     @Specialization
-    protected Object escapingPrimitive(short escapingValue, LLVMContext context) {
+    public Object escapingPrimitive(short escapingValue, LLVMContext context) {
         return escapingValue;
     }
 
     @Specialization
-    protected Object escapingPrimitive(char escapingValue, LLVMContext context) {
+    public Object escapingPrimitive(char escapingValue, LLVMContext context) {
         return escapingValue;
     }
 
     @Specialization
-    protected Object escapingPrimitive(int escapingValue, LLVMContext context) {
+    public Object escapingPrimitive(int escapingValue, LLVMContext context) {
         return escapingValue;
     }
 
     @Specialization
-    protected Object escapingPrimitive(long escapingValue, LLVMContext context) {
+    public Object escapingPrimitive(long escapingValue, LLVMContext context) {
         return escapingValue;
     }
 
     @Specialization
-    protected Object escapingPrimitive(float escapingValue, LLVMContext context) {
+    public Object escapingPrimitive(float escapingValue, LLVMContext context) {
         return escapingValue;
     }
 
     @Specialization
-    protected Object escapingPrimitive(double escapingValue, LLVMContext context) {
+    public Object escapingPrimitive(double escapingValue, LLVMContext context) {
         return escapingValue;
     }
 
     @Specialization
-    protected Object escapingString(String escapingValue, LLVMContext context) {
+    public Object escapingString(String escapingValue, LLVMContext context) {
         return escapingValue;
     }
 
     @Specialization
-    protected Object escapingString(LLVMBoxedPrimitive escapingValue, LLVMContext context) {
+    public Object escapingString(LLVMBoxedPrimitive escapingValue, LLVMContext context) {
         return escapingValue.getValue();
     }
 
     @Specialization
-    protected TruffleObject escapingAddress(LLVMAddress escapingValue, LLVMContext context) {
+    public TruffleObject escapingAddress(LLVMAddress escapingValue, LLVMContext context) {
         if (LLVMAddress.nullPointer().equals(escapingValue)) {
             return new LLVMTruffleAddress(LLVMAddress.fromLong(0), new PointerType(null), context);
         }
@@ -130,65 +132,70 @@ public abstract class LLVMDataEscapeNode extends Node {
     }
 
     @Specialization
-    protected TruffleObject escapingFunction(LLVMFunctionDescriptor escapingValue, LLVMContext context) {
+    public TruffleObject escapingFunction(LLVMFunctionHandle escapingValue, LLVMContext context) {
+        return context.getFunctionDescriptor(escapingValue);
+    }
+
+    @Specialization
+    public TruffleObject escapingFunction(LLVMFunctionDescriptor escapingValue, LLVMContext context) {
         return escapingValue;
     }
 
     @Specialization
-    protected TruffleObject escapingVector(LLVMI8Vector vector, LLVMContext context) {
+    public TruffleObject escapingVector(LLVMI8Vector vector, LLVMContext context) {
         CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException("Exporting Vectors is not yet supported!");
     }
 
     @Specialization
-    protected TruffleObject escapingVector(LLVMI64Vector vector, LLVMContext context) {
+    public TruffleObject escapingVector(LLVMI64Vector vector, LLVMContext context) {
         CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException("Exporting Vectors is not yet supported!");
     }
 
     @Specialization
-    protected TruffleObject escapingVector(LLVMI32Vector vector, LLVMContext context) {
+    public TruffleObject escapingVector(LLVMI32Vector vector, LLVMContext context) {
         CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException("Exporting Vectors is not yet supported!");
     }
 
     @Specialization
-    protected TruffleObject escapingVector(LLVMI1Vector vector, LLVMContext context) {
+    public TruffleObject escapingVector(LLVMI1Vector vector, LLVMContext context) {
         CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException("Exporting Vectors is not yet supported!");
     }
 
     @Specialization
-    protected TruffleObject escapingVector(LLVMI16Vector vector, LLVMContext context) {
+    public TruffleObject escapingVector(LLVMI16Vector vector, LLVMContext context) {
         CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException("Exporting Vectors is not yet supported!");
     }
 
     @Specialization
-    protected TruffleObject escapingVector(LLVMFloatVector vector, LLVMContext context) {
+    public TruffleObject escapingVector(LLVMFloatVector vector, LLVMContext context) {
         CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException("Exporting Vectors is not yet supported!");
     }
 
     @Specialization
-    protected TruffleObject escapingVector(LLVMDoubleVector vector, LLVMContext context) {
+    public TruffleObject escapingVector(LLVMDoubleVector vector, LLVMContext context) {
         CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException("Exporting Vectors is not yet supported!");
     }
 
     @Specialization
-    protected TruffleObject escapingVarbit(LLVMIVarBit vector, LLVMContext context) {
+    public TruffleObject escapingVarbit(LLVMIVarBit vector, LLVMContext context) {
         CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException("Exporting VarBit is not yet supported!");
     }
 
     @Specialization
-    protected TruffleObject escapingTruffleObject(LLVMTruffleAddress address, LLVMContext context) {
+    public TruffleObject escapingTruffleObject(LLVMTruffleAddress address, LLVMContext context) {
         return address;
     }
 
     @Specialization
-    protected TruffleObject escapingTruffleObject(LLVMTruffleObject address, LLVMContext context) {
+    public TruffleObject escapingTruffleObject(LLVMTruffleObject address, LLVMContext context) {
         if (address.getOffset() == 0) {
             return address.getObject();
         } else {
@@ -198,17 +205,17 @@ public abstract class LLVMDataEscapeNode extends Node {
     }
 
     @Specialization
-    protected TruffleObject escapingJavaByteArray(LLVMVirtualAllocationAddress address, LLVMContext context) {
+    public TruffleObject escapingJavaByteArray(LLVMVirtualAllocationAddress address, LLVMContext context) {
         return new LLVMVirtualAllocationAddressTruffleObject(address.copy());
     }
 
     @Specialization
-    protected Object escapingTruffleObject(LLVMGlobal escapingValue, LLVMContext context) {
+    public Object escapingTruffleObject(LLVMGlobalVariable escapingValue, LLVMContext context) {
         return new LLVMSharedGlobalVariable(escapingValue, context);
     }
 
     @Specialization(guards = "escapingValue == null")
-    protected Object escapingNull(Object escapingValue, LLVMContext context) {
+    public Object escapingNull(Object escapingValue, LLVMContext context) {
         return new LLVMTruffleAddress(LLVMAddress.nullPointer(), new PointerType(null), context);
     }
 
@@ -220,14 +227,16 @@ public abstract class LLVMDataEscapeNode extends Node {
             return new LLVMTruffleAddress(LLVMAddress.nullPointer(), new PointerType(null), context);
         } else if (value instanceof LLVMAddress) {
             return new LLVMTruffleAddress((LLVMAddress) value, type, context);
+        } else if (value instanceof LLVMFunctionHandle) {
+            return context.getFunctionDescriptor((LLVMFunctionHandle) value);
         } else if (value instanceof LLVMTruffleObject && ((LLVMTruffleObject) value).getOffset() == 0) {
             return ((LLVMTruffleObject) value).getObject();
         } else if (value instanceof LLVMTruffleObject) {
             throw new IllegalStateException("TruffleObject after pointer arithmetic must not leave Sulong.");
         } else if (value instanceof LLVMVirtualAllocationAddress) {
             return new LLVMVirtualAllocationAddressTruffleObject(((LLVMVirtualAllocationAddress) value).copy());
-        } else if (value instanceof LLVMGlobal) {
-            return new LLVMSharedGlobalVariable((LLVMGlobal) value, context);
+        } else if (value instanceof LLVMGlobalVariable) {
+            return new LLVMSharedGlobalVariable((LLVMGlobalVariable) value, context);
         } else if (value == null) {
             return new LLVMTruffleAddress(LLVMAddress.nullPointer(), new PointerType(null), context);
         } else {

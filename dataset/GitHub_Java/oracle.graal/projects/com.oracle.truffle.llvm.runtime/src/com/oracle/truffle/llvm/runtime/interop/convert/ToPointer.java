@@ -38,89 +38,90 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress.LLVMVirtualAllocationAddressTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 abstract class ToPointer extends ForeignToLLVM {
 
     @Specialization
-    protected LLVMVirtualAllocationAddress fromLLVMByteArrayAddress(LLVMVirtualAllocationAddressTruffleObject value) {
+    public LLVMVirtualAllocationAddress fromLLVMByteArrayAddress(LLVMVirtualAllocationAddressTruffleObject value) {
         return value.getObject();
     }
 
     @Specialization
-    protected Object fromInt(int value) {
+    public Object fromInt(int value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromChar(char value) {
+    public Object fromChar(char value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromLong(long value) {
+    public Object fromLong(long value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromByte(byte value) {
+    public Object fromByte(byte value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromShort(short value) {
+    public Object fromShort(short value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromFloat(float value) {
+    public Object fromFloat(float value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromDouble(double value) {
+    public Object fromDouble(double value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected Object fromBoolean(boolean value) {
+    public Object fromBoolean(boolean value) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected String fromString(String obj) {
+    public String fromString(String obj) {
         return obj;
     }
 
     @Specialization
-    protected LLVMAddress fromLLVMTruffleAddress(LLVMTruffleAddress obj) {
+    public LLVMAddress fromLLVMTruffleAddress(LLVMTruffleAddress obj) {
         return obj.getAddress();
     }
 
     @Specialization
-    protected LLVMGlobal fromSharedDescriptor(LLVMSharedGlobalVariable shared) {
+    public LLVMGlobalVariable fromSharedDescriptor(LLVMSharedGlobalVariable shared) {
         return shared.getDescriptor();
     }
 
     @Specialization
-    protected LLVMFunctionDescriptor id(LLVMFunctionDescriptor fd) {
+    public LLVMFunctionDescriptor id(LLVMFunctionDescriptor fd) {
         return fd;
     }
 
     @Specialization
-    protected LLVMBoxedPrimitive id(LLVMBoxedPrimitive boxed) {
+    public LLVMBoxedPrimitive id(LLVMBoxedPrimitive boxed) {
         return boxed;
     }
 
     @Specialization(guards = {"checkIsPointer(obj)", "notLLVM(obj)"})
-    protected LLVMAddress fromNativePointer(TruffleObject obj) {
+    public LLVMAddress fromNativePointer(TruffleObject obj) {
         try {
             long raw = ForeignAccess.sendAsPointer(asPointer, obj);
             return LLVMAddress.fromLong(raw);
@@ -131,8 +132,8 @@ abstract class ToPointer extends ForeignToLLVM {
     }
 
     @Specialization(guards = {"!checkIsPointer(obj)", "notLLVM(obj)"})
-    protected LLVMTruffleObject fromTruffleObject(TruffleObject obj) {
-        return new LLVMTruffleObject(obj, PointerType.VOID);
+    public LLVMTruffleObject fromTruffleObject(TruffleObject obj) {
+        return new LLVMTruffleObject(obj, new PointerType(VoidType.INSTANCE));
     }
 
     @TruffleBoundary
@@ -162,7 +163,7 @@ abstract class ToPointer extends ForeignToLLVM {
                 throw new IllegalStateException("Foreign value is not a pointer!", ex);
             }
         } else if (value instanceof TruffleObject && !thiz.checkIsPointer((TruffleObject) value) && notLLVM((TruffleObject) value)) {
-            return new LLVMTruffleObject((TruffleObject) value, PointerType.VOID);
+            return new LLVMTruffleObject((TruffleObject) value, new PointerType(VoidType.INSTANCE));
         } else {
             throw UnsupportedTypeException.raise(new Object[]{value});
         }

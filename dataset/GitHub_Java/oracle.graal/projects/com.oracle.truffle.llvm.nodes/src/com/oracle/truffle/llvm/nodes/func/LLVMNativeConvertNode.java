@@ -44,25 +44,22 @@ import com.oracle.truffle.llvm.nodes.func.LLVMNativeConvertNodeFactory.FunctionT
 import com.oracle.truffle.llvm.nodes.func.LLVMNativeConvertNodeFactory.I1FromNativeToLLVMNodeGen;
 import com.oracle.truffle.llvm.nodes.func.LLVMNativeConvertNodeFactory.IdNodeGen;
 import com.oracle.truffle.llvm.nodes.func.LLVMNativeConvertNodeFactory.NativeToAddressNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.LLVMForceLLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.memory.LLVMForceLLVMAddressNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.NFIContextExtension;
-import com.oracle.truffle.llvm.runtime.LLVMNativeFunctions.NullPointerNode;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
+import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions.NullPointerNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType.PrimitiveKind;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-public abstract class LLVMNativeConvertNode extends LLVMNode {
+abstract class LLVMNativeConvertNode extends LLVMNode {
 
     public abstract Object executeConvert(VirtualFrame frame, Object arg);
 
@@ -82,7 +79,7 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
         return Message.TO_NATIVE.createNode();
     }
 
-    public static LLVMNativeConvertNode createToNative(Type argType) {
+    static LLVMNativeConvertNode createToNative(Type argType) {
         if (Type.isFunctionOrFunctionPointer(argType)) {
             return FunctionToNativeNodeGen.create();
         } else if (argType instanceof PointerType) {
@@ -91,7 +88,7 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
         return IdNodeGen.create();
     }
 
-    public static LLVMNativeConvertNode createFromNative(Type retType) {
+    static LLVMNativeConvertNode createFromNative(Type retType) {
         if (retType instanceof PointerType) {
             return NativeToAddressNodeGen.create();
         } else if (retType instanceof PrimitiveType && ((PrimitiveType) retType).getPrimitiveKind() == PrimitiveKind.I1) {
@@ -112,15 +109,31 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
             return globalAccess.getNativeLocation(address).getVal();
         }
 
-        protected LLVMForceLLVMAddressNode createLLVMForceLLVMAddressNode() {
-            return LLVMForceLLVMAddressNodeGen.create();
+        @SuppressWarnings("unused")
+        @Specialization(guards = "checkIsPointer(isPointer, truffleObject.getObject())")
+        long llvmTruffleObjectToNative(LLVMTruffleObject truffleObject, @Cached("createIsPointer()") Node isPointer, @Cached("createAsPointer()") Node asPointer) {
+            try {
+                return truffleObject.getOffset() + ForeignAccess.sendAsPointer(asPointer, truffleObject.getObject());
+            } catch (UnsupportedMessageException e) {
+                CompilerDirectives.transferToInterpreter();
+                UnsupportedTypeException.raise(new Object[]{truffleObject});
+                return 0;
+            }
         }
 
-        @Specialization
-        long doLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject truffleObject, @Cached("createLLVMForceLLVMAddressNode()") LLVMForceLLVMAddressNode toNative) {
-            return truffleObject.getOffset() + toNative.executeWithTarget(frame, truffleObject).getVal();
+        @SuppressWarnings("unused")
+        @Specialization(guards = "!checkIsPointer(isPointer, truffleObject.getObject())")
+        long llvmTruffleObjectToNative2(LLVMTruffleObject truffleObject, @Cached("createIsPointer()") Node isPointer, @Cached("createToNative()") Node toNative,
+                        @Cached("createAsPointer()") Node asPointer) {
+            try {
+                TruffleObject n = (TruffleObject) ForeignAccess.sendToNative(toNative, truffleObject.getObject());
+                return truffleObject.getOffset() + ForeignAccess.sendAsPointer(asPointer, n);
+            } catch (UnsupportedMessageException e) {
+                CompilerDirectives.transferToInterpreter();
+                UnsupportedTypeException.raise(new Object[]{truffleObject});
+                return 0;
+            }
         }
-
     }
 
     protected abstract static class NativeToAddress extends LLVMNativeConvertNode {
@@ -230,9 +243,7 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
         protected TruffleObject nullPointer() {
             if (nullPointer == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                LLVMContext context = getContext();
-                NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
-                nullPointer = insert(nfiContextExtension.getNativeSulongFunctions().createNullPointerNode(context));
+                nullPointer = insert(getContext().getNativeFunctions().createNullPointerNode());
             }
             return nullPointer.getNullPointer();
         }

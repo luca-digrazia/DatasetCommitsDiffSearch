@@ -42,78 +42,79 @@ import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 abstract class ToAnyLLVM extends ForeignToLLVM {
 
     @Specialization
-    protected int fromInt(int value) {
+    public int fromInt(int value) {
         return value;
     }
 
     @Specialization
-    protected char fromChar(char value) {
+    public char fromChar(char value) {
         return value;
     }
 
     @Specialization
-    protected long fromLong(long value) {
+    public long fromLong(long value) {
         return value;
     }
 
     @Specialization
-    protected byte fromByte(byte value) {
+    public byte fromByte(byte value) {
         return value;
     }
 
     @Specialization
-    protected short fromShort(short value) {
+    public short fromShort(short value) {
         return value;
     }
 
     @Specialization
-    protected float fromFloat(float value) {
+    public float fromFloat(float value) {
         return value;
     }
 
     @Specialization
-    protected double fromDouble(double value) {
+    public double fromDouble(double value) {
         return value;
     }
 
     @Specialization
-    protected boolean fromBoolean(boolean value) {
+    public boolean fromBoolean(boolean value) {
         return value;
     }
 
     @Specialization
-    protected String fromString(String obj) {
+    public String fromString(String obj) {
         return obj;
     }
 
     @Specialization
-    protected LLVMBoxedPrimitive fromBoxedPrimitive(LLVMBoxedPrimitive boxed) {
+    public LLVMBoxedPrimitive fromBoxedPrimitive(LLVMBoxedPrimitive boxed) {
         return boxed;
     }
 
     @Specialization
-    protected LLVMAddress fromLLVMTruffleAddress(LLVMTruffleAddress obj) {
+    public LLVMAddress fromLLVMTruffleAddress(LLVMTruffleAddress obj) {
         return obj.getAddress();
     }
 
     @Specialization
-    protected LLVMFunctionDescriptor fromLLVMFunctionDescriptor(LLVMFunctionDescriptor fd) {
+    public LLVMFunctionDescriptor fromLLVMFunctionDescriptor(LLVMFunctionDescriptor fd) {
         return fd;
     }
 
     @Specialization
-    protected LLVMGlobal fromSharedDescriptor(LLVMSharedGlobalVariable shared) {
+    public LLVMGlobalVariable fromSharedDescriptor(LLVMSharedGlobalVariable shared) {
         return shared.getDescriptor();
     }
 
     @Specialization(guards = {"checkIsPointer(obj)", "notLLVM(obj)"})
-    protected LLVMAddress fromNativePointer(TruffleObject obj) {
+    public LLVMAddress fromNativePointer(TruffleObject obj) {
         try {
             long raw = ForeignAccess.sendAsPointer(asPointer, obj);
             return LLVMAddress.fromLong(raw);
@@ -124,8 +125,8 @@ abstract class ToAnyLLVM extends ForeignToLLVM {
     }
 
     @Specialization(guards = {"!checkIsPointer(obj)", "notLLVM(obj)"})
-    protected LLVMTruffleObject fromTruffleObject(TruffleObject obj) {
-        return new LLVMTruffleObject(obj, PointerType.VOID);
+    public LLVMTruffleObject fromTruffleObject(TruffleObject obj) {
+        return new LLVMTruffleObject(obj, new PointerType(VoidType.INSTANCE));
     }
 
     @TruffleBoundary
@@ -155,7 +156,7 @@ abstract class ToAnyLLVM extends ForeignToLLVM {
                 throw new IllegalStateException("Foreign value is not a pointer!", ex);
             }
         } else if (value instanceof TruffleObject && !thiz.checkIsPointer((TruffleObject) value) && notLLVM((TruffleObject) value)) {
-            return new LLVMTruffleObject((TruffleObject) value, PointerType.VOID);
+            return new LLVMTruffleObject((TruffleObject) value, new PointerType(VoidType.INSTANCE));
         } else {
             throw UnsupportedTypeException.raise(new Object[]{value});
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,19 +31,40 @@ package com.oracle.truffle.llvm.nodes.memory.load;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.FloatValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-public abstract class LLVMFloatLoadNode extends LLVMLoadNode {
+@NodeChild(type = LLVMExpressionNode.class)
+public abstract class LLVMFloatLoadNode extends LLVMExpressionNode {
+    @Child protected Node foreignRead = Message.READ.createNode();
+    @Child protected ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.FLOAT);
+
+    protected float doForeignAccess(LLVMTruffleObject addr) {
+        try {
+            int index = (int) (addr.getOffset() / LLVMExpressionNode.FLOAT_SIZE_IN_BYTES);
+            Object value = ForeignAccess.sendRead(foreignRead, addr.getObject(), index);
+            return (float) toLLVM.executeWithTarget(value);
+        } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException(e);
+        }
+    }
 
     private final FloatValueProfile profile = FloatValueProfile.createRawIdentityProfile();
 
@@ -63,13 +84,9 @@ public abstract class LLVMFloatLoadNode extends LLVMLoadNode {
         return profile.profile(val);
     }
 
-    static LLVMForeignReadNode createForeignRead() {
-        return new LLVMForeignReadNode(ForeignToLLVMType.FLOAT, FLOAT_SIZE_IN_BYTES);
-    }
-
     @Specialization
-    public float executeFloat(VirtualFrame frame, LLVMTruffleObject addr, @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
-        return (float) foreignRead.execute(frame, addr);
+    public float executeFloat(LLVMTruffleObject addr) {
+        return doForeignAccess(addr);
     }
 
     @Specialization
