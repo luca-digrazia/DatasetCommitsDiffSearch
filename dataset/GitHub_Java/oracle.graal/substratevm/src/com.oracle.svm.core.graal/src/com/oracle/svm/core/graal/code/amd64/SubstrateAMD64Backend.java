@@ -28,12 +28,10 @@ import static jdk.vm.ci.amd64.AMD64.rax;
 import static jdk.vm.ci.amd64.AMD64.rdi;
 import static jdk.vm.ci.amd64.AMD64.rsp;
 import static jdk.vm.ci.amd64.AMD64.xmm0;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.asm.Assembler;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
-import org.graalvm.compiler.asm.amd64.AMD64Address.Scale;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.code.CompilationResult;
@@ -73,7 +71,7 @@ import org.graalvm.compiler.lir.amd64.AMD64FrameMapBuilder;
 import org.graalvm.compiler.lir.amd64.AMD64LIRInstruction;
 import org.graalvm.compiler.lir.amd64.AMD64Move;
 import org.graalvm.compiler.lir.amd64.AMD64Move.MoveFromConstOp;
-import org.graalvm.compiler.lir.amd64.AMD64Move.PointerCompressionOp;
+import org.graalvm.compiler.lir.amd64.AMD64Move.UncompressPointerOp;
 import org.graalvm.compiler.lir.amd64.AMD64PrefetchOp;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
@@ -649,7 +647,7 @@ public class SubstrateAMD64Backend extends Backend {
          * looks performance-critical, it is still faster to memorize the original constant in the
          * node.
          */
-        public static final class LoadCompressedObjectConstantOp extends PointerCompressionOp implements LoadConstantOp {
+        public static class LoadCompressedObjectConstantOp extends UncompressPointerOp implements LoadConstantOp {
             public static final LIRInstructionClass<LoadCompressedObjectConstantOp> TYPE = LIRInstructionClass.create(LoadCompressedObjectConstantOp.class);
             private final SubstrateObjectConstant constant;
 
@@ -661,20 +659,6 @@ public class SubstrateAMD64Backend extends Backend {
             @Override
             public Constant getConstant() {
                 return constant;
-            }
-
-            @Override
-            public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-                Register resultReg = asRegister(getResult());
-                Register baseReg = hasBase(crb.getOptions(), encoding) ? getBaseRegister() : Register.None;
-
-                /*
-                 * WARNING: must NOT have side effects. Preserve the flags register!
-                 */
-
-                move(lirKindTool.getNarrowOopKind(), crb, masm);
-                assert !baseReg.equals(Register.None) || getShift() != 0 : "no compression in place";
-                masm.leaq(resultReg, new AMD64Address(baseReg, resultReg, Scale.fromShift(getShift())));
             }
         }
     }
@@ -716,7 +700,7 @@ public class SubstrateAMD64Backend extends Backend {
     }
 
     protected AMD64ArithmeticLIRGenerator createArithmeticLIRGen() {
-        return new AMD64ArithmeticLIRGenerator(null);
+        return new AMD64ArithmeticLIRGenerator();
     }
 
     protected AMD64MoveFactoryBase createMoveFactory(LIRGenerationResult lirGenRes, BackupSlotProvider backupSlotProvider) {
