@@ -223,7 +223,7 @@ public abstract class LLVMInteropType implements TruffleObject {
         }
 
         boolean contains(long offset) {
-            return startOffset <= offset && ((startOffset == endOffset) | offset < endOffset);
+            return startOffset <= offset && offset < endOffset;
         }
 
         public String getName() {
@@ -248,7 +248,7 @@ public abstract class LLVMInteropType implements TruffleObject {
         return new InteropTypeFactory().getStructured(type);
     }
 
-    private static final class InteropTypeFactory {
+    private static class InteropTypeFactory {
 
         private final IdentityHashMap<LLVMSourceType, LLVMInteropType> typeCache = new IdentityHashMap<>();
 
