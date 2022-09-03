@@ -84,20 +84,8 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         return getObjectUnsafe(slot);
     }
 
-    private Object[] getLocals() {
-        return CompilerDirectives.unsafeCast(locals, Object[].class, true);
-    }
-
-    private long[] getPrimitiveLocals() {
-        return CompilerDirectives.unsafeCast(this.primitiveLocals, long[].class, true);
-    }
-
-    private byte[] getTags() {
-        return CompilerDirectives.unsafeCast(tags, byte[].class, true);
-    }
-
     private Object getObjectUnsafe(FrameSlot slot) {
-        return CompilerDirectives.unsafeGetObject(getLocals(), (long) slot.getIndex() * Unsafe.ARRAY_OBJECT_INDEX_SCALE + Unsafe.ARRAY_OBJECT_BASE_OFFSET, true, slot);
+        return CompilerDirectives.unsafeGetObject(locals, (long) slot.getIndex() * Unsafe.ARRAY_OBJECT_INDEX_SCALE + Unsafe.ARRAY_OBJECT_BASE_OFFSET, true, slot);
     }
 
     @Override
@@ -107,7 +95,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setObjectUnsafe(FrameSlot slot, Object value) {
-        CompilerDirectives.unsafePutObject(getLocals(), (long) slot.getIndex() * Unsafe.ARRAY_OBJECT_INDEX_SCALE + Unsafe.ARRAY_OBJECT_BASE_OFFSET, value, slot);
+        CompilerDirectives.unsafePutObject(locals, (long) slot.getIndex() * Unsafe.ARRAY_OBJECT_INDEX_SCALE + Unsafe.ARRAY_OBJECT_BASE_OFFSET, value, slot);
     }
 
     @Override
@@ -117,7 +105,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private byte getByteUnsafe(FrameSlot slot) {
-        return CompilerDirectives.unsafeGetByte(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
+        return CompilerDirectives.unsafeGetByte(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
     }
 
     @Override
@@ -127,7 +115,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setByteUnsafe(FrameSlot slot, byte value) {
-        CompilerDirectives.unsafePutByte(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
+        CompilerDirectives.unsafePutByte(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
     }
 
     @Override
@@ -137,7 +125,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private boolean getBooleanUnsafe(FrameSlot slot) {
-        return CompilerDirectives.unsafeGetBoolean(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
+        return CompilerDirectives.unsafeGetBoolean(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
     }
 
     @Override
@@ -147,7 +135,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setBooleanUnsafe(FrameSlot slot, boolean value) {
-        CompilerDirectives.unsafePutBoolean(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
+        CompilerDirectives.unsafePutBoolean(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
     }
 
     @Override
@@ -157,7 +145,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private float getFloatUnsafe(FrameSlot slot) {
-        return CompilerDirectives.unsafeGetFloat(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
+        return CompilerDirectives.unsafeGetFloat(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
     }
 
     @Override
@@ -167,7 +155,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setFloatUnsafe(FrameSlot slot, float value) {
-        CompilerDirectives.unsafePutFloat(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
+        CompilerDirectives.unsafePutFloat(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
     }
 
     @Override
@@ -177,7 +165,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private long getLongUnsafe(FrameSlot slot) {
-        return CompilerDirectives.unsafeGetLong(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
+        return CompilerDirectives.unsafeGetLong(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
     }
 
     @Override
@@ -187,7 +175,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setLongUnsafe(FrameSlot slot, long value) {
-        CompilerDirectives.unsafePutLong(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
+        CompilerDirectives.unsafePutLong(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
     }
 
     @Override
@@ -197,7 +185,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private int getIntUnsafe(FrameSlot slot) {
-        return CompilerDirectives.unsafeGetInt(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
+        return CompilerDirectives.unsafeGetInt(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
     }
 
     @Override
@@ -207,7 +195,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setIntUnsafe(FrameSlot slot, int value) {
-        CompilerDirectives.unsafePutInt(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
+        CompilerDirectives.unsafePutInt(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
     }
 
     @Override
@@ -217,7 +205,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private double getDoubleUnsafe(FrameSlot slot) {
-        return CompilerDirectives.unsafeGetDouble(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
+        return CompilerDirectives.unsafeGetDouble(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, true, slot);
     }
 
     @Override
@@ -227,7 +215,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     }
 
     private void setDoubleUnsafe(FrameSlot slot, double value) {
-        CompilerDirectives.unsafePutDouble(getPrimitiveLocals(), (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
+        CompilerDirectives.unsafePutDouble(primitiveLocals, (long) slot.getIndex() * Unsafe.ARRAY_LONG_INDEX_SCALE + Unsafe.ARRAY_LONG_BASE_OFFSET, value, slot);
     }
 
     @Override
@@ -237,25 +225,25 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
 
     private void verifySet(FrameSlot slot, FrameSlotKind accessKind) {
         int slotIndex = slot.getIndex();
-        if (slotIndex >= getTags().length) {
+        if (slotIndex >= tags.length) {
             CompilerDirectives.transferToInterpreter();
             resize();
         }
-        getTags()[slotIndex] = (byte) accessKind.ordinal();
+        tags[slotIndex] = (byte) accessKind.ordinal();
     }
 
     private void verifyGet(FrameSlot slot, FrameSlotKind accessKind) throws FrameSlotTypeException {
         int slotIndex = slot.getIndex();
-        if (slotIndex >= getTags().length) {
+        if (slotIndex >= tags.length) {
             CompilerDirectives.transferToInterpreter();
             resize();
         }
-        byte tag = this.getTags()[slotIndex];
+        byte tag = this.tags[slotIndex];
         if (accessKind == FrameSlotKind.Object ? tag != 0 : tag != accessKind.ordinal()) {
             CompilerDirectives.transferToInterpreter();
             if (slot.getKind() == accessKind || tag == 0) {
                 descriptor.getTypeConversion().updateFrameSlot(this, slot, getValue(slot));
-                if (getTags()[slotIndex] == accessKind.ordinal()) {
+                if (tags[slotIndex] == accessKind.ordinal()) {
                     return;
                 }
             }
@@ -266,11 +254,11 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     @Override
     public Object getValue(FrameSlot slot) {
         int slotIndex = slot.getIndex();
-        if (slotIndex >= getTags().length) {
+        if (slotIndex >= tags.length) {
             CompilerDirectives.transferToInterpreter();
             resize();
         }
-        byte tag = getTags()[slotIndex];
+        byte tag = tags[slotIndex];
         if (tag == FrameSlotKind.Boolean.ordinal()) {
             return getBooleanUnsafe(slot);
         } else if (tag == FrameSlotKind.Byte.ordinal()) {
@@ -303,10 +291,10 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
     @Override
     public boolean isInitialized(FrameSlot slot) {
         int slotIndex = slot.getIndex();
-        if (slotIndex >= getTags().length) {
+        if (slotIndex >= tags.length) {
             CompilerDirectives.transferToInterpreter();
             resize();
         }
-        return getTags()[slotIndex] != 0;
+        return tags[slotIndex] != 0;
     }
 }

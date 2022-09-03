@@ -55,6 +55,8 @@ import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.graal.truffle.nodes.frame.*;
 import com.oracle.graal.truffle.nodes.frame.NewFrameNode.VirtualOnlyInstanceNode;
 import com.oracle.graal.truffle.phases.*;
+import com.oracle.graal.truffle.printer.*;
+import com.oracle.graal.truffle.printer.method.*;
 import com.oracle.graal.virtual.phases.ea.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
@@ -105,6 +107,10 @@ public class PartialEvaluator {
 
         final StructuredGraph graph = new StructuredGraph(executeHelperMethod);
 
+        if (TruffleInlinePrinter.getValue()) {
+            InlinePrinterProcessor.initialize();
+        }
+
         Debug.scope("createGraph", graph, new Runnable() {
 
             @Override
@@ -133,6 +139,11 @@ public class PartialEvaluator {
                 expandTree(graph, assumptions);
 
                 new VerifyFrameDoesNotEscapePhase().apply(graph, false);
+
+                if (TruffleInlinePrinter.getValue()) {
+                    InlinePrinterProcessor.printTree();
+                    InlinePrinterProcessor.reset();
+                }
 
                 if (TraceTruffleCompilationDetails.getValue() && constantReceivers != null) {
                     DebugHistogram histogram = Debug.createHistogram("Expanded Truffle Nodes");
@@ -185,6 +196,9 @@ public class PartialEvaluator {
             for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.class)) {
                 InvokeKind kind = methodCallTargetNode.invokeKind();
                 if (kind == InvokeKind.Static || (kind == InvokeKind.Special && (methodCallTargetNode.receiver().isConstant() || methodCallTargetNode.receiver() instanceof NewFrameNode))) {
+                    if (TruffleInlinePrinter.getValue()) {
+                        InlinePrinterProcessor.addInlining(MethodHolder.getNewTruffleExecuteMethod(methodCallTargetNode));
+                    }
                     if (TraceTruffleCompilationDetails.getValue() && kind == InvokeKind.Special) {
                         ConstantNode constantNode = (ConstantNode) methodCallTargetNode.arguments().first();
                         constantReceivers.add(constantNode.asConstant());

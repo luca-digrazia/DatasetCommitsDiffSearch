@@ -29,6 +29,7 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.impl.*;
@@ -53,21 +54,21 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
         }
     }
 
-    private InstalledCode installedCode;
+    private HotSpotNmethod compiledMethod;
     private final TruffleCompiler compiler;
     private final CompilationPolicy compilationPolicy;
+
     private boolean disableCompilation;
+
     private int callCount;
-
-    /**
-     * Number of times an installed code for this tree was invalidated.
-     */
     private int invalidationCount;
-
-    /**
-     * Number of times a node was replaced in this tree.
-     */
-    private int nodeReplaceCount;
+    private int replaceCount;
+    long timeCompilationStarted;
+    long timePartialEvaluationFinished;
+    long timeCompilationFinished;
+    int codeSize;
+    int nodeCountPartialEval;
+    int nodeCountLowered;
 
     @Override
     public Object call(PackedFrame caller, Arguments args) {
@@ -78,9 +79,9 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
         if (TruffleCallTargetProfiling.getValue()) {
             callCount++;
         }
-        if (CompilerDirectives.injectBranchProbability(CompilerDirectives.FASTPATH_PROBABILITY, installedCode != null)) {
+        if (CompilerDirectives.injectBranchProbability(CompilerDirectives.FASTPATH_PROBABILITY, compiledMethod != null)) {
             try {
-                return installedCode.execute(this, caller, args);
+                return compiledMethod.execute(this, caller, args);
             } catch (InvalidInstalledCodeException ex) {
                 return compiledCodeInvalidated(caller, args);
             }
@@ -90,21 +91,15 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
     }
 
     private Object compiledCodeInvalidated(PackedFrame caller, Arguments args) {
-        invalidate();
-        return call(caller, args);
-    }
-
-    private void invalidate() {
-        InstalledCode m = this.installedCode;
-        if (m != null) {
-            CompilerAsserts.neverPartOfCompilation();
-            installedCode = null;
-            invalidationCount++;
-            compilationPolicy.compilationInvalidated();
-            if (TraceTruffleCompilation.getValue()) {
-                OUT.printf("[truffle] invalidated %-48s |Inv# %d                                     |Replace# %d\n", rootNode, invalidationCount, nodeReplaceCount);
-            }
+        CompilerAsserts.neverPartOfCompilation();
+        compiledMethod = null;
+        invalidationCount++;
+        compilationPolicy.compilationInvalidated();
+        if (TraceTruffleCompilation.getValue()) {
+            OUT.printf("[truffle] invalidated %-48s |Alive %5.0fms |Inv# %d                                     |Replace# %d\n", rootNode, (System.nanoTime() - timeCompilationFinished) / 1e6,
+                            invalidationCount, replaceCount);
         }
+        return call(caller, args);
     }
 
     private Object interpreterCall(PackedFrame caller, Arguments args) {
@@ -134,10 +129,16 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
     public void compile() {
         CompilerAsserts.neverPartOfCompilation();
         try {
-            installedCode = compiler.compile(this);
-            if (installedCode == null) {
-                throw new BailoutException(String.format("code installation failed"));
+            compiledMethod = (HotSpotNmethod) compiler.compile(this);
+            if (compiledMethod == null) {
+                throw new BailoutException(String.format("code installation failed (codeSize=%s)", codeSize));
             } else {
+                if (TraceTruffleCompilation.getValue()) {
+                    int nodeCountTruffle = NodeUtil.countNodes(rootNode);
+                    OUT.printf("[truffle] optimized %-50s |Nodes %7d |Time %5.0f(%4.0f+%-4.0f)ms |Nodes %5d/%5d |CodeSize %d\n", rootNode, nodeCountTruffle,
+                                    (timeCompilationFinished - timeCompilationStarted) / 1e6, (timePartialEvaluationFinished - timeCompilationStarted) / 1e6,
+                                    (timeCompilationFinished - timePartialEvaluationFinished) / 1e6, nodeCountPartialEval, nodeCountLowered, codeSize);
+                }
                 if (TruffleCallTargetProfiling.getValue()) {
                     resetProfiling();
                 }
@@ -181,8 +182,13 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
 
     @Override
     public void nodeReplaced() {
-        nodeReplaceCount++;
-        invalidate();
+        replaceCount++;
+        if (compiledMethod != null) {
+            if (compiledMethod.isValid()) {
+                compiledMethod.invalidate();
+            }
+            compiledMethod = null;
+        }
         compilationPolicy.nodeReplaced();
     }
 
@@ -396,7 +402,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
             int notInlinedCallSiteCount = InliningHelper.getInlinableCallSites(callTarget).size();
             int nodeCount = NodeUtil.countNodes(callTarget.rootNode);
             int inlinedCallSiteCount = NodeUtil.countNodes(callTarget.rootNode, InlinedCallSite.class);
-            String comment = callTarget.installedCode == null ? " int" : "";
+            String comment = callTarget.compiledMethod == null ? " int" : "";
             comment += callTarget.disableCompilation ? " fail" : "";
             OUT.printf("%-50s | %10d | %15d | %15d | %10d | %3d%s\n", callTarget.getRootNode(), callTarget.callCount, inlinedCallSiteCount, notInlinedCallSiteCount, nodeCount,
                             callTarget.invalidationCount, comment);

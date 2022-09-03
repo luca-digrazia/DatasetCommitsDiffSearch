@@ -79,6 +79,8 @@ public class TruffleCompilerOptions {
     @Option(help = "")
     public static final OptionValue<Boolean> TraceTruffleCacheDetails = new OptionValue<>(false);
     @Option(help = "")
+    public static final OptionValue<Boolean> TruffleInlinePrinter = new OptionValue<>(false);
+    @Option(help = "")
     public static final OptionValue<Boolean> TraceTruffleCompilationExceptions = new OptionValue<>(true);
     @Option(help = "")
     public static final OptionValue<Boolean> TruffleCompilationExceptionsAreFatal = new OptionValue<>(true);

@@ -33,31 +33,31 @@ import com.oracle.graal.nodes.type.*;
  * Node for a {@linkplain ForeignCallDescriptor foreign} call.
  */
 @NodeInfo(nameTemplate = "ForeignCall#{p#descriptor/s}")
-public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowerable, DeoptimizingNode, MemoryCheckpoint.Multi {
+public class ForeignCallNode extends AbstractStateSplit implements LIRLowerable, DeoptimizingNode, MemoryCheckpoint.Multi {
 
     @Input private final NodeInputList<ValueNode> arguments;
-    private final ForeignCallsProvider foreignCalls;
+    private final MetaAccessProvider metaAccess;
     @Input private FrameState deoptState;
 
     private final ForeignCallDescriptor descriptor;
 
-    public ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, ValueNode... arguments) {
+    public ForeignCallNode(@InjectedNodeParameter MetaAccessProvider metaAccess, ForeignCallDescriptor descriptor, ValueNode... arguments) {
         super(StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())));
         this.arguments = new NodeInputList<>(this, arguments);
         this.descriptor = descriptor;
-        this.foreignCalls = foreignCalls;
+        this.metaAccess = metaAccess;
     }
 
-    protected ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp) {
+    protected ForeignCallNode(@InjectedNodeParameter MetaAccessProvider metaAccess, ForeignCallDescriptor descriptor, Stamp stamp) {
         super(stamp);
         this.arguments = new NodeInputList<>(this);
         this.descriptor = descriptor;
-        this.foreignCalls = foreignCalls;
+        this.metaAccess = metaAccess;
     }
 
     @Override
     public boolean hasSideEffect() {
-        return !foreignCalls.isReexecutable(descriptor);
+        return !metaAccess.isReexecutable(descriptor);
     }
 
     public ForeignCallDescriptor getDescriptor() {
@@ -66,7 +66,7 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
 
     @Override
     public LocationIdentity[] getLocationIdentities() {
-        return foreignCalls.getKilledLocations(descriptor);
+        return metaAccess.getKilledLocations(descriptor);
     }
 
     protected Value[] operands(LIRGeneratorTool gen) {
@@ -79,7 +79,7 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        ForeignCallLinkage linkage = gen.getForeignCalls().lookupForeignCall(descriptor);
+        ForeignCallLinkage linkage = gen.getCodeCache().lookupForeignCall(descriptor);
         Value[] operands = operands(gen);
         Value result = gen.emitForeignCall(linkage, this, operands);
         if (result != null) {
@@ -126,7 +126,7 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
 
     @Override
     public boolean canDeoptimize() {
-        return foreignCalls.canDeoptimize(descriptor);
+        return metaAccess.canDeoptimize(descriptor);
     }
 
     @Override
