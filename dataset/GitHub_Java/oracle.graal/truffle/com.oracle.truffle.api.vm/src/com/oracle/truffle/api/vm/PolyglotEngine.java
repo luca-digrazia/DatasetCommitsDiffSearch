@@ -51,7 +51,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
@@ -59,7 +58,6 @@ import com.oracle.truffle.api.TruffleLanguage.Registration;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.ExecutionEvent;
 import com.oracle.truffle.api.debug.SuspendedEvent;
-import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.instrument.Instrumenter;
@@ -108,12 +106,6 @@ import com.oracle.truffle.api.source.Source;
 @SuppressWarnings("rawtypes")
 public class PolyglotEngine {
     static final boolean JAVA_INTEROP_ENABLED = !Boolean.getBoolean("com.oracle.truffle.aot");
-    private static final Executor DIRECT_EXECUTOR = new Executor() {
-        @Override
-        public void execute(Runnable command) {
-            command.run();
-        }
-    };
 
     static final Logger LOG = Logger.getLogger(PolyglotEngine.class.getName());
     private static final SPIAccessor SPI = new SPIAccessor();
@@ -357,7 +349,12 @@ public class PolyglotEngine {
             if (in == null) {
                 in = System.in;
             }
-            Executor nonNullExecutor = executor != null ? executor : DIRECT_EXECUTOR;
+            Executor nonNullExecutor = executor != null ? executor : new Executor() {
+                @Override
+                public void execute(Runnable command) {
+                    command.run();
+                }
+            };
             return new PolyglotEngine(nonNullExecutor, globals, out, err, in, handlers.toArray(new EventConsumer[0]));
         }
     }
@@ -529,37 +526,22 @@ public class PolyglotEngine {
     }
 
     @SuppressWarnings("try")
-    final Object invokeForeign(final Node foreignNode, VirtualFrame frame, final TruffleObject receiver) throws IOException {
+    final Object invokeForeign(final Node foreignNode, final VirtualFrame frame, final TruffleObject receiver) throws IOException {
         final Object[] res = {null, null};
-        if (executor == DIRECT_EXECUTOR) {
-            try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
-                final Object[] args = ForeignAccess.getArguments(frame).toArray();
-                res[0] = ForeignAccess.execute(foreignNode, frame, receiver, args);
-            }
-        } else {
-            invokeForeignOnExecutor(foreignNode, frame, receiver, res);
-        }
-        exceptionCheck(res);
-        if (res[0] instanceof TruffleObject) {
-            return new EngineTruffleObject(this, (TruffleObject) res[0]);
-        } else {
-            return res[0];
-        }
-    }
-
-    @TruffleBoundary
-    private void invokeForeignOnExecutor(final Node foreignNode, VirtualFrame frame, final TruffleObject receiver, final Object[] res) throws IOException {
-        final MaterializedFrame materialized = frame.materialize();
         final CountDownLatch computed = new CountDownLatch(1);
+        final Thread caller = Thread.currentThread();
         executor.execute(new Runnable() {
-            @SuppressWarnings("try")
             @Override
             public void run() {
                 try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
-                    final Object[] args = ForeignAccess.getArguments(materialized).toArray();
-                    RootNode node = SymbolInvokerImpl.createTemporaryRoot(TruffleLanguage.class, foreignNode, receiver, args.length);
-                    final CallTarget target = Truffle.getRuntime().createCallTarget(node);
-                    res[0] = target.call(args);
+                    final Object[] args = ForeignAccess.getArguments(frame).toArray();
+                    if (caller != Thread.currentThread()) {
+                        RootNode node = SymbolInvokerImpl.createTemporaryRoot(TruffleLanguage.class, foreignNode, receiver, args.length);
+                        final CallTarget target = Truffle.getRuntime().createCallTarget(node);
+                        res[0] = target.call(args);
+                    } else {
+                        res[0] = ForeignAccess.execute(foreignNode, frame, receiver, args);
+                    }
                 } catch (Exception ex) {
                     res[1] = ex;
                 } finally {
@@ -571,6 +553,12 @@ public class PolyglotEngine {
             computed.await();
         } catch (InterruptedException ex) {
             throw new InterruptedIOException(ex.getMessage());
+        }
+        exceptionCheck(res);
+        if (res[0] instanceof TruffleObject) {
+            return new EngineTruffleObject(this, (TruffleObject) res[0]);
+        } else {
+            return res[0];
         }
     }
 
