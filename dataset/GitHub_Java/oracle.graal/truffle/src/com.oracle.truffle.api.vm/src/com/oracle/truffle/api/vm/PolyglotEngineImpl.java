@@ -336,30 +336,22 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     @Override
     public Language getLanguage(String id) {
         checkEngine(this);
-        Language language = idToPublicLanguage.get(id);
-        if (language == null) {
-            throw new IllegalArgumentException(String.format("A language with id '%s' is not installed. Installed languages are: %s.", id, getLanguages().keySet()));
-        }
-        return language;
+        return idToPublicLanguage.get(id);
     }
 
     @Override
     public Instrument getInstrument(String id) {
         checkEngine(this);
-        Instrument instrument = idToInstrument.get(id);
-        if (instrument == null) {
-            throw new IllegalArgumentException(String.format("An instruments with id '%s' is not installed. Installed instruments are: %s.", id, getInstruments().keySet()));
-        }
-        return instrument;
+        return idToInstrument.get(id);
     }
 
     @Override
-    public PolyglotContext createPolyglotContext(OutputStream providedOut, OutputStream providedErr, InputStream providedIn, Map<String, String[]> arguments, Map<String, String> options) {
+    public PolyglotContext createPolyglotContext(OutputStream providedOut, OutputStream providedErr, InputStream providedIn, Map<String, String> options) {
         checkEngine(this);
         OutputStream useOut = providedOut == null ? out : providedOut;
         OutputStream useErr = providedErr == null ? err : providedErr;
         InputStream useIn = providedIn == null ? in : providedIn;
-        PolyglotContextImpl contextImpl = new PolyglotContextImpl(this, useOut, useErr, useIn, options, arguments, null);
+        PolyglotContextImpl contextImpl = new PolyglotContextImpl(this, useOut, useErr, useIn, options, null);
         return impl.getAPIAccess().newPolyglotContext(api, contextImpl);
     }
 
