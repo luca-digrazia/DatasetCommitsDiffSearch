@@ -24,6 +24,8 @@
  */
 package com.oracle.truffle.api.instrumentation;
 
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
@@ -72,17 +74,15 @@ public final class AllocationReporter {
     public static final String PROPERTY_ACTIVE = "active";
 
     final LanguageInfo language;
-    private final PropChangeSupport propSupport = new PropChangeSupport(this);
-    private final ThreadLocal<LinkedList<Reference<Object>>> valueCheck;
+    private final PropertyChangeSupport propSupport = new PropertyChangeSupport(this);
+    private ThreadLocal<LinkedList<Reference<Object>>> valueCheck;
 
     @CompilationFinal private volatile Assumption listenersNotChangedAssumption = Truffle.getRuntime().createAssumption();
     @CompilationFinal(dimensions = 1) private volatile AllocationListener[] listeners = null;
 
     AllocationReporter(LanguageInfo language) {
         this.language = language;
-        boolean assertions = false;
-        assert (assertions = true) == true;
-        valueCheck = (assertions) ? new ThreadLocal<>() : null;
+        assert (valueCheck = new ThreadLocal<>()) != null;
     }
 
     /**
@@ -92,8 +92,7 @@ public final class AllocationReporter {
      * @since 0.27
      * @see #PROPERTY_ACTIVE
      */
-    public void addPropertyChangeListener(java.beans.PropertyChangeListener listener) {
-        // Using FQN to avoid mx to generate dependency on java.desktop JDK9 module
+    public void addPropertyChangeListener(PropertyChangeListener listener) {
         propSupport.addPropertyChangeListener(listener);
     }
 
@@ -103,8 +102,7 @@ public final class AllocationReporter {
      * @since 0.27
      * @see #addPropertyChangeListener(java.beans.PropertyChangeListener)
      */
-    public void removePropertyChangeListener(java.beans.PropertyChangeListener listener) {
-        // Using FQN to avoid mx to generate dependency on java.desktop JDK9 module
+    public void removePropertyChangeListener(PropertyChangeListener listener) {
         propSupport.removePropertyChangeListener(listener);
     }
 
@@ -112,7 +110,7 @@ public final class AllocationReporter {
      * Test if the reporter instance is actually doing some reporting when notify methods are
      * called. Methods {@link #onEnter(java.lang.Object, long, long)} and
      * {@link #onReturnValue(java.lang.Object, long, long)} have no effect when this method returns
-     * false. A {@link java.beans.PropertyChangeListener} can be
+     * false. A {@link PropertyChangeListener} can be
      * {@link #addPropertyChangeListener(java.beans.PropertyChangeListener) added} to listen on
      * changes of this property.
      *
@@ -212,20 +210,14 @@ public final class AllocationReporter {
      * @since 0.27
      */
     public void onEnter(Object valueToReallocate, long oldSize, long newSizeEstimate) {
-        if (valueCheck != null) {
-            enterSizeCheck(valueToReallocate, oldSize, newSizeEstimate);
-            if (valueToReallocate != null) {
-                allocateValueCheck(valueToReallocate);
-            }
-        }
+        assert enterSizeCheck(valueToReallocate, oldSize, newSizeEstimate);
+        assert valueToReallocate == null || allocateValueCheck(valueToReallocate);
         notifyAllocateOrReallocate(valueToReallocate, oldSize, newSizeEstimate);
     }
 
     @ExplodeLoop
     private void notifyAllocateOrReallocate(Object value, long oldSize, long newSizeEstimate) {
-        if (valueCheck != null) {
-            setValueCheck(value);
-        }
+        assert setValueCheck(value);
         CompilerAsserts.partialEvaluationConstant(this);
         if (!listenersNotChangedAssumption.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -264,10 +256,8 @@ public final class AllocationReporter {
      * @since 0.27
      */
     public void onReturnValue(Object value, long oldSize, long newSize) {
-        if (valueCheck != null) {
-            allocateValueCheck(value);
-            allocatedCheck(value, oldSize, newSize);
-        }
+        assert allocateValueCheck(value);
+        assert allocatedCheck(value, oldSize, newSize);
         notifyAllocated(value, oldSize, newSize);
     }
 
@@ -287,10 +277,11 @@ public final class AllocationReporter {
     }
 
     @TruffleBoundary
-    private static void enterSizeCheck(Object valueToReallocate, long oldSize, long newSizeEstimate) {
+    private static boolean enterSizeCheck(Object valueToReallocate, long oldSize, long newSizeEstimate) {
         assert (newSizeEstimate == SIZE_UNKNOWN || newSizeEstimate > 0) : "Wrong new size estimate = " + newSizeEstimate;
         assert valueToReallocate != null || oldSize == 0 : "Old size must be 0 for new allocations. Was: " + oldSize;
         assert valueToReallocate == null || (oldSize > 0 || oldSize == SIZE_UNKNOWN) : "Old size of a re-allocated value must be positive or unknown. Was: " + oldSize;
+        return true;
     }
 
     @TruffleBoundary
@@ -305,34 +296,38 @@ public final class AllocationReporter {
     }
 
     @TruffleBoundary
-    private static void allocateValueCheck(Object value) {
+    private static boolean allocateValueCheck(Object value) {
         if (value == null) {
             throw new NullPointerException("No allocated value.");
         }
         // Strings are O.K.
         if (value instanceof String) {
-            return;
+            return true;
         }
         // Primitive types are O.K.
         if (value instanceof Boolean || value instanceof Byte || value instanceof Character ||
                         value instanceof Short || value instanceof Integer || value instanceof Long ||
                         value instanceof Float || value instanceof Double) {
-            return;
+            return true;
         }
         // TruffleObject is O.K.
         boolean isTO = InstrumentationHandler.ACCESSOR.isTruffleObject(value);
         assert isTO : "Wrong value class, TruffleObject is required. Was: " + value.getClass().getName();
+        return isTO;
     }
 
     @TruffleBoundary
-    private void allocatedCheck(Object value, long oldSize, long newSize) {
+    private boolean allocatedCheck(Object value, long oldSize, long newSize) {
         LinkedList<Reference<Object>> list = valueCheck.get();
-        assert list != null && !list.isEmpty() : "onEnter() was not called";
-        Object orig = list.removeLast().get();
-        assert orig == null || orig == value : "A different reallocated value. Was: " + orig + " now is: " + value;
-        assert orig == null && oldSize == 0 || orig != null : "Old size must be 0 for new allocations. Was: " + oldSize;
-        assert orig != null && (oldSize > 0 || oldSize == SIZE_UNKNOWN) || orig == null : "Old size of a re-allocated value must be positive or unknown. Was: " + oldSize;
-        assert newSize == SIZE_UNKNOWN || newSize > 0 : "New value size must be positive or unknown. Was: " + newSize;
+        if (list != null && !list.isEmpty()) {
+            assert list != null && !list.isEmpty() : "onEnter() was not called";
+            Object orig = list.removeLast().get();
+            assert orig == null || orig == value : "A different reallocated value. Was: " + orig + " now is: " + value;
+            assert orig == null && oldSize == 0 || orig != null : "Old size must be 0 for new allocations. Was: " + oldSize;
+            assert orig != null && (oldSize > 0 || oldSize == SIZE_UNKNOWN) || orig == null : "Old size of a re-allocated value must be positive or unknown. Was: " + oldSize;
+            assert newSize == SIZE_UNKNOWN || newSize > 0 : "New value size must be positive or unknown. Was: " + newSize;
+        }
+        return true;
     }
 }
 
