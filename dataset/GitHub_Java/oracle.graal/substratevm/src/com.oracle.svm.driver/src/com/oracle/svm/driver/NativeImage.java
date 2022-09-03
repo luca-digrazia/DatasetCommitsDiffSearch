@@ -96,7 +96,6 @@ class NativeImage {
     static final String oHReflectionConfigurationFiles = oH + "ReflectionConfigurationFiles=";
     static final String oHReflectionConfigurationResources = oH + "ReflectionConfigurationResources=";
     static final String oHJNIConfigurationFiles = oH + "JNIConfigurationFiles=";
-    static final String oHJNIConfigurationResources = oH + "JNIConfigurationResources=";
 
     static final String oHMaxRuntimeCompileMethods = oH + "MaxRuntimeCompileMethods=";
     static final String oHInspectServerContentPath = oH + "InspectServerContentPath=";
@@ -123,7 +122,6 @@ class NativeImage {
     private final Path homeDir;
 
     private boolean verbose = Boolean.valueOf(System.getenv("VERBOSE_GRAALVM_LAUNCHERS"));
-    private boolean dryRun = false;
 
     final Registry optionRegistry;
     private final MacroOption truffleOption;
@@ -279,7 +277,6 @@ class NativeImage {
 
         Path graalvmDir = getRootDir().resolve("lib/graalvm");
         getJars(graalvmDir).forEach((Consumer<? super Path>) this::addImageClasspath);
-        consolidateListArgs(imageBuilderJavaArgs, "-Dpolyglot.engine.PreinitializeContexts=", ",", Function.identity());
     }
 
     protected static boolean replaceArg(Collection<String> args, String argPrefix, String argSuffix) {
@@ -357,7 +354,6 @@ class NativeImage {
         consolidateListArgs(imageBuilderArgs, oHReflectionConfigurationFiles, ",", s -> canonicalize(Paths.get(s)).toString());
         consolidateListArgs(imageBuilderArgs, oHReflectionConfigurationResources, ",", Function.identity());
         consolidateListArgs(imageBuilderArgs, oHJNIConfigurationFiles, ",", s -> canonicalize(Paths.get(s)).toString());
-        consolidateListArgs(imageBuilderArgs, oHJNIConfigurationResources, ",", Function.identity());
         consolidateListArgs(imageBuilderArgs, oHFeatures, ",", Function.identity());
 
         BiFunction<String, String, String> takeLast = (a, b) -> b;
@@ -434,20 +430,18 @@ class NativeImage {
         command.addAll(Arrays.asList("-imagecp", imagecp.stream().map(Path::toString).collect(Collectors.joining(":"))));
         command.addAll(imageArgs);
 
-        showVerboseMessage(verbose || dryRun, "Executing [");
-        showVerboseMessage(verbose || dryRun, command.stream().collect(Collectors.joining(" \\\n")));
-        showVerboseMessage(verbose || dryRun, "]");
+        showVerboseMessage(verbose, "Executing [");
+        showVerboseMessage(verbose, command.stream().collect(Collectors.joining(" \\\n")));
+        showVerboseMessage(verbose, "]");
 
-        if (!dryRun) {
-            try {
-                Process p = pb.inheritIO().start();
-                int exitStatus = p.waitFor();
-                if (exitStatus != 0) {
-                    showError("Image building with exit status " + exitStatus);
-                }
-            } catch (IOException | InterruptedException e) {
-                showError(e.getMessage());
+        try {
+            Process p = pb.inheritIO().start();
+            int exitStatus = p.waitFor();
+            if (exitStatus != 0) {
+                showError("Image building with exit status " + exitStatus);
             }
+        } catch (IOException | InterruptedException e) {
+            showError(e.getMessage());
         }
     }
 
@@ -550,14 +544,6 @@ class NativeImage {
 
     boolean isVerbose() {
         return verbose;
-    }
-
-    protected void setDryRun(boolean val) {
-        dryRun = val;
-    }
-
-    boolean isDryRun() {
-        return dryRun;
     }
 
     void showVerboseMessage(boolean show, String message) {
