@@ -29,24 +29,27 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
-import com.oracle.truffle.llvm.nodes.control.LLVMBrUnconditionalNode;
-import com.oracle.truffle.llvm.nodes.control.LLVMConditionalBranchNode;
-import com.oracle.truffle.llvm.nodes.control.LLVMIndirectBranchNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.base.LLVMNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMTerminatorNode;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI1Node;
+import com.oracle.truffle.llvm.nodes.impl.control.LLVMBrUnconditionalNode;
+import com.oracle.truffle.llvm.nodes.impl.control.LLVMConditionalBranchNodeFactory;
+import com.oracle.truffle.llvm.nodes.impl.control.LLVMIndirectBranchNode;
 
-final class LLVMBranchFactory {
+public class LLVMBranchFactory {
 
-    static LLVMControlFlowNode createIndirectBranch(LLVMExpressionNode value, int[] labelTargets, LLVMExpressionNode[] phiWrites) {
-        return new LLVMIndirectBranchNode(value, labelTargets, phiWrites);
+    public static LLVMTerminatorNode createIndirectBranch(LLVMExpressionNode value, int[] labelTargets, LLVMNode[] phiWrites) {
+        return new LLVMIndirectBranchNode((LLVMAddressNode) value, labelTargets, phiWrites);
     }
 
-    static LLVMControlFlowNode createConditionalBranch(int trueIndex, int falseIndex, LLVMExpressionNode conditionNode, LLVMExpressionNode[] truePhiWriteNodes,
-                    LLVMExpressionNode[] falsePhiWriteNodes) {
-        return new LLVMConditionalBranchNode(trueIndex, falseIndex, truePhiWriteNodes, falsePhiWriteNodes, conditionNode);
+    public static LLVMTerminatorNode createConditionalBranch(int trueIndex, int falseIndex, LLVMExpressionNode conditionNode, LLVMNode[] truePhiWriteNodes,
+                    LLVMNode[] falsePhiWriteNodes) {
+        return LLVMConditionalBranchNodeFactory.LLVMBrConditionalNodeGen.create(trueIndex, falseIndex, truePhiWriteNodes, falsePhiWriteNodes, (LLVMI1Node) conditionNode);
     }
 
-    static LLVMControlFlowNode createUnconditionalBranch(int unconditionalIndex, LLVMExpressionNode[] phiWrites) {
+    public static LLVMTerminatorNode createUnconditionalBranch(int unconditionalIndex, LLVMNode[] phiWrites) {
         return new LLVMBrUnconditionalNode(unconditionalIndex, phiWrites);
     }
 
