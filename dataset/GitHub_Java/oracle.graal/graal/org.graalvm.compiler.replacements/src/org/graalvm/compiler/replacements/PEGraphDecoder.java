@@ -88,9 +88,8 @@ import org.graalvm.compiler.nodes.java.MonitorIdNode;
 import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.options.OptionValue;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 
 import jdk.vm.ci.code.Architecture;
@@ -121,13 +120,13 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
     public static class Options {
         @Option(help = "Maximum inlining depth during partial evaluation before reporting an infinite recursion")//
-        public static final OptionKey<Integer> InliningDepthError = new OptionKey<>(1000);
+        public static final OptionValue<Integer> InliningDepthError = new OptionValue<>(1000);
 
         @Option(help = "Max number of loop explosions per method.", type = OptionType.Debug)//
-        public static final OptionKey<Integer> MaximumLoopExplosionCount = new OptionKey<>(10000);
+        public static final OptionValue<Integer> MaximumLoopExplosionCount = new OptionValue<>(10000);
 
         @Option(help = "Do not bail out but throw an exception on failed loop explosion.", type = OptionType.Debug) //
-        public static final OptionKey<Boolean> FailedLoopExplosionIsFatal = new OptionKey<>(false);
+        public static final OptionValue<Boolean> FailedLoopExplosionIsFatal = new OptionValue<>(false);
     }
 
     protected class PEMethodScope extends MethodScope {
@@ -398,12 +397,9 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
     }
 
-    protected final OptionValues options;
-
     public PEGraphDecoder(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, StampProvider stampProvider,
-                    Architecture architecture, OptionValues options) {
+                    Architecture architecture) {
         super(metaAccess, constantReflection, constantFieldProvider, stampProvider, true, architecture);
-        this.options = options;
     }
 
     protected static LoopExplosionKind loopExplosionKind(ResolvedJavaMethod method, LoopExplosionPlugin loopExplosionPlugin) {
@@ -458,14 +454,14 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     protected void checkLoopExplosionIteration(MethodScope s, LoopScope loopScope) {
         PEMethodScope methodScope = (PEMethodScope) s;
 
-        if (loopScope.loopIteration > Options.MaximumLoopExplosionCount.getValue(options)) {
-            throw tooManyLoopExplosionIterations(methodScope, options);
+        if (loopScope.loopIteration > Options.MaximumLoopExplosionCount.getValue()) {
+            throw tooManyLoopExplosionIterations(methodScope);
         }
     }
 
-    private static RuntimeException tooManyLoopExplosionIterations(PEMethodScope methodScope, OptionValues options) {
+    private static RuntimeException tooManyLoopExplosionIterations(PEMethodScope methodScope) {
         String message = "too many loop explosion iterations - does the explosion not terminate for method " + methodScope.method + "?";
-        RuntimeException bailout = Options.FailedLoopExplosionIsFatal.getValue(options) ? new RuntimeException(message) : new PermanentBailoutException(message);
+        RuntimeException bailout = Options.FailedLoopExplosionIsFatal.getValue() ? new RuntimeException(message) : new PermanentBailoutException(message);
         throw GraphUtil.createBailoutException(message, bailout, GraphUtil.approxSourceStackTraceElement(methodScope.getCallerBytecodePosition()));
     }
 
@@ -579,7 +575,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
-        if (targetMethod.hasNeverInlineDirective()) {
+        if (!targetMethod.canBeInlined()) {
             return null;
         }
 
@@ -606,7 +602,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             return null;
         }
 
-        if (methodScope.inliningDepth > Options.InliningDepthError.getValue(options)) {
+        if (methodScope.inliningDepth > Options.InliningDepthError.getValue()) {
             throw tooDeepInlining(methodScope);
         }
 
@@ -721,7 +717,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             plugin.notifyAfterInline(inlineMethod);
         }
 
-        if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL) && DumpDuringGraphBuilding.getValue(options)) {
+        if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL) && DumpDuringGraphBuilding.getValue()) {
             Debug.dump(Debug.INFO_LOG_LEVEL, methodScope.graph, "Inline finished: %s.%s", inlineMethod.getDeclaringClass().getUnqualifiedName(), inlineMethod.getName());
         }
     }
