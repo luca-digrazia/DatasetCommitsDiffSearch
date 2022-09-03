@@ -22,15 +22,13 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
  * A {@link PiNode} that also provides an array length in addition to a more refined stamp. A usage
- * that reads the array length, such as an {@link ArrayLengthNode}, can be canonicalized based on
+ * that reads the array length, such as an {@link ArrayLengthNode}, can be canonicalized base on
  * this information.
  */
 public final class PiArrayNode extends PiNode implements ArrayLengthProvider {
@@ -47,7 +45,7 @@ public final class PiArrayNode extends PiNode implements ArrayLengthProvider {
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (!(object() instanceof ArrayLengthProvider) || length() != ((ArrayLengthProvider) object()).length()) {
             return this;
         }
