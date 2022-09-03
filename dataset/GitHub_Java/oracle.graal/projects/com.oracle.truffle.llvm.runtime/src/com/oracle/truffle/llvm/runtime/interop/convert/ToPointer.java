@@ -42,6 +42,7 @@ import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress.LLVMVirtualAllocationAddressTruffleObject;
@@ -88,48 +89,53 @@ abstract class ToPointer extends ForeignToLLVM {
     }
 
     @Specialization
-    protected LLVMBoxedPrimitive fromInt(int value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromInt(int value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMBoxedPrimitive fromChar(char value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromChar(char value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMBoxedPrimitive fromLong(long value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromLong(long value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMBoxedPrimitive fromByte(byte value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromByte(byte value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMBoxedPrimitive fromShort(short value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromShort(short value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMBoxedPrimitive fromFloat(float value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromFloat(float value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMBoxedPrimitive fromDouble(double value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromDouble(double value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMBoxedPrimitive fromBoolean(boolean value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    protected Object fromBoolean(boolean value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
         return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
     protected String fromString(String obj, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
         return obj;
+    }
+
+    @Specialization
+    protected LLVMAddress fromLLVMTruffleAddress(LLVMTruffleAddress obj, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        return obj.getAddress();
     }
 
     @Specialization
@@ -187,6 +193,8 @@ abstract class ToPointer extends ForeignToLLVM {
             return value;
         } else if (value instanceof LLVMFunctionDescriptor) {
             return value;
+        } else if (value instanceof LLVMTruffleAddress) {
+            return ((LLVMTruffleAddress) value).getAddress();
         } else if (value instanceof LLVMSharedGlobalVariable) {
             return ((LLVMSharedGlobalVariable) value).getDescriptor();
         } else if (value instanceof LLVMTruffleObject) {

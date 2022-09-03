@@ -34,12 +34,10 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropAccessNode.AccessLocation;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
@@ -55,12 +53,11 @@ public abstract class LLVMInteropReadNode extends LLVMNode {
     @Child ForeignToLLVM foreignToLLVM;
 
     private final int elementAccessSize;
-    private final ForeignToLLVMType llvmType;
 
-    protected LLVMInteropReadNode(ForeignToLLVMType llvmType) {
+    protected LLVMInteropReadNode(ForeignToLLVMType type) {
         this.read = Message.READ.createNode();
-        this.elementAccessSize = llvmType.getSizeInBytes();
-        this.llvmType = llvmType;
+        this.foreignToLLVM = ForeignToLLVM.create(type);
+        this.elementAccessSize = type.getSizeInBytes();
     }
 
     public abstract Object execute(LLVMInteropType.Structured type, TruffleObject foreign, long offset);
@@ -83,21 +80,10 @@ public abstract class LLVMInteropReadNode extends LLVMNode {
         Object ret;
         try {
             ret = ForeignAccess.sendRead(read, location.base, location.identifier);
-        } catch (UnknownIdentifierException ex) {
+        } catch (InteropException ex) {
             CompilerDirectives.transferToInterpreter();
-            throw new LLVMPolyglotException(this, "Member '%s' not found.", location.identifier);
-        } catch (UnsupportedMessageException ex) {
-            CompilerDirectives.transferToInterpreter();
-            throw new LLVMPolyglotException(this, "Can not read member '%s'.", location.identifier);
+            throw ex.raise();
         }
-        return getForeignToLLVM().executeWithType(ret, location.type);
-    }
-
-    private ForeignToLLVM getForeignToLLVM() {
-        if (foreignToLLVM == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            foreignToLLVM = insert(getNodeFactory().createForeignToLLVM(llvmType));
-        }
-        return foreignToLLVM;
+        return foreignToLLVM.executeWithType(ret, location.type);
     }
 }

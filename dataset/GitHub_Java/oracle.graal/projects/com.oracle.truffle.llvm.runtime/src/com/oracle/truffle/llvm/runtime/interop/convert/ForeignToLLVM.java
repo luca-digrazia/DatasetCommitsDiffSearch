@@ -37,11 +37,11 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
@@ -60,7 +60,6 @@ public abstract class ForeignToLLVM extends LLVMNode {
     @Child protected Node asPointer = Message.AS_POINTER.createNode();
     @Child protected Node isBoxed = Message.IS_BOXED.createNode();
     @Child protected Node unbox = Message.UNBOX.createNode();
-    @Child protected Node toNative = Message.TO_NATIVE.createNode();
 
     public Object fromForeign(TruffleObject value) {
         try {
@@ -69,7 +68,8 @@ public abstract class ForeignToLLVM extends LLVMNode {
             } else if (ForeignAccess.sendIsBoxed(isBoxed, value)) {
                 return ForeignAccess.sendUnbox(unbox, value);
             } else {
-                return ForeignAccess.sendAsPointer(asPointer, (TruffleObject) ForeignAccess.sendToNative(toNative, value));
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedTypeException.raise(new Object[]{value});
             }
         } catch (InteropException e) {
             CompilerDirectives.transferToInterpreter();
@@ -252,7 +252,7 @@ public abstract class ForeignToLLVM extends LLVMNode {
             case I64:
                 return 0L;
             case POINTER:
-                return LLVMNativePointer.createNull();
+                return LLVMAddress.fromLong(0);
             case FLOAT:
                 return 0f;
             case DOUBLE:
@@ -273,7 +273,7 @@ public abstract class ForeignToLLVM extends LLVMNode {
         public Object convert(LLVMMemory memory, ForeignToLLVMType type, Object value) {
             switch (type) {
                 case ANY:
-                    return ToAnyLLVM.slowPathPrimitiveConvert(value);
+                    return ToAnyLLVM.slowPathPrimitiveConvert(this, value);
                 case DOUBLE:
                     return ToDouble.slowPathPrimitiveConvert(memory, this, value);
                 case FLOAT:
@@ -289,7 +289,7 @@ public abstract class ForeignToLLVM extends LLVMNode {
                 case I8:
                     return ToI8.slowPathPrimitiveConvert(memory, this, value);
                 case POINTER:
-                    return ToPointer.slowPathPrimitiveConvert(value);
+                    return ToPointer.slowPathPrimitiveConvert(this, value);
                 default:
                     throw new IllegalStateException(type.toString());
 
