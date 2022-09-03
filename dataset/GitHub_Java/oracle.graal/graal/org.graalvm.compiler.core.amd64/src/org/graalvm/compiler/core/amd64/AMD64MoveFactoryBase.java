@@ -27,7 +27,6 @@ import static org.graalvm.compiler.asm.amd64.AMD64Assembler.OperandSize.QWORD;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.OperandSize.WORD;
 
 import org.graalvm.compiler.core.common.CollectionsFactory;
-import org.graalvm.compiler.core.common.CompareStrategy;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.EconomicMap;
 import org.graalvm.compiler.lir.VirtualStackSlot;
@@ -70,7 +69,7 @@ public abstract class AMD64MoveFactoryBase implements MoveFactory {
         protected RegisterBackupPair getScratchRegister(PlatformKind kind) {
             PlatformKind.Key key = kind.getKey();
             if (categorized == null) {
-                categorized = CollectionsFactory.newMap(CompareStrategy.EQUALS);
+                categorized = CollectionsFactory.newMap();
             } else if (categorized.containsKey(key)) {
                 return categorized.get(key);
             }

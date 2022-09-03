@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -65,6 +65,8 @@ import static jdk.vm.ci.sparc.SPARC.g5;
 import static jdk.vm.ci.sparc.SPARCKind.WORD;
 import static jdk.vm.ci.sparc.SPARCKind.XWORD;
 
+import java.util.Map;
+
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.spi.ForeignCallLinkage;
@@ -99,7 +101,6 @@ import org.graalvm.compiler.lir.sparc.SPARCImmediateAddressValue;
 import org.graalvm.compiler.lir.sparc.SPARCMove.CompareAndSwapOp;
 import org.graalvm.compiler.lir.sparc.SPARCMove.NullCheckOp;
 import org.graalvm.compiler.lir.sparc.SPARCMove.StoreOp;
-import org.graalvm.util.EconomicMap;
 import org.graalvm.compiler.lir.sparc.SPARCPrefetchOp;
 import org.graalvm.compiler.lir.sparc.SPARCSaveRegistersOp;
 
@@ -471,7 +472,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         Variable result = super.emitForeignCall(linkage, null, threadRegister.asValue(LIRKind.value(target().arch.getWordKind())), trapRequest, mode);
         append(new SPARCHotSpotCRuntimeCallEpilogueOp(config.threadLastJavaSpOffset(), config.threadLastJavaPcOffset(), config.threadJavaFrameAnchorFlagsOffset(), threadRegister, threadTemp));
 
-        EconomicMap<LIRFrameState, SaveRegistersOp> calleeSaveInfo = getResult().getCalleeSaveInfo();
+        Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = getResult().getCalleeSaveInfo();
         assert currentRuntimeCallInfo != null;
         assert !calleeSaveInfo.containsKey(currentRuntimeCallInfo);
         calleeSaveInfo.put(currentRuntimeCallInfo, saveRegisterOp);
@@ -491,7 +492,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         Variable result = super.emitForeignCall(linkage, null, threadRegister.asValue(LIRKind.value(target().arch.getWordKind())), mode);
         append(new SPARCHotSpotCRuntimeCallEpilogueOp(config.threadLastJavaSpOffset(), config.threadLastJavaPcOffset(), config.threadJavaFrameAnchorFlagsOffset(), threadRegister, threadTemp));
 
-        EconomicMap<LIRFrameState, SaveRegistersOp> calleeSaveInfo = getResult().getCalleeSaveInfo();
+        Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = getResult().getCalleeSaveInfo();
         assert currentRuntimeCallInfo != null;
         assert !calleeSaveInfo.containsKey(currentRuntimeCallInfo);
         calleeSaveInfo.put(currentRuntimeCallInfo, saveRegisterOp);
@@ -535,7 +536,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     }
 
     @Override
-    protected StrategySwitchOp createStrategySwitchOp(AllocatableValue base, SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Variable key, Variable scratchValue) {
+    protected StrategySwitchOp createStrategySwitchOp(AllocatableValue base, SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Variable key, AllocatableValue scratchValue) {
         return new SPARCHotSpotStrategySwitchOp(base, strategy, keyTargets, defaultTarget, key, scratchValue);
     }
 

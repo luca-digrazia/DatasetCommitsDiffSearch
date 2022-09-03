@@ -23,7 +23,6 @@
 
 package org.graalvm.compiler.core.amd64;
 
-import static jdk.vm.ci.code.ValueUtil.isAllocatableValue;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.CMP;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.OperandSize.DWORD;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.OperandSize.PD;
@@ -33,6 +32,7 @@ import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.lir.LIRValueUtil.asConstantValue;
 import static org.graalvm.compiler.lir.LIRValueUtil.asJavaConstant;
 import static org.graalvm.compiler.lir.LIRValueUtil.isJavaConstant;
+import static jdk.vm.ci.code.ValueUtil.isAllocatableValue;
 
 import org.graalvm.compiler.asm.NumUtil;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64MIOp;
@@ -209,21 +209,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         RegisterValue raxRes = AMD64.rax.asValue(kind);
         emitMove(raxRes, expectedValue);
         append(new CompareAndSwapOp(memKind, raxRes, addressValue, raxRes, asAllocatable(newValue)));
-        Variable result = newVariable(kind);
-        emitMove(result, raxRes);
-        return result;
-    }
-
-    public void emitCompareAndSwapBranch(ValueKind<?> kind, AMD64AddressValue address, Value expectedValue, Value newValue, Condition condition, LabelRef trueLabel, LabelRef falseLabel,
-                    double trueLabelProbability) {
-        assert kind.equals(expectedValue.getValueKind());
-        assert kind.equals(newValue.getValueKind());
-        assert condition == Condition.EQ || condition == Condition.NE;
-        AMD64Kind memKind = (AMD64Kind) kind.getPlatformKind();
-        RegisterValue raxValue = AMD64.rax.asValue(kind);
-        emitMove(raxValue, expectedValue);
-        append(new CompareAndSwapOp(memKind, raxValue, address, raxValue, asAllocatable(newValue)));
-        append(new BranchOp(condition, trueLabel, falseLabel, trueLabelProbability));
+        return raxRes;
     }
 
     @Override

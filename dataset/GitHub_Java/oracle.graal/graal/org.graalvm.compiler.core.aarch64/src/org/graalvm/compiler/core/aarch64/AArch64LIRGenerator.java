@@ -59,7 +59,6 @@ import org.graalvm.compiler.lir.gen.LIRGenerator;
 import org.graalvm.compiler.phases.util.Providers;
 
 import jdk.vm.ci.aarch64.AArch64Kind;
-import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaConstant;
@@ -469,6 +468,4 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     public void emitPause() {
         append(new AArch64PauseOp());
     }
-
-    public abstract void emitCCall(long address, CallingConvention nativeCallingConvention, Value[] args);
 }

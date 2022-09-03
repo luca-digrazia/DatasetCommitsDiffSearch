@@ -34,27 +34,27 @@ import java.util.function.BiFunction;
  */
 public class CollectionsFactory {
 
-    private static final boolean DEBUG_MAPS = false;
+    private static boolean DEBUG_MAPS = false;
 
     /**
      * Creates a new map that guarnatees insertion order on the key set.
      */
-    public static <K, V> EconomicMap<K, V> newMap(CompareStrategy strategy) {
+    public static <K, V> EconomicMap<K, V> newMap() {
         if (DEBUG_MAPS) {
             return debugNewMap();
         }
-        return new EconomicMapImpl<>(strategy);
+        return new EconomicMapImpl<>();
     }
 
     /**
      * Creates a new map that guarantees insertion order on the key set and initializes with a
      * specified capacity.
      */
-    public static <K, V> EconomicMap<K, V> newMap(CompareStrategy strategy, int initialCapacity) {
+    public static <K, V> EconomicMap<K, V> newMap(int initialCapacity) {
         if (DEBUG_MAPS) {
             return debugNewMap();
         } else {
-            return new EconomicMapImpl<>(strategy, initialCapacity);
+            return new EconomicMapImpl<>(initialCapacity);
         }
     }
 
@@ -62,12 +62,12 @@ public class CollectionsFactory {
      * Creates a new map that guarantees insertion order on the key set and copies all elements from
      * the specified existing map.
      */
-    public static <K, V> EconomicMap<K, V> newMap(CompareStrategy strategy, ImmutableEconomicMap<K, V> m) {
+    public static <K, V> EconomicMap<K, V> newMap(ImmutableEconomicMap<K, V> m) {
         EconomicMap<K, V> result;
         if (DEBUG_MAPS) {
             result = debugNewMap(m);
         } else {
-            result = new EconomicMapImpl<>(strategy, m);
+            result = new EconomicMapImpl<>(m);
         }
 
         return result;
@@ -76,38 +76,38 @@ public class CollectionsFactory {
     /**
      * Creates a new set guaranteeing insertion order when iterating over its elements.
      */
-    public static <E> EconomicSet<E> newSet(CompareStrategy strategy) {
+    public static <E> EconomicSet<E> newSet() {
         if (DEBUG_MAPS) {
             return newDebugSet();
         }
-        return new EconomicMapImpl<E, E>(strategy);
+        return new EconomicMapImpl<E, E>();
     }
 
     /**
      * Creates a new set guaranteeing insertion order when iterating over its elements and inserts
      * all elements of the specified collection.
      */
-    public static <E> EconomicSet<E> newSet(CompareStrategy strategy, EconomicSet<E> c) {
-        return new EconomicMapImpl<E, E>(strategy, c);
+    public static <E> EconomicSet<E> newSet(EconomicSet<E> c) {
+        return new EconomicMapImpl<E, E>(c);
     }
 
     /**
      * Creates a new set guaranteeing insertion order when iterating over its elements and inserts
      * all elements of the specified collection.
      */
-    public static <E> EconomicSet<E> newSet(CompareStrategy strategy, Iterable<? extends E> c) {
-        EconomicSet<E> result = newSet(strategy);
+    public static <E> EconomicSet<E> newSet(Iterable<? extends E> c) {
+        EconomicSet<E> result = newSet();
         for (E element : c) {
             result.add(element);
         }
         return result;
     }
 
-    public static <E> EconomicSet<E> newSet(CompareStrategy strategy, int initialCapacity) {
+    public static <E> EconomicSet<E> newSet(int initialCapacity) {
         if (DEBUG_MAPS) {
             return newDebugSet();
         }
-        return new EconomicMapImpl<E, E>(strategy, initialCapacity);
+        return new EconomicMapImpl<E, E>(initialCapacity);
     }
 
     /**
@@ -175,7 +175,7 @@ public class CollectionsFactory {
 
     public static <K, V> EconomicMap<K, V> debugNewMap(ImmutableEconomicMap<K, V> m) {
         EconomicMap<K, V> result = debugNewMap();
-        ImmutableMapCursor<K, V> cursor = m.getEntries();
+        ImmutableEconomicMap.Cursor<K, V> cursor = m.getEntries();
         while (cursor.advance()) {
             result.put(cursor.getKey(), cursor.getValue());
         }
@@ -235,9 +235,9 @@ public class CollectionsFactory {
             }
 
             @Override
-            public MapCursor<K, V> getEntries() {
+            public EconomicMap.Cursor<K, V> getEntries() {
                 Iterator<java.util.Map.Entry<K, V>> iterator = map.entrySet().iterator();
-                return new MapCursor<K, V>() {
+                return new EconomicMap.Cursor<K, V>() {
 
                     private Map.Entry<K, V> current;
 
@@ -281,7 +281,7 @@ public class CollectionsFactory {
      */
     public static <K, V> EconomicMap<K, V> debugNewMap() {
         final LinkedHashMap<K, V> linkedMap = new LinkedHashMap<>();
-        final EconomicMapImpl<K, V> sparseMap = new EconomicMapImpl<>(CompareStrategy.EQUALS);
+        final EconomicMapImpl<K, V> sparseMap = new EconomicMapImpl<>();
         return new EconomicMap<K, V>() {
 
             @Override
@@ -410,10 +410,10 @@ public class CollectionsFactory {
             }
 
             @Override
-            public MapCursor<K, V> getEntries() {
+            public EconomicMap.Cursor<K, V> getEntries() {
                 Iterator<java.util.Map.Entry<K, V>> iterator = linkedMap.entrySet().iterator();
-                MapCursor<K, V> cursor = sparseMap.getEntries();
-                return new MapCursor<K, V>() {
+                EconomicMap.Cursor<K, V> cursor = sparseMap.getEntries();
+                return new EconomicMap.Cursor<K, V>() {
 
                     private Map.Entry<K, V> current;
 
