@@ -23,15 +23,16 @@
 package com.oracle.graal.lir.amd64;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
+import java.util.*;
+
+import com.oracle.max.asm.*;
+import com.oracle.max.asm.target.amd64.*;
+import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.max.asm.*;
-import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
 
 public enum AMD64Arithmetic {
     IADD, ISUB, IMUL, IDIV, IREM, IUDIV, IUREM, IAND, IOR, IXOR, ISHL, ISHR, IUSHR,
@@ -47,183 +48,254 @@ public enum AMD64Arithmetic {
 
 
     public static class Op1Reg extends AMD64LIRInstruction {
-        @Opcode private final AMD64Arithmetic opcode;
-        @Def({REG, HINT}) protected Value result;
-        @Use({REG}) protected Value x;
-
         public Op1Reg(AMD64Arithmetic opcode, Value result, Value x) {
-            this.opcode = opcode;
-            this.result = result;
-            this.x = x;
+            super(opcode, new Value[] {result}, null, new Value[] {x}, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            emit(tasm, masm, opcode, result, x, null);
+            Value result = output(0);
+            Value x = input(0);
+
+            emit(tasm, masm, (AMD64Arithmetic) code, result, x, null);
+        }
+
+        @Override
+        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Input && index == 0) {
+                return EnumSet.of(OperandFlag.Register);
+            } else if (mode == OperandMode.Output && index == 0) {
+                return EnumSet.of(OperandFlag.Register);
+            }
+            throw GraalInternalError.shouldNotReachHere();
         }
     }
 
     public static class Op1Stack extends AMD64LIRInstruction {
-        @Opcode private final AMD64Arithmetic opcode;
-        @Def({REG, HINT}) protected Value result;
-        @Use({REG, STACK, CONST}) protected Value x;
-
         public Op1Stack(AMD64Arithmetic opcode, Value result, Value x) {
-            this.opcode = opcode;
-            this.result = result;
-            this.x = x;
+            super(opcode, new Value[] {result}, null, new Value[] {x}, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+            Value result = output(0);
+            Value x = input(0);
+
             AMD64Move.move(tasm, masm, result, x);
-            emit(tasm, masm, opcode, result);
+            emit(tasm, masm, (AMD64Arithmetic) code, result);
+        }
+
+        @Override
+        public EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Input && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+            } else if (mode == OperandMode.Output && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
+            }
+            throw GraalInternalError.shouldNotReachHere();
         }
     }
 
     public static class Op2Stack extends AMD64LIRInstruction {
-        @Opcode private final AMD64Arithmetic opcode;
-        @Def({REG, HINT}) protected Value result;
-        @Use({REG, STACK, CONST}) protected Value x;
-        @Alive({REG, STACK, CONST}) protected Value y;
-
         public Op2Stack(AMD64Arithmetic opcode, Value result, Value x, Value y) {
-            this.opcode = opcode;
-            this.result = result;
-            this.x = x;
-            this.y = y;
+            super(opcode, new Value[] {result}, null, new Value[] {x}, new Value[] {y}, LIRInstruction.NO_OPERANDS);
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+            Value result = output(0);
+            Value x = input(0);
+            Value y = alive(0);
+
             AMD64Move.move(tasm, masm, result, x);
-            emit(tasm, masm, opcode, result, y, null);
+            emit(tasm, masm, (AMD64Arithmetic) code, result, y, null);
+        }
+
+        @Override
+        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Input && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+            } else if (mode == OperandMode.Alive && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+            } else if (mode == OperandMode.Output && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
+            }
+            throw GraalInternalError.shouldNotReachHere();
         }
 
         @Override
         public void verify() {
+            Value result = output(0);
+            Value x = input(0);
+            Value y = alive(0);
+
             super.verify();
             assert differentRegisters(result, y) || sameRegister(x, y);
-            verifyKind(opcode, result, x, y);
+            verifyKind((AMD64Arithmetic) code, result, x, y);
         }
     }
 
     public static class Op2Reg extends AMD64LIRInstruction {
-        @Opcode private final AMD64Arithmetic opcode;
-        @Def({REG, HINT}) protected Value result;
-        @Use({REG, STACK, CONST}) protected Value x;
-        @Alive({REG, CONST}) protected Value y;
-
         public Op2Reg(AMD64Arithmetic opcode, Value result, Value x, Value y) {
-            this.opcode = opcode;
-            this.result = result;
-            this.x = x;
-            this.y = y;
+            super(opcode, new Value[] {result}, null, new Value[] {x}, new Value[] {y}, LIRInstruction.NO_OPERANDS);
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+            Value result = output(0);
+            Value x = input(0);
+            Value y = alive(0);
+
             AMD64Move.move(tasm, masm, result, x);
-            emit(tasm, masm, opcode, result, y, null);
+            emit(tasm, masm, (AMD64Arithmetic) code, result, y, null);
+        }
+
+        @Override
+        protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Input && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+            } else if (mode == OperandMode.Alive && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Constant);
+            } else if (mode == OperandMode.Output && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
+            }
+            throw GraalInternalError.shouldNotReachHere();
         }
 
         @Override
         public void verify() {
+            Value result = output(0);
+            Value x = input(0);
+            Value y = alive(0);
+
             super.verify();
             assert differentRegisters(result, y) || sameRegister(x, y);
-            verifyKind(opcode, result, x, y);
+            verifyKind((AMD64Arithmetic) code, result, x, y);
         }
     }
 
     public static class Op2RegCommutative extends AMD64LIRInstruction {
-        @Opcode private final AMD64Arithmetic opcode;
-        @Def({REG, HINT}) protected Value result;
-        @Use({REG, STACK, CONST}) protected Value x;
-        @Use({REG, CONST}) protected Value y;
-
         public Op2RegCommutative(AMD64Arithmetic opcode, Value result, Value x, Value y) {
-            this.opcode = opcode;
-            this.result = result;
-            this.x = x;
-            this.y = y;
+            super(opcode, new Value[] {result}, null, new Value[] {x, y}, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+            Value result = output(0);
+            Value x = input(0);
+            Value y = input(1);
+
             if (sameRegister(result, y)) {
-                emit(tasm, masm, opcode, result, x, null);
+                emit(tasm, masm, (AMD64Arithmetic) code, result, x, null);
             } else {
                 AMD64Move.move(tasm, masm, result, x);
-                emit(tasm, masm, opcode, result, y, null);
+                emit(tasm, masm, (AMD64Arithmetic) code, result, y, null);
             }
         }
 
         @Override
+        public EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Input && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+            } else if (mode == OperandMode.Input && index == 1) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Constant);
+            } else if (mode == OperandMode.Output && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
+            }
+            throw GraalInternalError.shouldNotReachHere();
+        }
+
+        @Override
         protected void verify() {
+            Value result = output(0);
+            Value x = input(0);
+            Value y = input(1);
+
             super.verify();
-            verifyKind(opcode, result, x, y);
+            verifyKind((AMD64Arithmetic) code, result, x, y);
         }
     }
 
     public static class ShiftOp extends AMD64LIRInstruction {
-        @Opcode private final AMD64Arithmetic opcode;
-        @Def({REG, HINT}) protected Value result;
-        @Use({REG, STACK, CONST}) protected Value x;
-        @Alive({REG, CONST}) protected Value y;
-
         public ShiftOp(AMD64Arithmetic opcode, Value result, Value x, Value y) {
-            this.opcode = opcode;
-            this.result = result;
-            this.x = x;
-            this.y = y;
+            super(opcode, new Value[] {result}, null, new Value[] {x}, new Value[] {y}, LIRInstruction.NO_OPERANDS);
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+            Value result = output(0);
+            Value x = input(0);
+            Value y = alive(0);
+
             AMD64Move.move(tasm, masm, result, x);
-            emit(tasm, masm, opcode, result, y, null);
+            emit(tasm, masm, (AMD64Arithmetic) code, result, y, null);
+        }
+
+        @Override
+        public EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Input && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
+            } else if (mode == OperandMode.Alive && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.Constant);
+            } else if (mode == OperandMode.Output && index == 0) {
+                return EnumSet.of(OperandFlag.Register, OperandFlag.RegisterHint);
+            }
+            throw GraalInternalError.shouldNotReachHere();
         }
 
         @Override
         public void verify() {
+            Value result = output(0);
+            Value x = input(0);
+            Value y = alive(0);
+
             super.verify();
             assert isConstant(y) || asRegister(y) == AMD64.rcx;
             assert differentRegisters(result, y) || sameRegister(x, y);
-            verifyKind(opcode, result, x, x);
+            verifyKind((AMD64Arithmetic) code, result, x, x);
             assert y.kind.stackKind() == Kind.Int;
         }
     }
 
     public static class DivOp extends AMD64LIRInstruction {
-        @Opcode private final AMD64Arithmetic opcode;
-        @Def protected Value result;
-        @Use protected Value x;
-        @Alive protected Value y;
-        @Temp protected Value temp;
-        @State protected LIRFrameState state;
-
-        public DivOp(AMD64Arithmetic opcode, Value result, Value x, Value y, LIRFrameState state) {
-            this.opcode = opcode;
-            this.result = result;
-            this.x = x;
-            this.y = y;
-            this.temp = asRegister(result) == AMD64.rax ? AMD64.rdx.asValue(result.kind) : AMD64.rax.asValue(result.kind);
-            this.state = state;
+        public DivOp(AMD64Arithmetic opcode, Value result, Value x, Value y, LIRDebugInfo info) {
+            super(opcode, new Value[] {result}, info, new Value[] {x}, new Value[] {y}, new Value[] {asRegister(result) == AMD64.rax ? AMD64.rdx.asValue(result.kind) : AMD64.rax.asValue(result.kind)});
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            emit(tasm, masm, opcode, result, y, state);
+            Value result = output(0);
+            Value y = alive(0);
+
+            emit(tasm, masm, (AMD64Arithmetic) code, result, y, info);
+        }
+
+        @Override
+        public EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
+            if (mode == OperandMode.Input && index == 0) {
+                return EnumSet.of(OperandFlag.Register);
+            } else if (mode == OperandMode.Alive && index == 0) {
+                return EnumSet.of(OperandFlag.Register);
+            } else if (mode == OperandMode.Temp && index == 0) {
+                return EnumSet.of(OperandFlag.Register);
+            } else if (mode == OperandMode.Output && index == 0) {
+                return EnumSet.of(OperandFlag.Register);
+            }
+            throw GraalInternalError.shouldNotReachHere();
         }
 
         @Override
         protected void verify() {
+            Value result = output(0);
+            Value x = input(0);
+            Value y = alive(0);
+
             super.verify();
             // left input in rax, right input in any register but rax and rdx, result quotient in rax, result remainder in rdx
             assert asRegister(x) == AMD64.rax;
             assert differentRegisters(y, AMD64.rax.asValue(), AMD64.rdx.asValue());
             assert (name().endsWith("DIV") && asRegister(result) == AMD64.rax) || (name().endsWith("REM") && asRegister(result) == AMD64.rdx);
-            verifyKind(opcode, result, x, y);
+            verifyKind((AMD64Arithmetic) code, result, x, y);
         }
     }
 
@@ -241,7 +313,7 @@ public enum AMD64Arithmetic {
         }
     }
 
-    public static void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, AMD64Arithmetic opcode, Value dst, Value src, LIRFrameState info) {
+    public static void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, AMD64Arithmetic opcode, Value dst, Value src, LIRDebugInfo info) {
         int exceptionOffset = -1;
         if (isRegister(src)) {
             switch (opcode) {
