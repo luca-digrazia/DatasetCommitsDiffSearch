@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,6 +26,8 @@ package org.graalvm.compiler.nodes.virtual;
 
 import java.nio.ByteOrder;
 
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import org.graalvm.compiler.core.common.spi.ArrayOffsetProvider;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.Verbosity;
@@ -35,9 +39,8 @@ import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import sun.misc.Unsafe;
 
-@NodeInfo(nameTemplate = "VirtualArray {p#componentType/s}[{p#length}]")
+@NodeInfo(nameTemplate = "VirtualArray({p#objectId}) {p#componentType/s}[{p#length}]")
 public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthProvider {
 
     public static final NodeClass<VirtualArrayNode> TYPE = NodeClass.create(VirtualArrayNode.class);
@@ -76,7 +79,7 @@ public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthPr
     @Override
     public String toString(Verbosity verbosity) {
         if (verbosity == Verbosity.Name) {
-            return super.toString(Verbosity.Name) + " " + componentType.getName() + "[" + length + "]";
+            return super.toString(Verbosity.Name) + "(" + getObjectId() + ") " + componentType.getName() + "[" + length + "]";
         } else {
             return super.toString(verbosity);
         }
@@ -88,57 +91,19 @@ public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthPr
     }
 
     @Override
-    public int entryIndexForOffset(long constantOffset, JavaKind expectedEntryKind) {
-        return entryIndexForOffset(constantOffset, expectedEntryKind, componentType, length);
+    public int entryIndexForOffset(ArrayOffsetProvider arrayOffsetProvider, long constantOffset, JavaKind expectedEntryKind) {
+        return entryIndexForOffset(arrayOffsetProvider, constantOffset, expectedEntryKind, componentType, length);
     }
 
-    public static int entryIndexForOffset(long constantOffset, JavaKind expectedEntryKind, ResolvedJavaType componentType, int length) {
-        int baseOffset;
-        int indexScale;
-        switch (componentType.getJavaKind()) {
-            case Boolean:
-                baseOffset = Unsafe.ARRAY_BOOLEAN_BASE_OFFSET;
-                indexScale = Unsafe.ARRAY_BOOLEAN_INDEX_SCALE;
-                break;
-            case Byte:
-                baseOffset = Unsafe.ARRAY_BYTE_BASE_OFFSET;
-                indexScale = Unsafe.ARRAY_BYTE_INDEX_SCALE;
-                break;
-            case Short:
-                baseOffset = Unsafe.ARRAY_SHORT_BASE_OFFSET;
-                indexScale = Unsafe.ARRAY_SHORT_INDEX_SCALE;
-                break;
-            case Char:
-                baseOffset = Unsafe.ARRAY_CHAR_BASE_OFFSET;
-                indexScale = Unsafe.ARRAY_CHAR_INDEX_SCALE;
-                break;
-            case Int:
-                baseOffset = Unsafe.ARRAY_INT_BASE_OFFSET;
-                indexScale = Unsafe.ARRAY_INT_INDEX_SCALE;
-                break;
-            case Long:
-                baseOffset = Unsafe.ARRAY_LONG_BASE_OFFSET;
-                indexScale = Unsafe.ARRAY_LONG_INDEX_SCALE;
-                break;
-            case Float:
-                baseOffset = Unsafe.ARRAY_FLOAT_BASE_OFFSET;
-                indexScale = Unsafe.ARRAY_FLOAT_INDEX_SCALE;
-                break;
-            case Double:
-                baseOffset = Unsafe.ARRAY_DOUBLE_BASE_OFFSET;
-                indexScale = Unsafe.ARRAY_DOUBLE_INDEX_SCALE;
-                break;
-            case Object:
-                baseOffset = Unsafe.ARRAY_OBJECT_BASE_OFFSET;
-                indexScale = Unsafe.ARRAY_OBJECT_INDEX_SCALE;
-                break;
-            default:
-                return -1;
-        }
+    public static int entryIndexForOffset(ArrayOffsetProvider arrayOffsetProvider, long constantOffset, JavaKind expectedEntryKind, ResolvedJavaType componentType, int length) {
+        int baseOffset = arrayOffsetProvider.arrayBaseOffset(componentType.getJavaKind());
+        int indexScale = arrayOffsetProvider.arrayScalingFactor(componentType.getJavaKind());
+
         long offset;
         if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN && componentType.isPrimitive()) {
-            // On big endian, we do just get expect the type be right aligned in this memory slot
-            offset = constantOffset - (componentType.getJavaKind().getByteCount() - Math.min(componentType.getJavaKind().getByteCount(), 4 + expectedEntryKind.getByteCount()));
+            // On big endian, we expect the value to be correctly aligned in memory
+            int componentByteCount = componentType.getJavaKind().getByteCount();
+            offset = constantOffset - (componentByteCount - Math.min(componentByteCount, 4 + expectedEntryKind.getByteCount()));
         } else {
             offset = constantOffset;
         }
@@ -161,16 +126,20 @@ public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthPr
 
     @Override
     public VirtualArrayNode duplicate() {
-        return new VirtualArrayNode(componentType, length);
+        VirtualArrayNode node = new VirtualArrayNode(componentType, length);
+        node.setNodeSourcePosition(this.getNodeSourcePosition());
+        return node;
     }
 
     @Override
     public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
-        return new AllocatedObjectNode(this);
+        AllocatedObjectNode node = new AllocatedObjectNode(this);
+        node.setNodeSourcePosition(this.getNodeSourcePosition());
+        return node;
     }
 
     @Override
-    public ValueNode length() {
+    public ValueNode findLength(FindLengthMode mode, ConstantReflectionProvider constantReflection) {
         return ConstantNode.forInt(length);
     }
 }

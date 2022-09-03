@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,13 +38,11 @@ import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.NodeMap;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.lir.ConstantValue;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
-import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.spi.ArrayLengthProvider;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
@@ -56,7 +54,6 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.PrimitiveConstant;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The {@code ConstantNode} represents a {@link Constant constant}.
@@ -102,10 +99,6 @@ public final class ConstantNode extends FloatingNode implements LIRLowerable, Ar
         }
     }
 
-    public ConstantNode(@InjectedNodeParameter Stamp stamp, @InjectedNodeParameter ConstantReflectionProvider constantReflection, @ConstantNodeParameter ResolvedJavaType type) {
-        this(constantReflection.asJavaClass(type), stamp);
-    }
-
     /**
      * @return the constant value represented by this node
      */
@@ -149,23 +142,8 @@ public final class ConstantNode extends FloatingNode implements LIRLowerable, Ar
         if (onlyUsedInVirtualState()) {
             gen.setResult(this, new ConstantValue(kind, value));
         } else {
-            gen.setResult(this, gen.getLIRGeneratorTool().emitConstant(kind, value, hasExactlyOneUsage() && onlyUsedInCurrentBlock()));
+            gen.setResult(this, gen.getLIRGeneratorTool().emitConstant(kind, value));
         }
-    }
-
-    /**
-     * Expecting false for loop invariant.
-     */
-    private boolean onlyUsedInCurrentBlock() {
-        assert graph().getLastSchedule() != null;
-        NodeMap<Block> nodeBlockMap = graph().getLastSchedule().getNodeToBlockMap();
-        Block currentBlock = nodeBlockMap.get(this);
-        for (Node usage : usages()) {
-            if (currentBlock != nodeBlockMap.get(usage)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private boolean onlyUsedInVirtualState() {
@@ -568,7 +546,4 @@ public final class ConstantNode extends FloatingNode implements LIRLowerable, Ar
         }
         return ConstantNode.forInt(length);
     }
-
-    @NodeIntrinsic
-    public static native Class<?> forClass(@ConstantNodeParameter ResolvedJavaType type);
 }
