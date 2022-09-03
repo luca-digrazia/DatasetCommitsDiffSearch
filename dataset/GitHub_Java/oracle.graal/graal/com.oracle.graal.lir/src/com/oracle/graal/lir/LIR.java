@@ -22,94 +22,64 @@
  */
 package com.oracle.graal.lir;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.cfg.*;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
+import com.oracle.graal.compiler.common.cfg.BlockMap;
+import com.oracle.graal.lir.StandardOp.BlockEndOp;
+import com.oracle.graal.lir.StandardOp.LabelOp;
+import com.oracle.graal.lir.gen.LIRGenerator;
 
 /**
- * This class implements the overall container for the LIR graph
- * and directs its construction, optimization, and finalization.
+ * This class implements the overall container for the LIR graph and directs its construction,
+ * optimization, and finalization.
  */
-public class LIR {
+public final class LIR extends LIRGenerator.VariableProvider {
 
-    public final ControlFlowGraph cfg;
-
-    /**
-     * The nodes for the blocks.
-     * TODO: This should go away, we want all nodes connected with a next-pointer.
-     */
-    private final BlockMap<List<Node>> blockToNodesMap;
+    private final AbstractControlFlowGraph<?> cfg;
 
     /**
      * The linear-scan ordered list of blocks.
      */
-    private final List<Block> linearScanOrder;
+    private final AbstractBlockBase<?>[] linearScanOrder;
 
     /**
      * The order in which the code is emitted.
      */
-    private final List<Block> codeEmittingOrder;
+    private final AbstractBlockBase<?>[] codeEmittingOrder;
 
     /**
-     * Various out-of-line stubs to be emitted near the end of the method
-     * after all other LIR code has been emitted.
+     * Map from {@linkplain AbstractBlockBase block} to {@linkplain LIRInstruction}s. Note that we
+     * are using {@link ArrayList} instead of {@link List} to avoid interface dispatch.
      */
-    public final List<Code> stubs;
-
-    private int numVariables;
-
-    public SpillMoveFactory spillMoveFactory;
-
-    public interface SpillMoveFactory {
-        LIRInstruction createMove(Value result, Value input);
-        LIRInstruction createExchange(Value input1, Value input2);
-    }
+    private final BlockMap<ArrayList<LIRInstruction>> lirInstructions;
 
     private boolean hasArgInCallerFrame;
 
     /**
-     * An opaque chunk of machine code.
-     */
-    public interface Code {
-        void emitCode(TargetMethodAssembler tasm);
-        /**
-         * A description of this code stub useful for commenting the code in a disassembly.
-         */
-        String description();
-    }
-
-    /**
      * Creates a new LIR instance for the specified compilation.
-     * @param numLoops number of loops
-     * @param compilation the compilation
      */
-    public LIR(ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodesMap, List<Block> linearScanOrder, List<Block> codeEmittingOrder) {
+    public LIR(AbstractControlFlowGraph<?> cfg, AbstractBlockBase<?>[] linearScanOrder, AbstractBlockBase<?>[] codeEmittingOrder) {
         this.cfg = cfg;
-        this.blockToNodesMap = blockToNodesMap;
         this.codeEmittingOrder = codeEmittingOrder;
         this.linearScanOrder = linearScanOrder;
+        this.lirInstructions = new BlockMap<>(cfg);
+    }
 
-        stubs = new ArrayList<>();
+    public AbstractControlFlowGraph<?> getControlFlowGraph() {
+        return cfg;
     }
 
     /**
-     * Gets the nodes in a given block.
-     */
-    public List<Node> nodesFor(Block block) {
-        return blockToNodesMap.get(block);
-    }
-
-    /**
-     * Determines if any instruction in the LIR has any debug info associated with it.
+     * Determines if any instruction in the LIR has debug info associated with it.
      */
     public boolean hasDebugInfo() {
-        for (Block b : linearScanOrder()) {
-            for (LIRInstruction op : b.lir) {
-                if (op.info != null) {
+        for (AbstractBlockBase<?> b : linearScanOrder()) {
+            for (LIRInstruction op : getLIRforBlock(b)) {
+                if (op.hasState()) {
                     return true;
                 }
             }
@@ -117,74 +87,26 @@ public class LIR {
         return false;
     }
 
+    public ArrayList<LIRInstruction> getLIRforBlock(AbstractBlockBase<?> block) {
+        return lirInstructions.get(block);
+    }
+
+    public void setLIRforBlock(AbstractBlockBase<?> block, ArrayList<LIRInstruction> list) {
+        assert getLIRforBlock(block) == null : "lir instruction list should only be initialized once";
+        lirInstructions.put(block, list);
+    }
+
     /**
-     * Gets the linear scan ordering of blocks as a list.
+     * Gets the linear scan ordering of blocks as an array.
+     *
      * @return the blocks in linear scan order
      */
-    public List<Block> linearScanOrder() {
+    public AbstractBlockBase<?>[] linearScanOrder() {
         return linearScanOrder;
     }
 
-    public List<Block> codeEmittingOrder() {
+    public AbstractBlockBase<?>[] codeEmittingOrder() {
         return codeEmittingOrder;
-    }
-
-    public int numVariables() {
-        return numVariables;
-    }
-
-    public int nextVariable() {
-        return numVariables++;
-    }
-
-    public void emitCode(TargetMethodAssembler tasm) {
-        if (tasm.frameContext != null) {
-            tasm.frameContext.enter(tasm);
-        }
-
-        for (Block b : codeEmittingOrder()) {
-            emitBlock(tasm, b);
-        }
-
-        // generate code stubs
-        for (Code c : stubs) {
-            emitCodeStub(tasm, c);
-        }
-    }
-
-    private static void emitBlock(TargetMethodAssembler tasm, Block block) {
-        if (Debug.isDumpEnabled()) {
-            tasm.blockComment(String.format("block B%d %s", block.getId(), block.getLoop()));
-        }
-
-        for (LIRInstruction op : block.lir) {
-            if (Debug.isDumpEnabled()) {
-                tasm.blockComment(String.format("%d %s", op.id(), op));
-            }
-
-            emitOp(tasm, op);
-        }
-    }
-
-    private static void emitOp(TargetMethodAssembler tasm, LIRInstruction op) {
-        try {
-            try {
-                op.emitCode(tasm);
-            } catch (AssertionError t) {
-                throw new GraalInternalError(t);
-            } catch (RuntimeException t) {
-                throw new GraalInternalError(t);
-            }
-        } catch (GraalInternalError e) {
-            throw e.addContext("lir instruction", op);
-        }
-    }
-
-    private static void emitCodeStub(TargetMethodAssembler tasm, Code code) {
-        if (Debug.isDumpEnabled()) {
-            tasm.blockComment(String.format("code stub: %s", code.description()));
-        }
-        code.emitCode(tasm);
     }
 
     public void setHasArgInCallerFrame() {
@@ -192,80 +114,111 @@ public class LIR {
     }
 
     /**
-     * Determines if any of the parameters to the method are passed via the stack
-     * where the parameters are located in the caller's frame.
+     * Determines if any of the parameters to the method are passed via the stack where the
+     * parameters are located in the caller's frame.
      */
     public boolean hasArgInCallerFrame() {
         return hasArgInCallerFrame;
     }
 
-/*
-    private int lastDecodeStart;
-
-    private void printAssembly(TargetMethodAssembler tasm) {
-        byte[] currentBytes = tasm.asm.codeBuffer.copyData(lastDecodeStart, tasm.asm.codeBuffer.position());
-        if (currentBytes.length > 0) {
-            String disasm = tasm.runtime.disassemble(currentBytes, lastDecodeStart);
-            if (disasm.length() != 0) {
-                TTY.println(disasm);
-            } else {
-                TTY.println("Code [+%d]: %d bytes", lastDecodeStart, currentBytes.length);
-                Util.printBytes(lastDecodeStart, currentBytes, GraalOptions.PrintAssemblyBytesPerLine);
+    /**
+     * Gets the next non-{@code null} block in a list.
+     *
+     * @param blocks list of blocks
+     * @param blockIndex index of the current block
+     * @return the next block in the list that is none {@code null} or {@code null} if there is no
+     *         such block
+     */
+    public static AbstractBlockBase<?> getNextBlock(AbstractBlockBase<?>[] blocks, int blockIndex) {
+        for (int nextIndex = blockIndex + 1; nextIndex > 0 && nextIndex < blocks.length; nextIndex++) {
+            AbstractBlockBase<?> nextBlock = blocks[nextIndex];
+            if (nextBlock != null) {
+                return nextBlock;
             }
         }
-        lastDecodeStart = tasm.asm.codeBuffer.position();
+        return null;
     }
 
-
-    public static void printBlock(Block x) {
-        // print block id
-        TTY.print("B%d ", x.getId());
-
-        // print flags
-        if (x.isLoopHeader()) {
-            TTY.print("lh ");
-        }
-        if (x.isLoopEnd()) {
-            TTY.print("le ");
-        }
-
-        // print block bci range
-        TTY.print("[%d, %d] ", -1, -1);
-
-        // print predecessors and successors
-        if (x.numberOfPreds() > 0) {
-            TTY.print("preds: ");
-            for (int i = 0; i < x.numberOfPreds(); i++) {
-                TTY.print("B%d ", x.predAt(i).getId());
+    /**
+     * Gets the exception edge (if any) originating at a given operation.
+     */
+    public static LabelRef getExceptionEdge(LIRInstruction op) {
+        final LabelRef[] exceptionEdge = {null};
+        op.forEachState(state -> {
+            if (state.exceptionEdge != null) {
+                assert exceptionEdge[0] == null;
+                exceptionEdge[0] = state.exceptionEdge;
             }
-        }
-
-        if (x.numberOfSux() > 0) {
-            TTY.print("sux: ");
-            for (int i = 0; i < x.numberOfSux(); i++) {
-                TTY.print("B%d ", x.suxAt(i).getId());
-            }
-        }
-
-        TTY.println();
+        });
+        return exceptionEdge[0];
     }
 
-    public static void printLIR(List<Block> blocks) {
-        if (TTY.isSuppressed()) {
-            return;
+    /**
+     * The maximum distance an operation with an {@linkplain #getExceptionEdge(LIRInstruction)
+     * exception edge} can be from the last instruction of a LIR block. The value of 3 is based on a
+     * non-void call operation that has an exception edge. Such a call may move the result to
+     * another register and then spill it.
+     * <p>
+     * The rationale for such a constant is to limit the search for an insertion point when adding
+     * move operations at the end of a block. Such moves must be inserted before all control flow
+     * instructions.
+     */
+    public static final int MAX_EXCEPTION_EDGE_OP_DISTANCE_FROM_END = 3;
+
+    public static boolean verifyBlock(LIR lir, AbstractBlockBase<?> block) {
+        ArrayList<LIRInstruction> ops = lir.getLIRforBlock(block);
+        if (ops.size() == 0) {
+            return false;
         }
-        TTY.println("LIR:");
-        int i;
-        for (i = 0; i < blocks.size(); i++) {
-            Block bb = blocks.get(i);
-            printBlock(bb);
-            TTY.println("__id_Instruction___________________________________________");
-            for (LIRInstruction op : bb.lir) {
-                TTY.println(op.toStringWithIdPrefix());
-                TTY.println();
+        LIRInstruction opWithExceptionEdge = null;
+        int index = 0;
+        int lastIndex = ops.size() - 1;
+        for (LIRInstruction op : ops.subList(0, lastIndex)) {
+            assert !(op instanceof BlockEndOp) : op.getClass();
+            LabelRef exceptionEdge = getExceptionEdge(op);
+            if (exceptionEdge != null) {
+                assert opWithExceptionEdge == null : "multiple ops with an exception edge not allowed";
+                opWithExceptionEdge = op;
+                int distanceFromEnd = lastIndex - index;
+                assert distanceFromEnd <= MAX_EXCEPTION_EDGE_OP_DISTANCE_FROM_END;
             }
-            TTY.println();
+            index++;
+        }
+        LIRInstruction end = ops.get(lastIndex);
+        assert end instanceof BlockEndOp : end.getClass();
+        return true;
+    }
+
+    public static boolean verifyBlocks(LIR lir, AbstractBlockBase<?>[] blocks) {
+        for (AbstractBlockBase<?> block : blocks) {
+            if (block == null) {
+                continue;
+            }
+            for (AbstractBlockBase<?> sux : block.getSuccessors()) {
+                assert Arrays.asList(blocks).contains(sux) : "missing successor from: " + block + "to: " + sux;
+            }
+            for (AbstractBlockBase<?> pred : block.getPredecessors()) {
+                assert Arrays.asList(blocks).contains(pred) : "missing predecessor from: " + block + "to: " + pred;
+            }
+            if (!verifyBlock(lir, block)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void resetLabels() {
+
+        for (AbstractBlockBase<?> block : codeEmittingOrder()) {
+            if (block == null) {
+                continue;
+            }
+            for (LIRInstruction inst : lirInstructions.get(block)) {
+                if (inst instanceof LabelOp) {
+                    ((LabelOp) inst).getLabel().reset();
+                }
+            }
         }
     }
-*/
+
 }
