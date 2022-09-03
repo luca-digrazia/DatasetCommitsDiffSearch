@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,15 @@
 
 package org.litepal.crud;
 
+import android.content.ContentValues;
+import android.database.sqlite.SQLiteDatabase;
+import android.util.Log;
+
+import org.litepal.annotation.Encrypt;
+import org.litepal.crud.model.AssociationsInfo;
+import org.litepal.exceptions.LitePalSupportException;
+import org.litepal.util.DBUtility;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
@@ -23,14 +32,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.litepal.crud.model.AssociationsInfo;
-import org.litepal.exceptions.DataSupportException;
-
-import android.content.ContentValues;
-import android.database.sqlite.SQLiteDatabase;
+import static org.litepal.util.BaseUtility.changeCase;
 
 /**
- * This is a component under DataSupport. It deals with the saving stuff as
+ * This is a component under LitePalSupport. It deals with the saving stuff as
  * primary task. All the implementation based on the java reflection API and
  * Android SQLiteDatabase API. It will persist the model class into table. If
  * there're some associated models already persisted, it will build the
@@ -40,16 +45,19 @@ import android.database.sqlite.SQLiteDatabase;
  * @author Tony Green
  * @since 1.1
  */
-class SaveHandler extends DataHandler {
+public class SaveHandler extends DataHandler {
 
-	/**
+    private ContentValues values;
+
+    /**
 	 * Initialize {@link org.litepal.crud.DataHandler#mDatabase} for operating database. Do not
 	 * allow to create instance of SaveHandler out of CRUD package.
 	 * 
 	 * @param db
 	 *            The instance of SQLiteDatabase.
 	 */
-	SaveHandler(SQLiteDatabase db) {
+    public SaveHandler(SQLiteDatabase db) {
+        values = new ContentValues();
 		mDatabase = db;
 	}
 
@@ -69,25 +77,26 @@ class SaveHandler extends DataHandler {
 	 * @throws IllegalArgumentException
 	 * @throws SecurityException
 	 */
-	void onSave(DataSupport baseObj) throws SecurityException, IllegalArgumentException,
+	void onSave(LitePalSupport baseObj) throws SecurityException, IllegalArgumentException,
 			NoSuchMethodException, IllegalAccessException, InvocationTargetException {
 		String className = baseObj.getClassName();
 		List<Field> supportedFields = getSupportedFields(className);
+        List<Field> supportedGenericFields = getSupportedGenericFields(className);
 		Collection<AssociationsInfo> associationInfos = getAssociationInfo(className);
 		if (!baseObj.isSaved()) {
-			analyzeAssociatedModels(baseObj, associationInfos);
-			doSaveAction(baseObj, supportedFields);
-			analyzeAssociatedModels(baseObj, associationInfos);
+            analyzeAssociatedModels(baseObj, associationInfos);
+			doSaveAction(baseObj, supportedFields, supportedGenericFields);
+            analyzeAssociatedModels(baseObj, associationInfos);
 		} else {
-			analyzeAssociatedModels(baseObj, associationInfos);
-			doUpdateAction(baseObj, supportedFields);
+            analyzeAssociatedModels(baseObj, associationInfos);
+			doUpdateAction(baseObj, supportedFields, supportedGenericFields);
 		}
 	}
 
 	/**
 	 * The open interface for other classes in CRUD package to save a model
 	 * collection. It is called when developer calls
-	 * {@link org.litepal.crud.DataSupport#saveAll(java.util.Collection)}. Each model in the collection
+	 * {@link org.litepal.LitePal#saveAll(java.util.Collection)}. Each model in the collection
 	 * will be persisted. If there're associated models detected, each
 	 * associated model which is persisted will build association with current
 	 * model in database.
@@ -100,23 +109,24 @@ class SaveHandler extends DataHandler {
 	 * @throws IllegalArgumentException
 	 * @throws SecurityException
 	 */
-	<T extends DataSupport> void onSaveAll(Collection<T> collection) throws SecurityException,
+	public <T extends LitePalSupport> void onSaveAll(Collection<T> collection) throws SecurityException,
 			IllegalArgumentException, NoSuchMethodException, IllegalAccessException,
 			InvocationTargetException {
 		if (collection != null && collection.size() > 0) {
-			DataSupport[] array = collection.toArray(new DataSupport[0]);
-			DataSupport firstObj = array[0];
+			LitePalSupport[] array = collection.toArray(new LitePalSupport[0]);
+			LitePalSupport firstObj = array[0];
 			String className = firstObj.getClassName();
 			List<Field> supportedFields = getSupportedFields(className);
+            List<Field> supportedGenericFields = getSupportedGenericFields(className);
 			Collection<AssociationsInfo> associationInfos = getAssociationInfo(className);
-			for (DataSupport baseObj : array) {
+			for (LitePalSupport baseObj : array) {
 				if (!baseObj.isSaved()) {
 					analyzeAssociatedModels(baseObj, associationInfos);
-					doSaveAction(baseObj, supportedFields);
+					doSaveAction(baseObj, supportedFields, supportedGenericFields);
 					analyzeAssociatedModels(baseObj, associationInfos);
 				} else {
 					analyzeAssociatedModels(baseObj, associationInfos);
-					doUpdateAction(baseObj, supportedFields);
+					doUpdateAction(baseObj, supportedFields, supportedGenericFields);
 				}
 				baseObj.clearAssociatedData();
 			}
@@ -125,9 +135,9 @@ class SaveHandler extends DataHandler {
 
 	/**
 	 * Persisting model class into database happens here. But first
-	 * {@link #beforeSave(org.litepal.crud.DataSupport, java.util.List, android.content.ContentValues)} will be called to
+	 * {@link #beforeSave(LitePalSupport, java.util.List, android.content.ContentValues)} will be called to
 	 * put the values for ContentValues. When the model is saved,
-	 * {@link #afterSave(org.litepal.crud.DataSupport, java.util.List, long)} will be called to do stuffs
+	 * {@link #afterSave(LitePalSupport, java.util.List, java.util.List, long)} will be called to do stuffs
 	 * after model is saved. Note that SaveSupport won't help with id. Any
 	 * developer who wants to set value to id will be ignored here. The value of
 	 * id will be generated by SQLite automatically.
@@ -136,19 +146,21 @@ class SaveHandler extends DataHandler {
 	 *            Current model to persist.
 	 * @param supportedFields
 	 *            List of all supported fields.
+     * @param  supportedGenericFields
+     *            List of all supported generic fields.
 	 * @throws java.lang.reflect.InvocationTargetException
 	 * @throws IllegalAccessException
 	 * @throws NoSuchMethodException
 	 * @throws IllegalArgumentException
 	 * @throws SecurityException
 	 */
-	private void doSaveAction(DataSupport baseObj, List<Field> supportedFields)
+	private void doSaveAction(LitePalSupport baseObj, List<Field> supportedFields, List<Field> supportedGenericFields)
 			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
 			IllegalAccessException, InvocationTargetException {
-		ContentValues values = new ContentValues();
+		values.clear();
 		beforeSave(baseObj, supportedFields, values);
 		long id = saving(baseObj, values);
-		afterSave(baseObj, supportedFields, id);
+		afterSave(baseObj, supportedFields, supportedGenericFields, id);
 	}
 
 	/**
@@ -168,11 +180,11 @@ class SaveHandler extends DataHandler {
 	 * @throws IllegalArgumentException
 	 * @throws SecurityException
 	 */
-	private void beforeSave(DataSupport baseObj, List<Field> supportedFields, ContentValues values)
+	private void beforeSave(LitePalSupport baseObj, List<Field> supportedFields, ContentValues values)
 			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
 			IllegalAccessException, InvocationTargetException {
 		putFieldsValue(baseObj, supportedFields, values);
-		putForeignKeyValue(values, baseObj);
+        putForeignKeyValue(values, baseObj);
 	}
 
 	/**
@@ -185,7 +197,10 @@ class SaveHandler extends DataHandler {
 	 *            To store data of current model for persisting.
 	 * @return The row ID of the newly inserted row, or -1 if an error occurred.
 	 */
-	private long saving(DataSupport baseObj, ContentValues values) {
+	private long saving(LitePalSupport baseObj, ContentValues values) {
+        if (values.size() == 0) {
+            values.putNull("id");
+        }
 		return mDatabase.insert(baseObj.getTableName(), null, values);
 	}
 
@@ -196,14 +211,18 @@ class SaveHandler extends DataHandler {
 	 *            Current model that is persisted.
 	 * @param supportedFields
 	 *            List of all supported fields.
+     * @param  supportedGenericFields
+     *            List of all supported generic fields.
 	 * @param id
 	 *            The current model's id.
 	 */
-	private void afterSave(DataSupport baseObj, List<Field> supportedFields, long id) {
+	private void afterSave(LitePalSupport baseObj, List<Field> supportedFields,
+                           List<Field> supportedGenericFields, long id) throws IllegalAccessException, InvocationTargetException {
 		throwIfSaveFailed(id);
 		assignIdValue(baseObj, getIdField(supportedFields), id);
-		updateAssociatedTableWithFK(baseObj);
-		insertIntermediateJoinTableValue(baseObj, false);
+        updateGenericTables(baseObj, supportedGenericFields, id);
+        updateAssociatedTableWithFK(baseObj);
+        insertIntermediateJoinTableValue(baseObj, false);
 	}
 
 	/**
@@ -211,19 +230,23 @@ class SaveHandler extends DataHandler {
 	 * 
 	 * @param baseObj
 	 *            The class of base object.
+     * @param supportedFields
+     *            List of all supported fields.
+     * @param  supportedGenericFields
+     *            List of all supported generic fields.
 	 * @throws java.lang.reflect.InvocationTargetException
 	 * @throws IllegalAccessException
 	 * @throws NoSuchMethodException
 	 * @throws IllegalArgumentException
 	 * @throws SecurityException
 	 */
-	private void doUpdateAction(DataSupport baseObj, List<Field> supportedFields)
+	private void doUpdateAction(LitePalSupport baseObj, List<Field> supportedFields, List<Field> supportedGenericFields)
 			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
 			IllegalAccessException, InvocationTargetException {
-		ContentValues values = new ContentValues();
+		values.clear();
 		beforeUpdate(baseObj, supportedFields, values);
 		updating(baseObj, values);
-		afterUpdate(baseObj);
+		afterUpdate(baseObj, supportedGenericFields);
 	}
 
 	/**
@@ -244,14 +267,14 @@ class SaveHandler extends DataHandler {
 	 * @throws IllegalArgumentException
 	 * @throws SecurityException
 	 */
-	private void beforeUpdate(DataSupport baseObj, List<Field> supportedFields, ContentValues values)
+	private void beforeUpdate(LitePalSupport baseObj, List<Field> supportedFields, ContentValues values)
 			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
 			IllegalAccessException, InvocationTargetException {
 		putFieldsValue(baseObj, supportedFields, values);
-		putForeignKeyValue(values, baseObj);
-		for (String fkName : baseObj.getListToClearSelfFK()) {
-			values.putNull(fkName);
-		}
+        putForeignKeyValue(values, baseObj);
+        for (String fkName : baseObj.getListToClearSelfFK()) {
+            values.putNull(fkName);
+        }
 	}
 
 	/**
@@ -264,9 +287,11 @@ class SaveHandler extends DataHandler {
 	 * @param values
 	 *            To store data of current model for updating.
 	 */
-	private void updating(DataSupport baseObj, ContentValues values) {
-		mDatabase.update(baseObj.getTableName(), values, "id = ?",
-				new String[] { String.valueOf(baseObj.getBaseObjId()) });
+	private void updating(LitePalSupport baseObj, ContentValues values) {
+	    if (values.size() > 0) {
+            mDatabase.update(baseObj.getTableName(), values, "id = ?",
+                    new String[] { String.valueOf(baseObj.getBaseObjId()) });
+        }
 	}
 
 	/**
@@ -274,11 +299,15 @@ class SaveHandler extends DataHandler {
 	 * 
 	 * @param baseObj
 	 *            Current model that is updated.
+     * @param  supportedGenericFields
+     *            List of all supported generic fields.
 	 */
-	private void afterUpdate(DataSupport baseObj) {
-		updateAssociatedTableWithFK(baseObj);
-		insertIntermediateJoinTableValue(baseObj, true);
-		clearFKValueInAssociatedTable(baseObj);
+	private void afterUpdate(LitePalSupport baseObj, List<Field> supportedGenericFields)
+            throws InvocationTargetException, IllegalAccessException {
+        updateGenericTables(baseObj, supportedGenericFields, baseObj.getBaseObjId());
+        updateAssociatedTableWithFK(baseObj);
+        insertIntermediateJoinTableValue(baseObj, true);
+        clearFKValueInAssociatedTable(baseObj);
 	}
 
 	/**
@@ -305,15 +334,15 @@ class SaveHandler extends DataHandler {
 	 */
 	private void throwIfSaveFailed(long id) {
 		if (id == -1) {
-			throw new DataSupportException(DataSupportException.SAVE_FAILED);
+			throw new LitePalSupportException(LitePalSupportException.SAVE_FAILED);
 		}
 	}
 
 	/**
 	 * Assign the generated id value to the model. The
-	 * {@link org.litepal.crud.DataSupport#baseObjId} will be assigned anyway. If the model has a
+	 * {@link LitePalSupport#baseObjId} will be assigned anyway. If the model has a
 	 * field named id or _id, LitePal will assign it too. The
-	 * {@link org.litepal.crud.DataSupport#baseObjId} will be used as identify of this model for
+	 * {@link LitePalSupport#baseObjId} will be used as identify of this model for
 	 * system use. The id or _id field will help developers for their own
 	 * purpose.
 	 * 
@@ -324,14 +353,14 @@ class SaveHandler extends DataHandler {
 	 * @param id
 	 *            The value of id.
 	 */
-	private void assignIdValue(DataSupport baseObj, Field idField, long id) {
+	private void assignIdValue(LitePalSupport baseObj, Field idField, long id) {
 		try {
 			giveBaseObjIdValue(baseObj, id);
 			if (idField != null) {
 				giveModelIdValue(baseObj, idField.getName(), idField.getType(), id);
 			}
 		} catch (Exception e) {
-			throw new DataSupportException(e.getMessage());
+			throw new LitePalSupportException(e.getMessage(), e);
 		}
 	}
 
@@ -352,17 +381,17 @@ class SaveHandler extends DataHandler {
 	 * @throws IllegalArgumentException
 	 * @throws IllegalAccessException
 	 */
-	private void giveModelIdValue(DataSupport baseObj, String idName, Class<?> idType, long id)
+	private void giveModelIdValue(LitePalSupport baseObj, String idName, Class<?> idType, long id)
 			throws SecurityException, NoSuchFieldException, IllegalArgumentException,
 			IllegalAccessException {
 		if (shouldGiveModelIdValue(idName, idType, id)) {
-			Object value = null;
+			Object value;
 			if (idType == int.class || idType == Integer.class) {
 				value = (int) id;
 			} else if (idType == long.class || idType == Long.class) {
 				value = id;
 			} else {
-				throw new DataSupportException(DataSupportException.ID_TYPE_INVALID_EXCEPTION);
+				throw new LitePalSupportException(LitePalSupportException.ID_TYPE_INVALID_EXCEPTION);
 			}
 			DynamicExecutor.setField(baseObj, idName, value, baseObj.getClass());
 		}
@@ -375,7 +404,7 @@ class SaveHandler extends DataHandler {
 	 * @param values
 	 *            The instance of ContentValues to put foreign key value.
 	 */
-	private void putForeignKeyValue(ContentValues values, DataSupport baseObj) {
+	private void putForeignKeyValue(ContentValues values, LitePalSupport baseObj) {
 		Map<String, Long> associatedModelMap = baseObj.getAssociatedModelsMapWithoutFK();
 		for (String associatedTableName : associatedModelMap.keySet()) {
 			values.put(getForeignKeyColumnName(associatedTableName),
@@ -389,7 +418,7 @@ class SaveHandler extends DataHandler {
 	 * @param baseObj
 	 *            Current model that is persisted.
 	 */
-	private void updateAssociatedTableWithFK(DataSupport baseObj) {
+	private void updateAssociatedTableWithFK(LitePalSupport baseObj) {
 		Map<String, Set<Long>> associatedModelMap = baseObj.getAssociatedModelsMapWithFK();
 		ContentValues values = new ContentValues();
 		for (String associatedTableName : associatedModelMap.keySet()) {
@@ -410,7 +439,7 @@ class SaveHandler extends DataHandler {
 	 * @param baseObj
 	 *            Current model that is persisted.
 	 */
-	private void clearFKValueInAssociatedTable(DataSupport baseObj) {
+	private void clearFKValueInAssociatedTable(LitePalSupport baseObj) {
 		List<String> associatedTableNames = baseObj.getListToClearAssociatedFK();
 		for (String associatedTableName : associatedTableNames) {
 			String fkColumnName = getForeignKeyColumnName(baseObj.getTableName());
@@ -430,8 +459,8 @@ class SaveHandler extends DataHandler {
 	 * @param isUpdate
 	 *            The current action is update or not.
 	 */
-	private void insertIntermediateJoinTableValue(DataSupport baseObj, boolean isUpdate) {
-		Map<String, Set<Long>> associatedIdsM2M = baseObj.getAssociatedModelsMapForJoinTable();
+	private void insertIntermediateJoinTableValue(LitePalSupport baseObj, boolean isUpdate) {
+		Map<String, List<Long>> associatedIdsM2M = baseObj.getAssociatedModelsMapForJoinTable();
 		ContentValues values = new ContentValues();
 		for (String associatedTableName : associatedIdsM2M.keySet()) {
 			String joinTableName = getIntermediateTableName(baseObj, associatedTableName);
@@ -439,7 +468,7 @@ class SaveHandler extends DataHandler {
 				mDatabase.delete(joinTableName, getWhereForJoinTableToDelete(baseObj),
 						new String[] { String.valueOf(baseObj.getBaseObjId()) });
 			}
-			Set<Long> associatedIdsM2MSet = associatedIdsM2M.get(associatedTableName);
+			List<Long> associatedIdsM2MSet = associatedIdsM2M.get(associatedTableName);
 			for (long associatedId : associatedIdsM2MSet) {
 				values.clear();
 				values.put(getForeignKeyColumnName(baseObj.getTableName()), baseObj.getBaseObjId());
@@ -457,7 +486,7 @@ class SaveHandler extends DataHandler {
 	 *            Current model that is persisted.
 	 * @return The where clause to execute.
 	 */
-	private String getWhereForJoinTableToDelete(DataSupport baseObj) {
+	private String getWhereForJoinTableToDelete(LitePalSupport baseObj) {
 		StringBuilder where = new StringBuilder();
 		where.append(getForeignKeyColumnName(baseObj.getTableName()));
 		where.append(" = ?");
@@ -481,4 +510,58 @@ class SaveHandler extends DataHandler {
 	private boolean shouldGiveModelIdValue(String idName, Class<?> idType, long id) {
 		return idName != null && idType != null && id > 0;
 	}
+
+    /**
+     * Update the generic data in generic tables. Need to delete the related generic data before
+     * saving, because generic data has no id.
+     * @param baseObj
+     *          Current model that is persisted.
+     *@param  supportedGenericFields
+     *            List of all supported generic fields.
+     * @param id
+     *          The id of current model.
+     * @throws IllegalAccessException
+     * @throws InvocationTargetException
+     */
+    private void updateGenericTables(LitePalSupport baseObj, List<Field> supportedGenericFields,
+                                     long id) throws IllegalAccessException, InvocationTargetException {
+        for (Field field : supportedGenericFields) {
+            Encrypt annotation = field.getAnnotation(Encrypt.class);
+            String algorithm = null;
+            String genericTypeName = getGenericTypeName(field);
+            if (annotation != null && "java.lang.String".equals(genericTypeName)) {
+                algorithm = annotation.algorithm();
+            }
+            field.setAccessible(true);
+            Collection<?> collection = (Collection<?>) field.get(baseObj);
+            if (collection != null) {
+                Log.d(TAG, "updateGenericTables: class name is " + baseObj.getClassName() + " , field name is " + field.getName() );
+                String tableName = DBUtility.getGenericTableName(baseObj.getClassName(), field.getName());
+                String genericValueIdColumnName = DBUtility.getGenericValueIdColumnName(baseObj.getClassName());
+                mDatabase.delete(tableName, genericValueIdColumnName + " = ?", new String[] {String.valueOf(id)});
+                for (Object object : collection) {
+                    ContentValues values = new ContentValues();
+                    values.put(genericValueIdColumnName, id);
+                    object = encryptValue(algorithm, object);
+                    if (baseObj.getClassName().equals(genericTypeName)) {
+                        LitePalSupport dataSupport = (LitePalSupport) object;
+                        if (dataSupport == null) {
+                            continue;
+                        }
+                        long baseObjId = dataSupport.getBaseObjId();
+                        if (baseObjId <= 0) {
+                            continue;
+                        }
+                        values.put(DBUtility.getM2MSelfRefColumnName(field), baseObjId);
+                    } else {
+                        Object[] parameters = new Object[] { changeCase(DBUtility.convertToValidColumnName(field.getName())), object };
+                        Class<?>[] parameterTypes = new Class[] { String.class, getGenericTypeClass(field) };
+                        DynamicExecutor.send(values, "put", parameters, values.getClass(), parameterTypes);
+                    }
+                    mDatabase.insert(tableName, null, values);
+                }
+            }
+        }
+    }
+
 }

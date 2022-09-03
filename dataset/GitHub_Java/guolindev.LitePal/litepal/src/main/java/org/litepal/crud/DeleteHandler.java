@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,22 +16,25 @@
 
 package org.litepal.crud;
 
+import android.database.sqlite.SQLiteDatabase;
+import android.text.TextUtils;
+
+import org.litepal.LitePal;
+import org.litepal.crud.model.AssociationsInfo;
+import org.litepal.exceptions.LitePalSupportException;
+import org.litepal.util.BaseUtility;
+import org.litepal.util.Const;
+import org.litepal.util.DBUtility;
+
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.litepal.crud.model.AssociationsInfo;
-import org.litepal.exceptions.DataSupportException;
-import org.litepal.util.BaseUtility;
-import org.litepal.util.Const;
-import org.litepal.util.DBUtility;
-
-import android.database.sqlite.SQLiteDatabase;
-
 /**
- * This is a component under DataSupport. It deals with the deleting stuff as
+ * This is a component under LitePalSupport. It deals with the deleting stuff as
  * primary task. If deletes a saved model or delete a record with id, the
  * cascade delete function would work. But considering efficiency, if deletes
  * with deleteAll method, the referenced data in other tables will not be
@@ -55,14 +58,14 @@ public class DeleteHandler extends DataHandler {
 	 * @param db
 	 *            The instance of SQLiteDatabase.
 	 */
-	DeleteHandler(SQLiteDatabase db) {
+    public DeleteHandler(SQLiteDatabase db) {
 		mDatabase = db;
 	}
 
 	/**
 	 * The open interface for other classes in CRUD package to delete. Using
 	 * baseObj to decide which record to delete. The baseObj must be saved
-	 * already(using {@link org.litepal.crud.DataSupport#isSaved()} to test), or nothing will be
+	 * already(using {@link LitePalSupport#isSaved()} to test), or nothing will be
 	 * deleted. This method can action cascade delete. When the record is
 	 * deleted from database, all the referenced data such as foreign key value
 	 * will be removed too.
@@ -71,8 +74,10 @@ public class DeleteHandler extends DataHandler {
 	 *            The record to delete.
 	 * @return The number of rows affected. Including cascade delete rows.
 	 */
-	int onDelete(DataSupport baseObj) {
+	int onDelete(LitePalSupport baseObj) {
 		if (baseObj.isSaved()) {
+            List<Field> supportedGenericFields = getSupportedGenericFields(baseObj.getClassName());
+            deleteGenericData(baseObj.getClass(), supportedGenericFields, baseObj.getBaseObjId());
 			Collection<AssociationsInfo> associationInfos = analyzeAssociations(baseObj);
 			int rowsAffected = deleteCascade(baseObj);
 			rowsAffected += mDatabase.delete(baseObj.getTableName(), "id = "
@@ -96,7 +101,9 @@ public class DeleteHandler extends DataHandler {
 	 *            Which record to delete.
 	 * @return The number of rows affected. Including cascade delete rows.
 	 */
-	int onDelete(Class<?> modelClass, long id) {
+    public int onDelete(Class<?> modelClass, long id) {
+        List<Field> supportedGenericFields = getSupportedGenericFields(modelClass.getName());
+        deleteGenericData(modelClass, supportedGenericFields, id);
 		analyzeAssociations(modelClass);
 		int rowsAffected = deleteCascade(modelClass, id);
 		rowsAffected += mDatabase.delete(getTableName(modelClass),
@@ -117,39 +124,39 @@ public class DeleteHandler extends DataHandler {
 	 *            statement.
 	 * @return The number of rows affected.
 	 */
-	int onDeleteAll(String tableName, String... conditions) {
+	public int onDeleteAll(String tableName, String... conditions) {
 		BaseUtility.checkConditionsCorrect(conditions);
+        if (conditions != null && conditions.length > 0) {
+            conditions[0] = DBUtility.convertWhereClauseToColumnName(conditions[0]);
+        }
 		return mDatabase.delete(tableName, getWhereClause(conditions),
 				getWhereArgs(conditions));
 	}
-	
-	int onDeleteAll(Class<?> modelClass, String... conditions) {
+
+    @SuppressWarnings("unchecked")
+    public int onDeleteAll(Class<?> modelClass, String... conditions) {
 		BaseUtility.checkConditionsCorrect(conditions);
+        if (conditions != null && conditions.length > 0) {
+            conditions[0] = DBUtility.convertWhereClauseToColumnName(conditions[0]);
+        }
+        List<Field> supportedGenericFields = getSupportedGenericFields(modelClass.getName());
+        if (!supportedGenericFields.isEmpty()) {
+            List<LitePalSupport> list = (List<LitePalSupport>) LitePal.select("id").where(conditions).find(modelClass);
+            if (list.size() > 0) {
+                long[] ids = new long[list.size()];
+                for (int i = 0; i < ids.length; i++) {
+                    LitePalSupport dataSupport = list.get(i);
+                    ids[i] = dataSupport.getBaseObjId();
+                }
+                deleteGenericData(modelClass, supportedGenericFields, ids);
+            }
+        }
 		analyzeAssociations(modelClass);
 		int rowsAffected = deleteAllCascade(modelClass, conditions);
 		rowsAffected += mDatabase.delete(getTableName(modelClass), getWhereClause(conditions),
 				getWhereArgs(conditions));
 		getForeignKeyTableToDelete().clear();
 		return rowsAffected;
-	}
-
-	/**
-	 * Do the action for deleting multiple rows. It will check the validity of
-	 * conditions, then delete values in database. If the format of conditions
-	 * is invalid, throw DataSupportException.
-	 * 
-	 * @param tableName
-	 *            Which table to delete from.
-	 * @param conditions
-	 *            A string array representing the WHERE part of an SQL
-	 *            statement.
-	 * @return The number of rows affected.
-	 */
-	@Deprecated
-	int doDeleteAllAction(String tableName, String... conditions) {
-		BaseUtility.checkConditionsCorrect(conditions);
-		return mDatabase.delete(tableName, getWhereClause(conditions),
-				getWhereArgs(conditions));
 	}
 
 	/**
@@ -241,14 +248,14 @@ public class DeleteHandler extends DataHandler {
 	 * @param baseObj
 	 *            The record to delete.
 	 */
-	private Collection<AssociationsInfo> analyzeAssociations(DataSupport baseObj) {
+	private Collection<AssociationsInfo> analyzeAssociations(LitePalSupport baseObj) {
 		try {
 			Collection<AssociationsInfo> associationInfos = getAssociationInfo(baseObj
 					.getClassName());
 			analyzeAssociatedModels(baseObj, associationInfos);
 			return associationInfos;
 		} catch (Exception e) {
-			throw new DataSupportException(e.getMessage());
+			throw new LitePalSupportException(e.getMessage(), e);
 		}
 	}
 
@@ -262,39 +269,39 @@ public class DeleteHandler extends DataHandler {
 	 * @param associationInfos
 	 *            The associated info.
 	 */
-	private void clearAssociatedModelSaveState(DataSupport baseObj,
+	private void clearAssociatedModelSaveState(LitePalSupport baseObj,
 			Collection<AssociationsInfo> associationInfos) {
 		try {
 			for (AssociationsInfo associationInfo : associationInfos) {
 				if (associationInfo.getAssociationType() == Const.Model.MANY_TO_ONE
 						&& !baseObj.getClassName().equals(
 								associationInfo.getClassHoldsForeignKey())) {
-					Collection<DataSupport> associatedModels = getAssociatedModels(
+					Collection<LitePalSupport> associatedModels = getAssociatedModels(
 							baseObj, associationInfo);
 					if (associatedModels != null && !associatedModels.isEmpty()) {
-						for (DataSupport model : associatedModels) {
+						for (LitePalSupport model : associatedModels) {
 							if (model != null) {
-								model.resetBaseObjId();
+								model.clearSavedState();
 							}
 						}
 					}
 				} else if (associationInfo.getAssociationType() == Const.Model.ONE_TO_ONE) {
-					DataSupport model = getAssociatedModel(baseObj,
+					LitePalSupport model = getAssociatedModel(baseObj,
 							associationInfo);
 					if (model != null) {
-						model.resetBaseObjId();
+						model.clearSavedState();
 					}
 				}
 			}
 		} catch (Exception e) {
-			throw new DataSupportException(e.getMessage());
+			throw new LitePalSupportException(e.getMessage(), e);
 		}
 	}
 
 	/**
 	 * Use the analyzed result of associations to delete referenced data. So
 	 * this method must be called after
-	 * {@link #analyzeAssociations(org.litepal.crud.DataSupport)}. There're two parts of
+	 * {@link #analyzeAssociations(LitePalSupport)}. There're two parts of
 	 * referenced data to delete. The foreign key rows in associated tables and
 	 * the foreign key rows in intermediate join tables.
 	 * 
@@ -303,7 +310,7 @@ public class DeleteHandler extends DataHandler {
 	 * @return The number of rows affected in associated table and intermediate
 	 *         join table.
 	 */
-	private int deleteCascade(DataSupport baseObj) {
+	private int deleteCascade(LitePalSupport baseObj) {
 		int rowsAffected;
 		rowsAffected = deleteAssociatedForeignKeyRows(baseObj);
 		rowsAffected += deleteAssociatedJoinTableRows(baseObj);
@@ -318,7 +325,7 @@ public class DeleteHandler extends DataHandler {
 	 *            The record to delete. Now contains associations info.
 	 * @return The number of rows affected in all associated tables.
 	 */
-	private int deleteAssociatedForeignKeyRows(DataSupport baseObj) {
+	private int deleteAssociatedForeignKeyRows(LitePalSupport baseObj) {
 		int rowsAffected = 0;
 		Map<String, Set<Long>> associatedModelMap = baseObj
 				.getAssociatedModelsMapWithFK();
@@ -338,7 +345,7 @@ public class DeleteHandler extends DataHandler {
 	 *            The record to delete. Now contains associations info.
 	 * @return The number of rows affected in all intermediate join tables.
 	 */
-	private int deleteAssociatedJoinTableRows(DataSupport baseObj) {
+	private int deleteAssociatedJoinTableRows(LitePalSupport baseObj) {
 		int rowsAffected = 0;
 		Set<String> associatedTableNames = baseObj
 				.getAssociatedModelsMapForJoinTable().keySet();
@@ -365,4 +372,40 @@ public class DeleteHandler extends DataHandler {
 		return foreignKeyTableToDelete;
 	}
 
+    /**
+     * Delete the generic data in generic tables while main data was deleted.
+     * @param modelClass
+     *          Used to get the generic table name and value id column.
+     * @param supportedGenericFields
+     *          List of all supported generic fields.
+     * @param ids
+     *          The id array of models.
+     */
+    private void deleteGenericData(Class<?> modelClass, List<Field> supportedGenericFields, long... ids) {
+        for (Field field : supportedGenericFields) {
+            String tableName = DBUtility.getGenericTableName(modelClass.getName(), field.getName());
+            String genericValueIdColumnName = DBUtility.getGenericValueIdColumnName(modelClass.getName());
+            int maxExpressionCount = 500; // Prevent the where condition is too long
+            int length = ids.length;
+            int loopCount = (length - 1) / maxExpressionCount;
+            for (int i = 0; i <= loopCount; i++) {
+                StringBuilder whereClause = new StringBuilder();
+                boolean needOr = false;
+                for (int j = maxExpressionCount * i; j < maxExpressionCount * (i + 1); j++) {
+                    if (j >= length) {
+                        break;
+                    }
+                    long id = ids[j];
+                    if (needOr) {
+                        whereClause.append(" or ");
+                    }
+                    whereClause.append(genericValueIdColumnName).append(" = ").append(id);
+                    needOr = true;
+                }
+                if (!TextUtils.isEmpty(whereClause.toString())) {
+                    mDatabase.delete(tableName, whereClause.toString(), null);
+                }
+            }
+        }
+    }
 }

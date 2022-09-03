@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
-import org.litepal.exceptions.DataSupportException;
+import org.litepal.exceptions.LitePalSupportException;
 
 /**
  * This provides a send method to allow calling method in dynamic way. (Just
@@ -72,10 +72,17 @@ class DynamicExecutor {
 			method.setAccessible(true);
 			return method.invoke(object, parameters);
 		} catch (NoSuchMethodException e) {
-			throw new DataSupportException(DataSupportException.noSuchMethodException(
-					objectClass.getSimpleName(), methodName));
+			throw new LitePalSupportException(LitePalSupportException.noSuchMethodException(
+					objectClass.getSimpleName(), methodName), e);
 		}
 	}
+
+    static void set(Object object, String fieldName, Object value, Class<?> objectClass)
+            throws SecurityException, IllegalArgumentException, IllegalAccessException, NoSuchFieldException {
+        Field objectField = objectClass.getDeclaredField(fieldName);
+        objectField.setAccessible(true);
+        objectField.set(object, value);
+    }
 
 	/**
 	 * This method use java reflect API to set field value dynamically. Most
@@ -96,13 +103,14 @@ class DynamicExecutor {
 	 */
 	static void setField(Object object, String fieldName, Object value, Class<?> objectClass)
 			throws SecurityException, IllegalArgumentException, IllegalAccessException {
+        if (objectClass == LitePalSupport.class || objectClass == Object.class) {
+            throw new LitePalSupportException(LitePalSupportException.noSuchFieldExceptioin(
+                    objectClass.getSimpleName(), fieldName));
+        }
 		try {
-			Field objectField = objectClass.getDeclaredField(fieldName);
-			objectField.setAccessible(true);
-			objectField.set(object, value);
+			set(object, fieldName, value, objectClass);
 		} catch (NoSuchFieldException e) {
-			throw new DataSupportException(DataSupportException.noSuchFieldExceptioin(
-					objectClass.getSimpleName(), fieldName));
+			setField(object, fieldName, value, objectClass.getSuperclass());
 		}
 	}
 
@@ -118,19 +126,21 @@ class DynamicExecutor {
 	 * @param objectClass
 	 *            The class of object.
 	 * @throws SecurityException
-	 * @throws NoSuchFieldException
 	 * @throws IllegalArgumentException
 	 * @throws IllegalAccessException
 	 */
 	static Object getField(Object object, String fieldName, Class<?> objectClass)
 			throws IllegalArgumentException, IllegalAccessException {
+        if (objectClass == LitePalSupport.class || objectClass == Object.class) {
+            throw new LitePalSupportException(LitePalSupportException.noSuchFieldExceptioin(
+                    objectClass.getSimpleName(), fieldName));
+        }
 		try {
 			Field objectField = objectClass.getDeclaredField(fieldName);
 			objectField.setAccessible(true);
 			return objectField.get(object);
 		} catch (NoSuchFieldException e) {
-			throw new DataSupportException(DataSupportException.noSuchFieldExceptioin(
-					objectClass.getSimpleName(), fieldName));
+			return getField(object, fieldName, objectClass.getSuperclass());
 		}
 	}
 

@@ -16,17 +16,14 @@
 
 package org.litepal.litepalsample.model;
 
-import org.litepal.annotation.Column;
 import org.litepal.crud.LitePalSupport;
 
 public class Song extends LitePalSupport {
 
 	private long id;
 
-	@Column(index = true)
 	private String name;
 
-	@Column(index = true)
 	private String lyric;
 
 	private String duration;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,17 @@
 
 package org.litepal;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
+import org.litepal.annotation.Column;
+import org.litepal.crud.DataSupport;
+import org.litepal.crud.LitePalSupport;
 import org.litepal.crud.model.AssociationsInfo;
 import org.litepal.exceptions.DatabaseGenerateException;
 import org.litepal.parser.LitePalAttr;
 import org.litepal.tablemanager.model.AssociationsModel;
+import org.litepal.tablemanager.model.ColumnModel;
+import org.litepal.tablemanager.model.GenericModel;
 import org.litepal.tablemanager.model.TableModel;
+import org.litepal.tablemanager.typechange.BlobOrm;
 import org.litepal.tablemanager.typechange.BooleanOrm;
 import org.litepal.tablemanager.typechange.DateOrm;
 import org.litepal.tablemanager.typechange.DecimalOrm;
@@ -40,6 +36,18 @@ import org.litepal.tablemanager.typechange.TextOrm;
 import org.litepal.util.BaseUtility;
 import org.litepal.util.Const;
 import org.litepal.util.DBUtility;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Base class of all the LitePal components. If each component need to
@@ -67,7 +75,17 @@ public abstract class LitePalBase {
 	 * All the supporting mapping types currently in the array.
 	 */
 	private OrmChange[] typeChangeRules = { new NumericOrm(), new TextOrm(), new BooleanOrm(),
-			new DecimalOrm(), new DateOrm() };
+			new DecimalOrm(), new DateOrm(), new BlobOrm()};
+
+    /**
+     * This is map of class name to fields list. Indicates that each class has which supported fields.
+     */
+    private Map<String, List<Field>> classFieldsMap = new HashMap<String, List<Field>>();
+
+	/**
+	 * This is map of class name to generic fields list. Indicates that each class has which supported generic fields.
+	 */
+    private Map<String, List<Field>> classGenericFieldsMap = new HashMap<String, List<Field>>();
 
 	/**
 	 * The collection contains all association models.
@@ -79,14 +97,19 @@ public abstract class LitePalBase {
 	 */
 	private Collection<AssociationsInfo> mAssociationInfos;
 
+    /**
+     * The collection contains all generic models.
+     */
+    private Collection<GenericModel> mGenericModels;
+
 	/**
 	 * This method is used to get the table model by the class name passed
-	 * in.The principle to generate table model is that each field in the class
-	 * with private modifier and has a type among int/Integer, long/Long,
+	 * in. The principle to generate table model is that each field in the class
+	 * with non-static modifier and has a type among int/Integer, long/Long,
 	 * short/Short, float/Float, double/Double, char/Character, boolean/Boolean
 	 * or String, would generate a column with same name as corresponding field.
-	 * If users don't want some of the fields map a column, declare them as
-	 * protected or default.
+	 * If users don't want some of the fields map a column, declare an ignore
+     * annotation with {@link Column#ignore()}.
 	 * 
 	 * @param className
 	 *            The full name of the class to map in database.
@@ -100,20 +123,8 @@ public abstract class LitePalBase {
 		tableModel.setClassName(className);
 		List<Field> supportedFields = getSupportedFields(className);
 		for (Field field : supportedFields) {
-			String fieldName = field.getName();
-			Class<?> fieldTypeClass = field.getType();
-			String fieldType = fieldTypeClass.getName();
-			String columnName = null;
-			String columnType = null;
-			for (OrmChange ormChange : typeChangeRules) {
-				String[] relations = ormChange.object2Relation(className, fieldName, fieldType);
-				if (relations != null) {
-					columnName = relations[0];
-					columnType = relations[1];
-					tableModel.addColumn(columnName, columnType);
-					break;
-				}
-			}
+            ColumnModel columnModel = convertFieldToColumnModel(field);
+            tableModel.addColumnModel(columnModel);
 		}
 		return tableModel;
 	}
@@ -130,12 +141,24 @@ public abstract class LitePalBase {
 		if (mAssociationModels == null) {
 			mAssociationModels = new HashSet<AssociationsModel>();
 		}
+        if (mGenericModels == null) {
+            mGenericModels = new HashSet<GenericModel>();
+        }
 		mAssociationModels.clear();
+        mGenericModels.clear();
 		for (String className : classNames) {
 			analyzeClassFields(className, GET_ASSOCIATIONS_ACTION);
 		}
 		return mAssociationModels;
 	}
+
+    /**
+     * Get all generic models for create generic tables.
+     * @return All generic models.
+     */
+    protected Collection<GenericModel> getGenericModels() {
+        return mGenericModels;
+    }
 
 	/**
 	 * Get the association info model by the class name.
@@ -161,28 +184,46 @@ public abstract class LitePalBase {
 	 * 
 	 * @param className
 	 *            The full name of the class.
-	 * @return A list of supported fields
+	 * @return A list of supported fields.
 	 */
 	protected List<Field> getSupportedFields(String className) {
-		List<Field> supportedFields = new ArrayList<Field>();
-		Class<?> dynamicClass = null;
-		try {
-			dynamicClass = Class.forName(className);
-		} catch (ClassNotFoundException e) {
-			throw new DatabaseGenerateException(DatabaseGenerateException.CLASS_NOT_FOUND + className);
-		}
-		Field[] fields = dynamicClass.getDeclaredFields();
-		for (Field field : fields) {
-			int modifiers = field.getModifiers();
-			if (Modifier.isPrivate(modifiers) && !Modifier.isStatic(modifiers)) {
-				Class<?> fieldTypeClass = field.getType();
-				String fieldType = fieldTypeClass.getName();
-				if (BaseUtility.isFieldTypeSupported(fieldType)) {
-					supportedFields.add(field);
-				}
-			}
-		}
-		return supportedFields;
+        List<Field> fieldList = classFieldsMap.get(className);
+        if (fieldList == null) {
+            List<Field> supportedFields = new ArrayList<Field>();
+            Class<?> clazz;
+            try {
+                clazz = Class.forName(className);
+            } catch (ClassNotFoundException e) {
+                throw new DatabaseGenerateException(DatabaseGenerateException.CLASS_NOT_FOUND + className);
+            }
+            recursiveSupportedFields(clazz, supportedFields);
+            classFieldsMap.put(className, supportedFields);
+            return supportedFields;
+        }
+        return fieldList;
+	}
+
+    /**
+     * Find all supported generic fields in the class. Supporting rule is in {@link BaseUtility#isGenericTypeSupported(String)}.
+     * @param className
+     *           The full name of the class.
+     * @return A list of supported generic fields.
+     */
+	protected List<Field> getSupportedGenericFields(String className) {
+        List<Field> genericFieldList = classGenericFieldsMap.get(className);
+        if (genericFieldList == null) {
+            List<Field> supportedGenericFields = new ArrayList<Field>();
+            Class<?> clazz;
+            try {
+                clazz = Class.forName(className);
+            } catch (ClassNotFoundException e) {
+                throw new DatabaseGenerateException(DatabaseGenerateException.CLASS_NOT_FOUND + className);
+            }
+            recursiveSupportedGenericFields(clazz, supportedGenericFields);
+            classGenericFieldsMap.put(className, supportedGenericFields);
+            return supportedGenericFields;
+        }
+        return genericFieldList;
 	}
 
 	/**
@@ -243,30 +284,88 @@ public abstract class LitePalBase {
 		return BaseUtility.changeCase(associatedTableName + "_id");
 	}
 
-	/**
-	 * Analyze the two parameters passed in. Return the first one of the two
-	 * class names in alphabetical order as the one who holds foreign key. This
-	 * is only going to work under one2one bidirectional association. When it's
-	 * one2one unidirectional association, the foreign key column will be always
-	 * on the side of the class which declares the association.
-	 * 
-	 * @param className
-	 *            The first class name.
-	 * @param associatedClassName
-	 *            The second class class.
-	 * @return The first one of the two passed in parameters in alphabetical
-	 *         order.
-	 */
-	@Deprecated
-	protected String whoHoldsForeignKey(String className, String associatedClassName) {
-		String tableName = DBUtility.getTableNameByClassName(className);
-		String associatedTableName = DBUtility.getTableNameByClassName(associatedClassName);
-		if (tableName.compareTo(associatedTableName) < 0) {
-			return className;
-		} else {
-			return associatedClassName;
-		}
-	}
+    /**
+     * Get the column type for creating table by field type.
+     * @param fieldType
+     *          Type of field.
+     * @return The column type for creating table.
+     */
+    protected String getColumnType(String fieldType) {
+        String columnType;
+        for (OrmChange ormChange : typeChangeRules) {
+            columnType = ormChange.object2Relation(fieldType);
+            if (columnType != null) {
+                return columnType;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get the generic type class of List or Set. If there's no generic type of
+     * List or Set return null.
+     *
+     * @param field
+     *            A generic type field.
+     * @return The generic type of List or Set.
+     */
+    protected Class<?> getGenericTypeClass(Field field) {
+        Type genericType = field.getGenericType();
+        if (genericType != null) {
+            if (genericType instanceof ParameterizedType) {
+                ParameterizedType parameterizedType = (ParameterizedType) genericType;
+                return (Class<?>) parameterizedType.getActualTypeArguments()[0];
+            }
+        }
+        return null;
+    }
+
+    private void recursiveSupportedFields(Class<?> clazz, List<Field> supportedFields) {
+        if (clazz == LitePalSupport.class || clazz == Object.class) {
+            return;
+        }
+        Field[] fields = clazz.getDeclaredFields();
+        if (fields != null && fields.length > 0) {
+            for (Field field : fields) {
+                Column annotation = field.getAnnotation(Column.class);
+                if (annotation != null && annotation.ignore()) {
+                    continue;
+                }
+                int modifiers = field.getModifiers();
+                if (!Modifier.isStatic(modifiers)) {
+                    Class<?> fieldTypeClass = field.getType();
+                    String fieldType = fieldTypeClass.getName();
+                    if (BaseUtility.isFieldTypeSupported(fieldType)) {
+                        supportedFields.add(field);
+                    }
+                }
+            }
+        }
+        recursiveSupportedFields(clazz.getSuperclass(), supportedFields);
+    }
+
+    private void recursiveSupportedGenericFields(Class<?> clazz, List<Field> supportedGenericFields) {
+        if (clazz == LitePalSupport.class || clazz == DataSupport.class || clazz == Object.class) {
+            return;
+        }
+        Field[] fields = clazz.getDeclaredFields();
+        if (fields != null && fields.length > 0) {
+            for (Field field : fields) {
+                Column annotation = field.getAnnotation(Column.class);
+                if (annotation != null && annotation.ignore()) {
+                    continue;
+                }
+                int modifiers = field.getModifiers();
+                if (!Modifier.isStatic(modifiers) && isCollection(field.getType())) {
+                    String genericTypeName = getGenericTypeName(field);
+                    if (BaseUtility.isGenericTypeSupported(genericTypeName) || clazz.getName().equalsIgnoreCase(genericTypeName)) {
+                        supportedGenericFields.add(field);
+                    }
+                }
+            }
+        }
+        recursiveSupportedGenericFields(clazz.getSuperclass(), supportedGenericFields);
+    }
 
 	/**
 	 * Introspection of the passed in class. Analyze the fields of current class
@@ -279,12 +378,15 @@ public abstract class LitePalBase {
 	 *            {@link org.litepal.LitePalBase#GET_ASSOCIATION_INFO_ACTION}
 	 */
 	private void analyzeClassFields(String className, int action) {
-		Class<?> dynamicClass = null;
 		try {
-			dynamicClass = Class.forName(className);
+            Class<?> dynamicClass = Class.forName(className);
 			Field[] fields = dynamicClass.getDeclaredFields();
 			for (Field field : fields) {
-				if (isPrivateAndNonPrimitive(field)) {
+				if (isNonPrimitive(field)) {
+                    Column annotation = field.getAnnotation(Column.class);
+                    if (annotation != null && annotation.ignore()) {
+                        continue;
+                    }
 					oneToAnyConditions(className, field, action);
 					manyToAnyConditions(className, field, action);
 				}
@@ -296,16 +398,26 @@ public abstract class LitePalBase {
 	}
 
 	/**
-	 * Judge the field is a private non primitive field or not.
+	 * Check the field is a non primitive field or not.
 	 * 
 	 * @param field
-	 *            The field to judge.
-	 * @return True if the field is <b>private</b> and <b>non primitive</b>,
-	 *         false otherwise.
+	 *            The field to check.
+	 * @return True if the field is non primitive, false otherwise.
 	 */
-	private boolean isPrivateAndNonPrimitive(Field field) {
-		return Modifier.isPrivate(field.getModifiers()) && !field.getType().isPrimitive();
+	private boolean isNonPrimitive(Field field) {
+		return !field.getType().isPrimitive();
 	}
+
+    /**
+     * Check the field is a private field or not.
+     *
+     * @param field
+     *            The field to check.
+     * @return True if the field is private, false otherwise.
+     */
+	private boolean isPrivate(Field field) {
+        return Modifier.isPrivate(field.getModifiers());
+    }
 
 	/**
 	 * Deals with one to any association conditions. e.g. Song and Album. An
@@ -345,52 +457,51 @@ public abstract class LitePalBase {
 			boolean reverseAssociations = false;
 			// Begin to check the fields of the defined
 			// class.
-			for (int i = 0; i < reverseFields.length; i++) {
-				Field reverseField = reverseFields[i];
-				if (Modifier.isPrivate(reverseField.getModifiers())) {
-					Class<?> reverseFieldTypeClass = reverseField.getType();
-					// If there's the from class name in the
-					// defined class, they are one2one bidirectional
-					// associations.
-					if (className.equals(reverseFieldTypeClass.getName())) {
-						if (action == GET_ASSOCIATIONS_ACTION) {
-							addIntoAssociationModelCollection(className, fieldTypeClass.getName(),
-									fieldTypeClass.getName(), Const.Model.ONE_TO_ONE);
-						} else if (action == GET_ASSOCIATION_INFO_ACTION) {
-							addIntoAssociationInfoCollection(className, fieldTypeClass.getName(),
-									fieldTypeClass.getName(), field, reverseField, Const.Model.ONE_TO_ONE);
-						}
-						reverseAssociations = true;
-					}
-					// If there's the from class Set or List in
-					// the defined class, they are many2one bidirectional
-					// associations.
-					else if (isCollection(reverseFieldTypeClass)) {
-						String genericTypeName = getGenericTypeName(reverseField);
-						if (className.equals(genericTypeName)) {
-							if (action == GET_ASSOCIATIONS_ACTION) {
-								addIntoAssociationModelCollection(className, fieldTypeClass.getName(),
-										className, Const.Model.MANY_TO_ONE);
-							} else if (action == GET_ASSOCIATION_INFO_ACTION) {
-								addIntoAssociationInfoCollection(className, fieldTypeClass.getName(),
-										className, field, reverseField, Const.Model.MANY_TO_ONE);
-							}
-							reverseAssociations = true;
-						}
-					}
-					// If there's no from class in the defined class, they are
-					// one2one unidirectional associations.
-					if ((i == reverseFields.length - 1) && !reverseAssociations) {
-						if (action == GET_ASSOCIATIONS_ACTION) {
-							addIntoAssociationModelCollection(className, fieldTypeClass.getName(),
-									fieldTypeClass.getName(), Const.Model.ONE_TO_ONE);
-						} else if (action == GET_ASSOCIATION_INFO_ACTION) {
-							addIntoAssociationInfoCollection(className, fieldTypeClass.getName(),
-									fieldTypeClass.getName(), field, null, Const.Model.ONE_TO_ONE);
-						}
-					}
-				}
-			}
+            for (Field reverseField : reverseFields) {
+                if (!Modifier.isStatic(reverseField.getModifiers())) {
+                    Class<?> reverseFieldTypeClass = reverseField.getType();
+                    // If there's the from class name in the
+                    // defined class, they are one2one bidirectional
+                    // associations.
+                    if (className.equals(reverseFieldTypeClass.getName())) {
+                        if (action == GET_ASSOCIATIONS_ACTION) {
+                            addIntoAssociationModelCollection(className, fieldTypeClass.getName(),
+                                    fieldTypeClass.getName(), Const.Model.ONE_TO_ONE);
+                        } else if (action == GET_ASSOCIATION_INFO_ACTION) {
+                            addIntoAssociationInfoCollection(className, fieldTypeClass.getName(),
+                                    fieldTypeClass.getName(), field, reverseField, Const.Model.ONE_TO_ONE);
+                        }
+                        reverseAssociations = true;
+                    }
+                    // If there's the from class Set or List in
+                    // the defined class, they are many2one bidirectional
+                    // associations.
+                    else if (isCollection(reverseFieldTypeClass)) {
+                        String genericTypeName = getGenericTypeName(reverseField);
+                        if (className.equals(genericTypeName)) {
+                            if (action == GET_ASSOCIATIONS_ACTION) {
+                                addIntoAssociationModelCollection(className, fieldTypeClass.getName(),
+                                        className, Const.Model.MANY_TO_ONE);
+                            } else if (action == GET_ASSOCIATION_INFO_ACTION) {
+                                addIntoAssociationInfoCollection(className, fieldTypeClass.getName(),
+                                        className, field, reverseField, Const.Model.MANY_TO_ONE);
+                            }
+                            reverseAssociations = true;
+                        }
+                    }
+                }
+            }
+            // If there's no from class in the defined class, they are
+            // one2one unidirectional associations.
+            if (!reverseAssociations) {
+                if (action == GET_ASSOCIATIONS_ACTION) {
+                    addIntoAssociationModelCollection(className, fieldTypeClass.getName(),
+                            fieldTypeClass.getName(), Const.Model.ONE_TO_ONE);
+                } else if (action == GET_ASSOCIATION_INFO_ACTION) {
+                    addIntoAssociationInfoCollection(className, fieldTypeClass.getName(),
+                            fieldTypeClass.getName(), field, null, Const.Model.ONE_TO_ONE);
+                }
+            }
 		}
 	}
 
@@ -431,54 +542,72 @@ public abstract class LitePalBase {
 				// Look up if there's a reverse association
 				// definition in the reverse class.
 				boolean reverseAssociations = false;
-				for (int i = 0; i < reverseFields.length; i++) {
-					Field reverseField = reverseFields[i];
-					// Only map private fields
-					if (Modifier.isPrivate(reverseField.getModifiers())) {
-						Class<?> reverseFieldTypeClass = reverseField.getType();
-						// If there's a from class name defined in the reverse
-						// class, they are many2one bidirectional
-						// associations.
-						if (className.equals(reverseFieldTypeClass.getName())) {
-							if (action == GET_ASSOCIATIONS_ACTION) {
-								addIntoAssociationModelCollection(className, genericTypeName,
-										genericTypeName, Const.Model.MANY_TO_ONE);
-							} else if (action == GET_ASSOCIATION_INFO_ACTION) {
-								addIntoAssociationInfoCollection(className, genericTypeName, genericTypeName,
-										field, reverseField, Const.Model.MANY_TO_ONE);
-							}
-							reverseAssociations = true;
-						}
-						// If there's a List or Set contains from class name
-						// defined in the reverse class, they are many2many
-						// association.
-						else if (isCollection(reverseFieldTypeClass)) {
-							String reverseGenericTypeName = getGenericTypeName(reverseField);
-							if (className.equals(reverseGenericTypeName)) {
-								if (action == GET_ASSOCIATIONS_ACTION) {
-									addIntoAssociationModelCollection(className, genericTypeName, null,
-											Const.Model.MANY_TO_MANY);
-								} else if (action == GET_ASSOCIATION_INFO_ACTION) {
-									addIntoAssociationInfoCollection(className, genericTypeName, null, field,
-											reverseField, Const.Model.MANY_TO_MANY);
-								}
-								reverseAssociations = true;
-							}
-						}
-						// If there's no from class in the defined class, they
-						// are many2one unidirectional associations.
-						if ((i == reverseFields.length - 1) && !reverseAssociations) {
-							if (action == GET_ASSOCIATIONS_ACTION) {
-								addIntoAssociationModelCollection(className, genericTypeName,
-										genericTypeName, Const.Model.MANY_TO_ONE);
-							} else if (action == GET_ASSOCIATION_INFO_ACTION) {
-								addIntoAssociationInfoCollection(className, genericTypeName, genericTypeName,
-										field, null, Const.Model.MANY_TO_ONE);
-							}
-						}
-					}
-				}
-			}
+                for (Field reverseField : reverseFields) {
+                    // Only map private fields
+                    if (!Modifier.isStatic(reverseField.getModifiers())) {
+                        Class<?> reverseFieldTypeClass = reverseField.getType();
+                        // If there's a from class name defined in the reverse
+                        // class, they are many2one bidirectional
+                        // associations.
+                        if (className.equals(reverseFieldTypeClass.getName())) {
+                            if (action == GET_ASSOCIATIONS_ACTION) {
+                                addIntoAssociationModelCollection(className, genericTypeName,
+                                        genericTypeName, Const.Model.MANY_TO_ONE);
+                            } else if (action == GET_ASSOCIATION_INFO_ACTION) {
+                                addIntoAssociationInfoCollection(className, genericTypeName, genericTypeName,
+                                        field, reverseField, Const.Model.MANY_TO_ONE);
+                            }
+                            reverseAssociations = true;
+                        }
+                        // If there's a List or Set contains from class name
+                        // defined in the reverse class, they are many2many
+                        // association.
+                        else if (isCollection(reverseFieldTypeClass)) {
+                            String reverseGenericTypeName = getGenericTypeName(reverseField);
+                            if (className.equals(reverseGenericTypeName)) {
+                                if (action == GET_ASSOCIATIONS_ACTION) {
+                                    if (className.equalsIgnoreCase(genericTypeName)) {
+                                        // This is M2M self association condition. Regard as generic model condition.
+                                        GenericModel genericModel = new GenericModel();
+                                        genericModel.setTableName(DBUtility.getGenericTableName(className, field.getName()));
+                                        genericModel.setValueColumnName(DBUtility.getM2MSelfRefColumnName(field));
+                                        genericModel.setValueColumnType("integer");
+                                        genericModel.setValueIdColumnName(DBUtility.getGenericValueIdColumnName(className));
+                                        mGenericModels.add(genericModel);
+                                    } else {
+                                        addIntoAssociationModelCollection(className, genericTypeName, null,
+                                                Const.Model.MANY_TO_MANY);
+                                    }
+                                } else if (action == GET_ASSOCIATION_INFO_ACTION) {
+                                    if (!className.equalsIgnoreCase(genericTypeName)) {
+                                        addIntoAssociationInfoCollection(className, genericTypeName, null, field,
+                                                reverseField, Const.Model.MANY_TO_MANY);
+                                    }
+                                }
+                                reverseAssociations = true;
+                            }
+                        }
+                    }
+                }
+                // If there's no from class in the defined class, they
+                // are many2one unidirectional associations.
+                if (!reverseAssociations) {
+                    if (action == GET_ASSOCIATIONS_ACTION) {
+                        addIntoAssociationModelCollection(className, genericTypeName,
+                                genericTypeName, Const.Model.MANY_TO_ONE);
+                    } else if (action == GET_ASSOCIATION_INFO_ACTION) {
+                        addIntoAssociationInfoCollection(className, genericTypeName, genericTypeName,
+                                field, null, Const.Model.MANY_TO_ONE);
+                    }
+                }
+			} else if(BaseUtility.isGenericTypeSupported(genericTypeName) && action == GET_ASSOCIATIONS_ACTION) {
+                GenericModel genericModel = new GenericModel();
+                genericModel.setTableName(DBUtility.getGenericTableName(className, field.getName()));
+                genericModel.setValueColumnName(DBUtility.convertToValidColumnName(field.getName()));
+                genericModel.setValueColumnType(getColumnType(genericTypeName));
+                genericModel.setValueIdColumnName(DBUtility.getGenericValueIdColumnName(className));
+                mGenericModels.add(genericModel);
+            }
 		}
 	}
 
@@ -545,16 +674,40 @@ public abstract class LitePalBase {
 	 *            A generic type field.
 	 * @return The name of generic type of List of Set.
 	 */
-	private String getGenericTypeName(Field field) {
-		Type genericType = field.getGenericType();
-		if (genericType != null) {
-			if (genericType instanceof ParameterizedType) {
-				ParameterizedType parameterizedType = (ParameterizedType) genericType;
-				Class<?> genericArg = (Class<?>) parameterizedType.getActualTypeArguments()[0];
-				return genericArg.getName();
-			}
-		}
-		return null;
+	protected String getGenericTypeName(Field field) {
+		Class<?> genericTypeClass = getGenericTypeClass(field);
+        if (genericTypeClass != null) {
+            return genericTypeClass.getName();
+        }
+        return null;
 	}
+
+    /**
+     * Convert a field instance into A ColumnModel instance. ColumnModel can provide information
+     * when creating table.
+     * @param field
+     *          A supported field to map into column.
+     * @return ColumnModel instance contains column information.
+     */
+    private ColumnModel convertFieldToColumnModel(Field field) {
+        String fieldType = field.getType().getName();
+        String columnType = getColumnType(fieldType);
+        boolean nullable = true;
+        boolean unique = false;
+        String defaultValue = "";
+        Column annotation = field.getAnnotation(Column.class);
+        if (annotation != null) {
+            nullable = annotation.nullable();
+            unique = annotation.unique();
+            defaultValue = annotation.defaultValue();
+        }
+        ColumnModel columnModel = new ColumnModel();
+        columnModel.setColumnName(DBUtility.convertToValidColumnName(field.getName()));
+        columnModel.setColumnType(columnType);
+        columnModel.setNullable(nullable);
+        columnModel.setUnique(unique);
+        columnModel.setDefaultValue(defaultValue);
+        return columnModel;
+    }
 
 }

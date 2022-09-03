@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import java.util.HashSet;
 
 import org.litepal.LitePalBase;
 import org.litepal.crud.model.AssociationsInfo;
-import org.litepal.exceptions.DataSupportException;
+import org.litepal.exceptions.LitePalSupportException;
 import org.litepal.util.DBUtility;
 
 /**
@@ -52,10 +52,10 @@ abstract class AssociationsAnalyzer extends DataHandler {
 	 * @throws java.lang.reflect.InvocationTargetException
 	 */
 	@SuppressWarnings("unchecked")
-	protected Collection<DataSupport> getReverseAssociatedModels(DataSupport associatedModel,
-			AssociationsInfo associationInfo) throws SecurityException, IllegalArgumentException,
+	protected Collection<LitePalSupport> getReverseAssociatedModels(LitePalSupport associatedModel,
+                                                                    AssociationsInfo associationInfo) throws SecurityException, IllegalArgumentException,
 			NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-		return (Collection<DataSupport>) takeGetMethodValueByField(associatedModel,
+		return (Collection<LitePalSupport>) getFieldValue(associatedModel,
 				associationInfo.getAssociateSelfFromOtherModel());
 	}
 
@@ -76,11 +76,11 @@ abstract class AssociationsAnalyzer extends DataHandler {
 	 * @throws IllegalAccessException
 	 * @throws java.lang.reflect.InvocationTargetException
 	 */
-	protected void setReverseAssociatedModels(DataSupport associatedModel,
-			AssociationsInfo associationInfo, Collection<DataSupport> associatedModelCollection)
+	protected void setReverseAssociatedModels(LitePalSupport associatedModel,
+			AssociationsInfo associationInfo, Collection<LitePalSupport> associatedModelCollection)
 			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
 			IllegalAccessException, InvocationTargetException {
-		putSetMethodValueByField(associatedModel, associationInfo.getAssociateSelfFromOtherModel(),
+		setFieldValue(associatedModel, associationInfo.getAssociateSelfFromOtherModel(),
 				associatedModelCollection);
 	}
 
@@ -98,17 +98,17 @@ abstract class AssociationsAnalyzer extends DataHandler {
 	 * @param associatedField
 	 *            The field to decide which type to initialize for associated
 	 *            model collection.
-	 * @throws DataSupportException
+	 * @throws LitePalSupportException
 	 */
-	protected Collection<DataSupport> checkAssociatedModelCollection(
-			Collection<DataSupport> associatedModelCollection, Field associatedField) {
-		Collection<DataSupport> collection = null;
+	protected Collection<LitePalSupport> checkAssociatedModelCollection(
+            Collection<LitePalSupport> associatedModelCollection, Field associatedField) {
+		Collection<LitePalSupport> collection = null;
 		if (isList(associatedField.getType())) {
-			collection = new ArrayList<DataSupport>();
+			collection = new ArrayList<LitePalSupport>();
 		} else if (isSet(associatedField.getType())) {
-			collection = new HashSet<DataSupport>();
+			collection = new HashSet<LitePalSupport>();
 		} else {
-			throw new DataSupportException(DataSupportException.WRONG_FIELD_TYPE_FOR_ASSOCIATIONS);
+			throw new LitePalSupportException(LitePalSupportException.WRONG_FIELD_TYPE_FOR_ASSOCIATIONS);
 		}
 		if (associatedModelCollection != null) {
 			collection.addAll(associatedModelCollection);
@@ -132,27 +132,26 @@ abstract class AssociationsAnalyzer extends DataHandler {
 	 * @throws IllegalAccessException
 	 * @throws java.lang.reflect.InvocationTargetException
 	 */
-	protected void buildBidirectionalAssociations(DataSupport baseObj, DataSupport associatedModel,
-			AssociationsInfo associationInfo) throws SecurityException, IllegalArgumentException,
+	protected void buildBidirectionalAssociations(LitePalSupport baseObj, LitePalSupport associatedModel,
+                                                  AssociationsInfo associationInfo) throws SecurityException, IllegalArgumentException,
 			NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-		putSetMethodValueByField(associatedModel, associationInfo.getAssociateSelfFromOtherModel(),
+		setFieldValue(associatedModel, associationInfo.getAssociateSelfFromOtherModel(),
 				baseObj);
 	}
 
 	/**
 	 * If the associated model is saved, add its' name and id to baseObj by
-	 * calling {@link org.litepal.crud.DataSupport#addAssociatedModelWithFK(String, long)}. Or if
+	 * calling {@link LitePalSupport#addAssociatedModelWithFK(String, long)}. Or if
 	 * the baseObj is saved, add its' name and id to associated model by calling
-	 * {@link org.litepal.crud.DataSupport#addAssociatedModelWithoutFK(String, long)}.
+	 * {@link LitePalSupport#addAssociatedModelWithoutFK(String, long)}.
 	 * 
 	 * @param baseObj
 	 *            The baseObj currently want to persist.
-	 * @param associationInfo
-	 *            The associated info analyzed by
-	 *            {@link LitePalBase#getRelatedInfo}.
+	 * @param associatedModel
+	 *            The associated model.
 	 */
-	protected void dealsAssociationsOnTheSideWithoutFK(DataSupport baseObj,
-			DataSupport associatedModel) {
+	protected void dealsAssociationsOnTheSideWithoutFK(LitePalSupport baseObj,
+			LitePalSupport associatedModel) {
 		if (associatedModel != null) {
 			if (associatedModel.isSaved()) {
 				baseObj.addAssociatedModelWithFK(associatedModel.getTableName(),
@@ -172,11 +171,11 @@ abstract class AssociationsAnalyzer extends DataHandler {
 	 * 
 	 * @param baseObj
 	 *            The baseObj currently want to persist or update.
-	 * @param associatedInfo
+	 * @param associationInfo
 	 *            The associated info analyzed by
-	 *            {@link LitePalBase#getRelatedInfo}.
+	 *            {@link LitePalBase#getAssociationInfo(String)}.
 	 */
-	protected void mightClearFKValue(DataSupport baseObj, AssociationsInfo associationInfo) {
+	protected void mightClearFKValue(LitePalSupport baseObj, AssociationsInfo associationInfo) {
 		baseObj.addFKNameToClearSelf(getForeignKeyName(associationInfo));
 	}
 

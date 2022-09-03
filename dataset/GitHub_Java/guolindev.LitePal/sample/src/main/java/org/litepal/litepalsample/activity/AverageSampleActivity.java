@@ -16,10 +16,10 @@
 
 package org.litepal.litepalsample.activity;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
@@ -30,9 +30,13 @@ import org.litepal.LitePal;
 import org.litepal.litepalsample.R;
 import org.litepal.litepalsample.model.Singer;
 
-public class AverageSampleActivity extends AppCompatActivity implements OnClickListener {
+public class AverageSampleActivity extends Activity implements OnClickListener {
 
-    private EditText mAgeEdit;
+	private Button mAvgBtn1;
+
+	private Button mAvgBtn2;
+
+	private EditText mAgeEdit;
 
 	private TextView mResultText;
 
@@ -45,10 +49,10 @@ public class AverageSampleActivity extends AppCompatActivity implements OnClickL
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.average_sample_layout);
-        Button mAvgBtn1 = findViewById(R.id.avg_btn1);
-        Button mAvgBtn2 = findViewById(R.id.avg_btn2);
-		mAgeEdit = findViewById(R.id.age_edit);
-		mResultText = findViewById(R.id.result_text);
+		mAvgBtn1 = (Button) findViewById(R.id.avg_btn1);
+		mAvgBtn2 = (Button) findViewById(R.id.avg_btn2);
+		mAgeEdit = (EditText) findViewById(R.id.age_edit);
+		mResultText = (TextView) findViewById(R.id.result_text);
 		mAvgBtn1.setOnClickListener(this);
 		mAvgBtn2.setOnClickListener(this);
 	}
