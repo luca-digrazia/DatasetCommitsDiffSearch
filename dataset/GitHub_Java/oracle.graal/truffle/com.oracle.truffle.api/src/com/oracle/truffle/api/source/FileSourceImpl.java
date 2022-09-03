@@ -25,25 +25,26 @@
 package com.oracle.truffle.api.source;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
-import java.io.UnsupportedEncodingException;
+import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
-import java.util.Objects;
+import java.nio.file.Path;
+import java.nio.file.spi.FileTypeDetector;
+import java.util.Collection;
+import java.util.ServiceLoader;
 
-final class FileSourceImpl extends Content {
+import com.oracle.truffle.api.TruffleOptions;
 
+final class FileSourceImpl extends Content implements Content.CreateURI {
     private final File file;
     private final String name; // Name used originally to describe the source
     private final String path; // Normalized path description of an actual file
-    private String code; // A cache of the file's contents
 
-    FileSourceImpl(File file, String name, String path) {
+    FileSourceImpl(String content, File file, String name, String path) {
+        this.code = content;
         this.file = file.getAbsoluteFile();
         this.name = name;
         this.path = path;
@@ -65,21 +66,8 @@ final class FileSourceImpl extends Content {
     }
 
     @Override
-    public String getCode() {
-        if (Source.fileCacheEnabled) {
-            if (code == null) {
-                try {
-                    code = Source.read(getReader());
-                } catch (IOException e) {
-                }
-            }
-            return code;
-        }
-        try {
-            return Source.read(new InputStreamReader(new FileInputStream(file), "UTF-8"));
-        } catch (IOException e) {
-        }
-        return null;
+    String getCode() {
+        return code;
     }
 
     @Override
@@ -93,17 +81,18 @@ final class FileSourceImpl extends Content {
     }
 
     @Override
+    URI getURI() {
+        return createURIOnce(this);
+    }
+
+    @Override
+    public URI createURI() {
+        return file.toURI();
+    }
+
+    @Override
     public Reader getReader() {
-        if (code != null) {
-            return new StringReader(code);
-        }
-        try {
-            return new InputStreamReader(new FileInputStream(file), "UTF-8");
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException("Can't find file " + path, e);
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("Unsupported encoding in file " + path, e);
-        }
+        return new StringReader(code);
     }
 
     @Override
@@ -113,30 +102,23 @@ final class FileSourceImpl extends Content {
 
     @Override
     String findMimeType() throws IOException {
-        return Files.probeContentType(file.toPath());
+        return findMimeType(file.toPath());
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj instanceof FileSourceImpl) {
-            FileSourceImpl other = (FileSourceImpl) obj;
-            if (!path.equals(other.path)) {
-                return false;
+    static String findMimeType(final Path filePath) throws IOException {
+        if (!TruffleOptions.AOT) {
+            Collection<ClassLoader> loaders = SourceAccessor.allLoaders();
+            for (ClassLoader l : loaders) {
+                for (FileTypeDetector detector : ServiceLoader.load(FileTypeDetector.class, l)) {
+                    String mimeType = detector.probeContentType(filePath);
+                    if (mimeType != null) {
+                        return mimeType;
+                    }
+                }
             }
-            if (code == null && other.code == null) {
-                return true;
-            }
-            return Objects.equals(getCode(), other.getCode());
         }
-        return false;
-    }
 
-    @Override
-    void reset() {
-        this.code = null;
+        String found = Files.probeContentType(filePath);
+        return found == null ? "content/unknown" : found;
     }
-
 }
