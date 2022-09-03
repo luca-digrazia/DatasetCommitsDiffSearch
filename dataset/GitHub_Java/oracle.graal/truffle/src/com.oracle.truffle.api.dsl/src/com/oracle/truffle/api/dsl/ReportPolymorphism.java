@@ -31,10 +31,6 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 @Inherited
 public @interface ReportPolymorphism {
-
-    @Target({ElementType.METHOD, ElementType.TYPE})
-    @Inherited
-    @interface Exclude {
-
-    }
+    String[] include() default {};
+    String[] exclude() default {};
 }

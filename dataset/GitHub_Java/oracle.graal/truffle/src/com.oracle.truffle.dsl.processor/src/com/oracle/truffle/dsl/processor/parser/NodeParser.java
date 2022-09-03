@@ -211,9 +211,10 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
 
         AnnotationMirror reportPolymorphism = findFirstAnnotation(lookupTypes, ReportPolymorphism.class);
-        AnnotationMirror excludePolymorphism = findFirstAnnotation(lookupTypes, ReportPolymorphism.Exclude.class);
-        if (reportPolymorphism != null && excludePolymorphism == null) {
-            node.setReportPolymorphism(true);
+        if (reportPolymorphism != null) {
+            List<String> include = ElementUtils.getAnnotationValueList(String.class, reportPolymorphism, "include");
+            List<String> exclude = ElementUtils.getAnnotationValueList(String.class, reportPolymorphism, "exclude");
+            node.setReportPolymorphism(true, include, exclude);
         }
         node.getFields().addAll(parseFields(lookupTypes, members));
         node.getChildren().addAll(parseChildren(node, lookupTypes, members));

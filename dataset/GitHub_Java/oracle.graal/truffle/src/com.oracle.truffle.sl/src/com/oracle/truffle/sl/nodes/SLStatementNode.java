@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -39,6 +39,8 @@
  * SOFTWARE.
  */
 package com.oracle.truffle.sl.nodes;
+
+import java.io.File;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.ReportPolymorphism;
@@ -203,7 +205,7 @@ public abstract class SLStatementNode extends Node implements InstrumentableNode
         if (section == null || section.getSource() == null) {
             return "<unknown source>";
         } else {
-            String sourceName = section.getSource().getName();
+            String sourceName = new File(section.getSource().getName()).getName();
             int startLine = section.getStartLine();
             return String.format("%s:%d%s", sourceName, startLine, estimated ? "~" : "");
         }

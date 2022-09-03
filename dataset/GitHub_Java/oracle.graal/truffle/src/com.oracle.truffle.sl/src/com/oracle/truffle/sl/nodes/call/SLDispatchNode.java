@@ -172,7 +172,7 @@ public abstract class SLDispatchNode extends Node {
     }
 
     protected static Node createCrossLanguageCallNode(Object[] arguments) {
-        return Message.EXECUTE.createNode();
+        return Message.createExecute(arguments.length).createNode();
     }
 
     protected static SLForeignToSLTypeNode createToSLTypeNode() {
