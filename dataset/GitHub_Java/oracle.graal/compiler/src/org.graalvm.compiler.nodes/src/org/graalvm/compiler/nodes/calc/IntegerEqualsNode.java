@@ -39,7 +39,6 @@ import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.LogicConstantNode;
 import org.graalvm.compiler.nodes.LogicNegationNode;
 import org.graalvm.compiler.nodes.LogicNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 
@@ -136,11 +135,11 @@ public final class IntegerEqualsNode extends CompareNode implements BinaryCommut
 
         @Override
         protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue) {
-            if (newX.stamp(NodeView.DEFAULT) instanceof FloatStamp && newY.stamp(NodeView.DEFAULT) instanceof FloatStamp) {
+            if (newX.stamp() instanceof FloatStamp && newY.stamp() instanceof FloatStamp) {
                 return new FloatEqualsNode(newX, newY);
-            } else if (newX.stamp(NodeView.DEFAULT) instanceof IntegerStamp && newY.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
+            } else if (newX.stamp() instanceof IntegerStamp && newY.stamp() instanceof IntegerStamp) {
                 return new IntegerEqualsNode(newX, newY);
-            } else if (newX.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp && newY.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp) {
+            } else if (newX.stamp() instanceof AbstractPointerStamp && newY.stamp() instanceof AbstractPointerStamp) {
                 return new IntegerEqualsNode(newX, newY);
             }
             throw GraalError.shouldNotReachHere();
@@ -151,7 +150,7 @@ public final class IntegerEqualsNode extends CompareNode implements BinaryCommut
                         boolean unorderedIsTrue, ValueNode forX, ValueNode forY) {
             if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
                 return LogicConstantNode.tautology();
-            } else if (forX.stamp(NodeView.DEFAULT).alwaysDistinct(forY.stamp(NodeView.DEFAULT))) {
+            } else if (forX.stamp().alwaysDistinct(forY.stamp())) {
                 return LogicConstantNode.contradiction();
             }
 
@@ -187,7 +186,7 @@ public final class IntegerEqualsNode extends CompareNode implements BinaryCommut
                         Condition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue) {
             if (constant instanceof PrimitiveConstant) {
                 PrimitiveConstant primitiveConstant = (PrimitiveConstant) constant;
-                IntegerStamp nonConstantStamp = ((IntegerStamp) nonConstant.stamp(NodeView.DEFAULT));
+                IntegerStamp nonConstantStamp = ((IntegerStamp) nonConstant.stamp());
                 if ((primitiveConstant.asLong() == 1 && nonConstantStamp.upperBound() == 1 && nonConstantStamp.lowerBound() == 0) ||
                                 (primitiveConstant.asLong() == -1 && nonConstantStamp.upperBound() == 0 && nonConstantStamp.lowerBound() == -1)) {
                     // nonConstant can only be 0 or 1 (respective -1), test against 0 instead of 1
@@ -203,7 +202,7 @@ public final class IntegerEqualsNode extends CompareNode implements BinaryCommut
                     } else if (nonConstant instanceof SubNode) {
                         SubNode subNode = (SubNode) nonConstant;
                         return IntegerEqualsNode.create(constantReflection, metaAccess, options, smallestCompareWidth, subNode.getX(), subNode.getY());
-                    } else if (nonConstant instanceof ShiftNode && nonConstant.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
+                    } else if (nonConstant instanceof ShiftNode && nonConstant.stamp() instanceof IntegerStamp) {
                         if (nonConstant instanceof LeftShiftNode) {
                             LeftShiftNode shift = (LeftShiftNode) nonConstant;
                             if (shift.getY().isConstant()) {
@@ -218,7 +217,7 @@ public final class IntegerEqualsNode extends CompareNode implements BinaryCommut
                             }
                         } else if (nonConstant instanceof RightShiftNode) {
                             RightShiftNode shift = (RightShiftNode) nonConstant;
-                            if (shift.getY().isConstant() && ((IntegerStamp) shift.getX().stamp(NodeView.DEFAULT)).isPositive()) {
+                            if (shift.getY().isConstant() && ((IntegerStamp) shift.getX().stamp()).isPositive()) {
                                 int mask = shift.getShiftAmountMask();
                                 int amount = shift.getY().asJavaConstant().asInt() & mask;
                                 if (shift.getX().getStackKind() == JavaKind.Int) {
@@ -259,12 +258,12 @@ public final class IntegerEqualsNode extends CompareNode implements BinaryCommut
                     }
                 }
 
-                if (nonConstant instanceof XorNode && nonConstant.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
+                if (nonConstant instanceof XorNode && nonConstant.stamp() instanceof IntegerStamp) {
                     XorNode xorNode = (XorNode) nonConstant;
-                    if (xorNode.getY().isJavaConstant() && xorNode.getY().asJavaConstant().asLong() == 1 && ((IntegerStamp) xorNode.getX().stamp(NodeView.DEFAULT)).upMask() == 1) {
+                    if (xorNode.getY().isJavaConstant() && xorNode.getY().asJavaConstant().asLong() == 1 && ((IntegerStamp) xorNode.getX().stamp()).upMask() == 1) {
                         // x ^ 1 == 0 is the same as x == 1 if x in [0, 1]
                         // x ^ 1 == 1 is the same as x == 0 if x in [0, 1]
-                        return new IntegerEqualsNode(xorNode.getX(), ConstantNode.forIntegerStamp(xorNode.getX().stamp(NodeView.DEFAULT), primitiveConstant.asLong() ^ 1));
+                        return new IntegerEqualsNode(xorNode.getX(), ConstantNode.forIntegerStamp(xorNode.getX().stamp(), primitiveConstant.asLong() ^ 1));
                     }
                 }
             }
