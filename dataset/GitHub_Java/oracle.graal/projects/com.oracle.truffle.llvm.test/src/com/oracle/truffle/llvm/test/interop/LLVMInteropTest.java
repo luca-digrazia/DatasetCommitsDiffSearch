@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -58,7 +58,8 @@ import org.junit.Assume;
 import org.junit.Ignore;
 import org.junit.Test;
 
-public class LLVMInteropTest {
+@SuppressWarnings({"static-method"})
+public final class LLVMInteropTest {
     @Test
     public void test001() {
         Runner runner = new Runner("interop001");
@@ -94,6 +95,7 @@ public class LLVMInteropTest {
         runner.export(ProxyObject.fromMap(a), "foreign");
         runner.run();
 
+        Assert.assertEquals(false, ((Value) a.get("valueBool")).asBoolean());
         Assert.assertEquals(2, ((Value) a.get("valueI")).asInt());
         Assert.assertEquals(3, ((Value) a.get("valueB")).asByte());
         Assert.assertEquals(4, ((Value) a.get("valueL")).asLong());
@@ -208,14 +210,14 @@ public class LLVMInteropTest {
     @Test
     public void test013() {
         Runner runner = new Runner("interop013");
-        runner.export(new BoxedTestValue(42), "foreign");
+        runner.export(new MyBoxedInt(), "foreign");
         Assert.assertEquals(42, runner.run());
     }
 
     @Test
     public void test014() {
         Runner runner = new Runner("interop014");
-        runner.export(new BoxedTestValue(42), "foreign");
+        runner.export(new MyBoxedInt(), "foreign");
         Assert.assertEquals(42, runner.run(), 0.1);
     }
 
@@ -354,6 +356,16 @@ public class LLVMInteropTest {
         runner.export(result, "foo");
         Assert.assertEquals(72, runner.run());
         Assert.assertEquals("foo\u0000 bar\u0080 ", result.storage);
+    }
+
+    @Test
+    public void test029() {
+        Runner runner = new Runner("interop029");
+        ReturnObject result = new ReturnObject();
+        runner.export(result, "foo");
+        Assert.assertEquals(36, runner.run());
+        byte[] actualResult = (byte[]) result.storage;
+        Assert.assertArrayEquals(new byte[]{102, 111, 111, 0, 32, 98, 97, 114, -128, 32}, actualResult);
     }
 
     // implicit interop
@@ -900,22 +912,6 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testTypeCheckNative() {
-        Runner runner = new Runner("typeCheck");
-        runner.load();
-        int ret = runner.findGlobalSymbol("check_types_nativeptr").execute().asInt();
-        Assert.assertEquals(0, ret);
-    }
-
-    @Test
-    public void testFitsInNative() {
-        Runner runner = new Runner("fitsIn");
-        runner.load();
-        int ret = runner.findGlobalSymbol("test_fits_in_nativeptr").execute().asInt();
-        Assert.assertEquals(0, ret);
-    }
-
-    @Test
     public void testIsHandle() {
         Runner runner = new Runner("isHandle");
         Object a = new Object();
@@ -945,7 +941,7 @@ public class LLVMInteropTest {
         @Resolve(message = "READ")
         abstract static class ReadNode extends Node {
             int access(ForeignObject object, Object key) {
-                Assert.assertEquals(0, key);
+                Assert.assertEquals("foo", key);
                 return object.foo;
             }
         }
@@ -1296,7 +1292,7 @@ public class LLVMInteropTest {
 
         Runner(String testName) {
             this.testName = testName;
-            this.context = Context.newBuilder().allowAllAccess(true).build();
+            this.context = Context.create();
             this.library = null;
         }
 
