@@ -47,8 +47,7 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.options.OptionsParser;
 import org.graalvm.compiler.test.SubprocessUtil;
 import org.graalvm.compiler.test.SubprocessUtil.Subprocess;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
@@ -84,7 +83,7 @@ public class LazyInitializationTest {
 
     @Test
     public void testSLTck() throws IOException, InterruptedException {
-        Assume.assumeFalse(TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompileImmediately));
+        Assume.assumeTrue(TruffleCompilerOptions.getValue(TruffleCompilerOptions.TruffleCompileImmediately));
         List<String> vmArgs = withoutDebuggerArguments(getVMCommandLine());
         vmArgs.add(Java8OrEarlier ? "-XX:+TraceClassLoading" : "-Xlog:class+init=info");
         vmArgs.add("-dsa");
