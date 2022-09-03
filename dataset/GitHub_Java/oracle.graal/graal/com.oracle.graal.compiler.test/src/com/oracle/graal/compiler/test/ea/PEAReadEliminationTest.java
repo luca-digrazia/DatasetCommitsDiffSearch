@@ -37,7 +37,7 @@ import com.oracle.graal.virtual.phases.ea.*;
 
 public class PEAReadEliminationTest extends GraalCompilerTest {
 
-    protected StructuredGraph graph;
+    private StructuredGraph graph;
 
     public static Object staticField;
 
@@ -240,10 +240,10 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
         return graph.getNodes(ReturnNode.class).first();
     }
 
-    protected void processMethod(final String snippet) {
+    private void processMethod(final String snippet) {
         graph = parse(snippet);
         Assumptions assumptions = new Assumptions(false);
-        HighTierContext context = new HighTierContext(runtime(), assumptions, replacements, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
+        HighTierContext context = new HighTierContext(runtime(), assumptions, replacements);
         new InliningPhase(runtime(), null, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
         new PartialEscapePhase(false, true, canonicalizer).apply(graph, context);
