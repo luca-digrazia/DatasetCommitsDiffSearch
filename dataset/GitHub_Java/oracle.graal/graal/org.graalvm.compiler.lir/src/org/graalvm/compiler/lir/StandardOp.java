@@ -171,10 +171,19 @@ public class StandardOp {
         }
     }
 
+    public abstract static class AbstractBlockEndOp extends LIRInstruction implements BlockEndOp {
+        public static final LIRInstructionClass<AbstractBlockEndOp> TYPE = LIRInstructionClass.create(AbstractBlockEndOp.class);
+
+        protected AbstractBlockEndOp(LIRInstructionClass<? extends AbstractBlockEndOp> c) {
+            super(c);
+        }
+
+    }
+
     /**
      * LIR operation that is an unconditional jump to a {@link #destination()}.
      */
-    public static class JumpOp extends LIRInstruction implements BlockEndOp {
+    public static class JumpOp extends AbstractBlockEndOp {
         public static final LIRInstructionClass<JumpOp> TYPE = LIRInstructionClass.create(JumpOp.class);
         public static final EnumSet<OperandFlag> outgoingFlags = EnumSet.of(REG, STACK, CONST, OUTGOING);
 
