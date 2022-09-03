@@ -383,9 +383,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
     private PhasePlan getDefaultPhasePlan() {
         PhasePlan phasePlan = new PhasePlan();
-        if (GraalOptions.Intrinsify) {
-            phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
-        }
+        phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
         return phasePlan;
     }
 }

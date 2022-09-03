@@ -22,9 +22,10 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import java.lang.annotation.*;
 import java.lang.reflect.*;
 
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.max.graal.graph.Node.NodeIntrinsic;
@@ -32,8 +33,6 @@ import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.java.*;
 import com.oracle.max.graal.nodes.util.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
 
 public class SnippetIntrinsificationPhase extends Phase {
 
@@ -102,36 +101,13 @@ public class SnippetIntrinsificationPhase extends Phase {
         return nodeConstructorArguments;
     }
 
-    private Method findMethod(RiResolvedMethod target, Class< ? >[] parameterTypes) {
-        Class< ? > c = target.holder().toJava();
-        if (c != null) {
-            try {
-                return c.getDeclaredMethod(target.name(), parameterTypes);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-        return null;
-    }
-
-    private Class< ? > getNodeClass(RiResolvedMethod target, NodeIntrinsic intrinsic) {
+    private static Class< ? > getNodeClass(RiResolvedMethod target, NodeIntrinsic intrinsic) {
         Class< ? > result = intrinsic.value();
         if (result == NodeIntrinsic.class) {
             result = target.holder().toJava();
         }
         assert Node.class.isAssignableFrom(result);
         return result;
-    }
-
-    private ConstantNodeParameter findConstantParameterAnnotation(int parameterIndex, Annotation[][] parameterAnnotations) {
-        if (parameterIndex >= 0) {
-            for (Annotation a : parameterAnnotations[parameterIndex]) {
-                if (a instanceof ConstantNodeParameter) {
-                    return (ConstantNodeParameter) a;
-                }
-            }
-        }
-        return null;
     }
 
     private ValueNode tryBoxingElimination(int parameterIndex, RiResolvedMethod target, ValueNode node) {
@@ -148,15 +124,21 @@ public class SnippetIntrinsificationPhase extends Phase {
                                 Invoke invokeNode = (Invoke) node;
                                 MethodCallTargetNode callTarget = invokeNode.callTarget();
                                 if (pool.isBoxingMethod(callTarget.targetMethod())) {
+                                    FrameState stateAfter = invokeNode.stateAfter();
+                                    assert stateAfter.usages().size() == 1;
+                                    invokeNode.node().replaceAtUsages(null);
+                                    ValueNode result = callTarget.arguments().get(0);
+                                    StructuredGraph graph = (StructuredGraph) node.graph();
                                     if (invokeNode instanceof InvokeWithExceptionNode) {
                                         // Destroy exception edge & clear stateAfter.
                                         InvokeWithExceptionNode invokeWithExceptionNode = (InvokeWithExceptionNode) invokeNode;
+
                                         invokeWithExceptionNode.killExceptionEdge();
+                                        graph.removeSplit(invokeWithExceptionNode, InvokeWithExceptionNode.NORMAL_EDGE);
+                                    } else {
+                                        graph.removeFixed((InvokeNode) invokeNode);
                                     }
-                                    assert invokeNode.stateAfter().usages().size() == 1;
-                                    invokeNode.stateAfter().delete();
-                                    invokeNode.node().replaceAndDelete(invokeNode.next());
-                                    ValueNode result = callTarget.arguments().get(0);
+                                    stateAfter.safeDelete();
                                     GraphUtil.propagateKill(callTarget);
                                     return result;
                                 }
@@ -169,11 +151,12 @@ public class SnippetIntrinsificationPhase extends Phase {
         return node;
     }
 
-    private Node createNodeInstance(Class< ? > nodeClass, Class< ? >[] parameterTypes, Object[] nodeConstructorArguments) {
+    private static Node createNodeInstance(Class< ? > nodeClass, Class< ? >[] parameterTypes, Object[] nodeConstructorArguments) {
 
         Constructor< ? > constructor;
         try {
             constructor = nodeClass.getDeclaredConstructor(parameterTypes);
+            constructor.setAccessible(true);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -186,33 +169,34 @@ public class SnippetIntrinsificationPhase extends Phase {
 
     public void cleanUpReturnCheckCast(Node newInstance) {
         if (newInstance instanceof ValueNode && ((ValueNode) newInstance).kind() != CiKind.Object) {
-            for (Node usage : newInstance.usages().snapshot()) {
-                if (usage instanceof CheckCastNode) {
-                    CheckCastNode checkCastNode = (CheckCastNode) usage;
-                    for (Node checkCastUsage : checkCastNode.usages().snapshot()) {
-                        if (checkCastUsage instanceof ValueAnchorNode) {
-                            ValueAnchorNode valueAnchorNode = (ValueAnchorNode) checkCastUsage;
-                            valueAnchorNode.replaceAndDelete(valueAnchorNode.next());
-                        } else if (checkCastUsage instanceof MethodCallTargetNode) {
-                            MethodCallTargetNode checkCastCallTarget = (MethodCallTargetNode) checkCastUsage;
-                            assert pool.isUnboxingMethod(checkCastCallTarget.targetMethod());
-                            Invoke invokeNode = checkCastCallTarget.invoke();
-                            if (invokeNode instanceof InvokeWithExceptionNode) {
-                                // Destroy exception edge & clear stateAfter.
-                                InvokeWithExceptionNode invokeWithExceptionNode = (InvokeWithExceptionNode) invokeNode;
-                                invokeWithExceptionNode.killExceptionEdge();
-                            }
-                            invokeNode.node().replaceAtUsages(newInstance);
-                            invokeNode.node().replaceAndDelete(invokeNode.next());
-                            checkCastCallTarget.safeDelete();
-                        } else if (checkCastUsage instanceof FrameState) {
-                            checkCastUsage.replaceFirstInput(checkCastNode, null);
+            StructuredGraph graph = (StructuredGraph) newInstance.graph();
+            for (CheckCastNode checkCastNode : newInstance.usages().filter(CheckCastNode.class).snapshot()) {
+                for (Node checkCastUsage : checkCastNode.usages().snapshot()) {
+                    if (checkCastUsage instanceof ValueAnchorNode) {
+                        ValueAnchorNode valueAnchorNode = (ValueAnchorNode) checkCastUsage;
+                        graph.removeFixed(valueAnchorNode);
+                    } else if (checkCastUsage instanceof MethodCallTargetNode) {
+                        MethodCallTargetNode checkCastCallTarget = (MethodCallTargetNode) checkCastUsage;
+                        assert pool.isUnboxingMethod(checkCastCallTarget.targetMethod());
+                        Invoke invokeNode = checkCastCallTarget.invoke();
+                        invokeNode.node().replaceAtUsages(newInstance);
+                        if (invokeNode instanceof InvokeWithExceptionNode) {
+                            // Destroy exception edge & clear stateAfter.
+                            InvokeWithExceptionNode invokeWithExceptionNode = (InvokeWithExceptionNode) invokeNode;
+
+                            invokeWithExceptionNode.killExceptionEdge();
+                            graph.removeSplit(invokeWithExceptionNode, InvokeWithExceptionNode.NORMAL_EDGE);
                         } else {
-                            assert false : "unexpected checkcast usage: " + checkCastUsage;
+                            graph.removeFixed((InvokeNode) invokeNode);
                         }
+                        checkCastCallTarget.safeDelete();
+                    } else if (checkCastUsage instanceof FrameState) {
+                        checkCastUsage.replaceFirstInput(checkCastNode, null);
+                    } else {
+                        assert false : "unexpected checkcast usage: " + checkCastUsage;
                     }
-                    checkCastNode.safeDelete();
                 }
+                checkCastNode.safeDelete();
             }
         }
     }
