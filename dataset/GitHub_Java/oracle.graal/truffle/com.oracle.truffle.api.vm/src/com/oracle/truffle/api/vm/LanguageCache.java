@@ -24,8 +24,9 @@
  */
 package com.oracle.truffle.api.vm;
 
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.TruffleOptions;
 import static com.oracle.truffle.api.vm.PolyglotEngine.LOG;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -38,15 +39,12 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Level;
 
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleOptions;
-
 /**
  * Ahead-of-time initialization. If the JVM is started with {@link TruffleOptions#AOT}, it populates
  * cache with languages found in application classloader.
  */
 final class LanguageCache {
-    private static final boolean PRELOAD;
+    static final boolean PRELOAD;
     private static final Map<String, LanguageCache> CACHE;
     private TruffleLanguage<?> language;
     private final String className;
@@ -55,29 +53,18 @@ final class LanguageCache {
     private final String version;
 
     static {
-        CACHE = TruffleOptions.AOT ? initializeLanguages(loader()) : null;
+        Map<String, LanguageCache> map = null;
+        if (TruffleOptions.AOT) {
+            map = languages();
+            for (LanguageCache info : map.values()) {
+                info.getImpl(true);
+            }
+        }
+        CACHE = map;
         PRELOAD = CACHE != null;
     }
 
-    /**
-     * This method initializes all languages under the provided classloader.
-     *
-     * NOTE: Method's signature should not be changed as it is reflectively invoked from AOT
-     * compilation.
-     *
-     * @param loader The classloader to be used for finding languages.
-     * @return A map of initialized languages.
-     */
-    private static Map<String, LanguageCache> initializeLanguages(ClassLoader loader) {
-        Map<String, LanguageCache> map;
-        map = createLanguages(loader);
-        for (LanguageCache info : map.values()) {
-            info.createLanguage(loader);
-        }
-        return map;
-    }
-
-    private LanguageCache(String prefix, Properties info, TruffleLanguage<?> language) {
+    LanguageCache(String prefix, Properties info, TruffleLanguage<?> language) {
         this.className = info.getProperty(prefix + "className");
         this.name = info.getProperty(prefix + "name");
         this.version = info.getProperty(prefix + "version");
@@ -101,14 +88,20 @@ final class LanguageCache {
         return l;
     }
 
+    private static TruffleLanguage<?> find(String name, ClassLoader loader) throws NoSuchFieldException, IllegalAccessException, ClassNotFoundException {
+        if (PRELOAD) {
+            return CACHE.get(name).language;
+        } else {
+            Class<?> langClazz = Class.forName(name, true, loader);
+            return (TruffleLanguage<?>) langClazz.getField("INSTANCE").get(null);
+        }
+    }
+
     static Map<String, LanguageCache> languages() {
         if (PRELOAD) {
             return CACHE;
         }
-        return createLanguages(loader());
-    }
-
-    private static Map<String, LanguageCache> createLanguages(ClassLoader loader) {
+        ClassLoader loader = loader();
         Map<String, LanguageCache> map = new LinkedHashMap<>();
         Enumeration<URL> en;
         try {
@@ -159,20 +152,13 @@ final class LanguageCache {
             return language;
         }
         if (create) {
-            createLanguage(loader());
+            try {
+                language = LanguageCache.find(className, loader());
+            } catch (Exception ex) {
+                throw new IllegalStateException("Cannot initialize " + getName() + " language with implementation " + className, ex);
+            }
         }
         return language;
-    }
-
-    private void createLanguage(ClassLoader loader) {
-        try {
-            TruffleLanguage<?> result;
-            Class<?> langClazz = Class.forName(className, true, loader);
-            result = (TruffleLanguage<?>) langClazz.getField("INSTANCE").get(null);
-            language = result;
-        } catch (Exception ex) {
-            throw new IllegalStateException("Cannot initialize " + getName() + " language with implementation " + className, ex);
-        }
     }
 
 }
