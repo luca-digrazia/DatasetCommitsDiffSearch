@@ -24,11 +24,10 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import com.oracle.graal.debug.*;
-
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.util.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
@@ -169,7 +168,7 @@ public class GraphEncoder {
 
     public void finishPrepare() {
         objectsArray = objects.encodeAll(new Object[objects.getLength()]);
-        nodeClassesArray = nodeClasses.encodeAll(new NodeClass<?>[nodeClasses.getLength()]);
+        nodeClassesArray = nodeClasses.encodeAll(new NodeClass[nodeClasses.getLength()]);
     }
 
     public Object[] getObjects() {
