@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,26 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.arrayBaseOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.config;
 
-import java.util.zip.*;
+import java.util.zip.CRC32;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.graph.Node.*;
-import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.replacements.Snippet.Fold;
-import com.oracle.graal.word.*;
+import jdk.vm.ci.meta.JavaKind;
+
+import com.oracle.graal.api.replacements.Fold;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.graph.Node.ConstantNodeParameter;
+import com.oracle.graal.graph.Node.NodeIntrinsic;
+import com.oracle.graal.hotspot.nodes.ComputeObjectAddressNode;
+import com.oracle.graal.nodes.extended.ForeignCallNode;
+import com.oracle.graal.word.Word;
+
+// JaCoCo Exclude
 
 /**
  * Substitutions for {@link CRC32}.
  */
-@ClassSubstitution(value = CRC32.class)
 public class CRC32Substitutions {
 
     /**
@@ -46,10 +49,9 @@ public class CRC32Substitutions {
      */
     @Fold
     private static long crcTableAddress() {
-        return graalRuntime().getConfig().crcTableAddress;
+        return config().crcTableAddress;
     }
 
-    @MethodSubstitution(isStatic = true)
     static int update(int crc, int b) {
         int c = ~crc;
         int index = (b ^ c) & 0xFF;
@@ -59,20 +61,28 @@ public class CRC32Substitutions {
         return ~result;
     }
 
-    @MethodSubstitution(isStatic = true)
     static int updateBytes(int crc, byte[] buf, int off, int len) {
-        Word bufAddr = Word.unsigned(GetObjectAddressNode.get(buf) + arrayBaseOffset(Kind.Byte) + off);
-        return updateBytes(UPDATE_BYTES_CRC32, crc, bufAddr, len);
+        Word bufAddr = Word.unsigned(ComputeObjectAddressNode.get(buf, arrayBaseOffset(JavaKind.Byte) + off));
+        return updateBytesCRC32(UPDATE_BYTES_CRC32, crc, bufAddr, len);
     }
 
-    @MethodSubstitution(isStatic = true, optional = true)
+    static int updateBytes0(int crc, byte[] buf, int off, int len) {
+        Word bufAddr = Word.unsigned(ComputeObjectAddressNode.get(buf, arrayBaseOffset(JavaKind.Byte) + off));
+        return updateBytesCRC32(UPDATE_BYTES_CRC32, crc, bufAddr, len);
+    }
+
     static int updateByteBuffer(int crc, long addr, int off, int len) {
         Word bufAddr = Word.unsigned(addr).add(off);
-        return updateBytes(UPDATE_BYTES_CRC32, crc, bufAddr, len);
+        return updateBytesCRC32(UPDATE_BYTES_CRC32, crc, bufAddr, len);
+    }
+
+    static int updateByteBuffer0(int crc, long addr, int off, int len) {
+        Word bufAddr = Word.unsigned(addr).add(off);
+        return updateBytesCRC32(UPDATE_BYTES_CRC32, crc, bufAddr, len);
     }
 
     public static final ForeignCallDescriptor UPDATE_BYTES_CRC32 = new ForeignCallDescriptor("updateBytesCRC32", int.class, int.class, Word.class, int.class);
 
     @NodeIntrinsic(ForeignCallNode.class)
-    public static native int updateBytes(@ConstantNodeParameter ForeignCallDescriptor descriptor, int crc, Word buf, int length);
+    public static native int updateBytesCRC32(@ConstantNodeParameter ForeignCallDescriptor descriptor, int crc, Word buf, int length);
 }
