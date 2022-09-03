@@ -22,14 +22,20 @@
  */
 package com.oracle.truffle.object.debug;
 
-import java.io.*;
-import java.text.*;
-import java.util.*;
-import java.util.concurrent.*;
+import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.api.object.Shape;
+import com.oracle.truffle.object.ObjectStorageOptions;
+import com.oracle.truffle.object.ShapeImpl;
+import java.io.PrintWriter;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
-import com.oracle.truffle.api.object.*;
-import com.oracle.truffle.object.*;
-
+@Deprecated
 public class ShapeProfiler {
     private static final String LINE_SEPARATOR = "***********************************************";
     private static final String BULLET = "* ";
@@ -70,12 +76,13 @@ public class ShapeProfiler {
             List<ShapeStats> allStats = new ArrayList<>(shapeMap.values());
             Collections.sort(allStats, new Comparator<ShapeStats>() {
                 public int compare(ShapeStats a, ShapeStats b) {
-                    return Long.compare(b.jsObjects, a.jsObjects);
+                    return Long.compare(b.objects, a.objects);
                 }
             });
 
-            ShapeStats avgStats = new ShapeStats("Cumulative results for top " + topResults + " shapes");
-            for (int i = 0; i < topResults; i++) {
+            int top = Math.min(topResults, allStats.size());
+            ShapeStats avgStats = new ShapeStats("Cumulative results for top " + top + " shapes");
+            for (int i = 0; i < top; i++) {
                 ShapeStats stats = allStats.get(i);
                 stats.setLabel("Shape " + (i + 1) + ": " + stats.getLabel());
                 stats.dump(out);
@@ -94,7 +101,7 @@ public class ShapeProfiler {
 
     private static class ShapeStats {
         private String label;
-        private long jsObjects;
+        private long objects;
         private long oac;
         private long oas;
         private long ofs;
@@ -102,7 +109,7 @@ public class ShapeProfiler {
         private long pas;
         private long pfs;
 
-        public ShapeStats(String label) {
+        ShapeStats(String label) {
             this.label = label;
         }
 
@@ -115,7 +122,7 @@ public class ShapeProfiler {
         }
 
         public void profile(Shape shape) {
-            jsObjects++;
+            objects++;
             oac += ((ShapeImpl) shape).getObjectArrayCapacity();
             oas += ((ShapeImpl) shape).getObjectArraySize();
             ofs += ((ShapeImpl) shape).getObjectFieldSize();
@@ -125,13 +132,13 @@ public class ShapeProfiler {
         }
 
         public void add(ShapeStats stats) {
-            jsObjects += stats.jsObjects;
+            objects += stats.objects;
             oac += stats.oac;
             oas += stats.oas;
             ofs += stats.ofs;
-            oac += stats.oac;
-            oas += stats.oas;
-            ofs += stats.ofs;
+            pac += stats.pac;
+            pas += stats.pas;
+            pfs += stats.pfs;
         }
 
         public void dump(PrintWriter out) {
@@ -139,7 +146,7 @@ public class ShapeProfiler {
             out.println(LINE_SEPARATOR);
             out.println(BULLET + label);
             out.println(LINE_SEPARATOR);
-            out.println(BULLET + "Allocated objects:\t" + jsObjects);
+            out.println(BULLET + "Allocated objects:\t" + objects);
             out.println(BULLET + "Total object array capacity:\t" + oac);
             out.println(BULLET + "Total object array size:\t" + oas);
             out.println(BULLET + "Total object field size:\t" + ofs);
@@ -164,7 +171,7 @@ public class ShapeProfiler {
             DecimalFormat format = new DecimalFormat("###.####");
             // @formatter:off
             return "{" + label + "}" + TOKEN_SEPARATOR
-                   + jsObjects + TOKEN_SEPARATOR
+                   + objects + TOKEN_SEPARATOR
                    + avgOAC(format) + TOKEN_SEPARATOR
                    + avgOAS(format) + TOKEN_SEPARATOR
                    + avgOFS(format) + TOKEN_SEPARATOR
@@ -175,27 +182,27 @@ public class ShapeProfiler {
         }
 
         private String avgOAC(DecimalFormat format) {
-            return format.format((double) oac / jsObjects);
+            return format.format((double) oac / objects);
         }
 
         private String avgOAS(DecimalFormat format) {
-            return format.format((double) oas / jsObjects);
+            return format.format((double) oas / objects);
         }
 
         private String avgOFS(DecimalFormat format) {
-            return format.format((double) ofs / jsObjects);
+            return format.format((double) ofs / objects);
         }
 
         private String avgPAC(DecimalFormat format) {
-            return format.format((double) pac / jsObjects);
+            return format.format((double) pac / objects);
         }
 
         private String avgPAS(DecimalFormat format) {
-            return format.format((double) pas / jsObjects);
+            return format.format((double) pas / objects);
         }
 
         private String avgPFS(DecimalFormat format) {
-            return format.format((double) pfs / jsObjects);
+            return format.format((double) pfs / objects);
         }
     }
 

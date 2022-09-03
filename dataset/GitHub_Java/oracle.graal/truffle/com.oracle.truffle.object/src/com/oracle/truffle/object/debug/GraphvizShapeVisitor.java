@@ -22,13 +22,18 @@
  */
 package com.oracle.truffle.object.debug;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
-import com.oracle.truffle.api.object.*;
-import com.oracle.truffle.object.*;
+import com.oracle.truffle.api.object.Shape;
+import com.oracle.truffle.object.ShapeImpl;
+import com.oracle.truffle.object.Transition;
 
-public class GraphvizShapeVisitor extends DebugShapeVisitor<GraphvizShapeVisitor> {
+@SuppressWarnings("deprecation")
+@Deprecated
+public class GraphvizShapeVisitor extends com.oracle.truffle.object.DebugShapeVisitor<GraphvizShapeVisitor> {
     private final Set<Shape> drawn;
     private final StringBuilder sb = new StringBuilder();
 
@@ -39,7 +44,7 @@ public class GraphvizShapeVisitor extends DebugShapeVisitor<GraphvizShapeVisitor
     @Override
     public GraphvizShapeVisitor visitShape(Shape shape, Map<? extends Transition, ? extends Shape> transitions) {
         if (!drawn.add(shape)) {
-            return null;
+            return this;
         }
 
         String prefix = "s";
@@ -59,11 +64,11 @@ public class GraphvizShapeVisitor extends DebugShapeVisitor<GraphvizShapeVisitor
 
         for (Entry<? extends Transition, ? extends Shape> entry : transitions.entrySet()) {
             Shape dst = entry.getValue();
-            dst.accept(this);
+            ((ShapeImpl) dst).accept(this);
             assert drawn.contains(dst);
 
             sb.append(prefix).append(getId(shape)).append("->").append(prefix).append(getId(dst));
-            sb.append(" [label=\"").append(escapeString(entry.getKey().getShortName())).append("\"]");
+            sb.append(" [label=\"").append(escapeString(entry.getKey().toString())).append("\"]");
             sb.append(";");
         }
 

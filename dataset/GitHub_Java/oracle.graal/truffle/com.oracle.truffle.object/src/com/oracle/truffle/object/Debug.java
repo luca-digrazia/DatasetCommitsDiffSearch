@@ -22,17 +22,69 @@
  */
 package com.oracle.truffle.object;
 
-import java.io.*;
-import java.util.*;
-import java.util.concurrent.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
+import java.nio.file.Paths;
+import java.util.Collection;
+import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
-import com.oracle.truffle.object.debug.*;
+import com.oracle.truffle.api.nodes.GraphPrintVisitor;
+import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.api.object.Property;
 
+@SuppressWarnings("deprecation")
 class Debug {
     private static Collection<ShapeImpl> allShapes;
 
-    static void registerShape(ShapeImpl newShape) {
+    static void trackShape(ShapeImpl newShape) {
         allShapes.add(newShape);
+    }
+
+    static void trackObject(DynamicObject obj) {
+        com.oracle.truffle.object.debug.ShapeProfiler.getInstance().track(obj);
+    }
+
+    static Iterable<ShapeImpl> getAllShapes() {
+        return allShapes;
+    }
+
+    static String dumpObject(DynamicObject object, int level, int levelStop) {
+        List<Property> properties = object.getShape().getPropertyListInternal(true);
+        StringBuilder sb = new StringBuilder(properties.size() * 10);
+        sb.append("{\n");
+        for (Property property : properties) {
+            indent(sb, level + 1);
+
+            sb.append(property.getKey());
+            sb.append('[').append(property.getLocation()).append(']');
+            Object value = property.get(object, false);
+            if (value instanceof DynamicObject) {
+                if (level < levelStop) {
+                    value = dumpObject((DynamicObject) value, level + 1, levelStop);
+                } else {
+                    value = value.toString();
+                }
+            }
+            sb.append(": ");
+            sb.append(value);
+            if (property != properties.get(properties.size() - 1)) {
+                sb.append(",");
+            }
+            sb.append("\n");
+        }
+        indent(sb, level);
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private static StringBuilder indent(StringBuilder sb, int level) {
+        for (int i = 0; i < level; i++) {
+            sb.append(' ');
+        }
+        return sb;
     }
 
     static {
@@ -43,23 +95,77 @@ class Debug {
         if (ObjectStorageOptions.DumpShapes) {
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
                 public void run() {
-                    try (PrintWriter out = new PrintWriter("shapes.json", "UTF-8")) {
+                    try {
+                        if (ObjectStorageOptions.DumpShapesDOT) {
+                            dumpDOT();
+                        }
+                        if (ObjectStorageOptions.DumpShapesJSON) {
+                            dumpJSON();
+                        }
+                        if (ObjectStorageOptions.DumpShapesIGV) {
+                            dumpIGV();
+                        }
+                    } catch (FileNotFoundException | UnsupportedEncodingException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+
+                private void dumpDOT() throws FileNotFoundException, UnsupportedEncodingException {
+                    try (PrintWriter out = new PrintWriter(getOutputFile("dot"), "UTF-8")) {
+                        com.oracle.truffle.object.debug.GraphvizShapeVisitor visitor = new com.oracle.truffle.object.debug.GraphvizShapeVisitor();
+                        for (ShapeImpl shape : getAllShapes()) {
+                            shape.accept(visitor);
+                        }
+                        out.println(visitor);
+                    }
+                }
+
+                private void dumpJSON() throws FileNotFoundException, UnsupportedEncodingException {
+                    try (PrintWriter out = new PrintWriter(getOutputFile("json"), "UTF-8")) {
                         out.println("{\"shapes\": [");
                         boolean first = true;
-                        for (ShapeImpl shape : allShapes) {
+                        for (ShapeImpl shape : getAllShapes()) {
                             if (!first) {
                                 out.println(",");
                             }
                             first = false;
-                            out.print(shape.accept(new JSONShapeVisitor()));
+                            out.print(shape.accept(new com.oracle.truffle.object.debug.JSONShapeVisitor()));
                         }
                         if (!first) {
                             out.println();
                         }
                         out.println("]}");
-                    } catch (FileNotFoundException | UnsupportedEncodingException e) {
-                        throw new RuntimeException(e);
                     }
+                }
+
+                private void dumpIGV() {
+                    GraphPrintVisitor printer = new GraphPrintVisitor();
+                    printer.beginGroup("shapes");
+                    com.oracle.truffle.object.debug.IGVShapeVisitor visitor = new com.oracle.truffle.object.debug.IGVShapeVisitor(printer);
+                    for (ShapeImpl shape : getAllShapes()) {
+                        if (isRootShape(shape)) {
+                            printer.beginGraph(DebugShapeVisitor.getId(shape));
+                            shape.accept(visitor);
+                            printer.endGraph();
+                        }
+                    }
+                    printer.beginGraph("all shapes");
+                    for (ShapeImpl shape : getAllShapes()) {
+                        if (isRootShape(shape)) {
+                            shape.accept(visitor);
+                        }
+                    }
+                    printer.endGraph();
+                    printer.endGroup();
+                    printer.printToNetwork(false);
+                }
+
+                private boolean isRootShape(ShapeImpl shape) {
+                    return shape.getParent() == null;
+                }
+
+                private File getOutputFile(String extension) {
+                    return Paths.get(ObjectStorageOptions.DumpShapesPath, "shapes." + extension).toFile();
                 }
             }));
         }
