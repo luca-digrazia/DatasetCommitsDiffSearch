@@ -1,137 +1,76 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.nfi;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.api.nodes.Node;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-@ExportLibrary(InteropLibrary.class)
 final class NFILibrary implements TruffleObject {
 
-    private final Object library;
-    private final Map<String, Object> symbols;
+    private final TruffleObject library;
+    private final Map<String, TruffleObject> symbols;
 
-    @TruffleBoundary
-    NFILibrary(Object library) {
+    NFILibrary(TruffleObject library) {
         this.library = library;
         this.symbols = new HashMap<>();
     }
 
-    Object getLibrary() {
+    @Override
+    public ForeignAccess getForeignAccess() {
+        return NFILibraryMessageResolutionForeign.ACCESS;
+    }
+
+    TruffleObject getLibrary() {
         return library;
     }
 
     @TruffleBoundary
-    Object findSymbol(String name) {
+    TruffleObject findSymbol(String name) {
         return symbols.get(name);
     }
 
     @TruffleBoundary
-    void preBindSymbol(String name, Object symbol) {
+    void preBindSymbol(String name, TruffleObject symbol) {
         symbols.put(name, symbol);
     }
 
-    @SuppressWarnings("static-method")
-    @ExportMessage
-    boolean hasMembers() {
-        return true;
-    }
-
-    @ExportMessage
     @TruffleBoundary
-    Keys getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+    Keys getSymbols() {
         return new Keys(symbols.keySet());
     }
 
-    @ExportMessage(limit = "3")
-    boolean isMemberReadable(String symbol,
-                    @CachedLibrary("this.getLibrary()") InteropLibrary recursive) {
-        // no need to check the map, pre-bound symbols need to exist in the library, too
-        return recursive.isMemberReadable(getLibrary(), symbol);
-    }
-
-    @ExportMessage(limit = "3")
-    Object readMember(String symbol,
-                    @CachedLibrary("this.getLibrary()") InteropLibrary recursive) throws UnsupportedMessageException, UnknownIdentifierException {
-        Object preBound = findSymbol(symbol);
-        if (preBound != null) {
-            return preBound;
-        } else {
-            return recursive.readMember(getLibrary(), symbol);
-        }
-    }
-
-    @SuppressWarnings("static-method")
-    @ExportMessage
-    boolean isMemberInvocable(@SuppressWarnings("unused") String symbol) {
-        return true; // avoid expensive truffleboundary
-    }
-
-    @ExportMessage
-    Object invokeMember(String symbol, Object[] args,
-                    @CachedLibrary(limit = "3") InteropLibrary executables,
-                    @Cached BranchProfile exception) throws UnknownIdentifierException, ArityException, UnsupportedTypeException, UnsupportedMessageException {
-        Object preBound = findSymbol(symbol);
-        if (preBound == null) {
-            exception.enter();
-            throw UnknownIdentifierException.create(symbol);
-        }
-        return executables.execute(preBound, args);
-    }
-
-    @ExportLibrary(InteropLibrary.class)
+    @MessageResolution(receiverType = Keys.class)
     static final class Keys implements TruffleObject {
 
         private final Object[] keys;
@@ -140,30 +79,33 @@ final class NFILibrary implements TruffleObject {
             this.keys = keySet.toArray();
         }
 
-        @SuppressWarnings("static-method")
-        @ExportMessage
-        boolean hasArrayElements() {
-            return true;
+        static boolean isInstance(TruffleObject obj) {
+            return obj instanceof Keys;
         }
 
-        @ExportMessage
-        long getArraySize() {
-            return keys.length;
+        @Override
+        public ForeignAccess getForeignAccess() {
+            return KeysForeign.ACCESS;
         }
 
-        @ExportMessage
-        boolean isArrayElementReadable(long index) {
-            return 0 <= index && index < keys.length;
-        }
+        @Resolve(message = "GET_SIZE")
+        abstract static class GetSize extends Node {
 
-        @ExportMessage
-        Object readArrayElement(long idx,
-                        @Cached BranchProfile exception) throws InvalidArrayIndexException {
-            if (!isArrayElementReadable(idx)) {
-                exception.enter();
-                throw InvalidArrayIndexException.create(idx);
+            int access(Keys receiver) {
+                return receiver.keys.length;
             }
-            return keys[(int) idx];
+        }
+
+        @Resolve(message = "READ")
+        abstract static class Read extends Node {
+
+            Object access(Keys receiver, int index) {
+                if (index < 0 || index >= receiver.keys.length) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw UnknownIdentifierException.raise(Integer.toString(index));
+                }
+                return receiver.keys[index];
+            }
         }
     }
 }
