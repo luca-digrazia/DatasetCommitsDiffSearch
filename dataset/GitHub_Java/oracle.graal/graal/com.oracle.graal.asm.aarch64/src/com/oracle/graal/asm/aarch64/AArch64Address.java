@@ -24,12 +24,12 @@ package com.oracle.graal.asm.aarch64;
 
 import static jdk.vm.ci.aarch64.AArch64.zr;
 
+import com.oracle.graal.asm.AbstractAddress;
+import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.debug.GraalError;
+
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.code.Register;
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.asm.AbstractAddress;
-
-import jdk.vm.ci.common.JVMCIError;
 
 /**
  * Represents an address in target machine memory, specified using one of the different addressing
@@ -103,8 +103,8 @@ public final class AArch64Address extends AbstractAddress {
 
     /**
      * @param base may not be null or the zero-register.
-     * @param imm9 Signed 9 bit immediate value.
-     * @return AArch64Address specifying a post-indexed immediate address pointing to base. After
+     * @param imm9 Signed 9-bit immediate value.
+     * @return an address specifying a post-indexed immediate address pointing to base. After
      *         ldr/str instruction, base is updated to point to base + imm9
      */
     public static AArch64Address createPostIndexedImmediateAddress(Register base, int imm9) {
@@ -113,9 +113,9 @@ public final class AArch64Address extends AbstractAddress {
 
     /**
      * @param base may not be null or the zero-register.
-     * @param imm9 Signed 9 bit immediate value.
-     * @return AArch64Address specifying a pre-indexed immediate address pointing to base + imm9.
-     *         After ldr/str instruction, base is updated to point to base + imm9
+     * @param imm9 Signed 9-bit immediate value.
+     * @return an address specifying a pre-indexed immediate address pointing to base + imm9. After
+     *         ldr/str instruction, base is updated to point to base + imm9
      */
     public static AArch64Address createPreIndexedImmediateAddress(Register base, int imm9) {
         return new AArch64Address(base, zr, imm9, false, null, AddressingMode.IMMEDIATE_PRE_INDEXED);
@@ -123,10 +123,10 @@ public final class AArch64Address extends AbstractAddress {
 
     /**
      * @param base may not be null or the zero-register.
-     * @param imm12 Unsigned 12 bit immediate value. This is scaled by the word access size. This
+     * @param imm12 Unsigned 12-bit immediate value. This is scaled by the word access size. This
      *            means if this address is used to load/store a word, the immediate is shifted by 2
      *            (log2Ceil(4)).
-     * @return AArch64Address specifying a signed address of the form base + imm12 <<
+     * @return an address specifying a signed address of the form base + imm12 <<
      *         log2(memory_transfer_size).
      */
     public static AArch64Address createScaledImmediateAddress(Register base, int imm12) {
@@ -135,8 +135,8 @@ public final class AArch64Address extends AbstractAddress {
 
     /**
      * @param base may not be null or the zero-register.
-     * @param imm9 Signed 9 bit immediate value.
-     * @return AArch64Address specifying an unscaled immediate address of the form base + imm9
+     * @param imm9 Signed 9-bit immediate value.
+     * @return an address specifying an unscaled immediate address of the form base + imm9
      */
     public static AArch64Address createUnscaledImmediateAddress(Register base, int imm9) {
         return new AArch64Address(base, zr, imm9, false, null, AddressingMode.IMMEDIATE_UNSCALED);
@@ -144,7 +144,7 @@ public final class AArch64Address extends AbstractAddress {
 
     /**
      * @param base May not be null or the zero register.
-     * @return AArch64Address specifying the address pointed to by base.
+     * @return an address specifying the address pointed to by base.
      */
     public static AArch64Address createBaseRegisterOnlyAddress(Register base) {
         return createRegisterOffsetAddress(base, zr, false);
@@ -155,11 +155,20 @@ public final class AArch64Address extends AbstractAddress {
      * @param offset Register specifying some offset, optionally scaled by the memory_transfer_size.
      *            May not be null or the stackpointer.
      * @param scaled Specifies whether offset should be scaled by memory_transfer_size or not.
-     * @return AArch64Address specifying a register offset address of the form base + offset [<<
-     *         log2 (memory_transfer_size)]
+     * @return an address specifying a register offset address of the form base + offset [<< log2
+     *         (memory_transfer_size)]
      */
     public static AArch64Address createRegisterOffsetAddress(Register base, Register offset, boolean scaled) {
         return new AArch64Address(base, offset, 0, scaled, null, AddressingMode.REGISTER_OFFSET);
+    }
+
+    /**
+     * @param base may not be null or the zero-register.
+     * @param imm7 Signed 7-bit immediate value.
+     * @return an address specifying an unscaled immediate address of the form base + imm7
+     */
+    public static AArch64Address createPairUnscaledImmediateAddress(Register base, int imm7) {
+        return new AArch64Address(base, zr, imm7, false, null, AddressingMode.IMMEDIATE_UNSCALED);
     }
 
     /**
@@ -168,7 +177,7 @@ public final class AArch64Address extends AbstractAddress {
      *            memory_transfer_size. May not be null or the stackpointer.
      * @param scaled Specifies whether offset should be scaled by memory_transfer_size or not.
      * @param extendType Describes whether register is zero- or sign-extended. May not be null.
-     * @return AArch64Address specifying an extended register offset of the form base +
+     * @return an address specifying an extended register offset of the form base +
      *         extendType(offset) [<< log2(memory_transfer_size)]
      */
     public static AArch64Address createExtendedRegisterOffsetAddress(Register base, Register offset, boolean scaled, AArch64Assembler.ExtendType extendType) {
@@ -199,28 +208,59 @@ public final class AArch64Address extends AbstractAddress {
 
     private boolean verify() {
         assert addressingMode != null;
-        assert base.getRegisterCategory().equals(AArch64.CPU) && offset.getRegisterCategory().equals(AArch64.CPU);
+        assert base.getRegisterCategory().equals(AArch64.CPU);
+        assert offset.getRegisterCategory().equals(AArch64.CPU);
 
         switch (addressingMode) {
             case IMMEDIATE_SCALED:
-                return !base.equals(zr) && offset.equals(zr) && extendType == null && NumUtil.isUnsignedNbit(12, immediate);
+                assert !base.equals(zr);
+                assert offset.equals(zr);
+                assert extendType == null;
+                assert NumUtil.isUnsignedNbit(12, immediate);
+                break;
             case IMMEDIATE_UNSCALED:
-                return !base.equals(zr) && offset.equals(zr) && extendType == null && NumUtil.isSignedNbit(9, immediate);
+                assert !base.equals(zr);
+                assert offset.equals(zr);
+                assert extendType == null;
+                assert NumUtil.isSignedNbit(9, immediate);
+                break;
             case BASE_REGISTER_ONLY:
-                return !base.equals(zr) && offset.equals(zr) && extendType == null && immediate == 0;
+                assert !base.equals(zr);
+                assert offset.equals(zr);
+                assert extendType == null;
+                assert immediate == 0;
+                break;
             case REGISTER_OFFSET:
-                return !base.equals(zr) && offset.getRegisterCategory().equals(AArch64.CPU) && extendType == null && immediate == 0;
+                assert !base.equals(zr);
+                assert offset.getRegisterCategory().equals(AArch64.CPU);
+                assert extendType == null;
+                assert immediate == 0;
+                break;
             case EXTENDED_REGISTER_OFFSET:
-                return !base.equals(zr) && offset.getRegisterCategory().equals(AArch64.CPU) && (extendType == AArch64Assembler.ExtendType.SXTW || extendType == AArch64Assembler.ExtendType.UXTW) &&
-                                immediate == 0;
+                assert !base.equals(zr);
+                assert offset.getRegisterCategory().equals(AArch64.CPU);
+                assert (extendType == AArch64Assembler.ExtendType.SXTW || extendType == AArch64Assembler.ExtendType.UXTW);
+                assert immediate == 0;
+                break;
             case PC_LITERAL:
-                return base.equals(zr) && offset.equals(zr) && extendType == null && NumUtil.isSignedNbit(21, immediate) && ((immediate & 0x3) == 0);
+                assert base.equals(zr);
+                assert offset.equals(zr);
+                assert extendType == null;
+                assert NumUtil.isSignedNbit(21, immediate);
+                assert ((immediate & 0x3) == 0);
+                break;
             case IMMEDIATE_POST_INDEXED:
             case IMMEDIATE_PRE_INDEXED:
-                return !base.equals(zr) && offset.equals(zr) && extendType == null && NumUtil.isSignedNbit(9, immediate);
+                assert !base.equals(zr);
+                assert offset.equals(zr);
+                assert extendType == null;
+                assert NumUtil.isSignedNbit(9, immediate);
+                break;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalError.shouldNotReachHere();
         }
+
+        return true;
     }
 
     public Register getBase() {
@@ -234,7 +274,7 @@ public final class AArch64Address extends AbstractAddress {
     /**
      * @return immediate in correct representation for the given addressing mode. For example in
      *         case of <code>addressingMode ==IMMEDIATE_UNSCALED </code> the value will be returned
-     *         as the 9bit signed representation.
+     *         as the 9-bit signed representation.
      */
     public int getImmediate() {
         switch (addressingMode) {
@@ -242,15 +282,18 @@ public final class AArch64Address extends AbstractAddress {
             case IMMEDIATE_POST_INDEXED:
             case IMMEDIATE_PRE_INDEXED:
                 // 9-bit signed value
+                assert NumUtil.isSignedNbit(9, immediate);
                 return immediate & NumUtil.getNbitNumberInt(9);
             case IMMEDIATE_SCALED:
                 // Unsigned value can be returned as-is.
+                assert NumUtil.isUnsignedNbit(9, immediate);
                 return immediate;
             case PC_LITERAL:
                 // 21-bit signed value, but lower 2 bits are always 0 and are shifted out.
+                assert NumUtil.isSignedNbit(19, immediate >> 2);
                 return (immediate >> 2) & NumUtil.getNbitNumberInt(19);
             default:
-                throw JVMCIError.shouldNotReachHere("Should only be called for addressing modes that use immediate values.");
+                throw GraalError.shouldNotReachHere("Should only be called for addressing modes that use immediate values.");
         }
     }
 
@@ -266,7 +309,7 @@ public final class AArch64Address extends AbstractAddress {
             case PC_LITERAL:
                 return immediate;
             default:
-                throw JVMCIError.shouldNotReachHere("Should only be called for addressing modes that use immediate values.");
+                throw GraalError.shouldNotReachHere("Should only be called for addressing modes that use immediate values.");
         }
     }
 
@@ -312,8 +355,33 @@ public final class AArch64Address extends AbstractAddress {
             case IMMEDIATE_PRE_INDEXED:
                 return String.format("[X%d,%d]!", base.encoding, immediate);
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalError.shouldNotReachHere();
         }
     }
 
+    /**
+     * Loads an address into Register r.
+     *
+     * @param masm the macro assembler.
+     * @param r general purpose register. May not be null.
+     */
+    public void lea(AArch64MacroAssembler masm, Register r) {
+        switch (addressingMode) {
+            case IMMEDIATE_UNSCALED:
+                if (immediate == 0 && base.equals(r)) { // it's a nop
+                    break;
+                }
+                masm.add(64, r, base, immediate);
+                break;
+            case REGISTER_OFFSET:
+                masm.add(64, r, base, offset);
+                break;
+            case PC_LITERAL: {
+                masm.mov(r, getImmediate());
+                break;
+            }
+            default:
+                throw GraalError.shouldNotReachHere();
+        }
+    }
 }
