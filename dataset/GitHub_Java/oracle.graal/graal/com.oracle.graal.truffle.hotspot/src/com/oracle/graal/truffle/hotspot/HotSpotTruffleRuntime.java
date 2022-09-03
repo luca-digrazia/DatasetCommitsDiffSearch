@@ -213,7 +213,7 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
     }
 
     private static CompilationResultBuilderFactory getOptimizedCallTargetInstrumentationFactory(String arch, ResolvedJavaMethod method) {
-        for (OptimizedCallTargetInstrumentationFactory factory : Services.load(OptimizedCallTargetInstrumentationFactory.class)) {
+        for (OptimizedCallTargetInstrumentationFactory factory : ServiceLoader.loadInstalled(OptimizedCallTargetInstrumentationFactory.class)) {
             if (factory.getArchitecture().equals(arch)) {
                 factory.setInstrumentedMethod(method);
                 return factory;
@@ -246,7 +246,9 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
 
     @SlowPath
     public Iterable<FrameInstance> getStackTrace() {
-        initStackIntrospection();
+        if (stackIntrospection == null) {
+            stackIntrospection = Graal.getRequiredCapability(StackIntrospection.class);
+        }
         final Iterator<InspectedFrame> frames = stackIntrospection.getStackTrace(anyFrameMethod, anyFrameMethod, 1).iterator();
         class FrameIterator implements Iterator<FrameInstance> {
 
@@ -274,19 +276,15 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
         };
     }
 
-    private void initStackIntrospection() {
+    public FrameInstance getCurrentFrame() {
         if (stackIntrospection == null) {
             stackIntrospection = Graal.getRequiredCapability(StackIntrospection.class);
         }
-    }
-
-    @SlowPath
-    public FrameInstance getCurrentFrame() {
-        initStackIntrospection();
         Iterator<InspectedFrame> frames = stackIntrospection.getStackTrace(callTargetMethod, callTargetMethod, 0).iterator();
         if (frames.hasNext()) {
             return new HotSpotFrameInstance.CallTargetFrame(frames.next(), true);
         } else {
+            System.out.println("no current frame found");
             return null;
         }
     }
