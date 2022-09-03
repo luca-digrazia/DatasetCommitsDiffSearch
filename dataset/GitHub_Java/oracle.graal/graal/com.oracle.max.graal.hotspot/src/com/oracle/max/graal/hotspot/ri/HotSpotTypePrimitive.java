@@ -75,11 +75,6 @@ public final class HotSpotTypePrimitive extends HotSpotType implements RiResolve
     }
 
     @Override
-    public RiResolvedType leastCommonAncestor(RiResolvedType otherType) {
-        return null;
-    }
-
-    @Override
     public CiConstant getEncoding(Representation r) {
         throw GraalInternalError.unimplemented("HotSpotTypePrimitive.getEncoding");
     }
