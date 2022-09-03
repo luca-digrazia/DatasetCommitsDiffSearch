@@ -22,10 +22,7 @@
  */
 package org.graalvm.compiler.truffle;
 
-import java.lang.annotation.Annotation;
-
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
-import org.graalvm.util.EconomicMap;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.Node.Child;
@@ -40,12 +37,10 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 public class TruffleConstantFieldProvider implements ConstantFieldProvider {
     private final ConstantFieldProvider graalConstantFieldProvider;
     private final MetaAccessProvider metaAccess;
-    private final EconomicMap<ResolvedJavaField, Annotation[]> cachedAnnotations;
 
     public TruffleConstantFieldProvider(ConstantFieldProvider graalConstantFieldProvider, MetaAccessProvider metaAccess) {
         this.graalConstantFieldProvider = graalConstantFieldProvider;
         this.metaAccess = metaAccess;
-        this.cachedAnnotations = EconomicMap.create();
     }
 
     @Override
@@ -68,49 +63,27 @@ public class TruffleConstantFieldProvider implements ConstantFieldProvider {
         }
 
         boolean hasObjectKind = field.getType().getJavaKind() == JavaKind.Object;
-        Annotation[] annotations = getAnnotations(field);
-        if (annotations.length > 0) {
-            if (!isStaticField && hasObjectKind && getAnnotation(annotations, Child.class) != null) {
-                return tool.foldConstant(verifyFieldValue(field, tool.readValue(), annotations));
-            }
+        if (!isStaticField && hasObjectKind && field.getAnnotation(Child.class) != null) {
+            return tool.foldConstant(verifyFieldValue(field, tool.readValue()));
+        }
 
-            CompilationFinal compilationFinal = getAnnotation(annotations, CompilationFinal.class);
-            if (compilationFinal != null) {
-                if (isArrayField) {
-                    int stableDimensions = actualStableDimensions(field, compilationFinal.dimensions());
-                    return tool.foldStableArray(tool.readValue(), stableDimensions, true);
-                } else {
-                    return tool.foldConstant(tool.readValue());
-                }
+        CompilationFinal compilationFinal = field.getAnnotation(CompilationFinal.class);
+        if (compilationFinal != null) {
+            if (isArrayField) {
+                int stableDimensions = actualStableDimensions(field, compilationFinal.dimensions());
+                return tool.foldStableArray(tool.readValue(), stableDimensions, true);
+            } else {
+                return tool.foldConstant(tool.readValue());
             }
+        }
 
-            if (!isStaticField && hasObjectKind && getAnnotation(annotations, Children.class) != null) {
-                int stableDimensions = isArrayField ? 1 : 0;
-                return tool.foldStableArray(verifyFieldValue(field, tool.readValue(), annotations), stableDimensions, true);
-            }
+        if (!isStaticField && hasObjectKind && field.getAnnotation(Children.class) != null) {
+            int stableDimensions = isArrayField ? 1 : 0;
+            return tool.foldStableArray(verifyFieldValue(field, tool.readValue()), stableDimensions, true);
         }
 
         if (isArrayField) {
             return readConstantFieldFast(field, tool);
-        }
-        return null;
-    }
-
-    private Annotation[] getAnnotations(ResolvedJavaField field) {
-        Annotation[] annotations = cachedAnnotations.get(field);
-        if (annotations == null) {
-            annotations = field.getAnnotations();
-            cachedAnnotations.put(field, annotations);
-        }
-        return annotations;
-    }
-
-    private static <T extends Annotation> T getAnnotation(Annotation[] annotations, Class<T> annotationClass) {
-        // hardly any fields have more than one annotation, so a simple loop works best
-        for (int i = 0; i < annotations.length; i++) {
-            if (annotations[i].annotationType() == annotationClass) {
-                return annotationClass.cast(annotations[i]);
-            }
         }
         return null;
     }
@@ -148,11 +121,11 @@ public class TruffleConstantFieldProvider implements ConstantFieldProvider {
         return dimensions;
     }
 
-    private JavaConstant verifyFieldValue(ResolvedJavaField field, JavaConstant constant, Annotation[] annotations) {
-        assert getAnnotation(annotations, Child.class) == null || constant.isNull() ||
+    private JavaConstant verifyFieldValue(ResolvedJavaField field, JavaConstant constant) {
+        assert field.getAnnotation(Child.class) == null || constant.isNull() ||
                         metaAccess.lookupJavaType(com.oracle.truffle.api.nodes.Node.class).isAssignableFrom(metaAccess.lookupJavaType(constant)) : String.format(
                                         "@Child field value must be a Node: %s, but was: %s", field, constant);
-        assert getAnnotation(annotations, Children.class) == null || constant.isNull() ||
+        assert field.getAnnotation(Children.class) == null || constant.isNull() ||
                         metaAccess.lookupJavaType(constant).isArray() : String.format("@Children field value must be an array: %s, but was: %s", field, constant);
         return constant;
     }
