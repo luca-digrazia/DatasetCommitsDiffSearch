@@ -24,8 +24,6 @@ package com.oracle.graal.hotspot.stubs;
 
 import static com.oracle.graal.api.code.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
-import static com.oracle.graal.api.meta.MetaUtil.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.nodes.CStringNode.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
 
@@ -34,9 +32,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CompilationResult.Call;
 import com.oracle.graal.api.code.CompilationResult.DataPatch;
-import com.oracle.graal.api.code.CompilationResult.Infopoint;
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
@@ -65,8 +61,7 @@ import com.oracle.graal.word.*;
 
 /**
  * Base class for implementing some low level code providing the out-of-line slow path for a
- * snippet. A stub may make a direct call to a HotSpot C/C++ runtime function. Stubs are installed
- * as an instance of the C++ RuntimeStub class (as opposed to nmethod).
+ * snippet. A concrete stub is defined a subclass of this class.
  * <p>
  * Implementation detail: The stub classes re-use some of the functionality for {@link Snippet}s
  * purely for convenience (e.g., can re-use the {@link ReplacementsImpl}).
@@ -135,22 +130,11 @@ public abstract class Stub extends AbstractTemplates implements Snippets {
         return linkage;
     }
 
-    /**
-     * Checks the conditions a compilation must satisfy to be installed as a RuntimeStub.
-     */
-    private boolean checkStubInvariants(CompilationResult compResult) {
+    private boolean checkCompilationResult(CompilationResult compResult) {
         for (DataPatch data : compResult.getDataReferences()) {
             Constant constant = data.constant;
-            assert constant.getKind() != Kind.Object : format("%h.%n(%p): ", getMethod()) + "cannot have embedded oop: " + constant;
-            assert constant.getPrimitiveAnnotation() == null : format("%h.%n(%p): ", getMethod()) + "cannot have embedded metadata: " + constant;
-        }
-        for (Infopoint infopoint : compResult.getInfopoints()) {
-            assert infopoint instanceof Call : format("%h.%n(%p): ", getMethod()) + "cannot have non-call infopoint: " + infopoint;
-            Call call = (Call) infopoint;
-            assert call.target instanceof HotSpotRuntimeCallTarget : format("%h.%n(%p): ", getMethod()) + "cannot have non runtime call: " + call.target;
-            HotSpotRuntimeCallTarget callTarget = (HotSpotRuntimeCallTarget) call.target;
-            assert callTarget.getAddress() == graalRuntime().getConfig().deoptimizeStub || callTarget.isCRuntimeCall() : format("%h.%n(%p): ", getMethod()) +
-                            "must only call C runtime or deoptimization stub, not " + call.target;
+            assert constant.getKind() != Kind.Object : MetaUtil.format("%h.%n(%p): ", getMethod()) + "cannot have embedded oop: " + constant;
+            assert constant.getPrimitiveAnnotation() == null : MetaUtil.format("%h.%n(%p): ", getMethod()) + "cannot have embedded metadata: " + constant;
         }
         return true;
     }
@@ -197,7 +181,7 @@ public abstract class Stub extends AbstractTemplates implements Snippets {
                     final CompilationResult compResult = GraalCompiler.compileMethod(runtime(), replacements, backend, runtime().getTarget(), getMethod(), graph, null, phasePlan,
                                     OptimisticOptimizations.ALL, new SpeculationLog());
 
-                    assert checkStubInvariants(compResult);
+                    assert checkCompilationResult(compResult);
 
                     assert definedRegisters != null;
                     code = Debug.scope("CodeInstall", new Callable<InstalledCode>() {
