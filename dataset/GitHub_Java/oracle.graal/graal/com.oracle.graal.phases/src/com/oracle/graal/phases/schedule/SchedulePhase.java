@@ -428,6 +428,10 @@ public final class SchedulePhase extends Phase {
                     assert checkLatestEarliestRelation(currentNode, earliestBlock, block);
                 }
             }
+            if (block == earliestBlock) {
+                // No need to search further. The earliest block *must* be a valid schedule block.
+                break;
+            }
         }
         assert block != null : currentNode;
         return block;
