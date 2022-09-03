@@ -22,57 +22,28 @@
  */
 package com.oracle.graal.java;
 
-import static com.oracle.graal.bytecode.Bytecodes.DUP;
-import static com.oracle.graal.bytecode.Bytecodes.DUP2;
-import static com.oracle.graal.bytecode.Bytecodes.DUP2_X1;
-import static com.oracle.graal.bytecode.Bytecodes.DUP2_X2;
-import static com.oracle.graal.bytecode.Bytecodes.DUP_X1;
-import static com.oracle.graal.bytecode.Bytecodes.DUP_X2;
-import static com.oracle.graal.bytecode.Bytecodes.POP;
-import static com.oracle.graal.bytecode.Bytecodes.POP2;
-import static com.oracle.graal.bytecode.Bytecodes.SWAP;
-import static com.oracle.graal.graph.iterators.NodePredicates.isA;
-import static com.oracle.graal.graph.iterators.NodePredicates.isNotA;
-import static com.oracle.graal.java.BytecodeParserOptions.HideSubstitutionStates;
-import static com.oracle.graal.nodes.FrameState.TWO_SLOT_MARKER;
-import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
+import static com.oracle.graal.bytecode.Bytecodes.*;
+import static com.oracle.graal.graph.iterators.NodePredicates.*;
+import static com.oracle.graal.java.BytecodeParser.Options.*;
+import static com.oracle.graal.nodes.FrameState.*;
+import static jdk.internal.jvmci.common.JVMCIError.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.function.Function;
+import java.util.*;
+import java.util.function.*;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Signature;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graphbuilderconf.IntrinsicContext.SideEffectsState;
-import com.oracle.graal.graphbuilderconf.ParameterPlugin;
+import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.ValueProxyNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.java.MonitorIdNode;
-import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.util.*;
 
 public final class FrameStateBuilder implements SideEffectsState {
 
@@ -139,7 +110,7 @@ public final class FrameStateBuilder implements SideEffectsState {
         Signature sig = method.getSignature();
         int max = sig.getParameterCount(false);
         for (int i = 0; i < max; i++) {
-            JavaKind kind = sig.getParameterKind(i);
+            Kind kind = sig.getParameterKind(i);
             locals[javaIndex] = arguments[index];
             javaIndex++;
             if (kind.needsTwoSlots()) {
@@ -179,9 +150,9 @@ public final class FrameStateBuilder implements SideEffectsState {
             if (eagerResolve) {
                 type = type.resolve(accessingClass);
             }
-            JavaKind kind = type.getJavaKind();
+            Kind kind = type.getKind();
             Stamp stamp;
-            if (kind == JavaKind.Object && type instanceof ResolvedJavaType) {
+            if (kind == Kind.Object && type instanceof ResolvedJavaType) {
                 stamp = StampFactory.declared((ResolvedJavaType) type);
             } else {
                 stamp = StampFactory.forKind(kind);
@@ -269,16 +240,15 @@ public final class FrameStateBuilder implements SideEffectsState {
     }
 
     /**
-     * @param pushedValues if non-null, values to {@link #push(JavaKind, ValueNode)} to the stack
-     *            before creating the {@link FrameState}
+     * @param pushedValues if non-null, values to {@link #push(Kind, ValueNode)} to the stack before
+     *            creating the {@link FrameState}
      */
-    public FrameState create(int bci, BytecodeParser parent, boolean duringCall, JavaKind[] pushedSlotKinds, ValueNode[] pushedValues) {
+    public FrameState create(int bci, BytecodeParser parent, boolean duringCall, Kind[] pushedSlotKinds, ValueNode[] pushedValues) {
         if (outerFrameState == null && parent != null) {
-            assert !parent.parsingIntrinsic() : "must already have the next non-intrinsic ancestor";
-            outerFrameState = parent.getFrameStateBuilder().create(parent.bci(), parent.getNonIntrinsicAncestor(), true, null, null);
+            outerFrameState = parent.getFrameStateBuilder().create(parent.bci(), null);
         }
         if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI && parent != null) {
-            FrameState newFrameState = outerFrameState.duplicateModified(outerFrameState.bci, true, false, JavaKind.Void, new JavaKind[]{JavaKind.Object}, new ValueNode[]{stack[0]});
+            FrameState newFrameState = outerFrameState.duplicateModified(outerFrameState.bci, true, Kind.Void, new Kind[]{Kind.Object}, new ValueNode[]{stack[0]});
             return newFrameState;
         }
         if (bci == BytecodeFrame.INVALID_FRAMESTATE_BCI) {
@@ -552,7 +522,7 @@ public final class FrameStateBuilder implements SideEffectsState {
      * @param object the object whose monitor will be locked.
      */
     public void pushLock(ValueNode object, MonitorIdNode monitorId) {
-        assert object.isAlive() && object.getStackKind() == JavaKind.Object : "unexpected value: " + object;
+        assert object.isAlive() && object.getStackKind() == Kind.Object : "unexpected value: " + object;
         lockedObjects = Arrays.copyOf(lockedObjects, lockedObjects.length + 1);
         monitorIds = Arrays.copyOf(monitorIds, monitorIds.length + 1);
         lockedObjects[lockedObjects.length - 1] = object;
@@ -677,7 +647,7 @@ public final class FrameStateBuilder implements SideEffectsState {
         return stackSize;
     }
 
-    private boolean verifyKind(JavaKind slotKind, ValueNode x) {
+    private boolean verifyKind(Kind slotKind, ValueNode x) {
         assert x != null;
         assert x != TWO_SLOT_MARKER;
         assert slotKind.getSlotCount() > 0;
@@ -696,7 +666,7 @@ public final class FrameStateBuilder implements SideEffectsState {
      * @param slotKind the kind of the local variable from the point of view of the bytecodes
      * @return the instruction that produced the specified local
      */
-    public ValueNode loadLocal(int i, JavaKind slotKind) {
+    public ValueNode loadLocal(int i, Kind slotKind) {
         ValueNode x = locals[i];
         assert verifyKind(slotKind, x);
         assert slotKind.needsTwoSlots() ? locals[i + 1] == TWO_SLOT_MARKER : (i == locals.length - 1 || locals[i + 1] != TWO_SLOT_MARKER);
@@ -711,7 +681,7 @@ public final class FrameStateBuilder implements SideEffectsState {
      * @param slotKind the kind of the local variable from the point of view of the bytecodes
      * @param x the instruction which produces the value for the local
      */
-    public void storeLocal(int i, JavaKind slotKind, ValueNode x) {
+    public void storeLocal(int i, Kind slotKind, ValueNode x) {
         assert verifyKind(slotKind, x);
 
         if (locals[i] == TWO_SLOT_MARKER) {
@@ -737,7 +707,7 @@ public final class FrameStateBuilder implements SideEffectsState {
      * @param slotKind the kind of the stack element from the point of view of the bytecodes
      * @param x the instruction to push onto the stack
      */
-    public void push(JavaKind slotKind, ValueNode x) {
+    public void push(Kind slotKind, ValueNode x) {
         assert verifyKind(slotKind, x);
 
         xpush(x);
@@ -746,8 +716,8 @@ public final class FrameStateBuilder implements SideEffectsState {
         }
     }
 
-    public void pushReturn(JavaKind slotKind, ValueNode x) {
-        if (slotKind != JavaKind.Void) {
+    public void pushReturn(Kind slotKind, ValueNode x) {
+        if (slotKind != Kind.Void) {
             push(slotKind, x);
         }
     }
@@ -758,7 +728,7 @@ public final class FrameStateBuilder implements SideEffectsState {
      * @param slotKind the kind of the stack element from the point of view of the bytecodes
      * @return the instruction on the top of the stack
      */
-    public ValueNode pop(JavaKind slotKind) {
+    public ValueNode pop(Kind slotKind) {
         if (slotKind.needsTwoSlots()) {
             ValueNode s = xpop();
             assert s == TWO_SLOT_MARKER;
