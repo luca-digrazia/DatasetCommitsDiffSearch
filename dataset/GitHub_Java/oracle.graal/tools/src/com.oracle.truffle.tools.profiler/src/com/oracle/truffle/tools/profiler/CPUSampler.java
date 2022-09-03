@@ -24,19 +24,6 @@
  */
 package com.oracle.truffle.tools.profiler;
 
-import java.io.Closeable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.atomic.AtomicLong;
-
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Engine;
-
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
 import com.oracle.truffle.api.instrumentation.EventBinding;
@@ -46,8 +33,20 @@ import com.oracle.truffle.api.instrumentation.StandardTags.RootTag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
 import com.oracle.truffle.api.nodes.LanguageInfo;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.tools.profiler.impl.CPUSamplerInstrument;
 import com.oracle.truffle.tools.profiler.impl.ProfilerToolFactory;
+
+import java.io.Closeable;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Implementation of a sampling based profiler for
@@ -257,20 +256,8 @@ public final class CPUSampler implements Closeable {
      * @param engine the engine to find debugger for
      * @return an instance of associated {@link CPUSampler}
      * @since 0.30
-     * @deprecated use {@link #find(Engine)} instead
      */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public static CPUSampler find(com.oracle.truffle.api.vm.PolyglotEngine engine) {
-        return CPUSamplerInstrument.getSampler(engine);
-    }
-
-    /**
-     * Finds {@link CPUSampler} associated with given engine.
-     *
-     * @since 1.0
-     */
-    public static CPUSampler find(Engine engine) {
+    public static CPUSampler find(PolyglotEngine engine) {
         return CPUSamplerInstrument.getSampler(engine);
     }
 
@@ -493,7 +480,7 @@ public final class CPUSampler implements Closeable {
             f = DEFAULT_FILTER;
         }
         this.stackOverflowed = false;
-        this.shadowStack = new ShadowStack(stackLimit, mode == Mode.STATEMENTS);
+        this.shadowStack = new ShadowStack(stackLimit);
         this.stacksBinding = this.shadowStack.install(env.getInstrumenter(), combine(f, mode), mode == Mode.EXCLUDE_INLINED_ROOTS);
 
         this.samplerTask = new SamplingTimerTask();
@@ -635,11 +622,14 @@ class CPUSamplerSnippets {
     public void example() {
         // @formatter:off
         // BEGIN: CPUSamplerSnippets#example
-        Context context = Context.create();
+        PolyglotEngine engine = PolyglotEngine.newBuilder().build();
 
-        CPUSampler sampler = CPUSampler.find(context.getEngine());
+        CPUSampler sampler = CPUSampler.find(engine);
         sampler.setCollecting(true);
-        context.eval("...", "...");
+        Source someCode = Source.newBuilder("...").
+                mimeType("...").
+                name("example").build();
+        engine.eval(someCode);
         sampler.setCollecting(false);
         sampler.close();
         // Read information about the roots of the tree.
