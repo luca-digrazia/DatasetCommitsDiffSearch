@@ -24,12 +24,10 @@ package com.oracle.graal.lir.amd64;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-
 import static java.lang.Double.*;
 import static java.lang.Float.*;
 
 import com.oracle.graal.amd64.*;
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
@@ -161,32 +159,16 @@ public class AMD64Move {
     public static class LeaOp extends AMD64LIRInstruction {
 
         @Def({REG}) protected Value result;
-        @Use({ADDR, UNINITIALIZED}) protected AMD64Address address;
+        @Use({ADDR, STACK, UNINITIALIZED}) protected Value address;
 
-        public LeaOp(Value result, AMD64Address address) {
+        public LeaOp(Value result, Value address) {
             this.result = result;
             this.address = address;
         }
 
         @Override
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            masm.leaq(asLongReg(result), address);
-        }
-    }
-
-    public static class StackLeaOp extends AMD64LIRInstruction {
-
-        @Def({REG}) protected Value result;
-        @Use({STACK, UNINITIALIZED}) protected StackSlot slot;
-
-        public StackLeaOp(Value result, StackSlot slot) {
-            this.result = result;
-            this.slot = slot;
-        }
-
-        @Override
-        public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-            masm.leaq(asLongReg(result), (AMD64Address) tasm.asAddress(slot));
+            masm.leaq(asLongReg(result), (AMD64Address) tasm.asAddress(address));
         }
     }
 
