@@ -104,21 +104,16 @@ public final class ReflectionConfigurationParser {
     }
 
     private void parseAndRegister(Reader reader, String featureName, Object location, HostedOptionKey<String> option) {
-        /*
-         * Calling toString() on an anonymous subclass of JsonReader will return
-         * " at line <n> column <c>" which is useful for error messages.
-         */
+        // Calling toString() on an anonymous subclass of
+        // JsonReader will return " at line <n> column <c>"
+        // which is useful for error messages.
         JsonReader json = new JsonReader(reader) {
         };
         assert json.toString().equals(" at line 1 column 1");
         try {
             parseClassArray(json);
         } catch (Exception e) {
-            String errorMessage = e.getMessage();
-            if (errorMessage == null || errorMessage.isEmpty()) {
-                errorMessage = e.toString();
-            }
-            throw UserError.abort("Error parsing " + featureName + " configuration in " + location + json + ":\n" + errorMessage +
+            throw UserError.abort("Error parsing " + featureName + " configuration in " + location + json + ":\n" + e.getMessage() +
                             "\nVerify that the configuration matches the schema described in the " +
                             HostedOptionParser.commandArgument(PrintFlags, "+") + " output for option " + option.getName() + ".");
         }
@@ -162,7 +157,7 @@ public final class ReflectionConfigurationParser {
                 }
             } else {
                 if (clazz == null) {
-                    throw new JsonParseException("Class 'name' attribute must precede '" + name + "' attribute");
+                    throw new JsonParseException("Class 'name' attribute must preceed '" + name + "' attribute");
                 }
                 if (name.equals("allDeclaredMethods")) {
                     if (parseBoolean(reader)) {
@@ -185,8 +180,7 @@ public final class ReflectionConfigurationParser {
                 } else if (name.equals("fields")) {
                     parseFields(reader, clazz);
                 } else {
-                    throw new JsonParseException("Unknown class attribute '" + name +
-                                    "' (supported attributes: allDeclaredMethods, allPublicMethods, allDeclaredFields, allPublicFields, methods, fields)");
+                    throw new JsonParseException("Unknown class attribute '" + name + "'");
                 }
             }
         }
@@ -209,7 +203,7 @@ public final class ReflectionConfigurationParser {
             if (name.equals("name")) {
                 fieldName = reader.nextString();
             } else {
-                throw new JsonParseException("Unknown field attribute '" + name + "' (supported attributes: name)");
+                throw new JsonParseException("Unknown field attribute '" + name + "'");
             }
         }
         reader.endObject();
@@ -244,7 +238,7 @@ public final class ReflectionConfigurationParser {
                 methodName = reader.nextString();
             } else {
                 if (methodName == null) {
-                    throw new JsonParseException("Method 'name' attribute must be precede '" + name + "' attribute");
+                    throw new JsonParseException("Method 'name' attribute must be preceed '" + name + "' attribute");
                 }
                 if (name.equals("parameterTypes")) {
                     if (methodParameterTypes != null) {
@@ -252,7 +246,7 @@ public final class ReflectionConfigurationParser {
                     }
                     methodParameterTypes = parseTypes(reader);
                 } else {
-                    throw new JsonParseException("Unknown method attribute '" + name + "' (supported attributes: name, parameterTypes)");
+                    throw new JsonParseException("Unknown method attribute '" + name + "'");
                 }
             }
         }

@@ -28,7 +28,6 @@ import static com.oracle.svm.reflect.hosted.ReflectionFeature.Options.Reflection
 import java.util.function.BooleanSupplier;
 
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionType;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 
@@ -46,10 +45,10 @@ public final class ReflectionFeature implements Feature {
         @Option(help = "Enable support for reflection at run time")//
         public static final HostedOptionKey<Boolean> ReflectionEnabled = new HostedOptionKey<>(true);
 
-        @Option(help = "file:doc-files/ReflectionConfigurationFilesHelp.txt", type = OptionType.User)//
+        @Option(help = "file:doc-files/ReflectionConfigurationFilesHelp.txt")//
         public static final HostedOptionKey<String> ReflectionConfigurationFiles = new HostedOptionKey<>("");
 
-        @Option(help = "Resources describing program elements to be made available for reflection (see ReflectionConfigurationFiles).", type = OptionType.User)//
+        @Option(help = "Resources describing program elements to be made available for reflection (see ReflectionConfigurationFiles).")//
         public static final HostedOptionKey<String> ReflectionConfigurationResources = new HostedOptionKey<>("");
     }
 
