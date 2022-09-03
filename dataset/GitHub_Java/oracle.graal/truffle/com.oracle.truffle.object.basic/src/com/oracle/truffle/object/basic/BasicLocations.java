@@ -557,10 +557,6 @@ public abstract class BasicLocations {
             longLocation.setLongInternal(store, value);
         }
 
-        InternalLongLocation getInternalLocation() {
-            return longLocation;
-        }
-
         @Override
         public final int primitiveFieldCount() {
             return ((LocationImpl) longLocation).primitiveFieldCount();
@@ -584,11 +580,6 @@ public abstract class BasicLocations {
         @Override
         public boolean equals(Object obj) {
             return super.equals(obj) && this.longLocation.equals(((PrimitiveLocationDecorator) obj).longLocation);
-        }
-
-        @Override
-        public int hashCode() {
-            return longLocation.hashCode();
         }
     }
 
