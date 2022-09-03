@@ -111,10 +111,6 @@ public final class ModelModule implements ModuleGenerator {
         declares.forEach(visitor::visit);
     }
 
-    public int getSymbolCount() {
-        return symbols.getSize();
-    }
-
     @Override
     public void createAlias(Type type, int aliasedValue, long linkage, long visibility) {
         GlobalAlias alias = GlobalAlias.create(type, aliasedValue, linkage, visibility);
