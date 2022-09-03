@@ -47,7 +47,7 @@ import jdk.vm.ci.meta.PlatformKind;
 public class SaveCalleeSaveRegisters extends PreAllocationOptimizationPhase {
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
                     PreAllocationOptimizationContext context) {
         FrameMapBuilder frameMapBuilder = lirGenRes.getFrameMapBuilder();
         RegisterArray calleeSaveRegisters = frameMapBuilder.getCodeCache().getRegisterConfig().getCalleeSaveRegisters();

@@ -22,13 +22,15 @@
  */
 package com.oracle.graal.lir.phases;
 
-import com.oracle.graal.lir.constopt.*;
-import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase.*;
+import com.oracle.graal.lir.alloc.SaveCalleeSaveRegisters;
+import com.oracle.graal.lir.constopt.ConstantLoadOptimization;
+import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase.PreAllocationOptimizationContext;
 
 public class PreAllocationOptimizationStage extends LIRPhaseSuite<PreAllocationOptimizationContext> {
     public PreAllocationOptimizationStage() {
         if (ConstantLoadOptimization.Options.LIROptConstantLoadOptimization.getValue()) {
             appendPhase(new ConstantLoadOptimization());
+            appendPhase(new SaveCalleeSaveRegisters());
         }
     }
 }
