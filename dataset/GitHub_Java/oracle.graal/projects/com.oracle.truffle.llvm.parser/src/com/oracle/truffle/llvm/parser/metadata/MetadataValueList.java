@@ -55,16 +55,20 @@ public final class MetadataValueList extends ValueList<MDBaseNode, MetadataVisit
         }
     };
 
+    private final MetadataValueList parent;
+
     private final Map<String, MDNamedNode> namedNodes;
-    private final Map<String, MDCompositeType> mdTypeRegistry = new HashMap<>();
     private final List<MDKind> kinds;
-    private final List<MDLocalVariable> locals;
 
     public MetadataValueList() {
-        super(PLACEHOLDER_FACTORY);
+        this(null);
+    }
+
+    public MetadataValueList(MetadataValueList parent) {
+        super(parent, PLACEHOLDER_FACTORY);
+        this.parent = parent;
         this.namedNodes = new HashMap<>();
         this.kinds = new ArrayList<>();
-        this.locals = new ArrayList<>();
     }
 
     public void addKind(MDKind newKind) {
@@ -76,6 +80,12 @@ public final class MetadataValueList extends ValueList<MDBaseNode, MetadataVisit
     }
 
     public MDNamedNode getNamedNode(String name) {
+        if (parent != null) {
+            final MDNamedNode parentResult = parent.getNamedNode(name);
+            if (parentResult != null) {
+                return parentResult;
+            }
+        }
         return namedNodes.get(name);
     }
 
@@ -100,6 +110,13 @@ public final class MetadataValueList extends ValueList<MDBaseNode, MetadataVisit
     }
 
     public MDKind getKind(long id) {
+        if (parent != null) {
+            final MDKind kind = parent.getKind(id);
+            if (kind != null) {
+                return kind;
+            }
+        }
+
         for (MDKind kind : kinds) {
             if (kind.getId() == id) {
                 return kind;
@@ -118,25 +135,12 @@ public final class MetadataValueList extends ValueList<MDBaseNode, MetadataVisit
             }
         }
 
+        if (parent != null) {
+            return parent.findKind(name);
+        }
+
         final MDKind newKind = MDKind.create(nextArtificialKindId--, name);
         kinds.add(newKind);
         return newKind;
-    }
-
-    public MDCompositeType identifyType(String name) {
-        return mdTypeRegistry.get(name);
-    }
-
-    public void registerType(String identifier, MDCompositeType type) {
-        mdTypeRegistry.put(identifier, type);
-    }
-
-    public void registerLocal(MDLocalVariable mdLocal) {
-        locals.add(mdLocal);
-    }
-
-    public void consumeLocals(MetadataVisitor visitor) {
-        locals.forEach(l -> l.accept(visitor));
-        locals.clear();
     }
 }

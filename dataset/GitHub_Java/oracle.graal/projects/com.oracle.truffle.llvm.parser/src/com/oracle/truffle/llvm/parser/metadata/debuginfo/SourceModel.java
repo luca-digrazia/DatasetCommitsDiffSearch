@@ -32,12 +32,7 @@ package com.oracle.truffle.llvm.parser.metadata.debuginfo;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.parser.metadata.MDBaseNode;
-import com.oracle.truffle.llvm.parser.metadata.MDExpression;
-import com.oracle.truffle.llvm.parser.metadata.MDGlobalVariable;
-import com.oracle.truffle.llvm.parser.metadata.MDGlobalVariableExpression;
 import com.oracle.truffle.llvm.parser.metadata.MDKind;
-import com.oracle.truffle.llvm.parser.metadata.MDVoidNode;
-import com.oracle.truffle.llvm.parser.metadata.MetadataSymbol;
 import com.oracle.truffle.llvm.parser.metadata.MetadataValueList;
 import com.oracle.truffle.llvm.parser.metadata.MDLocation;
 import com.oracle.truffle.llvm.parser.metadata.MetadataAttachmentHolder;
@@ -46,6 +41,7 @@ import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionParameter;
+import com.oracle.truffle.llvm.parser.model.symbols.constants.MetadataConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.NullConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalAlias;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalConstant;
@@ -57,37 +53,35 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruc
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.InstructionVisitorAdapter;
 import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
-import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceStaticMemberType;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceFile;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.parser.model.SymbolImpl;
+import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 public final class SourceModel {
 
     public static final int LLVM_DBG_INTRINSICS_VALUE_ARGINDEX = 0;
 
     public static final String LLVM_DBG_DECLARE_NAME = "@llvm.dbg.declare";
-    public static final int LLVM_DBG_DECLARE_ARGSIZE = 3;
     public static final int LLVM_DBG_DECLARE_LOCALREF_ARGINDEX = 1;
-    public static final int LLVM_DBG_DECLARE_EXPR_ARGINDEX = 2;
 
     public static final String LLVM_DBG_VALUE_NAME = "@llvm.dbg.value";
-    public static final int LLVM_DBG_VALUE_ARGSIZE = 4;
     public static final int LLVM_DBG_VALUE_LOCALREF_ARGINDEX = 2;
-    public static final int LLVM_DBG_VALUE_EXPR_ARGINDEX = 3;
+
+    public static SourceModel generate(ModelModule irModel, Source bitcodeSource) {
+        final MetadataValueList moduleMetadata = irModel.getMetadata();
+        final Parser parser = new Parser(moduleMetadata, bitcodeSource);
+        MDSymbolLinkUpgrade.perform(moduleMetadata);
+        irModel.accept(parser);
+        return parser.sourceModel;
+    }
 
     public static final class Function {
 
@@ -97,14 +91,11 @@ public final class SourceModel {
 
         private final Map<Instruction, LLVMSourceLocation> instructions = new HashMap<>();
 
-        private final Map<LLVMSourceSymbol, Variable> locals = new HashMap<>();
-
         private LLVMSourceLocation lexicalScope;
 
         private Function(Source bitcodeSource, FunctionDefinition definition) {
             this.bitcodeSource = bitcodeSource;
             this.definition = definition;
-            this.lexicalScope = null;
         }
 
         public SourceSection getSourceSection() {
@@ -134,36 +125,20 @@ public final class SourceModel {
         public LLVMSourceLocation getLexicalScope() {
             return lexicalScope;
         }
-
-        Variable getLocal(LLVMSourceSymbol symbol) {
-            if (locals.containsKey(symbol)) {
-                return locals.get(symbol);
-            }
-
-            final Variable variable = new Variable(symbol);
-            locals.put(symbol, variable);
-            return variable;
-        }
-
-        public Set<Variable> getPartialValues() {
-            return locals.values().stream().filter(Variable::hasFragments).collect(Collectors.toSet());
-        }
     }
 
-    public static final class Variable implements SymbolImpl {
+    public static final class Variable implements Symbol {
+
+        private final Symbol symbol;
 
         private final LLVMSourceSymbol variable;
 
-        private List<ValueFragment> fragments;
-        private boolean hasFullDefinition;
-
-        private Variable(LLVMSourceSymbol variable) {
+        private Variable(Symbol symbol, LLVMSourceSymbol variable) {
+            this.symbol = symbol;
             this.variable = variable;
-            this.fragments = null;
-            this.hasFullDefinition = false;
         }
 
-        public LLVMSourceSymbol getSymbol() {
+        public LLVMSourceSymbol getVariable() {
             return variable;
         }
 
@@ -171,47 +146,12 @@ public final class SourceModel {
             return variable.getName();
         }
 
+        public Symbol getSymbol() {
+            return symbol;
+        }
+
         public LLVMSourceType getSourceType() {
             return variable.getType();
-        }
-
-        public boolean hasFragments() {
-            return fragments != null;
-        }
-
-        public int getFragmentIndex(int offset, int length) {
-            if (fragments != null) {
-                for (int i = 0; i < fragments.size(); i++) {
-                    final ValueFragment fragment = fragments.get(i);
-                    if (fragment.getOffset() == offset && fragment.getLength() == length) {
-                        return i;
-                    }
-                }
-            }
-            return -1;
-        }
-
-        public List<ValueFragment> getFragments() {
-            return fragments != null ? fragments : Collections.emptyList();
-        }
-
-        private void addFragment(ValueFragment fragment) {
-            if (fragments == null) {
-                fragments = new ArrayList<>();
-            }
-
-            if (!fragments.contains(fragment)) {
-                fragments.add(fragment);
-            }
-        }
-
-        private void processFragments() {
-            if (fragments != null) {
-                if (hasFullDefinition) {
-                    addFragment(ValueFragment.create(0, (int) variable.getType().getSize()));
-                }
-                Collections.sort(fragments);
-            }
         }
 
         @Override
@@ -223,45 +163,19 @@ public final class SourceModel {
         public String toString() {
             return variable.getName();
         }
-
-        private void addFullDefinition() {
-            hasFullDefinition = true;
-        }
-
-        @Override
-        public void replace(SymbolImpl oldValue, SymbolImpl newValue) {
-        }
-
-        @Override
-        public void accept(SymbolVisitor visitor) {
-            visitor.visit(this);
-        }
     }
 
-    public SourceModel() {
+    private SourceModel() {
         globals = new HashMap<>();
-        staticMembers = new HashMap<>();
-    }
-
-    public void process(ModelModule irModel, Source bitcodeSource, MetadataValueList metadata) {
-        final Parser parser = new Parser(this, metadata, bitcodeSource);
-        MDSymbolLinkUpgrade.perform(metadata);
-        irModel.accept(parser);
     }
 
     private final Map<LLVMSourceSymbol, GlobalValueSymbol> globals;
-
-    private final Map<LLVMSourceStaticMemberType, SymbolImpl> staticMembers;
 
     public Map<LLVMSourceSymbol, GlobalValueSymbol> getGlobals() {
         return Collections.unmodifiableMap(globals);
     }
 
-    public Map<LLVMSourceStaticMemberType, SymbolImpl> getStaticMembers() {
-        return Collections.unmodifiableMap(staticMembers);
-    }
-
-    private static final class Parser implements FunctionVisitor, InstructionVisitorAdapter, ModelVisitor {
+    private static final class Parser implements ModelVisitor, FunctionVisitor, InstructionVisitorAdapter {
 
         private static MDBaseNode getDebugInfo(MetadataAttachmentHolder holder) {
             if (holder.hasAttachedMetadata()) {
@@ -273,22 +187,29 @@ public final class SourceModel {
         }
 
         private final Map<MDBaseNode, LLVMSourceSymbol> parsedVariables;
+
+        private final DITypeIdentifier typeIdentifier;
         private final DIScopeExtractor scopeExtractor;
         private final DITypeExtractor typeExtractor;
         private final SourceModel sourceModel;
+
+        private final MetadataValueList moduleMetadata;
         private final Source bitcodeSource;
 
         private Function currentFunction = null;
 
-        private Parser(SourceModel sourceModel, MetadataValueList metadata, Source bitcodeSource) {
+        private Parser(MetadataValueList moduleMetadata, Source bitcodeSource) {
+            this.moduleMetadata = moduleMetadata;
             this.bitcodeSource = bitcodeSource;
-            this.sourceModel = sourceModel;
             this.parsedVariables = new HashMap<>();
-            this.scopeExtractor = new DIScopeExtractor(metadata);
-            this.typeExtractor = new DITypeExtractor(scopeExtractor, metadata, sourceModel.staticMembers);
+            typeIdentifier = new DITypeIdentifier();
+            typeIdentifier.setMetadata(moduleMetadata);
+            scopeExtractor = new DIScopeExtractor(typeIdentifier);
+            typeExtractor = new DITypeExtractor(scopeExtractor, typeIdentifier);
+            sourceModel = new SourceModel();
         }
 
-        private LLVMSourceSymbol getSourceSymbol(MDBaseNode mdVariable, boolean isGlobal) {
+        private LLVMSourceSymbol getSourceVariable(MDBaseNode mdVariable, boolean isGlobal) {
             if (parsedVariables.containsKey(mdVariable)) {
                 return parsedVariables.get(mdVariable);
             }
@@ -297,29 +218,26 @@ public final class SourceModel {
             final LLVMSourceType type = typeExtractor.parseType(mdVariable);
             final String varName = MDNameExtractor.getName(mdVariable);
 
-            final LLVMSourceSymbol symbol = new LLVMSourceSymbol(varName, location, type, isGlobal);
-            parsedVariables.put(mdVariable, symbol);
+            final LLVMSourceSymbol variable = new LLVMSourceSymbol(varName, location, type, isGlobal);
+            parsedVariables.put(mdVariable, variable);
 
             if (location != null) {
-                // this is currently the line/column where the symbol was declared, we want the
+                // this is currently the line/column where the variable was declared, we want the
                 // scope
                 location = location.getParent();
             }
 
             if (location != null) {
-                location.addSymbol(symbol);
+                location.addSymbol(variable);
             }
 
-            return symbol;
-        }
-
-        @Override
-        public void visit(FunctionDeclaration function) {
+            return variable;
         }
 
         @Override
         public void visit(FunctionDefinition function) {
             currentFunction = new Function(bitcodeSource, function);
+            typeIdentifier.setMetadata(function.getMetadata());
 
             final MDBaseNode debugInfo = getDebugInfo(function);
             if (debugInfo != null) {
@@ -327,37 +245,19 @@ public final class SourceModel {
                 currentFunction.setLexicalScope(scope);
             }
 
-            function.accept((FunctionVisitor) this);
+            function.accept(this);
             function.setSourceFunction(currentFunction);
 
-            for (Variable local : currentFunction.locals.values()) {
-                local.processFragments();
-            }
-
-            scopeExtractor.clearLineScopes();
+            typeIdentifier.setMetadata(moduleMetadata);
             currentFunction = null;
         }
 
         private void visitGlobal(GlobalValueSymbol global) {
-            MDBaseNode mdGlobal = getDebugInfo(global);
+            final MDBaseNode mdGlobal = getDebugInfo(global);
             if (mdGlobal != null) {
-                final LLVMSourceSymbol symbol = getSourceSymbol(mdGlobal, true);
+                final LLVMSourceSymbol symbol = getSourceVariable(mdGlobal, true);
                 if (symbol != null) {
                     sourceModel.globals.put(symbol, global);
-                }
-
-                if (mdGlobal instanceof MDGlobalVariableExpression) {
-                    mdGlobal = ((MDGlobalVariableExpression) mdGlobal).getGlobalVariable();
-                }
-
-                if (mdGlobal instanceof MDGlobalVariable) {
-                    final MDBaseNode declaration = ((MDGlobalVariable) mdGlobal).getStaticMemberDeclaration();
-                    if (declaration != MDVoidNode.INSTANCE) {
-                        final LLVMSourceType sourceType = typeExtractor.parseType(declaration);
-                        if (sourceType instanceof LLVMSourceStaticMemberType) {
-                            sourceModel.staticMembers.put((LLVMSourceStaticMemberType) sourceType, global);
-                        }
-                    }
                 }
             }
         }
@@ -383,7 +283,7 @@ public final class SourceModel {
         }
 
         @Override
-        public void visitInstruction(Instruction instruction) {
+        public void defaultAction(Instruction instruction) {
             final MDLocation loc = instruction.getDebugLocation();
             if (loc != null) {
                 final LLVMSourceLocation scope = scopeExtractor.resolve(loc);
@@ -395,39 +295,37 @@ public final class SourceModel {
 
         @Override
         public void visit(VoidCallInstruction call) {
-            final SymbolImpl callTarget = call.getCallTarget();
+            final Symbol callTarget = call.getCallTarget();
             if (callTarget instanceof FunctionDeclaration) {
-                int mdlocalArgIndex = -1;
-                int mdExprArgIndex = -1;
+                int mdlocalArgumentIndex = -1;
                 switch (((FunctionDeclaration) callTarget).getName()) {
                     case LLVM_DBG_DECLARE_NAME:
-                        if (call.getArgumentCount() >= LLVM_DBG_DECLARE_ARGSIZE) {
-                            mdlocalArgIndex = LLVM_DBG_DECLARE_LOCALREF_ARGINDEX;
-                            mdExprArgIndex = LLVM_DBG_DECLARE_EXPR_ARGINDEX;
+                        if (call.getArgumentCount() >= LLVM_DBG_DECLARE_LOCALREF_ARGINDEX) {
+                            mdlocalArgumentIndex = LLVM_DBG_DECLARE_LOCALREF_ARGINDEX;
                         }
                         break;
 
                     case LLVM_DBG_VALUE_NAME:
-                        if (call.getArgumentCount() >= LLVM_DBG_VALUE_ARGSIZE) {
-                            mdlocalArgIndex = LLVM_DBG_VALUE_LOCALREF_ARGINDEX;
-                            mdExprArgIndex = LLVM_DBG_VALUE_EXPR_ARGINDEX;
+                        if (call.getArgumentCount() >= LLVM_DBG_VALUE_LOCALREF_ARGINDEX) {
+                            mdlocalArgumentIndex = LLVM_DBG_VALUE_LOCALREF_ARGINDEX;
                         }
                         break;
                 }
 
-                if (mdlocalArgIndex >= 0) {
-                    handleDebugIntrinsic(call, mdlocalArgIndex, mdExprArgIndex);
+                if (mdlocalArgumentIndex >= 0) {
+                    handleDebugIntrinsic(call, mdlocalArgumentIndex);
                 }
             }
 
-            visitInstruction(call);
+            defaultAction(call);
         }
 
-        private void handleDebugIntrinsic(VoidCallInstruction call, int mdlocalArgIndex, int mdExprArgIndex) {
-            SymbolImpl value = call.getArgument(LLVM_DBG_INTRINSICS_VALUE_ARGINDEX);
-            if (value instanceof MetadataSymbol) {
+        private void handleDebugIntrinsic(VoidCallInstruction call, int mdlocalArgumentIndex) {
+            Symbol value = call.getArgument(LLVM_DBG_INTRINSICS_VALUE_ARGINDEX);
+            if (value instanceof MetadataConstant) {
                 // the first argument should reference the allocation site of the variable
-                value = MDSymbolExtractor.getSymbol(((MetadataSymbol) value).getNode());
+                final long mdIndex = ((MetadataConstant) value).getValue();
+                value = MDSymbolExtractor.getSymbol(currentFunction.definition.getMetadata().getOrNull((int) mdIndex));
 
             } else {
                 return;
@@ -444,36 +342,18 @@ public final class SourceModel {
                 ((FunctionParameter) value).setSourceVariable(true);
             }
 
-            final SymbolImpl mdLocalMDRef = call.getArgument(mdlocalArgIndex);
-            final Variable variable;
-            if (mdLocalMDRef instanceof MetadataSymbol) {
-                final MDBaseNode mdLocal = ((MetadataSymbol) mdLocalMDRef).getNode();
+            final Symbol mdLocalMDRef = call.getArgument(mdlocalArgumentIndex);
+            if (mdLocalMDRef instanceof MetadataConstant) {
+                final long mdIndex = ((MetadataConstant) mdLocalMDRef).getValue();
+                final MDBaseNode mdLocal = currentFunction.definition.getMetadata().getOrNull((int) mdIndex);
 
-                final LLVMSourceSymbol symbol = getSourceSymbol(mdLocal, false);
-                variable = currentFunction.getLocal(symbol);
+                final LLVMSourceSymbol variable = getSourceVariable(mdLocal, false);
+                final Variable var = new Variable(value, variable);
 
                 // ensure that lifetime analysis does not kill the variable before it is used in
                 // the call
                 call.replace(call.getArgument(LLVM_DBG_INTRINSICS_VALUE_ARGINDEX), value);
-                call.replace(mdLocalMDRef, variable);
-
-            } else {
-                variable = null;
-            }
-
-            final SymbolImpl expr = call.getArgument(mdExprArgIndex);
-            if (expr instanceof MetadataSymbol) {
-                final MDBaseNode exprNode = ((MetadataSymbol) expr).getNode();
-                if (exprNode instanceof MDExpression) {
-                    final MDExpression expression = (MDExpression) exprNode;
-                    if (variable != null) {
-                        if (ValueFragment.describesFragment(expression)) {
-                            variable.addFragment(ValueFragment.parse(expression));
-                        } else {
-                            variable.addFullDefinition();
-                        }
-                    }
-                }
+                call.replace(mdLocalMDRef, var);
             }
         }
     }
