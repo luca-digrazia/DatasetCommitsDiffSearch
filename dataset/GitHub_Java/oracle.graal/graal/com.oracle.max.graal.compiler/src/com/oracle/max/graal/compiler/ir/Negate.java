@@ -31,10 +31,10 @@ import com.sun.cri.ci.*;
 /**
  * The {@code NegateOp} instruction negates its operand.
  */
-public final class Negate extends FloatingNode implements Canonicalizable {
+public final class Negate extends FloatingNode {
+    private static final NegateCanonicalizerOp CANONICALIZER = new NegateCanonicalizerOp();
 
-    @Input
-    private Value x;
+    @Input    private Value x;
 
     public Value x() {
         return x;
@@ -47,7 +47,6 @@ public final class Negate extends FloatingNode implements Canonicalizable {
 
     /**
      * Creates new NegateOp instance.
-     *
      * @param x the instruction producing the value that is input to this instruction
      */
     public Negate(Value x, Graph graph) {
@@ -70,23 +69,33 @@ public final class Negate extends FloatingNode implements Canonicalizable {
         out.print("- ").print(x());
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Node canonical(NotifyReProcess reProcess) {
-        if (x().isConstant()) {
-            switch (x().kind) {
-                case Int:
-                    return Constant.forInt(-x().asConstant().asInt(), graph());
-                case Long:
-                    return Constant.forLong(-x().asConstant().asLong(), graph());
-                case Float:
-                    return Constant.forFloat(-x().asConstant().asFloat(), graph());
-                case Double:
-                    return Constant.forDouble(-x().asConstant().asDouble(), graph());
+    public <T extends Op> T lookup(Class<T> clazz) {
+        if (clazz == CanonicalizerOp.class) {
+            return (T) CANONICALIZER;
+        }
+        return super.lookup(clazz);
+    }
+
+    private static class NegateCanonicalizerOp implements CanonicalizerOp {
+        @Override
+        public Node canonical(Node node, NotifyReProcess reProcess) {
+            Negate negate = (Negate) node;
+            Value x = negate.x();
+            Graph graph = negate.graph();
+            if (x.isConstant()) {
+                switch (x.kind) {
+                    case Int: return Constant.forInt(-x.asConstant().asInt(), graph);
+                    case Long: return Constant.forLong(-x.asConstant().asLong(), graph);
+                    case Float: return Constant.forFloat(-x.asConstant().asFloat(), graph);
+                    case Double: return Constant.forDouble(-x.asConstant().asDouble(), graph);
+                }
             }
+            if (x instanceof Negate) {
+                return ((Negate) x).x();
+            }
+            return negate;
         }
-        if (x() instanceof Negate) {
-            return ((Negate) x()).x();
-        }
-        return this;
     }
 }

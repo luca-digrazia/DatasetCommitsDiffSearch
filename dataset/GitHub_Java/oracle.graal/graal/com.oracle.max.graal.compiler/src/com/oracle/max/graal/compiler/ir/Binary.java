@@ -22,7 +22,6 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
@@ -32,48 +31,27 @@ import com.sun.cri.ci.*;
  */
 public abstract class Binary extends FloatingNode {
 
-    private static final int INPUT_COUNT = 2;
-    private static final int INPUT_X = 0;
-    private static final int INPUT_Y = 1;
+    @Input private Value x;
+    @Input private Value y;
+    @Data public final int opcode;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value x() {
+        return x;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
+    public void setX(Value x) {
+        updateUsages(this.x, x);
+        this.x = x;
     }
 
-    /**
-     * The first input to this instruction.
-     */
-     public Value x() {
-        return (Value) inputs().get(super.inputCount() + INPUT_X);
-    }
-
-    public Value setX(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_X, n);
-    }
-
-    /**
-     * The second input to this instruction.
-     */
     public Value y() {
-        return (Value) inputs().get(super.inputCount() + INPUT_Y);
+        return y;
     }
 
-    public Value setY(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_Y, n);
+    public void setY(Value x) {
+        updateUsages(y, x);
+        this.y = x;
     }
-
-    /**
-     * The opcode of this instruction.
-     */
-    public final int opcode;
 
     /**
      * Creates a new Op2 instance.
@@ -82,8 +60,8 @@ public abstract class Binary extends FloatingNode {
      * @param x the first input instruction
      * @param y the second input instruction
      */
-    public Binary(CiKind kind, int opcode, Value x, Value y, int inputCount, int successorCount, Graph graph) {
-        super(kind, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
+    public Binary(CiKind kind, int opcode, Value x, Value y, Graph graph) {
+        super(kind, graph);
         this.opcode = opcode;
         setX(x);
         setY(y);
@@ -97,19 +75,5 @@ public abstract class Binary extends FloatingNode {
         Value t = x();
         setX(y());
         setY(t);
-    }
-
-    @Override
-    public int valueNumber() {
-        return Util.hash2(opcode, x(), y());
-    }
-
-    @Override
-    public boolean valueEqual(Node i) {
-        if (i instanceof Binary) {
-            Binary o = (Binary) i;
-            return opcode == o.opcode && x() == o.x() && y() == o.y();
-        }
-        return false;
     }
 }

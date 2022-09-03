@@ -33,7 +33,8 @@ import com.sun.cri.ri.*;
 /**
  * The {@code ArrayLength} instruction gets the length of an array.
  */
-public final class ArrayLength extends FloatingNode implements Canonicalizable {
+public final class ArrayLength extends FloatingNode {
+    private static final ArrayLengthCanonicalizerOp CANONICALIZER = new ArrayLengthCanonicalizerOp();
 
     @Input private Value array;
 
@@ -48,7 +49,6 @@ public final class ArrayLength extends FloatingNode implements Canonicalizable {
 
     /**
      * Constructs a new ArrayLength instruction.
-     *
      * @param array the instruction producing the array
      * @param newFrameState the state after executing this instruction
      */
@@ -67,23 +67,40 @@ public final class ArrayLength extends FloatingNode implements Canonicalizable {
         out.print(array()).print(".length");
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Node canonical(NotifyReProcess reProcess) {
-        if (array() instanceof NewArray) {
-            Value length = ((NewArray) array()).dimension(0);
-            assert length != null;
-            return length;
+    public <T extends Op> T lookup(Class<T> clazz) {
+        if (clazz == CanonicalizerOp.class) {
+            return (T) CANONICALIZER;
         }
-        CiConstant constantValue = null;
-        if (array().isConstant()) {
-            constantValue = array().asConstant();
+        return super.lookup(clazz);
+    }
+
+    private static class ArrayLengthCanonicalizerOp implements CanonicalizerOp {
+        @Override
+        public Node canonical(Node node, NotifyReProcess reProcess) {
+            ArrayLength arrayLength = (ArrayLength) node;
+            Value array = arrayLength.array();
+            if (array instanceof NewArray) {
+                Value length = ((NewArray) array).length();
+                if (array instanceof NewMultiArray) {
+                    length = ((NewMultiArray) array).dimension(0);
+                }
+                assert length != null;
+                return length;
+            }
+            CiConstant constantValue = null;
+            if (array.isConstant()) {
+                constantValue = array.asConstant();
+            }
             if (constantValue != null && constantValue.isNonNull()) {
-                if (graph() instanceof CompilerGraph) {
-                    RiRuntime runtime = ((CompilerGraph) graph()).runtime();
-                    return Constant.forInt(runtime.getArrayLength(constantValue), graph());
+                Graph graph = node.graph();
+                if (graph instanceof CompilerGraph) {
+                    RiRuntime runtime = ((CompilerGraph) graph).runtime();
+                    return Constant.forInt(runtime.getArrayLength(constantValue), graph);
                 }
             }
+            return arrayLength;
         }
-        return this;
     }
 }

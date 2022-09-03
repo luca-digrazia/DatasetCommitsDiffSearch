@@ -27,13 +27,10 @@ import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 
-public final class ReadNode extends AccessNode {
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
-
+public final class ReadNode extends AccessNode implements Node.ValueNumberable {
 
     public ReadNode(CiKind kind, Value object, LocationNode location, Graph graph) {
-        super(kind, object, location, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(kind, object, location, graph);
     }
 
     @Override
@@ -44,10 +41,5 @@ public final class ReadNode extends AccessNode {
     @Override
     public void print(LogStream out) {
         out.print("mem read from ").print(object());
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        return new ReadNode(super.kind, null, null, into);
     }
 }

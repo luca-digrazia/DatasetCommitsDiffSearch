@@ -33,16 +33,18 @@ import com.sun.cri.ci.*;
 
 
 public final class CreateVectorNode extends AbstractVectorNode {
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_LENGTH = 0;
-    private static final int SUCCESSOR_COUNT = 0;
+    @Input private Value length;
+
+    public Value length() {
+        return length;
+    }
+
+    public void setLength(Value x) {
+        updateUsages(length, x);
+        length = x;
+    }
 
     private boolean reversed;
-
-    public void setLength(Value length) {
-        assert length == null || length.kind == CiKind.Int;
-        inputs().set(super.inputCount() + INPUT_LENGTH, length);
-    }
 
     public boolean reversed() {
         return reversed;
@@ -52,12 +54,8 @@ public final class CreateVectorNode extends AbstractVectorNode {
         reversed = r;
     }
 
-    public Value length() {
-        return (Value) inputs().get(super.inputCount() + INPUT_LENGTH);
-    }
-
     public CreateVectorNode(boolean reversed, Value length, Graph graph) {
-        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, null, graph);
+        super(CiKind.Illegal, null, graph);
         setLength(length);
         setReversed(reversed);
     }
@@ -85,16 +83,6 @@ public final class CreateVectorNode extends AbstractVectorNode {
         out.print("vector with length ").print(length().toString());
     }
 
-    @Override
-    public Node copy(Graph into) {
-        return new CreateVectorNode(reversed, null, into);
-    }
-
-    @Override
-    public boolean valueEqual(Node i) {
-        return (i instanceof CreateVectorNode);
-    }
-
     private LoopBegin createLoop(Map<AbstractVectorNode, Value> map) {
         EndNode end = new EndNode(graph());
         LoopBegin loopBegin = new LoopBegin(graph());
@@ -113,13 +101,18 @@ public final class CreateVectorNode extends AbstractVectorNode {
 
         LoopEnd loopEnd = new LoopEnd(graph());
         loopEnd.setLoopBegin(loopBegin);
+        loopBegin.setStateAfter(stateAfter());
         Compare condition;
         if (reversed) {
             condition = new Compare(loopVariable, Condition.GE, Constant.forInt(0, graph()), graph());
         } else {
             condition = new Compare(loopVariable, Condition.LT, length(), graph());
         }
-        If ifNode = new If(condition, graph());
+        int expectedLength = 100; // TODO: it may be possible to get a more accurate estimate...?
+        if (length().isConstant()) {
+            expectedLength = length().asConstant().asInt();
+        }
+        If ifNode = new If(condition, 1.0 / expectedLength, graph());
         loopBegin.setNext(ifNode);
         ifNode.setTrueSuccessor(loopEnd);
         this.replaceAtPredecessors(end);

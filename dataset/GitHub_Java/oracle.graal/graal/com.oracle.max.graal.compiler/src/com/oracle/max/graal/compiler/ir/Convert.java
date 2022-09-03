@@ -23,7 +23,6 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
@@ -32,37 +31,18 @@ import com.sun.cri.ci.*;
  * The {@code Convert} class represents a conversion between primitive types.
  */
 public final class Convert extends FloatingNode {
+    @Input private Value value;
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_VALUE = 0;
+    @Data public final int opcode;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value value() {
+        return value;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
+    public void setValue(Value x) {
+        updateUsages(value, x);
+        value = x;
     }
-
-    /**
-     * The instruction which produces the input value to this instruction.
-     */
-     public Value value() {
-        return (Value) inputs().get(super.inputCount() + INPUT_VALUE);
-    }
-
-    public Value setValue(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_VALUE, n);
-    }
-
-    /**
-     * The opcode for this conversion operation.
-     */
-    public final int opcode;
 
     /**
      * Constructs a new Convert instance.
@@ -72,7 +52,7 @@ public final class Convert extends FloatingNode {
      * @param graph
      */
     public Convert(int opcode, Value value, CiKind kind, Graph graph) {
-        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(kind, graph);
         this.opcode = opcode;
         setValue(value);
     }
@@ -83,27 +63,7 @@ public final class Convert extends FloatingNode {
     }
 
     @Override
-    public int valueNumber() {
-        return Util.hash1(opcode, value());
-    }
-
-    @Override
-    public boolean valueEqual(Node i) {
-        if (i instanceof Convert) {
-            Convert o = (Convert) i;
-            return opcode == o.opcode && value() == o.value();
-        }
-        return false;
-    }
-
-    @Override
     public void print(LogStream out) {
         out.print(Bytecodes.nameOf(opcode)).print('(').print(value()).print(')');
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        Convert x = new Convert(opcode, null, kind, into);
-        return x;
     }
 }
