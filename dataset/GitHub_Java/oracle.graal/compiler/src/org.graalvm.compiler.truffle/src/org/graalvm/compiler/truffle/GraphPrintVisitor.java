@@ -95,7 +95,7 @@ class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeElement
 
     @Override
     protected String findNameTemplate(NodeClass clazz) {
-        return "{p#label}";
+        return "";
     }
 
     @Override
@@ -288,7 +288,7 @@ class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeElement
             nodeMap.put(node, new NodeElement(node, nodeId));
 
             String className = className(node.getClass());
-            setNodeProperty(node, "label", dropNodeSuffix(className));
+            setNodeProperty(node, "name", dropNodeSuffix(className));
             NodeInfo nodeInfo = node.getClass().getAnnotation(NodeInfo.class);
             if (nodeInfo != null) {
                 setNodeProperty(node, "cost", nodeInfo.cost());
@@ -296,6 +296,7 @@ class GraphPrintVisitor extends AbstractGraphPrinter<RootCallTarget, NodeElement
                     setNodeProperty(node, "shortName", nodeInfo.shortName());
                 }
             }
+            setNodeProperty(node, "class", className);
             if (node instanceof Node) {
                 readNodeProperties((Node) node);
                 copyDebugProperties((Node) node);
