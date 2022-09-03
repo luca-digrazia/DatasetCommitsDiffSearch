@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,58 +29,35 @@
  */
 package com.oracle.truffle.llvm.test.interop;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.java.JavaInterop;
-import com.oracle.truffle.api.nodes.LanguageInfo;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
-import java.io.File;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Assert;
-import org.junit.Test;
-
-import com.oracle.truffle.llvm.test.options.TestOptions;
-import com.oracle.truffle.tck.TruffleRunner;
-import com.oracle.truffle.tck.TruffleRunner.Inject;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import org.graalvm.polyglot.Source;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.llvm.test.interop.values.ArrayObject;
+import com.oracle.truffle.llvm.test.interop.values.StructObject;
+import com.oracle.truffle.tck.TruffleRunner;
+import com.oracle.truffle.tck.TruffleRunner.Inject;
+
 @RunWith(Parameterized.class)
 @Parameterized.UseParametersRunnerFactory(TruffleRunner.ParametersFactory.class)
-public final class NameBasedInteropTest {
+public final class NameBasedInteropTest extends InteropTestBase {
 
-    @ClassRule public static TruffleRunner.RunWithPolyglotRule runWithPolyglot = new TruffleRunner.RunWithPolyglotRule();
-
-    private static LanguageInfo llvmLanguage;
+    private static TruffleObject testLibrary;
 
     @BeforeClass
     public static void loadTestBitcode() {
-        File file = new File(TestOptions.TEST_SUITE_PATH, "interop/nameBasedInterop/O0_MEM2REG.bc");
-        Source source;
-        try {
-            source = Source.newBuilder("llvm", file).build();
-        } catch (IOException ex) {
-            throw new AssertionError(ex);
-        }
-        runWithPolyglot.getPolyglotContext().eval(source);
-
-        final Map<String, LanguageInfo> languages = runWithPolyglot.getTruffleTestEnv().getLanguages();
-        llvmLanguage = languages.get("llvm");
+        testLibrary = InteropTestBase.loadTestBitcodeInternal("nameBasedInterop");
     }
 
     @Parameters(name = "{0}")
@@ -98,60 +75,39 @@ public final class NameBasedInteropTest {
     @Parameter(0) public String name;
     @Parameter(1) public Object value;
 
-    public static class SulongTestNode extends RootNode {
-
-        private final TruffleObject function;
-        @Child private Node execute;
-
-        protected SulongTestNode(String fnName, int argCount) {
-            super(null);
-            function = (TruffleObject) runWithPolyglot.getTruffleTestEnv().lookupSymbol(llvmLanguage, fnName);
-            execute = Message.createExecute(argCount).createNode();
-        }
-
-        @Override
-        public Object execute(VirtualFrame frame) {
-            try {
-                return ForeignAccess.sendExecute(execute, function, frame.getArguments());
-            } catch (InteropException ex) {
-                throw new AssertionError(ex);
-            }
-        }
-    }
-
     public class GetStructNode extends SulongTestNode {
 
         public GetStructNode() {
-            super("getStruct" + name, 1);
+            super(testLibrary, "getStruct" + name, 1);
         }
     }
 
     @Test
     public void getStruct(@Inject(GetStructNode.class) CallTarget get) {
-        Map<String, Object> obj = makeStruct();
-        Object expected = obj.get("value" + name);
-        Object actual = get.call(JavaInterop.asTruffleObject(obj));
+        Map<String, Object> members = makeStruct();
+        Object expected = members.get("value" + name);
+        Object actual = get.call(new StructObject(members));
         Assert.assertEquals(expected, actual);
     }
 
     public class SetStructNode extends SulongTestNode {
 
         public SetStructNode() {
-            super("setStruct" + name, 2);
+            super(testLibrary, "setStruct" + name, 2);
         }
     }
 
     @Test
     public void setStruct(@Inject(SetStructNode.class) CallTarget set) {
-        Map<String, Object> obj = makeStruct();
-        set.call(JavaInterop.asTruffleObject(obj), value);
-        Assert.assertEquals(value, obj.get("value" + name));
+        Map<String, Object> members = makeStruct();
+        set.call(new StructObject(members), value);
+        Assert.assertEquals(value, members.get("value" + name));
     }
 
     public class GetArrayNode extends SulongTestNode {
 
         public GetArrayNode() {
-            super("getArray" + name, 2);
+            super(testLibrary, "getArray" + name, 2);
         }
     }
 
@@ -159,21 +115,21 @@ public final class NameBasedInteropTest {
     public void getArray(@Inject(GetArrayNode.class) CallTarget get) {
         Object[] arr = new Object[42];
         arr[3] = value;
-        Object actual = get.call(JavaInterop.asTruffleObject(arr), 3);
+        Object actual = get.call(new ArrayObject(arr), 3);
         Assert.assertEquals(value, actual);
     }
 
     public class SetArrayNode extends SulongTestNode {
 
         public SetArrayNode() {
-            super("setArray" + name, 3);
+            super(testLibrary, "setArray" + name, 3);
         }
     }
 
     @Test
     public void setArray(@Inject(SetArrayNode.class) CallTarget set) {
         Object[] arr = new Object[42];
-        set.call(JavaInterop.asTruffleObject(arr), 5, value);
+        set.call(new ArrayObject(arr), 5, value);
         Assert.assertEquals(value, arr[5]);
     }
 
@@ -188,4 +144,5 @@ public final class NameBasedInteropTest {
         values.put("valueD", 45.5);
         return values;
     }
+
 }
