@@ -56,9 +56,7 @@ public final class TruffleTypes {
     private final TypeMirror compilerDirectives;
     private final TypeMirror compilerAsserts;
     private final DeclaredType slowPath;
-    private final DeclaredType sourceSection;
     private final DeclaredType truffleOptions;
-    private final DeclaredType compilationFinal;
     private final TypeElement expectError;
 
     private final List<String> errors = new ArrayList<>();
@@ -77,14 +75,8 @@ public final class TruffleTypes {
         nodeInfoAnnotation = getRequired(context, NodeInfo.class);
         nodeInfoKind = getRequired(context, NodeInfo.Kind.class);
         slowPath = getRequired(context, SlowPath.class);
-        sourceSection = getRequired(context, SourceSection.class);
         truffleOptions = getRequired(context, TruffleOptions.class);
-        compilationFinal = getRequired(context, CompilationFinal.class);
         expectError = (TypeElement) getRequired(context, ExpectError.class).asElement();
-    }
-
-    public DeclaredType getCompilationFinal() {
-        return compilationFinal;
     }
 
     public TypeElement getExpectError() {
@@ -165,9 +157,5 @@ public final class TruffleTypes {
 
     public DeclaredType getSlowPath() {
         return slowPath;
-    }
-
-    public DeclaredType getSourceSection() {
-        return sourceSection;
     }
 }

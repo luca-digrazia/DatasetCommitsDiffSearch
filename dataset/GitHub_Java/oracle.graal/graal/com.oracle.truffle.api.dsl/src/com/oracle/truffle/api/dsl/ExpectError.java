@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -20,38 +22,17 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.dsl.test;
+package com.oracle.truffle.api.dsl;
 
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
+import java.lang.annotation.*;
 
-public class CompilerErrorTest {
+/**
+ * This annotation is internally known by the dsl processor and used to expect errors for testing
+ * purposes. This is not part of public API.
+ */
+@Retention(RetentionPolicy.RUNTIME)
+public @interface ExpectError {
 
-    abstract static class Visiblity01 extends ValueNode {
-
-        @Specialization
-        @SuppressWarnings("static-method")
-        @ExpectError("Method annotated with @Specialization must not be private.")
-        private Object s() {
-            return null;
-        }
-
-    }
-
-    @ExpectError("Nodes containing the @Specialization annotation cannot be private.")
-    private abstract static class Visiblity02 extends ValueNode {
-
-        @Specialization
-        public Object s() {
-            return null;
-        }
-
-    }
-
-    // assert no error
-    @ExpectError({})
-    private abstract static class Visiblity03 extends ValueNode {
-
-    }
+    String[] value();
 
 }

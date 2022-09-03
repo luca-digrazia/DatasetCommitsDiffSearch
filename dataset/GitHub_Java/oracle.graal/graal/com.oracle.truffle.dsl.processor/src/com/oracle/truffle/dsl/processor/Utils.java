@@ -423,8 +423,6 @@ public class Utils {
                 return getSimpleName(mirror);
             case ERROR:
                 throw new CompileErrorException("Type error " + mirror);
-            case EXECUTABLE:
-                return ((ExecutableType) mirror).toString();
             case NONE:
                 return "$none";
             default:
