@@ -22,28 +22,34 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
-import java.util.concurrent.*;
+import java.lang.ref.SoftReference;
 
-import junit.framework.Assert;
-
+import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.compiler.phases.ea.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.api.directives.GraalDirectives;
+import com.oracle.graal.compiler.test.TypeSystemTest;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.cfg.ControlFlowGraph;
+import com.oracle.graal.nodes.extended.BoxNode;
+import com.oracle.graal.nodes.extended.UnboxNode;
+import com.oracle.graal.nodes.java.LoadFieldNode;
+import com.oracle.graal.nodes.java.LoadIndexedNode;
+import com.oracle.graal.nodes.java.NewArrayNode;
+import com.oracle.graal.nodes.java.NewInstanceNode;
+import com.oracle.graal.nodes.java.StoreFieldNode;
+import com.oracle.graal.nodes.virtual.CommitAllocationNode;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
 
 /**
- * In these test cases the probability of all invokes is set to a high value, such that an InliningPhase should inline
- * them all. After that, the PartialEscapeAnalysisPhase is expected to remove all allocations and return the correct
+ * The PartialEscapeAnalysisPhase is expected to remove all allocations and return the correct
  * values.
  */
-public class PartialEscapeAnalysisTest extends GraalCompilerTest {
+public class PartialEscapeAnalysisTest extends EATestBase {
 
     public static class TestObject {
 
@@ -69,12 +75,12 @@ public class PartialEscapeAnalysisTest extends GraalCompilerTest {
 
     @Test
     public void test1() {
-        testMaterialize("test1Snippet", 0.25, 1);
+        testPartialEscapeAnalysis("test1Snippet", 0.25, 1);
     }
 
     @SuppressWarnings("all")
-    public static Object test1Snippet(int a, int b) {
-        TestObject obj = new TestObject(1, 2);
+    public static Object test1Snippet(int a, int b, Object x, Object y) {
+        TestObject2 obj = new TestObject2(x, y);
         if (a < 0) {
             if (b < 0) {
                 return obj;
@@ -88,18 +94,18 @@ public class PartialEscapeAnalysisTest extends GraalCompilerTest {
 
     @Test
     public void test2() {
-        testMaterialize("test2Snippet", 1.5, 3, LoadIndexedNode.class);
+        testPartialEscapeAnalysis("test2Snippet", 1.5, 3, LoadIndexedNode.class);
     }
 
-    public static Object test2Snippet(int a) {
-        TestObject2 obj = new TestObject2(1, 2);
-        obj.x = new TestObject2(obj, 3);
+    public static Object test2Snippet(int a, Object x, Object y, Object z) {
+        TestObject2 obj = new TestObject2(x, y);
+        obj.x = new TestObject2(obj, z);
         if (a < 0) {
             ((TestObject2) obj.x).y = null;
             obj.y = null;
             return obj;
         } else {
-            ((TestObject2) obj.x).y = null;
+            ((TestObject2) obj.x).y = Integer.class;
             ((TestObject2) obj.x).x = null;
             return obj.x;
         }
@@ -107,7 +113,7 @@ public class PartialEscapeAnalysisTest extends GraalCompilerTest {
 
     @Test
     public void test3() {
-        testMaterialize("test3Snippet", 0.5, 1, StoreFieldNode.class, LoadFieldNode.class);
+        testPartialEscapeAnalysis("test3Snippet", 0.5, 1, StoreFieldNode.class, LoadFieldNode.class);
     }
 
     public static Object test3Snippet(int a) {
@@ -123,48 +129,170 @@ public class PartialEscapeAnalysisTest extends GraalCompilerTest {
         }
     }
 
-    @SafeVarargs
-    final void testMaterialize(final String snippet, double expectedProbability, int expectedCount, Class<? extends Node>... invalidNodeClasses) {
-        StructuredGraph result = processMethod(snippet);
-        Assert.assertTrue("partial escape analysis should have removed all NewInstanceNode allocations", result.getNodes(NewInstanceNode.class).isEmpty());
-        Assert.assertTrue("partial escape analysis should have removed all NewObjectArrayNode allocations", result.getNodes(NewObjectArrayNode.class).isEmpty());
-        Assert.assertTrue("partial escape analysis should have removed all NewPrimitiveArrayNode allocations", result.getNodes(NewPrimitiveArrayNode.class).isEmpty());
-        double probabilitySum = 0;
-        int materializeCount = 0;
-        for (MaterializeObjectNode materialize : result.getNodes(MaterializeObjectNode.class)) {
-            probabilitySum += materialize.probability();
-            materializeCount++;
+    @Test
+    public void testArrayCopy() {
+        testPartialEscapeAnalysis("testArrayCopySnippet", 0, 0);
+    }
+
+    public static Object[] array = new Object[]{1, 2, 3, 4, 5, "asdf", "asdf"};
+
+    public static Object testArrayCopySnippet(int a) {
+        Object[] tmp = new Object[]{a != 1 ? array[a] : null};
+        Object[] tmp2 = new Object[5];
+        System.arraycopy(tmp, 0, tmp2, 4, 1);
+        return tmp2[4];
+    }
+
+    @Test
+    @Ignore
+    public void testCache() {
+        testPartialEscapeAnalysis("testCacheSnippet", 0.75, 1);
+    }
+
+    public static class CacheKey {
+
+        private final int idx;
+        private final Object ref;
+
+        public CacheKey(int idx, Object ref) {
+            this.idx = idx;
+            this.ref = ref;
         }
-        Assert.assertEquals("unexpected number of MaterializeObjectNodes", expectedCount, materializeCount);
-        Assert.assertEquals("unexpected probability of MaterializeObjectNodes", expectedProbability, probabilitySum, 0.01);
-        for (Node node : result.getNodes()) {
-            for (Class<? extends Node> clazz : invalidNodeClasses) {
-                Assert.assertFalse("instance of invalid class: " + clazz.getSimpleName(), clazz.isInstance(node) && node.usages().isNotEmpty());
-            }
+
+        @Override
+        public int hashCode() {
+            return 31 * idx + ref.hashCode();
+        }
+
+        public synchronized boolean equals(CacheKey other) {
+            return idx == other.idx && ref == other.ref;
         }
     }
 
-    private StructuredGraph processMethod(final String snippet) {
-        return Debug.scope(getClass().getSimpleName(), new Callable<StructuredGraph>() {
-            @Override
-            public StructuredGraph call() throws Exception {
-                StructuredGraph graph = parse(snippet);
-                new ComputeProbabilityPhase().apply(graph);
-                for (Invoke n : graph.getInvokes()) {
-                    n.node().setProbability(100000);
-                }
-                new InliningPhase(null, runtime(), null, null, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
-//                TypeSystemTest.outputGraph(graph, "before EscapeAnalysis " + snippet);
-                new PartialEscapeAnalysisPhase(null, runtime(), null).apply(graph);
-//                TypeSystemTest.outputGraph(graph, "after EscapeAnalysis " + snippet);
-                new CullFrameStatesPhase().apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
-//                TypeSystemTest.outputGraph(graph, "after CullFrameStates " + snippet);
-                return graph;
+    public static CacheKey cacheKey = null;
+    public static Object value = null;
+
+    private static native Object createValue(CacheKey key);
+
+    public static Object testCacheSnippet(int idx, Object ref) {
+        CacheKey key = new CacheKey(idx, ref);
+        if (!key.equals(cacheKey)) {
+            cacheKey = key;
+            value = createValue(key);
+        }
+        return value;
+    }
+
+    public static int testReference1Snippet(Object a) {
+        SoftReference<Object> softReference = new SoftReference<>(a);
+        if (softReference.get().hashCode() == 0) {
+            return 1;
+        } else {
+            return 2;
+        }
+    }
+
+    @Test
+    public void testReference1() {
+        prepareGraph("testReference1Snippet", false);
+        assertDeepEquals(1, graph.getNodes().filter(NewInstanceNode.class).count());
+    }
+
+    public static int testCanonicalizeSnippet(int v) {
+        CacheKey key = new CacheKey(v, null);
+
+        CacheKey key2;
+        if (key.idx == v) {
+            key2 = new CacheKey(v, null);
+        } else {
+            key2 = null;
+        }
+        return key2.idx;
+    }
+
+    @Test
+    public void testCanonicalize() {
+        prepareGraph("testCanonicalizeSnippet", false);
+        assertTrue(graph.getNodes().filter(ReturnNode.class).count() == 1);
+        assertTrue(graph.getNodes().filter(ReturnNode.class).first().result() == graph.getParameter(0));
+    }
+
+    public static int testBoxLoopSnippet(int n) {
+        Integer sum = 0;
+        for (Integer i = 0; i < n; i++) {
+            if (sum == null) {
+                sum = null;
+            } else {
+                sum += i;
             }
-        });
+        }
+        return sum;
+    }
+
+    @Test
+    public void testBoxLoop() {
+        testPartialEscapeAnalysis("testBoxLoopSnippet", 0, 0, BoxNode.class, UnboxNode.class);
+    }
+
+    static volatile int staticField;
+    static boolean executedDeoptimizeDirective;
+
+    static class A {
+        String field;
+    }
+
+    public static Object deoptWithVirtualObjectsSnippet() {
+        A a = new A();
+        a.field = "field";
+
+        staticField = 5;
+        if (staticField == 5) {
+            GraalDirectives.deoptimize();
+            executedDeoptimizeDirective = true;
+        }
+
+        return a.field;
+    }
+
+    /**
+     * Tests deoptimizing with virtual objects in debug info.
+     */
+    @Test
+    public void testDeoptWithVirtualObjects() {
+        assertFalse(executedDeoptimizeDirective);
+        test("deoptWithVirtualObjectsSnippet");
+        assertTrue(executedDeoptimizeDirective);
+    }
+
+    @SafeVarargs
+    protected final void testPartialEscapeAnalysis(String snippet, double expectedProbability, int expectedCount, Class<? extends Node>... invalidNodeClasses) {
+        prepareGraph(snippet, false);
+        for (AbstractMergeNode merge : graph.getNodes(AbstractMergeNode.TYPE)) {
+            merge.setStateAfter(null);
+        }
+        new DeadCodeEliminationPhase().apply(graph);
+        new CanonicalizerPhase().apply(graph, context);
+        try {
+            Assert.assertTrue("partial escape analysis should have removed all NewInstanceNode allocations", graph.getNodes().filter(NewInstanceNode.class).isEmpty());
+            Assert.assertTrue("partial escape analysis should have removed all NewArrayNode allocations", graph.getNodes().filter(NewArrayNode.class).isEmpty());
+
+            ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, false, false);
+            double probabilitySum = 0;
+            int materializeCount = 0;
+            for (CommitAllocationNode materialize : graph.getNodes().filter(CommitAllocationNode.class)) {
+                probabilitySum += cfg.blockFor(materialize).probability() * materialize.getVirtualObjects().size();
+                materializeCount += materialize.getVirtualObjects().size();
+            }
+            Assert.assertEquals("unexpected number of MaterializeObjectNodes", expectedCount, materializeCount);
+            Assert.assertEquals("unexpected probability of MaterializeObjectNodes", expectedProbability, probabilitySum, 0.01);
+            for (Node node : graph.getNodes()) {
+                for (Class<? extends Node> clazz : invalidNodeClasses) {
+                    Assert.assertFalse("instance of invalid class: " + clazz.getSimpleName(), clazz.isInstance(node) && node.usages().isNotEmpty());
+                }
+            }
+        } catch (AssertionError e) {
+            TypeSystemTest.outputGraph(graph, snippet + ": " + e.getMessage());
+            throw e;
+        }
     }
 }
