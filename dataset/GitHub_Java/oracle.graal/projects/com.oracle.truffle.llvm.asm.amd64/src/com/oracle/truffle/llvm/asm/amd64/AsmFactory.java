@@ -217,8 +217,6 @@ import com.oracle.truffle.llvm.nodes.memory.load.LLVMI16LoadNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.load.LLVMI32LoadNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.load.LLVMI64LoadNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.load.LLVMI8LoadNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.load.LLVMLoadExpressionNodeGen;
-import com.oracle.truffle.llvm.nodes.memory.load.LLVMLoadNode;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMAddressStoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI16StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI32StoreNodeGen;
@@ -1965,23 +1963,17 @@ class AsmFactory {
             FrameSlot frame = getArgumentSlot(op.getIndex(), type);
             if (info.isMemory()) {
                 if (type instanceof PointerType) {
-                    LLVMLoadNode load = LLVMAddressDirectLoadNodeGen.create();
-                    return LLVMLoadExpressionNodeGen.create(load, LLVMAddressReadNodeGen.create(frame));
+                    return LLVMAddressDirectLoadNodeGen.create(LLVMAddressReadNodeGen.create(frame));
                 }
-                LLVMLoadNode load;
                 switch (((PrimitiveType) type).getPrimitiveKind()) {
                     case I8:
-                        load = LLVMI8LoadNodeGen.create();
-                        return LLVMLoadExpressionNodeGen.create(load, LLVMAddressReadNodeGen.create(frame));
+                        return LLVMI8LoadNodeGen.create(LLVMAddressReadNodeGen.create(frame));
                     case I16:
-                        load = LLVMI16LoadNodeGen.create();
-                        return LLVMLoadExpressionNodeGen.create(load, LLVMAddressReadNodeGen.create(frame));
+                        return LLVMI16LoadNodeGen.create(LLVMAddressReadNodeGen.create(frame));
                     case I32:
-                        load = LLVMI32LoadNodeGen.create();
-                        return LLVMLoadExpressionNodeGen.create(load, LLVMAddressReadNodeGen.create(frame));
+                        return LLVMI32LoadNodeGen.create(LLVMAddressReadNodeGen.create(frame));
                     case I64:
-                        load = LLVMI64LoadNodeGen.create();
-                        return LLVMLoadExpressionNodeGen.create(load, LLVMAddressReadNodeGen.create(frame));
+                        return LLVMI64LoadNodeGen.create(LLVMAddressReadNodeGen.create(frame));
                     default:
                         throw new AsmParseException("unsupported operand type: " + type);
                 }
@@ -2023,20 +2015,15 @@ class AsmFactory {
             }
         } else if (operand instanceof AsmMemoryOperand) {
             LLVMExpressionNode address = getOperandAddress(operand);
-            LLVMLoadNode load;
             switch (((PrimitiveType) type).getPrimitiveKind()) {
                 case I8:
-                    load = LLVMI8LoadNodeGen.create();
-                    return LLVMLoadExpressionNodeGen.create(load, address);
+                    return LLVMI8LoadNodeGen.create(address);
                 case I16:
-                    load = LLVMI16LoadNodeGen.create();
-                    return LLVMLoadExpressionNodeGen.create(load, address);
+                    return LLVMI16LoadNodeGen.create(address);
                 case I32:
-                    load = LLVMI32LoadNodeGen.create();
-                    return LLVMLoadExpressionNodeGen.create(load, address);
+                    return LLVMI32LoadNodeGen.create(address);
                 case I64:
-                    load = LLVMI64LoadNodeGen.create();
-                    return LLVMLoadExpressionNodeGen.create(load, address);
+                    return LLVMI64LoadNodeGen.create(address);
                 default:
                     throw new AsmParseException("unsupported operand type: " + type);
             }
