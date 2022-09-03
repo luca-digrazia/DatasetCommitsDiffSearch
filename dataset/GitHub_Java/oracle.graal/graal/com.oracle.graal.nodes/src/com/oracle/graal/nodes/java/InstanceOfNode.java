@@ -35,10 +35,15 @@ import com.oracle.max.cri.ri.*;
  */
 public final class InstanceOfNode extends BooleanNode implements Canonicalizable, LIRLowerable, ConditionalTypeFeedbackProvider, TypeCanonicalizable {
 
+    private final boolean negated;
     @Input private ValueNode object;
     @Input private ValueNode targetClassInstruction;
     private final RiResolvedType targetClass;
     private final RiTypeProfile profile;
+
+    public boolean negated() {
+        return negated;
+    }
 
     /**
      * Constructs a new InstanceOfNode.
@@ -47,16 +52,17 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
      * @param targetClass the class which is the target of the instanceof check
      * @param object the instruction producing the object input to this instruction
      */
-    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object) {
-        this(targetClassInstruction, targetClass, object, null);
+    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, boolean negated) {
+        this(targetClassInstruction, targetClass, object, null, negated);
     }
 
-    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiTypeProfile profile) {
-        super(StampFactory.condition());
+    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiTypeProfile profile, boolean negated) {
+        super(StampFactory.illegal());
         this.targetClassInstruction = targetClassInstruction;
         this.targetClass = targetClass;
         this.object = object;
         this.profile = profile;
+        this.negated = negated;
         assert targetClass != null;
     }
 
@@ -68,40 +74,40 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
     public ValueNode canonical(CanonicalizerTool tool) {
         assert object() != null : this;
 
-        ObjectStamp stamp = object().objectStamp();
-        RiResolvedType type = stamp.type();
-
-        if (stamp.isExactType()) {
-            boolean subType = type.isSubtypeOf(targetClass());
+        RiResolvedType exact = object().exactType();
+        if (exact != null) {
+            boolean subType = exact.isSubtypeOf(targetClass());
 
             if (subType) {
-                if (stamp.nonNull()) {
-                    // the instanceOf matches, so return true
-                    return ConstantNode.forBoolean(true, graph());
+                if (object().stamp().nonNull()) {
+                    // the instanceOf matches, so return true (or false, for the negated case)
+                    return ConstantNode.forBoolean(!negated, graph());
                 } else {
-                    // the instanceof matches if the object is non-null, so return true depending on the null-ness.
-                    negateUsages();
-                    return graph().unique(new IsNullNode(object()));
+                    // the instanceof matches if the object is non-null, so return true (or false, for the negated case) depending on the null-ness.
+                    return graph().unique(new NullCheckNode(object(), negated));
                 }
             } else {
                 // since this type check failed for an exact type we know that it can never succeed at run time.
                 // we also don't care about null values, since they will also make the check fail.
-                return ConstantNode.forBoolean(false, graph());
+                // so return false (or true, for the negated case)
+                return ConstantNode.forBoolean(negated, graph());
             }
-        } else if (type != null) {
-            boolean subType = type.isSubtypeOf(targetClass());
+        } else {
+            RiResolvedType declared = object().declaredType();
+            if (declared != null) {
+                boolean subType = declared.isSubtypeOf(targetClass());
 
-            if (subType) {
-                if (stamp.nonNull()) {
-                    // the instanceOf matches, so return true
-                    return ConstantNode.forBoolean(true, graph());
+                if (subType) {
+                    if (object().stamp().nonNull()) {
+                        // the instanceOf matches, so return true (or false, for the negated case)
+                        return ConstantNode.forBoolean(!negated, graph());
+                    } else {
+                        // the instanceof matches if the object is non-null, so return true (or false, for the negated case) depending on the null-ness.
+                        return graph().unique(new NullCheckNode(object(), negated));
+                    }
                 } else {
-                    // the instanceof matches if the object is non-null, so return true depending on the null-ness.
-                    negateUsages();
-                    return graph().unique(new IsNullNode(object()));
+                    // since the subtype comparison was only performed on a declared type we don't really know if it might be true at run time...
                 }
-            } else {
-                // since the subtype comparison was only performed on a declared type we don't really know if it might be true at run time...
             }
         }
 
@@ -109,31 +115,49 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
         if (constant != null) {
             assert constant.kind == CiKind.Object;
             if (constant.isNull()) {
-                return ConstantNode.forBoolean(false, graph());
+                return ConstantNode.forBoolean(negated, graph());
             } else {
-                assert false : "non-null constants are always expected to provide an exact type";
+                assert false : "non-null constants are always expected to provide an exactType";
             }
         }
         return this;
     }
 
     @Override
+    public BooleanNode negate() {
+        return graph().unique(new InstanceOfNode(targetClassInstruction(), targetClass(), object(), profile(), !negated));
+    }
+
+    @Override
     public void typeFeedback(TypeFeedbackTool tool) {
-        tool.addObject(object()).declaredType(targetClass(), true);
+        if (negated) {
+            tool.addObject(object()).notDeclaredType(targetClass(), true);
+        } else {
+            tool.addObject(object()).declaredType(targetClass(), true);
+        }
+    }
+
+    @Override
+    public String toString(Verbosity verbosity) {
+        if (verbosity == Verbosity.Name && negated) {
+            return "!" + super.toString(Verbosity.Name);
+        } else {
+            return super.toString(verbosity);
+        }
     }
 
     @Override
     public Result canonical(TypeFeedbackTool tool) {
         ObjectTypeQuery query = tool.queryObject(object());
         if (query.constantBound(Condition.EQ, CiConstant.NULL_OBJECT)) {
-            return new Result(ConstantNode.forBoolean(false, graph()), query);
+            return new Result(ConstantNode.forBoolean(negated, graph()), query);
         } else if (targetClass() != null) {
             if (query.notDeclaredType(targetClass())) {
-                return new Result(ConstantNode.forBoolean(false, graph()), query);
+                return new Result(ConstantNode.forBoolean(negated, graph()), query);
             }
             if (query.constantBound(Condition.NE, CiConstant.NULL_OBJECT)) {
                 if (query.declaredType(targetClass())) {
-                    return new Result(ConstantNode.forBoolean(true, graph()), query);
+                    return new Result(ConstantNode.forBoolean(!negated, graph()), query);
                 }
             }
         }

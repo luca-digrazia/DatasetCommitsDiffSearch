@@ -90,7 +90,7 @@ public class GraalCompiler {
                 });
                 final FrameMap frameMap = Debug.scope("BackEnd", lir, new Callable<FrameMap>() {
                     public FrameMap call() {
-                        return emitLIR(lir, graph, method, assumptions);
+                        return emitLIR(lir, graph, method);
                     }
                 });
                 return Debug.scope("CodeGen", frameMap, new Callable<CiTargetMethod>() {
@@ -169,9 +169,12 @@ public class GraalCompiler {
         }
 
         graph.mark();
-        new LoweringPhase(runtime, assumptions).apply(graph);
+        new LoweringPhase(runtime).apply(graph);
         new CanonicalizerPhase(target, runtime, assumptions, true, null).apply(graph);
 
+        if (GraalOptions.CullFrameStates) {
+            new CullFrameStatesPhase().apply(graph);
+        }
         if (GraalOptions.Lower) {
             new FloatingReadPhase().apply(graph);
             if (GraalOptions.OptGVN) {
@@ -232,9 +235,9 @@ public class GraalCompiler {
         });
     }
 
-    public FrameMap emitLIR(final LIR lir, StructuredGraph graph, final RiResolvedMethod method, CiAssumptions assumptions) {
+    public FrameMap emitLIR(final LIR lir, StructuredGraph graph, final RiResolvedMethod method) {
         final FrameMap frameMap = backend.newFrameMap(runtime.getRegisterConfig(method));
-        final LIRGenerator lirGenerator = backend.newLIRGenerator(graph, frameMap, method, lir, xir, assumptions);
+        final LIRGenerator lirGenerator = backend.newLIRGenerator(graph, frameMap, method, lir, xir);
 
         Debug.scope("LIRGen", lirGenerator, new Runnable() {
             public void run() {
