@@ -26,21 +26,14 @@ import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.*;
 import static com.oracle.graal.java.BytecodeParser.Options.*;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
+import static com.oracle.jvmci.meta.MetaUtil.*;
 import static java.lang.String.*;
-import static jdk.internal.jvmci.meta.MetaUtil.*;
 
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
-import jdk.internal.jvmci.options.OptionValue.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.replacements.*;
@@ -60,6 +53,13 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.word.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.options.*;
+import com.oracle.jvmci.options.OptionValue.OverrideScope;
 
 public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
 
@@ -327,8 +327,8 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
             if (plugin != null) {
                 if (!plugin.inlineOnly() || invokeBci >= 0) {
                     if (plugin instanceof MethodSubstitutionPlugin) {
-                        MethodSubstitutionPlugin msPlugin = (MethodSubstitutionPlugin) plugin;
-                        substitute = msPlugin.getSubstitute(providers.getMetaAccess());
+                        MethodSubstitutionPlugin msplugin = (MethodSubstitutionPlugin) plugin;
+                        substitute = msplugin.getSubstitute(providers.getMetaAccess());
                     } else {
                         StructuredGraph graph = new IntrinsicGraphBuilder(providers.getMetaAccess(), providers.getConstantReflection(), providers.getStampProvider(), original, invokeBci).buildGraph(plugin);
                         if (graph != null) {
@@ -558,8 +558,6 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
 
             // They will also never evolve or have breakpoints set in them
             graph.disableInlinedMethodRecording();
-            // They are not user code so they do not participate in unsafe access tracking
-            graph.disableUnsafeAccessTracking();
 
             try (Scope s = Debug.scope("buildInitialGraph", graph)) {
                 MetaAccessProvider metaAccess = replacements.providers.getMetaAccess();
@@ -684,11 +682,6 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
     }
 
     public ResolvedJavaMethod getSubstitutionMethod(ResolvedJavaMethod original) {
-        InvocationPlugin plugin = graphBuilderPlugins.getInvocationPlugins().lookupInvocation(original);
-        if (plugin instanceof MethodSubstitutionPlugin) {
-            MethodSubstitutionPlugin msPlugin = (MethodSubstitutionPlugin) plugin;
-            return msPlugin.getSubstitute(providers.getMetaAccess());
-        }
         ClassReplacements cr = getClassReplacements(original.getDeclaringClass().getName());
         return cr == null ? null : cr.methodSubstitutions.get(original);
     }
