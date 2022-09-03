@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.extended.*;
 
 /**
@@ -30,10 +31,13 @@ import com.oracle.graal.nodes.extended.*;
  * {@code UnsafeLoadNode}). The return value of the read is passed to the snippet implementing the
  * read barrier and consequently is added to the SATB queue if the concurrent marker is enabled.
  */
-public class G1ReferentFieldReadBarrier extends WriteBarrier {
+public class G1ReferentFieldReadBarrier extends WriteBarrier implements DeoptimizingNode {
 
     @Input private ValueNode expectedObject;
     private final boolean doLoad;
+
+    @Input private FrameState deoptimizationState;
+    private final boolean nullCheck;
 
     public ValueNode getExpectedObject() {
         return expectedObject;
@@ -43,9 +47,35 @@ public class G1ReferentFieldReadBarrier extends WriteBarrier {
         return doLoad;
     }
 
-    public G1ReferentFieldReadBarrier(ValueNode object, ValueNode expectedObject, LocationNode location, boolean doLoad) {
+    public boolean getNullCheck() {
+        return nullCheck;
+    }
+
+    public G1ReferentFieldReadBarrier(ValueNode object, ValueNode expectedObject, LocationNode location, boolean doLoad, boolean nullCheck) {
         super(object, location, true);
         this.doLoad = doLoad;
+        this.nullCheck = nullCheck;
         this.expectedObject = expectedObject;
+    }
+
+    @Override
+    public boolean canDeoptimize() {
+        return nullCheck;
+    }
+
+    @Override
+    public FrameState getDeoptimizationState() {
+        return deoptimizationState;
+    }
+
+    @Override
+    public void setDeoptimizationState(FrameState state) {
+        updateUsages(deoptimizationState, state);
+        deoptimizationState = state;
+    }
+
+    @Override
+    public DeoptimizationReason getDeoptimizationReason() {
+        return DeoptimizationReason.NullCheckException;
     }
 }
