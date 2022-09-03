@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.replacements.nodes;
 
+import static jdk.vm.ci.meta.LocationIdentity.any;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LocationIdentity;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-import static com.oracle.graal.compiler.common.LocationIdentity.any;
-
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.graph.NodeClass;
@@ -128,12 +127,10 @@ public class BasicArrayCopyNode extends AbstractMemoryCheckpoint implements Virt
         return any();
     }
 
-    @Override
     public MemoryNode getLastLocationAccess() {
         return lastLocationAccess;
     }
 
-    @Override
     public void setLastLocationAccess(MemoryNode lla) {
         updateUsagesInterface(lastLocationAccess, lla);
         lastLocationAccess = lla;
@@ -236,7 +233,7 @@ public class BasicArrayCopyNode extends AbstractMemoryCheckpoint implements Virt
                         return;
                     }
                     for (int i = 0; i < len; i++) {
-                        LoadIndexedNode load = new LoadIndexedNode(graph().getAssumptions(), srcAlias, ConstantNode.forInt(i + srcPosInt, graph()), destComponentType.getJavaKind());
+                        LoadIndexedNode load = new LoadIndexedNode(srcAlias, ConstantNode.forInt(i + srcPosInt, graph()), destComponentType.getJavaKind());
                         tool.addNode(load);
                         tool.setVirtualEntry(destVirtual, destPosInt + i, load, false);
                     }
@@ -246,23 +243,19 @@ public class BasicArrayCopyNode extends AbstractMemoryCheckpoint implements Virt
         }
     }
 
-    @Override
     public boolean canDeoptimize() {
         return true;
     }
 
-    @Override
     public FrameState stateDuring() {
         return stateDuring;
     }
 
-    @Override
     public void setStateDuring(FrameState stateDuring) {
         updateUsages(this.stateDuring, stateDuring);
         this.stateDuring = stateDuring;
     }
 
-    @Override
     public void computeStateDuring(FrameState currentStateAfter) {
         FrameState newStateDuring = currentStateAfter.duplicateModifiedDuringCall(getBci(), asNode().getStackKind());
         setStateDuring(newStateDuring);
