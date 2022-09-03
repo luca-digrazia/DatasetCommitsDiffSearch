@@ -529,77 +529,57 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             NodeData node = specialization.getNode();
             TypeSystemData typeSystem = node.getTypeSystem();
 
-            ExecutableTypeData castedType = node.findExecutableType(type);
+            if (!type.isVoid()) {
+                builder.startStatement().type(specialization.getReturnType().getActualType()).string(" result").end();
+            }
+
             TypeData primaryType = specialization.getReturnType().getActualTypeData(typeSystem);
             ExecutableTypeData execType = specialization.getNode().findExecutableType(primaryType);
 
-            boolean needsTry = execType.hasUnexpectedValue(getContext());
-            boolean returnVoid = type.isVoid();
+            boolean needsTry = !specialization.getReturnType().getActualTypeData(typeSystem).isGeneric();
+            if (needsTry) {
+                builder.startTryBlock();
+            }
 
-            CodeTree primaryExecuteCall = null;
-
-            CodeTreeBuilder executeBuilder = CodeTreeBuilder.createBuilder();
-            buildExecute(executeBuilder, null, execType);
-            primaryExecuteCall = executeBuilder.getRoot();
+            builder.startStatement();
+            if (!type.isVoid()) {
+                builder.string("result = ");
+            }
+            buildExecute(builder, null, execType);
+            builder.end(); // statement
 
             if (needsTry) {
-                if (!returnVoid) {
-                    builder.declaration(primaryType.getPrimitiveType(), "value");
-                }
-                builder.startTryBlock();
-
-                if (returnVoid) {
-                    builder.statement(primaryExecuteCall);
-                } else {
-                    builder.startStatement();
-                    builder.string("value = ");
-                    builder.tree(primaryExecuteCall);
-                    builder.end();
-                }
-
                 builder.end().startCatchBlock(getUnexpectedValueException(), "ex");
-                if (returnVoid) {
+
+                if (!type.isVoid()) {
+                    builder.startReturn();
+                    if (!type.isGeneric()) {
+                        startCallTypeSystemMethod(getContext(), builder, node, TypeSystemCodeGenerator.expectTypeMethodName(type));
+                    }
+
+                    builder.string("ex.getResult()");
+
+                    if (!type.isGeneric()) {
+                        builder.end().end();
+                    }
+                    builder.end(); // return
+                } else {
                     builder.string("// ignore").newLine();
-                } else {
-                    builder.startReturn();
-                    builder.tree(castPrimaryExecute(node, castedType, CodeTreeBuilder.singleString("ex.getResult()")));
-                    builder.end();
-                }
-                builder.end();
-
-                if (!returnVoid) {
-                    builder.startReturn();
-                    builder.tree(castPrimaryExecute(node, castedType, CodeTreeBuilder.singleString("value")));
-                    builder.end();
-                }
-            } else {
-                if (returnVoid) {
-                    builder.statement(primaryExecuteCall);
-                } else {
-                    builder.startReturn();
-                    builder.tree(castPrimaryExecute(node, castedType, primaryExecuteCall));
-                    builder.end();
                 }
             }
-        }
+            builder.end(); // try/catch
 
-        private CodeTree castPrimaryExecute(NodeData node, ExecutableTypeData castedType, CodeTree value) {
-            if (castedType.getType().isVoid()) {
-                return value;
+            if (!type.isVoid()) {
+                builder.startReturn();
+                if (!type.isGeneric()) {
+                    startCallTypeSystemMethod(getContext(), builder, node, TypeSystemCodeGenerator.expectTypeMethodName(type));
+                }
+                builder.string("result");
+                if (!type.isGeneric()) {
+                    builder.end().end();
+                }
+                builder.end(); // return
             }
-            if (castedType.getType().isGeneric()) {
-                return value;
-            }
-
-            CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
-            if (castedType.hasUnexpectedValue(getContext())) {
-                startCallTypeSystemMethod(getContext(), builder, node, TypeSystemCodeGenerator.expectTypeMethodName(castedType.getType()));
-            } else {
-                startCallTypeSystemMethod(getContext(), builder, node, TypeSystemCodeGenerator.asTypeMethodName(castedType.getType()));
-            }
-            builder.tree(value);
-            builder.end().end();
-            return builder.getRoot();
         }
 
         private void buildFunctionalExecuteMethod(CodeTreeBuilder builder, SpecializationData specialization) {
@@ -814,22 +794,16 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             addValueParameterNames(specializeCall, nextSpecialization.getNode().getGenericSpecialization(), exceptionSpec != null ? exceptionSpec.getName() : null, true);
             specializeCall.end().end();
 
-            TypeData expectedType = currentSpecialization.getReturnType().getActualTypeData(currentSpecialization.getNode().getTypeSystem());
             if (canThrowUnexpected) {
                 builder.startReturn();
+                TypeData expectedType = currentSpecialization.getReturnType().getActualTypeData(currentSpecialization.getNode().getTypeSystem());
                 startCallTypeSystemMethod(context, builder, currentSpecialization.getNode(), TypeSystemCodeGenerator.expectTypeMethodName(expectedType));
                 builder.tree(specializeCall.getRoot());
                 builder.end().end();
                 builder.end(); // return
             } else {
                 builder.startReturn();
-                if (!expectedType.isVoid() && !expectedType.isGeneric()) {
-                    startCallTypeSystemMethod(context, builder, currentSpecialization.getNode(), TypeSystemCodeGenerator.asTypeMethodName(expectedType));
-                    builder.tree(specializeCall.getRoot());
-                    builder.end().end();
-                } else {
-                    builder.tree(specializeCall.getRoot());
-                }
+                builder.tree(specializeCall.getRoot());
                 builder.end();
             }
 

@@ -233,9 +233,10 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
         return new ActualParameter(specification, resolvedType);
     }
 
-    protected List<TypeDef> createTypeDefinitions(ParameterSpec returnType, List<? extends ParameterSpec> parameters) {
+    protected static List<TypeDef> createTypeDefinitions(ParameterSpec returnType, List<? extends ParameterSpec> parameters) {
         List<TypeDef> typeDefs = new ArrayList<>();
 
+        TypeMirror[] types = returnType.getAllowedTypes();
         List<ParameterSpec> allParams = new ArrayList<>();
         allParams.add(returnType);
         allParams.addAll(parameters);
@@ -243,11 +244,10 @@ public abstract class TemplateMethodParser<T extends Template, E extends Templat
         int defIndex = 0;
         for (ParameterSpec spec : allParams) {
             TypeMirror[] allowedTypes = spec.getAllowedTypes();
-            TypeMirror[] types = spec.getAllowedTypes();
             if (types != null && allowedTypes.length > 1) {
                 TypeDef foundDef = null;
                 for (TypeDef def : typeDefs) {
-                    if (Arrays.equals(allowedTypes, def.getTypes())) {
+                    if (Arrays.equals(spec.getAllowedTypes(), def.getTypes())) {
                         foundDef = def;
                         break;
                     }

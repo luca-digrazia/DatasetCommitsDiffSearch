@@ -33,13 +33,9 @@ public class CodeAnnotationValue implements AnnotationValue {
 
     public CodeAnnotationValue(Object value) {
         Objects.requireNonNull(value);
-        if ((value instanceof AnnotationMirror) || (value instanceof List< ? >)
-                        || (value instanceof Boolean) || (value instanceof Byte)
-                        || (value instanceof Character) || (value instanceof Double)
-                        || (value instanceof VariableElement) || (value instanceof Float)
-                        || (value instanceof Integer) || (value instanceof Long)
-                        || (value instanceof Short) || (value instanceof String)
-                        || (value instanceof TypeMirror)) {
+        if ((value instanceof AnnotationMirror) || (value instanceof List<?>) || (value instanceof Boolean) || (value instanceof Byte) || (value instanceof Character) || (value instanceof Double) ||
+                        (value instanceof VariableElement) || (value instanceof Float) || (value instanceof Integer) || (value instanceof Long) || (value instanceof Short) ||
+                        (value instanceof String) || (value instanceof TypeMirror)) {
             this.value = value;
         } else {
             throw new IllegalArgumentException("Invalid annotation value type " + value.getClass().getName());
@@ -56,8 +52,8 @@ public class CodeAnnotationValue implements AnnotationValue {
     public <R, P> R accept(AnnotationValueVisitor<R, P> v, P p) {
         if (value instanceof AnnotationMirror) {
             return v.visitAnnotation((AnnotationMirror) value, p);
-        } else if (value instanceof List< ? >) {
-            return v.visitArray((List< ? extends AnnotationValue>) value, p);
+        } else if (value instanceof List<?>) {
+            return v.visitArray((List<? extends AnnotationValue>) value, p);
         } else if (value instanceof Boolean) {
             return v.visitBoolean((boolean) value, p);
         } else if (value instanceof Byte) {
