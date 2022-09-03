@@ -42,29 +42,17 @@ public class DiscoverableReferenceProcessing {
      * Public methods for collectors.
      */
     public static void discoverDiscoverableReference(Object object) {
-        final Object obj = KnownIntrinsics.convertUnknownValue(object, Object.class);
-        /* TODO: What's the cost of this type test, since it will be a concrete subtype? */
+        final Log trace = Log.noopLog();
+        /* TODO: What's the cost of this type test, since o will be a concrete subtype? */
+        Object obj = KnownIntrinsics.convertUnknownValue(object, Object.class);
         if (obj instanceof DiscoverableReference) {
-            final Log trace = Log.noopLog().string("[DiscoverableReference.discoverDiscoverableReference:");
+            /* Add this DiscoverableReference to the discovered list. */
             final DiscoverableReference dr = (DiscoverableReference) obj;
-            trace.string("  dr: ").object(dr);
-            /*
-             * If the DiscoverableReference has been allocated but not initialized, do not do
-             * anything with it. The referent will be strongly-reachable because it is on the call
-             * stack to the constructor so the DiscoveredReference does not need to be put on the
-             * discovered list.
-             */
-            if (dr.isInitialized()) {
-                /* Add this DiscoverableReference to the discovered list. */
-                if (trace.isEnabled()) {
-                    trace.string("  referent: ").hex(DiscoverableReference.TestingBackDoor.getReferentPointer(dr));
-                }
-                addToDiscoveredReferences(dr);
-            } else {
-                trace.string("  uninitialized");
-            }
-            trace.string("]").newline();
+            trace.string("[DiscoverableReference.discoverDiscoverableReference:");
+            trace.string("  dr: ").object(dr).string("  referent: ").hex(DiscoverableReference.TestingBackDoor.getReferentPointer(dr)).string("]").newline();
+            addToDiscoveredReferences(dr);
         }
+
     }
 
     /** The first element of the discovered list, or null. */
@@ -115,11 +103,11 @@ public class DiscoverableReferenceProcessing {
              * about looking through the referent field.
              */
             if (!processReferent(current)) {
-                /* The referent will not survive the collection: put it on the new list. */
+                /* The referent isn't live: put it on the new list. */
                 trace.string("  unpromoted current: ").object(current).newline();
                 newList = current.prependToDiscoveredReference(newList);
             } else {
-                /* Referent will survive the collection: don't add it to the new list. */
+                /* Referent did get promoted: don't add it to the new list. */
                 trace.string("  promoted current: ").object(current).newline();
             }
         }
@@ -127,11 +115,7 @@ public class DiscoverableReferenceProcessing {
         trace.string("]").newline();
     }
 
-    /**
-     * Determine if a referent is live, and adjust it as necessary.
-     *
-     * Returns true if the referent will survive the collection, false otherwise.
-     */
+    /** Determine if a referent is live, and adjust it as necessary. */
     private static boolean processReferent(DiscoverableReference dr) {
         final Log trace = Log.noopLog().string("[DiscoverableReference.processReferent:").string("  this: ").object(dr);
         final Pointer refPointer = dr.getReferentPointer();

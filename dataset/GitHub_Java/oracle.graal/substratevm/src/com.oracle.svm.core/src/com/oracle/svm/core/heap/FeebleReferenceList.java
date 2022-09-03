@@ -44,7 +44,7 @@ import com.oracle.svm.core.util.TimeUtils;
 public final class FeebleReferenceList<T> {
 
     /** The head of the list of FeebleReference<T>. */
-    private final UninterruptibleUtils.AtomicReference<FeebleReference<? extends T>> head;
+    private UninterruptibleUtils.AtomicReference<FeebleReference<? extends T>> head;
 
     /**
      * Notification of other threads that FeebleReferences might be available.
@@ -65,11 +65,6 @@ public final class FeebleReferenceList<T> {
     /** Constructor for subclasses. */
     private FeebleReferenceList() {
         head = new UninterruptibleUtils.AtomicReference<>(null);
-    }
-
-    /** Whether the list is empty at the time of the call. */
-    public boolean isEmpty() {
-        return getHead() == null;
     }
 
     /**
@@ -197,12 +192,12 @@ public final class FeebleReferenceList<T> {
      * Manipulations of head.
      */
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     private FeebleReference<? extends T> getHead() {
         return head.get();
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     private boolean compareAndSetHead(FeebleReference<? extends T> expect, FeebleReference<? extends T> update) {
         return head.compareAndSet(expect, update);
     }
@@ -211,12 +206,12 @@ public final class FeebleReferenceList<T> {
      * Methods on the lock and condition variable, for {@link #remove(long)}.
      */
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     private static void lock() {
         availableLock.lockNoTransition();
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     private static void unlock() {
         availableLock.unlock();
     }
@@ -271,14 +266,12 @@ public final class FeebleReferenceList<T> {
      * way. Similarly, I could add asserts about the thread state on the way out, but there is not
      * much I can do if things go wrong.
      */
-    @NeverInline("Must not be inlined in a caller that has an exception handler: We only support InvokeNode and not InvokeWithExceptionNode between a CFunctionPrologueNode and CFunctionEpilogueNode")
     private static void awaitWithTransition() {
         CFunctionPrologueNode.cFunctionPrologue();
         awaitInNative();
         CFunctionEpilogueNode.cFunctionEpilogue();
     }
 
-    @NeverInline("Must not be inlined in a caller that has an exception handler: We only support InvokeNode and not InvokeWithExceptionNode between a CFunctionPrologueNode and CFunctionEpilogueNode")
     private static long awaitWithTransition(long waitNanos) {
         CFunctionPrologueNode.cFunctionPrologue();
         final long result = awaitInNative(waitNanos);
@@ -349,7 +342,7 @@ public final class FeebleReferenceList<T> {
      */
 
     /** Clean the list state that is kept in a FeebleReference. */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     protected static void clean(FeebleReference<?> fr) {
         fr.listRemove();
     }
