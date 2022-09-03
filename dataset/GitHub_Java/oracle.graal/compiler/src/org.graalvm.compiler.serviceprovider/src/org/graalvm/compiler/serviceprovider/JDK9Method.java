@@ -22,13 +22,23 @@
  */
 package org.graalvm.compiler.serviceprovider;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
+import java.io.InputStream;
+import java.util.Set;
 
 /**
- * Reflection based access to API introduced by JDK 9. This allows the API to be used in code that
- * must be compiled on a JDK prior to 9.
+ * Access to API introduced by JDK 9. Use of any method in this class must ensure that the current
+ * runtime is JDK 9 or later. For example:
+ *
+ * <pre>
+ * if (!JDK9Method.isJava8OrEarlier) {
+ *     Object module = JDK9Method.getModule(c);
+ *     ...
+ * }
+ * </pre>
+ *
+ * This version of the class must be used on JDK 8.
+ *
+ * @see "https://docs.oracle.com/javase/9/docs/specs/jar/jar.html#Multi-release"
  */
 public final class JDK9Method {
 
@@ -46,103 +56,52 @@ public final class JDK9Method {
      */
     public static final int JAVA_SPECIFICATION_VERSION = getJavaSpecificationVersion();
 
-    public JDK9Method(Class<?> declaringClass, String name, Class<?>... parameterTypes) {
-        try {
-            this.method = declaringClass.getMethod(name, parameterTypes);
-        } catch (Exception e) {
-            throw new InternalError(e);
-        }
-    }
-
     /**
      * Determines if the Java runtime is version 8 or earlier.
      */
     public static final boolean Java8OrEarlier = JAVA_SPECIFICATION_VERSION <= 8;
 
-    public final Method method;
-
-    public Class<?> getReturnType() {
-        return method.getReturnType();
+    private static Error unreachable() {
+        throw new InternalError("Cannot use API introduced in Java 9 or later on Java " + JAVA_SPECIFICATION_VERSION);
     }
 
     /**
-     * {@code Class.getModule()}.
+     * Wrapper for {@code Class.getModule()}.
      */
-    public static final JDK9Method getModule;
-
-    /**
-     * {@code java.lang.Module.getPackages()}.
-     */
-    public static final JDK9Method getPackages;
-
-    /**
-     * {@code java.lang.Module.getResourceAsStream(String)}.
-     */
-    public static final JDK9Method getResourceAsStream;
-
-    /**
-     * {@code java.lang.Module.addOpens(String, Module)}.
-     */
-    public static final JDK9Method addOpens;
-
-    /**
-     * {@code java.lang.Module.isOpen(String, Module)}.
-     */
-    public static final JDK9Method isOpenTo;
-
-    /**
-     * Invokes the static Module API method represented by this object.
-     */
-    @SuppressWarnings("unchecked")
-    public <T> T invokeStatic(Object... args) {
-        checkAvailability();
-        assert Modifier.isStatic(method.getModifiers());
-        try {
-            return (T) method.invoke(null, args);
-        } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-            throw new InternalError(e);
-        }
+    @SuppressWarnings("unused")
+    public static Object getModule(Class<?> clazz) {
+        throw unreachable();
     }
 
     /**
-     * Invokes the non-static Module API method represented by this object.
+     * Wrapper for {@code Module.getPackages()}.
      */
-    @SuppressWarnings("unchecked")
-    public <T> T invoke(Object receiver, Object... args) {
-        checkAvailability();
-        assert !Modifier.isStatic(method.getModifiers());
-        try {
-            return (T) method.invoke(receiver, args);
-        } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-            throw new InternalError(e);
-        }
+    @SuppressWarnings("unused")
+    public static Set<String> getPackages(Object module) {
+        throw unreachable();
     }
 
-    private void checkAvailability() throws InternalError {
-        if (method == null) {
-            throw new InternalError("Cannot use Module API on JDK " + JAVA_SPECIFICATION_VERSION);
-        }
+    /**
+     * Wrapper for {@code Module.getResourceAsStream(String)}.
+     */
+    @SuppressWarnings("unused")
+    public static InputStream getResourceAsStream(Object module, String resource) {
+        throw unreachable();
     }
 
-    static {
-        if (JAVA_SPECIFICATION_VERSION >= 9) {
-            getModule = new JDK9Method(Class.class, "getModule");
-            Class<?> moduleClass = getModule.getReturnType();
-            getPackages = new JDK9Method(moduleClass, "getPackages");
-            addOpens = new JDK9Method(moduleClass, "addOpens", String.class, moduleClass);
-            getResourceAsStream = new JDK9Method(moduleClass, "getResourceAsStream", String.class);
-            isOpenTo = new JDK9Method(moduleClass, "isOpen", String.class, moduleClass);
-        } else {
-            JDK9Method unavailable = new JDK9Method();
-            getModule = unavailable;
-            getPackages = unavailable;
-            addOpens = unavailable;
-            getResourceAsStream = unavailable;
-            isOpenTo = unavailable;
-        }
+    /**
+     * Wrapper for {@code Module.addOpens(String, Module)}.
+     */
+    @SuppressWarnings("unused")
+    static void addOpens(Object thisModule, String packageName, Object otherModule) {
+        throw unreachable();
     }
 
-    private JDK9Method() {
-        method = null;
+    /**
+     * Wrapper for {@code Module.isOpen(String, Module)}.
+     */
+    @SuppressWarnings("unused")
+    public static boolean isOpenTo(Object module1, String pkg, Object module2) {
+        throw unreachable();
     }
 }
