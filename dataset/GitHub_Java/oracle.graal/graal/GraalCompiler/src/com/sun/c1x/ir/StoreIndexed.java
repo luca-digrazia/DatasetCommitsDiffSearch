@@ -61,6 +61,15 @@ public final class StoreIndexed extends AccessIndexed {
         return value;
     }
 
+    /**
+     * Checks whether this instruction can cause a trap.
+     * @return {@code true} if this instruction can cause a trap
+     */
+    @Override
+    public boolean canTrap() {
+        return true;
+    }
+
     @Override
     public void inputValuesDo(ValueClosure closure) {
         super.inputValuesDo(closure);

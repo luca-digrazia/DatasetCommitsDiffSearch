@@ -105,6 +105,15 @@ public final class Invoke extends StateSplit {
     }
 
     /**
+     * Checks whether this instruction can trap.
+     * @return {@code true}, conservatively assuming the called method may throw an exception
+     */
+    @Override
+    public boolean canTrap() {
+        return true;
+    }
+
+    /**
      * Checks whether this invocation has a receiver object.
      * @return {@code true} if this invocation has a receiver object; {@code false} otherwise, if this is a
      *         static call

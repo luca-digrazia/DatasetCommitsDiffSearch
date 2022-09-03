@@ -22,7 +22,6 @@
  */
 package com.sun.c1x.ir;
 
-import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.bytecode.*;
@@ -45,8 +44,8 @@ public final class ArithmeticOp extends Op2 {
      * @param isStrictFP indicates this operation has strict rounding semantics
      * @param stateBefore the state for instructions that may trap
      */
-    public ArithmeticOp(int opcode, CiKind kind, Value x, Value y, boolean isStrictFP, FrameState stateBefore, Graph graph) {
-        super(kind, opcode, x, y, graph);
+    public ArithmeticOp(int opcode, CiKind kind, Value x, Value y, boolean isStrictFP, FrameState stateBefore) {
+        super(kind, opcode, x, y);
         this.isStrictFP = isStrictFP;
         this.stateBefore = stateBefore;
     }

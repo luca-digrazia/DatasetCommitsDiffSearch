@@ -24,7 +24,6 @@ package com.sun.c1x.ir;
 
 import java.util.*;
 
-import com.oracle.graal.graph.*;
 import com.sun.c1x.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
@@ -43,34 +42,6 @@ import com.sun.cri.ci.*;
  */
 public abstract class Instruction extends Value {
 
-    public static final int INPUT_COUNT = 0;
-
-    public static final int SUCCESSOR_COUNT = 1;
-    public static final int SUCCESSOR_NEXT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
-    }
-
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * Links to next instruction in a basic block, to {@code null} if this instruction is the end of a basic block or to
-     * itself if not in a block.
-     */
-    public Instruction next() {
-        return (Instruction) successors().get(super.successorCount() + SUCCESSOR_NEXT);
-    }
-
-    public Node setNext(Instruction next) {
-        return successors().set(super.successorCount() + SUCCESSOR_NEXT, next);
-    }
-
-
     public static final int SYNCHRONIZATION_ENTRY_BCI = -1;
 
     /**
@@ -80,6 +51,11 @@ public abstract class Instruction extends Value {
     private int bci;
 
     /**
+     * Links to next instruction in a basic block or to {@code} itself if not in a block.
+     */
+    private Instruction next = this;
+
+    /**
      * List of associated exception handlers.
      */
     private List<ExceptionHandler> exceptionHandlers = ExceptionHandler.ZERO_HANDLERS;
@@ -87,16 +63,10 @@ public abstract class Instruction extends Value {
     /**
      * Constructs a new instruction with the specified value type.
      * @param kind the value type for this instruction
-     * @param inputCount
-     * @param successorCount
      */
-    public Instruction(CiKind kind, int inputCount, int successorCount, Graph graph) {
-        super(kind, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
-        C1XMetrics.HIRInstructions++;
-    }
-
     public Instruction(CiKind kind) {
-        this(kind, 0, 0, null);
+        super(kind);
+        C1XMetrics.HIRInstructions++;
     }
 
     /**
@@ -121,9 +91,20 @@ public abstract class Instruction extends Value {
      * @return {@code true} if this instruction has been added to the basic block containing it
      */
     public final boolean isAppended() {
-        return next() != this;
+        return next != this;
     }
 
+    /**
+     * Gets the next instruction after this one in the basic block, or {@code null}
+     * if this instruction is the end of a basic block.
+     * @return the next instruction after this one in the basic block
+     */
+    public final Instruction next() {
+        if (next == this) {
+            return null;
+        }
+        return next;
+    }
 
     /**
      * Sets the next instruction for this instruction. Note that it is illegal to
@@ -132,13 +113,13 @@ public abstract class Instruction extends Value {
      * @param bci the bytecode index of the next instruction
      * @return the new next instruction
      */
-    public final Instruction appendNext(Instruction next, int bci) {
-        setNext(next);
+    public final Instruction setNext(Instruction next, int bci) {
+        this.next = next;
         if (next != null) {
             assert !(this instanceof BlockEnd);
             next.setBCI(bci);
-            if (next.next() == next) {
-                next.setNext(null);
+            if (next.next == next) {
+                next.next = null;
             }
         }
         return next;
@@ -153,7 +134,7 @@ public abstract class Instruction extends Value {
     public final Instruction resetNext(Instruction next) {
         if (next != null) {
             assert !(this instanceof BlockEnd);
-            setNext(next);
+            this.next = next;
         }
         return next;
     }
@@ -183,7 +164,7 @@ public abstract class Instruction extends Value {
         // TODO(tw): Make this more efficient.
         Instruction cur = this;
         while (!(cur instanceof BlockEnd)) {
-            cur = cur.next();
+            cur = cur.next;
         }
         return ((BlockEnd) cur).begin;
     }
