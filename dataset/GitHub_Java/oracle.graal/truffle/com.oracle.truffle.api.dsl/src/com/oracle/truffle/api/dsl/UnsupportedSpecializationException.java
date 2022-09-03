@@ -24,14 +24,16 @@
  */
 package com.oracle.truffle.api.dsl;
 
-import java.util.*;
-
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.Node;
+import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * Thrown by the generated code of Truffle-DSL if no compatible Specialization could be found for
  * the provided values.
+ *
+ * @since 0.8 or earlier
  */
 public final class UnsupportedSpecializationException extends RuntimeException {
 
@@ -41,6 +43,7 @@ public final class UnsupportedSpecializationException extends RuntimeException {
     private final Node[] suppliedNodes;
     private final Object[] suppliedValues;
 
+    /** @since 0.8 or earlier */
     @TruffleBoundary
     public UnsupportedSpecializationException(Node node, Node[] suppliedNodes, Object... suppliedValues) {
         Objects.requireNonNull(suppliedNodes, "The suppliedNodes parameter must not be null.");
@@ -52,13 +55,21 @@ public final class UnsupportedSpecializationException extends RuntimeException {
         this.suppliedValues = suppliedValues;
     }
 
+    /** @since 0.8 or earlier */
     @Override
     public String getMessage() {
-        return String.format("Unexpected values provided for %s: %s", node, Arrays.toString(suppliedValues));
+        StringBuilder str = new StringBuilder();
+        str.append("Unexpected values provided for ").append(node).append(": ").append(Arrays.toString(suppliedValues)).append(", [");
+        for (int i = 0; i < suppliedValues.length; i++) {
+            str.append(i == 0 ? "" : ",").append(suppliedValues[i] == null ? "null" : suppliedValues[i].getClass().getSimpleName());
+        }
+        return str.append("]").toString();
     }
 
     /**
      * Returns the {@link Node} that caused the this {@link UnsupportedSpecializationException}.
+     *
+     * @since 0.8 or earlier
      */
     public Node getNode() {
         return node;
@@ -69,6 +80,8 @@ public final class UnsupportedSpecializationException extends RuntimeException {
      * values returned by {@link #getSuppliedValues()}. The array returned by
      * {@link #getSuppliedNodes()} has the same length as the array returned by
      * {@link #getSuppliedValues()}. Never returns null.
+     *
+     * @since 0.8 or earlier
      */
     public Node[] getSuppliedNodes() {
         return suppliedNodes;
@@ -78,6 +91,8 @@ public final class UnsupportedSpecializationException extends RuntimeException {
      * Returns the dynamic values that were supplied to the node.The array returned by
      * {@link #getSuppliedNodes()} has the same length as the array returned by
      * {@link #getSuppliedValues()}. Never returns null.
+     *
+     * @since 0.8 or earlier
      */
     public Object[] getSuppliedValues() {
         return suppliedValues;
