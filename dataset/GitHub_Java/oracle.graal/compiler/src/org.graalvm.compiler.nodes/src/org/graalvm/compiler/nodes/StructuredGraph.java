@@ -295,8 +295,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         }
 
         public StructuredGraph build() {
-            EconomicSet<ResolvedJavaMethod> inlinedMethods = recordInlinedMethods ? EconomicSet.create() : null;
-            return new StructuredGraph(name, rootMethod, entryBCI, assumptions, speculationLog, useProfilingInfo, inlinedMethods,
+            return new StructuredGraph(name, rootMethod, entryBCI, assumptions, speculationLog, useProfilingInfo, recordInlinedMethods,
                             trackNodeSourcePosition, compilationId, options, debug, cancellable, callerContext);
         }
     }
@@ -363,7 +362,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                     Assumptions assumptions,
                     SpeculationLog speculationLog,
                     boolean useProfilingInfo,
-                    EconomicSet<ResolvedJavaMethod> methods,
+                    boolean recordInlinedMethods,
                     SourcePositionTracking trackNodeSourcePosition,
                     CompilationIdentifier compilationId,
                     OptionValues options,
@@ -377,7 +376,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         this.compilationId = compilationId;
         this.entryBCI = entryBCI;
         this.assumptions = assumptions;
-        this.methods = methods;
+        this.methods = recordInlinedMethods ? EconomicSet.create() : null;
         if (speculationLog != null && !(speculationLog instanceof GraphSpeculationLog)) {
             this.speculationLog = new GraphSpeculationLog(speculationLog);
         } else {
@@ -533,7 +532,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                         assumptions == null ? null : new Assumptions(),
                         speculationLog,
                         useProfilingInfo,
-                        methods != null ? EconomicSet.create(methods) : null,
+                        methods != null,
                         trackNodeSourcePosition,
                         newCompilationId,
                         getOptions(), debugForCopy, null, callerContext);
@@ -546,8 +545,8 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         copy.hasValueProxies = hasValueProxies;
         copy.isAfterExpandLogic = isAfterExpandLogic;
         copy.trackNodeSourcePosition = trackNodeSourcePosition;
-        if (fields != null) {
-            copy.fields = EconomicSet.create(fields);
+        if (copy.methods != null) {
+            copy.methods.addAll(methods);
         }
         EconomicMap<Node, Node> replacements = EconomicMap.create(Equivalence.IDENTITY);
         replacements.put(start, copy.start);
@@ -945,9 +944,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     }
 
     /**
-     * Gets an unmodifiable view of the fields that were accessed while constructing this graph.
-     *
-     * @return {@code null} if no field accesses were recorded
+     * Gets the fields that were accessed while constructing this graph.
      */
     public UnmodifiableEconomicSet<ResolvedJavaField> getFields() {
         return fields;
