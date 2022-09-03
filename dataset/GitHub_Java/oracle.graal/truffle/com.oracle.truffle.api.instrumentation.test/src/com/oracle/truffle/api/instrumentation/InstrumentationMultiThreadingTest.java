@@ -145,20 +145,20 @@ public class InstrumentationMultiThreadingTest {
         };
         instrumenter.attachListener(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION).build(), dummyListener);
         instrumenter.attachListener(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.STATEMENT).build(), dummyListener);
-        instrumenter.attachLoadSourceListener(SourceSectionFilter.newBuilder().build(), new LoadSourceListener() {
+        instrumenter.attachLoadSourceListener(SourceSectionFilter.newBuilder().build(), new LoadSourceEventListener() {
 
             public void onLoad(LoadSourceEvent event) {
 
             }
         }, true);
-        instrumenter.attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION).build(), new LoadSourceSectionListener() {
+        instrumenter.attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.EXPRESSION).build(), new LoadSourceSectionEventListener() {
 
             public void onLoad(LoadSourceSectionEvent event) {
 
             }
         }, true);
 
-        instrumenter.attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.STATEMENT).build(), new LoadSourceSectionListener() {
+        instrumenter.attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().tagIs(InstrumentationTestLanguage.STATEMENT).build(), new LoadSourceSectionEventListener() {
             public void onLoad(LoadSourceSectionEvent event) {
 
             }
