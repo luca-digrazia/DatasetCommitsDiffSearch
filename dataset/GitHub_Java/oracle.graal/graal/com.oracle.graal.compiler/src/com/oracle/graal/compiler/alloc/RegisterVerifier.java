@@ -26,22 +26,22 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.criutils.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.util.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.*;
-import com.oracle.graal.lir.cfg.*;
+import com.oracle.graal.lir.LIRInstruction.OperandFlag;
+import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.phases.util.*;
 
 /**
  */
 final class RegisterVerifier {
 
     LinearScan allocator;
-    List<Block> workList; // all blocks that must be processed
+    List<AbstractBlock<?>> workList; // all blocks that must be processed
     ArrayMap<Interval[]> savedStates; // saved information of previous check
 
     // simplified access to methods of LinearScan
@@ -55,15 +55,15 @@ final class RegisterVerifier {
     }
 
     // accessors
-    Interval[] stateForBlock(Block block) {
+    Interval[] stateForBlock(AbstractBlock<?> block) {
         return savedStates.get(block.getId());
     }
 
-    void setStateForBlock(Block block, Interval[] savedState) {
+    void setStateForBlock(AbstractBlock<?> block, Interval[] savedState) {
         savedStates.put(block.getId(), savedState);
     }
 
-    void addToWorkList(Block block) {
+    void addToWorkList(AbstractBlock<?> block) {
         if (!workList.contains(block)) {
             workList.add(block);
         }
@@ -76,7 +76,7 @@ final class RegisterVerifier {
 
     }
 
-    void verify(Block start) {
+    void verify(AbstractBlock<?> start) {
         // setup input registers (method arguments) for first block
         Interval[] inputState = new Interval[stateSize()];
         setStateForBlock(start, inputState);
@@ -84,47 +84,39 @@ final class RegisterVerifier {
 
         // main loop for verification
         do {
-            Block block = workList.get(0);
+            AbstractBlock<?> block = workList.get(0);
             workList.remove(0);
 
             processBlock(block);
         } while (!workList.isEmpty());
     }
 
-    private void processBlock(Block block) {
-        if (GraalOptions.TraceLinearScanLevel >= 2) {
-            TTY.println();
-            TTY.println("processBlock B%d", block.getId());
-        }
+    private void processBlock(AbstractBlock<?> block) {
+        try (Indent indent = Debug.logAndIndent("processBlock B%d", block.getId())) {
+            // must copy state because it is modified
+            Interval[] inputState = copy(stateForBlock(block));
 
-        // must copy state because it is modified
-        Interval[] inputState = copy(stateForBlock(block));
-
-        if (GraalOptions.TraceLinearScanLevel >= 4) {
-            TTY.println("Input-State of intervals:");
-            TTY.print("    ");
-            for (int i = 0; i < stateSize(); i++) {
-                if (inputState[i] != null) {
-                    TTY.print(" %4d", inputState[i].operandNumber);
-                } else {
-                    TTY.print("   __");
+            try (Indent indent2 = Debug.logAndIndent("Input-State of intervals:")) {
+                for (int i = 0; i < stateSize(); i++) {
+                    if (inputState[i] != null) {
+                        Debug.log(" %4d", inputState[i].operandNumber);
+                    } else {
+                        Debug.log("   __");
+                    }
                 }
             }
-            TTY.println();
-            TTY.println();
-        }
 
-        // process all operations of the block
-        processOperations(allocator.ir.lir(block), inputState);
+            // process all operations of the block
+            processOperations(allocator.ir.getLIRforBlock(block), inputState);
 
-        // iterate all successors
-        for (int i = 0; i < block.numberOfSux(); i++) {
-            Block succ = block.suxAt(i);
-            processSuccessor(succ, inputState);
+            // iterate all successors
+            for (AbstractBlock<?> succ : block.getSuccessors()) {
+                processSuccessor(succ, inputState);
+            }
         }
     }
 
-    private void processSuccessor(Block block, Interval[] inputState) {
+    private void processSuccessor(AbstractBlock<?> block, Interval[] inputState) {
         Interval[] savedState = stateForBlock(block);
 
         if (savedState != null) {
@@ -143,31 +135,23 @@ final class RegisterVerifier {
                         savedStateCorrect = false;
                         savedState[i] = null;
 
-                        if (GraalOptions.TraceLinearScanLevel >= 4) {
-                            TTY.println("processSuccessor B%d: invalidating slot %d", block.getId(), i);
-                        }
+                        Debug.log("processSuccessor B%d: invalidating slot %d", block.getId(), i);
                     }
                 }
             }
 
             if (savedStateCorrect) {
                 // already processed block with correct inputState
-                if (GraalOptions.TraceLinearScanLevel >= 2) {
-                    TTY.println("processSuccessor B%d: previous visit already correct", block.getId());
-                }
+                Debug.log("processSuccessor B%d: previous visit already correct", block.getId());
             } else {
                 // must re-visit this block
-                if (GraalOptions.TraceLinearScanLevel >= 2) {
-                    TTY.println("processSuccessor B%d: must re-visit because input state changed", block.getId());
-                }
+                Debug.log("processSuccessor B%d: must re-visit because input state changed", block.getId());
                 addToWorkList(block);
             }
 
         } else {
             // block was not processed before, so set initial inputState
-            if (GraalOptions.TraceLinearScanLevel >= 2) {
-                TTY.println("processSuccessor B%d: initial visit", block.getId());
-            }
+            Debug.log("processSuccessor B%d: initial visit", block.getId());
 
             setStateForBlock(block, copy(inputState));
             addToWorkList(block);
@@ -183,13 +167,9 @@ final class RegisterVerifier {
             Register reg = asRegister(location);
             int regNum = reg.number;
             if (interval != null) {
-                if (GraalOptions.TraceLinearScanLevel >= 4) {
-                    TTY.println("        %s = %s", reg, interval.operand);
-                }
+                Debug.log("%s = %s", reg, interval.operand);
             } else if (inputState[regNum] != null) {
-                if (GraalOptions.TraceLinearScanLevel >= 4) {
-                    TTY.println("        %s = null", reg);
-                }
+                Debug.log("%s = null", reg);
             }
 
             inputState[regNum] = interval;
@@ -206,57 +186,55 @@ final class RegisterVerifier {
     }
 
     void processOperations(List<LIRInstruction> ops, final Interval[] inputState) {
+        InstructionValueConsumer useConsumer = new InstructionValueConsumer() {
+
+            @Override
+            public void visitValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
+                // we skip spill moves inserted by the spill position optimization
+                if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand) && op.id() != LinearScan.DOMINATOR_SPILL_MOVE_ID) {
+                    Interval interval = intervalAt(operand);
+                    if (op.id() != -1) {
+                        interval = interval.getSplitChildAtOpId(op.id(), mode, allocator);
+                    }
+
+                    assert checkState(inputState, interval.location(), interval.splitParent());
+                }
+            }
+        };
+
+        InstructionValueConsumer defConsumer = (op, operand, mode, flags) -> {
+            if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand)) {
+                Interval interval = intervalAt(operand);
+                if (op.id() != -1) {
+                    interval = interval.getSplitChildAtOpId(op.id(), mode, allocator);
+                }
+
+                statePut(inputState, interval.location(), interval.splitParent());
+            }
+        };
+
         // visit all instructions of the block
         for (int i = 0; i < ops.size(); i++) {
             final LIRInstruction op = ops.get(i);
 
-            if (GraalOptions.TraceLinearScanLevel >= 4) {
-                TTY.println(op.toStringWithIdPrefix());
+            if (Debug.isLogEnabled()) {
+                Debug.log("%s", op.toStringWithIdPrefix());
             }
 
-            ValueProcedure useProc = new ValueProcedure() {
-                @Override
-                public Value doValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
-                    if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand)) {
-                        Interval interval = intervalAt(operand);
-                        if (op.id() != -1) {
-                            interval = interval.getSplitChildAtOpId(op.id(), mode, allocator);
-                        }
-
-                        assert checkState(inputState, interval.location(), interval.splitParent());
-                    }
-                    return operand;
-                }
-            };
-
-            ValueProcedure defProc = new ValueProcedure() {
-                @Override
-                public Value doValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
-                    if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand)) {
-                        Interval interval = intervalAt(operand);
-                        if (op.id() != -1) {
-                            interval = interval.getSplitChildAtOpId(op.id(), mode, allocator);
-                        }
-
-                        statePut(inputState, interval.location(), interval.splitParent());
-                    }
-                    return operand;
-                }
-            };
-
             // check if input operands are correct
-            op.forEachInput(useProc);
+            op.visitEachInput(useConsumer);
             // invalidate all caller save registers at calls
-            if (op.hasCall()) {
-                for (Register r : allocator.frameMap.registerConfig.getCallerSaveRegisters()) {
+            if (op.destroysCallerSavedRegisters()) {
+                for (Register r : allocator.frameMap.getRegisterConfig().getCallerSaveRegisters()) {
                     statePut(inputState, r.asValue(), null);
                 }
             }
-            op.forEachAlive(useProc);
-            // set temp operands (some operations use temp operands also as output operands, so can't set them null)
-            op.forEachTemp(defProc);
+            op.visitEachAlive(useConsumer);
+            // set temp operands (some operations use temp operands also as output operands, so
+            // can't set them null)
+            op.visitEachTemp(defConsumer);
             // set output operands
-            op.forEachOutput(defProc);
+            op.visitEachOutput(defConsumer);
         }
     }
 }

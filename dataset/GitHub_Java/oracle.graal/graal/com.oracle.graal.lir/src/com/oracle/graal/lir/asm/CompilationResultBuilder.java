@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,18 +27,13 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CompilationResult.ConstantReference;
-import com.oracle.graal.api.code.CompilationResult.DataSectionReference;
-import com.oracle.graal.api.code.DataSection.Data;
-import com.oracle.graal.api.code.DataSection.DataBuilder;
+import com.oracle.graal.api.code.CompilationResult.Data;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.framemap.*;
-import com.oracle.graal.options.*;
 
 /**
  * Fills in a {@link CompilationResult} as its code is being assembled.
@@ -46,11 +41,6 @@ import com.oracle.graal.options.*;
  * @see CompilationResultBuilderFactory
  */
 public class CompilationResultBuilder {
-
-    // @formatter:off
-    @Option(help = "Include the LIR as comments with the final assembly.", type = OptionType.Debug)
-    public static final OptionValue<Boolean> PrintLIRWithAssembly = new OptionValue<>(false);
-    // @formatter:on
 
     private static class ExceptionInfo {
 
@@ -87,8 +77,6 @@ public class CompilationResultBuilder {
 
     private List<ExceptionInfo> exceptionInfoList;
 
-    private final IdentityHashMap<Constant, Data> dataCache;
-
     public CompilationResultBuilder(CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, FrameMap frameMap, Assembler asm, FrameContext frameContext, CompilationResult compilationResult) {
         this.target = codeCache.getTarget();
         this.codeCache = codeCache;
@@ -98,9 +86,6 @@ public class CompilationResultBuilder {
         this.compilationResult = compilationResult;
         this.frameContext = frameContext;
         assert frameContext != null;
-
-        // constants are already GVNed in the high level graph, so we can use an IdentityHashMap
-        this.dataCache = new IdentityHashMap<>();
     }
 
     public void setTotalFrameSize(int frameSize) {
@@ -169,39 +154,27 @@ public class CompilationResultBuilder {
     }
 
     public void recordInlineDataInCode(Constant data) {
+        recordInlineDataInCode(codeCache.createDataItem(data, 0));
+    }
+
+    public void recordInlineDataInCode(Data data) {
         assert data != null;
         int pos = asm.position();
         Debug.log("Inline data in code: pos = %d, data = %s", pos, data);
-        if (data instanceof VMConstant) {
-            compilationResult.recordDataPatch(pos, new ConstantReference((VMConstant) data));
-        }
+        compilationResult.recordInlineData(pos, data);
     }
 
-    private AbstractAddress recordDataSectionReference(Data data) {
+    public AbstractAddress recordDataReferenceInCode(Constant data, int alignment) {
         assert data != null;
-        DataSectionReference reference = compilationResult.getDataSection().insertData(data);
-        compilationResult.recordDataPatch(asm.position(), reference);
+        return recordDataReferenceInCode(codeCache.createDataItem(data, alignment));
+    }
+
+    public AbstractAddress recordDataReferenceInCode(Data data) {
+        assert data != null;
+        int pos = asm.position();
+        Debug.log("Data reference in code: pos = %d, data = %s", pos, data);
+        compilationResult.recordDataReference(pos, data);
         return asm.getPlaceholder();
-    }
-
-    public AbstractAddress recordDataReferenceInCode(Constant constant, int alignment) {
-        assert constant != null;
-        Debug.log("Constant reference in code: pos = %d, data = %s", asm.position(), constant);
-        Data data = dataCache.get(constant);
-        if (data == null) {
-            data = codeCache.createDataItem(constant);
-            dataCache.put(constant, data);
-        }
-        data.updateAlignment(alignment);
-        return recordDataSectionReference(data);
-    }
-
-    public AbstractAddress recordDataReferenceInCode(byte[] data, int alignment) {
-        assert data != null;
-        if (Debug.isLogEnabled()) {
-            Debug.log("Data reference in code: pos = %d, data = %s", asm.position(), Arrays.toString(data));
-        }
-        return recordDataSectionReference(new Data(alignment, data.length, DataBuilder.raw(data)));
     }
 
     /**
@@ -210,7 +183,7 @@ public class CompilationResultBuilder {
      */
     public int asIntConst(Value value) {
         assert (value.getKind().isNumericInteger()) && isConstant(value);
-        JavaConstant constant = (JavaConstant) value;
+        Constant constant = (Constant) value;
         assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
         long c = constant.asLong();
         if (!NumUtil.isInt(c)) {
@@ -224,7 +197,7 @@ public class CompilationResultBuilder {
      */
     public float asFloatConst(Value value) {
         assert (value.getKind().getStackKind() == Kind.Float && isConstant(value));
-        JavaConstant constant = (JavaConstant) value;
+        Constant constant = (Constant) value;
         assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
         return constant.asFloat();
     }
@@ -234,7 +207,7 @@ public class CompilationResultBuilder {
      */
     public long asLongConst(Value value) {
         assert (value.getKind().getStackKind() == Kind.Long && isConstant(value));
-        JavaConstant constant = (JavaConstant) value;
+        Constant constant = (Constant) value;
         assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
         return constant.asLong();
     }
@@ -244,7 +217,7 @@ public class CompilationResultBuilder {
      */
     public double asDoubleConst(Value value) {
         assert (value.getKind().getStackKind() == Kind.Double && isConstant(value));
-        JavaConstant constant = (JavaConstant) value;
+        Constant constant = (Constant) value;
         assert !codeCache.needsDataPatch(constant) : constant + " should be in a DataPatch";
         return constant.asDouble();
     }
@@ -258,7 +231,7 @@ public class CompilationResultBuilder {
 
     public AbstractAddress asFloatConstRef(Value value, int alignment) {
         assert value.getKind() == Kind.Float && isConstant(value);
-        return recordDataReferenceInCode((JavaConstant) value, alignment);
+        return recordDataReferenceInCode((Constant) value, alignment);
     }
 
     /**
@@ -270,7 +243,7 @@ public class CompilationResultBuilder {
 
     public AbstractAddress asDoubleConstRef(Value value, int alignment) {
         assert value.getKind() == Kind.Double && isConstant(value);
-        return recordDataReferenceInCode((JavaConstant) value, alignment);
+        return recordDataReferenceInCode((Constant) value, alignment);
     }
 
     /**
@@ -278,7 +251,7 @@ public class CompilationResultBuilder {
      */
     public AbstractAddress asLongConstRef(Value value) {
         assert value.getKind() == Kind.Long && isConstant(value);
-        return recordDataReferenceInCode((JavaConstant) value, 8);
+        return recordDataReferenceInCode((Constant) value, 8);
     }
 
     /**
@@ -286,7 +259,7 @@ public class CompilationResultBuilder {
      */
     public AbstractAddress asObjectConstRef(Value value) {
         assert value.getKind() == Kind.Object && isConstant(value);
-        return recordDataReferenceInCode((JavaConstant) value, 8);
+        return recordDataReferenceInCode((Constant) value, 8);
     }
 
     public AbstractAddress asByteAddr(Value value) {
@@ -336,7 +309,7 @@ public class CompilationResultBuilder {
      */
     public boolean isSuccessorEdge(LabelRef edge) {
         assert lir != null;
-        List<? extends AbstractBlockBase<?>> order = lir.codeEmittingOrder();
+        List<? extends AbstractBlock<?>> order = lir.codeEmittingOrder();
         assert order.get(currentBlockIndex) == edge.getSourceBlock();
         return currentBlockIndex < order.size() - 1 && order.get(currentBlockIndex + 1) == edge.getTargetBlock();
     }
@@ -350,7 +323,7 @@ public class CompilationResultBuilder {
         this.lir = lir;
         this.currentBlockIndex = 0;
         frameContext.enter(this);
-        for (AbstractBlockBase<?> b : lir.codeEmittingOrder()) {
+        for (AbstractBlock<?> b : lir.codeEmittingOrder()) {
             emitBlock(b);
             currentBlockIndex++;
         }
@@ -358,13 +331,13 @@ public class CompilationResultBuilder {
         this.currentBlockIndex = 0;
     }
 
-    private void emitBlock(AbstractBlockBase<?> block) {
-        if (Debug.isDumpEnabled() || PrintLIRWithAssembly.getValue()) {
+    private void emitBlock(AbstractBlock<?> block) {
+        if (Debug.isDumpEnabled()) {
             blockComment(String.format("block B%d %s", block.getId(), block.getLoop()));
         }
 
         for (LIRInstruction op : lir.getLIRforBlock(block)) {
-            if (Debug.isDumpEnabled() || PrintLIRWithAssembly.getValue()) {
+            if (Debug.isDumpEnabled()) {
                 blockComment(String.format("%d %s", op.id(), op));
             }
 
@@ -389,11 +362,5 @@ public class CompilationResultBuilder {
     public void reset() {
         asm.reset();
         compilationResult.reset();
-        if (exceptionInfoList != null) {
-            exceptionInfoList.clear();
-        }
-        if (dataCache != null) {
-            dataCache.clear();
-        }
     }
 }

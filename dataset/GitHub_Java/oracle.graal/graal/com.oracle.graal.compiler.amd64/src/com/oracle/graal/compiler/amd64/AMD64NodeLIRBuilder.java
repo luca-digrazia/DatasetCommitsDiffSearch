@@ -50,9 +50,8 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
 
     @Override
     protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-        Value targetAddressSrc = operand(callTarget.computedAddress());
-        AllocatableValue targetAddress = AMD64.rax.asValue(targetAddressSrc.getLIRKind());
-        gen.emitMove(targetAddress, targetAddressSrc);
+        AllocatableValue targetAddress = AMD64.rax.asValue();
+        gen.emitMove(targetAddress, operand(callTarget.computedAddress()));
         append(new AMD64Call.IndirectCallOp(callTarget.targetMethod(), result, parameters, temps, targetAddress, callState));
     }
 
@@ -111,7 +110,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
         Kind kind = getMemoryKind(access);
 
         if (value.isConstant()) {
-            JavaConstant constant = value.asJavaConstant();
+            Constant constant = value.asConstant();
             if (kind == Kind.Long && !NumUtil.isInt(constant.asLong())) {
                 // Only imm32 as long
                 return null;
@@ -146,7 +145,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
                 double trueLabelProbability = ifNode.probability(ifNode.trueSuccessor());
                 Value other;
                 if (value.isConstant()) {
-                    other = value.asJavaConstant();
+                    other = value.asConstant();
                 } else {
                     other = operand(value);
                 }
@@ -166,7 +165,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
             if (kind != kind.getStackKind()) {
                 return null;
             }
-            JavaConstant constant = value.asJavaConstant();
+            Constant constant = value.asConstant();
             if (kind == Kind.Long && !NumUtil.isInt(constant.asLong())) {
                 // Only imm32 as long
                 return null;
@@ -356,7 +355,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
 
     @MatchRule("(Or (LeftShift=lshift value Constant) (UnsignedRightShift=rshift value Constant))")
     public ComplexMatchResult rotateLeftConstant(LeftShiftNode lshift, UnsignedRightShiftNode rshift) {
-        if ((lshift.getShiftAmountMask() & (lshift.getY().asJavaConstant().asInt() + rshift.getY().asJavaConstant().asInt())) == 0) {
+        if ((lshift.getShiftAmountMask() & (lshift.getY().asConstant().asInt() + rshift.getY().asConstant().asInt())) == 0) {
             return builder -> getLIRGeneratorTool().emitRol(operand(lshift.getX()), operand(lshift.getY()));
         }
         return null;
@@ -364,7 +363,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
 
     @MatchRule("(Or (LeftShift value (Sub Constant=delta shiftAmount)) (UnsignedRightShift value shiftAmount))")
     public ComplexMatchResult rotateRightVariable(ValueNode value, ConstantNode delta, ValueNode shiftAmount) {
-        if (delta.asJavaConstant().asLong() == 0 || delta.asJavaConstant().asLong() == 32) {
+        if (delta.asConstant().asLong() == 0 || delta.asConstant().asLong() == 32) {
             return builder -> getLIRGeneratorTool().emitRor(operand(value), operand(shiftAmount));
         }
         return null;
@@ -372,7 +371,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
 
     @MatchRule("(Or (LeftShift value shiftAmount) (UnsignedRightShift value (Sub Constant=delta shiftAmount)))")
     public ComplexMatchResult rotateLeftVariable(ValueNode value, ValueNode shiftAmount, ConstantNode delta) {
-        if (delta.asJavaConstant().asLong() == 0 || delta.asJavaConstant().asLong() == 32) {
+        if (delta.asConstant().asLong() == 0 || delta.asConstant().asLong() == 32) {
             return builder -> getLIRGeneratorTool().emitRol(operand(value), operand(shiftAmount));
         }
         return null;
@@ -454,7 +453,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
             sig[i] = node.arguments().get(i).stamp().javaType(gen.getMetaAccess());
         }
 
-        Value[] parameters = visitInvokeArguments(gen.getResult().getFrameMapBuilder().getRegisterConfig().getCallingConvention(CallingConvention.Type.JavaCall, null, sig, gen.target(), false),
+        Value[] parameters = visitInvokeArguments(gen.getResult().getFrameMap().getRegisterConfig().getCallingConvention(CallingConvention.Type.JavaCall, null, sig, gen.target(), false),
                         node.arguments());
         append(new AMD64BreakpointOp(parameters));
     }

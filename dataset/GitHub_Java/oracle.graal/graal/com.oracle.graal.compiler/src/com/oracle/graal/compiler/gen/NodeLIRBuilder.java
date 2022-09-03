@@ -332,7 +332,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
 
         for (ParameterNode param : graph.getNodes(ParameterNode.class)) {
             Value paramValue = params[param.index()];
-            assert paramValue.getLIRKind().equals(getLIRGeneratorTool().getLIRKind(param.stamp()));
+            assert paramValue.getKind() == param.getKind().getStackKind();
             setResult(param, gen.emitMove(paramValue));
         }
     }
@@ -456,9 +456,9 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
     @Override
     public void emitInvoke(Invoke x) {
         LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
-        CallingConvention invokeCc = gen.getResult().getFrameMapBuilder().getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp().javaType(gen.getMetaAccess()),
+        CallingConvention invokeCc = gen.getResult().getFrameMap().getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp().javaType(gen.getMetaAccess()),
                         callTarget.signature(), gen.target(), false);
-        gen.getResult().getFrameMapBuilder().callsMethod(invokeCc);
+        gen.getResult().getFrameMap().callsMethod(invokeCc);
 
         Value[] parameters = visitInvokeArguments(invokeCc, callTarget.arguments());
 
@@ -532,7 +532,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
                 gen.emitCompareBranch(kind, gen.load(operand(x.value())), x.keyAt(0), Condition.EQ, false, getLIRBlock(x.keySuccessor(0)), defaultTarget, probability);
             } else {
                 LabelRef[] keyTargets = new LabelRef[keyCount];
-                JavaConstant[] keyConstants = new JavaConstant[keyCount];
+                Constant[] keyConstants = new Constant[keyCount];
                 double[] keyProbabilities = new double[keyCount];
                 for (int i = 0; i < keyCount; i++) {
                     keyTargets[i] = getLIRBlock(x.keySuccessor(i));
@@ -598,10 +598,8 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool {
         return getDebugInfoBuilder().build(state, exceptionEdge);
     }
 
-    @Override
-    public void emitOverflowCheckBranch(BeginNode overflowSuccessor, BeginNode next, Stamp stamp, double probability) {
-        LIRKind cmpKind = getLIRGeneratorTool().getLIRKind(stamp);
-        gen.emitOverflowCheckBranch(getLIRBlock(overflowSuccessor), getLIRBlock(next), cmpKind, probability);
+    public void emitOverflowCheckBranch(BeginNode overflowSuccessor, BeginNode next, double probability) {
+        gen.emitOverflowCheckBranch(getLIRBlock(overflowSuccessor), getLIRBlock(next), probability);
     }
 
     @Override

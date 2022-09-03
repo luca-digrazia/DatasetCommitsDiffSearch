@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,17 +28,36 @@ import com.oracle.graal.lir.*;
 
 /**
  * PTX specific frame map.
- * 
+ *
  * This is the format of a PTX stack frame:
- * 
+ *
  * <pre>
- * TODO
+ * TODO stack frame layout
  * </pre>
  */
 public final class PTXFrameMap extends FrameMap {
 
-    public PTXFrameMap(CodeCacheProvider runtime, TargetDescription target, RegisterConfig registerConfig) {
-        super(runtime, target, registerConfig);
+    public PTXFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig) {
+        super(codeCache, registerConfig);
+    }
+
+    @Override
+    public int totalFrameSize() {
+        // FIXME return some sane values
+        return frameSize();
+    }
+
+    @Override
+    public int currentFrameSize() {
+        // FIXME return some sane values
+        return alignFrameSize(outgoingSize + spillSize);
+    }
+
+    @Override
+    protected int alignFrameSize(int size) {
+        // FIXME return some sane values
+        int x = size + (getTarget().stackAlignment - 1);
+        return (x / getTarget().stackAlignment) * getTarget().stackAlignment;
     }
 
     @Override
@@ -47,7 +66,7 @@ public final class PTXFrameMap extends FrameMap {
     }
 
     @Override
-    protected StackSlot allocateNewSpillSlot(PlatformKind kind, int additionalOffset) {
+    protected StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset) {
         return StackSlot.get(kind, -spillSize + additionalOffset, true);
     }
 }

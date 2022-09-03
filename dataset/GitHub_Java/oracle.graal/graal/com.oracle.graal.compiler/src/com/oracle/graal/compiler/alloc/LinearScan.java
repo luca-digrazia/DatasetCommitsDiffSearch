@@ -45,7 +45,6 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.util.*;
@@ -59,9 +58,8 @@ import com.oracle.graal.phases.util.*;
 public final class LinearScan {
 
     final TargetDescription target;
-    final LIRGenerationResult res;
     final LIR ir;
-    final FrameMapBuilder frameMapBuilder;
+    final FrameMap frameMap;
     final RegisterAttributes[] registerAttributes;
     final Register[] registers;
 
@@ -161,13 +159,12 @@ public final class LinearScan {
      */
     private final int firstVariableNumber;
 
-    public LinearScan(TargetDescription target, LIRGenerationResult res) {
+    public LinearScan(TargetDescription target, LIR ir, FrameMap frameMap) {
         this.target = target;
-        this.res = res;
-        this.ir = res.getLIR();
-        this.frameMapBuilder = res.getFrameMapBuilder();
+        this.ir = ir;
+        this.frameMap = frameMap;
         this.sortedBlocks = ir.linearScanOrder();
-        this.registerAttributes = frameMapBuilder.getRegisterConfig().getAttributesMap();
+        this.registerAttributes = frameMap.getRegisterConfig().getAttributesMap();
 
         this.registers = target.arch.getRegisters();
         this.firstVariableNumber = registers.length;
@@ -260,7 +257,7 @@ public final class LinearScan {
         } else if (interval.spillSlot() != null) {
             interval.assignLocation(interval.spillSlot());
         } else {
-            VirtualStackSlot slot = frameMapBuilder.allocateSpillSlot(interval.kind());
+            StackSlot slot = frameMap.allocateSpillSlot(interval.kind());
             interval.setSpillSlot(slot);
             interval.assignLocation(slot);
         }
@@ -565,7 +562,7 @@ public final class LinearScan {
                                 AllocatableValue toLocation = canonicalSpillOpr(interval);
 
                                 assert isRegister(fromLocation) : "from operand must be a register but is: " + fromLocation + " toLocation=" + toLocation + " spillState=" + interval.spillState();
-                                assert isStackSlotValue(toLocation) : "to operand must be a stack slot";
+                                assert isStackSlot(toLocation) : "to operand must be a stack slot";
 
                                 insertionBuffer.append(j + 1, ir.getSpillMoveFactory().createMove(toLocation, fromLocation));
 
@@ -1171,7 +1168,7 @@ public final class LinearScan {
             };
 
             // create a list with all caller-save registers (cpu, fpu, xmm)
-            Register[] callerSaveRegs = frameMapBuilder.getRegisterConfig().getCallerSaveRegisters();
+            Register[] callerSaveRegs = frameMap.getRegisterConfig().getCallerSaveRegisters();
 
             // iterate all blocks in reverse order
             for (int i = blockCount() - 1; i >= 0; i--) {
@@ -1556,7 +1553,7 @@ public final class LinearScan {
     // * Phase 7: assign register numbers back to LIR
     // (includes computation of debug information and oop maps)
 
-    static StackSlotValue canonicalSpillOpr(Interval interval) {
+    static StackSlot canonicalSpillOpr(Interval interval) {
         assert interval.spillSlot() != null : "canonical spill slot not set";
         return interval.spillSlot();
     }
@@ -1635,7 +1632,7 @@ public final class LinearScan {
      * Visits all intervals for a frame state. The frame state use this information to build the OOP
      * maps.
      */
-    private void markFrameLocations(IntervalWalker iw, LIRInstruction op, LIRFrameState info, FrameMap frameMap) {
+    private void markFrameLocations(IntervalWalker iw, LIRInstruction op, LIRFrameState info) {
         Debug.log("creating oop map at opId %d", op.id());
 
         // walk before the current operation . intervals that start at
@@ -1728,14 +1725,13 @@ public final class LinearScan {
         // the intervals
         // if the interval is not live, colorLirOperand will cause an assert on failure
         Value result = colorLirOperand((Variable) operand, tempOpId, mode);
-        assert !hasCall(tempOpId) || isStackSlotValue(result) || isConstant(result) || !isCallerSave(result) : "cannot have caller-save register operands at calls";
+        assert !hasCall(tempOpId) || isStackSlot(result) || isConstant(result) || !isCallerSave(result) : "cannot have caller-save register operands at calls";
         return result;
     }
 
     private void computeDebugInfo(IntervalWalker iw, final LIRInstruction op, LIRFrameState info) {
-        FrameMap frameMap = res.getFrameMap();
         info.initDebugInfo(frameMap, !op.destroysCallerSavedRegisters() || !callKillsRegisters);
-        markFrameLocations(iw, op, info, frameMap);
+        markFrameLocations(iw, op, info);
 
         info.forEachState(op, this::debugInfoProcedure);
         info.finish(op, frameMap);
@@ -1804,8 +1800,8 @@ public final class LinearScan {
         }
     }
 
-    public static void allocate(TargetDescription target, LIRGenerationResult res) {
-        new LinearScan(target, res).allocate();
+    public static void allocate(TargetDescription target, LIR lir, FrameMap frameMap) {
+        new LinearScan(target, lir, frameMap).allocate();
     }
 
     private void allocate() {
@@ -1848,13 +1844,10 @@ public final class LinearScan {
             }
 
             try (Scope s = Debug.scope("DebugInfo")) {
+                frameMap.finish();
+
                 printIntervals("After register allocation");
                 printLir("After register allocation", true);
-
-                // build frame map
-                res.buildFrameMap();
-
-                printLir("After FrameMap building", true);
 
                 sortIntervalsAfterAllocation();
 
@@ -1898,7 +1891,7 @@ public final class LinearScan {
                 Interval firstSpillChild = null;
                 try (Indent indent = Debug.logAndIndent("interval %s (%s)", interval, defBlock)) {
                     for (Interval splitChild : interval.getSplitChildren()) {
-                        if (isStackSlotValue(splitChild.location())) {
+                        if (isStackSlot(splitChild.location())) {
                             if (firstSpillChild == null || splitChild.from() < firstSpillChild.from()) {
                                 firstSpillChild = splitChild;
                             } else {
@@ -2229,12 +2222,12 @@ public final class LinearScan {
      * @param interval The interval for this defined value.
      * @return Returns the value which is moved to the instruction and which can be reused at all
      *         reload-locations in case the interval of this instruction is spilled. Currently this
-     *         can only be a {@link JavaConstant}.
+     *         can only be a {@link Constant}.
      */
-    public static JavaConstant getMaterializedValue(LIRInstruction op, Value operand, Interval interval) {
+    public static Constant getMaterializedValue(LIRInstruction op, Value operand, Interval interval) {
         if (op instanceof MoveOp) {
             MoveOp move = (MoveOp) op;
-            if (move.getInput() instanceof JavaConstant) {
+            if (move.getInput() instanceof Constant) {
                 /*
                  * Check if the interval has any uses which would accept an stack location (priority
                  * == ShouldHaveRegister). Rematerialization of such intervals can result in a
@@ -2249,7 +2242,7 @@ public final class LinearScan {
                         return null;
                     }
                 }
-                return (JavaConstant) move.getInput();
+                return (Constant) move.getInput();
             }
         }
         return null;

@@ -46,7 +46,17 @@ public class TailcallNode extends FixedWithNextNode implements LIRLowerable {
     @Input(InputType.State) FrameState frameState;
     @Input ValueNode target;
 
-    public TailcallNode(ValueNode target, FrameState frameState) {
+    /**
+     * Creates a TailcallNode.
+     *
+     * @param target points to the start of an nmethod
+     * @param frameState the parameters will be taken from this FrameState
+     */
+    public static TailcallNode create(ValueNode target, FrameState frameState) {
+        return new TailcallNode(target, frameState);
+    }
+
+    protected TailcallNode(ValueNode target, FrameState frameState) {
         super(StampFactory.forVoid());
         this.target = target;
         this.frameState = frameState;
@@ -59,7 +69,7 @@ public class TailcallNode extends FixedWithNextNode implements LIRLowerable {
         boolean isStatic = method.isStatic();
 
         JavaType[] signature = method.getSignature().toParameterTypes(isStatic ? null : method.getDeclaringClass());
-        CallingConvention cc = lirGen.getResult().getFrameMapBuilder().getRegisterConfig().getCallingConvention(CallingConvention.Type.JavaCall, null, signature, lirGen.target(), false);
+        CallingConvention cc = lirGen.getResult().getFrameMap().getRegisterConfig().getCallingConvention(CallingConvention.Type.JavaCall, null, signature, lirGen.target(), false);
         List<ValueNode> parameters = new ArrayList<>();
         for (int i = 0, slot = 0; i < cc.getArgumentCount(); i++, slot += HIRFrameStateBuilder.stackSlots(frameState.localAt(slot).getKind())) {
             parameters.add(frameState.localAt(slot));

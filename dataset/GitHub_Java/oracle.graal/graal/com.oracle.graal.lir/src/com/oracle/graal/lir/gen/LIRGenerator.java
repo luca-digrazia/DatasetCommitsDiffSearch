@@ -44,7 +44,7 @@ import com.oracle.graal.options.*;
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
  */
-public abstract class LIRGenerator implements LIRGeneratorTool {
+public abstract class LIRGenerator implements LIRGeneratorTool, LIRKindTool {
 
     public static class Options {
         // @formatter:off
@@ -55,8 +55,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         // @formatter:on
     }
 
-    private final LIRKindTool lirKindTool;
-
     private final CodeGenProviders providers;
     private final CallingConvention cc;
 
@@ -64,8 +62,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     private LIRGenerationResult res;
 
-    public LIRGenerator(LIRKindTool lirKindTool, CodeGenProviders providers, CallingConvention cc, LIRGenerationResult res) {
-        this.lirKindTool = lirKindTool;
+    public LIRGenerator(CodeGenProviders providers, CallingConvention cc, LIRGenerationResult res) {
         this.res = res;
         this.providers = providers;
         this.cc = cc;
@@ -103,10 +100,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         return providers.getForeignCalls();
     }
 
-    protected LIRKindTool getLIRKindTool() {
-        return lirKindTool;
-    }
-
     @Override
     public Variable newVariable(LIRKind lirKind) {
         return new Variable(lirKind, res.getLIR().nextVariable());
@@ -114,7 +107,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     @Override
     public RegisterAttributes attributes(Register register) {
-        return res.getFrameMapBuilder().getRegisterConfig().getAttributesMap()[register.number];
+        return res.getFrameMap().getRegisterConfig().getAttributesMap()[register.number];
     }
 
     @Override
@@ -126,11 +119,10 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     @Override
     public Value emitLoadConstant(LIRKind kind, Constant constant) {
-        JavaConstant javaConstant = (JavaConstant) constant;
-        if (canInlineConstant(javaConstant)) {
-            return javaConstant;
+        if (canInlineConstant(constant)) {
+            return constant;
         } else {
-            return emitMove(javaConstant);
+            return emitMove(constant);
         }
     }
 
@@ -157,10 +149,10 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
      * @return True if the constant can be used directly, false if the constant needs to be in a
      *         register.
      */
-    protected abstract boolean canInlineConstant(JavaConstant c);
+    protected abstract boolean canInlineConstant(Constant c);
 
     public Value loadNonConst(Value value) {
-        if (isConstant(value) && !canInlineConstant((JavaConstant) value)) {
+        if (isConstant(value) && !canInlineConstant((Constant) value)) {
             return emitMove(value);
         }
         return value;
@@ -181,7 +173,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
      *         {@code kind}
      */
     public AllocatableValue resultOperandFor(LIRKind kind) {
-        return res.getFrameMapBuilder().getRegisterConfig().getReturnRegister((Kind) kind.getPlatformKind()).asValue(kind);
+        return res.getFrameMap().getRegisterConfig().getReturnRegister((Kind) kind.getPlatformKind()).asValue(kind);
     }
 
     public void append(LIRInstruction op) {
@@ -281,7 +273,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
         // move the arguments into the correct location
         CallingConvention linkageCc = linkage.getOutgoingCallingConvention();
-        res.getFrameMapBuilder().callsMethod(linkageCc);
+        res.getFrameMap().callsMethod(linkageCc);
         assert linkageCc.getArgumentCount() == args.length : "argument count mismatch";
         Value[] argLocations = new Value[args.length];
         for (int i = 0; i < args.length; i++) {
@@ -300,7 +292,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         }
     }
 
-    public void emitStrategySwitch(JavaConstant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value) {
+    public void emitStrategySwitch(Constant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value) {
         int keyCount = keyConstants.length;
         SwitchStrategy strategy = SwitchStrategy.getBestStrategy(keyProbabilities, keyConstants, keyTargets);
         long valueRange = keyConstants[keyCount - 1].asLong() - keyConstants[0].asLong() + 1;
@@ -342,34 +334,65 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     /**
      * Gets a garbage value for a given kind.
      */
-    protected JavaConstant zapValueForKind(PlatformKind kind) {
+    protected Constant zapValueForKind(PlatformKind kind) {
         long dead = 0xDEADDEADDEADDEADL;
         switch ((Kind) kind) {
             case Boolean:
-                return JavaConstant.FALSE;
+                return Constant.FALSE;
             case Byte:
-                return JavaConstant.forByte((byte) dead);
+                return Constant.forByte((byte) dead);
             case Char:
-                return JavaConstant.forChar((char) dead);
+                return Constant.forChar((char) dead);
             case Short:
-                return JavaConstant.forShort((short) dead);
+                return Constant.forShort((short) dead);
             case Int:
-                return JavaConstant.forInt((int) dead);
+                return Constant.forInt((int) dead);
             case Double:
-                return JavaConstant.forDouble(Double.longBitsToDouble(dead));
+                return Constant.forDouble(Double.longBitsToDouble(dead));
             case Float:
-                return JavaConstant.forFloat(Float.intBitsToFloat((int) dead));
+                return Constant.forFloat(Float.intBitsToFloat((int) dead));
             case Long:
-                return JavaConstant.forLong(dead);
+                return Constant.forLong(dead);
             case Object:
-                return JavaConstant.NULL_OBJECT;
+                return Constant.NULL_OBJECT;
             default:
                 throw new IllegalArgumentException(kind.toString());
         }
     }
 
+    /**
+     * Default implementation: Return the Java stack kind for each stamp.
+     */
     public LIRKind getLIRKind(Stamp stamp) {
-        return stamp.getLIRKind(lirKindTool);
+        return stamp.getLIRKind(this);
+    }
+
+    public LIRKind getIntegerKind(int bits) {
+        if (bits <= 8) {
+            return LIRKind.value(Kind.Byte);
+        } else if (bits <= 16) {
+            return LIRKind.value(Kind.Short);
+        } else if (bits <= 32) {
+            return LIRKind.value(Kind.Int);
+        } else {
+            assert bits <= 64;
+            return LIRKind.value(Kind.Long);
+        }
+    }
+
+    public LIRKind getFloatingKind(int bits) {
+        switch (bits) {
+            case 32:
+                return LIRKind.value(Kind.Float);
+            case 64:
+                return LIRKind.value(Kind.Double);
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
+    }
+
+    public LIRKind getObjectKind() {
+        return LIRKind.reference(Kind.Object);
     }
 
     protected LIRKind getAddressKind(Value base, long displacement, Value index) {

@@ -25,7 +25,7 @@ package com.oracle.graal.lir.sparc;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.sparc.*;
 
 /**
@@ -35,7 +35,7 @@ import com.oracle.graal.sparc.*;
  *
  * <pre>
  *   Base       Contents
- *
+ * 
  *            :                                :  -----
  *   caller   | incoming overflow argument n   |    ^
  *   frame    :     ...                        :    | positive
@@ -108,7 +108,7 @@ public final class SPARCFrameMap extends FrameMap {
     }
 
     /**
-     * In SPARC we have spill slots word aligned.
+     * In SPARC we have spill slots word aligned
      */
     @Override
     public int spillSlotSize(LIRKind kind) {
@@ -116,7 +116,7 @@ public final class SPARCFrameMap extends FrameMap {
     }
 
     /**
-     * We must add the calleSaveAreaSize() when it is a in or out parameter.
+     * We must add the calleSaveAreaSize() when it is a in or out parameter
      */
     @Override
     public int offsetForStackSlot(StackSlot slot) {
@@ -130,10 +130,5 @@ public final class SPARCFrameMap extends FrameMap {
     @Override
     public boolean frameNeedsAllocating() {
         return super.frameNeedsAllocating() || spillSize > 0;
-    }
-
-    public StackSlot allocateDeoptimizationRescueSlot() {
-        assert spillSize == initialSpillSize : "Deoptimization rescue slot must be the first stack slot";
-        return allocateSpillSlot(LIRKind.value(Kind.Long));
     }
 }

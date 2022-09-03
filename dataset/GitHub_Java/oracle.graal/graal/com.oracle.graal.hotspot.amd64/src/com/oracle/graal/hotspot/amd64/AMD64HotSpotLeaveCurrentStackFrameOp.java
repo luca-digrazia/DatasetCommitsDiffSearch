@@ -52,7 +52,7 @@ final class AMD64HotSpotLeaveCurrentStackFrameOp extends AMD64HotSpotEpilogueOp 
         Register stackPointer = registerConfig.getFrameRegister();
 
         // Restore integer result register.
-        final int stackSlotSize = frameMap.getTarget().wordSize;
+        final int stackSlotSize = frameMap.stackSlotSize();
         Register integerResultRegister = registerConfig.getReturnRegister(Kind.Long);
         masm.movptr(integerResultRegister, new AMD64Address(stackPointer, registerSaveLayout.registerToSlot(integerResultRegister) * stackSlotSize));
         masm.movptr(rdx, new AMD64Address(stackPointer, registerSaveLayout.registerToSlot(rdx) * stackSlotSize));

@@ -28,7 +28,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.match.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.lir.gen.*;
@@ -59,7 +58,7 @@ public abstract class SPARCNodeLIRBuilder extends NodeLIRBuilder {
             sig[i] = node.arguments().get(i).stamp().javaType(gen.getMetaAccess());
         }
 
-        Value[] parameters = visitInvokeArguments(gen.getResult().getFrameMapBuilder().getRegisterConfig().getCallingConvention(CallingConvention.Type.JavaCall, null, sig, gen.target(), false),
+        Value[] parameters = visitInvokeArguments(gen.getResult().getFrameMap().getRegisterConfig().getCallingConvention(CallingConvention.Type.JavaCall, null, sig, gen.target(), false),
                         node.arguments());
         append(new SPARCBreakpointOp(parameters));
     }
@@ -102,25 +101,20 @@ public abstract class SPARCNodeLIRBuilder extends NodeLIRBuilder {
             default:
                 throw GraalInternalError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
         }
-
-        Kind localFromKind = fromKind;
-        Kind localToKind = toKind;
-        return builder -> {
-            TTY.println("FromKind: " + localFromKind + " " + localToKind);
-            Value address = access.accessLocation().generateAddress(builder, gen, operand(access.object()));
-            Value v = getLIRGeneratorTool().emitSignExtendLoad(LIRKind.value(localFromKind), address, getState(access));
-            return getLIRGeneratorTool().emitReinterpret(LIRKind.value(localToKind), v);
-        };
+        {
+            Kind localFromKind = fromKind;
+            Kind localToKind = toKind;
+            return builder -> {
+                Value address = access.accessLocation().generateAddress(builder, gen, operand(access.object()));
+                Value v = getLIRGeneratorTool().emitLoad(LIRKind.value(localFromKind), address, getState(access));
+                return getLIRGeneratorTool().emitReinterpret(LIRKind.value(localToKind), v);
+            };
+        }
     }
 
     @MatchRule("(SignExtend Read=access)")
     @MatchRule("(SignExtend FloatingRead=access)")
     public ComplexMatchResult signExtend(SignExtendNode root, Access access) {
         return emitSignExtendMemory(access, root.getInputBits(), root.getResultBits());
-    }
-
-    @Override
-    public SPARCLIRGenerator getLIRGeneratorTool() {
-        return (SPARCLIRGenerator) super.getLIRGeneratorTool();
     }
 }
