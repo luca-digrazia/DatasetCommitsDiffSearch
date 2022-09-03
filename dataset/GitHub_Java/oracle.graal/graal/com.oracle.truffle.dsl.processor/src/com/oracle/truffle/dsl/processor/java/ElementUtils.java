@@ -844,7 +844,6 @@ public class ElementUtils {
         PrintWriter writer = new PrintWriter(string);
         e.printStackTrace(writer);
         writer.flush();
-        string.flush();
         return e.getMessage() + "\r\n" + string.toString();
     }
 
@@ -997,18 +996,6 @@ public class ElementUtils {
         }
 
         return false;
-    }
-
-    public static void setVisibility(Set<Modifier> modifiers, Modifier visibility) {
-        Modifier current = getVisibility(modifiers);
-        if (current != visibility) {
-            if (current != null) {
-                modifiers.remove(current);
-            }
-            if (visibility != null) {
-                modifiers.add(visibility);
-            }
-        }
     }
 
     public static Modifier getVisibility(Set<Modifier> modifier) {
