@@ -27,11 +27,25 @@ import java.util.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
-public final class GraphOrder implements Iterable<Node> {
+public class GraphOrder implements Iterable<Node> {
 
     private final ArrayList<Node> nodes = new ArrayList<>();
 
     private GraphOrder() {
+    }
+
+    public GraphOrder(Graph graph) {
+        NodeBitMap visited = graph.createNodeBitMap();
+
+        for (ReturnNode node : graph.getNodes(ReturnNode.class)) {
+            visitForward(visited, node);
+        }
+        for (UnwindNode node : graph.getNodes(UnwindNode.class)) {
+            visitForward(visited, node);
+        }
+        for (DeoptimizeNode node : graph.getNodes(DeoptimizeNode.class)) {
+            visitForward(visited, node);
+        }
     }
 
     public static GraphOrder forwardGraph(Graph graph) {
@@ -39,7 +53,13 @@ public final class GraphOrder implements Iterable<Node> {
 
         NodeBitMap visited = graph.createNodeBitMap();
 
-        for (ControlSinkNode node : graph.getNodes(ControlSinkNode.class)) {
+        for (ReturnNode node : graph.getNodes(ReturnNode.class)) {
+            result.visitForward(visited, node);
+        }
+        for (UnwindNode node : graph.getNodes(UnwindNode.class)) {
+            result.visitForward(visited, node);
+        }
+        for (DeoptimizeNode node : graph.getNodes(DeoptimizeNode.class)) {
             result.visitForward(visited, node);
         }
         return result;
