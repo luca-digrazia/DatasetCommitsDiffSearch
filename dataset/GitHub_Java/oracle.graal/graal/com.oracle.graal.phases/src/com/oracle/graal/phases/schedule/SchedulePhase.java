@@ -94,7 +94,6 @@ public final class SchedulePhase extends Phase {
         cfg = ControlFlowGraph.compute(graph, true, true, true, false);
 
         if (selectedStrategy == SchedulingStrategy.EARLIEST) {
-            // Assign early so we are getting a context in case of an exception.
             this.nodeToBlockMap = graph.createNodeMap();
             this.blockToNodesMap = new BlockMap<>(cfg);
             NodeBitMap visited = graph.createNodeBitMap();
@@ -106,11 +105,6 @@ public final class SchedulePhase extends Phase {
                 NodeMap<Block> currentNodeMap = graph.createNodeMap();
                 BlockMap<List<Node>> earliestBlockToNodesMap = new BlockMap<>(cfg);
                 NodeBitMap visited = graph.createNodeBitMap();
-
-                // Assign early so we are getting a context in case of an exception.
-                this.blockToNodesMap = earliestBlockToNodesMap;
-                this.nodeToBlockMap = currentNodeMap;
-
                 scheduleEarliestIterative(cfg, earliestBlockToNodesMap, currentNodeMap, visited, graph);
                 BlockMap<List<Node>> latestBlockToNodesMap = new BlockMap<>(cfg);
 
