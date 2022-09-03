@@ -217,7 +217,7 @@ class JavaObjectMessageResolution {
     @Resolve(message = "KEYS")
     abstract static class PropertiesNode extends Node {
         @TruffleBoundary
-        public Object access(JavaObject receiver, boolean includeInternal) {
+        public Object access(JavaObject receiver) {
             String[] fields;
             if (receiver.obj instanceof Map) {
                 Map<?, ?> map = (Map<?, ?>) receiver.obj;
@@ -227,7 +227,7 @@ class JavaObjectMessageResolution {
                     fields[i++] = Objects.toString(key, null);
                 }
             } else {
-                fields = TruffleOptions.AOT ? new String[0] : JavaInteropReflect.findUniquePublicMemberNames(receiver.clazz, receiver.obj != null, includeInternal);
+                fields = TruffleOptions.AOT ? new String[0] : JavaInteropReflect.findUniquePublicMemberNames(receiver.clazz, receiver.obj != null);
             }
             return JavaInterop.asTruffleObject(fields);
         }
@@ -236,6 +236,28 @@ class JavaObjectMessageResolution {
 
     @Resolve(message = "KEY_INFO")
     abstract static class PropertyInfoNode extends Node {
+
+        @TruffleBoundary
+        public Object access(JavaObject receiver, Number index) {
+            int i = index.intValue();
+            if (i != index.doubleValue()) {
+                // No non-integer indexes
+                return 0;
+            }
+            if (i < 0) {
+                return 0;
+            }
+            Object obj = receiver.obj;
+            try {
+                int length = Array.getLength(obj);
+                if (i >= length) {
+                    return 0;
+                }
+                return 0b111;
+            } catch (IllegalArgumentException notAnArr) {
+                return 0;
+            }
+        }
 
         @TruffleBoundary
         public Object access(JavaObject receiver, String name) {
@@ -256,12 +278,19 @@ class JavaObjectMessageResolution {
             if (JavaInteropReflect.isMethod(receiver, name)) {
                 return 0b1111;
             }
-            if (name.contains("__")) {
-                if (JavaInteropReflect.isJNIMethod(receiver, name)) {
-                    return 0b11111;
-                }
-            }
             return 0;
         }
+    }
+
+    @Resolve(message = "com.oracle.truffle.api.interop.java.ClassMessage")
+    abstract static class ClassMessageNode extends Node {
+        protected Object access(JavaObject receiver) {
+            if (receiver.obj == null) {
+                return new JavaObject(null, receiver.clazz.getClass());
+            } else {
+                return new JavaObject(null, receiver.clazz);
+            }
+        }
+
     }
 }
