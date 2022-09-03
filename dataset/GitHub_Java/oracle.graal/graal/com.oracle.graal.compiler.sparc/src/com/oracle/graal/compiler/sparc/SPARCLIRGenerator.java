@@ -70,7 +70,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     private StackSlotValue tmpStackSlot;
 
-    private class SPARCSpillMoveFactory implements LIRGeneratorTool.SpillMoveFactory {
+    private class SPARCSpillMoveFactory implements LIR.SpillMoveFactory {
 
         @Override
         public LIRInstruction createMove(AllocatableValue result, Value input) {
@@ -80,10 +80,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     public SPARCLIRGenerator(LIRKindTool lirKindTool, Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
         super(lirKindTool, providers, cc, lirGenRes);
-    }
-
-    public SpillMoveFactory getSpillMoveFactory() {
-        return new SPARCSpillMoveFactory();
+        lirGenRes.getLIR().setSpillMoveFactory(new SPARCSpillMoveFactory());
     }
 
     @Override
@@ -626,7 +623,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             case Long:
                 if (setFlags) {
                     Variable result = newVariable(LIRKind.derive(a, b));
-                    append(new SPARCLMulccOp(result, load(a), load(b), this));
+                    append(new SPARCLMulccOp(result, a, b, this));
                     return result;
                 } else {
                     return emitBinary(LMUL, true, a, b);
