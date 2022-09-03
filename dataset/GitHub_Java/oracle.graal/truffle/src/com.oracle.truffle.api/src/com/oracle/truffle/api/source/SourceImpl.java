@@ -168,16 +168,13 @@ final class SourceImpl extends Source {
         }
 
         private boolean compareCharacters(Key other) {
-            CharSequence otherCharacters = other.characters;
-            if (characters == otherCharacters) {
+            if (characters == other.characters) {
                 return true;
             } else if (characters == null) {
                 return false;
-            } else if (characters.length() != otherCharacters.length()) {
-                return false;
             } else {
-                assert otherCharacters != null;
-                return Objects.equals(characters.toString(), otherCharacters.toString());
+                assert other.characters != null;
+                return Objects.equals(characters.toString(), other.characters.toString());
             }
         }
 
