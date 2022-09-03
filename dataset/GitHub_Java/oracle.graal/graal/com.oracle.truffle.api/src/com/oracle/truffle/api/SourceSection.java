@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,98 +25,147 @@
 package com.oracle.truffle.api;
 
 /**
- * Represents a section in the source code of a guest language program.
+ * Description of contiguous section of text within a {@link Source} of program code.
+ *
+ * The starting location of the section can be described using two different coordinates:
+ * <ul>
+ * <li>{@code (startLine, startColumn)}: rows and columns are 1-based, so the first character in a
+ * source file is at position {@code (1,1)}. {@code Tab} characters are counted as occupying one
+ * column.</li>
+ * <li><b>character index</b>: 0-based offset of the character from the beginning of the source, so
+ * the first character in a file is at index {@code 0}.</li>
+ * </ul>
+ * The {@code Newline} that terminates each line counts as a single character for the purpose of a
+ * character index and when counting the length of text. The {@code (line,column)} coordinates of a
+ * {@code Newline} should never appear in a text section.
+ * <p>
+ * If the final character of source is not a {@code Newline}, the final characters of the text are
+ * still considered to be a line ("unterminated").
+ * <p>
+ *
+ * @see Source#createSection(String, int, int, int, int)
+ * @see Source#createSection(String, int, int, int)
+ * @see Source#createSection(String, int, int)
  */
-public class SourceSection {
+public interface SourceSection {
 
-    private final Source source;
-    private final String identifier;
-    private final int startLine;
-    private final int startColumn;
-    private final int charIndex;
-    private final int charLength;
+    // TODO support alternate text representations/encodings
 
     /**
-     * Creates a new object representing a section in the source code of a guest language program.
-     * 
-     * @param source object representing the source program this is should be a section of
-     * @param identifier an identifier used when printing the section
-     * @param startLine the index of the start line of the section
-     * @param startColumn the index of the start column of the section
-     * @param charIndex the index of the first character of the section
-     * @param charLength the length of the section in number of characters
-     */
-    public SourceSection(Source source, String identifier, int startLine, int startColumn, int charIndex, int charLength) {
-        this.source = source;
-        this.identifier = identifier;
-        this.startLine = startLine;
-        this.startColumn = startColumn;
-        this.charIndex = charIndex;
-        this.charLength = charLength;
-    }
-
-    /**
-     * Returns the source object representing the source program this is a section of.
-     * 
+     * Representation of the source program that contains this section.
+     *
      * @return the source object
      */
-    public final Source getSource() {
-        return source;
-    }
+    Source getSource();
 
     /**
-     * Returns the index of the start line of this source section (inclusive).
-     * 
-     * @return the start line
+     * Returns 1-based line number of the first character in this section (inclusive).
+     *
+     * @return the starting line number
      */
-    public final int getStartLine() {
-        return startLine;
-    }
+    int getStartLine();
 
     /**
-     * Returns the index of the start column of this source section (inclusive).
-     * 
-     * @return the start column
+     * Returns the 1-based column number of the first character in this section (inclusive).
+     *
+     * @return the starting column number
      */
-    public final int getStartColumn() {
-        return startColumn;
-    }
+    int getStartColumn();
 
     /**
-     * Returns the index of the first character of this section. All characters of the source can be
-     * retrieved via the {@link Source#getCode()} method.
-     * 
-     * @return the character index
+     * Returns the 0-based index of the first character in this section.
+     *
+     * @return the starting character index
      */
-    public final int getCharIndex() {
-        return charIndex;
-    }
+    int getCharIndex();
 
     /**
-     * Returns the length of this section in characters. All characters of the source can be
-     * retrieved via the {@link Source#getCode()} method.
-     * 
-     * @return the character length
+     * Returns the length of this section in characters.
+     *
+     * @return the number of characters in the section
      */
-    public final int getCharLength() {
-        return charLength;
-    }
+    int getCharLength();
 
     /**
-     * Returns the identifier of this source section that is used for printing the section.
-     * 
+     * Returns the index of the text position immediately following the last character in the
+     * section.
+     *
+     * @return the end position of the section
+     */
+    int getCharEndIndex();
+
+    /**
+     * Returns terse text describing this source section, typically used for printing the section.
+     *
      * @return the identifier of the section
      */
-    public final String getIdentifier() {
-        return identifier;
-    }
+    String getIdentifier();
 
     /**
-     * Returns the code represented by this code section.
-     * 
+     * Returns text described by this section.
+     *
      * @return the code as a String object
      */
-    public final String getCode() {
-        return getSource().getCode().substring(charIndex, charLength);
-    }
+    String getCode();
+
+    /**
+     * Returns a short description of the source section, using just the file name, rather than its
+     * full path.
+     *
+     * @return a short description of the source section
+     */
+    String getShortDescription();
+
+    /**
+     * Singleton instance with no content.
+     */
+    SourceSection NULL = new NullSourceSection() {
+
+        @Override
+        public Source getSource() {
+            return null;
+        }
+
+        @Override
+        public int getStartLine() {
+            return 0;
+        }
+
+        @Override
+        public int getStartColumn() {
+            return 0;
+        }
+
+        @Override
+        public int getCharIndex() {
+            return 0;
+        }
+
+        @Override
+        public int getCharLength() {
+            return 0;
+        }
+
+        @Override
+        public int getCharEndIndex() {
+            return 0;
+        }
+
+        @Override
+        public String getIdentifier() {
+            return null;
+        }
+
+        @Override
+        public String getCode() {
+            return null;
+        }
+
+        @Override
+        public String getShortDescription() {
+            return "short";
+        }
+
+    };
+
 }
