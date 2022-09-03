@@ -41,7 +41,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.java.*;
-import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
@@ -222,8 +221,8 @@ public class TruffleCompilerImpl implements TruffleCompiler {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
             CompilationResult compilationResult = new CompilationResult(graph.method().toString());
-            result = GraalCompiler.compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, plan, OptimisticOptimizations.ALL, new SpeculationLog(), suites, false,
-                            compilationResult, CompilationResultBuilderFactory.Default);
+            result = GraalCompiler.compileGraphNoScope(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, plan, OptimisticOptimizations.ALL, new SpeculationLog(), suites,
+                            compilationResult);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
@@ -244,21 +243,25 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
         result.setAssumptions(newAssumptions);
 
-        InstalledCode installedCode = null;
+        InstalledCode compiledMethod = null;
         try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache()); TimerCloseable a = CodeInstallationTime.start()) {
-            installedCode = providers.getCodeCache().addMethod(graph.method(), result);
+            InstalledCode installedCode = providers.getCodeCache().addMethod(graph.method(), result);
+            if (installedCode != null) {
+                Debug.dump(new Object[]{result, installedCode}, "After code installation");
+            }
+            compiledMethod = installedCode;
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
 
         for (AssumptionValidAssumption a : validAssumptions) {
-            a.getAssumption().registerInstalledCode(installedCode);
+            a.getAssumption().registerInstalledCode(compiledMethod);
         }
 
         if (Debug.isLogEnabled()) {
-            Debug.log(providers.getCodeCache().disassemble(result, installedCode));
+            Debug.log(providers.getCodeCache().disassemble(result, compiledMethod));
         }
-        return installedCode;
+        return compiledMethod;
     }
 
     private PhasePlan createPhasePlan(final GraphBuilderConfiguration config) {

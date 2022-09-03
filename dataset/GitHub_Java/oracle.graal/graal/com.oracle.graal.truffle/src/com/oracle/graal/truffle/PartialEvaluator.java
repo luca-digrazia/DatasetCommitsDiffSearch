@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
@@ -81,6 +80,7 @@ public class PartialEvaluator {
         this.skippedExceptionTypes = TruffleCompilerImpl.getSkippedExceptionTypes(providers.getMetaAccess());
         this.cache = runtime.getGraphCache();
         this.truffleCache = truffleCache;
+
         try {
             executeHelperMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.class.getDeclaredMethod("executeHelper", PackedFrame.class, Arguments.class));
         } catch (NoSuchMethodException ex) {
@@ -88,12 +88,11 @@ public class PartialEvaluator {
         }
     }
 
-    public StructuredGraph createGraph(final OptimizedCallTarget node, final Assumptions assumptions) {
-        if (Dump.getValue() != null && Dump.getValue().contains("Truffle")) {
-            RootNode root = node.getRootNode();
-            if (root != null) {
-                new GraphPrintVisitor().beginGroup("TruffleGraph").beginGraph(node.toString()).visit(root).printToNetwork();
-            }
+    public StructuredGraph createGraph(final OptimizedCallTarget callTarget, final Assumptions assumptions) {
+        try (Scope s = Debug.scope("TruffleTree")) {
+            Debug.dump(callTarget, "truffle tree");
+        } catch (Throwable e) {
+            throw Debug.handle(e);
         }
 
         if (TraceTruffleCompilationDetails.getValue()) {
@@ -110,7 +109,7 @@ public class PartialEvaluator {
 
             // Replace thisNode with constant.
             LocalNode thisNode = graph.getLocal(0);
-            thisNode.replaceAndDelete(ConstantNode.forObject(node, providers.getMetaAccess(), graph));
+            thisNode.replaceAndDelete(ConstantNode.forObject(callTarget, providers.getMetaAccess(), graph));
 
             // Canonicalize / constant propagate.
             PhaseContext baseContext = new PhaseContext(providers, assumptions);
@@ -181,10 +180,6 @@ public class PartialEvaluator {
 
     private void expandTree(StructuredGraph graph, Assumptions assumptions) {
         PhaseContext phaseContext = new PhaseContext(providers, assumptions);
-        TruffleExpansionLogger expansionLogger = null;
-        if (TraceTruffleExpansion.getValue()) {
-            expansionLogger = new TruffleExpansionLogger(graph);
-        }
         boolean changed;
         do {
             changed = false;
@@ -215,13 +210,7 @@ public class PartialEvaluator {
                     if (inlineGraph != null) {
                         int nodeCountBefore = graph.getNodeCount();
                         Mark mark = graph.getMark();
-                        if (TraceTruffleExpansion.getValue()) {
-                            expansionLogger.preExpand(methodCallTargetNode, inlineGraph);
-                        }
-                        Map<Node, Node> inlined = InliningUtil.inline(methodCallTargetNode.invoke(), inlineGraph, false);
-                        if (TraceTruffleExpansion.getValue()) {
-                            expansionLogger.postExpand(inlined);
-                        }
+                        InliningUtil.inline(methodCallTargetNode.invoke(), inlineGraph, false);
                         if (Debug.isDumpEnabled()) {
                             int nodeCountAfter = graph.getNodeCount();
                             Debug.dump(graph, "After inlining %s %+d (%d)", methodCallTargetNode.targetMethod().toString(), nodeCountAfter - nodeCountBefore, nodeCountAfter);
@@ -240,10 +229,6 @@ public class PartialEvaluator {
                 }
             }
         } while (changed);
-
-        if (TraceTruffleExpansion.getValue()) {
-            expansionLogger.print();
-        }
     }
 
     private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final PhaseContext phaseContext) {
