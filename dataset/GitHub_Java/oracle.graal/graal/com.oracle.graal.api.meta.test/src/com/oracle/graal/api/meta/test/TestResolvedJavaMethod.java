@@ -132,18 +132,6 @@ public class TestResolvedJavaMethod extends MethodUniverse {
     }
 
     @Test
-    public void isSyntheticTest() {
-        for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
-            ResolvedJavaMethod m = e.getValue();
-            assertEquals(e.getKey().isSynthetic(), m.isSynthetic());
-        }
-        for (Map.Entry<Constructor, ResolvedJavaMethod> e : constructors.entrySet()) {
-            ResolvedJavaMethod m = e.getValue();
-            assertEquals(e.getKey().isSynthetic(), m.isSynthetic());
-        }
-    }
-
-    @Test
     public void canBeStaticallyBoundTest() {
         for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
             ResolvedJavaMethod m = e.getValue();
