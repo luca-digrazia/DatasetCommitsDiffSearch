@@ -75,7 +75,7 @@ public abstract class Node implements NodeInterface, Cloneable {
     protected Node(SourceSection sourceSection) {
         CompilerAsserts.neverPartOfCompilation();
         this.sourceSection = sourceSection;
-        this.nodeClass = NodeClass.get(getClass());
+        this.nodeClass = NodeClass.Lookup.get(getClass());
         if (TruffleOptions.TraceASTJSON) {
             JSONHelper.dumpNewNode(this);
         }
@@ -430,9 +430,6 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     public final void atomic(Runnable closure) {
         RootNode rootNode = getRootNode();
-        // Major Assumption: parent is never null after a node got adopted
-        // it is never reset to null, and thus, rootNode is always reachable.
-        // GIL: used for nodes that are replace in ASTs that are not yet adopted
         synchronized (rootNode != null ? rootNode : GIL) {
             assert enterAtomic();
             try {
@@ -446,9 +443,6 @@ public abstract class Node implements NodeInterface, Cloneable {
     public final <T> T atomic(Callable<T> closure) {
         try {
             RootNode rootNode = getRootNode();
-            // Major Assumption: parent is never null after a node got adopted
-            // it is never reset to null, and thus, rootNode is always reachable.
-            // GIL: used for nodes that are replace in ASTs that are not yet adopted
             synchronized (rootNode != null ? rootNode : GIL) {
                 assert enterAtomic();
                 try {

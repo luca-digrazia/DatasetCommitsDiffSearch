@@ -24,14 +24,16 @@
  */
 package com.oracle.truffle.api.nodes.serial;
 
-import java.lang.reflect.*;
-import java.util.*;
-
-import sun.misc.*;
-
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeClass;
+import com.oracle.truffle.api.nodes.NodeFieldAccessor;
 import com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind;
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.source.SourceSection;
+import java.lang.reflect.Array;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+import sun.misc.Unsafe;
 
 /**
  * Experimental API. May change without notice.
@@ -146,7 +148,7 @@ public final class PostOrderDeserializer {
 
         Node node = (Node) object;
 
-        NodeFieldAccessor[] nodeFields = NodeClass.get(nodeClass).getFields();
+        NodeFieldAccessor[] nodeFields = NodeClass.Lookup.get(nodeClass).getFields();
         deserializeChildrenFields(node, nodeFields);
         deserializeChildFields(node, nodeFields);
         deserializeDataFields(buffer, node, nodeFields);
@@ -158,12 +160,12 @@ public final class PostOrderDeserializer {
         for (int i = 0; i < nodeFields.length; i++) {
             NodeFieldAccessor field = nodeFields[i];
             if (field.getKind() == NodeFieldKind.DATA) {
-                Class<?> fieldClass = field.getType();
-                long offset = field.getOffset();
+                Class<?> fieldClass = field.getFieldType();
+                long offset = getFieldOffset(field);
 
                 // source sections are not serialized
                 // TODO add support for source sections
-                if (field.getType().isAssignableFrom(SourceSection.class)) {
+                if (field.getFieldType().isAssignableFrom(SourceSection.class)) {
                     continue;
                 }
 
@@ -241,7 +243,7 @@ public final class PostOrderDeserializer {
         for (int i = nodeFields.length - 1; i >= 0; i--) {
             NodeFieldAccessor field = nodeFields[i];
             if (field.getKind() == NodeFieldKind.CHILD) {
-                unsafe.putObject(parent, field.getOffset(), popNode(parent, field.getType()));
+                unsafe.putObject(parent, getFieldOffset(field), popNode(parent, field.getFieldType()));
             }
         }
     }
@@ -250,18 +252,31 @@ public final class PostOrderDeserializer {
         for (int i = nodeFields.length - 1; i >= 0; i--) {
             NodeFieldAccessor field = nodeFields[i];
             if (field.getKind() == NodeFieldKind.CHILDREN) {
-                unsafe.putObject(parent, field.getOffset(), popArray(parent, field.getType()));
+                unsafe.putObject(parent, getFieldOffset(field), popArray(parent, field.getFieldType()));
             }
         }
     }
 
     private static Node updateParent(Node parent, Node child) {
         if (child != null) {
-            NodeClass nodeClass = NodeClass.get(child.getClass());
+            NodeClass nodeClass = NodeClass.Lookup.get(child.getClass());
             nodeClass.getNodeClassField().putObject(child, nodeClass);
             nodeClass.getParentField().putObject(child, parent);
         }
         return child;
+    }
+
+    static long getFieldOffset(NodeFieldAccessor field) {
+        if (field instanceof NodeFieldAccessor.AbstractUnsafeNodeFieldAccessor) {
+            return ((NodeFieldAccessor.AbstractUnsafeNodeFieldAccessor) field).getOffset();
+        } else {
+            try {
+                Field reflectionField = field.getFieldDeclaringClass().getDeclaredField(field.getName());
+                return unsafe.objectFieldOffset(reflectionField);
+            } catch (NoSuchFieldException | SecurityException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     private static Unsafe loadUnsafe() {
