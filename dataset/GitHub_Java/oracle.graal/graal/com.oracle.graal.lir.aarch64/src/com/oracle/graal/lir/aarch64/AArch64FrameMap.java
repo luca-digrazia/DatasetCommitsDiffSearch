@@ -22,13 +22,14 @@
  */
 package com.oracle.graal.lir.aarch64;
 
-import com.oracle.graal.lir.framemap.FrameMap;
-
 import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.meta.LIRKind;
+
+import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.lir.framemap.FrameMap;
 
 /**
  * AArch64 specific frame map.
@@ -38,7 +39,7 @@ import jdk.vm.ci.meta.LIRKind;
  *
  * <pre>
  *   Base       Contents
- * 
+ *
  *            :                                :  -----
  *   caller   | incoming overflow argument n   |    ^
  *   frame    :     ...                        :    | positive
@@ -96,6 +97,16 @@ public class AArch64FrameMap extends FrameMap {
     @Override
     public int currentFrameSize() {
         return alignFrameSize(outgoingSize + spillSize);
+    }
+
+    @Override
+    protected int alignFrameSize(int size) {
+        return NumUtil.roundUp(size, getTarget().stackAlignment);
+    }
+
+    @Override
+    protected StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset) {
+        return StackSlot.get(kind, -spillSize + additionalOffset, true);
     }
 
     public StackSlot allocateDeoptimizationRescueSlot() {
