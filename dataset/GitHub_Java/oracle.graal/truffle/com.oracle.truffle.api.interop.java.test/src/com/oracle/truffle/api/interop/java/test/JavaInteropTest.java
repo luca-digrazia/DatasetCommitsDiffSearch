@@ -569,7 +569,7 @@ public class JavaInteropTest {
             try {
                 return ForeignAccess.send(foreignAccess, function, args);
             } catch (InteropException e) {
-                throw e.raise();
+                throw new AssertionError(e);
             }
         }
     } // end of TemporaryRoot
