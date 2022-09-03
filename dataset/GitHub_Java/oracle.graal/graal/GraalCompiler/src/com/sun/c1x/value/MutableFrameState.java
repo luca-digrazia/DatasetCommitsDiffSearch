@@ -24,7 +24,7 @@ package com.sun.c1x.value;
 
 import java.util.*;
 
-import com.sun.c1x.*;
+import com.sun.c1x.graph.*;
 import com.sun.c1x.ir.*;
 import com.sun.c1x.util.*;
 import com.sun.cri.ci.*;
@@ -39,48 +39,11 @@ import com.sun.cri.ci.*;
  * Contrariwise and as an optimization, an instance referenced as {@code MutableFrameState} can be assigned to
  * a variable, field, or method parameter of type {@link FrameState} without creating an immutable copy before
  * (using {@link #immutableCopy(int)}) if the state is not mutated after the assignment.
- *
- * @author Michael Duller
  */
 public final class MutableFrameState extends FrameState {
 
-    public MutableFrameState(IRScope irScope, int bci, int maxLocals, int maxStack) {
-        super(irScope, bci, maxLocals, maxStack);
-    }
-
-    /**
-     * Replace the local variables in this frame state with the local variables from the specified frame state. This is
-     * used in inlining.
-     *
-     * @param with the frame state containing the new local variables
-     */
-    public void replaceLocals(FrameState with) {
-        assert with.maxLocals == maxLocals;
-        System.arraycopy(with.values, 0, values, 0, maxLocals);
-    }
-
-    /**
-     * Replace the stack in this frame state with the stack from the specified frame state. This is used in inlining.
-     *
-     * @param with the frame state containing the new local variables
-     */
-    public void replaceStack(FrameState with) {
-        System.arraycopy(with.values, with.maxLocals, values, maxLocals, with.stackIndex);
-        stackIndex = with.stackIndex;
-        assert stackIndex >= 0;
-    }
-
-    /**
-     * Replace the locks in this frame state with the locks from the specified frame state. This is used in inlining.
-     *
-     * @param with the frame state containing the new local variables
-     */
-    public void replaceLocks(FrameState with) {
-        if (with.locks == null) {
-            locks = null;
-        } else {
-            locks = Util.uncheckedCast(with.locks.clone());
-        }
+    public MutableFrameState(int bci, int maxLocals, int maxStack) {
+        super(bci, maxLocals, maxStack);
     }
 
     /**
@@ -267,42 +230,42 @@ public final class MutableFrameState extends FrameState {
     }
 
     private static Value assertKind(CiKind kind, Value x) {
-        assert x != null && (x.kind == kind || !isTypesafe()) : "kind=" + kind + ", value=" + x + ((x == null) ? "" : ", value.kind=" + x.kind);
+        assert x != null && (x.kind == kind) : "kind=" + kind + ", value=" + x + ((x == null) ? "" : ", value.kind=" + x.kind);
         return x;
     }
 
     private static Value assertLong(Value x) {
-        assert x != null && (x.kind == CiKind.Long || !isTypesafe());
+        assert x != null && (x.kind == CiKind.Long);
         return x;
     }
 
     private static Value assertJsr(Value x) {
-        assert x != null && (x.kind == CiKind.Jsr || !isTypesafe());
+        assert x != null && (x.kind == CiKind.Jsr);
         return x;
     }
 
     private static Value assertInt(Value x) {
-        assert x != null && (x.kind == CiKind.Int || !isTypesafe());
+        assert x != null && (x.kind == CiKind.Int);
         return x;
     }
 
     private static Value assertFloat(Value x) {
-        assert x != null && (x.kind == CiKind.Float || !isTypesafe());
+        assert x != null && (x.kind == CiKind.Float);
         return x;
     }
 
     private static Value assertObject(Value x) {
-        assert x != null && (x.kind == CiKind.Object || !isTypesafe());
+        assert x != null && (x.kind == CiKind.Object);
         return x;
     }
 
     private static Value assertWord(Value x) {
-        assert x != null && (x.kind == CiKind.Word || !isTypesafe());
+        assert x != null && (x.kind == CiKind.Word);
         return x;
     }
 
     private static Value assertDouble(Value x) {
-        assert x != null && (x.kind == CiKind.Double || !isTypesafe());
+        assert x != null && (x.kind == CiKind.Double);
         return x;
     }
 
@@ -329,12 +292,12 @@ public final class MutableFrameState extends FrameState {
      * @param scope the IRScope in which this locking operation occurs
      * @param obj the object being locked
      */
-    public void lock(IRScope scope, Value obj, int totalNumberOfLocks) {
+    public void lock(IR ir, Value obj, int totalNumberOfLocks) {
         if (locks == null) {
             locks = new ArrayList<Value>(4);
         }
         locks.add(obj);
-        scope.updateMaxLocks(totalNumberOfLocks);
+        ir.updateMaxLocks(totalNumberOfLocks);
     }
 
     /**
@@ -349,14 +312,7 @@ public final class MutableFrameState extends FrameState {
      * @param bci the bytecode index of the new frame state
      */
     public FrameState immutableCopy(int bci) {
-        return copy(bci, true, true, true);
-    }
-
-    /**
-     * Determines if the current compilation is typesafe.
-     */
-    private static boolean isTypesafe() {
-        return C1XCompilation.compilation().isTypesafe();
+        return immutableCopy(bci, true, true, true);
     }
 
     private static void assertHigh(Value x) {
