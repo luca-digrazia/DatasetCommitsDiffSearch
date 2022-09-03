@@ -383,7 +383,7 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public void releaseHandle(LLVMMemory memory, LLVMAddress address) {
+    public void releaseHandle(LLVMAddress address) {
         synchronized (handlesLock) {
             final TruffleObject object = toManaged.get(address);
 
@@ -393,16 +393,16 @@ public final class LLVMContext {
 
             toManaged.remove(address);
             toNative.remove(object);
-            memory.free(address);
+            LLVMMemory.free(address);
         }
     }
 
     @TruffleBoundary
-    public LLVMAddress getHandleForManagedObject(LLVMMemory memory, TruffleObject object) {
+    public LLVMAddress getHandleForManagedObject(TruffleObject object) {
         synchronized (handlesLock) {
             return toNative.computeIfAbsent(object, (k) -> {
-                LLVMAddress allocatedMemory = memory.allocateMemory(Long.BYTES);
-                memory.putI64(allocatedMemory, 0xdeadbeef);
+                LLVMAddress allocatedMemory = LLVMMemory.allocateMemory(Long.BYTES);
+                LLVMMemory.putI64(allocatedMemory, 0xdeadbeef);
                 toManaged.put(allocatedMemory, object);
                 return allocatedMemory;
             });

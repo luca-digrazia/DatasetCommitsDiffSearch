@@ -61,7 +61,6 @@ import com.oracle.truffle.llvm.parser.scanner.LLVMScanner;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.nfi.types.NativeLibraryDescriptor;
@@ -227,36 +226,36 @@ public final class Runner {
             context.registerDestructorFunction(result.getDestructorFunction());
         }
         if (!context.getEnv().getOptions().get(SulongEngineOption.PARSE_ONLY)) {
-            try (StackPointer stackPointer = context.getThreadingStack().getStack().newFrame()) {
-                result.getGlobalVarInit().call(stackPointer);
+            try (StackPointer stackPointer = context.getThreadingStack().getStack().takeStackPointer()) {
+                result.getGlobalVarInit().call(stackPointer.get());
             }
             if (result.getConstructorFunction() != null) {
-                try (StackPointer stackPointer = context.getThreadingStack().getStack().newFrame()) {
-                    result.getConstructorFunction().call(stackPointer);
+                try (StackPointer stackPointer = context.getThreadingStack().getStack().takeStackPointer()) {
+                    result.getConstructorFunction().call(stackPointer.get());
                 }
             }
         }
     }
 
-    public static void disposeContext(LLVMMemory memory, LLVMContext context) {
+    public static void disposeContext(LLVMContext context) {
         LLVMFunctionDescriptor atexitDescriptor = context.getGlobalScope().getFunctionDescriptor("@__sulong_funcs_on_exit");
         if (atexitDescriptor != null) {
             RootCallTarget atexit = atexitDescriptor.getLLVMIRFunction();
-            try (StackPointer stackPointer = context.getThreadingStack().getStack().newFrame()) {
-                atexit.call(stackPointer);
+            try (StackPointer stackPointer = context.getThreadingStack().getStack().takeStackPointer()) {
+                atexit.call(stackPointer.get());
             }
         }
         for (RootCallTarget destructorFunction : context.getDestructorFunctions()) {
-            try (StackPointer stackPointer = context.getThreadingStack().getStack().newFrame()) {
-                destructorFunction.call(stackPointer);
+            try (StackPointer stackPointer = context.getThreadingStack().getStack().takeStackPointer()) {
+                destructorFunction.call(stackPointer.get());
             }
         }
         for (RootCallTarget destructor : context.getGlobalVarDeallocs()) {
-            try (StackPointer stackPointer = context.getThreadingStack().getStack().newFrame()) {
-                destructor.call(stackPointer);
+            try (StackPointer stackPointer = context.getThreadingStack().getStack().takeStackPointer()) {
+                destructor.call(stackPointer.get());
             }
         }
-        context.getThreadingStack().freeMainStack(memory);
+        context.getThreadingStack().freeMainStack();
         context.getGlobalsStack().free();
     }
 

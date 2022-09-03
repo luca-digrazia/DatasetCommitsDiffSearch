@@ -70,28 +70,28 @@ public final class LLVMThreadingStack {
     }
 
     @TruffleBoundary
-    public void freeStack(LLVMMemory memory, Thread thread) {
+    public void freeStack(Thread thread) {
         /*
          * Do not free the main thread: Sulong#disposeThread runs before Sulong#disposeContext,
          * which needs to call destructors that need a SP.
          */
         if (mainThread != Thread.currentThread()) {
             LLVMStack s = threadMap.get(thread);
-            free(memory, s);
+            free(s);
         }
     }
 
-    private static void free(LLVMMemory memory, LLVMStack s) {
+    private static void free(LLVMStack s) {
         if (s != null) {
-            s.free(memory);
+            s.free();
         }
     }
 
     @TruffleBoundary
-    public void freeMainStack(LLVMMemory memory) {
+    public void freeMainStack() {
         assert mainThread == Thread.currentThread();
         assert stack.get() == threadMap.get(Thread.currentThread());
         LLVMStack s = threadMap.get(Thread.currentThread());
-        free(memory, s);
+        free(s);
     }
 }

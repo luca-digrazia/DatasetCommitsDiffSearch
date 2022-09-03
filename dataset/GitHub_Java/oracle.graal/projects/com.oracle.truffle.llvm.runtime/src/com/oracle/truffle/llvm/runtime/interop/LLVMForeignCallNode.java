@@ -43,24 +43,19 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMGetStackNode;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.SlowPathForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-abstract class LLVMForeignCallNode extends Node {
+abstract class LLVMForeignCallNode extends LLVMNode {
 
     @Child protected LLVMDataEscapeNode prepareValueForEscape;
-
-    protected LLVMMemory getLLVMMemory() {
-        return LLVMLanguage.getLanguage().getCapability(LLVMMemory.class);
-    }
 
     protected LLVMForeignCallNode(Type returnType) {
         this.prepareValueForEscape = LLVMDataEscapeNodeGen.create(returnType);
@@ -99,15 +94,15 @@ abstract class LLVMForeignCallNode extends Node {
     protected static class SlowPackForeignArgumentsNode extends Node {
         @Child private SlowPathForeignToLLVM slowConvert = ForeignToLLVM.createSlowPathNode();
 
-        Object[] pack(LLVMFunctionDescriptor function, LLVMMemory memory, LLVMContext context, Object[] arguments, long stackPointer) {
+        Object[] pack(LLVMFunctionDescriptor function, LLVMContext context, Object[] arguments, long stackPointer) {
             int actualArgumentsLength = Math.max(arguments.length, function.getType().getArgumentTypes().length);
             final Object[] packedArguments = new Object[1 + actualArgumentsLength];
             packedArguments[0] = stackPointer;
             for (int i = 0; i < function.getType().getArgumentTypes().length; i++) {
-                packedArguments[i + 1] = slowConvert.convert(function.getType().getArgumentTypes()[i], memory, context, arguments[i]);
+                packedArguments[i + 1] = slowConvert.convert(function.getType().getArgumentTypes()[i], context, arguments[i]);
             }
             for (int i = function.getType().getArgumentTypes().length; i < arguments.length; i++) {
-                packedArguments[i + 1] = slowConvert.convert(memory, ForeignToLLVMType.ANY, context, arguments[i]);
+                packedArguments[i + 1] = slowConvert.convert(ForeignToLLVMType.ANY, context, arguments[i]);
             }
             return packedArguments;
         }
@@ -161,13 +156,12 @@ abstract class LLVMForeignCallNode extends Node {
     protected Object callIndirect(LLVMFunctionDescriptor function, Object[] arguments,
                     @Cached("create()") IndirectCallNode callNode,
                     @Cached("createSlowPackArguments()") SlowPackForeignArgumentsNode slowPack,
-                    @Cached("create()") LLVMGetStackNode getStack,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+                    @Cached("create()") LLVMGetStackNode getStack) {
         assert !(function.getType().getReturnType() instanceof StructureType);
         LLVMStack stack = getStack.executeWithTarget(function.getContext().getThreadingStack(), Thread.currentThread());
         Object result;
         try (StackPointer stackPointer = stack.takeStackPointer()) {
-            result = callNode.call(getCallTarget(function), slowPack.pack(function, memory, function.getContext(), arguments, stackPointer.get()));
+            result = callNode.call(getCallTarget(function), slowPack.pack(function, function.getContext(), arguments, stackPointer.get()));
         }
         return prepareValueForEscape.executeWithTarget(result, function.getContext());
     }
