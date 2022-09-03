@@ -39,15 +39,12 @@ public class LoopUtil {
 
     public static class Loop {
         private final LoopBegin loopBegin;
-        private NodeBitMap cfgNodes;
+        private NodeBitMap nodes;
         private Loop parent;
         private NodeBitMap exits;
-        private NodeBitMap inOrBefore;
-        private NodeBitMap inOrAfter;
-        private NodeBitMap nodes;
         public Loop(LoopBegin loopBegin, NodeBitMap nodes, NodeBitMap exits) {
             this.loopBegin = loopBegin;
-            this.cfgNodes = nodes;
+            this.nodes = nodes;
             this.exits = exits;
         }
 
@@ -55,16 +52,7 @@ public class LoopUtil {
             return loopBegin;
         }
 
-        public NodeBitMap cfgNodes() {
-            return cfgNodes;
-        }
-
         public NodeBitMap nodes() {
-            if (nodes == null) {
-                nodes = loopBegin().graph().createNodeBitMap();
-                nodes.setUnion(inOrAfter());
-                nodes.setIntersect(inOrBefore());
-            }
             return nodes;
         }
 
@@ -82,31 +70,6 @@ public class LoopUtil {
 
         public boolean isChild(Loop loop) {
             return loop.parent != null && (loop.parent == this || loop.parent.isChild(this));
-        }
-
-        public NodeBitMap inOrAfter() {
-            if (inOrAfter == null) {
-                inOrAfter = LoopUtil.inOrAfter(this);
-            }
-            return inOrAfter;
-        }
-
-        public NodeBitMap inOrBefore() {
-            if (inOrBefore == null) {
-                inOrBefore = LoopUtil.inOrBefore(this, inOrAfter());
-            }
-            return inOrBefore;
-        }
-
-        public void invalidateCached() {
-            inOrAfter = null;
-            inOrBefore = null;
-            nodes = null;
-        }
-
-        @Override
-        public String toString() {
-            return "Loop #" + loopBegin().id();
         }
     }
 
@@ -134,15 +97,14 @@ public class LoopUtil {
     public static List<Loop> computeLoops(Graph graph) {
         List<Loop> loops = new LinkedList<LoopUtil.Loop>();
         for (LoopBegin loopBegin : graph.getNodes(LoopBegin.class)) {
-            NodeBitMap cfgNodes = markUpCFG(loopBegin, loopBegin.loopEnd()); // computeLoopNodes(loopBegin);
-            cfgNodes.mark(loopBegin);
-            NodeBitMap exits = computeLoopExits(loopBegin, cfgNodes);
-            loops.add(new Loop(loopBegin, cfgNodes, exits));
+            NodeBitMap nodes = computeLoopNodes(loopBegin);
+            NodeBitMap exits = computeLoopExits(loopBegin, nodes);
+            loops.add(new Loop(loopBegin, nodes, exits));
         }
         for (Loop loop : loops) {
             for (Loop other : loops) {
-                if (other != loop && other.cfgNodes().isMarked(loop.loopBegin())) {
-                    if (loop.parent() == null || loop.parent().cfgNodes().isMarked(other.loopBegin())) {
+                if (other != loop && other.nodes().isMarked(loop.loopBegin())) {
+                    if (loop.parent() == null || loop.parent().nodes().isMarked(other.loopBegin())) {
                         loop.setParent(other);
                     }
                 }
@@ -151,13 +113,13 @@ public class LoopUtil {
         return loops;
     }
 
-    public static NodeBitMap computeLoopExits(LoopBegin loopBegin, NodeBitMap cfgNodes) {
+    public static NodeBitMap computeLoopExits(LoopBegin loopBegin, NodeBitMap nodes) {
         Graph graph = loopBegin.graph();
         NodeBitMap exits = graph.createNodeBitMap();
-        for (Node n : cfgNodes) {
+        for (Node n : markUpCFG(loopBegin, loopBegin.loopEnd())) {
             if (IdentifyBlocksPhase.trueSuccessorCount(n) > 1) {
                 for (Node sux : n.cfgSuccessors()) {
-                    if (!cfgNodes.isMarked(sux) && sux instanceof FixedNode) {
+                    if (!nodes.isMarked(sux) && sux instanceof FixedNode) {
                         exits.mark(sux);
                     }
                 }
@@ -225,9 +187,7 @@ public class LoopUtil {
             }
             if (n instanceof Merge) { //add phis & counters
                 for (Node usage : n.dataUsages()) {
-                    if (!(usage instanceof LoopEnd)) {
-                        workData2.add(usage);
-                    }
+                    workData2.add(usage);
                 }
             }
             if (n instanceof StateSplit) {
@@ -274,16 +234,16 @@ public class LoopUtil {
     }
 
     public static void inverseLoop(Loop loop, If split) {
-        assert loop.cfgNodes().isMarked(split);
+        assert loop.nodes().isMarked(split);
         FixedNode noExit = split.trueSuccessor();
         FixedNode exit = split.falseSuccessor();
-        if (loop.cfgNodes().isMarked(exit) && !loop.cfgNodes().isMarked(noExit)) {
+        if (loop.nodes().isMarked(exit) && !loop.nodes().isMarked(noExit)) {
             FixedNode tmp = noExit;
             noExit = exit;
             exit = tmp;
         }
-        assert !loop.cfgNodes().isMarked(exit);
-        assert loop.cfgNodes().isMarked(noExit);
+        assert !loop.nodes().isMarked(exit);
+        assert loop.nodes().isMarked(noExit);
 
         PeelingResult peeling = preparePeeling(loop, split);
         rewirePeeling(peeling, loop, split);
@@ -323,9 +283,8 @@ public class LoopUtil {
         // update parents
         Loop parent = loop.parent();
         while (parent != null) {
-            parent.cfgNodes = computeLoopNodes(parent.loopBegin);
-            parent.invalidateCached();
-            parent.exits = computeLoopExits(parent.loopBegin, parent.cfgNodes);
+            parent.nodes = computeLoopNodes(parent.loopBegin);
+            parent.exits = computeLoopExits(parent.loopBegin, parent.nodes);
             parent = parent.parent;
         }
         GraalMetrics.LoopsPeeled++;
@@ -336,7 +295,7 @@ public class LoopUtil {
         Graph graph = loopBegin.graph();
         Node loopPred = loopBegin.singlePredecessor();
         loopPred.successors().replace(loopBegin.forwardEdge(), peeling.begin);
-        NodeBitMap loopNodes = loop.cfgNodes();
+        NodeBitMap loopNodes = loop.nodes();
         Node originalLast = from;
         if (originalLast == loopBegin.loopEnd()) {
             originalLast = loopBegin.loopEnd().singlePredecessor();
@@ -483,17 +442,13 @@ public class LoopUtil {
             }
         });
 
-
-        loop.invalidateCached();
-        final NodeBitMap inOrBefore = loop.inOrBefore();
+        final NodeBitMap inOrBefore = inOrBefore(loop);
 
         GraalCompilation compilation = GraalCompilation.compilation();
         if (compilation.compiler.isObserved()) {
             Map<String, Object> debug = new HashMap<String, Object>();
             debug.put("loopExits", colors);
             debug.put("inOrBefore", inOrBefore);
-            debug.put("inOrAfter", loop.inOrAfter());
-            debug.put("nodes", loop.nodes());
             debug.put("exitFrameStates", exitFrameStates);
             compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "After coloring", graph, true, false, debug));
         }
@@ -540,11 +495,6 @@ public class LoopUtil {
             }
             @Override
             public boolean explore(Node n) {
-                /*System.out.println("Explore " + n + "?");
-                System.out.println(" - exitFS : " + (!exitFrameStates.isNew(n) && exitFrameStates.isMarked(n)));
-                System.out.println(" - !inOrBefore : " + (!inOrBefore.isNew(n) && !inOrBefore.isMarked(n)));
-                System.out.println(" - inputs > 0 : " + (n.inputs().size() > 0));
-                System.out.println(" - !danglingMergeFrameState : " + (!danglingMergeFrameState(n)));*/
                 return (!exitFrameStates.isNew(n) && exitFrameStates.isMarked(n))
                 || (!inOrBefore.isNew(n) && !inOrBefore.isMarked(n) && n.inputs().size() > 0 && !danglingMergeFrameState(n)); //TODO (gd) hum
             }
@@ -560,9 +510,7 @@ public class LoopUtil {
                 //System.out.println("fixNode(" + node + ", " + color + ")");
                 if (color == null) {
                     // 'white' it out : make non-explorable
-                    if (!exitFrameStates.isNew(node)) {
-                        exitFrameStates.clear(node);
-                    }
+                    exitFrameStates.clear(node);
                     inOrBefore.mark(node);
                 } else {
                     for (int i = 0; i < node.inputs().size(); i++) {
@@ -729,45 +677,11 @@ public class LoopUtil {
         return (StateSplit) exit;
     }
 
-    private static NodeBitMap inOrAfter(Loop loop) {
-        Graph graph = loop.loopBegin().graph();
-        NodeBitMap inOrAfter = graph.createNodeBitMap();
-        NodeFlood work = graph.createNodeFlood();
-        NodeBitMap loopNodes = loop.cfgNodes();
-        work.addAll(loopNodes);
-        for (Node n : work) {
-            //inOrAfter.mark(n);
-            markWithState(n, inOrAfter);
-            for (Node sux : n.successors()) {
-                if (sux != null) {
-                    work.add(sux);
-                }
-            }
-            for (Node usage : n.usages()) {
-                if (usage instanceof Phi) { // filter out data graph cycles
-                    Phi phi = (Phi) usage;
-                    if (!phi.isDead()) {
-                        Merge merge = phi.merge();
-                        if (merge instanceof LoopBegin) {
-                            LoopBegin phiLoop = (LoopBegin) merge;
-                            int backIndex = phiLoop.phiPredecessorIndex(phiLoop.loopEnd());
-                            if (phi.valueAt(backIndex) == n) {
-                                continue;
-                            }
-                        }
-                    }
-                }
-                work.add(usage);
-            }
-        }
-        return inOrAfter;
-    }
-
-    private static NodeBitMap inOrBefore(Loop loop, NodeBitMap inOrAfter) {
+    private static NodeBitMap inOrBefore(Loop loop) {
         Graph graph = loop.loopBegin().graph();
         NodeBitMap inOrBefore = graph.createNodeBitMap();
         NodeFlood work = graph.createNodeFlood();
-        NodeBitMap loopNodes = loop.cfgNodes();
+        NodeBitMap loopNodes = loop.nodes();
         work.addAll(loopNodes);
         for (Node n : work) {
             inOrBefore.mark(n);
@@ -795,19 +709,7 @@ public class LoopUtil {
                         work.add(in);
                     }
                 }
-                for (Node sux : n.cfgSuccessors()) { // go down into branches that are not 'inOfAfter'
-                    if (sux != null && !inOrAfter.isMarked(sux)) {
-                        work.add(sux);
-                    }
-                }
-                if (n instanceof Merge) { //add phis & counters
-                    for (Node usage : n.dataUsages()) {
-                        if (!(usage instanceof LoopEnd)) {
-                            work.add(usage);
-                        }
-                    }
-                }
-                if (n instanceof LoopBegin && n != loop.loopBegin()) {
+                if (n instanceof LoopBegin) {
                     Loop p = loop.parent;
                     boolean isParent = false;
                     while (p != null) {
