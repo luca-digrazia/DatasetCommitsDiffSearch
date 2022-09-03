@@ -23,33 +23,32 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 public abstract class UnsafeAccessNode extends FixedWithNextNode implements Canonicalizable {
 
     @Input private ValueNode object;
     @Input private ValueNode offset;
+    private final int displacement;
     private final Kind accessKind;
-    private final LocationIdentity locationIdentity;
 
-    public UnsafeAccessNode(Stamp stamp, ValueNode object, ValueNode offset, Kind accessKind, LocationIdentity locationIdentity) {
+    public UnsafeAccessNode(Stamp stamp, ValueNode object, int displacement, ValueNode offset, Kind accessKind) {
         super(stamp);
         assert accessKind != null;
         this.object = object;
+        this.displacement = displacement;
         this.offset = offset;
         this.accessKind = accessKind;
-        this.locationIdentity = locationIdentity;
-    }
-
-    public LocationIdentity getLocationIdentity() {
-        return locationIdentity;
     }
 
     public ValueNode object() {
         return object;
+    }
+
+    public int displacement() {
+        return displacement;
     }
 
     public ValueNode offset() {
@@ -61,19 +60,30 @@ public abstract class UnsafeAccessNode extends FixedWithNextNode implements Cano
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
-        if (this.getLocationIdentity() == LocationIdentity.ANY_LOCATION && offset().isConstant()) {
+    public ValueNode canonical(CanonicalizerTool tool) {
+        if (offset().isConstant()) {
             long constantOffset = offset().asConstant().asLong();
 
             // Try to canonicalize to a field access.
-            ResolvedJavaType receiverType = ObjectStamp.typeOrNull(object());
-            if (receiverType != null) {
-                ResolvedJavaField field = receiverType.findInstanceFieldWithOffset(constantOffset);
-                // No need for checking that the receiver is non-null. The field access includes
-                // the null check and if a field is found, the offset is so small that this is
-                // never a valid access of an arbitrary address.
-                if (field != null && field.getKind() == this.accessKind()) {
-                    return cloneAsFieldAccess(field);
+            if (object().stamp() instanceof ObjectStamp) {
+                // TODO (gd) remove that once UnsafeAccess only have an object base
+                ObjectStamp receiverStamp = object().objectStamp();
+                ResolvedJavaType receiverType = receiverStamp.type();
+                if (receiverType != null) {
+                    ResolvedJavaField field = receiverType.findInstanceFieldWithOffset(displacement() + constantOffset);
+                    // No need for checking that the receiver is non-null. The field access includes
+                    // the null check and if a field is found, the offset is so small that this is
+                    // never a valid access of an arbitrary address.
+                    if (field != null && field.getKind() == this.accessKind()) {
+                        return cloneAsFieldAccess(field);
+                    }
+                }
+            }
+
+            if (constantOffset != 0 && Integer.MAX_VALUE - displacement() >= constantOffset) {
+                int intDisplacement = (int) (constantOffset + displacement());
+                if (constantOffset == intDisplacement) {
+                    return cloneWithZeroOffset(intDisplacement);
                 }
             }
         }
@@ -81,4 +91,6 @@ public abstract class UnsafeAccessNode extends FixedWithNextNode implements Cano
     }
 
     protected abstract ValueNode cloneAsFieldAccess(ResolvedJavaField field);
+
+    protected abstract ValueNode cloneWithZeroOffset(int intDisplacement);
 }
