@@ -990,10 +990,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
                         }
                     }
                     closed = success;
-                    if (success) {
-                        disposeStaticContext(this);
-                    }
                     cancelling = false;
+                    disposeStaticContext(this);
                 }
             }
         } finally {
