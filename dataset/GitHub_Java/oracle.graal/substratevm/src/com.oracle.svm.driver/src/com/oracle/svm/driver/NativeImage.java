@@ -107,9 +107,6 @@ class NativeImage {
     static final String oXmx = "-Xmx";
     static final String oXms = "-Xms";
 
-    private static final String defaultProperties = "default.properties";
-    private static final String pKeyNativeImageArgs = "NativeImageArgs";
-
     private final LinkedHashSet<String> imageBuilderArgs = new LinkedHashSet<>();
     private final LinkedHashSet<Path> imageBuilderClasspath = new LinkedHashSet<>();
     private final LinkedHashSet<Path> imageBuilderBootClasspath = new LinkedHashSet<>();
@@ -124,7 +121,6 @@ class NativeImage {
     private final Path workDir;
     private final Path rootDir;
     private final Path homeDir;
-    private final Map<String, String> userConfigProperties;
 
     private boolean verbose = Boolean.valueOf(System.getenv("VERBOSE_GRAALVM_LAUNCHERS"));
     private boolean dryRun = false;
@@ -147,7 +143,6 @@ class NativeImage {
         String homeDirString = System.getProperty("user.home");
         homeDir = Paths.get(homeDirString);
         assert homeDir != null;
-        userConfigProperties = loadProperties(getUserConfigDir().resolve(defaultProperties));
 
         // Default javaArgs needed for image building
         addImageBuilderJavaArgs("-server", "-d64", "-noverify");
@@ -162,7 +157,7 @@ class NativeImage {
 
         addImageBuilderJavaArgs("-Xss10m");
         addImageBuilderJavaArgs(oXms + getXmsValue());
-        addImageBuilderJavaArgs(oXmx + getXmxValue(1));
+        addImageBuilderJavaArgs(oXmx + getXmxValue());
 
         addImageBuilderJavaArgs("-Duser.country=US", "-Duser.language=en");
 
@@ -190,23 +185,15 @@ class NativeImage {
         optionHandlers.add(handler);
     }
 
-    protected Path getRootDir() {
+    Path getRootDir() {
         return rootDir;
     }
 
-    protected Path getHomeDir() {
+    Path getHomeDir() {
         return homeDir;
     }
 
-    protected Map<String, String> getUserConfigProperties() {
-        return userConfigProperties;
-    }
-
-    protected Path getUserConfigDir() {
-        return getHomeDir().resolve(".native-image");
-    }
-
-    protected static void ensureDirectoryExists(Path dir) {
+    static void ensureDirectoryExists(Path dir) {
         if (Files.exists(dir)) {
             if (!Files.isDirectory(dir)) {
                 throw showError("File " + dir + " is not a directory");
@@ -630,12 +617,7 @@ class NativeImage {
 
     private List<String> processNativeImageArgs(String[] args) {
         List<String> leftoverArgs = new ArrayList<>();
-        Queue<String> arguments = new ArrayDeque<>();
-        String defaultNativeImageArgs = getUserConfigProperties().get(pKeyNativeImageArgs);
-        if (defaultNativeImageArgs != null && !defaultNativeImageArgs.isEmpty()) {
-            arguments.addAll(Arrays.asList(defaultNativeImageArgs.split(" ")));
-        }
-        arguments.addAll(Arrays.asList(args));
+        Queue<String> arguments = new ArrayDeque<>(Arrays.asList(args));
         while (!arguments.isEmpty()) {
             boolean consumed = false;
             for (int index = optionHandlers.size() - 1; index >= 0; --index) {
@@ -658,8 +640,8 @@ class NativeImage {
         return "1g";
     }
 
-    protected String getXmxValue(int maxInstances) {
-        UnsignedWord memMax = PhysicalMemory.size().unsignedDivide(10).multiply(8).unsignedDivide(maxInstances);
+    protected String getXmxValue() {
+        UnsignedWord memMax = PhysicalMemory.size().unsignedDivide(10).multiply(8);
         String maxXmx = "14g";
         if (memMax.aboveOrEqual(Word.unsigned(parseSize(maxXmx)))) {
             return maxXmx;
