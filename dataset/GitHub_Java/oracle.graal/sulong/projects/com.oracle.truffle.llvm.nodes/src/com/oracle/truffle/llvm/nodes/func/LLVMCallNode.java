@@ -52,29 +52,29 @@ public final class LLVMCallNode extends LLVMExpressionNode {
      */
     private static final class IntrinsicDispatch extends Node {
 
-        @CompilationFinal private LLVMFunctionDescriptor descriptor;
-        @Child private LLVMExpressionNode intrinsic;
+        @CompilationFinal private LLVMFunctionDescriptor builtinDescriptor;
+        @Child private LLVMExpressionNode builtin;
 
         IntrinsicDispatch(LLVMFunctionDescriptor descriptor, LLVMExpressionNode[] argumentNodes) {
-            this.descriptor = descriptor;
-            this.intrinsic = descriptor.getIntrinsic().generateNode(argumentNodes);
+            this.builtinDescriptor = descriptor;
+            this.builtin = descriptor.getNativeIntrinsic().generateNode(argumentNodes);
         }
 
         public boolean matches(Object function) {
-            return function == descriptor;
+            return function == builtinDescriptor;
         }
 
         public Object execute(VirtualFrame frame) {
-            return intrinsic.executeGeneric(frame);
+            return builtin.executeGeneric(frame);
         }
     }
 
     public static final int USER_ARGUMENT_OFFSET = 1;
 
     @Children private final LLVMExpressionNode[] argumentNodes;
-    @Children private ArgumentNode[] prepareArgumentNodes;
+    @Children private final ArgumentNode[] prepareArgumentNodes;
     @Child private LLVMLookupDispatchTargetNode dispatchTargetNode;
-    @Child private LLVMDispatchNode dispatchNode;
+    @Child private LLVMLookupDispatchNode dispatchNode;
     @Child private IntrinsicDispatch intrinsicDispatch;
 
     @CompilationFinal private boolean mayBeBuiltin = true;
@@ -84,7 +84,8 @@ public final class LLVMCallNode extends LLVMExpressionNode {
     public LLVMCallNode(FunctionType functionType, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes, LLVMSourceLocation source) {
         this.argumentNodes = argumentNodes;
         this.dispatchTargetNode = LLVMLookupDispatchTargetNodeGen.create(functionNode);
-        this.dispatchNode = LLVMDispatchNodeGen.create(functionType);
+        this.dispatchNode = LLVMLookupDispatchNodeGen.create(functionType);
+        this.prepareArgumentNodes = new ArgumentNode[argumentNodes.length];
         this.source = source;
     }
 
@@ -108,17 +109,12 @@ public final class LLVMCallNode extends LLVMExpressionNode {
                 return intrinsic.execute(frame);
             }
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            intrinsicDispatch = null;
-            // re-insert nodes (parent was changed to IntrinsicDispatch node)
+            intrinsic = null;
             for (int i = 0; i < argumentNodes.length; i++) {
                 argumentNodes[i] = insert(argumentNodes[i]);
             }
         }
         Object[] argValues = new Object[argumentNodes.length];
-        if (prepareArgumentNodes == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            prepareArgumentNodes = new ArgumentNode[argumentNodes.length];
-        }
         for (int i = 0; i < argumentNodes.length; i++) {
             if (prepareArgumentNodes[i] == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
