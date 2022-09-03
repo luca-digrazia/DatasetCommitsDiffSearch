@@ -26,7 +26,7 @@ import static com.oracle.graal.api.code.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
 import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.*;
 
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
@@ -94,7 +94,7 @@ public class NewInstanceStub extends Stub {
                     for (int offset = 2 * wordSize(); offset < sizeInBytes; offset += wordSize()) {
                         memory.writeWord(offset, Word.zero(), ANY_LOCATION);
                     }
-                    return memory.toObject();
+                    return verifyOop(memory.toObject());
                 }
             }
         }
@@ -108,7 +108,7 @@ public class NewInstanceStub extends Stub {
             getAndClearObjectResult(thread());
             DeoptimizeCallerNode.deopt(InvalidateReprofile, RuntimeConstraint);
         }
-        return getAndClearObjectResult(thread());
+        return verifyOop(getAndClearObjectResult(thread()));
     }
 
     /**

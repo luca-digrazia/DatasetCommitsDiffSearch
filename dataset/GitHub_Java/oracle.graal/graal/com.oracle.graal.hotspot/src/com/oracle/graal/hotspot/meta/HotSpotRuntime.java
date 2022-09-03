@@ -37,7 +37,6 @@ import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
 import static com.oracle.graal.hotspot.stubs.NewArrayStub.*;
 import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
 import static com.oracle.graal.hotspot.stubs.NewMultiArrayStub.*;
-import static com.oracle.graal.hotspot.stubs.RegisterFinalizerStub.*;
 import static com.oracle.graal.java.GraphBuilderPhase.RuntimeCalls.*;
 import static com.oracle.graal.nodes.java.RegisterFinalizerNode.*;
 import static com.oracle.graal.replacements.Log.*;
@@ -216,15 +215,10 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         /*             ret */ ret(Kind.Void),
                         /* arg0:      long */ javaCallingConvention(Kind.Long));
 
-        addStubCall(REGISTER_FINALIZER,
-                        /*             ret */ ret(Kind.Void),
-                        /* arg0:    object */ javaCallingConvention(Kind.Object));
-
-        addCRuntimeCall(REGISTER_FINALIZER_C, config.registerFinalizerAddress,
+        addRuntimeCall(REGISTER_FINALIZER, config.registerFinalizerStub,
                         /*           temps */ null,
                         /*             ret */ ret(Kind.Void),
-                        /* arg0:    thread */ nativeCallingConvention(word,
-                        /* arg1:    object */                         Kind.Object));
+                        /* arg0:    object */ javaCallingConvention(Kind.Object));
 
         addStubCall(NEW_ARRAY,
                         /*             ret */ ret(Kind.Object),
@@ -414,7 +408,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         registerStub(new NewInstanceStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_INSTANCE)));
         registerStub(new NewArrayStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_ARRAY)));
         registerStub(new NewMultiArrayStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_MULTI_ARRAY)));
-        registerStub(new RegisterFinalizerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(REGISTER_FINALIZER)));
     }
 
     private void registerStub(Stub stub) {

@@ -25,7 +25,7 @@ package com.oracle.graal.hotspot.stubs;
 import static com.oracle.graal.api.code.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
 import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.*;
 import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
 
@@ -101,7 +101,7 @@ public class NewArrayStub extends Stub {
             if (memory.notEqual(0)) {
                 log(log, "newArray: allocated new array at %p\n", memory);
                 formatArray(hub, sizeInBytes, length, headerSize, memory, Word.unsigned(arrayPrototypeMarkWord()), true);
-                return memory.toObject();
+                return verifyOop(memory.toObject());
             }
         }
         log(log, "newArray: calling new_array_c\n", 0L);
@@ -113,7 +113,7 @@ public class NewArrayStub extends Stub {
             getAndClearObjectResult(thread());
             DeoptimizeCallerNode.deopt(InvalidateReprofile, RuntimeConstraint);
         }
-        return getAndClearObjectResult(thread());
+        return verifyOop(getAndClearObjectResult(thread()));
     }
 
     public static final Descriptor NEW_ARRAY_C = descriptorFor(NewArrayStub.class, "newArrayC", false);
