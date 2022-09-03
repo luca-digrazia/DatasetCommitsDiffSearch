@@ -24,7 +24,7 @@ package com.oracle.graal.compiler.test.ea;
 
 import java.util.concurrent.*;
 
-import junit.framework.Assert;
+import junit.framework.*;
 
 import org.junit.Test;
 
@@ -36,7 +36,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.nodes.*;
 import com.oracle.graal.virtual.phases.ea.*;
 
@@ -161,15 +160,14 @@ public class PartialEscapeAnalysisTest extends GraalCompilerTest {
                     n.node().setProbability(100000);
                 }
                 Assumptions assumptions = new Assumptions(false);
-                HighTierContext context = new HighTierContext(runtime(), assumptions);
-                new InliningPhase(runtime(), null, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
+                new InliningPhase(runtime(), null, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
-                new CanonicalizerPhase().apply(graph, context);
-                new PartialEscapeAnalysisPhase(false, false).apply(graph, context);
+                new CanonicalizerPhase(runtime(), assumptions).apply(graph);
+                new PartialEscapeAnalysisPhase(runtime(), assumptions, false, false).apply(graph);
 
                 new CullFrameStatesPhase().apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
-                new CanonicalizerPhase().apply(graph, context);
+                new CanonicalizerPhase(runtime(), assumptions).apply(graph);
                 return graph;
             }
         });
