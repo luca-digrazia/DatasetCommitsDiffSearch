@@ -38,6 +38,7 @@ public interface RiResolvedMethod extends RiMethod {
 
     /**
      * Gets the bytecode of the method, if the method {@linkplain #isResolved()} and has code.
+     * The returned byte array does not contain breakpoints or non-Java bytecodes.
      * @return the bytecode of the method or {@code null} if none is available
      */
     byte[] code();
@@ -47,6 +48,18 @@ public interface RiResolvedMethod extends RiMethod {
      * @return the size of the bytecode in bytes, or 0 if no bytecode is available
      */
     int codeSize();
+
+    /**
+     * Gets the size of the compiled machine code.
+     * @return the size of the compiled machine code in bytes, or 0 if no compiled code exists.
+     */
+    int compiledCodeSize();
+
+    /**
+     * Gets an estimate how complex it is to compile this method.
+     * @return A value >= 0, where higher means more complex.
+     */
+    int compilationComplexity();
 
     /**
      * Gets the symbol used to link this method if it is native, otherwise {@code null}.
@@ -211,9 +224,4 @@ public interface RiResolvedMethod extends RiMethod {
      * @return {@code true} if this method can be inlined
      */
     boolean canBeInlined();
-
-    /**
-     * Dumps the recorded profiling information to TTY.
-     */
-    void dumpProfile();
 }
