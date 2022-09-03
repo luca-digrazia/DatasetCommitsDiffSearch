@@ -204,7 +204,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             private final boolean explodeLoops;
             private Stack<ExplodedLoopContext> explodeLoopsContext;
             private int nextPeelIteration = 1;
-            private int returnCount;
 
             public BytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, int entryBCI) {
                 super(metaAccess, method, graphBuilderConfig, optimisticOpts);
@@ -252,7 +251,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     BciBlockMapping blockMap = BciBlockMapping.create(method, graphBuilderConfig.doLivenessAnalysis(), explodeLoops);
                     loopHeaders = blockMap.getLoopHeaders();
                     liveness = blockMap.liveness;
-                    returnCount = blockMap.getReturnCount();
 
                     lastInstr = startInstruction;
                     this.setCurrentFrameState(startFrameState);
@@ -630,7 +628,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected void genGoto() {
-                appendGoto(createTarget(currentBlock.getSuccessor(0), frameState));
+                appendGoto(createTarget(currentBlock.getSuccessors().get(0), frameState));
                 assert currentBlock.numNormalSuccessors() == 1;
             }
 
@@ -1005,18 +1003,10 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     beforeReturn(x);
                     append(new ReturnNode(x));
                 } else {
-                    if (returnCount == 1) {
-                        // There is only a single return.
-                        this.returnValue = x;
-                        this.beforeReturnNode = this.lastInstr;
-                        this.lastInstr = null;
-                    } else {
-                        if (x != null) {
-                            frameState.push(x.getKind(), x);
-                        }
-                        assert returnCount > 1;
-                        appendGoto(createTarget(returnBlock(bci()), frameState));
+                    if (x != null) {
+                        frameState.push(x.getKind(), x);
                     }
+                    appendGoto(createTarget(returnBlock(bci()), frameState));
                 }
             }
 
@@ -1223,10 +1213,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             private FixedNode createTarget(BciBlock block, HIRFrameStateBuilder state) {
-                return createTarget(block, state, false);
-            }
-
-            private FixedNode createTarget(BciBlock block, HIRFrameStateBuilder state, boolean isGoto) {
                 assert block != null && state != null;
                 assert !block.isExceptionEntry || state.stackSize() == 1;
 
@@ -1271,11 +1257,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                      * this block again.
                      */
                     FixedNode targetNode;
-                    if (isGoto && block.getPredecessorCount() == 1) {
-                        block.setFirstInstruction(operatingDimension, lastInstr);
-                    } else {
-                        block.setFirstInstruction(operatingDimension, currentGraph.add(new BeginNode()));
-                    }
+                    block.setFirstInstruction(operatingDimension, currentGraph.add(new BeginNode()));
                     targetNode = block.getFirstInstruction(operatingDimension);
                     Target target = checkLoopExit(targetNode, block, state);
                     FixedNode result = target.fixed;
@@ -1650,9 +1632,9 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             protected void genIf(ValueNode x, Condition cond, ValueNode y) {
                 // assert !x.isDeleted() && !y.isDeleted();
                 // assert currentBlock.numNormalSuccessors() == 2;
-                assert currentBlock.getSuccessorCount() == 2;
-                BciBlock trueBlock = currentBlock.getSuccessor(0);
-                BciBlock falseBlock = currentBlock.getSuccessor(1);
+                assert currentBlock.getSuccessors().size() == 2;
+                BciBlock trueBlock = currentBlock.getSuccessors().get(0);
+                BciBlock falseBlock = currentBlock.getSuccessors().get(1);
                 if (trueBlock == falseBlock) {
                     appendGoto(createTarget(trueBlock, frameState));
                     return;
