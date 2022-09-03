@@ -48,7 +48,6 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Predicate;
 
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
@@ -66,7 +65,6 @@ import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.MonitorSupport;
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
@@ -212,7 +210,6 @@ final class Target_java_lang_Throwable {
     }
 
     @Substitute
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
     int getStackTraceDepth() {
         if (stackTrace != null) {
             return stackTrace.length;
@@ -221,7 +218,6 @@ final class Target_java_lang_Throwable {
     }
 
     @Substitute
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
     StackTraceElement getStackTraceElement(int index) {
         if (stackTrace == null) {
             throw new IndexOutOfBoundsException();
@@ -547,20 +543,6 @@ final class Target_java_lang_Compiler {
     }
 }
 
-final class IsSingleThreaded implements Predicate<Class<?>> {
-    @Override
-    public boolean test(Class<?> t) {
-        return !SubstrateOptions.MultiThreaded.getValue();
-    }
-}
-
-final class IsMultiThreaded implements Predicate<Class<?>> {
-    @Override
-    public boolean test(Class<?> t) {
-        return SubstrateOptions.MultiThreaded.getValue();
-    }
-}
-
 @TargetClass(className = "java.lang.ApplicationShutdownHooks")
 final class Target_java_lang_ApplicationShutdownHooks {
 
@@ -575,14 +557,9 @@ final class Target_java_lang_ApplicationShutdownHooks {
     /**
      * Instead of starting all the threads in {@link #hooks}, just run the {@link Runnable}s one
      * after another.
-     *
-     * We need this substitution in single-threaded mode, where we cannot start new threads but
-     * still want to support shutdown hooks. In multi-threaded mode, this substitution is not
-     * present, i.e., the original JDK code runs the shutdown hooks in separate threads.
      */
     @Substitute
-    @TargetElement(name = "runHooks", onlyWith = IsSingleThreaded.class)
-    static void runHooksSingleThreaded() {
+    static void runHooks() {
         /* Claim all the hooks. */
         final Collection<Thread> threads;
         /* Checkstyle: allow synchronization. */
@@ -608,10 +585,6 @@ final class Target_java_lang_ApplicationShutdownHooks {
             }
         }
     }
-
-    @Alias
-    @TargetElement(name = "runHooks", onlyWith = IsMultiThreaded.class)
-    static native void runHooksMultiThreaded();
 
     /**
      * Interpose so that the first time someone adds an ApplicationShutdownHook, I set up a shutdown
@@ -661,11 +634,7 @@ class Util_java_lang_ApplicationShutdownHooks {
                                         new Runnable() {
                                             @Override
                                             public void run() {
-                                                if (SubstrateOptions.MultiThreaded.getValue()) {
-                                                    Target_java_lang_ApplicationShutdownHooks.runHooksMultiThreaded();
-                                                } else {
-                                                    Target_java_lang_ApplicationShutdownHooks.runHooksSingleThreaded();
-                                                }
+                                                Target_java_lang_ApplicationShutdownHooks.runHooks();
                                             }
                                         });
                     } catch (InternalError ie) {
@@ -688,6 +657,52 @@ class Util_java_lang_ApplicationShutdownHooks {
     }
 }
 
+@TargetClass(className = "java.lang.Shutdown")
+final class Target_java_lang_Shutdown {
+    /**
+     * Re-initialize the map of registered hooks, because any hooks registered during native image
+     * construction can not survive into the running image.
+     */
+    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.FromAlias)//
+    static Runnable[] hooks;
+
+    static {
+        hooks = new Runnable[Util_java_lang_Shutdown.MAX_SYSTEM_HOOKS];
+        /*
+         * We use the last system hook slot (index 9), which is currently not used by the JDK, for
+         * our own shutdown hooks that are registered during image generation. The JDK currently
+         * uses slots 0, 1, and 2.
+         */
+        hooks[hooks.length - 1] = RuntimeSupport::executeShutdownHooks;
+    }
+
+    /* Wormhole for invoking java.lang.ref.Finalizer.runAllFinalizers */
+    @Substitute
+    static void runAllFinalizers() {
+        throw VMError.unsupportedFeature("java.lang.Shudown.runAllFinalizers()");
+    }
+
+    /**
+     * Invoked by the JNI DestroyJavaVM procedure when the last non-daemon thread has finished.
+     * Unlike the exit method, this method does not actually halt the VM.
+     */
+    @Alias
+    static native void shutdown();
+
+    @Alias
+    static native void add(int slot, boolean registerShutdownInProgress, Runnable hook);
+}
+
+/** Utility methods for Target_java_lang_Shutdown. */
+final class Util_java_lang_Shutdown {
+
+    /**
+     * Value *copied* from {@code java.lang.Shutdown.MAX_SYSTEM_HOOKS} so that the value can be used
+     * during image generation (@Alias values are only visible at run time).
+     */
+    static final int MAX_SYSTEM_HOOKS = 10;
+}
+
 @TargetClass(java.lang.Package.class)
 final class Target_java_lang_Package {
 
@@ -700,7 +715,6 @@ final class Target_java_lang_Package {
     }
 
     @Substitute
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
     static Package getPackage(Class<?> c) {
         if (c.isPrimitive() || c.isArray()) {
             /* Arrays and primitives don't have a package. */
