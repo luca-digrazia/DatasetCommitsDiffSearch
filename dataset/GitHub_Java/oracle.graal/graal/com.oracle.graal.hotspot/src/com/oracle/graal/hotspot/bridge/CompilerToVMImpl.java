@@ -189,7 +189,4 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native boolean canInlineMethod(long metaspaceMethod);
 
     public native boolean shouldInlineMethod(long metaspaceMethod);
-
-    public native boolean hasCompiledCodeForOSR(long metaspaceMethod, int entryBCI, int level);
-
 }
