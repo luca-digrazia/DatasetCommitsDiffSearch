@@ -186,7 +186,7 @@ public class StructuredGraph extends Graph {
         copy.setGuardsStage(getGuardsStage());
         copy.isAfterFloatingReadPhase = isAfterFloatingReadPhase;
         copy.hasValueProxies = hasValueProxies;
-        Map<Node, Node> replacements = Node.newMap();
+        HashMap<Node, Node> replacements = new HashMap<>();
         replacements.put(start, copy.start);
         copy.addDuplicates(getNodes(), this, this.getNodeCount(), replacements);
         return copy;
