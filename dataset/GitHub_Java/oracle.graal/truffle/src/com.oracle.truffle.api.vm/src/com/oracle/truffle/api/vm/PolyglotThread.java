@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 final class PolyglotThread extends Thread {
 
-    final PolyglotLanguageContext languageContext;
+    private final PolyglotLanguageContext languageContext;
 
     Object context;
 
@@ -39,10 +39,6 @@ final class PolyglotThread extends Thread {
 
     static String createDefaultName(PolyglotLanguageContext creator) {
         return "Polyglot-" + creator.language.getId() + "-" + THREAD_INIT_NUMBER.getAndIncrement();
-    }
-
-    boolean isOwner(PolyglotContextImpl testContext) {
-        return languageContext.context == testContext;
     }
 
     @Override
