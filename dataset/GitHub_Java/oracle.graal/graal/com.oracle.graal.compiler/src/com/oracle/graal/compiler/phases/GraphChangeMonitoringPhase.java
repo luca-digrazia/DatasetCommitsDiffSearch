@@ -26,7 +26,7 @@ import java.util.*;
 import java.util.stream.*;
 
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.Graph.NodeEvent;
 import com.oracle.graal.graph.Graph.NodeEventScope;
 import com.oracle.graal.graph.Node;
@@ -60,7 +60,6 @@ public class GraphChangeMonitoringPhase<C extends PhaseContext> extends PhaseSui
     }
 
     @Override
-    @SuppressWarnings("try")
     protected void run(StructuredGraph graph, C context) {
         /*
          * Phase may add nodes but not end up using them so ignore additions. Nodes going dead and

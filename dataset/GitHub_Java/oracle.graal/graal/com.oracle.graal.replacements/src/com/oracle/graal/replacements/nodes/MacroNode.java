@@ -22,10 +22,14 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static com.oracle.jvmci.code.BytecodeFrame.*;
+import static com.oracle.graal.api.code.BytecodeFrame.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
@@ -37,10 +41,6 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
-import com.oracle.jvmci.meta.*;
 
 /**
  * Macro nodes can be used to temporarily replace an invoke. They can, for example, be used to
@@ -68,7 +68,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
     protected final InvokeKind invokeKind;
 
     protected MacroNode(NodeClass<? extends MacroNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, JavaType returnType, ValueNode... arguments) {
-        super(c, returnStamp(returnType));
+        super(c, StampFactory.forKind(returnType.getKind()));
         assert targetMethod.getSignature().getParameterCount(!targetMethod.isStatic()) == arguments.length;
         this.arguments = new NodeInputList<>(this, arguments);
         this.bci = bci;
@@ -76,15 +76,6 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
         this.returnType = returnType;
         this.invokeKind = invokeKind;
         assert !isPlaceholderBci(bci);
-    }
-
-    private static Stamp returnStamp(JavaType returnType) {
-        Kind kind = returnType.getKind();
-        if (kind == Kind.Object) {
-            return StampFactory.declared((ResolvedJavaType) returnType);
-        } else {
-            return StampFactory.forKind(kind);
-        }
     }
 
     public int getBci() {
@@ -175,7 +166,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
             Debug.dump(graph(), "After inlining replacement %s", replacementGraph);
         } else {
             if (isPlaceholderBci(invoke.bci())) {
-                throw new JVMCIError("%s: cannot lower to invoke with placeholder BCI: %s", graph(), this);
+                throw new GraalInternalError("%s: cannot lower to invoke with placeholder BCI: %s", graph(), this);
             }
 
             if (invoke.stateAfter() == null) {
@@ -185,10 +176,10 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
                     // no longer needs a MacroNode. For example, Class.getComponentType()
                     // only needs a MacroNode prior to JDK9 as it was given a non-native
                     // implementation in JDK9.
-                    throw new JVMCIError("%s macro created for call to %s in %s must be lowerable to a snippet or intrinsic graph. "
+                    throw new GraalInternalError("%s macro created for call to %s in %s must be lowerable to a snippet or intrinsic graph. "
                                     + "Maybe a macro node is not needed for this method in the current JDK?", getClass().getSimpleName(), targetMethod.format("%h.%n(%p)"), graph());
                 }
-                throw new JVMCIError("%s: cannot lower to invoke without state: %s", graph(), this);
+                throw new GraalInternalError("%s: cannot lower to invoke without state: %s", graph(), this);
             }
             invoke.lower(tool);
         }
@@ -201,7 +192,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
     }
 
     protected InvokeNode createInvoke() {
-        MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(invokeKind, targetMethod, arguments.toArray(new ValueNode[arguments.size()]), returnType, null));
+        MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(invokeKind, targetMethod, arguments.toArray(new ValueNode[arguments.size()]), returnType));
         InvokeNode invoke = graph().add(new InvokeNode(callTarget, bci));
         if (stateAfter() != null) {
             invoke.setStateAfter(stateAfter().duplicate());

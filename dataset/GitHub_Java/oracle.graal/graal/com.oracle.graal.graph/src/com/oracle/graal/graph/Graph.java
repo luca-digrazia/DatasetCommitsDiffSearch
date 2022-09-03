@@ -27,13 +27,11 @@ import static com.oracle.graal.graph.Edges.Type.*;
 import java.util.*;
 import java.util.function.*;
 
-import jdk.internal.jvmci.common.*;
-import com.oracle.graal.debug.*;
-import jdk.internal.jvmci.options.*;
-
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.options.*;
 
 /**
  * This class is a graph container, it contains the set of nodes that belong to this graph.
@@ -766,14 +764,11 @@ public class Graph {
     }
 
     private Node findFirstLiveIterable(int iterableId, Node node) {
+        assert iterableNodesFirst.get(iterableId) == node;
         Node start = node;
         while (start != null && start.isDeleted()) {
             start = start.typeCacheNext;
         }
-        /*
-         * Multiple threads iterating nodes can update this cache simultaneously. This is a benign
-         * race, since all threads update it to the same value.
-         */
         iterableNodesFirst.set(iterableId, start);
         if (start == null) {
             iterableNodesLast.set(iterableId, start);
@@ -911,12 +906,12 @@ public class Graph {
                     try {
                         assert node.verify();
                     } catch (AssertionError t) {
-                        throw new JVMCIError(t);
+                        throw new GraalInternalError(t);
                     } catch (RuntimeException t) {
-                        throw new JVMCIError(t);
+                        throw new GraalInternalError(t);
                     }
-                } catch (JVMCIError e) {
-                    throw GraalGraphJVMCIError.transformAndAddContext(e, node).addContext(this);
+                } catch (GraalInternalError e) {
+                    throw GraalGraphInternalError.transformAndAddContext(e, node).addContext(this);
                 }
             }
         }
