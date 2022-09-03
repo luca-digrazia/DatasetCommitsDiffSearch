@@ -29,7 +29,6 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.UNINITIALIZED;
 import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
-import static jdk.vm.ci.aarch64.AArch64.sp;
 import static jdk.vm.ci.aarch64.AArch64.zr;
 import static jdk.vm.ci.code.ValueUtil.asAllocatableValue;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
@@ -52,6 +51,7 @@ import com.oracle.graal.lir.StandardOp.ValueMoveOp;
 import com.oracle.graal.lir.VirtualStackSlot;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
+import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.StackSlot;
@@ -450,17 +450,14 @@ public class AArch64Move {
     }
 
     private static void stack2reg(CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, AllocatableValue input) {
+        AArch64Address src = loadStackSlotAddress(crb, masm, asStackSlot(input), result);
+        Register dest = asRegister(result);
         AArch64Kind kind = (AArch64Kind) input.getPlatformKind();
-        final int size = kind.getSizeInBytes() * Byte.SIZE;
+        int size = kind.getSizeInBytes() * Byte.SIZE;
         if (kind.isInteger()) {
-            AArch64Address src = loadStackSlotAddress(crb, masm, asStackSlot(input), result);
-            masm.ldr(size, asRegister(result), src);
+            masm.ldr(size, dest, src);
         } else {
-            try (ScratchRegister sc = masm.getScratchRegister()) {
-                AllocatableValue scratchRegisterValue = sc.getRegister().asValue(LIRKind.combine(input));
-                AArch64Address src = loadStackSlotAddress(crb, masm, asStackSlot(input), scratchRegisterValue);
-                masm.fldr(size, asRegister(result), src);
-            }
+            masm.fldr(size, dest, src);
         }
     }
 
@@ -550,8 +547,8 @@ public class AArch64Move {
     private static AArch64Address loadStackSlotAddress(CompilationResultBuilder crb, AArch64MacroAssembler masm, StackSlot slot, AllocatableValue scratch) {
         int displacement = crb.frameMap.offsetForStackSlot(slot);
         int transferSize = slot.getPlatformKind().getSizeInBytes();
-        Register scratchReg = Value.ILLEGAL.equals(scratch) ? zr : asRegister(scratch);
-        return masm.makeAddress(sp, displacement, scratchReg, transferSize, /* allowOverwrite */false);
+        Register scratchReg = Value.ILLEGAL.equals(scratch) ? AArch64.zr : asRegister(scratch);
+        return masm.makeAddress(AArch64.sp, displacement, scratchReg, transferSize, /* allowOverwrite */false);
     }
 
 }
