@@ -244,7 +244,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
         osrTarget.setSpeculationLog(speculationLog);
         // let the old parent re-adopt the children
         parent.adoptChildren();
-        osrTarget.compile(true);
+        osrTarget.compile();
         return osrTarget;
     }
 
@@ -477,19 +477,19 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             this.readFrameSlotsTags = new byte[readFrameSlots.length];
             this.writtenFrameSlotsTags = new byte[writtenFrameSlots.length];
             int maxIndex = -1;
-            maxIndex = initializeFrameSlots(frameDescriptor, readFrameSlots, readFrameSlotsTags, maxIndex);
-            maxIndex = initializeFrameSlots(frameDescriptor, writtenFrameSlots, writtenFrameSlotsTags, maxIndex);
+            maxIndex = initializeFrameSlots(readFrameSlots, readFrameSlotsTags, maxIndex);
+            maxIndex = initializeFrameSlots(writtenFrameSlots, writtenFrameSlotsTags, maxIndex);
             this.maxTagsLength = maxIndex + 1;
         }
 
-        private static int initializeFrameSlots(FrameDescriptor frameDescriptor, FrameSlot[] frameSlots, byte[] tags, int maxIndex) {
+        private static int initializeFrameSlots(FrameSlot[] frameSlots, byte[] tags, int maxIndex) {
             int currentMaxIndex = maxIndex;
             for (int i = 0; i < frameSlots.length; i++) {
                 FrameSlot frameSlot = frameSlots[i];
                 if (frameSlot.getIndex() > currentMaxIndex) {
                     currentMaxIndex = frameSlot.getIndex();
                 }
-                tags[i] = frameDescriptor.getFrameSlotKind(frameSlot).tag;
+                tags[i] = frameSlot.getKind().tag;
             }
             return currentMaxIndex;
         }

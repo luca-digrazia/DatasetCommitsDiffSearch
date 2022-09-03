@@ -153,7 +153,7 @@ public abstract class LoopNode extends Node {
      *         }
      *         return sum;
      *     } finally {
-     *         LoopNode.reportLoopCount(this, data.length);
+     *         LoopNode.reportLoopCount(data.length);
      *     }
      * }
      *
@@ -166,7 +166,7 @@ public abstract class LoopNode extends Node {
      * @since 0.12
      */
     public static void reportLoopCount(Node source, int iterations) {
-        if (CompilerDirectives.inInterpreter()) {
+        if (CompilerDirectives.inInterpreterOrLowTier()) {
             Node.ACCESSOR.onLoopCount(source, iterations);
         }
     }

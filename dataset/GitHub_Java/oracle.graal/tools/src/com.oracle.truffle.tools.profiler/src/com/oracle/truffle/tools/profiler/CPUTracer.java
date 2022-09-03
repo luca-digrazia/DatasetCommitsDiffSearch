@@ -58,7 +58,7 @@ import com.oracle.truffle.tools.profiler.impl.ProfilerToolFactory;
  * The tracer counts how many times each of the elements of interest (e.g. functions, statements,
  * etc.) are executed.
  * <p>
- * Usage example: {@codesnippet CPUTracerSnippets#example}
+ * Usage example: {@link CPUTracerSnippets#example}
  *
  * @since 0.30
  */
@@ -297,7 +297,7 @@ public final class CPUTracer implements Closeable {
 
         @Override
         protected void onEnter(VirtualFrame frame) {
-            if (CompilerDirectives.inInterpreter()) {
+            if (CompilerDirectives.inInterpreterOrLowTier()) {
                 payload.countInterpreted++;
             } else {
                 payload.countCompiled++;

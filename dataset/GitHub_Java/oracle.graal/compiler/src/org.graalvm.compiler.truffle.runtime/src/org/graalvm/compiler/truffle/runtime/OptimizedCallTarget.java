@@ -228,10 +228,10 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     @TruffleCallBoundary
     protected final Object callBoundary(Object[] args) {
-        if (CompilerDirectives.inInterpreter()) {
+        if (CompilerDirectives.inInterpreterOrLowTier()) {
             // We are called and we are still in Truffle interpreter mode.
             getCompilationProfile().interpreterCall(this);
-            if (isValid()) {
+            if (CompilerDirectives.inInterpreter() && isValid()) {
                 // Stubs were deoptimized => reinstall.
                 runtime().bypassedInstalledCode();
             }
@@ -543,7 +543,9 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     @Override
     public boolean nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
         CompilerAsserts.neverPartOfCompilation();
-        invalidate(newNode, reason);
+        if (isValid()) {
+            invalidate(newNode, reason);
+        }
         /* Notify compiled method that have inlined this call target that the tree changed. */
         invalidateNodeRewritingAssumption();
 
