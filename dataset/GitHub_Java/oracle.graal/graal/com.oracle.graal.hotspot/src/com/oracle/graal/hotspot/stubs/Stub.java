@@ -22,10 +22,7 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.api.code.DeoptimizationAction.*;
-import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.nodes.CStringNode.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -42,7 +39,6 @@ import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -103,10 +99,11 @@ public abstract class Stub extends AbstractTemplates implements Snippets {
      * 
      * @param linkage linkage details for a call to the stub
      */
-    public Stub(HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage) {
+    public Stub(HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage, String methodName) {
         super(runtime, replacements, target);
-        this.stubInfo = snippet(getClass(), null);
+        this.stubInfo = snippet(getClass(), methodName);
         this.linkage = linkage;
+
     }
 
     /**
@@ -130,10 +127,12 @@ public abstract class Stub extends AbstractTemplates implements Snippets {
     }
 
     private boolean checkCompilationResult(CompilationResult compResult) {
-        for (DataPatch data : compResult.getDataReferences()) {
-            Constant constant = data.constant;
-            assert constant.getKind() != Kind.Object : MetaUtil.format("%h.%n(%p): ", getMethod()) + "cannot have embedded oop: " + constant;
-            assert constant.getPrimitiveAnnotation() == null : MetaUtil.format("%h.%n(%p): ", getMethod()) + "cannot have embedded metadata: " + constant;
+        if (this instanceof NewArrayStub) {
+            for (DataPatch data : compResult.getDataReferences()) {
+                Constant constant = data.constant;
+                assert constant.getKind() != Kind.Object : MetaUtil.format("%h.%n(%p): ", getMethod()) + "cannot have embedded oop: " + constant;
+                assert constant.getPrimitiveAnnotation() == null : MetaUtil.format("%h.%n(%p): ", getMethod()) + "cannot have embedded metadata: " + constant;
+            }
         }
         return true;
     }
@@ -201,15 +200,6 @@ public abstract class Stub extends AbstractTemplates implements Snippets {
     static void log(boolean enabled, String format, Word v1, Word v2) {
         if (enabled) {
             printf(format, v1.rawValue(), v2.rawValue());
-        }
-    }
-
-    static void handlePendingException(boolean isObjectResult) {
-        if (clearPendingException(thread())) {
-            if (isObjectResult) {
-                getAndClearObjectResult(thread());
-            }
-            DeoptimizeCallerNode.deopt(InvalidateReprofile, RuntimeConstraint);
         }
     }
 

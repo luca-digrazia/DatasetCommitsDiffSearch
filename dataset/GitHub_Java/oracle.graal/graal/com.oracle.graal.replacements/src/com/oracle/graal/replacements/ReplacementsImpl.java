@@ -366,10 +366,9 @@ public class ReplacementsImpl implements Replacements {
                     afterInline(graph, originalGraph);
                     substituteCallsOriginal = true;
                 } else {
-                    StructuredGraph intrinsicGraph = InliningUtil.getIntrinsicGraph(ReplacementsImpl.this, callee);
-                    if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) &&
-                                    (policy.shouldInline(callee, methodToParse) || (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)))) {
+                    if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) && policy.shouldInline(callee, methodToParse)) {
                         StructuredGraph targetGraph;
+                        StructuredGraph intrinsicGraph = InliningUtil.getIntrinsicGraph(ReplacementsImpl.this, callee);
                         if (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)) {
                             targetGraph = intrinsicGraph;
                         } else {
