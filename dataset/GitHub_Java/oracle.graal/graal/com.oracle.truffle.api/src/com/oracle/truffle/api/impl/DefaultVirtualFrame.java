@@ -31,27 +31,40 @@ import com.oracle.truffle.api.frame.*;
 
 /**
  * This is an implementation-specific class. Do not use or instantiate it. Instead, use
- * {@link TruffleRuntime#createVirtualFrame(Object[], FrameDescriptor)} to create a
+ * {@link TruffleRuntime#createVirtualFrame(PackedFrame, Arguments, FrameDescriptor)} to create a
  * {@link VirtualFrame}.
  */
 final class DefaultVirtualFrame implements VirtualFrame {
 
     private final FrameDescriptor descriptor;
-    private final Object[] arguments;
+    private final PackedFrame caller;
+    private final Arguments arguments;
     private Object[] locals;
     private byte[] tags;
 
-    DefaultVirtualFrame(FrameDescriptor descriptor, Object[] arguments) {
+    DefaultVirtualFrame(FrameDescriptor descriptor, PackedFrame caller, Arguments arguments) {
         this.descriptor = descriptor;
+        this.caller = caller;
         this.arguments = arguments;
         this.locals = new Object[descriptor.getSize()];
-        Arrays.fill(locals, descriptor.getDefaultValue());
+        Arrays.fill(locals, descriptor.getTypeConversion().getDefaultValue());
         this.tags = new byte[descriptor.getSize()];
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Object[] getArguments() {
-        return arguments;
+    public <T extends Arguments> T getArguments(Class<T> clazz) {
+        return (T) arguments;
+    }
+
+    @Override
+    public PackedFrame getCaller() {
+        return caller;
+    }
+
+    @Override
+    public PackedFrame pack() {
+        return new DefaultPackedFrame(this);
     }
 
     @Override
@@ -150,29 +163,40 @@ final class DefaultVirtualFrame implements VirtualFrame {
 
     @Override
     public Object getValue(FrameSlot slot) {
-        int slotIndex = getSlotIndexChecked(slot);
-        return locals[slotIndex];
-    }
-
-    private int getSlotIndexChecked(FrameSlot slot) {
         int slotIndex = slot.getIndex();
         if (slotIndex >= tags.length) {
             if (!resize()) {
                 throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
             }
         }
-        return slotIndex;
+        return locals[slotIndex];
     }
 
     private void verifySet(FrameSlot slot, FrameSlotKind accessKind) {
-        int slotIndex = getSlotIndexChecked(slot);
+        int slotIndex = slot.getIndex();
+        if (slotIndex >= tags.length) {
+            if (!resize()) {
+                throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
+            }
+        }
         tags[slotIndex] = (byte) accessKind.ordinal();
     }
 
     private void verifyGet(FrameSlot slot, FrameSlotKind accessKind) throws FrameSlotTypeException {
-        int slotIndex = getSlotIndexChecked(slot);
+        int slotIndex = slot.getIndex();
+        if (slotIndex >= tags.length) {
+            if (!resize()) {
+                throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
+            }
+        }
         byte tag = tags[slotIndex];
         if (accessKind == FrameSlotKind.Object ? tag != 0 : tag != accessKind.ordinal()) {
+            if (slot.getKind() == accessKind || tag == 0) {
+                descriptor.getTypeConversion().updateFrameSlot(this, slot, getValue(slot));
+                if (tags[slotIndex] == accessKind.ordinal()) {
+                    return;
+                }
+            }
             throw new FrameSlotTypeException();
         }
     }
@@ -182,7 +206,7 @@ final class DefaultVirtualFrame implements VirtualFrame {
         int newSize = descriptor.getSize();
         if (newSize > oldSize) {
             locals = Arrays.copyOf(locals, newSize);
-            Arrays.fill(locals, oldSize, newSize, descriptor.getDefaultValue());
+            Arrays.fill(locals, oldSize, newSize, descriptor.getTypeConversion().getDefaultValue());
             tags = Arrays.copyOf(tags, newSize);
             return true;
         }
@@ -190,7 +214,12 @@ final class DefaultVirtualFrame implements VirtualFrame {
     }
 
     private byte getTag(FrameSlot slot) {
-        int slotIndex = getSlotIndexChecked(slot);
+        int slotIndex = slot.getIndex();
+        if (slotIndex >= tags.length) {
+            if (!resize()) {
+                throw new IllegalArgumentException(String.format("The frame slot '%s' is not known by the frame descriptor.", slot));
+            }
+        }
         return tags[slotIndex];
     }
 

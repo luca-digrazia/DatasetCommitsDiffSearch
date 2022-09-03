@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,13 +27,13 @@ package com.oracle.truffle.api;
 import com.oracle.truffle.api.frame.*;
 
 /**
- * Represents the target of a call. Instances of this interface can be created using the
- * {@link TruffleRuntime#createCallTarget(com.oracle.truffle.api.nodes.RootNode, FrameDescriptor)} method.
+ * Represents the target of a call.
  */
 public abstract class CallTarget {
 
     /**
      * Calls this target as a root method and without arguments.
+     * 
      * @return the return result of the call
      */
     public final Object call() {
@@ -40,6 +42,7 @@ public abstract class CallTarget {
 
     /**
      * Calls this target with a caller frame and no arguments.
+     * 
      * @param caller the caller frame
      * @return the return result of the call
      */
@@ -49,6 +52,7 @@ public abstract class CallTarget {
 
     /**
      * Calls this target as a root method passing arguments.
+     * 
      * @param arguments the arguments that should be passed to the callee
      * @return the return result of the call
      */
@@ -58,6 +62,7 @@ public abstract class CallTarget {
 
     /**
      * Calls this target passing a caller frame and arguments.
+     * 
      * @param caller the caller frame
      * @param arguments the arguments that should be passed to the callee
      * @return the return result of the call

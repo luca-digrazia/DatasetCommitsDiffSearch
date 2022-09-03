@@ -32,28 +32,15 @@ import com.oracle.truffle.api.nodes.*;
  * This is an implementation-specific class. Do not use or instantiate it. Instead, use
  * {@link TruffleRuntime#createCallTarget(RootNode)} to create a {@link RootCallTarget}.
  */
-public class DefaultCallTarget implements RootCallTarget {
+public class DefaultCallTarget extends RootCallTarget {
 
-    private final RootNode rootNode;
-
-    public DefaultCallTarget(RootNode function) {
-        this.rootNode = function;
-        this.rootNode.adoptChildren();
-        this.rootNode.setCallTarget(this);
+    protected DefaultCallTarget(RootNode function) {
+        super(function);
     }
 
     @Override
-    public String toString() {
-        return rootNode.toString();
-    }
-
-    public final RootNode getRootNode() {
-        return rootNode;
-    }
-
-    @Override
-    public Object call(Object... args) {
-        VirtualFrame frame = new DefaultVirtualFrame(getRootNode().getFrameDescriptor(), args);
+    public Object call(PackedFrame caller, Arguments args) {
+        VirtualFrame frame = new DefaultVirtualFrame(getRootNode().getFrameDescriptor(), caller, args);
         return getRootNode().execute(frame);
     }
 }

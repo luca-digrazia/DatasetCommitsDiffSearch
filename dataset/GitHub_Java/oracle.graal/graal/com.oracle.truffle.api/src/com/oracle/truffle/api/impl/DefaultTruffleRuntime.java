@@ -24,8 +24,6 @@
  */
 package com.oracle.truffle.api.impl;
 
-import java.util.*;
-
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
@@ -38,9 +36,6 @@ import com.oracle.truffle.api.nodes.*;
  * {@link Truffle#getRuntime()} to retrieve the current {@link TruffleRuntime}.
  */
 public final class DefaultTruffleRuntime implements TruffleRuntime {
-
-    private ThreadLocal<LinkedList<FrameInstance>> stackTraces = new ThreadLocal<>();
-    private ThreadLocal<FrameInstance> currentFrames = new ThreadLocal<>();
 
     public DefaultTruffleRuntime() {
         if (Truffle.getRuntime() != null) {
@@ -55,30 +50,22 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
 
     @Override
     public RootCallTarget createCallTarget(RootNode rootNode) {
-        return new DefaultCallTarget(rootNode, this);
-    }
-
-    public DirectCallNode createDirectCallNode(CallTarget target) {
-        return new DefaultDirectCallNode(target, this);
-    }
-
-    public IndirectCallNode createIndirectCallNode() {
-        return new DefaultIndirectCallNode();
+        return new DefaultCallTarget(rootNode);
     }
 
     @Override
-    public VirtualFrame createVirtualFrame(Object[] arguments, FrameDescriptor frameDescriptor) {
-        return new DefaultVirtualFrame(frameDescriptor, arguments);
+    public VirtualFrame createVirtualFrame(PackedFrame caller, Arguments arguments, FrameDescriptor frameDescriptor) {
+        return new DefaultVirtualFrame(frameDescriptor, caller, arguments);
     }
 
     @Override
-    public MaterializedFrame createMaterializedFrame(Object[] arguments) {
+    public MaterializedFrame createMaterializedFrame(Arguments arguments) {
         return createMaterializedFrame(arguments, new FrameDescriptor());
     }
 
     @Override
-    public MaterializedFrame createMaterializedFrame(Object[] arguments, FrameDescriptor frameDescriptor) {
-        return new DefaultMaterializedFrame(new DefaultVirtualFrame(frameDescriptor, arguments));
+    public MaterializedFrame createMaterializedFrame(Arguments arguments, FrameDescriptor frameDescriptor) {
+        return new DefaultMaterializedFrame(new DefaultVirtualFrame(frameDescriptor, null, arguments));
     }
 
     @Override
@@ -89,36 +76,5 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
     @Override
     public Assumption createAssumption(String name) {
         return new DefaultAssumption(name);
-    }
-
-    private LinkedList<FrameInstance> getThreadLocalStackTrace() {
-        LinkedList<FrameInstance> result = stackTraces.get();
-        if (result == null) {
-            result = new LinkedList<>();
-            stackTraces.set(result);
-        }
-        return result;
-    }
-
-    public FrameInstance setCurrentFrame(FrameInstance newValue) {
-        FrameInstance oldValue = currentFrames.get();
-        currentFrames.set(newValue);
-        return oldValue;
-    }
-
-    public void pushFrame(FrameInstance frame) {
-        getThreadLocalStackTrace().addFirst(frame);
-    }
-
-    public void popFrame() {
-        getThreadLocalStackTrace().removeFirst();
-    }
-
-    public Iterable<FrameInstance> getStackTrace() {
-        return getThreadLocalStackTrace();
-    }
-
-    public FrameInstance getCurrentFrame() {
-        return currentFrames.get();
     }
 }

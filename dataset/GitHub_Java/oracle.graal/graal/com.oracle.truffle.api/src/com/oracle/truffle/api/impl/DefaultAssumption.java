@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,11 +24,16 @@
  */
 package com.oracle.truffle.api.impl;
 
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
 
-public final class DefaultAssumption extends AbstractAssumption {
+/**
+ * This is an implementation-specific class. Do not use or instantiate it. Instead, use
+ * {@link TruffleRuntime#createAssumption()} to create an {@link Assumption}.
+ */
+final class DefaultAssumption extends AbstractAssumption {
 
-    public DefaultAssumption(String name) {
+    DefaultAssumption(String name) {
         super(name);
     }
 

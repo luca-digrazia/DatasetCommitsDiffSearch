@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,20 +27,26 @@ package com.oracle.truffle.api.impl;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 
-final class DefaultMaterializedFrame implements MaterializedFrame {
+/**
+ * This is an implementation-specific class. Do not use or instantiate it. Instead, use
+ * {@link TruffleRuntime#createMaterializedFrame(Arguments)} or {@link Frame#materialize()} to
+ * create a {@link MaterializedFrame}.
+ */
+final class DefaultMaterializedFrame implements MaterializedFrame, PackedFrame {
+
     private final DefaultVirtualFrame wrapped;
 
-    protected DefaultMaterializedFrame(DefaultVirtualFrame wrapped) {
+    DefaultMaterializedFrame(DefaultVirtualFrame wrapped) {
         this.wrapped = wrapped;
     }
 
     @Override
-    public Arguments getArguments() {
-        return wrapped.getArguments();
+    public <T extends Arguments> T getArguments(Class<T> clazz) {
+        return wrapped.getArguments(clazz);
     }
 
     @Override
-    public Object getObject(FrameSlot slot) {
+    public Object getObject(FrameSlot slot) throws FrameSlotTypeException {
         return wrapped.getObject(slot);
     }
 
@@ -48,7 +56,17 @@ final class DefaultMaterializedFrame implements MaterializedFrame {
     }
 
     @Override
-    public boolean getBoolean(FrameSlot slot) {
+    public byte getByte(FrameSlot slot) throws FrameSlotTypeException {
+        return wrapped.getByte(slot);
+    }
+
+    @Override
+    public void setByte(FrameSlot slot, byte value) {
+        wrapped.setByte(slot, value);
+    }
+
+    @Override
+    public boolean getBoolean(FrameSlot slot) throws FrameSlotTypeException {
         return wrapped.getBoolean(slot);
     }
 
@@ -58,7 +76,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame {
     }
 
     @Override
-    public int getInt(FrameSlot slot) {
+    public int getInt(FrameSlot slot) throws FrameSlotTypeException {
         return wrapped.getInt(slot);
     }
 
@@ -68,7 +86,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame {
     }
 
     @Override
-    public long getLong(FrameSlot slot) {
+    public long getLong(FrameSlot slot) throws FrameSlotTypeException {
         return wrapped.getLong(slot);
     }
 
@@ -78,7 +96,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame {
     }
 
     @Override
-    public float getFloat(FrameSlot slot) {
+    public float getFloat(FrameSlot slot) throws FrameSlotTypeException {
         return wrapped.getFloat(slot);
     }
 
@@ -88,7 +106,7 @@ final class DefaultMaterializedFrame implements MaterializedFrame {
     }
 
     @Override
-    public double getDouble(FrameSlot slot) {
+    public double getDouble(FrameSlot slot) throws FrameSlotTypeException {
         return wrapped.getDouble(slot);
     }
 
@@ -98,7 +116,62 @@ final class DefaultMaterializedFrame implements MaterializedFrame {
     }
 
     @Override
-    public void updateToLatestVersion() {
-        wrapped.updateToLatestVersion();
+    public Object getValue(FrameSlot slot) {
+        return wrapped.getValue(slot);
+    }
+
+    @Override
+    public PackedFrame pack() {
+        return this;
+    }
+
+    @Override
+    public MaterializedFrame materialize() {
+        return this;
+    }
+
+    @Override
+    public Frame unpack() {
+        return this;
+    }
+
+    @Override
+    public FrameDescriptor getFrameDescriptor() {
+        return wrapped.getFrameDescriptor();
+    }
+
+    @Override
+    public boolean isObject(FrameSlot slot) {
+        return wrapped.isObject(slot);
+    }
+
+    @Override
+    public boolean isByte(FrameSlot slot) {
+        return wrapped.isByte(slot);
+    }
+
+    @Override
+    public boolean isBoolean(FrameSlot slot) {
+        return wrapped.isBoolean(slot);
+    }
+
+    @Override
+    public boolean isInt(FrameSlot slot) {
+        return wrapped.isInt(slot);
+    }
+
+    @Override
+    public boolean isLong(FrameSlot slot) {
+        return wrapped.isLong(slot);
+    }
+
+    @Override
+    public boolean isFloat(FrameSlot slot) {
+        return wrapped.isFloat(slot);
+    }
+
+    @Override
+    public boolean isDouble(FrameSlot slot) {
+        return wrapped.isDouble(slot);
     }
 }
