@@ -36,13 +36,13 @@ public class HotSpotNmethodTest extends GraalCompilerTest {
 
     @Test
     public void testInstallCodeInvalidation() {
-        final ResolvedJavaMethod testJavaMethod = getMetaAccess().lookupJavaMethod(getMethod("foo"));
+        final ResolvedJavaMethod testJavaMethod = runtime.lookupJavaMethod(getMethod("foo"));
         final StructuredGraph graph = parse("otherFoo");
         final HotSpotNmethod nmethod = (HotSpotNmethod) getCode(testJavaMethod, graph);
         Assert.assertTrue(nmethod.isValid());
         Object result;
         try {
-            result = nmethod.executeVarargs(null, "b", "c");
+            result = nmethod.execute(null, "b", "c");
             assertEquals(43, result);
         } catch (InvalidInstalledCodeException e) {
             Assert.fail("Code was invalidated");
@@ -51,7 +51,7 @@ public class HotSpotNmethodTest extends GraalCompilerTest {
         nmethod.invalidate();
         Assert.assertFalse(nmethod.isValid());
         try {
-            result = nmethod.executeVarargs(null, null, null);
+            result = nmethod.execute(null, null, null);
             Assert.fail("Code was not invalidated");
         } catch (InvalidInstalledCodeException e) {
         }
@@ -60,12 +60,12 @@ public class HotSpotNmethodTest extends GraalCompilerTest {
 
     @Test
     public void testInstallCodeInvalidationWhileRunning() {
-        final ResolvedJavaMethod testJavaMethod = getMetaAccess().lookupJavaMethod(getMethod("foo"));
+        final ResolvedJavaMethod testJavaMethod = runtime.lookupJavaMethod(getMethod("foo"));
         final StructuredGraph graph = parse("otherFoo");
         final HotSpotNmethod nmethod = (HotSpotNmethod) getCode(testJavaMethod, graph);
         Object result;
         try {
-            result = nmethod.executeVarargs(nmethod, null, null);
+            result = nmethod.execute(nmethod, null, null);
             assertEquals(43, result);
         } catch (InvalidInstalledCodeException e) {
             Assert.fail("Code was invalidated");
@@ -75,13 +75,13 @@ public class HotSpotNmethodTest extends GraalCompilerTest {
 
     @Test
     public void testInstalledCodeCalledFromCompiledCode() {
-        final ResolvedJavaMethod testJavaMethod = getMetaAccess().lookupJavaMethod(getMethod("foo"));
+        final ResolvedJavaMethod testJavaMethod = runtime.lookupJavaMethod(getMethod("foo"));
         final StructuredGraph graph = parse("otherFoo");
         final HotSpotNmethod nmethod = (HotSpotNmethod) getCode(testJavaMethod, graph);
         Assert.assertTrue(nmethod.isValid());
         try {
             for (int i = 0; i < ITERATION_COUNT; ++i) {
-                nmethod.executeVarargs(null, "b", "c");
+                nmethod.execute(null, "b", "c");
             }
         } catch (InvalidInstalledCodeException e) {
             Assert.fail("Code was invalidated");
