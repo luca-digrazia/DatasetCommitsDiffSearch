@@ -29,7 +29,7 @@ import java.util.*;
  */
 public class DebugValueMap {
 
-    private static List<DebugValueMap> topLevelMaps = new ArrayList<>();
+    private static final List<DebugValueMap> topLevelMaps = new ArrayList<>();
 
     private long[] values;
     private List<DebugValueMap> children;
@@ -52,6 +52,17 @@ public class DebugValueMap {
     public void clearChildren() {
         if (children != null) {
             children.clear();
+        }
+    }
+
+    public void reset() {
+        if (values != null) {
+            Arrays.fill(values, 0L);
+        }
+        if (children != null) {
+            for (DebugValueMap child : children) {
+                child.reset();
+            }
         }
     }
 
