@@ -110,11 +110,9 @@ public class InstrumentBranchesPhaseTest extends PartialEvaluationTest {
             TruffleCompilerOptions.TruffleInstrumentBranches.setValue(instrumentFlag);
             TruffleCompilerOptions.TruffleInstrumentBranchesFilter.setValue(filterFlag);
         }
-        String stackOutput = InstrumentBranchesPhase.instrumentation.accessTableToList().get(0);
-        Assert.assertTrue(stackOutput.contains("com.oracle.graal.truffle.test.InstrumentBranchesPhaseTest$SimpleIfTestNode.execute(InstrumentBranchesPhaseTest.java"));
-        Assert.assertTrue(stackOutput.contains("[bci: 4]\n[0] state = ELSE(if=0#, else=1#)"));
-        String histogramOutput = InstrumentBranchesPhase.instrumentation.accessTableToHistogram().get(0);
-        Assert.assertEquals("  0: ********************************************************************************", histogramOutput);
+        String output = InstrumentBranchesPhase.instrumentation.accessTableToList().get(0);
+        Assert.assertTrue(output.contains("com.oracle.graal.truffle.test.InstrumentBranchesPhaseTest$SimpleIfTestNode.execute(InstrumentBranchesPhaseTest.java"));
+        Assert.assertTrue(output.contains("[bci: 4]\n[0] state = ELSE(if=0#, else=1#)"));
     }
 
     @Test
@@ -137,11 +135,11 @@ public class InstrumentBranchesPhaseTest extends PartialEvaluationTest {
             TruffleCompilerOptions.TruffleInstrumentBranches.setValue(instrumentFlag);
             TruffleCompilerOptions.TruffleInstrumentBranchesFilter.setValue(filterFlag);
         }
-        String stackOutput1 = InstrumentBranchesPhase.instrumentation.accessTableToList().get(0);
-        Assert.assertTrue(stackOutput1.contains("com.oracle.graal.truffle.test.InstrumentBranchesPhaseTest$TwoIfsTestNode.execute(InstrumentBranchesPhaseTest.java"));
-        Assert.assertTrue(stackOutput1.contains("[bci: 4]\n[1] state = ELSE(if=0#, else=2#)"));
-        String stackOutput2 = InstrumentBranchesPhase.instrumentation.accessTableToList().get(1);
-        Assert.assertTrue(stackOutput2.contains("com.oracle.graal.truffle.test.InstrumentBranchesPhaseTest$TwoIfsTestNode.execute(InstrumentBranchesPhaseTest.java"));
-        Assert.assertTrue(stackOutput2.contains("[bci: 18]\n[2] state = IF(if=2#, else=0#)"));
+        String output1 = InstrumentBranchesPhase.instrumentation.accessTableToList().get(0);
+        Assert.assertTrue(output1.contains("com.oracle.graal.truffle.test.InstrumentBranchesPhaseTest$TwoIfsTestNode.execute(InstrumentBranchesPhaseTest.java"));
+        Assert.assertTrue(output1.contains("[bci: 4]\n[1] state = ELSE(if=0#, else=2#)"));
+        String output2 = InstrumentBranchesPhase.instrumentation.accessTableToList().get(1);
+        Assert.assertTrue(output2.contains("com.oracle.graal.truffle.test.InstrumentBranchesPhaseTest$TwoIfsTestNode.execute(InstrumentBranchesPhaseTest.java"));
+        Assert.assertTrue(output2.contains("[bci: 18]\n[2] state = IF(if=2#, else=0#)"));
     }
 }
