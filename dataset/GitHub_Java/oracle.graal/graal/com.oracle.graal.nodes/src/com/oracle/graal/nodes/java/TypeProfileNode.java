@@ -29,11 +29,10 @@ import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.FixedWithNextNode;
 
-@NodeInfo(allowedUsageTypes = InputType.Anchor)
+@NodeInfo
 public final class TypeProfileNode extends FixedWithNextNode implements Canonicalizable {
 
     public static final NodeClass<TypeProfileNode> TYPE = NodeClass.create(TypeProfileNode.class);
@@ -52,7 +51,6 @@ public final class TypeProfileNode extends FixedWithNextNode implements Canonica
         return new TypeProfileNode(profile);
     }
 
-    @Override
     public Node canonical(CanonicalizerTool tool) {
         if (this.usages().isEmpty()) {
             return null;

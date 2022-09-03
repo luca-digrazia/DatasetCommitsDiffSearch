@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,8 +23,6 @@
 package com.oracle.graal.phases.common;
 
 import static com.oracle.graal.compiler.common.GraalOptions.OptEliminateGuards;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
 import static com.oracle.graal.phases.common.LoweringPhase.ProcessBlockState.ST_ENTER;
 import static com.oracle.graal.phases.common.LoweringPhase.ProcessBlockState.ST_ENTER_ALWAYS_REACHED;
 import static com.oracle.graal.phases.common.LoweringPhase.ProcessBlockState.ST_LEAVE;
@@ -36,10 +34,15 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
-import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.MetaAccessProvider;
+
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeBitMap;
@@ -65,7 +68,6 @@ import com.oracle.graal.nodes.extended.GuardingNode;
 import com.oracle.graal.nodes.spi.Lowerable;
 import com.oracle.graal.nodes.spi.LoweringProvider;
 import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.NodeCostProvider;
 import com.oracle.graal.nodes.spi.Replacements;
 import com.oracle.graal.nodes.spi.StampProvider;
 import com.oracle.graal.phases.BasePhase;
@@ -73,18 +75,12 @@ import com.oracle.graal.phases.Phase;
 import com.oracle.graal.phases.schedule.SchedulePhase;
 import com.oracle.graal.phases.tiers.PhaseContext;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.MetaAccessProvider;
-
 /**
  * Processes all {@link Lowerable} nodes to do their lowering.
  */
 public class LoweringPhase extends BasePhase<PhaseContext> {
 
-    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    @NodeInfo
     static final class DummyGuardHandle extends ValueNode implements GuardedNode {
         public static final NodeClass<DummyGuardHandle> TYPE = NodeClass.create(DummyGuardHandle.class);
         @Input(InputType.Guard) GuardingNode guard;
@@ -94,12 +90,10 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             this.guard = guard;
         }
 
-        @Override
         public GuardingNode getGuard() {
             return guard;
         }
 
-        @Override
         public void setGuard(GuardingNode guard) {
             updateUsagesInterface(this.guard, guard);
             this.guard = guard;
@@ -109,11 +103,6 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         public ValueNode asNode() {
             return this;
         }
-    }
-
-    @Override
-    public boolean checkContract() {
-        return false;
     }
 
     final class LoweringToolImpl implements LoweringTool {
@@ -141,11 +130,6 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         }
 
         @Override
-        public ConstantFieldProvider getConstantFieldProvider() {
-            return context.getConstantFieldProvider();
-        }
-
-        @Override
         public MetaAccessProvider getMetaAccess() {
             return context.getMetaAccess();
         }
@@ -170,7 +154,6 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             return createGuard(before, condition, deoptReason, action, JavaConstant.NULL_POINTER, false);
         }
 
-        @Override
         public StampProvider getStampProvider() {
             return context.getStampProvider();
         }
@@ -202,14 +185,8 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             }
         }
 
-        @Override
         public FixedWithNextNode lastFixedNode() {
             return lastFixedNode;
-        }
-
-        @Override
-        public NodeCostProvider getNodeCostProvider() {
-            return context.getNodeCostProvider();
         }
 
         private void setLastFixedNode(FixedWithNextNode n) {
@@ -321,17 +298,8 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                 case VERIFY_LOWERING:
                     return "VerifyLoweringRound";
                 default:
-                    throw GraalError.shouldNotReachHere();
+                    throw JVMCIError.shouldNotReachHere();
             }
-        }
-
-        @Override
-        public boolean checkContract() {
-            /*
-             * lowering with snippets cannot be fully built in the node costs of all high level
-             * nodes
-             */
-            return false;
         }
 
         @Override
@@ -385,7 +353,6 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                     }
                 }
             }
-
         }
 
         @SuppressWarnings("try")
@@ -415,7 +382,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                     Collection<Node> unscheduledUsages = null;
                     assert (unscheduledUsages = getUnscheduledUsages(node)) != null;
                     Mark preLoweringMark = node.graph().getMark();
-                    try (DebugCloseable s = node.graph().withNodeSourcePosition(node)) {
+                    try (DebugCloseable s = node.graph().withNodeContext(node)) {
                         ((Lowerable) node).lower(loweringTool);
                     }
                     if (loweringTool.guardAnchor.asNode().isDeleted()) {
@@ -549,7 +516,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                 f = f.parent;
                 nextState = ST_ENTER;
             } else {
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
             }
             state = nextState;
         }
@@ -610,7 +577,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                 f = f.parent;
                 nextState = ST_ENTER;
             } else {
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
             }
             state = nextState;
         }

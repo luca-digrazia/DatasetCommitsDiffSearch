@@ -580,8 +580,7 @@ public class BytecodeParser implements GraphBuilderContext {
     private FixedWithNextNode[] firstInstructionArray;
     private FrameStateBuilder[] entryStateArray;
 
-    protected BytecodeParser(GraphBuilderPhase.Instance graphBuilderInstance, StructuredGraph graph, BytecodeParser parent, ResolvedJavaMethod method, int entryBCI,
-                    IntrinsicContext intrinsicContext) {
+    protected BytecodeParser(GraphBuilderPhase.Instance graphBuilderInstance, StructuredGraph graph, BytecodeParser parent, ResolvedJavaMethod method, int entryBCI, IntrinsicContext intrinsicContext) {
         this.graphBuilderInstance = graphBuilderInstance;
         this.graph = graph;
         this.graphBuilderConfig = graphBuilderInstance.graphBuilderConfig;
@@ -725,7 +724,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
 
             if (Debug.isDumpEnabled() && DumpDuringGraphBuilding.getValue() && this.beforeReturnNode != startInstruction) {
-                Debug.dump(graph, "Bytecodes parsed: %s.%s", method.getDeclaringClass().getUnqualifiedName(), method.getName());
+                Debug.dump(graph, "Bytecodes parsed: " + method.getDeclaringClass().getUnqualifiedName() + "." + method.getName());
             }
         }
     }
@@ -1610,8 +1609,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
     protected void traceWithContext(String format, Object... args) {
         StackTraceElement where = method.asStackTraceElement(bci());
-        TTY.println(format("%s%s (%s:%d) %s", nSpaces(getDepth()), method.isConstructor() ? method.format("%h.%n") : method.getName(), where.getFileName(), where.getLineNumber(),
-                        format(format, args)));
+        TTY.println(format("%s%s (%s:%d) %s", nSpaces(getDepth()), method.isConstructor() ? method.format("%h.%n") : method.getName(), where.getFileName(), where.getLineNumber(), format(format, args)));
     }
 
     protected BytecodeParserError asParserError(Throwable e) {
@@ -2067,9 +2065,8 @@ public class BytecodeParser implements GraphBuilderContext {
         FixedNode target = createTarget(probability, block, stateAfter);
         AbstractBeginNode begin = BeginNode.begin(target);
 
-        assert !(target instanceof DeoptimizeNode && begin instanceof BeginStateSplitNode && ((BeginStateSplitNode) begin).stateAfter() != null) : "We are not allowed to set the stateAfter of the begin node,"
-                        +
-                        " because we have to deoptimize to a bci _before_ the actual if, so that the interpreter can update the profiling information.";
+        assert !(target instanceof DeoptimizeNode && begin instanceof BeginStateSplitNode && ((BeginStateSplitNode) begin).stateAfter() != null) : "We are not allowed to set the stateAfter of the begin node, because we have to deoptimize "
+                        + "to a bci _before_ the actual if, so that the interpreter can update the profiling information.";
         return begin;
     }
 
@@ -2912,8 +2909,7 @@ public class BytecodeParser implements GraphBuilderContext {
          * interfaces are initialized only under special circumstances, so that this assertion would
          * often fail for interface calls.
          */
-        assert !graphBuilderConfig.unresolvedIsError() ||
-                        (result instanceof ResolvedJavaMethod && (opcode != INVOKESTATIC || ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized())) : result;
+        assert !graphBuilderConfig.unresolvedIsError() || (result instanceof ResolvedJavaMethod && (opcode != INVOKESTATIC || ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized())) : result;
         return result;
     }
 
@@ -2971,7 +2967,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
 
-        ValueNode castNode = null;
+        ValueNode checkCastNode = null;
         if (profile != null) {
             if (profile.getNullSeen().isFalse()) {
                 object = appendNullCheck(object);
@@ -2979,28 +2975,28 @@ public class BytecodeParser implements GraphBuilderContext {
                 if (singleType != null && checkedType.getType().isAssignableFrom(singleType)) {
                     LogicNode typeCheck = append(InstanceOfNode.create(TypeReference.createExactTrusted(singleType), object, null));
                     if (typeCheck.isTautology()) {
-                        castNode = object;
+                        checkCastNode = object;
                     } else {
                         FixedGuardNode fixedGuard = append(new FixedGuardNode(typeCheck, DeoptimizationReason.TypeCheckedInliningViolated, DeoptimizationAction.InvalidateReprofile, false));
-                        castNode = append(new PiNode(object, StampFactory.objectNonNull(TypeReference.createExactTrusted(singleType)), fixedGuard));
+                        checkCastNode = append(new PiNode(object, StampFactory.objectNonNull(TypeReference.createExactTrusted(singleType)), fixedGuard));
                     }
                 }
             }
         }
-        if (castNode == null) {
+        if (checkCastNode == null) {
             TypeProfileNode anchor = TypeProfileNode.create(profile);
             if (anchor != null) {
                 append(anchor);
             }
             LogicNode condition = genUnique(InstanceOfNode.createAllowNull(checkedType, object, anchor));
             if (condition.isTautology()) {
-                castNode = object;
+                checkCastNode = object;
             } else {
                 FixedGuardNode fixedGuard = append(new FixedGuardNode(condition, DeoptimizationReason.ClassCastException, DeoptimizationAction.InvalidateReprofile, false));
-                castNode = append(new PiNode(object, StampFactory.object(checkedType), fixedGuard));
+                checkCastNode = append(new PiNode(object, StampFactory.object(checkedType), fixedGuard));
             }
         }
-        frameState.push(JavaKind.Object, castNode);
+        frameState.push(JavaKind.Object, checkCastNode);
     }
 
     private ValueNode appendNullCheck(ValueNode object) {
