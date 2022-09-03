@@ -42,7 +42,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
     }
 
     private static List<TruffleInliningDecision> createDecisions(OptimizedCallTarget sourceTarget, TruffleInliningPolicy policy) {
-        int nodeCount = sourceTarget.countNonTrivialNodes(false);
+        int nodeCount = OptimizedCallUtils.countNonTrivialNodes(sourceTarget, false);
         List<TruffleInliningDecision> exploredCallSites = exploreCallSites(new ArrayList<>(Arrays.asList(sourceTarget)), nodeCount, policy);
         return decideInlining(exploredCallSites, policy, nodeCount);
     }
@@ -65,7 +65,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
 
         List<TruffleInliningDecision> childCallSites = Collections.emptyList();
         double frequency = calculateFrequency(parentTarget, callNode);
-        int nodeCount = callNode.getCurrentCallTarget().countNonTrivialNodes(false);
+        int nodeCount = OptimizedCallUtils.countNonTrivialNodes(callNode.getCurrentCallTarget(), false);
 
         boolean recursive = isRecursiveStack(callStack);
         int deepNodeCount = nodeCount;
@@ -165,9 +165,9 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
      */
     public interface CallTreeNodeVisitor extends NodeVisitor {
 
-        boolean visit(List<TruffleInlining> decisionStack, Node node);
+        public boolean visit(List<TruffleInlining> decisionStack, Node node);
 
-        default boolean visit(Node node) {
+        public default boolean visit(Node node) {
             return visit(null, node);
         }
 
@@ -205,7 +205,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
      * This visitor wraps an existing {@link NodeVisitor} or {@link CallTreeNodeVisitor} and
      * traverses the full Truffle tree including inlined call sites.
      */
-    private static final class CallTreeNodeVisitorImpl implements NodeVisitor {
+    private final static class CallTreeNodeVisitorImpl implements NodeVisitor {
 
         protected final List<TruffleInlining> stack = new ArrayList<>();
         private final NodeVisitor visitor;
@@ -216,7 +216,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
             this.visitor = visitor;
         }
 
-        public boolean visit(Node node) {
+        public final boolean visit(Node node) {
             if (node instanceof OptimizedDirectCallNode) {
                 OptimizedDirectCallNode callNode = (OptimizedDirectCallNode) node;
                 TruffleInlining inlining = stack.get(stack.size() - 1);
@@ -225,7 +225,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision> {
                     if (childInlining != null) {
                         stack.add(childInlining);
                         continueTraverse = visitNode(node);
-                        if (continueTraverse && childInlining.isInline()) {
+                        if (continueTraverse) {
                             childInlining.getTarget().getRootNode().accept(this);
                         }
                         stack.remove(stack.size() - 1);

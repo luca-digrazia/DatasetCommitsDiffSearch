@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,20 +26,20 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
 import java.io.*;
 import java.util.*;
+import java.util.function.*;
+import java.util.stream.*;
 
 import com.oracle.graal.debug.*;
+import com.oracle.graal.truffle.TruffleInlining.CallTreeNodeVisitor;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.nodes.NodeUtil.NodeCountFilter;
 
 public final class OptimizedCallTargetLog {
 
     protected static final PrintStream OUT = TTY.out().out();
 
-    private static Map<OptimizedCallTarget, Integer> callTargets;
     static {
         if (TruffleCallTargetProfiling.getValue()) {
-            callTargets = new WeakHashMap<>();
-
             Runtime.getRuntime().addShutdownHook(new Thread() {
 
                 @Override
@@ -53,49 +53,69 @@ public final class OptimizedCallTargetLog {
     private OptimizedCallTargetLog() {
     }
 
-    public static void logInliningDecision(TruffleInliningResult result) {
-        if (!TraceTruffleInlining.getValue()) {
+    public static void logInliningDecision(OptimizedCallTarget target) {
+        TruffleInlining inlining = target.getInlining();
+        if (inlining == null) {
             return;
         }
 
-        logInliningStart(result.getCallTarget());
-        logInliningDecisionRecursive(result, 0);
-        logInliningDone(result.getCallTarget());
+        logInliningStart(target);
+        logInliningDecisionRecursive(inlining, 1);
+        logInliningDone(target);
     }
 
-    private static void logInliningDecisionRecursive(TruffleInliningResult result, int depth) {
-        List<OptimizedDirectCallNode> callNodes = searchCallNodes(result.getCallTarget());
-        for (OptimizedDirectCallNode callNode : callNodes) {
-            TruffleInliningProfile profile = result.getProfiles().get(callNode);
-            boolean inlined = result.isInlined(callNode);
+    private static void logInliningDecisionRecursive(TruffleInlining result, int depth) {
+        for (TruffleInliningDecision decision : result) {
+            TruffleInliningProfile profile = decision.getProfile();
+            boolean inlined = decision.isInline();
             String msg = inlined ? "inline success" : "inline failed";
-            logInlinedImpl(msg, profile, depth);
-            if (profile.getRecursiveResult() != null && inlined) {
-                logInliningDecisionRecursive(profile.getRecursiveResult(), depth + 1);
+            logInlinedImpl(msg, decision.getProfile().getCallNode(), profile, depth);
+            if (inlined) {
+                logInliningDecisionRecursive(decision, depth + 1);
             }
         }
     }
 
-    private static List<OptimizedDirectCallNode> searchCallNodes(final OptimizedCallTarget target) {
-        final List<OptimizedDirectCallNode> callNodes = new ArrayList<>();
-        target.getRootNode().accept(new NodeVisitor() {
-            public boolean visit(Node node) {
+    public static void logTruffleCallTree(OptimizedCallTarget compilable) {
+        CallTreeNodeVisitor visitor = new CallTreeNodeVisitor() {
+
+            public boolean visit(List<TruffleInlining> decisionStack, Node node) {
                 if (node instanceof OptimizedDirectCallNode) {
-                    callNodes.add((OptimizedDirectCallNode) node);
+                    OptimizedDirectCallNode callNode = ((OptimizedDirectCallNode) node);
+                    int depth = decisionStack == null ? 0 : decisionStack.size() - 1;
+                    TruffleInliningDecision inlining = CallTreeNodeVisitor.getCurrentInliningDecision(decisionStack);
+                    String dispatched = "<dispatched>";
+                    if (inlining != null && inlining.isInline()) {
+                        dispatched = "";
+                    }
+                    Map<String, Object> properties = new LinkedHashMap<>();
+                    addASTSizeProperty(callNode.getCurrentCallTarget(), properties);
+                    properties.putAll(callNode.getCurrentCallTarget().getDebugProperties());
+                    properties.put("Stamp", callNode.getCurrentCallTarget().getArgumentStamp());
+                    log((depth * 2), "opt call tree", callNode.getCurrentCallTarget().toString() + dispatched, properties);
+                } else if (node instanceof OptimizedIndirectCallNode) {
+                    int depth = decisionStack == null ? 0 : decisionStack.size() - 1;
+                    log((depth * 2), "opt call tree", "<indirect>", new LinkedHashMap<String, Object>());
                 }
                 return true;
             }
-        });
-        return callNodes;
+
+        };
+
+        TruffleInlining inlining = compilable.getInlining();
+        if (inlining == null) {
+            compilable.getRootNode().accept(visitor);
+        } else {
+            inlining.accept(compilable, visitor);
+        }
     }
 
-    private static void logInlinedImpl(String status, TruffleInliningProfile profile, int depth) {
+    private static void logInlinedImpl(String status, OptimizedDirectCallNode callNode, TruffleInliningProfile profile, int depth) {
         Map<String, Object> properties = new LinkedHashMap<>();
-        addASTSizeProperty(profile.getCallNode().getCurrentCallTarget(), properties);
         if (profile != null) {
             properties.putAll(profile.getDebugProperties());
         }
-        log((depth * 2), status, profile.getCallNode().getCurrentCallTarget().toString(), properties);
+        log((depth * 2), status, callNode.getCurrentCallTarget().toString(), properties);
     }
 
     private static void logInliningStart(OptimizedCallTarget target) {
@@ -154,31 +174,20 @@ public final class OptimizedCallTargetLog {
         log(0, "opt fail", callSite.toString(), properties);
     }
 
-    static void logOptimizingDone(OptimizedCallTarget target, Map<String, Object> properties) {
+    public static void logOptimizingDone(OptimizedCallTarget target, Map<String, Object> properties) {
         if (TraceTruffleCompilationDetails.getValue() || TraceTruffleCompilation.getValue()) {
             log(0, "opt done", target.toString(), properties);
         }
         if (TraceTruffleCompilationPolymorphism.getValue()) {
-
-            target.getRootNode().accept(new NodeVisitor() {
-                public boolean visit(Node node) {
-                    NodeCost kind = node.getCost();
-                    if (kind == NodeCost.POLYMORPHIC || kind == NodeCost.MEGAMORPHIC) {
-                        Map<String, Object> props = new LinkedHashMap<>();
-                        props.put("simpleName", node.getClass().getSimpleName());
-                        String msg = kind == NodeCost.MEGAMORPHIC ? "megamorphic" : "polymorphic";
-                        log(0, msg, node.toString(), props);
-                    }
-                    if (node instanceof DirectCallNode) {
-                        DirectCallNode callNode = (DirectCallNode) node;
-                        if (callNode.isInliningForced()) {
-                            callNode.getCurrentRootNode().accept(this);
-                        }
-                    }
-                    return true;
-                }
+            target.nodeStream(true).filter(node -> node != null && (node.getCost() == NodeCost.MEGAMORPHIC || node.getCost() == NodeCost.POLYMORPHIC))//
+            .forEach(node -> {
+                NodeCost cost = node.getCost();
+                Map<String, Object> props = new LinkedHashMap<>();
+                props.put("simpleName", node.getClass().getSimpleName());
+                props.put("subtree", "\n" + NodeUtil.printCompactTreeToString(node));
+                String msg = cost == NodeCost.MEGAMORPHIC ? "megamorphic" : "polymorphic";
+                log(0, msg, node.toString(), props);
             });
-
         }
     }
 
@@ -194,21 +203,19 @@ public final class OptimizedCallTargetLog {
         }
     }
 
-    static void addASTSizeProperty(OptimizedCallTarget target, Map<String, Object> properties) {
-        int polymorphicCount = NodeUtil.countNodes(target.getRootNode(), new NodeCountFilter() {
-            public boolean isCounted(Node node) {
-                return node.getCost() == NodeCost.POLYMORPHIC;
-            }
-        }, true);
+    public static void addASTSizeProperty(OptimizedCallTarget target, Map<String, Object> properties) {
+        int nodeCount = OptimizedCallUtils.countNonTrivialNodes(target, false);
+        int deepNodeCount = nodeCount;
+        TruffleInlining inlining = target.getInlining();
+        if (inlining != null) {
+            deepNodeCount += inlining.getInlinedNodeCount();
+        }
+        properties.put("ASTSize", String.format("%5d/%5d", nodeCount, deepNodeCount));
 
-        int megamorphicCount = NodeUtil.countNodes(target.getRootNode(), new NodeCountFilter() {
-            public boolean isCounted(Node node) {
-                return node.getCost() == NodeCost.MEGAMORPHIC;
-            }
-        }, true);
+    }
 
-        String value = String.format("%4d (%d/%d)", OptimizedCallUtils.countNonTrivialNodes(target, true), polymorphicCount, megamorphicCount);
-        properties.put("ASTSize", value);
+    public static void logPerformanceWarning(String details, Map<String, Object> properties) {
+        log(0, "perf warn", details, properties);
     }
 
     static void log(int indent, String msg, String details, Map<String, Object> properties) {
@@ -243,43 +250,59 @@ public final class OptimizedCallTargetLog {
         OUT.println(sb.toString());
     }
 
+    private static int sumCalls(List<OptimizedCallTarget> targets, Function<TraceCompilationProfile, Integer> function) {
+        return targets.stream().collect(Collectors.summingInt(target -> function.apply((TraceCompilationProfile) target.getCompilationProfile())));
+    }
+
     private static void printProfiling() {
-        List<OptimizedCallTarget> sortedCallTargets = new ArrayList<>(callTargets.keySet());
-        Collections.sort(sortedCallTargets, new Comparator<OptimizedCallTarget>() {
-
-            @Override
-            public int compare(OptimizedCallTarget o1, OptimizedCallTarget o2) {
-                return o2.callCount - o1.callCount;
+        Map<OptimizedCallTarget, List<OptimizedCallTarget>> groupedTargets = Truffle.getRuntime().getCallTargets().stream()//
+        .map(target -> (OptimizedCallTarget) target)//
+        .collect(Collectors.groupingBy(target -> {
+            if (target.getSplitSource() != null) {
+                return target.getSplitSource();
             }
-        });
+            return target;
+        }));
 
-        int totalCallCount = 0;
-        int totalInlinedCallSiteCount = 0;
-        int totalNodeCount = 0;
+        List<OptimizedCallTarget> uniqueSortedTargets = groupedTargets.keySet().stream()//
+        .sorted((target1, target2) -> sumCalls(groupedTargets.get(target2), p -> p.getTotalCallCount()) - sumCalls(groupedTargets.get(target1), p -> p.getTotalCallCount()))//
+        .collect(Collectors.toList());
+
+        int totalDirectCallCount = 0;
+        int totalInlinedCallCount = 0;
+        int totalIndirectCallCount = 0;
+        int totalTotalCallCount = 0;
+        int totalInterpretedCallCount = 0;
         int totalInvalidationCount = 0;
 
         OUT.println();
-        OUT.printf("%-50s | %-10s | %s / %s | %s | %s\n", "Call Target", "Call Count", "Calls Sites Inlined", "Not Inlined", "Node Count", "Inv");
-        for (OptimizedCallTarget callTarget : sortedCallTargets) {
-            if (callTarget.callCount == 0) {
-                continue;
+        OUT.printf(" %-50s  | %-15s || %-15s | %-15s || %-15s | %-15s | %-15s || %3s \n", "Call Target", "Total Calls", "Interp. Calls", "Opt. Calls", "Direct Calls", "Inlined Calls",
+                        "Indirect Calls", "Invalidations");
+        for (OptimizedCallTarget uniqueCallTarget : uniqueSortedTargets) {
+            List<OptimizedCallTarget> allCallTargets = groupedTargets.get(uniqueCallTarget);
+            int directCallCount = sumCalls(allCallTargets, p -> p.getDirectCallCount());
+            int indirectCallCount = sumCalls(allCallTargets, p -> p.getIndirectCallCount());
+            int inlinedCallCount = sumCalls(allCallTargets, p -> p.getInlinedCallCount());
+            int interpreterCallCount = sumCalls(allCallTargets, p -> p.getInterpreterCallCount());
+            int totalCallCount = sumCalls(allCallTargets, p -> p.getTotalCallCount());
+            int invalidationCount = allCallTargets.stream().collect(Collectors.summingInt(target -> target.getCompilationProfile().getInvalidationCount()));
+
+            totalDirectCallCount += directCallCount;
+            totalInlinedCallCount += inlinedCallCount;
+            totalIndirectCallCount += indirectCallCount;
+            totalInvalidationCount += invalidationCount;
+            totalInterpretedCallCount += interpreterCallCount;
+            totalTotalCallCount += totalCallCount;
+
+            if (totalCallCount > 0) {
+                OUT.printf("  %-50s | %15d || %15d | %15d || %15d | %15d | %15d || %3d\n", uniqueCallTarget, totalCallCount, interpreterCallCount, totalCallCount - interpreterCallCount,
+                                directCallCount, inlinedCallCount, indirectCallCount, invalidationCount);
             }
 
-            int nodeCount = OptimizedCallUtils.countNonTrivialNodes(callTarget, true);
-            String comment = callTarget.installedCode == null ? " int" : "";
-            comment += callTarget.compilationEnabled ? "" : " fail";
-            OUT.printf("%-50s | %10d | %15d | %10d | %3d%s\n", callTarget.getRootNode(), callTarget.callCount, nodeCount, nodeCount, callTarget.getCompilationProfile().getInvalidationCount(), comment);
-
-            totalCallCount += callTarget.callCount;
-            totalInlinedCallSiteCount += nodeCount;
-            totalNodeCount += nodeCount;
-            totalInvalidationCount += callTarget.getCompilationProfile().getInvalidationCount();
         }
-        OUT.printf("%-50s | %10d | %15d | %10d | %3d\n", "Total", totalCallCount, totalInlinedCallSiteCount, totalNodeCount, totalInvalidationCount);
-    }
 
-    public static void registerCallTarget(OptimizedCallTarget callTarget) {
-        callTargets.put(callTarget, 0);
-    }
+        OUT.printf(" %-50s  | %15d || %15d | %15d || %15d | %15d | %15d || %3d\n", "Total", totalTotalCallCount, totalInterpretedCallCount, totalTotalCallCount - totalInterpretedCallCount,
+                        totalDirectCallCount, totalInlinedCallCount, totalIndirectCallCount, totalInvalidationCount);
 
+    }
 }
