@@ -41,6 +41,7 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
+import com.oracle.svm.core.hub.ClassForNameSupport;
 import com.oracle.svm.core.util.VMError;
 
 /**
@@ -78,6 +79,7 @@ public final class ICU4JFeature implements Feature {
         Class<?> shimClass = access.findClassByName(shimClassName);
         if (shimClass != null) {
             RuntimeReflection.registerForReflectiveInstantiation(shimClass);
+            ClassForNameSupport.registerClass(shimClass);
         } else {
             throw VMError.shouldNotReachHere(shimClassName + " not found");
         }
