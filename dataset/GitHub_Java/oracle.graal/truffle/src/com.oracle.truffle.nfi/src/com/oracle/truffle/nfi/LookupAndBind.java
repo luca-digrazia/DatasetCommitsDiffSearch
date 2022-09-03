@@ -30,6 +30,7 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.util.HashMap;
@@ -66,7 +67,7 @@ final class LookupAndBind extends RootNode {
                 throw UnknownIdentifierException.raise(nameAndSignature);
             }
         }
-        return library.register(libraryWrapper);
+        return JavaInterop.asTruffleObject(libraryWrapper);
     }
 
 }
