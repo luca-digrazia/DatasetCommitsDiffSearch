@@ -135,6 +135,7 @@ interface GraphPrinter extends Closeable {
                     // Overwrite the value inserted by
                     // ConstantNode.getDebugProperties()
                     props.put("rawvalue", rawvalue);
+                    System.out.println(obj.getClass() + ": " + rawvalue);
                     if (!rawvalue.equals(toString)) {
                         props.put("toString", toString);
                     }

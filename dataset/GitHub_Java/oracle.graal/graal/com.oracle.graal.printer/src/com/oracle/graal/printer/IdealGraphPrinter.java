@@ -22,69 +22,118 @@
  */
 package com.oracle.graal.printer;
 
-import java.io.*;
-import java.util.*;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.schedule.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.Verbosity;
-import com.oracle.graal.graph.NodeClass.NodeClassIterator;
-import com.oracle.graal.graph.NodeClass.Position;
-import com.oracle.graal.java.*;
-import com.oracle.graal.lir.cfg.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.api.replacements.SnippetReflectionProvider;
+import com.oracle.graal.bytecode.BytecodeDisassembler;
+import com.oracle.graal.debug.GraalDebugConfig.Options;
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.graph.Position;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.BeginNode;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.EndNode;
+import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.PhiNode;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
+import com.oracle.graal.nodes.cfg.Block;
+import com.oracle.graal.nodes.cfg.ControlFlowGraph;
+import com.oracle.graal.phases.schedule.SchedulePhase;
+
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
- * Generates a representation of {@link Graph Graphs} that can be visualized and inspected with the <a
- * href="http://kenai.com/projects/igv">Ideal Graph Visualizer</a>.
+ * Generates a representation of {@link Graph Graphs} that can be visualized and inspected with the
+ * <a href="http://kenai.com/projects/igv">Ideal Graph Visualizer</a>.
  */
-class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
+public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
+
+    private final boolean tryToSchedule;
+    private final SnippetReflectionProvider snippetReflection;
+
     /**
      * Creates a new {@link IdealGraphPrinter} that writes to the specified output stream.
+     *
+     * @param tryToSchedule If false, no scheduling is done, which avoids exceptions for
+     *            non-schedulable graphs.
      */
-    public IdealGraphPrinter(OutputStream stream) {
+    public IdealGraphPrinter(OutputStream stream, boolean tryToSchedule, SnippetReflectionProvider snippetReflection) {
         super(stream);
         this.begin();
+        this.tryToSchedule = tryToSchedule;
+        this.snippetReflection = snippetReflection;
+    }
+
+    @Override
+    public SnippetReflectionProvider getSnippetReflectionProvider() {
+        return snippetReflection;
     }
 
     /**
-     * Starts a new group of graphs with the given name, short name and method byte code index (BCI) as properties.
+     * Starts a new group of graphs with the given name, short name and method byte code index (BCI)
+     * as properties.
      */
     @Override
-    public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci) {
+    public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci, Map<Object, Object> properties) {
         beginGroup();
         beginProperties();
         printProperty("name", name);
+        if (properties != null) {
+            for (Entry<Object, Object> entry : properties.entrySet()) {
+                printProperty(entry.getKey().toString(), entry.getValue().toString());
+            }
+        }
         endProperties();
         beginMethod(name, shortName, bci);
-        if (method != null && method.code() != null) {
+        if (method != null && method.getCode() != null) {
             printBytecodes(new BytecodeDisassembler(false).disassemble(method));
         }
         endMethod();
     }
 
-    public void print(Graph graph, String title) {
-        print(graph, title, null);
-    }
-
     /**
-     * Prints an entire {@link Graph} with the specified title, optionally using short names for nodes.
+     * Prints an entire {@link Graph} with the specified title, optionally using short names for
+     * nodes.
      */
     @Override
-    public void print(Graph graph, String title, SchedulePhase predefinedSchedule) {
+    public void print(Graph graph, String title, Map<Object, Object> properties) {
         beginGraph(title);
-        Set<Node> noBlockNodes = new HashSet<>();
-        SchedulePhase schedule = predefinedSchedule;
-        if (schedule == null) {
-            try {
-                schedule = new SchedulePhase();
-                schedule.apply((StructuredGraph) graph);
-            } catch (Throwable t) {
+        Set<Node> noBlockNodes = Node.newSet();
+        ScheduleResult schedule = null;
+        if (graph instanceof StructuredGraph) {
+            StructuredGraph structuredGraph = (StructuredGraph) graph;
+            schedule = structuredGraph.getLastSchedule();
+            if (schedule == null && tryToSchedule) {
+                if (Options.PrintIdealGraphSchedule.getValue()) {
+                    try {
+                        SchedulePhase schedulePhase = new SchedulePhase();
+                        schedulePhase.apply(structuredGraph);
+                        schedule = structuredGraph.getLastSchedule();
+                    } catch (Throwable t) {
+                    }
+                }
             }
         }
-        ControlFlowGraph cfg =  schedule == null ? null : schedule.getCFG();
+        ControlFlowGraph cfg = schedule == null ? null : schedule.getCFG();
+
+        if (properties != null) {
+            beginProperties();
+            for (Entry<Object, Object> entry : properties.entrySet()) {
+                printProperty(entry.getKey().toString(), entry.getValue().toString());
+            }
+            endProperties();
+        }
 
         beginNodes();
         List<Edge> edges = printNodes(graph, cfg == null ? null : cfg.getNodeToBlock(), noBlockNodes);
@@ -128,12 +177,14 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
                 printProperty("name", name);
             }
             printProperty("class", node.getClass().getSimpleName());
-            Block block = nodeToBlock == null ? null : nodeToBlock.get(node);
+
+            Block block = nodeToBlock == null || nodeToBlock.isNew(node) ? null : nodeToBlock.get(node);
             if (block != null) {
                 printProperty("block", Integer.toString(block.getId()));
-//                if (!(node instanceof PhiNode || node instanceof FrameState || node instanceof LocalNode) && !block.nodes().contains(node)) {
-//                    printProperty("notInOwnBlock", "true");
-//                }
+                // if (!(node instanceof PhiNode || node instanceof FrameState || node instanceof
+                // ParameterNode) && !block.nodes().contains(node)) {
+                // printProperty("notInOwnBlock", "true");
+                // }
             } else {
                 printProperty("block", "noBlock");
                 noBlockNodes.add(node);
@@ -161,10 +212,13 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
                     printProperty(bit, "true");
                 }
             }
-            if (node.getClass() == BeginNode.class) {
+            if (node instanceof BeginNode) {
                 printProperty("shortName", "B");
             } else if (node.getClass() == EndNode.class) {
                 printProperty("shortName", "E");
+            } else if (node instanceof ConstantNode) {
+                ConstantNode cn = (ConstantNode) node;
+                updateStringPropertiesForConstant(props, cn);
             }
             if (node.predecessor() != null) {
                 printProperty("hasPredecessor", "true");
@@ -200,24 +254,20 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
 
             // successors
             int fromIndex = 0;
-            NodeClassIterator succIter = node.successors().iterator();
-            while (succIter.hasNext()) {
-                Position position = succIter.nextPosition();
-                Node successor = node.getNodeClass().get(node, position);
+            for (Position position : node.successorPositions()) {
+                Node successor = position.get(node);
                 if (successor != null) {
-                    edges.add(new Edge(node.toString(Verbosity.Id), fromIndex, successor.toString(Verbosity.Id), 0, node.getNodeClass().getName(position)));
+                    edges.add(new Edge(node.toString(Verbosity.Id), fromIndex, successor.toString(Verbosity.Id), 0, position.getName()));
                 }
                 fromIndex++;
             }
 
             // inputs
             int toIndex = 1;
-            NodeClassIterator inputIter = node.inputs().iterator();
-            while (inputIter.hasNext()) {
-                Position position = inputIter.nextPosition();
-                Node input = node.getNodeClass().get(node, position);
+            for (Position position : node.inputPositions()) {
+                Node input = position.get(node);
                 if (input != null) {
-                    edges.add(new Edge(input.toString(Verbosity.Id), input.successors().count(), node.toString(Verbosity.Id), toIndex, node.getNodeClass().getName(position)));
+                    edges.add(new Edge(input.toString(Verbosity.Id), input.successors().count(), node.toString(Verbosity.Id), toIndex, position.getName()));
                 }
                 toIndex++;
             }
@@ -237,11 +287,11 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
         endSuccessors();
         beginBlockNodes();
 
-        Set<Node> nodes = new HashSet<>();
+        Set<Node> nodes = Node.newSet();
 
         if (nodeToBlock != null) {
             for (Node n : graph.getNodes()) {
-                Block blk = nodeToBlock.get(n);
+                Block blk = nodeToBlock.isNew(n) ? null : nodeToBlock.get(n);
                 if (blk == block) {
                     nodes.add(n);
                 }
@@ -252,20 +302,20 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
             // if this is the first block: add all locals to this block
             if (block.getBeginNode() == ((StructuredGraph) graph).start()) {
                 for (Node node : graph.getNodes()) {
-                    if (node instanceof LocalNode) {
+                    if (node instanceof ParameterNode) {
                         nodes.add(node);
                     }
                 }
             }
 
-            Set<Node> snapshot = new HashSet<>(nodes);
+            Set<Node> snapshot = Node.newSet(nodes);
             // add all framestates and phis to their blocks
             for (Node node : snapshot) {
                 if (node instanceof StateSplit && ((StateSplit) node).stateAfter() != null) {
                     nodes.add(((StateSplit) node).stateAfter());
                 }
-                if (node instanceof MergeNode) {
-                    for (PhiNode phi : ((MergeNode) node).phis()) {
+                if (node instanceof AbstractMergeNode) {
+                    for (PhiNode phi : ((AbstractMergeNode) node).phis()) {
                         nodes.add(phi);
                     }
                 }

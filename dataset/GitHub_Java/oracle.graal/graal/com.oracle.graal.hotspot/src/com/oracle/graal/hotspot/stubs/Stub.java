@@ -25,7 +25,6 @@ package com.oracle.graal.hotspot.stubs;
 import static com.oracle.graal.compiler.GraalCompiler.emitBackEnd;
 import static com.oracle.graal.compiler.GraalCompiler.emitFrontEnd;
 import static com.oracle.graal.hotspot.HotSpotHostBackend.UNCOMMON_TRAP_HANDLER;
-import static com.oracle.graal.options.OptionValues.GLOBAL;
 
 import java.util.ListIterator;
 import java.util.Set;
@@ -45,7 +44,6 @@ import com.oracle.graal.lir.phases.LIRSuites;
 import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
 import com.oracle.graal.lir.profiling.MoveProfilingPhase;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.options.OptionValues;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.tiers.Suites;
@@ -181,9 +179,9 @@ public abstract class Stub {
 
                 compResult = new CompilationResult(toString());
                 try (Scope s0 = Debug.scope("StubCompilation", graph, providers.getCodeCache())) {
-                    Suites suites = createSuites(GLOBAL);
+                    Suites suites = createSuites();
                     emitFrontEnd(providers, backend, graph, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, DefaultProfilingInfo.get(TriState.UNKNOWN), suites);
-                    LIRSuites lirSuites = createLIRSuites(GLOBAL);
+                    LIRSuites lirSuites = createLIRSuites();
                     emitBackEnd(graph, Stub.this, getInstalledCodeOwner(), backend, compResult, CompilationResultBuilderFactory.Default, getRegisterConfig(), lirSuites);
                     assert checkStubInvariants();
                 } catch (Throwable e) {
@@ -241,13 +239,13 @@ public abstract class Stub {
         return true;
     }
 
-    protected Suites createSuites(OptionValues options) {
-        Suites defaultSuites = providers.getSuites().getDefaultSuites(options);
+    protected Suites createSuites() {
+        Suites defaultSuites = providers.getSuites().getDefaultSuites();
         return new Suites(new PhaseSuite<>(), defaultSuites.getMidTier(), defaultSuites.getLowTier());
     }
 
-    protected LIRSuites createLIRSuites(OptionValues options) {
-        LIRSuites lirSuites = new LIRSuites(providers.getSuites().getDefaultLIRSuites(options));
+    protected LIRSuites createLIRSuites() {
+        LIRSuites lirSuites = new LIRSuites(providers.getSuites().getDefaultLIRSuites());
         ListIterator<LIRPhase<PostAllocationOptimizationContext>> moveProfiling = lirSuites.getPostAllocationOptimizationStage().findPhase(MoveProfilingPhase.class);
         if (moveProfiling != null) {
             moveProfiling.remove();

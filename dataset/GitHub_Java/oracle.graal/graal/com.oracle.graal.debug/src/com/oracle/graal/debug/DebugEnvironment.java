@@ -24,36 +24,38 @@ package com.oracle.graal.debug;
 
 import static com.oracle.graal.debug.GraalDebugConfig.Options.Dump;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.Log;
-import static com.oracle.graal.debug.GraalDebugConfig.Options.Meter;
+import static com.oracle.graal.debug.GraalDebugConfig.Options.Count;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.MethodFilter;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.Time;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.TrackMemUse;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.Verify;
+import static com.oracle.graal.debug.GraalDebugConfig.Options.MethodMeter;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.oracle.graal.serviceprovider.GraalServices;
+
 import jdk.vm.ci.runtime.JVMCI;
-import jdk.vm.ci.services.Services;
 
 public class DebugEnvironment {
 
-    public static GraalDebugConfig initialize(PrintStream log) {
-        // Initialize JVMCI before loading class Debug to make sure, properties are loaded
-        // (especially Debug=...)
+    public static GraalDebugConfig initialize(PrintStream log, Object... extraArgs) {
+        // Initialize JVMCI before loading class Debug
         JVMCI.initialize();
         if (!Debug.isEnabled()) {
-            log.println("WARNING: Scope debugging needs to be enabled with -esa or -D" + Debug.Initialization.INITIALIZER_PROPERTY_NAME + "=true");
+            log.println("WARNING: Scope debugging needs to be enabled with -esa");
             return null;
         }
         List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
         List<DebugVerifyHandler> verifyHandlers = new ArrayList<>();
-        GraalDebugConfig debugConfig = new GraalDebugConfig(Log.getValue(), Meter.getValue(), TrackMemUse.getValue(), Time.getValue(), Dump.getValue(), Verify.getValue(), MethodFilter.getValue(),
+        GraalDebugConfig debugConfig = new GraalDebugConfig(Log.getValue(), Count.getValue(), TrackMemUse.getValue(), Time.getValue(), Dump.getValue(), Verify.getValue(), MethodFilter.getValue(),
+                        MethodMeter.getValue(),
                         log, dumpHandlers, verifyHandlers);
 
-        for (DebugConfigCustomizer customizer : Services.load(DebugConfigCustomizer.class)) {
-            customizer.customize(debugConfig);
+        for (DebugConfigCustomizer customizer : GraalServices.load(DebugConfigCustomizer.class)) {
+            customizer.customize(debugConfig, extraArgs);
         }
 
         Debug.setConfig(debugConfig);
