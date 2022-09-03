@@ -25,7 +25,17 @@ package com.oracle.graal.printer;
 import static com.oracle.graal.debug.GraalDebugConfig.asJavaMethod;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.lang.management.ManagementFactory;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.nio.channels.ClosedByInterruptException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.SocketChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,17 +44,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
-
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugDumpHandler;
-import com.oracle.graal.debug.DebugDumpScope;
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.GraalDebugConfig.Options;
-import com.oracle.graal.graph.Graph;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import jdk.vm.ci.meta.JavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugDumpHandler;
+import com.oracle.graal.debug.DebugDumpScope;
+import com.oracle.graal.debug.GraalDebugConfig.Options;
+import com.oracle.graal.debug.TTY;
+import com.oracle.graal.graph.Graph;
 
 //JaCoCo Exclude
 
@@ -55,7 +66,6 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  */
 public class GraphPrinterDumpHandler implements DebugDumpHandler {
 
-    private final GraphPrinterSupplier printerSupplier;
     protected GraphPrinter printer;
     private List<String> previousInlineContext;
     private int[] dumpIds = {};
@@ -64,19 +74,10 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     private final String jvmArguments;
     private final String sunJavaCommand;
 
-    @FunctionalInterface
-    public interface GraphPrinterSupplier {
-        GraphPrinter get() throws IOException;
-    }
-
     /**
      * Creates a new {@link GraphPrinterDumpHandler}.
-     * 
-     * @param printerSupplier Supplier used to create the GraphPrinter. Should supply an optional or
-     *            null in case of failure.
      */
-    public GraphPrinterDumpHandler(GraphPrinterSupplier printerSupplier) {
-        this.printerSupplier = printerSupplier;
+    public GraphPrinterDumpHandler() {
         /* Add the JVM and Java arguments to the graph properties to help identify it. */
         this.jvmArguments = String.join(" ", ManagementFactory.getRuntimeMXBean().getInputArguments());
         this.sunJavaCommand = System.getProperty("sun.java.command");
@@ -89,12 +90,15 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             }
             previousInlineContext = new ArrayList<>();
             inlineContextMap = new WeakHashMap<>();
-            try {
-                printer = printerSupplier.get();
-            } catch (IOException e) {
-                TTY.println(e.getMessage());
-                failuresCount++;
-            }
+            createPrinter();
+        }
+    }
+
+    protected void createPrinter() {
+        if (Options.PrintIdealGraphFile.getValue()) {
+            initializeFilePrinter();
+        } else {
+            initializeNetworkPrinter();
         }
     }
 
@@ -106,6 +110,62 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
         return dumpIds[depth - 1]++;
     }
 
+    private void initializeFilePrinter() {
+        Path path = getFilePrinterPath();
+        try {
+            if (Options.PrintBinaryGraphs.getValue()) {
+                printer = new BinaryGraphPrinter(FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW));
+            } else {
+                printer = new IdealGraphPrinter(Files.newOutputStream(path), true);
+            }
+            TTY.println("Dumping IGV graphs to %s", path.toString());
+        } catch (IOException e) {
+            TTY.println("Failed to open %s to dump IGV graphs : %s", path.toString(), e);
+            failuresCount++;
+            printer = null;
+        }
+    }
+
+    private static long dumpIgvTimestamp;
+    private static final AtomicInteger dumpIgvId = new AtomicInteger();
+
+    private static Path getFilePrinterPath() {
+        // If this is the first time I have constructed a FilePrinterPath,
+        // get a time stamp in a (weak) attempt to make unique file names.
+        if (dumpIgvTimestamp == 0) {
+            dumpIgvTimestamp = System.currentTimeMillis();
+        }
+        // Encode the kind of the file in the extension.
+        final String ext = (Options.PrintBinaryGraphs.getValue() ? ".bgv" : ".gv.xml");
+        // Construct the path to the file.
+        return Paths.get(Options.DumpPath.getValue(), "runtime-graphs-" + dumpIgvTimestamp + "_" + dumpIgvId.incrementAndGet() + ext);
+    }
+
+    private void initializeNetworkPrinter() {
+        String host = Options.PrintIdealGraphAddress.getValue();
+        int port = Options.PrintBinaryGraphs.getValue() ? Options.PrintBinaryGraphPort.getValue() : Options.PrintIdealGraphPort.getValue();
+        try {
+            if (Options.PrintBinaryGraphs.getValue()) {
+                printer = new BinaryGraphPrinter(SocketChannel.open(new InetSocketAddress(host, port)));
+            } else {
+                IdealGraphPrinter xmlPrinter = new IdealGraphPrinter(new Socket(host, port).getOutputStream(), true);
+                printer = xmlPrinter;
+            }
+            TTY.println("Connected to the IGV on %s:%d", host, port);
+        } catch (ClosedByInterruptException | InterruptedIOException e) {
+            /*
+             * Interrupts should not count as errors because they may be caused by a cancelled Graal
+             * compilation. ClosedByInterruptException occurs if the SocketChannel could not be
+             * opened. InterruptedIOException occurs if new Socket(..) was interrupted.
+             */
+            printer = null;
+        } catch (IOException e) {
+            TTY.println("Could not connect to the IGV on %s:%d : %s", host, port, e);
+            failuresCount++;
+            printer = null;
+        }
+    }
+
     @Override
     @SuppressWarnings("try")
     public void dump(Object object, final String message) {
@@ -115,57 +175,60 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 return;
             }
             final Graph graph = (Graph) object;
-            // Get all current JavaMethod instances in the context.
-            List<String> inlineContext = getInlineContext(graph);
 
-            if (inlineContext != previousInlineContext) {
-                Map<Object, Object> properties = new HashMap<>();
-                properties.put("graph", graph.toString());
-                if (inlineContext.equals(previousInlineContext)) {
-                    /*
-                     * two different graphs have the same inline context, so make sure they appear
-                     * in different folders by closing and reopening the top scope.
-                     */
-                    int inlineDepth = previousInlineContext.size() - 1;
-                    closeScope(inlineDepth);
-                    openScope(inlineContext.get(inlineDepth), inlineDepth, properties);
-                } else {
-                    // Check for method scopes that must be closed since the previous dump.
-                    for (int i = 0; i < previousInlineContext.size(); ++i) {
-                        if (i >= inlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
-                            for (int inlineDepth = previousInlineContext.size() - 1; inlineDepth >= i; --inlineDepth) {
-                                closeScope(inlineDepth);
+            if (printer != null) {
+                // Get all current JavaMethod instances in the context.
+                List<String> inlineContext = getInlineContext(graph);
+
+                if (inlineContext != previousInlineContext) {
+                    Map<Object, Object> properties = new HashMap<>();
+                    properties.put("graph", graph.toString());
+                    if (inlineContext.equals(previousInlineContext)) {
+                        /*
+                         * two different graphs have the same inline context, so make sure they
+                         * appear in different folders by closing and reopening the top scope.
+                         */
+                        int inlineDepth = previousInlineContext.size() - 1;
+                        closeScope(inlineDepth);
+                        openScope(inlineContext.get(inlineDepth), inlineDepth, properties);
+                    } else {
+                        // Check for method scopes that must be closed since the previous dump.
+                        for (int i = 0; i < previousInlineContext.size(); ++i) {
+                            if (i >= inlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
+                                for (int inlineDepth = previousInlineContext.size() - 1; inlineDepth >= i; --inlineDepth) {
+                                    closeScope(inlineDepth);
+                                }
+                                break;
                             }
-                            break;
                         }
-                    }
-                    // Check for method scopes that must be opened since the previous dump.
-                    for (int i = 0; i < inlineContext.size(); ++i) {
-                        if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
-                            for (int inlineDepth = i; inlineDepth < inlineContext.size(); ++inlineDepth) {
-                                openScope(inlineContext.get(inlineDepth), inlineDepth, inlineDepth == inlineContext.size() - 1 ? properties : null);
+                        // Check for method scopes that must be opened since the previous dump.
+                        for (int i = 0; i < inlineContext.size(); ++i) {
+                            if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
+                                for (int inlineDepth = i; inlineDepth < inlineContext.size(); ++inlineDepth) {
+                                    openScope(inlineContext.get(inlineDepth), inlineDepth, inlineDepth == inlineContext.size() - 1 ? properties : null);
+                                }
+                                break;
                             }
-                            break;
                         }
                     }
                 }
-            }
 
-            // Save inline context for next dump.
-            previousInlineContext = inlineContext;
+                // Save inline context for next dump.
+                previousInlineContext = inlineContext;
 
-            try (Scope s = Debug.sandbox("PrintingGraph", null)) {
-                // Finally, output the graph.
-                Map<Object, Object> properties = new HashMap<>();
-                properties.put("graph", graph.toString());
-                properties.put("date", new Date().toString());
-                properties.put("scope", Debug.currentScope());
-                printer.print(graph, nextDumpId() + ":" + message, properties);
-            } catch (IOException e) {
-                failuresCount++;
-                printer = null;
-            } catch (Throwable e) {
-                throw Debug.handle(e);
+                try (Scope s = Debug.sandbox("PrintingGraph", null)) {
+                    // Finally, output the graph.
+                    Map<Object, Object> properties = new HashMap<>();
+                    properties.put("graph", graph.toString());
+                    properties.put("date", new Date().toString());
+                    properties.put("scope", Debug.currentScope());
+                    printer.print(graph, nextDumpId() + ":" + message, properties);
+                } catch (IOException e) {
+                    failuresCount++;
+                    printer = null;
+                } catch (Throwable e) {
+                    throw Debug.handle(e);
+                }
             }
         }
     }
@@ -175,63 +238,39 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
         if (result == null) {
             result = new ArrayList<>();
             Object lastMethodOrGraph = null;
-            boolean graphSeen = false;
             for (Object o : Debug.context()) {
-                if (o == graph) {
-                    graphSeen = true;
-                }
-
-                if (o instanceof DebugDumpScope) {
+                JavaMethod method = asJavaMethod(o);
+                if (method != null) {
+                    if (lastMethodOrGraph == null || asJavaMethod(lastMethodOrGraph) == null || !asJavaMethod(lastMethodOrGraph).equals(method)) {
+                        result.add(method.format("%H::%n(%p)"));
+                    } else {
+                        /*
+                         * This prevents multiple adjacent method context objects for the same
+                         * method from resulting in multiple IGV tree levels. This works on the
+                         * assumption that real inlining debug scopes will have a graph context
+                         * object between the inliner and inlinee context objects.
+                         */
+                    }
+                } else if (o instanceof DebugDumpScope) {
                     DebugDumpScope debugDumpScope = (DebugDumpScope) o;
                     if (debugDumpScope.decorator && !result.isEmpty()) {
                         result.set(result.size() - 1, debugDumpScope.name + ":" + result.get(result.size() - 1));
                     } else {
                         result.add(debugDumpScope.name);
                     }
-                } else {
-                    addMethodContext(result, o, lastMethodOrGraph);
                 }
                 if (o instanceof JavaMethod || o instanceof Graph) {
                     lastMethodOrGraph = o;
                 }
             }
-
             if (result.isEmpty()) {
                 result.add(graph.toString());
-                graphSeen = true;
             }
             // Reverse list such that inner method comes after outer method.
             Collections.reverse(result);
-            if (!graphSeen) {
-                /*
-                 * The graph isn't in any context but is being processed within another graph so add
-                 * it to the end of the scopes.
-                 */
-                if (asJavaMethod(graph) != null) {
-                    addMethodContext(result, graph, lastMethodOrGraph);
-                } else {
-                    result.add(graph.toString());
-                }
-            }
             inlineContextMap.put(graph, result);
         }
         return result;
-    }
-
-    private static void addMethodContext(List<String> result, Object o, Object lastMethodOrGraph) {
-        JavaMethod method = asJavaMethod(o);
-        if (method != null) {
-            if (lastMethodOrGraph == null || asJavaMethod(lastMethodOrGraph) == null || !asJavaMethod(lastMethodOrGraph).equals(method)) {
-                result.add(method.format("%H::%n(%p)"));
-            } else {
-                /*
-                 * This prevents multiple adjacent method context objects for the same method from
-                 * resulting in multiple IGV tree levels. This works on the assumption that real
-                 * inlining debug scopes will have a graph context object between the inliner and
-                 * inlinee context objects.
-                 */
-            }
-        }
     }
 
     private void openScope(String name, int inlineDepth, Map<Object, Object> properties) {
