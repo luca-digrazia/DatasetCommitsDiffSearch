@@ -27,11 +27,13 @@ package com.oracle.truffle.api.interop.java;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import static com.oracle.truffle.api.interop.java.ToJavaNode.message;
+import static com.oracle.truffle.api.interop.java.ToJavaNode.toPrimitive;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.lang.reflect.Constructor;
@@ -72,9 +74,6 @@ final class JavaInteropReflect {
             }
             throw (NoSuchFieldError) new NoSuchFieldError(ex.getMessage()).initCause(ex);
         }
-        if (new ToPrimitiveNode().isPrimitive(val)) {
-            return val;
-        }
         return JavaInterop.asTruffleObject(val);
     }
 
@@ -99,7 +98,7 @@ final class JavaInteropReflect {
         for (Constructor<?> constructor : clazz.getConstructors()) {
             try {
                 Object ret = constructor.newInstance(args);
-                if (new ToPrimitiveNode().isPrimitive(ret)) {
+                if (ToJavaNode.isPrimitive(ret)) {
                     return ret;
                 }
                 return JavaInterop.asTruffleObject(ret);
@@ -135,7 +134,6 @@ final class JavaInteropReflect {
         return functionalType.cast(obj);
     }
 
-    @CompilerDirectives.TruffleBoundary
     static TruffleObject asTruffleViaReflection(Object obj) throws IllegalArgumentException {
         if (Proxy.isProxyClass(obj.getClass())) {
             InvocationHandler h = Proxy.getInvocationHandler(obj);
@@ -151,7 +149,7 @@ final class JavaInteropReflect {
     }
 
     @CompilerDirectives.TruffleBoundary
-    static String[] findPublicFieldsNames(Class<?> c, boolean onlyInstance) throws SecurityException {
+    static String[] findPublicMemberNames(Class<?> c, boolean onlyInstance) throws SecurityException {
         Class<?> clazz = c;
         while ((clazz.getModifiers() & Modifier.PUBLIC) == 0) {
             clazz = clazz.getSuperclass();
@@ -163,6 +161,16 @@ final class JavaInteropReflect {
                 continue;
             }
             names.add(field.getName());
+        }
+        final Method[] methods = clazz.getMethods();
+        for (Method method : methods) {
+            if (method.getDeclaringClass() == Object.class) {
+                continue;
+            }
+            if (((method.getModifiers() & Modifier.STATIC) == 0) != onlyInstance) {
+                continue;
+            }
+            names.add(method.getName());
         }
         return names.toArray(new String[0]);
     }
@@ -201,23 +209,20 @@ final class JavaInteropReflect {
             CompilerAsserts.neverPartOfCompilation();
             Object[] args = arguments == null ? EMPTY : arguments;
             if (target == null) {
-                target = JavaInterop.ACCESSOR.engine().registerInteropTarget(symbol, null);
-                if (target == null) {
-                    Node executeMain = Message.createExecute(args.length).createNode();
-                    RootNode symbolNode = new ToJavaNode.TemporaryRoot(TruffleLanguage.class, executeMain);
-                    target = JavaInterop.ACCESSOR.engine().registerInteropTarget(symbol, symbolNode);
-                }
+                Node executeMain = Message.createExecute(args.length).createNode();
+                RootNode symbolNode = new ToJavaNode.TemporaryRoot(TruffleLanguage.class, executeMain, symbol, TypeAndClass.forReturnType(method));
+                target = Truffle.getRuntime().createCallTarget(symbolNode);
             }
             for (int i = 0; i < args.length; i++) {
                 if (args[i] instanceof TruffleObject) {
                     continue;
                 }
-                if (new ToPrimitiveNode().isPrimitive(args[i])) {
+                if (ToJavaNode.isPrimitive(args[i])) {
                     continue;
                 }
                 arguments[i] = JavaInterop.asTruffleObject(args[i]);
             }
-            return target.call(symbol, TypeAndClass.forReturnType(method), args);
+            return target.call(args);
         }
     }
 
@@ -298,7 +303,7 @@ final class JavaInteropReflect {
                     ret = message(convertTo, Message.createInvoke(args.length), obj, callArgs.toArray());
                 } catch (InteropException ex) {
                     val = message(null, Message.READ, obj, name);
-                    Object primitiveVal = new ToPrimitiveNode().toPrimitive(val, method.getReturnType());
+                    Object primitiveVal = toPrimitive(val, method.getReturnType());
                     if (primitiveVal != null) {
                         return primitiveVal;
                     }
