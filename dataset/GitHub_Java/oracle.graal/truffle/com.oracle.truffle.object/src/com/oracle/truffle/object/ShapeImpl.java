@@ -58,10 +58,11 @@ import com.oracle.truffle.object.Locations.ValueLocation;
 import com.oracle.truffle.object.Transition.AddPropertyTransition;
 import com.oracle.truffle.object.Transition.ObjectTypeTransition;
 import com.oracle.truffle.object.Transition.PropertyTransition;
+import com.oracle.truffle.object.Transition.ShareShapeTransition;
 
 /**
  * Shape objects create a mapping of Property objects to indexes. The mapping of those indexes to an
- * actual store is not part of Shape's role, but JSObject's. Shapes are immutable; adding or
+ * actual store is not part of Shape's role, but DynamicObject's. Shapes are immutable; adding or
  * deleting a property yields a new Shape which links to the old one. This allows inline caching to
  * simply check the identity of an object's Shape to determine if the cache is valid. There is one
  * exception to this immutability, the transition map, but that is used simply to assure that an
@@ -102,6 +103,9 @@ public abstract class ShapeImpl extends Shape {
     protected final int primitiveArrayCapacity;
     /** @since 0.17 or earlier */
     protected final boolean hasPrimitiveArray;
+
+    /** @since 0.18 */
+    protected final boolean shared;
 
     /** @since 0.17 or earlier */
     protected final int depth;
@@ -155,6 +159,7 @@ public abstract class ShapeImpl extends Shape {
         this.primitiveArraySize = primitiveArraySize;
         this.primitiveArrayCapacity = capacityFromSize(primitiveArraySize);
         this.hasPrimitiveArray = hasPrimitiveArray;
+        this.shared = transitionFromParent instanceof ShareShapeTransition || (parent != null && parent.shared);
 
         if (parent != null) {
             this.propertyCount = makePropertyCount(parent, propertyMap);
@@ -395,7 +400,7 @@ public abstract class ShapeImpl extends Shape {
     @TruffleBoundary
     @Override
     public ShapeImpl defineProperty(Object key, Object value, int flags) {
-        return defineProperty(key, value, flags, layout.getStrategy().getDefaultLocationFactory());
+        return defineProperty(key, value, flags, LayoutStrategy.DEFAULT_LAYOUT_FACTORY);
     }
 
     /** @since 0.17 or earlier */
@@ -693,6 +698,9 @@ public abstract class ShapeImpl extends Shape {
     @Override
     public final ShapeImpl removeProperty(Property prop) {
         assert isValid();
+        if (shared) {
+            throw new UnsupportedOperationException("Do not use delete() with a shared shape as it moves locations");
+        }
         onPropertyTransition(prop);
 
         return layout.getStrategy().removeProperty(this, prop);
@@ -913,6 +921,30 @@ public abstract class ShapeImpl extends Shape {
         return visitor.visitShape(this);
     }
 
+    /** @since 0.18 */
+    @Override
+    public boolean isShared() {
+        return shared;
+    }
+
+    /** @since 0.18 */
+    @Override
+    public Shape makeSharedShape() {
+        if (shared) {
+            throw new UnsupportedOperationException("makeSharedShape() can only be called on non-shared shapes.");
+        }
+
+        Transition transition = new ShareShapeTransition();
+        ShapeImpl cachedShape = queryTransition(transition);
+        if (cachedShape != null) {
+            return layout.getStrategy().ensureValid(cachedShape);
+        }
+
+        ShapeImpl newShape = createShape(layout, sharedData, this, objectType, propertyMap, transition, allocator(), id);
+        addDirectTransition(transition, newShape);
+        return newShape;
+    }
+
     private static final class DynamicObjectFactoryImpl implements DynamicObjectFactory {
         private final ShapeImpl shape;
         @CompilationFinal(dimensions = 1) private final PropertyImpl[] instanceFields;
@@ -965,6 +997,8 @@ public abstract class ShapeImpl extends Shape {
         protected boolean hasPrimitiveArray;
         /** @since 0.17 or earlier */
         protected int depth;
+        /** @since 0.18 */
+        protected boolean shared;
 
         /** @since 0.17 or earlier */
         protected BaseAllocator(LayoutImpl layout) {
@@ -980,6 +1014,7 @@ public abstract class ShapeImpl extends Shape {
             this.primitiveArraySize = shape.primitiveArraySize;
             this.hasPrimitiveArray = shape.hasPrimitiveArray;
             this.depth = shape.depth;
+            this.shared = shape.shared;
         }
 
         /** @since 0.17 or earlier */
