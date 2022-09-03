@@ -58,22 +58,22 @@ public class CompositeValueClass extends LIRIntrospection {
     }
 
     public CompositeValueClass(Class<? extends CompositeValue> clazz) {
-        this(clazz, new FieldsScanner.DefaultCalcOffset());
+        this(clazz, new DefaultCalcOffset());
     }
 
-    public CompositeValueClass(Class<? extends CompositeValue> clazz, FieldsScanner.CalcOffset calcOffset) {
+    public CompositeValueClass(Class<? extends CompositeValue> clazz, CalcOffset calcOffset) {
         super(clazz);
 
-        CompositeValueFieldsScanner vfs = new CompositeValueFieldsScanner(calcOffset);
-        vfs.scan(clazz, CompositeValue.class, false);
+        ValueFieldScanner vfs = new ValueFieldScanner(calcOffset);
+        vfs.scan(clazz, true);
 
         values = new Values(vfs.valueAnnotations.get(CompositeValue.Component.class));
         data = new Fields(vfs.data);
     }
 
-    private static class CompositeValueFieldsScanner extends LIRFieldsScanner {
+    private static class ValueFieldScanner extends FieldScanner {
 
-        public CompositeValueFieldsScanner(FieldsScanner.CalcOffset calc) {
+        public ValueFieldScanner(CalcOffset calc) {
             super(calc);
             valueAnnotations.put(CompositeValue.Component.class, new OperandModeAnnotation());
         }
@@ -119,6 +119,20 @@ public class CompositeValueClass extends LIRIntrospection {
         }
 
         return result.toString();
+    }
+
+    Value getValue(CompositeValue obj, ValuePosition pos) {
+        return getValueForPosition(obj, values, pos);
+    }
+
+    CompositeValue createUpdatedValue(CompositeValue compValue, ValuePosition pos, Value value) {
+        CompositeValue newCompValue = compValue.clone();
+        setValueForPosition(newCompValue, values, pos, value);
+        return newCompValue;
+    }
+
+    EnumSet<OperandFlag> getFlags(ValuePosition pos) {
+        return values.getFlags(pos.getIndex());
     }
 
     void copyValueArrays(CompositeValue compositeValue) {

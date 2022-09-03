@@ -29,8 +29,7 @@ import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
 /**
- * Functional interface for iterating over a list of values, possibly returning a value to replace
- * the old value.
+ * Functional interface for iterating over a list of values.
  */
 @FunctionalInterface
 public interface InstructionValueProcedure {
