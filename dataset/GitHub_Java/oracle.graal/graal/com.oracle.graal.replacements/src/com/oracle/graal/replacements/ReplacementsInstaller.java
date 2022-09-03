@@ -32,6 +32,7 @@ import sun.misc.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.java.*;
@@ -76,7 +77,7 @@ public class ReplacementsInstaller {
 
     /**
      * Finds all the snippet methods in a given class, builds a graph for them and installs the
-     * graph with the key value of {@code Graph.class} in the
+     * graph with the key value of {@code Snippet.class} in the
      * {@linkplain ResolvedJavaMethod#getCompilerStorage() compiler storage} of each method.
      */
     public void installSnippets(Class<? extends Snippets> snippets) {
@@ -87,10 +88,10 @@ public class ReplacementsInstaller {
                     throw new RuntimeException("Snippet must not be abstract or native");
                 }
                 ResolvedJavaMethod snippet = runtime.lookupJavaMethod(method);
-                assert snippet.getCompilerStorage().get(Graph.class) == null : method;
+                assert snippet.getCompilerStorage().get(Snippet.class) == null : method;
                 StructuredGraph graph = makeGraph(snippet, inliningPolicy(snippet));
                 // System.out.println("snippet: " + graph);
-                snippet.getCompilerStorage().put(Graph.class, graph);
+                snippet.getCompilerStorage().put(Snippet.class, graph);
             }
         }
     }
@@ -99,9 +100,9 @@ public class ReplacementsInstaller {
      * Finds all the methods in a given class annotated with {@link MethodSubstitution} or
      * {@link MacroSubstitution}. It builds graphs for the former and installs them in the
      * {@linkplain ResolvedJavaMethod#getCompilerStorage() compiler storage} of the original (i.e.,
-     * substituted) method with a key of {@code Graph.class}. For the latter, the denoted
-     * {@linkplain MacroSubstitution#macro() macro} node type is install in the compiler storage
-     * with a key of {@code Node.class}.
+     * substituted) method with a key of {@code MethodSubstitution.class}. For the latter, the
+     * denoted {@linkplain MacroSubstitution#macro() macro} node type is install in the compiler
+     * storage with a key of {@code Node.class}.
      */
     public void installSubstitutions(Class<?> substitutions) {
         assert owner == Thread.currentThread() : "substitution installation must be single threaded";
@@ -150,20 +151,20 @@ public class ReplacementsInstaller {
     /**
      * Installs a method substitution.
      * 
-     * @param originalMethod a method or constructor being substituted
+     * @param originalMember a method or constructor being substituted
      * @param substituteMethod the substitute method
      */
-    protected void installMethodSubstitution(Member originalMethod, Method substituteMethod) {
+    protected void installMethodSubstitution(Member originalMember, Method substituteMethod) {
         substitute = runtime.lookupJavaMethod(substituteMethod);
-        if (originalMethod instanceof Method) {
-            original = runtime.lookupJavaMethod((Method) originalMethod);
+        if (originalMember instanceof Method) {
+            original = runtime.lookupJavaMethod((Method) originalMember);
         } else {
-            original = runtime.lookupJavaConstructor((Constructor) originalMethod);
+            original = runtime.lookupJavaConstructor((Constructor) originalMember);
         }
         try {
             Debug.log("substitution: " + MetaUtil.format("%H.%n(%p)", original) + " --> " + MetaUtil.format("%H.%n(%p)", substitute));
             StructuredGraph graph = makeGraph(substitute, inliningPolicy(substitute));
-            Object oldValue = original.getCompilerStorage().put(Graph.class, graph);
+            Object oldValue = original.getCompilerStorage().put(MethodSubstitution.class, graph);
             assert oldValue == null;
         } finally {
             substitute = null;
@@ -343,7 +344,7 @@ public class ReplacementsInstaller {
      * @param optional if true, resolution failure returns null
      * @return the resolved class or null if resolution fails and {@code optional} is true
      */
-    private static Class resolveType(String className, boolean optional) {
+    static Class resolveType(String className, boolean optional) {
         try {
             // Need to use launcher class path to handle classes
             // that are not on the boot class path
