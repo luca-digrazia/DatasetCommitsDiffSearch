@@ -29,8 +29,6 @@
  */
 package com.oracle.truffle.llvm.test;
 
-import static org.junit.Assert.assertEquals;
-
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -41,7 +39,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -49,10 +46,9 @@ import org.junit.BeforeClass;
 
 import com.oracle.truffle.llvm.LLVM;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import com.oracle.truffle.llvm.test.RemoteLLVMTester.RemoteProgramArgsBuilder;
-import com.oracle.truffle.llvm.test.options.SulongTestOptions;
 import com.oracle.truffle.llvm.tools.util.ProcessUtil;
-import com.oracle.truffle.llvm.tools.util.ProcessUtil.ProcessResult;
 
 public class RemoteTestSuiteBase extends TestSuiteBase {
 
@@ -82,7 +78,7 @@ public class RemoteTestSuiteBase extends TestSuiteBase {
     }
 
     public List<String> launchRemote(TestCaseFiles tuple, Object... args) throws IOException, AssertionError {
-        if (SulongTestOptions.TEST.runRemoteTestcasesAsLocal()) {
+        if (LLVMBaseOptionFacade.launchRemoteTestCasesAsLocal()) {
             return launchLocal(tuple, args);
         } else {
             String str = new RemoteProgramArgsBuilder(tuple.getBitCodeFile()).args(args).getCommand();
@@ -136,7 +132,7 @@ public class RemoteTestSuiteBase extends TestSuiteBase {
 
     @AfterClass
     public static void endRemoteProcess() {
-        if (!SulongTestOptions.TEST.runRemoteTestcasesAsLocal()) {
+        if (!LLVMBaseOptionFacade.launchRemoteTestCasesAsLocal()) {
             try {
                 outputStream.write("exit\n");
                 outputStream.flush();
@@ -149,13 +145,13 @@ public class RemoteTestSuiteBase extends TestSuiteBase {
 
     @BeforeClass
     public static void startRemoteProcess() throws IOException {
-        if (!SulongTestOptions.TEST.runRemoteTestcasesAsLocal()) {
+        if (!LLVMBaseOptionFacade.launchRemoteTestCasesAsLocal()) {
             remoteTruffleProcess = TestHelper.launchRemoteTruffle();
             outputStream = new BufferedWriter(new OutputStreamWriter(remoteTruffleProcess.getOutputStream()));
             reader = new BufferedReader(new InputStreamReader(remoteTruffleProcess.getInputStream()));
             errorReader = new BufferedReader(new InputStreamReader(remoteTruffleProcess.getErrorStream()));
             if (!remoteTruffleProcess.isAlive()) {
-                throw new IllegalStateException(ProcessUtil.readStreamAndClose(remoteTruffleProcess.getErrorStream()));
+                throw new IllegalStateException(ProcessUtil.readStream(remoteTruffleProcess.getErrorStream()));
             }
             TestHelper.compileToLLVMIRWithClang(LLVMPaths.FLUSH_C_FILE, LLVMPaths.FLUSH_BITCODE_FILE);
         }
@@ -172,31 +168,6 @@ public class RemoteTestSuiteBase extends TestSuiteBase {
             }
         }
         Assert.fail(bitCodeFile + errorMessage.toString());
-    }
-
-    public void remoteLaunchAndTest(TestCaseFiles tuple) throws Throwable {
-        LLVMLogger.info("original file: " + tuple.getOriginalFile());
-        try {
-            List<String> launchRemote = launchRemote(tuple);
-            int sulongRetValue = parseAndRemoveReturnValue(launchRemote);
-            String sulongLines = launchRemote.stream().collect(Collectors.joining());
-            ProcessResult processResult = TestHelper.executeLLVMBinary(tuple.getBitCodeFile());
-            String expectedLines = processResult.getStdOutput();
-            int expectedReturnValue = processResult.getReturnValue();
-            boolean pass = expectedLines.equals(sulongLines);
-            boolean undefinedReturnCode = tuple.hasFlag(TestCaseFlag.UNDEFINED_RETURN_CODE);
-            if (!undefinedReturnCode) {
-                pass &= expectedReturnValue == sulongRetValue;
-            }
-            recordTestCase(tuple, pass);
-            assertEquals(tuple.getBitCodeFile().getAbsolutePath(), expectedLines, sulongLines);
-            if (!undefinedReturnCode) {
-                assertEquals(tuple.getBitCodeFile().getAbsolutePath(), expectedReturnValue, sulongRetValue);
-            }
-        } catch (Throwable e) {
-            recordError(tuple, e);
-            throw e;
-        }
     }
 
 }
