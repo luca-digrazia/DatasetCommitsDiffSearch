@@ -24,11 +24,11 @@ package com.oracle.graal.hotspot.meta;
 
 import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
 import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionValue;
 
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaField;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -47,9 +47,9 @@ public class HotSpotConstantFieldProvider implements ConstantFieldProvider {
         public static final OptionValue<Boolean> TrustFinalDefaultFields = new OptionValue<>(true);
     }
 
-    private final GraalHotSpotVMConfig config;
+    private final HotSpotVMConfig config;
 
-    public HotSpotConstantFieldProvider(GraalHotSpotVMConfig config, MetaAccessProvider metaAccess) {
+    public HotSpotConstantFieldProvider(HotSpotVMConfig config, MetaAccessProvider metaAccess) {
         this.config = config;
         try {
             this.stringValueField = metaAccess.lookupJavaField(String.class.getDeclaredField("value"));
@@ -72,16 +72,15 @@ public class HotSpotConstantFieldProvider implements ConstantFieldProvider {
                 }
             }
         } else {
-            if (isStableField(hotspotField) && config.foldStableValues) {
-                JavaConstant value = tool.readValue();
-                if (isStableInstanceFieldValueConstant(value, tool.getReceiver())) {
-                    return tool.foldStableArray(value, getArrayDimension(hotspotField.getType()), isDefaultStableField(hotspotField));
-                }
-            }
             if (hotspotField.isFinal()) {
                 JavaConstant value = tool.readValue();
                 if (isFinalInstanceFieldValueConstant(value, tool.getReceiver())) {
                     return tool.foldConstant(value);
+                }
+            } else if (hotspotField.isStable() && config.foldStableValues) {
+                JavaConstant value = tool.readValue();
+                if (isStableInstanceFieldValueConstant(value, tool.getReceiver())) {
+                    return tool.foldStableArray(value, getArrayDimension(hotspotField.getType()), isDefaultStableField(hotspotField));
                 }
             }
         }
