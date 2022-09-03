@@ -173,7 +173,7 @@ public class LayoutParser {
 
         if (superLayout != null) {
             // assert parameters.size() >= superLayout.getAllNonShapeProperties().size();
-            parameters = parameters.subList(superLayout.getAllInstanceProperties().size(), parameters.size());
+            parameters = parameters.subList(superLayout.getAllNonShapeProperties().size(), parameters.size());
         }
 
         for (VariableElement element : parameters) {
@@ -363,8 +363,16 @@ public class LayoutParser {
     }
 
     public LayoutModel build() {
+        boolean hasShapeProperties = false;
+
+        for (PropertyBuilder property : properties.values()) {
+            if (property.isShapeProperty()) {
+                hasShapeProperties = true;
+            }
+        }
+
         return new LayoutModel(objectTypeSuperclass, superLayout, name, packageName, hasObjectTypeGuard, hasObjectGuard, hasDynamicObjectGuard,
-                        buildProperties(), interfaceFullName);
+                        buildProperties(), interfaceFullName, hasShapeProperties);
     }
 
     private List<PropertyModel> buildProperties() {
