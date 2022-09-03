@@ -22,16 +22,15 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static jdk.internal.jvmci.amd64.AMD64.rbp;
-import static jdk.internal.jvmci.code.ValueUtil.asRegister;
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.meta.AllocatableValue;
+import com.oracle.jvmci.code.Register;
+import com.oracle.jvmci.meta.AllocatableValue;
+import static com.oracle.graal.amd64.AMD64.*;
+import static com.oracle.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * Pops a deoptimized stack frame off the stack including the return address.
@@ -43,8 +42,8 @@ final class AMD64HotSpotLeaveDeoptimizedStackFrameOp extends AMD64HotSpotEpilogu
     @Use(REG) AllocatableValue frameSize;
     @Use(REG) AllocatableValue framePointer;
 
-    public AMD64HotSpotLeaveDeoptimizedStackFrameOp(AllocatableValue frameSize, AllocatableValue initialInfo) {
-        super(TYPE);
+    public AMD64HotSpotLeaveDeoptimizedStackFrameOp(AllocatableValue frameSize, AllocatableValue initialInfo, AllocatableValue savedRbp) {
+        super(TYPE, savedRbp);
         this.frameSize = frameSize;
         this.framePointer = initialInfo;
     }

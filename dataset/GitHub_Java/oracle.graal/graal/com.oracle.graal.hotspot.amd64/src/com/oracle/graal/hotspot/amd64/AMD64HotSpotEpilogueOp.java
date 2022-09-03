@@ -22,16 +22,16 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
+import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.amd64.AMD64.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.jvmci.code.ValueUtil.*;
 
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Superclass for operations that use the value of RBP saved in a method's prologue.
@@ -46,10 +46,6 @@ abstract class AMD64HotSpotEpilogueOp extends AMD64LIRInstruction {
     @Use({REG, STACK}) private AllocatableValue savedRbp;
 
     protected void leaveFrameAndRestoreRbp(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-        leaveFrameAndRestoreRbp(savedRbp, crb, masm);
-    }
-
-    static void leaveFrameAndRestoreRbp(AllocatableValue savedRbp, CompilationResultBuilder crb, AMD64MacroAssembler masm) {
         if (isStackSlot(savedRbp)) {
             // Restoring RBP from the stack must be done before the frame is removed
             masm.movq(rbp, (AMD64Address) crb.asAddress(savedRbp));
