@@ -45,7 +45,7 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
         new EspressoLauncher().launch(args);
     }
 
-    private String classpath = null;
+    private String classPathString = null;
     private final ArrayList<String> mainClassArgs = new ArrayList<>();
     private String mainClassName = null;
     private VersionAction versionAction = VersionAction.None;
@@ -62,7 +62,7 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
                 case "-classpath":
                     i += 1;
                     if (i < arguments.size()) {
-                        classpath = arguments.get(i);
+                        classPathString = arguments.get(i);
                     } else {
                         throw abort("Error: " + arg + " requires class path specification");
                     }
@@ -76,15 +76,11 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
                     }
                     break;
                 case "-version":
+                case "--version":
                     versionAction = VersionAction.PrintAndExit;
                     break;
-                case "-showversion":
+                case "--show-version":
                     versionAction = VersionAction.PrintAndContinue;
-                    break;
-
-                case "-?":
-                case "-help":
-                    unrecognized.add("--help");
                     break;
                 default:
                     if (arg.startsWith("-Xbootclasspath:")) {
@@ -116,7 +112,7 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
                 if (jarFileName != null) {
                     // Overwrite class path. For compatibility with the standard java launcher,
                     // this is done silently.
-                    classpath = jarFileName;
+                    classPathString = jarFileName;
 
                     mainClassName = getMainClassName(jarFileName);
                 }
@@ -127,23 +123,9 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
                 break;
             }
         }
-
-        // classpath provenance order:
-        // (1) the -cp/-classpath command line option
-        if (classpath == null) {
-            // (2) the property java.class.path
-            classpath = polyglotOptions.get("java.Properties.java.class.path");
-            if (classpath == null) {
-                // (3) the environment variable CLASSPATH
-                classpath = System.getenv("CLASSPATH");
-                if (classpath == null) {
-                    // (4) the current working directory only
-                    classpath = ".";
-                }
-            }
+        if (mainClassName == null) {
+            throw abort(usage());
         }
-
-        polyglotOptions.put("java.Classpath", classpath);
 
         return unrecognized;
     }
@@ -160,10 +142,6 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
                "    -classpath <class search path of directories and zip/jar files>" + nl +
                "                  A " + File.pathSeparator + " separated list of directories, JAR archives," + nl +
                "                  and ZIP archives to search for class files." + nl +
-               "    -D<name>=<value>" + nl +
-               "                  set a system property" + nl +
-               "    -version      print product version and exit" + nl +
-               "    -showversion  print product version and contin\n" + nl +
                "    -? -help      print this help message";
         // @formatter:on
     }
@@ -206,8 +184,8 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
     protected void launch(Builder contextBuilder) {
         contextBuilder.arguments(getLanguageId(), mainClassArgs.toArray(new String[0])).in(System.in).out(System.out).err(System.err);
 
-        if (classpath != null) {
-            contextBuilder.option("java.Classpath", classpath);
+        if (classPathString != null) {
+            contextBuilder.option("java.Classpath", classPathString);
         }
 
         for (String propKey : properties.keySet()) {
@@ -216,12 +194,7 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
 
         int rc = 1;
         try (Context context = contextBuilder.build()) {
-
             runVersionAction(versionAction, context.getEngine());
-
-            if (mainClassName == null) {
-                throw abort(usage());
-            }
 
             try {
                 eval(context);
@@ -239,6 +212,7 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
             rc = 1;
             e.printStackTrace();
         }
+        System.out.println("Exiting launcher");
         throw exit(rc);
     }
 
@@ -263,9 +237,7 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
         // launcher
         options.add("-cp");
         options.add("-classpath");
-        options.add("-version");
-        options.add("-showversion");
-        options.add("-?");
-        options.add("-help");
+        options.add("--version");
+        options.add("--show-version");
     }
 }

@@ -4,12 +4,12 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import com.oracle.truffle.espresso.EspressoOptions;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.Engine;
 
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.EspressoOptions;
 
 public interface EspressoProperties {
     String getJavaHome();
@@ -31,28 +31,25 @@ public interface EspressoProperties {
 
     default EspressoProperties processOptions(OptionValues options) {
 
-        Builder builder = new Builder(this);
+        String bootClasspath = getBootClasspath();
 
-        {
-            // Process boot classpath + append and prepend options.
-            String bootClasspath = getBootClasspath();
-            if (options.hasBeenSet(EspressoOptions.BootClasspath)) {
-                bootClasspath = options.get(EspressoOptions.BootClasspath);
-            }
-            if (options.hasBeenSet(EspressoOptions.BootClasspathAppend)) {
-                bootClasspath = bootClasspath + File.separator + options.get(EspressoOptions.BootClasspathAppend);
-            }
-            if (options.hasBeenSet(EspressoOptions.BootClasspathPrepend)) {
-                bootClasspath = options.get(EspressoOptions.BootClasspathPrepend) + File.separator + bootClasspath;
-            }
-            builder.setBootClasspath(bootClasspath);
+        if (options.hasBeenSet(EspressoOptions.BootClasspath)) {
+            bootClasspath = options.get(EspressoOptions.BootClasspath);
+        }
+        if (options.hasBeenSet(EspressoOptions.BootClasspathAppend)) {
+            bootClasspath = bootClasspath + File.separator + options.get(EspressoOptions.BootClasspathAppend);
         }
 
-        if (options.hasBeenSet(EspressoOptions.JavaHome)) {
-            builder.setJavaHome(options.get(EspressoOptions.JavaHome));
+        if (options.hasBeenSet(EspressoOptions.BootClasspathPrepend)) {
+            bootClasspath = options.get(EspressoOptions.BootClasspathPrepend) + File.separator + bootClasspath;
         }
 
-        return builder.build();
+        // No override.
+        if (bootClasspath.equals(getBootClasspath())) {
+            return this;
+        }
+
+        return new Builder(this).setBootClasspath(bootClasspath).build();
     }
 
     class Builder {
@@ -95,15 +92,6 @@ public interface EspressoProperties {
         }
 
         public EspressoProperties build() {
-            if ((javaHome == null || javaHome.equals(fallback.getJavaHome())) &&
-                            (bootClasspath == null || bootClasspath.equals(fallback.getBootClasspath())) &&
-                            (javaLibraryPath == null || javaLibraryPath.equals(fallback.getJavaLibraryPath())) &&
-                            (bootLibraryPath == null || bootLibraryPath.equals(fallback.getBootLibraryPath())) &&
-                            (extDirs == null || extDirs.equals(fallback.getExtDirs()))) {
-                // No overrides.
-                return fallback;
-            }
-
             return new EspressoProperties() {
                 @Override
                 public String getJavaHome() {
@@ -133,6 +121,7 @@ public interface EspressoProperties {
         }
     }
 }
+
 
 class EspressoPropertiesHotSpot implements EspressoProperties {
 
