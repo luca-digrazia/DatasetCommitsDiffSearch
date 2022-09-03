@@ -22,17 +22,16 @@
  */
 package com.oracle.graal.compiler.match;
 
-import java.util.List;
+import java.util.*;
 
-import com.oracle.graal.compiler.gen.NodeLIRBuilder;
-import com.oracle.graal.compiler.gen.NodeMatchRules;
+import com.oracle.graal.compiler.gen.*;
 
 public interface MatchStatementSet {
     /**
      * @return the {@link NodeLIRBuilder} subclass which defined this set of {@link MatchStatement}
      *         instances.
      */
-    Class<? extends NodeMatchRules> forClass();
+    Class<? extends NodeLIRBuilder> forClass();
 
     /**
      * @return the {@link MatchStatement}s available for this {@link NodeLIRBuilder} subclass.

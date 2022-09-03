@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.code;
 
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.InstalledCode;
+import com.oracle.jvmci.code.*;
 
 /**
  * Interface providing capability for disassembling machine code.
@@ -33,7 +32,8 @@ public interface DisassemblerProvider {
     /**
      * Gets a textual disassembly of a given compilation result.
      *
-     * @param codeCache the object used for code {@link CodeCacheProvider#addCode code installation}
+     * @param codeCache the object used for code {@link CodeCacheProvider#addMethod code
+     *            installation}
      * @param compResult a compilation result
      * @return a non-zero length string containing a disassembly of {@code compResult} or null it
      *         could not be disassembled
@@ -45,12 +45,13 @@ public interface DisassemblerProvider {
     /**
      * Gets a textual disassembly of a given installed code.
      *
-     * @param codeCache the object used for code {@link CodeCacheProvider#addCode code installation}
+     * @param codeCache the object used for code {@link CodeCacheProvider#addMethod code
+     *            installation}
      * @param compResult a compiled code that was installed to produce {@code installedCode}. This
      *            will be null if not available.
      * @param installedCode
-     * @return a non-zero length string containing a disassembly of {@code installedCode} or null if
-     *         {@code installedCode} is {@link InstalledCode#isValid() invalid} or it could not be
+     * @return a non-zero length string containing a disassembly of {@code code} or null if
+     *         {@code code} is {@link InstalledCode#isValid() invalid} or it could not be
      *         disassembled for some other reason
      */
     default String disassembleInstalledCode(CodeCacheProvider codeCache, CompilationResult compResult, InstalledCode installedCode) {

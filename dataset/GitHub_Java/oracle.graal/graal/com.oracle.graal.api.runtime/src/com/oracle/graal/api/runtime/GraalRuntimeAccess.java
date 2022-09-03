@@ -20,14 +20,15 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.truffle.hotspot;
+package com.oracle.graal.api.runtime;
 
-import com.oracle.jvmci.service.*;
-import com.oracle.truffle.api.*;
+/**
+ * A service that provides access to a {@link GraalRuntime} implementation.
+ */
+public interface GraalRuntimeAccess {
 
-@ServiceProvider(TruffleRuntimeAccess.class)
-public class HotSpotTruffleRuntimeAccess implements TruffleRuntimeAccess {
-    public TruffleRuntime getRuntime() {
-        return HotSpotTruffleRuntime.makeInstance();
-    }
+    /**
+     * Gets the {@link GraalRuntime} implementation available via this access object.
+     */
+    GraalRuntime getRuntime();
 }

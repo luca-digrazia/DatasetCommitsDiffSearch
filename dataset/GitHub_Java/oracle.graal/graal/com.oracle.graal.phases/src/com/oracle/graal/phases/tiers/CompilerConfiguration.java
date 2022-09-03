@@ -22,14 +22,13 @@
  */
 package com.oracle.graal.phases.tiers;
 
-import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
 import com.oracle.graal.lir.phases.*;
-import com.oracle.graal.lir.phases.LowLevelHighTierPhase.*;
-import com.oracle.graal.lir.phases.LowLevelLowTierPhase.*;
-import com.oracle.graal.lir.phases.LowLevelMidTierPhase.*;
+import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
+import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase.PreAllocationOptimizationContext;
 import com.oracle.graal.phases.*;
 
-public interface CompilerConfiguration extends Service {
+public interface CompilerConfiguration {
 
     PhaseSuite<HighTierContext> createHighTier();
 
@@ -37,9 +36,9 @@ public interface CompilerConfiguration extends Service {
 
     PhaseSuite<LowTierContext> createLowTier();
 
-    LowLevelPhaseSuite<LowLevelHighTierContext> createLowLevelHighTier();
+    LIRPhaseSuite<PreAllocationOptimizationContext> createPreAllocationOptimizationStage();
 
-    LowLevelPhaseSuite<LowLevelMidTierContext> createLowLevelMidTier();
+    LIRPhaseSuite<AllocationContext> createAllocationStage();
 
-    LowLevelPhaseSuite<LowLevelLowTierContext> createLowLevelLowTier();
+    LIRPhaseSuite<PostAllocationOptimizationContext> createPostAllocationOptimizationStage();
 }

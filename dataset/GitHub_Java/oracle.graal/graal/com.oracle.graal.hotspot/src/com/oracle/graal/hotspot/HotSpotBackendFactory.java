@@ -22,13 +22,22 @@
  */
 package com.oracle.graal.hotspot;
 
-import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider;
-
-import com.oracle.graal.phases.tiers.CompilerConfiguration;
+import com.oracle.jvmci.hotspot.HotSpotJVMCIRuntime.Options;
+import com.oracle.jvmci.runtime.*;
 
 public interface HotSpotBackendFactory {
 
-    void register();
+    HotSpotBackend createBackend(HotSpotGraalRuntimeProvider runtime, JVMCIBackend jvmciBackend, HotSpotBackend host);
 
-    HotSpotBackend createBackend(HotSpotGraalRuntimeProvider runtime, CompilerConfiguration compilerConfiguration, HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotBackend host);
+    /**
+     * Gets the CPU architecture of this backend.
+     */
+    String getArchitecture();
+
+    /**
+     * Gets the name of the {@link Options#JVMCIRuntime JVMCIRuntime} in which the backend created
+     * by this factory should be used.
+     */
+    String getGraalRuntimeName();
+
 }

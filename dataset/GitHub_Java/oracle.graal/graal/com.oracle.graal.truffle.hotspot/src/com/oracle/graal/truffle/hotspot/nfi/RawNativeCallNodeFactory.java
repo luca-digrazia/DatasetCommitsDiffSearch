@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,14 +20,17 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.truffle.hotspot;
+package com.oracle.graal.truffle.hotspot.nfi;
 
-import com.oracle.jvmci.service.*;
-import com.oracle.truffle.api.*;
+import com.oracle.jvmci.meta.Kind;
+import com.oracle.jvmci.meta.JavaConstant;
+import com.oracle.graal.nodes.*;
 
-@ServiceProvider(TruffleRuntimeAccess.class)
-public class HotSpotTruffleRuntimeAccess implements TruffleRuntimeAccess {
-    public TruffleRuntime getRuntime() {
-        return HotSpotTruffleRuntime.makeInstance();
-    }
+/**
+ * Factory for creating a node that makes a direct call to a native function pointer.
+ */
+public interface RawNativeCallNodeFactory {
+    FixedWithNextNode createRawCallNode(Kind returnType, JavaConstant functionPointer, ValueNode... args);
+
+    String getArchitecture();
 }
