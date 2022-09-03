@@ -24,7 +24,6 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.compiler.GraalDebugConfig.*;
-import static com.oracle.graal.hotspot.bridge.VMToCompilerImpl.*;
 import static java.nio.file.Files.*;
 
 import java.io.*;
@@ -243,7 +242,7 @@ public class HotSpotOptions {
      * @param timeCompilations true if the CITime or CITimeEach HotSpot VM options are set
      */
     public static void finalizeOptions(boolean timeCompilations) {
-        if (timeCompilations || PrintCompRate.getValue() != 0) {
+        if (timeCompilations) {
             unconditionallyEnableTimerOrMetric(InliningUtil.class, "InlinedBytecodes");
             unconditionallyEnableTimerOrMetric(CompilationTask.class, "CompilationTime");
         }

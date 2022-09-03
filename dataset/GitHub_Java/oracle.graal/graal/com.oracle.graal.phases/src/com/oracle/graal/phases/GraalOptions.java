@@ -218,7 +218,9 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> CanOmitFrame = new OptionValue<>(true);
 
     @Option(help = "")
-    public static final OptionValue<Boolean> MemoryAwareScheduling = new OptionValue<>(true);
+    public static final OptionValue<Boolean> MemoryAwareScheduling = new OptionValue<>(false);
+    @Option(help = "")
+    public static final OptionValue<Boolean> NewMemoryAwareScheduling = new OptionValue<>(true);
 
     // Translating tableswitch instructions
     @Option(help = "")
