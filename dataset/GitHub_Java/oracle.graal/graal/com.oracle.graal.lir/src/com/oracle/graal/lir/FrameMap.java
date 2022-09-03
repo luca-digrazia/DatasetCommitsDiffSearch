@@ -96,7 +96,8 @@ public final class FrameMap {
 
     /**
      * Size of the area occupied by outgoing overflow arguments. This value is adjusted as calling
-     * conventions for outgoing calls are retrieved. On some platforms, there is a minimum
+     * conventions for outgoing calls are retrieved. On some platforms, there is a minimum outgoing
+     * size even if no overflow arguments are on the stack.
      */
     private int outgoingSize;
 
@@ -210,7 +211,8 @@ public final class FrameMap {
     }
 
     /**
-     * Computes the offset of a stack slot relative to the frame register.
+     * Computes the offset of a stack slot relative to the frame register. This is also the bit
+     * index of stack slots in the reference map.
      * 
      * @param slot a stack slot
      * @return the offset of the stack slot
@@ -222,18 +224,6 @@ public final class FrameMap {
             accessesCallerFrame = true;
         }
         return slot.getOffset(totalFrameSize());
-    }
-
-    /**
-     * Computes the index of a stack slot relative to slot 0. This is also the bit index of stack
-     * slots in the reference map.
-     * 
-     * @param slot a stack slot
-     * @return the index of the stack slot
-     */
-    public int indexForStackSlot(StackSlot slot) {
-        assert offsetForStackSlot(slot) % target.wordSize == 0;
-        return offsetForStackSlot(slot) / target.wordSize;
     }
 
     /**
@@ -266,7 +256,7 @@ public final class FrameMap {
         hasOutgoingStackArguments = hasOutgoingStackArguments || argsSize > 0;
     }
 
-    private StackSlot getSlot(PlatformKind kind, int additionalOffset) {
+    private StackSlot getSlot(Kind kind, int additionalOffset) {
         return StackSlot.get(kind, -spillSize + additionalOffset, true);
     }
 
@@ -277,12 +267,12 @@ public final class FrameMap {
      * @param kind The kind of the spill slot to be reserved.
      * @return A spill slot denoting the reserved memory area.
      */
-    public StackSlot allocateSpillSlot(PlatformKind kind) {
+    public StackSlot allocateSpillSlot(Kind kind) {
         assert frameSize == -1 : "frame size must not yet be fixed";
         if (freedSlots != null) {
             for (Iterator<StackSlot> iter = freedSlots.iterator(); iter.hasNext();) {
                 StackSlot s = iter.next();
-                if (s.getPlatformKind() == kind) {
+                if (s.getKind() == kind) {
                     iter.remove();
                     if (freedSlots.isEmpty()) {
                         freedSlots = null;
@@ -296,15 +286,15 @@ public final class FrameMap {
         return getSlot(kind, 0);
     }
 
-    private Set<StackSlot> freedSlots;
+    private List<StackSlot> freedSlots;
 
     /**
-     * Frees a spill slot that was obtained via {@link #allocateSpillSlot(PlatformKind)} such that
-     * it can be reused for the next allocation request for the same kind of slot.
+     * Frees a spill slot that was obtained via {@link #allocateSpillSlot(Kind)} such that it can be
+     * reused for the next allocation request for the same kind of slot.
      */
     public void freeSpillSlot(StackSlot slot) {
         if (freedSlots == null) {
-            freedSlots = new HashSet<>();
+            freedSlots = new ArrayList<>();
         }
         freedSlots.add(slot);
     }
@@ -338,6 +328,11 @@ public final class FrameMap {
         } else {
             return getSlot(target.wordKind, 0);
         }
+    }
+
+    private int frameRefMapIndex(StackSlot slot) {
+        assert offsetForStackSlot(slot) % target.wordSize == 0;
+        return offsetForStackSlot(slot) / target.wordSize;
     }
 
     /**
@@ -374,7 +369,7 @@ public final class FrameMap {
             if (isRegister(location)) {
                 registerRefMap.set(asRegister(location).number);
             } else if (isStackSlot(location)) {
-                int index = indexForStackSlot(asStackSlot(location));
+                int index = frameRefMapIndex(asStackSlot(location));
                 frameRefMap.set(index);
             } else {
                 assert isConstant(location);
