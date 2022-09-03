@@ -307,7 +307,7 @@ public class InliningPhase extends Phase implements InliningCallback {
 
             double inlineRatio = Math.min(GraalOptions.ProbabilityCapForInlining, info.invoke.probability());
             double maxSize = Math.pow(GraalOptions.NestedInliningSizeRatio, info.level) * GraalOptions.MaximumGreedyInlineSize * inlineRatio;
-            maxSize = Math.max(maxSize, GraalOptions.MaximumTrivialSize);
+            maxSize = Math.max(maxSize, GraalOptions.MaximumInlineSize);
             return info.weight <= maxSize;
         }
     }
