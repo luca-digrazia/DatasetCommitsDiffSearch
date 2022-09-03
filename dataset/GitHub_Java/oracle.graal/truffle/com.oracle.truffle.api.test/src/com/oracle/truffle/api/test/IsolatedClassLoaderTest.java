@@ -22,47 +22,46 @@
  */
 package com.oracle.truffle.api.test;
 
-import java.io.File;
+import com.oracle.truffle.api.impl.TruffleLocator;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.security.CodeSource;
+import java.security.ProtectionDomain;
+import java.util.Set;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class IsolatedClassLoaderTest {
+    private static final boolean JDK8 = System.getProperty("java.specification.version").compareTo("1.9") < 0;
+
     @Test
-    public void loadLanguageByOwnClassLoader() throws Exception {
-        List<URL> arr = new ArrayList<>();
-        for (String entry : System.getProperty("java.class.path").split(File.pathSeparator)) {
-            File cpEntry = new File(entry);
-            arr.add(cpEntry.toURI().toURL());
+    public void loadLanguageByOwnClassLoaderOnJDK8() throws Exception {
+        final ProtectionDomain domain = TruffleLocator.class.getProtectionDomain();
+        final CodeSource source = domain.getCodeSource();
+        if (source == null || !JDK8) {
+            // skip the test
+            return;
         }
-        final ClassLoader testLoader = IsolatedClassLoaderTest.class.getClassLoader();
-        final ClassLoader parentLoader = testLoader.getParent();
-        ClassLoader loader = new URLClassLoader(arr.toArray(new URL[0]), parentLoader);
-        Class<?> engine = loader.loadClass("com.oracle.truffle.api.vm.PolyglotEngine");
-        assertEquals("Right classloader", loader, engine.getClassLoader());
+        final URL truffleURL = source.getLocation();
+        final String locatorName = "com.oracle.truffle.api.impl.TruffleLocator";
+        ClassLoader loader = new URLClassLoader(new URL[]{truffleURL}) {
+            @Override
+            public Class<?> loadClass(String name) throws ClassNotFoundException {
+                if (name.startsWith(locatorName)) {
+                    return super.findClass(name);
+                }
+                return super.loadClass(name);
+            }
+        };
+        Class<?> locator = loader.loadClass(locatorName);
+        assertEquals("Right classloader", loader, locator.getClassLoader());
 
-        Object builder = engine.getMethod("newBuilder").invoke(null);
-        Object vm = builder.getClass().getMethod("build").invoke(builder);
-        Map<?, ?> languages = (Map<?, ?>) vm.getClass().getMethod("getLanguages").invoke(vm);
-        assertNotNull("Langauges found", languages);
-
-        assertTrue("Contains testing languages", languages.containsKey("application/x-test-hash"));
-
-        Object language = languages.get("application/x-test-hash");
-        assertNotNull("Language found", language);
-
-        Method getImpl = language.getClass().getDeclaredMethod("getImpl", boolean.class);
-        getImpl.setAccessible(true);
-        Object realLanguageImpl = getImpl.invoke(language, true);
-
-        assertNotNull("Language impl found", realLanguageImpl);
-        assertEquals("Loaded by our isolated loader", loader, realLanguageImpl.getClass().getClassLoader());
+        final Method loadersMethod = locator.getDeclaredMethod("loaders");
+        loadersMethod.setAccessible(true);
+        Set<?> loaders = (Set<?>) loadersMethod.invoke(null);
+        assertTrue("Contains locator's loader: " + loaders, loaders.contains(loader));
+        assertTrue("Contains system loader: " + loader, loaders.contains(ClassLoader.getSystemClassLoader()));
     }
 }
