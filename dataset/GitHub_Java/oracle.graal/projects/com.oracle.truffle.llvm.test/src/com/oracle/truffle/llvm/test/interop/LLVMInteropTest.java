@@ -40,8 +40,6 @@ import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.java.JavaInterop;
@@ -50,7 +48,6 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
-import com.oracle.truffle.llvm.runtime.SulongRuntimeException;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 
 @SuppressWarnings({"static-method"})
@@ -778,7 +775,7 @@ public final class LLVMInteropTest {
         Assert.assertEquals(0, runner.run());
     }
 
-    @Test(expected = SulongRuntimeException.class)
+    @Test(expected = UnsupportedOperationException.class)
     public void test065() {
         Runner runner = new Runner("interop065");
         Object a = new Object();
@@ -787,7 +784,7 @@ public final class LLVMInteropTest {
         Assert.assertEquals(0, runner.run());
     }
 
-    @Test(expected = SulongRuntimeException.class)
+    @Test(expected = UnsupportedOperationException.class)
     public void test066() {
         Runner runner = new Runner("interop066");
         Object a = new Object();
@@ -811,126 +808,6 @@ public final class LLVMInteropTest {
         runner.export(true, "boxed_true");
         runner.export(false, "boxed_false");
         Assert.assertEquals(0, runner.run());
-    }
-
-    @Test
-    public void test069() {
-        Runner runner = new Runner("interop069");
-        runner.export(42, "a");
-        runner.run();
-        try {
-            Value globalSymbol = runner.findGlobalSymbol("registered_tagged_address");
-            Object result = globalSymbol.execute().get();
-            Assert.assertTrue(result instanceof Integer && (int) result == 42);
-        } catch (Exception e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    @Test
-    public void test070() {
-        Runner runner = new Runner("interop070");
-        runner.run();
-        try {
-            Value pointer = runner.findGlobalSymbol("returnPointerToGlobal");
-            TruffleObject pointerTruffleObject = (TruffleObject) pointer.execute().get();
-            ForeignAccess.sendWrite(Message.WRITE.createNode(), pointerTruffleObject, 0, 42);
-            Value value = runner.findGlobalSymbol("returnGlobal");
-            Object result = value.execute().get();
-            Assert.assertTrue(result instanceof Integer && (int) result == 42);
-        } catch (Exception e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    @Test
-    public void test071() {
-        Runner runner = new Runner("interop071");
-        runner.run();
-        try {
-            Object obj = new Object();
-            TruffleObject o = JavaInterop.asTruffleObject(obj);
-            Value pointer = runner.findGlobalSymbol("returnPointerToGlobal");
-            TruffleObject pointerTruffleObject = (TruffleObject) pointer.execute().get();
-            ForeignAccess.sendWrite(Message.WRITE.createNode(), pointerTruffleObject, 0, o);
-            Value value = runner.findGlobalSymbol("returnGlobal");
-            Object result = value.execute().get();
-            Assert.assertTrue(result == obj);
-        } catch (Exception e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    @Test
-    public void test072() {
-        Runner runner = new Runner("interop072");
-        runner.run();
-        try {
-            Object obj = new Object();
-            TruffleObject o = JavaInterop.asTruffleObject(obj);
-            Value pointer = runner.findGlobalSymbol("returnPointerToGlobal");
-            TruffleObject pointerTruffleObject = (TruffleObject) pointer.execute().get();
-
-            Value setter = runner.findGlobalSymbol("setter");
-            setter.execute(pointerTruffleObject, o);
-
-            Value value = runner.findGlobalSymbol("returnGlobal");
-            Object result = value.execute().get();
-            Assert.assertTrue(result == obj);
-        } catch (Exception e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    @Test
-    public void test072a() {
-        Runner runner = new Runner("interop072");
-        runner.run();
-        try {
-            Value pointer = runner.findGlobalSymbol("returnPointerToGlobal");
-            TruffleObject pointerTruffleObject = (TruffleObject) pointer.execute().get();
-
-            Value setter = runner.findGlobalSymbol("setter");
-            setter.execute(pointerTruffleObject, 42);
-
-            Value value = runner.findGlobalSymbol("returnGlobal");
-            Object result = value.execute().get();
-            Assert.assertTrue(result instanceof Integer && (int) result == 42);
-        } catch (Exception e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    @Test
-    public void test072b() {
-        Runner runner = new Runner("interop072");
-        runner.run();
-        try {
-            Value pointer = runner.findGlobalSymbol("returnPointerToGlobal");
-            TruffleObject pointerTruffleObject = (TruffleObject) pointer.execute().get();
-
-            Value setter = runner.findGlobalSymbol("setter");
-            setter.execute(pointerTruffleObject, 42);
-
-            Value value = runner.findGlobalSymbol("returnGlobal");
-            Object result = value.execute().get();
-            Assert.assertTrue(result instanceof Integer && (int) result == 42);
-
-            Object obj = new Object();
-            TruffleObject o = JavaInterop.asTruffleObject(obj);
-            setter.execute(pointerTruffleObject, o);
-            result = value.execute().get();
-            Assert.assertTrue(result == obj);
-
-        } catch (Exception e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    @Test
-    public void test073() {
-        Runner runner = new Runner("interop073");
-        Assert.assertEquals(42, runner.run());
     }
 
     @Test
@@ -983,30 +860,6 @@ public final class LLVMInteropTest {
             Assert.assertEquals(0, test11.get());
             Assert.assertEquals(1, test12.get());
             Assert.assertEquals(-1, test13.get());
-        } finally {
-            runner.dispose();
-        }
-    }
-
-    @Test
-    public void testHandleFromNativeCallback() throws Exception {
-        Runner runner = new Runner("handleFromNativeCallback");
-        try {
-            TruffleObject managed = JavaInterop.asTruffleObject(new ClassA());
-            Value testHandleFromNativeCallback = runner.findGlobalSymbol("testHandleFromNativeCallback");
-            Value ret = testHandleFromNativeCallback.execute(managed);
-            Assert.assertEquals(42, ret.get());
-        } finally {
-            runner.dispose();
-        }
-    }
-
-    @Test
-    public void testPointerThroughNativeCallback() throws Exception {
-        Runner runner = new Runner("pointerThroughNativeCallback");
-        try {
-            int result = runner.run();
-            Assert.assertEquals(42, result);
         } finally {
             runner.dispose();
         }
@@ -1118,7 +971,7 @@ public final class LLVMInteropTest {
     }
 
     private static final Path TEST_DIR = new File(LLVMOptions.ENGINE.projectRoot() + "/../cache/tests/interoptests").toPath();
-    private static final String FILE_SUFFIX = "_clang_v38_O0_MEM2REG.bc";
+    private static final String FILE_SUFFIX = "_clang_O0_MEM2REG.bc";
 
     private static final class Runner {
         private final Builder builder = PolyglotEngine.newBuilder();
