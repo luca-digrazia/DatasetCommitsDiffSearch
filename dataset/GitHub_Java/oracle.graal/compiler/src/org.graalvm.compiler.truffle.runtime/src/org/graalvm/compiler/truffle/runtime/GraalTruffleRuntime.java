@@ -82,7 +82,6 @@ import org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleOptions
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleDebugJavaMethod;
 import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
-import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
 import org.graalvm.compiler.truffle.runtime.debug.StatisticsListener;
 import org.graalvm.compiler.truffle.runtime.debug.TraceASTCompilationListener;
 import org.graalvm.compiler.truffle.runtime.debug.TraceCallTreeListener;
@@ -129,6 +128,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.object.LayoutFactory;
 
 import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.code.stack.InspectedFrame;
 import jdk.vm.ci.code.stack.InspectedFrameVisitor;
 import jdk.vm.ci.code.stack.StackIntrospection;
@@ -196,11 +196,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         return (GraalTruffleRuntime) Truffle.getRuntime();
     }
 
-    private final EconomicMap<String, Class<?>> lookupTypes;
-
-    public GraalTruffleRuntime(Supplier<GraalRuntime> graalRuntimeSupplier, Iterable<Class<?>> extraLookupTypes) {
+    public GraalTruffleRuntime(Supplier<GraalRuntime> graalRuntimeSupplier) {
         this.graalRuntimeSupplier = graalRuntimeSupplier;
-        this.lookupTypes = initLookupTypes(extraLookupTypes);
     }
 
     protected GraalTVMCI getTvmci() {
@@ -242,10 +239,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     @Override
-    public Consumer<OptimizedAssumptionDependency> registerOptimizedAssumptionDependency(JavaConstant optimizedAssumptionConstant) {
+    public Consumer<InstalledCode> registerInstalledCodeEntryForAssumption(JavaConstant optimizedAssumptionConstant) {
         SnippetReflectionProvider snippetReflection = getGraalRuntime().getRequiredCapability(SnippetReflectionProvider.class);
         OptimizedAssumption optimizedAssumption = snippetReflection.asObject(OptimizedAssumption.class, optimizedAssumptionConstant);
-        return optimizedAssumption.registerDependency();
+        return optimizedAssumption.registerInstalledCodeEntry();
     }
 
     private static <T extends PrioritizedServiceProvider> T loadPrioritizedServiceProvider(Class<T> clazz) {
@@ -341,7 +338,9 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         }
     }
 
-    private static EconomicMap<String, Class<?>> initLookupTypes(Iterable<Class<?>> extraTypes) {
+    private final EconomicMap<String, Class<?>> lookupTypes = initLookupTypes();
+
+    private static EconomicMap<String, Class<?>> initLookupTypes() {
         EconomicMap<String, Class<?>> m = EconomicMap.create();
         for (Class<?> c : new Class<?>[]{
                         Node.class,
@@ -362,9 +361,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                         AbstractAssumption.class,
                         MaterializedFrame.class
         }) {
-            m.put(c.getName(), c);
-        }
-        for (Class<?> c : extraTypes) {
             m.put(c.getName(), c);
         }
         for (TruffleTypes s : GraalServices.load(TruffleTypes.class)) {
@@ -655,7 +651,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         return target;
     }
 
-    public abstract OptimizedCallTarget createOptimizedCallTarget(OptimizedCallTarget source, RootNode rootNode);
+    protected abstract OptimizedCallTarget createOptimizedCallTarget(OptimizedCallTarget source, RootNode rootNode);
 
     public void addListener(GraalTruffleRuntimeListener listener) {
         listeners.add(listener);
@@ -678,10 +674,11 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         listeners.onCompilationStarted(callTarget);
         TruffleCompiler compiler = getTruffleCompiler();
         TruffleInlining inlining = new TruffleInlining(callTarget, new DefaultInliningPolicy());
+
         CompilationIdentifier compilationId = compiler.getCompilationIdentifier(callTarget);
         DebugContext debug = compilationId != null ? compiler.openDebugContext(options, compilationId, callTarget) : null;
         try (Scope s = debug != null ? debug.scope("Truffle", new TruffleDebugJavaMethod(callTarget)) : null) {
-            maybeDumpTruffleTree(debug, options, callTarget, inlining);
+            maybeDumpTruffleTree(debug, options, callTarget);
             compiler.doCompile(debug, compilationId, options, callTarget, inlining, task, listeners.isEmpty() ? null : listeners);
         } catch (RuntimeException | Error e) {
             throw e;
@@ -692,7 +689,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     @SuppressWarnings("try")
-    private static void maybeDumpTruffleTree(DebugContext inDebug, OptionValues options, OptimizedCallTarget callTarget, TruffleInlining inlining) {
+    private static void maybeDumpTruffleTree(DebugContext inDebug, OptionValues options, OptimizedCallTarget callTarget) {
         DebugContext debug = inDebug;
         if (debug == null) {
             Description description = new Description(callTarget, "TruffleTree:" + callTarget.getName());
@@ -702,8 +699,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         try (Scope c = debug.scope("TruffleTree")) {
             if (debug.isDumpEnabled(DebugContext.BASIC_LEVEL)) {
                 output = debug.buildOutput(GraphOutput.newBuilder(VoidGraphStructure.INSTANCE));
-                output.beginGroup(null, "Truffle::" + callTarget.toString(), "Truffle::" + callTarget.toString(), null, 0, DebugContext.addVersionProperties(null));
-                debug.dump(DebugContext.BASIC_LEVEL, new TruffleTreeDumpHandler.TruffleTreeDump(callTarget, inlining), "TruffleTree");
+                output.beginGroup(null, callTarget.toString(), callTarget.toString(), null, 0, DebugContext.addVersionProperties(null));
+                debug.dump(DebugContext.BASIC_LEVEL, new TruffleTreeDumpHandler.TruffleTreeDump(callTarget), "TruffleTree");
             }
         } catch (Throwable e) {
             if (output != null) {
@@ -867,6 +864,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         return false;
     }
 
+    public abstract void invalidateInstalledCode(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason);
+
     /**
      * Notifies this runtime when a Truffle AST is being executed in the Truffle interpreter even
      * though compiled code is available for the AST.
@@ -875,8 +874,15 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
      * means the code with the special entry point was deoptimized or otherwise removed from the
      * code cache and needs to be re-installed.
      */
-    public void bypassedInstalledCode() {
+    public void bypassedCompiledCode() {
     }
+
+    @Override
+    public final boolean enableInfopoints() {
+        return platformEnableInfopoints();
+    }
+
+    protected abstract boolean platformEnableInfopoints();
 
     protected CallMethods getCallMethods() {
         return callMethods;
@@ -1014,10 +1020,12 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     public InlineInfo getInlineInfo(ResolvedJavaMethod original) {
         TruffleBoundary truffleBoundary = original.getAnnotation(TruffleBoundary.class);
         if (truffleBoundary != null) {
-            if (!truffleBoundary.throwsControlFlowException() && truffleBoundary.transferToInterpreterOnException()) {
-                return InlineInfo.DO_NOT_INLINE_DEOPTIMIZE_ON_EXCEPTION;
-            } else {
-                return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
+            if (!truffleBoundary.allowInlining()) {
+                if (!truffleBoundary.throwsControlFlowException() && truffleBoundary.transferToInterpreterOnException()) {
+                    return InlineInfo.DO_NOT_INLINE_DEOPTIMIZE_ON_EXCEPTION;
+                } else {
+                    return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
+                }
             }
         } else if (original.getAnnotation(TruffleCallBoundary.class) != null) {
             return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
