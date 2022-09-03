@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,64 @@
  */
 package com.oracle.graal.asm.sparc;
 
-import com.oracle.graal.api.code.AbstractAddress;
-import com.oracle.graal.api.code.Register;
+import static jdk.internal.jvmci.sparc.SPARC.STACK_BIAS;
+import static jdk.internal.jvmci.sparc.SPARC.fp;
+import static jdk.internal.jvmci.sparc.SPARC.sp;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.sparc.SPARC;
+
+import com.oracle.graal.asm.AbstractAddress;
 
 public class SPARCAddress extends AbstractAddress {
 
     private final Register base;
-    private final int displacement; // need Register offset / displacement CompositeValue?
+    private final Register index;
+    private final int displacement;
 
     /**
      * Creates an {@link SPARCAddress} with given base register, no scaling and a given
      * displacement.
-     * 
+     *
      * @param base the base register
      * @param displacement the displacement
      */
     public SPARCAddress(Register base, int displacement) {
         this.base = base;
+        this.index = Register.None;
         this.displacement = displacement;
+    }
+
+    /**
+     * Creates an {@link SPARCAddress} with given base register, no scaling and a given index.
+     *
+     * @param base the base register
+     * @param index the index register
+     */
+    public SPARCAddress(Register base, Register index) {
+        this.base = base;
+        this.index = index;
+        this.displacement = 0;
     }
 
     @Override
     public String toString() {
         StringBuilder s = new StringBuilder();
         s.append("[");
+        String sep = "";
         if (!getBase().equals(Register.None)) {
             s.append(getBase());
+            sep = " + ";
         }
-        // later: displacement CompositeValue?
+        if (!getIndex().equals(Register.None)) {
+            s.append(sep).append(getIndex());
+            sep = " + ";
+        } else {
+            if (getDisplacement() < 0) {
+                s.append(" - ").append(-getDisplacement());
+            } else if (getDisplacement() > 0) {
+                s.append(sep).append(getDisplacement());
+            }
+        }
         s.append("]");
         return s.toString();
     }
@@ -63,9 +93,34 @@ public class SPARCAddress extends AbstractAddress {
     }
 
     /**
+     * @return Index register, the value of which is added to {@link #getBase}. If not present, is
+     *         denoted by {@link Register#None}.
+     */
+    public Register getIndex() {
+        return index;
+    }
+
+    /**
+     * @return true if this address has an index register
+     */
+    public boolean hasIndex() {
+        return !getIndex().equals(Register.None);
+    }
+
+    /**
+     * This method adds the stack-bias to the displacement if the base register is either
+     * {@link SPARC#sp} or {@link SPARC#fp}.
+     *
      * @return Optional additive displacement.
      */
     public int getDisplacement() {
+        if (hasIndex()) {
+            throw new InternalError("address has index register");
+        }
+        // TODO Should we also hide the register save area size here?
+        if (getBase().equals(sp) || getBase().equals(fp)) {
+            return displacement + STACK_BIAS;
+        }
         return displacement;
     }
 }

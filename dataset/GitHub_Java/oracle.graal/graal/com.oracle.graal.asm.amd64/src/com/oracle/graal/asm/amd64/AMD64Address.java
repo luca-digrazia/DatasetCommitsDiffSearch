@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.asm.amd64;
 
-import jdk.vm.ci.code.Register;
+import jdk.internal.jvmci.code.Register;
 
 import com.oracle.graal.asm.AbstractAddress;
 
@@ -85,7 +85,7 @@ public final class AMD64Address extends AbstractAddress {
         Times4(4, 2),
         Times8(8, 3);
 
-        Scale(int value, int log2) {
+        private Scale(int value, int log2) {
             this.value = value;
             this.log2 = log2;
         }

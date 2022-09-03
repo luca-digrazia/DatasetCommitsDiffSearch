@@ -22,14 +22,15 @@
  */
 package com.oracle.graal.asm;
 
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.TargetDescription;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.StackSlot;
+import jdk.internal.jvmci.code.TargetDescription;
 
 /**
  * The platform-independent base class for the assembler.
@@ -46,7 +47,11 @@ public abstract class Assembler {
 
     public Assembler(TargetDescription target) {
         this.target = target;
-        this.codeBuffer = new Buffer(target.arch.getByteOrder());
+        if (target.arch.getByteOrder() == ByteOrder.BIG_ENDIAN) {
+            this.codeBuffer = new Buffer.BigEndian();
+        } else {
+            this.codeBuffer = new Buffer.LittleEndian();
+        }
     }
 
     /**
