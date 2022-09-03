@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -53,13 +53,12 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
 
     private final int vectorLength;
 
-    public LLVMStoreVectorNode(int vectorLength) {
-        super(null);
-        this.vectorLength = vectorLength;
+    public LLVMStoreVectorNode(VectorType type) {
+        this(null, type);
     }
 
     public LLVMStoreVectorNode(LLVMSourceLocation sourceLocation, VectorType type) {
-        super(sourceLocation);
+        super(sourceLocation, type);
         this.vectorLength = type.getNumberOfElements();
     }
 
@@ -205,7 +204,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
     }
 
     LLVMStoreVectorNode createRecursive() {
-        return LLVMStoreVectorNodeGen.create(vectorLength, null, null);
+        return LLVMStoreVectorNodeGen.create((VectorType) valueType, null, null);
     }
 
     @Specialization(guards = "address.isManaged()")

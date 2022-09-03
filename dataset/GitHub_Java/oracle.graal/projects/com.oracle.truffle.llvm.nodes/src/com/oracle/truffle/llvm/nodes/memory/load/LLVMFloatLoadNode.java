@@ -40,9 +40,11 @@ import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadFloatNode;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 
-public abstract class LLVMFloatLoadNode extends LLVMAbstractLoadNode {
+public abstract class LLVMFloatLoadNode extends LLVMLoadNode {
 
     private final FloatValueProfile profile = FloatValueProfile.createRawIdentityProfile();
 
@@ -58,35 +60,34 @@ public abstract class LLVMFloatLoadNode extends LLVMAbstractLoadNode {
         return address.getFloat(memory);
     }
 
-    @Specialization(guards = "!isAutoDerefHandle(addr)")
-    protected float doFloat(LLVMAddress addr) {
-        return profile.profile(getLLVMMemoryCached().getFloat(addr));
+    @Specialization
+    protected float doFloat(LLVMAddress addr,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        float val = memory.getFloat(addr);
+        return profile.profile(val);
     }
 
-    @Specialization(guards = "isAutoDerefHandle(addr)")
-    protected float doFloatDerefHandle(LLVMAddress addr) {
-        return doFloatManaged(getDerefHandleGetReceiverNode().execute(addr));
-    }
-
-    @Override
-    LLVMForeignReadNode createForeignRead() {
+    static LLVMForeignReadNode createForeignRead() {
         return new LLVMForeignReadNode(ForeignToLLVMType.FLOAT);
     }
 
     @Specialization(guards = "addr.isNative()")
-    protected float doFloatNative(LLVMTruffleObject addr) {
-        return doFloat(addr.asNative());
+    protected float doFloat(LLVMTruffleObject addr,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return doFloat(addr.asNative(), memory);
     }
 
     @Specialization(guards = "addr.isManaged()")
-    protected float doFloatManaged(LLVMTruffleObject addr) {
-        return (float) getForeignReadNode().execute(addr);
+    protected float doFloat(LLVMTruffleObject addr,
+                    @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
+        return (float) foreignRead.execute(addr);
     }
 
     @Specialization
-    protected float doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
+    protected float doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         if (addr.getValue() instanceof Long) {
-            return getLLVMMemoryCached().getFloat((long) addr.getValue());
+            return memory.getFloat((long) addr.getValue());
         } else {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalAccessError("Cannot access address: " + addr.getValue());

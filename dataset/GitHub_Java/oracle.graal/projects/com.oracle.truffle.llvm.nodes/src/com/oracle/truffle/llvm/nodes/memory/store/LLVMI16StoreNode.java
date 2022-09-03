@@ -39,7 +39,9 @@ import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalWriteNode.WriteI16Node;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
 public abstract class LLVMI16StoreNode extends LLVMStoreNodeCommon {
 
@@ -48,7 +50,7 @@ public abstract class LLVMI16StoreNode extends LLVMStoreNodeCommon {
     }
 
     public LLVMI16StoreNode(LLVMSourceLocation sourceLocation) {
-        super(sourceLocation);
+        super(sourceLocation, PrimitiveType.I16);
     }
 
     @Specialization
@@ -65,32 +67,31 @@ public abstract class LLVMI16StoreNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "!isAutoDerefHandle(addr)")
-    protected Object doOp(LLVMAddress addr, short value) {
-        getLLVMMemoryCached().putI16(addr, value);
+    @Specialization
+    protected Object doOp(LLVMAddress address, short value,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        memory.putI16(address, value);
         return null;
     }
 
     @Specialization(guards = "address.isNative()")
-    protected Object doOpNative(LLVMTruffleObject address, short value) {
-        return doOp(address.asNative(), value);
+    protected Object doOp(LLVMTruffleObject address, short value,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return doOp(address.asNative(), value, memory);
     }
 
     @Specialization(guards = "address.isManaged()")
-    protected Object doOpManaged(LLVMTruffleObject address, short value) {
-        getForeignReadNode().execute(address, value);
+    protected Object doOp(LLVMTruffleObject address, short value,
+                    @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
+        foreignWrite.execute(address, value);
         return null;
     }
 
-    @Specialization(guards = "isAutoDerefHandle(addr)")
-    protected Object doOpDerefHandle(LLVMAddress addr, short value) {
-        return doOpManaged(getDerefHandleGetReceiverNode().execute(addr), value);
-    }
-
     @Specialization
-    protected Object doOp(LLVMBoxedPrimitive address, short value) {
+    protected Object doOp(LLVMBoxedPrimitive address, short value,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         if (address.getValue() instanceof Long) {
-            getLLVMMemoryCached().putI16((long) address.getValue(), value);
+            memory.putI16((long) address.getValue(), value);
             return null;
         } else {
             CompilerDirectives.transferToInterpreter();

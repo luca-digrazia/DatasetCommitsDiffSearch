@@ -38,13 +38,14 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMForeignWriteNode;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMForeignWriteNodeGen;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
 
 @NodeChild(value = "address", type = LLVMExpressionNode.class)
 public abstract class LLVMFunctionArrayLiteralNode extends LLVMExpressionNode {
@@ -58,7 +59,7 @@ public abstract class LLVMFunctionArrayLiteralNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    protected LLVMNativePointer handleGlobal(VirtualFrame frame, LLVMGlobal array,
+    protected LLVMAddress handleGlobal(VirtualFrame frame, LLVMGlobal array,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
@@ -67,14 +68,14 @@ public abstract class LLVMFunctionArrayLiteralNode extends LLVMExpressionNode {
 
     @Specialization
     @ExplodeLoop
-    protected LLVMNativePointer handleAddress(VirtualFrame frame, LLVMNativePointer array,
+    protected LLVMAddress handleAddress(VirtualFrame frame, LLVMAddress array,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
-        long currentPtr = array.asNative();
+        long currentPtr = array.getVal();
         for (int i = 0; i < values.length; i++) {
             try {
                 LLVMFunctionDescriptor currentValue = (LLVMFunctionDescriptor) values[i].executeTruffleObject(frame);
-                memory.putFunctionPointer(currentPtr, toNative.executeWithTarget(currentValue).asNative());
+                memory.putFunctionPointer(currentPtr, toNative.executeWithTarget(currentValue).getVal());
                 currentPtr += stride;
             } catch (UnexpectedResultException e) {
                 CompilerDirectives.transferToInterpreter();
@@ -84,11 +85,18 @@ public abstract class LLVMFunctionArrayLiteralNode extends LLVMExpressionNode {
         return array;
     }
 
-    @Specialization
+    @Specialization(guards = "addr.isNative()")
+    protected LLVMAddress handleAddress(VirtualFrame frame, LLVMTruffleObject addr,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return handleAddress(frame, addr.asNative(), toNative, memory);
+    }
+
+    @Specialization(guards = "array.isManaged()")
     @ExplodeLoop
-    protected LLVMManagedPointer handleTruffleObject(VirtualFrame frame, LLVMManagedPointer array,
+    protected LLVMTruffleObject handleTruffleObject(VirtualFrame frame, LLVMTruffleObject array,
                     @Cached("createForeignWrites()") LLVMForeignWriteNode[] foreignWrites) {
-        LLVMManagedPointer currentPtr = array;
+        LLVMTruffleObject currentPtr = array;
         for (int i = 0; i < values.length; i++) {
             try {
                 LLVMFunctionDescriptor currentValue = (LLVMFunctionDescriptor) values[i].executeTruffleObject(frame);
@@ -105,7 +113,7 @@ public abstract class LLVMFunctionArrayLiteralNode extends LLVMExpressionNode {
     protected LLVMForeignWriteNode[] createForeignWrites() {
         LLVMForeignWriteNode[] writes = new LLVMForeignWriteNode[values.length];
         for (int i = 0; i < writes.length; i++) {
-            writes[i] = LLVMForeignWriteNodeGen.create();
+            writes[i] = LLVMForeignWriteNodeGen.create(PointerType.VOID);
         }
         return writes;
     }

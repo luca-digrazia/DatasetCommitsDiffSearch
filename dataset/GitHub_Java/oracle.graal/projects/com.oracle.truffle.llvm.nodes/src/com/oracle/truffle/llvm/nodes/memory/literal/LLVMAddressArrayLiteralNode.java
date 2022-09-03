@@ -34,60 +34,55 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.llvm.nodes.memory.LLVMForceLLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.memory.LLVMForceLLVMAddressNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMForeignWriteNode;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMForeignWriteNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNodeGen;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
-import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 @NodeChild(value = "address", type = LLVMExpressionNode.class)
 public abstract class LLVMAddressArrayLiteralNode extends LLVMExpressionNode {
 
-    @Children private final LLVMExpressionNode[] values;
-    @Children private final LLVMForceLLVMAddressNode[] toLLVM;
+    @Children private final LLVMToNativeNode[] values;
     private final int stride;
 
     public LLVMAddressArrayLiteralNode(LLVMExpressionNode[] values, int stride) {
-        this.values = values;
+        this.values = getForceLLVMAddressNodes(values);
         this.stride = stride;
-        this.toLLVM = getForceLLVMAddressNodes(values.length);
     }
 
-    private static LLVMForceLLVMAddressNode[] getForceLLVMAddressNodes(int size) {
-        LLVMForceLLVMAddressNode[] forceToLLVM = new LLVMForceLLVMAddressNode[size];
-        for (int i = 0; i < size; i++) {
-            forceToLLVM[i] = getForceLLVMAddressNode();
+    private static LLVMToNativeNode[] getForceLLVMAddressNodes(LLVMExpressionNode[] values) {
+        LLVMToNativeNode[] forceToLLVM = new LLVMToNativeNode[values.length];
+        for (int i = 0; i < values.length; i++) {
+            forceToLLVM[i] = LLVMToNativeNodeGen.create(values[i]);
         }
         return forceToLLVM;
     }
 
-    private static LLVMForceLLVMAddressNode getForceLLVMAddressNode() {
-        return LLVMForceLLVMAddressNodeGen.create();
-    }
-
-    public LLVMExpressionNode[] getValues() {
+    public LLVMToNativeNode[] getValues() {
         return values;
     }
 
     @Specialization
-    protected LLVMAddress write(VirtualFrame frame, LLVMGlobalVariable global, @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        return writeAddress(frame, globalAccess.getNativeLocation(global));
+    protected LLVMAddress write(VirtualFrame frame, LLVMGlobal global,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return writeAddress(frame, globalAccess.executeWithTarget(global), memory);
     }
 
     @Specialization
     @ExplodeLoop
-    protected LLVMAddress writeAddress(VirtualFrame frame, LLVMAddress addr) {
+    protected LLVMAddress writeAddress(VirtualFrame frame, LLVMAddress addr,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         long currentPtr = addr.getVal();
         for (int i = 0; i < values.length; i++) {
-            LLVMAddress currentValue = toLLVM[i].executeWithTarget(frame, values[i].executeGeneric(frame));
-            LLVMMemory.putAddress(currentPtr, currentValue);
+            LLVMAddress currentValue = values[i].execute(frame);
+            memory.putAddress(currentPtr, currentValue);
             currentPtr += stride;
         }
         return addr;
@@ -96,24 +91,31 @@ public abstract class LLVMAddressArrayLiteralNode extends LLVMExpressionNode {
     protected LLVMForeignWriteNode[] createForeignWrites() {
         LLVMForeignWriteNode[] writes = new LLVMForeignWriteNode[values.length];
         for (int i = 0; i < writes.length; i++) {
-            writes[i] = LLVMForeignWriteNodeGen.create(new PointerType(VoidType.INSTANCE), 8);
+            writes[i] = LLVMForeignWriteNodeGen.create(PointerType.VOID);
         }
         return writes;
     }
 
+    @Specialization(guards = "addr.isNative()")
+    protected LLVMAddress writeAddress(VirtualFrame frame, LLVMTruffleObject addr,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return writeAddress(frame, addr.asNative(), memory);
+    }
+
     // TODO: work around a DSL bug (GR-6493): remove cached int a and int b
     @SuppressWarnings("unused")
-    @Specialization
+    @Specialization(guards = "addr.isManaged()")
     @ExplodeLoop
-    protected LLVMTruffleObject foreignWriteRef(VirtualFrame frame, LLVMTruffleObject addr, @Cached("0") int a,
-                    @Cached("0") int b, @Cached("createForeignWrites()") LLVMForeignWriteNode[] foreignWrites) {
+    protected LLVMTruffleObject foreignWriteRef(VirtualFrame frame, LLVMTruffleObject addr,
+                    @Cached("0") int a,
+                    @Cached("0") int b,
+                    @Cached("createForeignWrites()") LLVMForeignWriteNode[] foreignWrites) {
         LLVMTruffleObject currentPtr = addr;
         for (int i = 0; i < values.length; i++) {
-            Object currentValue = values[i].executeGeneric(frame);
-            foreignWrites[i].execute(frame, currentPtr, currentValue);
-            currentPtr = currentPtr.increment(stride, currentPtr.getType());
+            Object currentValue = values[i].execute(frame);
+            foreignWrites[i].execute(currentPtr, currentValue);
+            currentPtr = currentPtr.increment(stride);
         }
         return addr;
     }
-
 }

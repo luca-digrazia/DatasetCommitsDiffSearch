@@ -36,7 +36,9 @@ import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
 public abstract class LLVM80BitFloatStoreNode extends LLVMStoreNodeCommon {
 
@@ -45,39 +47,38 @@ public abstract class LLVM80BitFloatStoreNode extends LLVMStoreNodeCommon {
     }
 
     public LLVM80BitFloatStoreNode(LLVMSourceLocation sourceLocation) {
-        super(sourceLocation);
+        super(sourceLocation, PrimitiveType.X86_FP80);
     }
 
     @Specialization
     protected Object doOp(LLVMGlobal address, LLVM80BitFloat value,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
-        getLLVMMemoryCached().put80BitFloat(globalAccess.executeWithTarget(address), value);
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        memory.put80BitFloat(globalAccess.executeWithTarget(address), value);
         return null;
     }
 
-    @Specialization(guards = "!isAutoDerefHandle(addr)")
-    protected Object doOp(LLVMAddress addr, LLVM80BitFloat value) {
-        getLLVMMemoryCached().put80BitFloat(addr, value);
+    @Specialization
+    protected Object doOp(LLVMAddress address, LLVM80BitFloat value,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        memory.put80BitFloat(address, value);
         return null;
     }
 
     @Specialization(guards = "address.isNative()")
-    protected Object doOp(LLVMTruffleObject address, LLVM80BitFloat value) {
-        return doOp(address.asNative(), value);
-    }
-
-    @Specialization(guards = "isAutoDerefHandle(addr)")
-    protected Object doOpDerefHandle(LLVMAddress addr, LLVM80BitFloat value) {
-        return doForeign(getDerefHandleGetReceiverNode().execute(addr), value);
+    protected Object doOp(LLVMTruffleObject address, LLVM80BitFloat value,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return doOp(address.asNative(), value, memory);
     }
 
     // TODO (chaeubl): we could store this in a more efficient way (short + long)
     @Specialization(guards = "address.isManaged()")
-    protected Object doForeign(LLVMTruffleObject address, LLVM80BitFloat value) {
+    protected Object doForeign(LLVMTruffleObject address, LLVM80BitFloat value,
+                    @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
         byte[] bytes = value.getBytes();
         LLVMTruffleObject currentPtr = address;
         for (int i = 0; i < bytes.length; i++) {
-            getForeignReadNode().execute(currentPtr, bytes[i]);
+            foreignWrite.execute(currentPtr, bytes[i]);
             currentPtr = currentPtr.increment(I8_SIZE_IN_BYTES);
         }
         return null;
@@ -85,6 +86,6 @@ public abstract class LLVM80BitFloatStoreNode extends LLVMStoreNodeCommon {
 
     @Override
     protected LLVMForeignWriteNode createForeignWrite() {
-        return LLVMForeignWriteNodeGen.create();
+        return LLVMForeignWriteNodeGen.create(PrimitiveType.getIntegerType(I8_SIZE_IN_BITS));
     }
 }

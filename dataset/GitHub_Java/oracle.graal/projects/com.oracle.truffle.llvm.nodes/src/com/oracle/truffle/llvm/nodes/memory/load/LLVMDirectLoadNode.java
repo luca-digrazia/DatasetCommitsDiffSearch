@@ -47,48 +47,47 @@ import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLL
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 
 public abstract class LLVMDirectLoadNode {
 
     @NodeField(name = "bitWidth", type = int.class)
-    public abstract static class LLVMIVarBitDirectLoadNode extends LLVMAbstractLoadNode {
+    public abstract static class LLVMIVarBitDirectLoadNode extends LLVMLoadNode {
 
         public abstract int getBitWidth();
 
-        @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMIVarBit doI64(LLVMAddress addr) {
-            return getLLVMMemoryCached().getIVarBit(addr, getBitWidth());
-        }
-
-        @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected Object doI64DerefHandle(LLVMAddress addr) {
-            return doForeign(getDerefHandleGetReceiverNode().execute(addr));
+        @Specialization
+        protected LLVMIVarBit doI64(LLVMAddress addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getIVarBit(addr, getBitWidth());
         }
 
         @Specialization
         protected LLVMIVarBit doI64(LLVMGlobal addr,
-                        @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
-            return getLLVMMemoryCached().getIVarBit(globalAccess.executeWithTarget(addr), getBitWidth());
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getIVarBit(globalAccess.executeWithTarget(addr), getBitWidth());
         }
 
         @Specialization(guards = "addr.isNative()")
-        protected Object doI64(LLVMTruffleObject addr) {
-            return doI64(addr.asNative());
+        protected Object doI64(LLVMTruffleObject addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return doI64(addr.asNative(), memory);
         }
 
         @Specialization(guards = "addr.isManaged()")
-        protected Object doForeign(LLVMTruffleObject addr) {
+        protected Object doForeign(LLVMTruffleObject addr,
+                        @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
             byte[] result = new byte[getByteSize()];
             LLVMTruffleObject currentPtr = addr;
             for (int i = result.length - 1; i >= 0; i--) {
-                result[i] = (Byte) getForeignReadNode().execute(currentPtr);
+                result[i] = (Byte) foreignRead.execute(currentPtr);
                 currentPtr = currentPtr.increment(I8_SIZE_IN_BYTES);
             }
             return LLVMIVarBit.create(getBitWidth(), result, getBitWidth(), false);
         }
 
-        @Override
         protected LLVMForeignReadNode createForeignRead() {
             return new LLVMForeignReadNode(ForeignToLLVMType.I8);
         }
@@ -99,92 +98,84 @@ public abstract class LLVMDirectLoadNode {
         }
     }
 
-    public abstract static class LLVM80BitFloatDirectLoadNode extends LLVMAbstractLoadNode {
+    public abstract static class LLVM80BitFloatDirectLoadNode extends LLVMLoadNode {
 
-        @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVM80BitFloat doDouble(LLVMAddress addr) {
-            return getLLVMMemoryCached().get80BitFloat(addr);
-        }
-
-        @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected Object doDoubleDerefHandle(LLVMAddress addr) {
-            return doForeign(getDerefHandleGetReceiverNode().execute(addr));
+        @Specialization
+        protected LLVM80BitFloat doDouble(LLVMAddress addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.get80BitFloat(addr);
         }
 
         @Specialization
         protected LLVM80BitFloat doDouble(LLVMGlobal addr,
-                        @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
-            return getLLVMMemoryCached().get80BitFloat(globalAccess.executeWithTarget(addr));
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.get80BitFloat(globalAccess.executeWithTarget(addr));
         }
 
         @Specialization(guards = "addr.isNative()")
-        protected LLVM80BitFloat doDouble(LLVMTruffleObject addr) {
-            return doDouble(addr.asNative());
+        protected LLVM80BitFloat doDouble(LLVMTruffleObject addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return doDouble(addr.asNative(), memory);
         }
 
         @Specialization(guards = "addr.isManaged()")
-        protected LLVM80BitFloat doForeign(LLVMTruffleObject addr) {
+        protected LLVM80BitFloat doForeign(LLVMTruffleObject addr,
+                        @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
             byte[] result = new byte[LLVM80BitFloat.BYTE_WIDTH];
             LLVMTruffleObject currentPtr = addr;
             for (int i = 0; i < result.length; i++) {
-                result[i] = (Byte) getForeignReadNode().execute(currentPtr);
+                result[i] = (Byte) foreignRead.execute(currentPtr);
                 currentPtr = currentPtr.increment(I8_SIZE_IN_BYTES);
             }
             return LLVM80BitFloat.fromBytes(result);
         }
 
-        @Override
         protected LLVMForeignReadNode createForeignRead() {
             return new LLVMForeignReadNode(ForeignToLLVMType.I8);
         }
     }
 
-    public abstract static class LLVMFunctionDirectLoadNode extends LLVMAbstractLoadNode {
+    public abstract static class LLVMFunctionDirectLoadNode extends LLVMLoadNode {
 
-        @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMAddress doAddress(LLVMAddress addr) {
-            return LLVMAddress.fromLong(getLLVMMemoryCached().getFunctionPointer(addr));
-        }
-
-        @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected Object doAddressDerefHandle(LLVMAddress addr) {
-            return doForeign(getDerefHandleGetReceiverNode().execute(addr));
+        @Specialization
+        protected LLVMAddress doAddress(LLVMAddress addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return LLVMAddress.fromLong(memory.getFunctionPointer(addr));
         }
 
         @Specialization
         protected LLVMAddress doAddress(LLVMGlobal addr,
-                        @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
-            return LLVMAddress.fromLong(getLLVMMemoryCached().getFunctionPointer(globalAccess.executeWithTarget(addr)));
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return LLVMAddress.fromLong(memory.getFunctionPointer(globalAccess.executeWithTarget(addr)));
         }
 
-        @Override
-        LLVMForeignReadNode createForeignRead() {
+        static LLVMForeignReadNode createForeignRead() {
             return new LLVMForeignReadNode(ForeignToLLVMType.POINTER);
         }
 
         @Specialization(guards = "addr.isNative()")
-        protected Object doAddress(LLVMTruffleObject addr) {
-            return doAddress(addr.asNative());
+        protected Object doAddress(LLVMTruffleObject addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return doAddress(addr.asNative(), memory);
         }
 
         @Specialization(guards = "addr.isManaged()")
-        protected Object doForeign(LLVMTruffleObject addr) {
-            return getForeignReadNode().execute(addr);
+        protected Object doForeign(LLVMTruffleObject addr,
+                        @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
+            return foreignRead.execute(addr);
         }
     }
 
-    public abstract static class LLVMAddressDirectLoadNode extends LLVMAbstractLoadNode {
+    public abstract static class LLVMAddressDirectLoadNode extends LLVMLoadNode {
 
         @Child protected ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.POINTER);
 
-        @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMAddress doAddress(LLVMAddress addr) {
-            return getLLVMMemoryCached().getAddress(addr);
-        }
-
-        @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected Object doAddressDerefHandle(LLVMAddress addr) {
-            return doIndirectedForeign(getDerefHandleGetReceiverNode().execute(addr));
+        @Specialization
+        protected LLVMAddress doAddress(LLVMAddress addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getAddress(addr);
         }
 
         @Specialization
@@ -211,17 +202,18 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization(guards = "addr.isNative()")
-        protected Object doAddress(LLVMTruffleObject addr) {
-            return doAddress(addr.asNative());
+        protected Object doAddress(LLVMTruffleObject addr,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return doAddress(addr.asNative(), memory);
         }
 
         @Specialization(guards = "addr.isManaged()")
-        protected Object doIndirectedForeign(LLVMTruffleObject addr) {
-            return getForeignReadNode().execute(addr);
+        protected Object doIndirectedForeign(LLVMTruffleObject addr,
+                        @Cached("createForeignReadNode()") LLVMForeignReadNode foreignRead) {
+            return foreignRead.execute(addr);
         }
 
-        @Override
-        protected LLVMForeignReadNode createForeignRead() {
+        protected LLVMForeignReadNode createForeignReadNode() {
             return new LLVMForeignReadNode(ForeignToLLVMType.POINTER);
         }
     }
@@ -241,7 +233,7 @@ public abstract class LLVMDirectLoadNode {
         }
     }
 
-    public abstract static class LLVMStructDirectLoadNode extends LLVMAbstractLoadNode {
+    public abstract static class LLVMStructDirectLoadNode extends LLVMLoadNode {
 
         @Specialization
         protected LLVMAddress doAddress(LLVMAddress addr) {
