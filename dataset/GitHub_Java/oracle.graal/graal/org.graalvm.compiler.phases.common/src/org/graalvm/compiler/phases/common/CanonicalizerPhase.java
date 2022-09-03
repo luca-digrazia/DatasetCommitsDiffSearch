@@ -209,7 +209,9 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                     workList.add(node);
                     if (node instanceof IndirectCanonicalization) {
                         for (Node usage : node.usages()) {
-                            workList.add(usage);
+                            if (usage.isAlive()) {
+                                workList.add(usage);
+                            }
                         }
                     }
                 }
