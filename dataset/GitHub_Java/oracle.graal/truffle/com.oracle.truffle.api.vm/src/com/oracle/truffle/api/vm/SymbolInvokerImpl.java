@@ -95,8 +95,8 @@ abstract class SymbolInvokerImpl {
         public Object execute(VirtualFrame frame) {
             final Object[] args = frame.getArguments();
             try {
-                Object tmp = ForeignAccess.send(foreignAccess, function, args);
-                return convert.convert(typeProfile.profile(tmp));
+                Object tmp = ForeignAccess.send(foreignAccess, frame, function, args);
+                return convert.convert(frame, typeProfile.profile(tmp));
             } catch (InteropException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError(e);
@@ -126,8 +126,8 @@ abstract class SymbolInvokerImpl {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     foreignAccess = insert(Message.createExecute(args.length).createNode());
                 }
-                Object tmp = ForeignAccess.send(foreignAccess, function, args);
-                return convert.convert(tmp);
+                Object tmp = ForeignAccess.send(foreignAccess, frame, function, args);
+                return convert.convert(frame, tmp);
             } catch (ArityException e) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 foreignAccess = insert(Message.createExecute(args.length).createNode());
@@ -152,26 +152,26 @@ abstract class SymbolInvokerImpl {
             this.unbox = Message.UNBOX.createNode();
         }
 
-        Object convert(Object obj) {
+        Object convert(VirtualFrame frame, Object obj) {
             if (obj instanceof TruffleObject) {
-                return convert((TruffleObject) obj);
+                return convert(frame, (TruffleObject) obj);
             } else {
                 return obj;
             }
         }
 
-        private Object convert(TruffleObject obj) {
-            boolean isBoxedResult = ForeignAccess.sendIsBoxed(isBoxed, obj);
+        private Object convert(VirtualFrame frame, TruffleObject obj) {
+            boolean isBoxedResult = ForeignAccess.sendIsBoxed(isBoxed, frame, obj);
             if (isBoxedProfile.profile(isBoxedResult)) {
                 try {
-                    return ForeignAccess.sendUnbox(unbox, obj);
+                    return ForeignAccess.sendUnbox(unbox, frame, obj);
                 } catch (UnsupportedMessageException e) {
                     return null;
                 }
             } else {
-                boolean isNullResult = ForeignAccess.sendIsNull(isNull, obj);
+                boolean isNullResult = ForeignAccess.sendIsNull(isNull, frame, obj);
                 if (isNullResult) {
-                    return new NullObject(obj);
+                    return null;
                 }
             }
             return obj;
