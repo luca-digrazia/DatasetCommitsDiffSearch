@@ -38,7 +38,7 @@ import com.oracle.truffle.api.nodes.Node;
 
 abstract class SerializeArgumentNode extends Node {
 
-    public abstract Object execute(NativeArgumentBuffer buffer, Object arg);
+    abstract Object execute(NativeArgumentBuffer buffer, Object arg);
 
     protected static Node createIsNull() {
         return Message.IS_NULL.createNode();
@@ -48,7 +48,7 @@ abstract class SerializeArgumentNode extends Node {
         return ForeignAccess.sendIsNull(isNull, object);
     }
 
-    static abstract class SerializeUnboxingArgumentNode extends SerializeArgumentNode {
+    abstract static class SerializeUnboxingArgumentNode extends SerializeArgumentNode {
 
         protected final LibFFIType argType;
 
@@ -56,7 +56,12 @@ abstract class SerializeArgumentNode extends Node {
             this.argType = argType;
         }
 
-        @Specialization(guards = "checkNull(isNull, arg)")
+        @SuppressWarnings("unused")
+        protected boolean isSpecialized(TruffleObject arg) {
+            return false;
+        }
+
+        @Specialization(guards = {"!isSpecialized(arg)", "checkNull(isNull, arg)"})
         @SuppressWarnings("unused")
         protected Object serializeNull(NativeArgumentBuffer buffer, TruffleObject arg,
                         @Cached("createIsNull()") Node isNull) {
@@ -64,8 +69,10 @@ abstract class SerializeArgumentNode extends Node {
             return null;
         }
 
-        @Specialization
+        @Specialization(guards = {"!isSpecialized(arg)", "!checkNull(isNull, arg)"})
+        @SuppressWarnings("unused")
         protected Object serializeUnbox(NativeArgumentBuffer buffer, TruffleObject arg,
+                        @Cached("createIsNull()") Node isNull,
                         @Cached("createUnbox()") Node unbox,
                         @Cached("argType.createSerializeArgumentNode()") SerializeArgumentNode serialize) {
             try {
@@ -82,7 +89,7 @@ abstract class SerializeArgumentNode extends Node {
         }
     }
 
-    public static abstract class SerializeSimpleArgumentNode extends SerializeUnboxingArgumentNode {
+    abstract static class SerializeSimpleArgumentNode extends SerializeUnboxingArgumentNode {
 
         SerializeSimpleArgumentNode(LibFFIType argType) {
             super(argType);
@@ -137,10 +144,15 @@ abstract class SerializeArgumentNode extends Node {
         }
     }
 
-    public static abstract class SerializePointerArgumentNode extends SerializeSimpleArgumentNode {
+    abstract static class SerializePointerArgumentNode extends SerializeSimpleArgumentNode {
 
-        public SerializePointerArgumentNode(LibFFIType type) {
+        SerializePointerArgumentNode(LibFFIType type) {
             super(type);
+        }
+
+        @Override
+        protected boolean isSpecialized(TruffleObject arg) {
+            return arg instanceof NativeString || arg instanceof NativePointer;
         }
 
         @Specialization(insertBefore = "serializeNull")
@@ -154,18 +166,17 @@ abstract class SerializeArgumentNode extends Node {
             argType.serialize(buffer, ptr);
             return null;
         }
-
-        @Specialization(insertBefore = "serializeNull")
-        protected Object serializeSymbol(NativeArgumentBuffer buffer, LibFFISymbol symbol) {
-            argType.serialize(buffer, symbol);
-            return null;
-        }
     }
 
-    public static abstract class SerializeStringArgumentNode extends SerializeUnboxingArgumentNode {
+    abstract static class SerializeStringArgumentNode extends SerializeUnboxingArgumentNode {
 
-        public SerializeStringArgumentNode(LibFFIType type) {
+        SerializeStringArgumentNode(LibFFIType type) {
             super(type);
+        }
+
+        @Override
+        protected boolean isSpecialized(TruffleObject arg) {
+            return arg instanceof NativeString;
         }
 
         @Specialization(insertBefore = "serializeNull")
@@ -181,26 +192,26 @@ abstract class SerializeArgumentNode extends Node {
         }
     }
 
-    public static abstract class SerializeObjectArgumentNode extends SerializeArgumentNode {
+    static class SerializeObjectArgumentNode extends SerializeArgumentNode {
 
         private final LibFFIType argType;
 
-        public SerializeObjectArgumentNode(LibFFIType argType) {
+        SerializeObjectArgumentNode(LibFFIType argType) {
             this.argType = argType;
         }
 
-        @Specialization
-        protected Object serializeObject(NativeArgumentBuffer buffer, TruffleObject object) {
+        @Override
+        Object execute(NativeArgumentBuffer buffer, Object object) {
             argType.serialize(buffer, object);
             return null;
         }
     }
 
-    public static abstract class SerializeArrayArgumentNode extends SerializeArgumentNode {
+    abstract static class SerializeArrayArgumentNode extends SerializeArgumentNode {
 
         final LibFFIType.ArrayType argType;
 
-        public SerializeArrayArgumentNode(LibFFIType.ArrayType argType) {
+        SerializeArrayArgumentNode(LibFFIType.ArrayType argType) {
             this.argType = argType;
         }
 
@@ -233,17 +244,27 @@ abstract class SerializeArgumentNode extends Node {
         }
     }
 
-    public static abstract class SerializeClosureArgumentNode extends SerializeArgumentNode {
+    abstract static class SerializeClosureArgumentNode extends SerializeArgumentNode {
 
         private final LibFFIType argType;
         private final LibFFISignature signature;
 
-        public SerializeClosureArgumentNode(LibFFIType argType, LibFFISignature signature) {
+        SerializeClosureArgumentNode(LibFFIType argType, LibFFISignature signature) {
             this.argType = argType;
             this.signature = signature;
         }
 
-        @Specialization(limit = "5", guards = "object == cachedObject")
+        protected boolean isSpecialized(TruffleObject arg) {
+            return arg instanceof NativePointer;
+        }
+
+        @Specialization
+        protected Object serializeNativePointer(NativeArgumentBuffer buffer, NativePointer object) {
+            argType.serialize(buffer, object);
+            return null;
+        }
+
+        @Specialization(limit = "5", guards = {"!isSpecialized(object)", "object == cachedObject"})
         @SuppressWarnings("unused")
         protected Object serializeCached(NativeArgumentBuffer buffer, TruffleObject object,
                         @Cached("object") TruffleObject cachedObject,
@@ -252,7 +273,7 @@ abstract class SerializeArgumentNode extends Node {
             return null;
         }
 
-        @Specialization
+        @Specialization(guards = "!isSpecialized(object)")
         protected Object serializeFallback(NativeArgumentBuffer buffer, TruffleObject object) {
             argType.serialize(buffer, createClosure(object));
             return null;
