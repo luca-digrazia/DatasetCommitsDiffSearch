@@ -34,7 +34,7 @@ public final class HotSpotVMConfig extends CompilerObject {
 
     // os information, register layout, code generation, ...
     public boolean cAssertions;
-    public boolean windowsOs;
+    public final boolean windowsOs = System.getProperty("os.name", "").startsWith("Windows");
     public int codeEntryAlignment;
     public boolean verifyOops;
     public boolean ciTime;
@@ -369,14 +369,24 @@ public final class HotSpotVMConfig extends CompilerObject {
     // runtime stubs
     public long inlineCacheMissStub;
     public long handleDeoptStub;
+    public long monitorEnterStub;
+    public long monitorExitStub;
+    public long wbPreCallStub;
+    public long wbPostCallStub;
 
+    public long vmErrorStub;
     public long uncommonTrapStub;
     public long unwindExceptionStub;
+    public long createNullPointerExceptionStub;
+    public long createOutOfBoundsExceptionStub;
     public long javaTimeMillisStub;
     public long javaTimeNanosStub;
     public long arithmeticSinStub;
     public long arithmeticCosStub;
     public long arithmeticTanStub;
+    public long logPrimitiveStub;
+    public long logObjectStub;
+    public long logPrintfStub;
     public int deoptReasonNone;
     public long aescryptEncryptBlockStub;
     public long aescryptDecryptBlockStub;
@@ -393,16 +403,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long exceptionHandlerForPcAddress;
     public long exceptionHandlerForReturnAddressAddress;
     public long osrMigrationEndAddress;
-    public long monitorenterAddress;
-    public long monitorexitAddress;
-    public long createNullPointerExceptionAddress;
-    public long createOutOfBoundsExceptionAddress;
-    public long logPrimitiveAddress;
-    public long logObjectAddress;
-    public long logPrintfAddress;
-    public long vmErrorAddress;
-    public long writeBarrierPreAddress;
-    public long writeBarrierPostAddress;
 
     public int deoptReasonNullCheck;
     public int deoptReasonRangeCheck;
