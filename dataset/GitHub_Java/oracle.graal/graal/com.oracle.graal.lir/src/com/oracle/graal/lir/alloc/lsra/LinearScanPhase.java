@@ -29,10 +29,10 @@ import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.phases.*;
 
-public final class LinearScanPhase extends LIRMidTierPhase {
+public final class LinearScanPhase<B extends AbstractBlock<B>> extends LowLevelMidTierPhase<B> {
 
     @Override
-    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder) {
         new LinearScan(target, lirGenRes).allocate();
     }
 

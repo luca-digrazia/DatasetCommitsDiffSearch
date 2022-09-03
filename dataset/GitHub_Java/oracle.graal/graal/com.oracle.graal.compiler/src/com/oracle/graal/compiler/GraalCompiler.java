@@ -29,23 +29,24 @@ import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionalit
 
 import java.util.*;
 
-import com.oracle.graal.alloc.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CompilationResult.ConstantReference;
 import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ProfilingInfo.TriState;
-import com.oracle.graal.compiler.alloc.*;
+import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.alloc.lsra.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.constopt.*;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.lir.stackslotalloc.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
@@ -276,7 +277,7 @@ public class GraalCompiler {
         try (TimerCloseable a = BackEnd.start()) {
             LIRGenerationResult lirGen = null;
             lirGen = emitLIR(backend, target, schedule, graph, stub, cc, registerConfig);
-            try (Scope s = Debug.scope("CodeGen", new Object[]{lirGen, lirGen.getLIR()})) {
+            try (Scope s = Debug.scope("CodeGen", lirGen)) {
                 emitCode(backend, assumptions, lirGen, compilationResult, installedCodeOwner, factory);
             } catch (Throwable e) {
                 throw Debug.handle(e);
@@ -336,6 +337,19 @@ public class GraalCompiler {
                 throw Debug.handle(e);
             }
 
+            try (Scope s = Debug.scope("LowLevelTier", nodeLirGen)) {
+                return emitLowLevel(backend, target, lir, codeEmittingOrder, linearScanOrder, lirGenRes, lirGen);
+            } catch (Throwable e) {
+                throw Debug.handle(e);
+            }
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
+    }
+
+    public static <T extends AbstractBlock<T>> LIRGenerationResult emitLowLevel(Backend backend, TargetDescription target, LIR lir, List<T> codeEmittingOrder, List<T> linearScanOrder,
+                    LIRGenerationResult lirGenRes, LIRGeneratorTool lirGen) {
+        try (Scope s0 = Debug.scope("HighTier")) {
             if (ConstantLoadOptimization.Options.ConstantLoadOptimization.getValue()) {
                 try (Scope s = Debug.scope("ConstantLoadOptimization", lir)) {
                     ConstantLoadOptimization.optimize(lirGenRes.getLIR(), lirGen);
@@ -344,13 +358,14 @@ public class GraalCompiler {
                     throw Debug.handle(e);
                 }
             }
+        }
 
-            try (Scope s = Debug.scope("Allocator", nodeLirGen)) {
+        try (Scope s0 = Debug.scope("MidTier")) {
+            LowLevelMidTierPhase.Context<T> c = new LowLevelMidTierPhase.Context<>(codeEmittingOrder, linearScanOrder);
+            try (Scope s = Debug.scope("Allocator")) {
                 if (backend.shouldAllocateRegisters()) {
-                    LinearScan.allocate(target, lirGenRes);
+                    new LinearScanPhase<T>().apply(target, lirGenRes, c);
                 }
-            } catch (Throwable e) {
-                throw Debug.handle(e);
             }
 
             try (Scope s1 = Debug.scope("BuildFrameMap")) {
@@ -367,26 +382,25 @@ public class GraalCompiler {
             try (Scope s1 = Debug.scope("MarkLocations")) {
                 if (backend.shouldAllocateRegisters()) {
                     // currently we mark locations only if we do register allocation
-                    LocationMarker.markLocations(lir, lirGenRes.getFrameMap());
+                    new LocationMarker<T>().apply(target, lirGenRes, c);
                 }
             }
-
-            try (Scope s = Debug.scope("ControlFlowOptimizations")) {
-                EdgeMoveOptimizer.optimize(lir);
-                ControlFlowOptimizer.optimize(lir, codeEmittingOrder);
-                if (lirGen.canEliminateRedundantMoves()) {
-                    RedundantMoveElimination.optimize(lir, frameMapBuilder);
-                }
-                NullCheckOptimizer.optimize(lir, target.implicitNullCheckLimit);
-
-                Debug.dump(lir, "After control flow optimization");
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
-            return lirGenRes;
-        } catch (Throwable e) {
-            throw Debug.handle(e);
         }
+
+        try (Scope s = Debug.scope("LowTier")) {
+            LowLevelLowTierPhase.Context<T> c = new LowLevelLowTierPhase.Context<>(codeEmittingOrder, linearScanOrder);
+            new EdgeMoveOptimizer<T>().apply(target, lirGenRes, c);
+            new ControlFlowOptimizer<T>().apply(target, lirGenRes, c);
+
+            if (lirGen.canEliminateRedundantMoves()) {
+                new RedundantMoveElimination<T>().apply(target, lirGenRes, c);
+            }
+            new NullCheckOptimizer<T>().apply(target, lirGenRes, c);
+
+            Debug.dump(lir, "After control flow optimization");
+        }
+
+        return lirGenRes;
     }
 
     public static void emitCode(Backend backend, Assumptions assumptions, LIRGenerationResult lirGenRes, CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner,

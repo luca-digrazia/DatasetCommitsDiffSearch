@@ -48,7 +48,6 @@ import com.oracle.graal.lir.alloc.lsra.Interval.RegisterPriority;
 import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.options.*;
 
 /**
@@ -63,7 +62,6 @@ final class LinearScan {
     final LIRGenerationResult res;
     final LIR ir;
     final FrameMapBuilder frameMapBuilder;
-    final SpillMoveFactory spillMoveFactory;
     final RegisterAttributes[] registerAttributes;
     final Register[] registers;
 
@@ -163,11 +161,10 @@ final class LinearScan {
      */
     private final int firstVariableNumber;
 
-    LinearScan(TargetDescription target, LIRGenerationResult res, SpillMoveFactory spillMoveFactory) {
+    LinearScan(TargetDescription target, LIRGenerationResult res) {
         this.target = target;
         this.res = res;
         this.ir = res.getLIR();
-        this.spillMoveFactory = spillMoveFactory;
         this.frameMapBuilder = res.getFrameMapBuilder();
         this.sortedBlocks = ir.linearScanOrder();
         this.registerAttributes = frameMapBuilder.getRegisterConfig().getAttributesMap();
@@ -192,10 +189,6 @@ final class LinearScan {
         int result = instructions.get(instructions.size() - 1).id();
         assert result >= 0;
         return result;
-    }
-
-    SpillMoveFactory getSpillMoveFactory() {
-        return spillMoveFactory;
     }
 
     public static boolean isVariableOrRegister(Value value) {
@@ -578,7 +571,7 @@ final class LinearScan {
                                 assert isRegister(fromLocation) : "from operand must be a register but is: " + fromLocation + " toLocation=" + toLocation + " spillState=" + interval.spillState();
                                 assert isStackSlotValue(toLocation) : "to operand must be a stack slot";
 
-                                insertionBuffer.append(j + 1, getSpillMoveFactory().createMove(toLocation, fromLocation));
+                                insertionBuffer.append(j + 1, ir.getSpillMoveFactory().createMove(toLocation, fromLocation));
 
                                 Debug.log("inserting move after definition of interval %d to stack slot %s at opId %d", interval.operandNumber, interval.spillSlot(), opId);
                             }
@@ -1882,7 +1875,7 @@ final class LinearScan {
                                 // insert spill move
                                 AllocatableValue fromLocation = interval.getSplitChildAtOpId(spillOpId, OperandMode.DEF, this).location();
                                 AllocatableValue toLocation = canonicalSpillOpr(interval);
-                                LIRInstruction move = getSpillMoveFactory().createMove(toLocation, fromLocation);
+                                LIRInstruction move = ir.getSpillMoveFactory().createMove(toLocation, fromLocation);
                                 move.setId(DOMINATOR_SPILL_MOVE_ID);
                                 /*
                                  * We can use the insertion buffer directly because we always insert
