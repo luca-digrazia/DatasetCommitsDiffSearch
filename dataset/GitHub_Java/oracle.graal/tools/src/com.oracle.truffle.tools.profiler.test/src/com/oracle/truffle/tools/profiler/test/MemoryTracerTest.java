@@ -24,14 +24,15 @@
  */
 package com.oracle.truffle.tools.profiler.test;
 
-import java.util.Collection;
-
+import com.oracle.truffle.tools.profiler.MemoryTracer;
+import com.oracle.truffle.tools.profiler.ProfilerNode;
+import com.oracle.truffle.tools.profiler.impl.MemoryTracerInstrument;
+import org.graalvm.polyglot.Instrument;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.truffle.tools.profiler.MemoryTracer;
-import com.oracle.truffle.tools.profiler.ProfilerNode;
+import java.util.Collection;
 
 public class MemoryTracerTest extends AbstractProfilerTest {
 
@@ -39,7 +40,9 @@ public class MemoryTracerTest extends AbstractProfilerTest {
 
     @Before
     public void setupTracer() {
-        tracer = MemoryTracer.find(context.getEngine());
+        Instrument instrument = context.getEngine().getInstruments().get(MemoryTracerInstrument.ID);
+        Assert.assertNotNull(instrument);
+        tracer = instrument.lookup(MemoryTracer.class);
         Assert.assertNotNull(tracer);
     }
 
